@@ -745,6 +745,65 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D26. Decision 实体 + 多规则命中合成策略 ⭐⭐
+
+**为什么重要**：风控场景的核心输出是"决策码"（REJECT/REVIEW/PASS），而非简单的 `satisfied=true/false`。多条规则同时命中时，需要定义"谁的决策胜出"。不表态导致每个业务方自己在调用层做合成逻辑，引擎失去对决策语义的控制力；且 `EvalResult.decision?`（D12 占位）是为 `DECISION_TABLE` kind 的表格输出预留的，与"Tenant 级 Decision 实体 + 优先级合成"语义不同。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☐ A. Rule 直挂 `decisionCode` 字段 | Rule 命中后直接输出一个 decisionCode 字符串 | 最简单；但无法支持 score 区间 → Decision 映射（SCORECARD 场景必要）；Decision 无独立管理入口 |
+| ☐ B. 独立 `RuleDecisionBinding` 关联表 | Rule 通过绑定表关联 Decision，支持可选 score 区间；多对多松耦合 | 灵活、支持评分卡场景；发布时快照化进 `rule_version.decision_bindings_snapshot`，保证不可变性（D6） |
+| ☐ C. Decision 挂载 Action | Action 挂在 Decision 上，Rule 只出 Decision，所有 REJECT 触发同一批 Action | 配置量少；但失去 Rule 级别差异化 Action 能力；与现有 Rule→Action 设计摩擦大，v1 不适合 |
+
+**决定**：**B**（独立 `RuleDecisionBinding` 关联表）+ Decision 为 **Tenant 级**一等实体 + Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）+ Decision 与 Action **正交**
+
+**v1 落地范围**：
+
+1. **Decision 实体（Tenant 级）**：
+   - 字段：`tenant_id` / `code`（Tenant 内唯一）/ `name` / `priority`（数值越小优先级越高，如 REJECT=1, REVIEW=2, PASS=100）/ `description`；
+   - Tenant 内 `code` 全局唯一约束；`priority` 值由业务方自定，引擎只按数值排序；
+   - 横切标准审计字段（D14）；
+   - v1 不做 Decision 的层级 / 分类标签（如"拒绝类 / 通过类"）——priority 数值已足够合成排序，分类标签留 [`08-evolution.md`](./08-evolution.md) §演进。
+
+2. **RuleDecisionBinding（Rule 与 Decision 的关联，版本快照化）**：
+   - 字段：`rule_id` / `decision_code` / `score_range_min?` / `score_range_max?`（仅 `Rule.kind=SCORECARD` + `EvalResult.score` 在区间内时生效；v1 `AST_BOOLEAN` kind 直接绑一个 decisionCode，score 区间留空）；
+   - 一条 Rule 可绑多个 Decision（按 score 区间划分），最常见是 1:1；
+   - 发布时随 `rule_version` 整体快照化（存入 `rule_version.decision_bindings_snapshot`），保证不可变性（D6）；
+   - v1 `AST_BOOLEAN` kind 命中后直接取唯一绑定的 decisionCode；score 区间匹配在 D12 SCORECARD kind 实现时启用。
+
+3. **Scene.decisionStrategy（多规则命中合成）**：
+   - 可选字段（Scene 不配则 `EvalResult.finalDecision` 为空，调用方自行处理 `hitDecisions` 列表）；
+   - v1 仅实现 `HIGHEST_PRIORITY`：取所有命中规则对应 Decision 中 `priority` 值最小者作为最终决策；
+   - v2 补充 `MAJORITY`（多数命中）/ `CUSTOM_SPI`（自定义合成器 SPI）；
+   - PULL Scene 最常配此字段（风控"REJECT/REVIEW/PASS 合成"是刚需）；PUSH Scene 可选。
+
+4. **EvalResult 新增字段**：
+   - `finalDecision?: DecisionRef`：合成后最终 Decision（Scene 配了 `decisionStrategy` 时填充）；
+   - `hitDecisions: List<DecisionRef>`：所有命中规则的 Decision 按 priority 排序（始终填充）；
+   - `DecisionRef = { code: String, name: String, priority: Int, fromRuleVersionId: Long }`；
+   - 原 `EvalResult.decision?`（D12 `DECISION_TABLE` kind 的表格输出）语义正交，不冲突，继续保留。
+
+5. **Decision 与 Action 正交**（关键边界）：
+   - PULL Scene：配 Decision，不配 Action（现有 PULL Scene 禁止 Action 的约束继续生效）；
+   - PUSH Scene：配 Action，Decision 可选；
+   - HYBRID Scene：两者均可配，各自独立；
+   - **v1 不做** Decision 级 Action（"所有 REJECT 触发同一批 Action"），避免与 Rule→Action 模型摩擦；Decision 级 Action 留 [`08-evolution.md`](./08-evolution.md) §演进。
+
+**v1 不做的**：
+- Decision 分类标签（拒绝类 / 通过类 / 其他），priority 数值已足够；
+- `MAJORITY` / `CUSTOM_SPI` 合成策略；
+- Decision 级 Action；
+- 分数区间 → Decision 映射的 v1 实现（SCORECARD kind v1 不实装，score 区间字段只建 schema 占位）。
+
+**派生约束**：
+- Decision + RuleDecisionBinding 入 README §四 抽象表；
+- `01-concepts.md` §一 新增 Decision 一等公民 + §3.19 Decision + §3.20 RuleDecisionBinding；
+- `01-concepts.md` §3.4 EvalResult 结构追加 `finalDecision` / `hitDecisions` / `DecisionRef`；
+- `05-storage.md` 新增 `decision_definition` + `rule_decision_binding` 表 DDL；
+- `10-api-contract.md` 对外 API 的 `EvalResult` DTO 追加两字段。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -774,5 +833,6 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D23 | `evaluation_session` 幂等键语义 | A    | `(tenant_id, event_id)` 永远只评估一次，by design；Replay 换新 eventId；版本切换后测新规则走 dry-run |
 | D24 | Scene 变更热加载 | B    | 新增独立 `SceneWatcher` SPI；v1 实现 `DbPollingSceneWatcher`（30s 轮询）；与 `RuleVersionWatcher` 平级，职责独立 |
 | D25 | Context 构建并发模型 | C    | `CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源；Subject 加载与 metric 并行；单 metric 失败归 D15 METRIC_FETCH_FAIL，Subject 失败整 Context 失败；`SubjectLoader` SPI（v1 实现 `UserProfileLoader`） |
+| D26 | Decision 实体 + 多规则命中合成策略 | B    | Decision 为 Tenant 级一等实体；`RuleDecisionBinding` 关联表（支持可选 score 区间）；Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）；Decision 与 Action 正交 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

@@ -2,7 +2,7 @@
 
 > **位置定位**：所有后续文档的"共同语言"。这里只讲名词、关系、边界，**不讲实现**（实现在 02-runtime / 03-rule-expression / 04-extension）。
 >
-> **前置阅读**：[README](./README.md) §一定位与边界 + §二 D1-D25 决策表。
+> **前置阅读**：[README](./README.md) §一定位与边界 + §二 D1-D26 决策表。
 >
 > **解决什么疑问**：
 > - "Rule / Condition / Action / EvalContext 到底指什么？"
@@ -29,6 +29,7 @@
 | **Action** | Rule 命中后要做的事（发券 / 调 webhook / 写库），由 `actionType` 路由到具体处理器；**可空**——PULL 模式 Scene 不需要 Action | 业务运营选类型 + 配参数 |
 | **EvalContext** | 一次评估的运行时上下文：指标快照 + 用户画像 + 业务身份（不可变 POJO） | 引擎在评估前现场构建 |
 | **Metric** | 取数原子（按 `metricCode` 注册），同一指标可被多 Rule 共享、可缓存；**可见性由 Scene 白名单决定** | 平台 + 业务方共同治理 |
+| **Decision** | Tenant 级输出定义：规则命中后输出的语义结论（REJECT / REVIEW / PASS 等）；带 `priority` 字段，多规则命中时 Scene 按 `decisionStrategy` 合成最终 Decision；与 Action 正交（D26） | 平台运维 |
 
 > **三类支撑概念**（不是一等公民，但理解整体必须知道）：`ConditionEvaluator` / `ActionHandler` / `MetricSource` —— 它们是上面 Condition / Action / Metric 的"幕后执行者"，详见 §五边界辨析。
 >
@@ -229,12 +230,21 @@ EvalResult {
     satisfied:       boolean              // 所有 kind 都填；AST_BOOLEAN 表"整树求值结果"
     score?:          Number               // SCORECARD 启用
     category?:       String               // DECISION_TREE 启用
-    decision?:       Map<String, Object>  // DECISION_TABLE 启用，输出列的命中行
+    decision?:       Map<String, Object>  // DECISION_TABLE 启用，输出列的命中行（与 finalDecision 正交）
+    finalDecision?:  DecisionRef          // D26：合成后最终 Decision（Scene 配了 decisionStrategy 时填充）
+    hitDecisions:    List<DecisionRef>    // D26：所有命中规则的 Decision 按 priority 排序（始终填充，无绑定时为空列表）
     trace:           List<NodeTrace>      // 节点级 trace（D7），所有 kind 都填
     errorCode?:      String               // D15：EVAL_TIMEOUT / METRIC_FETCH_FAIL / EVALUATOR_EXCEPTION / SCHEMA_VIOLATION
     errorMessage?:   String               // D15：人读错误信息
     failedNodeIds?:  List<String>         // D15：哪些 AST 节点失败
     partial?:        Boolean              // D15：true=部分成功，false=完全失败
+}
+
+DecisionRef {
+    code:              String  // Decision.code
+    name:              String  // Decision.name（快照，不随 Decision 改名变化）
+    priority:          Int     // 合成排序依据
+    fromRuleVersionId: Long    // 哪条 RuleVersion 产生了该 Decision
 }
 ```
 
@@ -750,6 +760,71 @@ interface Scheduler {
 - **补偿结果记录**：执行结果写入 `action_execution` 的补偿流水字段（`compensated` / `compensated_at` / `compensated_by`），详见 [`05-storage.md`](./05-storage.md) §action_execution 表；
 - **运营 UI 与对账配置**：见 [`06-frontend.md`](./06-frontend.md) §补偿操作台 + [`07-operability.md`](./07-operability.md) §补偿流水线。
 
+### 3.19 Decision（决策定义，一等公民）
+
+**是什么**：Tenant 级的输出语义定义——规则命中后"最终结论是什么"的字典表。风控场景的典型 Decision 是 REJECT / REVIEW / PASS，营销场景可以是 PREMIUM_OFFER / STANDARD_OFFER / NO_OFFER 等业务自定义码。
+
+**为什么是一等公民**：引擎不限制规则产出只有 `satisfied=true/false`；风控和分层运营类场景需要在多规则命中时合成出一个**带语义的结论**，而非由调用方在外部硬编码合成逻辑。
+
+**字段（持久化，Tenant 级）**：
+
+| 字段 | 说明 |
+|------|------|
+| `tenant_id` | 归属租户 |
+| `code` | Tenant 内唯一英文标识（如 `REJECT` / `REVIEW` / `PASS`）；业务侧稳定标识，不改 |
+| `name` | 显示名（中文/英文均可，给运营/风控看） |
+| `priority` | 合成优先级，数值越小优先级越高；如 REJECT=1, REVIEW=2, PASS=100；业务方自定，引擎只排序 |
+| `description` | 给运营/风控看的业务说明 |
+
+（横切标准审计字段，见 §三 顶部横切说明）
+
+**关键边界**：
+
+- **Tenant 级，非 Scene 级**：同一 Tenant 的所有 Scene 共享 Decision 词汇表；不同 Tenant 的 Decision 严格隔离；
+- **Decision 与 Action 正交**（D26）：PULL Scene 配 Decision，不配 Action；PUSH Scene 配 Action，Decision 可选；HYBRID 两者均可；引擎 v1 不做 Decision 级 Action（"所有 REJECT 触发同一批 Action"）；
+- **priority 只用于合成排序**：priority 数值本身不影响 Rule 是否命中（Pre-Gate 和 AST 求值结果不读 priority）；priority 只在 `HIGHEST_PRIORITY` 合成策略里生效；
+- **Decision 不内置分类标签**：v1 不区分"拒绝类/通过类"，由 `priority` 数值隐式体现；分类标签留 [`08-evolution.md`](./08-evolution.md) §演进；
+- **DDL**：见 [`05-storage.md`](./05-storage.md) §decision_definition 表。
+
+### 3.20 RuleDecisionBinding（规则-决策绑定，非一等公民）
+
+**是什么**：Rule 与 Decision 之间的松耦合关联记录——"这条规则命中后，输出哪个 Decision"。发布时随 `rule_version` 整体快照化，保证运行时不可变（D6）。
+
+**为什么不把 decisionCode 直接放 Rule 字段上**：
+- 支持 `SCORECARD` kind 下按 score 区间映射多个 Decision（如 score 0-30 → REJECT，31-60 → REVIEW，61-100 → PASS）；
+- Rule 与 Decision 松耦合，多个 Rule 可以映射到同一个 Decision，Decision 改名不影响 Rule；
+- 关联关系快照化进 `rule_version`，行为与 actions_snapshot 对齐。
+
+**字段**：
+
+| 字段 | 说明 |
+|------|------|
+| `rule_id` | 关联规则 |
+| `decision_code` | 命中后输出的 Decision.code |
+| `score_range_min?` | 可选；仅 `Rule.kind=SCORECARD` 时生效，`EvalResult.score` ≥ 此值时匹配 |
+| `score_range_max?` | 可选；仅 `Rule.kind=SCORECARD` 时生效，`EvalResult.score` < 此值时匹配（左闭右开） |
+
+**运行时行为**：
+
+- `AST_BOOLEAN` kind（v1 主场景）：一条 Rule 绑一个 Decision（1:1），score 区间字段为空；Rule AST 求值 true → 直接取该 Decision；
+- `SCORECARD` kind（v2 启用）：一条 Rule 可绑多个 Decision（按区间），引擎取 `EvalResult.score` 匹配区间后取对应 Decision；无匹配区间 → 该 Rule 不贡献 Decision；
+- 快照字段：发布时将当前绑定列表序列化为 `rule_version.decision_bindings_snapshot` JSON 列。
+
+**Scene.decisionStrategy（多规则命中合成）**：
+
+| 值 | 语义 | 状态 |
+|----|------|------|
+| `HIGHEST_PRIORITY` | 取所有命中规则对应 Decision 中 `priority` 值最小者为最终决策 | v1 实现 |
+| `MAJORITY` | 多数命中的 Decision 胜出 | v2 |
+| `CUSTOM_SPI` | 自定义合成器 SPI | v2 |
+
+`Scene.decisionStrategy` 为可选字段：Scene 不配则 `EvalResult.finalDecision` 为空，`hitDecisions` 列表仍填充供调用方自行处理。
+
+**关键边界**：
+
+- **快照不可变**（D6）：RuleDecisionBinding 快照进 `rule_version` 后永不变更；修改绑定 = 修改 Rule 草稿 → 走标准发布产新 version；
+- **DDL**：见 [`05-storage.md`](./05-storage.md) §rule_decision_binding 表。
+
 ---
 
 ## 四、心智级时序（一个事件进来后发生了什么）
@@ -1002,4 +1077,6 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | dry-run 试算会话（隔离表、可重复运行） | §3.16 DryRunSession |
 | Action 失败后重试队列与退避策略 | §3.17 Action 重试队列 |
 | 已执行 Action 的逆向补偿触发与接口 | §3.18 Compensation Pipeline |
+| Tenant 级决策码定义（REJECT / REVIEW / PASS 等） | §3.19 Decision |
+| Rule 与 Decision 的绑定关系 + 多规则命中合成策略 | §3.20 RuleDecisionBinding |
 | 历史决策时间线 / 路线图 | [08-evolution](./08-evolution.md) |

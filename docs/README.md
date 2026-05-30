@@ -4,7 +4,7 @@
 >
 > **不是什么**：不是某个已有项目的迁移或重构，不绑定任何具体业务领域。设计上可以为风控、营销、运营触达、活动奖励、AB 实验门控等场景服务。
 >
-> **状态**：草稿（2026-05-25 起）。25 条核心决策已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)，详细演进见 [`08-evolution.md`](./08-evolution.md)。
+> **状态**：草稿（2026-05-25 起）。26 条核心决策已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)，详细演进见 [`08-evolution.md`](./08-evolution.md)。
 >
 > **设计基调**：场景与性能按**优先级演进**——第一阶段实现聚焦运营/营销/活动 + 千级 QPS 起步，但**核心抽象按风控级别预留扩展点**，避免后期推倒重来。
 
@@ -57,7 +57,7 @@
 
 ## 二、核心设计决策（已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)）
 
-下表与 `00-decisions.md` 的 D1-D25 一一对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
+下表与 `00-decisions.md` 的 D1-D26 一一对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
 
 | # | 决策 | 选择 | 取舍 |
 |---|------|------|------|
@@ -86,6 +86,7 @@
 | D23 | **`evaluation_session` 幂等键** | `(tenant_id, event_id)` 单一 UK，同一事件永远只评估一次（by design）；Replay 换新 eventId；版本切换后测新规则走 dry-run | 幂等最强、设计最简；Replay 符合 MQ 标准重推语义；v1 不引入 Replay 专用表 |
 | D24 | **Scene 变更热加载** | 新增独立 `SceneWatcher` SPI；v1 实现 `DbPollingSceneWatcher`（30s 轮询）；与 `RuleVersionWatcher` 平级，职责独立 | Scene 变更频率低于规则；bindings 变更触发 MetricSource/ActionHandler 资源预热/卸载，DISABLED 从 Matcher 路由表摘除 |
 | D25 | **Context 构建并发模型** | `CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源；Subject 加载（`SubjectLoader` SPI，v1 `UserProfileLoader`）与 metric 并行；单 metric 失败归 D15 METRIC_FETCH_FAIL，Subject 失败整 Context 失败 | 避免引擎侧共享线程池调优负担；最慢 IO 决定整体等待时间，而非串行累加 |
+| D26 | **Decision 实体 + 多规则命中合成策略** | Decision 为 Tenant 级一等实体（code + priority）；Rule 通过 `RuleDecisionBinding` 关联 Decision（支持可选 score 区间，v1 仅 `AST_BOOLEAN` 场景直接 1:1 绑定）；Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）；`EvalResult` 新增 `finalDecision` + `hitDecisions`；Decision 与 Action 正交 | PULL 场景风控输出刚需；`HIGHEST_PRIORITY` 覆盖 95% 业务需求；与现有 Rule→Action 模型零摩擦 |
 
 > **派生约束**（由上述决策推出、值得单独标注的工程约定，详见 §六设计原则）：
 >
@@ -161,8 +162,10 @@
 | `RuleNode` (sealed) | AST 节点：`AndNode` / `OrNode` / `NotNode` / `ConditionNode`；`AndNode` / `OrNode` 可携可选 `displayLabel`，用于前端"分组卡片"视觉渲染（数据模型不固化 Group 实体） | ✅ |
 | `RuleDefinition` | 持久化规则定义（kind + trigger + ast + preGates + actions + current_version + rollout + status）；`kind ∈ {AST_BOOLEAN, SCORECARD, DECISION_TREE, DECISION_TABLE, EXPRESSION_SCRIPT}`，v1 仅实现 `AST_BOOLEAN`；`status ∈ {DRAFT, PUBLISHING, PUBLISHED, PUBLISH_FAILED, DISABLED}`，`PUBLISH_FAILED` 为待人工确认状态，UI 显式点"重新编辑"才回 DRAFT（D19）；`current_version` 指向 `rule_version` 表中当前生效的不可变快照；发布是单条原子事务（D19） | — |
 | `RuleVersion` | 规则发布产生的不可变版本快照行（D6 + D19）：含 `(ruleId, version)` 主键 + AST/actions/preGates/rollout 冻结副本；运行时按 `(scene, eventType)` **倒排索引**直接拿 RuleVersion 快照列表（D17：`current_version` 在索引预热时已解析，无运行时二次查询） | ✅ |
-| `EvalResult` | 评估输出契约多态：`{satisfied, score?, category?, decision?, trace, errorCode?, errorMessage?, failedNodeIds?, partial?}`；D12 多态 + D15 失败槽位 | ✅ |
-| `Scene` | Tenant 内的业务域命名空间 + metric / action 治理白名单 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID）+ 元数据 schema（`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`） | — |
+| `EvalResult` | 评估输出契约多态：`{satisfied, score?, category?, decision?, finalDecision?, hitDecisions, trace, errorCode?, errorMessage?, failedNodeIds?, partial?}`；D12 多态 + D15 失败槽位 + D26 Decision 合成输出 | ✅ |
+| `Decision` | Tenant 级决策定义（D26）：`{tenant_id, code, name, priority, description}`；Tenant 内 `code` 唯一；`priority` 数值越小优先级越高（如 REJECT=1, REVIEW=2, PASS=100） | — |
+| `RuleDecisionBinding` | Rule 与 Decision 的关联（D26，版本快照化）：`{rule_id, decision_code, score_range_min?, score_range_max?}`；v1 `AST_BOOLEAN` kind 直接 1:1 绑定；score 区间在 D12 SCORECARD kind 时启用；发布时冻结进 `rule_version.decision_bindings_snapshot` | — |
+| `Scene` | Tenant 内的业务域命名空间 + metric / action 治理白名单 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID）+ 元数据 schema（`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`）+ 决策合成策略（`decisionStrategy`，D26） | — |
 | `SceneMetricBinding` | Scene 与 Metric 的可见性绑定，规则只能引用本 Scene 绑定的 metric | — |
 | `SceneActionBinding` | Scene 与 actionType 的可见性绑定（仅 PUSH / HYBRID Scene 需要），规则只能配置本 Scene 绑定的 actionType；含 Scene 级默认参数与速率覆盖 | — |
 | `MetricSource` | 按 `metricCode` 取指标，支持实时 / 预计算 / 外部指标平台 | — |
@@ -286,4 +289,5 @@
 | 2026-05-26 | **D21 落定：评估观测数据异步写入**。`TraceWriter` 异步批写（评估期内存累积 → `EvalResult` 出树时 submit → `ArrayBlockingQueue` + 消费者池 + batch insert，复用 D20 §2 队列模型），与 `audit_log` 同步事务严格分离；队列满 / 入库失败降级丢弃 + counter 告警，**不**阻塞热路径、**不**回写 `EvalResult.errorCode`（trace 是旁路观察通道）；ConditionNode trace 与 Pre-Gate trace 走同一通道。`01-concepts.md §3.5 / §3.14` 关键边界 + `README §四` 抽象表 `TraceWriter` 行同步。 |
 | 2026-05-25 | **占位声明**（不独立成 D 决策）：①  `Metric.metricVersion` 字段（v1 固定 1，语义变更走版本化）；②  `MetricRegistry` 并发契约（读路径 thread-safe 且不阻塞热路径，评估期内快照稳定；具体策略由实现层选择）；③  实时性敏感场景 `cachePolicyDefault.ttl=0` 原则。敏感数据加密 / 脱敏的 v1 范围已纳入 D14 决策详情（详见 [`00-decisions.md`](./00-decisions.md) D14 "v1 不做的"），不在本行重复声明。详见 [`08-evolution.md`](./08-evolution.md) §2.2 Metric 版本化 / §2.8 合规演进。 |
 | 2026-05-30 | **D22-D24 落定（矛盾修正）**：(1) D22：Pre-Gate 拦截对账状态从"归 MISS"修正为独立 `BLOCKED` 第四态，`evaluation_session` 加 `blocked_by` 列，命中率分母仅含 HIT+MISS；(2) D23：`evaluation_session` 幂等键 `(tenant_id, event_id)` 语义显式落定为 by design，Replay 换 eventId，版本测试走 dry-run；(3) D24：新增 `SceneWatcher` SPI 与 `RuleVersionWatcher` 平级，v1 实现 `DbPollingSceneWatcher`（30s），承载 Scene 配置热加载。`README §四` 抽象表追加 `SceneWatcher`；`01-concepts §3.14` Pre-Gate 对账描述 + `§3.2` Scene 关键边界同步更新。 |
+| 2026-05-30 | **D26 落定：Decision 实体 + 多规则命中合成策略**。Decision 为 Tenant 级一等实体（code + priority）；Rule 通过 `RuleDecisionBinding` 关联 Decision（版本快照化，支持可选 score 区间）；Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）；`EvalResult` 新增 `finalDecision` + `hitDecisions` 字段；Decision 与 Action 正交。`README §二` 决策表追加 D26；`§四` 抽象表追加 `Decision` / `RuleDecisionBinding`，`EvalResult` 行同步；`01-concepts §一` 命名清单追加 Decision，`§3.4 EvalResult` 结构更新，新增 `§3.19 Decision` + `§3.20 RuleDecisionBinding`。 |
 | 2026-05-30 | **缺失概念补全 + D25 落定**：(1) `01-concepts §3.15` 新增 `EvaluationSession` 字段表 + 四态 status 聚合语义（D22 落地）；(2) `§3.16` 新增 `DryRunSession` 独立存储结构（与生产 session 隔离、无 UK 约束、短保留期）；(3) `§3.17` 新增 Action 重试队列（独立于主派发队列，指数退避，进程重启丢失可重推恢复）；(4) `§3.18` 新增 Compensation Pipeline（引擎提供 `ActionHandler.compensate()` SPI 接入点，补偿不自动触发，由外部对账/手动操作发起）；(5) D25 落定：Context 构建并发模型，`CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源 + `SubjectLoader` SPI（v1 `UserProfileLoader`），`README §四` 抽象表追加 `SubjectLoader` / `SubjectLoaderRegistry`，`01-concepts §3.13` Subject 关键边界同步。|
