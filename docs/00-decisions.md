@@ -971,7 +971,16 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 1. **API 层**：`POST /api/scenes/{code}/evaluate` 请求体新增 `providedMetrics: Map<metricCode, value>` 可选字段。
 2. **校验**：`providedMetrics` 的 key 必须是本 Scene 白名单内已注册的 metricCode（发布期已有类型闭合，运行期入口校验类型一致性）；非法 key 返回 400。
 3. **EvalContext 构建优先级**：`providedMetrics` 中有值 → 跳过该 metric 的 sourceType 取数，直接用传入值；`allowProvided=false` 的 metric 即使传了也忽略（日志 WARN，不报错）。
-4. **Metric 注册新增字段** `allowProvided`（`BOOLEAN`，默认 `true`）：需要保护权威性的指标（如黑名单命中、官方风控分）设为 `false`，防止调用方伪造。
+4. **Metric 注册新增字段** `allowProvided`（`BOOLEAN`）：按 `sourceType` 给出推荐默认值，注册时无需每次手填——
+
+   | sourceType | 推荐默认 | 理由 |
+   |------------|---------|------|
+   | `ATTRIBUTE` | `true` | 属性类由业务方维护，上报合理 |
+   | `EXTERNAL_HTTP` | `true` | 业务方通常就是该服务的调用方，手里有值 |
+   | `SQL_AGGREGATE` | `false` | 平台权威聚合，不应被覆盖 |
+   | `STREAM` | `false` | 流计算结果是平台产物，同上 |
+
+   需要保护权威性的指标（如黑名单命中、官方风控分）在例外情况下手动覆盖为 `false`；其余按上表默认，不强制每次填写。
 5. **trace 记录来源**：每个 metric 的 trace 条目记录 `valueSource: PROVIDED | FETCHED`，方便排查。
 6. **不做持久化**：`providedMetrics` 的值只活在本次评估 EvalContext 中，评估完即丢弃。业务方如需持久化，走自己的系统存储，引擎后续用 sourceType 正常取。
 
@@ -980,9 +989,11 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - 不做 dry-run 时对 `providedMetrics` 值的额外限制（dry-run 本就不产生副作用）
 
 **派生约束**：
-- `01-concepts.md` §3.9 Metric 字段表需补充 `allowProvided` 字段说明
+- `01-concepts.md` §3.9 Metric 字段表需补充 `allowProvided` 字段说明（含 sourceType 推荐默认值）
 - `01-concepts.md` §3.11 EvalContext 构建逻辑需说明 `providedMetrics` 优先级
-- `10-api-contract.md` 评估接口请求体需更新
+- `10-api-contract.md` 需补充两处：
+  - 评估接口请求体新增 `providedMetrics` 字段
+  - 新增 `GET /api/scenes/{code}/provided-metrics` 发现接口，返回本 Scene 内 `allowProvided=true` 的 metric 列表（含 `metricCode / dataType / description`），供业务方接入时查询，响应可缓存
 
 ---
 

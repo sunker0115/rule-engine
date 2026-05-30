@@ -458,7 +458,7 @@ EvalContext {
 | `params` | 取数参数（SQL 模板 / HTTP URL / 流处理 topic） |
 | `dataType` | `LONG` / `DOUBLE` / `STRING` / `BOOLEAN` / `LIST` |
 | `cachePolicyDefault` | 默认缓存策略（TTL / 不缓存 / 评估范围内缓存）；实时性敏感场景配 `ttl=0` 强制每次取数 |
-| `allowProvided` | `BOOLEAN`，默认 `true`。是否允许调用方通过评估请求的 `providedMetrics` 字段覆盖本指标的取数结果（D30）。需要保护权威性的指标（如黑名单命中、官方风控评分）设为 `false`，防止调用方伪造；引擎忽略 `providedMetrics` 中对应 key，仍走 sourceType 正常取数，日志 WARN |
+| `allowProvided` | 是否允许调用方通过 `providedMetrics` 覆盖本指标取数结果（D30）。按 `sourceType` 给推荐默认值：`ATTRIBUTE` / `EXTERNAL_HTTP` 默认 `true`（业务方通常手里就有这个值）；`SQL_AGGREGATE` / `STREAM` 默认 `false`（平台权威计算，不应被覆盖）。例外情况手动覆盖；`false` 时引擎忽略 `providedMetrics` 中对应 key 并 WARN |
 
 **Scene 级可见性**（`scene_metric_binding` 表）：
 
