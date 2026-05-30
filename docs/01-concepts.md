@@ -597,7 +597,7 @@ interface Scheduler {
 
 - **Subject 不可变**：与 Context 同生命周期，评估期内 Evaluator 不能修改 attributes；
 - **Subject ≠ user_profile 实时**：Subject 是评估开始瞬间从主体表读出的**快照副本**，即使评估过程中主体属性发生变化（如运营改了 KYC 等级），本次评估读到的仍是初始快照值；
-- **跨 subjectType 的取数实现差异**留 [`04-extension.md`](./04-extension.md) §SubjectLoader 实现指南；
+- **SubjectLoader SPI**（D25）：Subject 取数由 `SubjectLoader.load(subjectId, subjectType, event) → Subject` 负责；v1 唯一实现 `UserProfileLoader`（`subjectType=USER`，查 `user_profile` 表）；与 metric 并行加载进 `EvalContext`（`CompletableFuture.allOf()`），Subject 加载失败整 Context 失败（D15 `METRIC_FETCH_FAIL`）；跨 subjectType 扩展见 [`04-extension.md`](./04-extension.md) §SubjectLoader 实现指南；
 - **AST 引用路径**：`subject.<attribute>`（如 `subject.kycLevel`）；具体 conditionType（如 `user.attribute.equals`）的参数路径解析在 [`03-rule-expression.md`](./03-rule-expression.md) 定义。
 
 ### 3.14 Pre-Gate（准入闸门，不是一等公民）
@@ -629,6 +629,124 @@ interface Scheduler {
 - **顶层架构图对齐**：README §三 `Pre-Gate Chain` 框就是本节落地。
 
 具体字段 schema（频次窗口配置 / 互斥组定义 / 黑白名单表结构）留 [`04-extension.md`](./04-extension.md) §Pre-Gate 扩展点 + [`05-storage.md`](./05-storage.md) §准入控制表 展开。
+
+### 3.15 EvaluationSession（评估会话，非一等公民）
+
+**是什么**：一次 RuleEvent 处理的持久化记录，每次引擎受理 RuleEvent 产生 **1 行**；同时充当幂等守护的 DB 下半层（D23，Redis trySet 是上半层快速路径，DB uk 是持久化最终校验）。对应的 `node_trace` 行和 `action_execution` 行均以 `session_id` 为锚。
+
+**字段**：
+
+| 字段 | 说明 |
+|------|------|
+| `session_id` | PK，雪花 BIGINT |
+| `tenant_id` | 租户 ID |
+| `event_id` | 业务事件 ID；与 `tenant_id` 构成 **DB 唯一键**（D23），防重复评估 |
+| `scene` | 场景（Matcher 路由键） |
+| `event_type` | 事件类型 |
+| `subject_id` | 主体 ID |
+| `status` | `HIT / MISS / BLOCKED / ERROR`（D22 四态，聚合自本次评估的规则集合结果） |
+| `blocked_by` | nullable；拦截 Gate 类型（`ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
+| `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
+| `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
+| `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |
+| `source` | `PUSH / PULL / REPLAY`；来源标记，不改幂等语义（D23） |
+| `started_at` | 评估开始时间 |
+| `finished_at` | 评估结束时间 |
+| `eval_duration_ms` | 整 session 耗时（ms） |
+
+**`status` 聚合语义**（session 结束时由引擎按规则集合结果填充）：
+
+| 规则集合结果 | `status` |
+|------------|---------|
+| ≥1 条 Rule AST 求值为 true | `HIT` |
+| 进入 AST 的 Rule ≥1 条且 ≥1 条 AST 评估出 ERROR（D15） | `ERROR` |
+| 进入 AST 的 Rule ≥1 条且全部 AST false | `MISS` |
+| 全部候选 Rule 均被 Pre-Gate 拦截，0 条进入 AST | `BLOCKED` |
+
+> 优先级：`HIT > ERROR > MISS > BLOCKED`（只要有一条 HIT 就是 HIT；BLOCKED 只在无任何 Rule 进入 AST 时才用）。
+
+**关键边界**：
+
+- **同步写（D21）**：`evaluation_session` 行在 `EvalResult` 返回前同步写入；单行 INSERT，量小，延迟可忽略；
+- **生产专用**：dry-run 场景写独立的 `dry_run_session` 表（§3.16），不污染生产幂等键；
+- **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键关联，可从 session 横向拉出完整评估链路；
+- **与 `rule_version` 的关联**：`action_execution` 额外记 `(rule_id, rule_version)` 二元组，按版本对账（§3.12 派生）；
+- **DDL**：见 [`05-storage.md`](./05-storage.md) §evaluation_session 表。
+
+### 3.16 DryRunSession（试算会话，非一等公民）
+
+**是什么**：dry-run 试算（D7）产生的独立会话记录，存放在 `dry_run_session` 系列表中，**不受生产幂等约束**——同一 eventId 可以重复 dry-run，不会与生产评估相互干扰。
+
+**与 EvaluationSession 的关键差异**：
+
+| 维度 | `evaluation_session`（生产） | `dry_run_session`（试算） |
+|------|--------------------------|------------------------|
+| 唯一键 | `(tenant_id, event_id)` UK | 无 UK 约束，同 eventId 可多次 dry-run |
+| 关联 trace | `node_trace` | `dry_run_node_trace` |
+| Action 派发 | 真实执行 → `action_execution` | 预览，不落盘，随响应返回 |
+| 计入统计报表 | 是（HIT/MISS/BLOCKED/ERROR 汇总） | 否 |
+| 保留时长 | 30 天（D9） | 短于生产（由 07-operability 定，建议 7 天） |
+
+**额外字段**（在 `evaluation_session` 基础上新增）：
+
+| 字段 | 说明 |
+|------|------|
+| `requested_by` | 发起 dry-run 的操作人 ID（来源 `X-Actor-Id` header，D14） |
+| `target_rule_version_id` | nullable；指定 dry-run 的 RuleVersion；未指定时使用 `current_version`（可提前预览未发布版本效果） |
+
+**关键边界**：
+
+- **dry-run 行为全定义在 §五 Q10**：本节只定义存储结构，不重复 Q10 的副作用 / 短路规则；
+- **DDL**：见 [`05-storage.md`](./05-storage.md) §dry_run_session 表。
+
+### 3.17 Action 重试队列（Dispatcher 内部，非一等公民）
+
+**是什么**：Dispatcher 内部承载 `retryable=true` 的失败 ActionInstance 的有界内存队列，与主派发队列（D20 §2）**独立**，防止重试事件阻塞新命中事件的正常派发。
+
+**结构**：
+
+```
+主派发队列 (BlockingQueue<ActionInstance>)
+    └── 消费者发现 ActionResult.retryable=true → 入重试队列
+
+重试队列 (BlockingQueue<RetryableActionInstance>)
+    └── 独立消费者：指数退避重试
+        → 重试达上限仍 FAILED → action_execution 终态（不再重试）
+        → 终态后补偿由 D4 补偿流水线外部调度（§3.18）
+```
+
+**关键边界**：
+
+- **独立于主队列**：重试项不占主队列容量，不影响新命中事件派发吞吐；
+- **退避策略**：指数退避（初始间隔 / 最大间隔 / 最大重试次数在 [`07-operability.md`](./07-operability.md) §重试策略 给默认值）；
+- **v1 内存队列**：进程重启时未消费重试项丢失；上游重推 RuleEvent（D23 幂等需换新 eventId）可完整恢复；引入持久化重试留 [`08-evolution.md`](./08-evolution.md) §二；
+- **v1 不引入死信队列（DLQ）**（D20 §2）：`action_execution` FAILED 行即是终态游标，DLQ 在引入 MQ 时再考虑；
+- **运维参数**（`retry.queue.capacity` / `retry.initial.interval` / `retry.max.interval` / `retry.max.attempts`）留 [`07-operability.md`](./07-operability.md) §重试策略。
+
+### 3.18 Compensation Pipeline（补偿流水线，外部过程）
+
+**是什么**：引擎**不内置**的外部操作过程，用于已执行 Action 的逆向回滚。不是引擎运行时组件，是依托引擎提供的 SPI 接口运行的运维流程。
+
+**触发场景**：
+
+| 场景 | 典型触发方式 |
+|------|------------|
+| 业务撤销（交易退款、活动取消） | 对账定时任务扫描应补偿的 `action_execution` 行 → 调用 `ActionHandler.compensate()` |
+| 手动修正（运营后台"撤回奖励"按钮） | 管理员操作 API → 调用 `ActionHandler.compensate()` |
+| 错误发放纠正 | 对账任务按 `evaluation_session + action_execution` 批量扫描 → 批量补偿 |
+
+**引擎提供的接入点**：
+
+- `ActionHandler.compensate(action, context): ActionResult`：SPI 方法，各 Handler 实现逆向逻辑（退券 / 扣回积分 / 关闭通知），返回类型与 `execute` 一致；
+- `Action.compensateActionType`：标记该 Action 的反向 handler 类型（如 `coupon.revoke`），补偿流水线按此字段路由；
+- 查询接口：补偿流水线通过管理 API 查 `action_execution`（`status=SUCCESS, compensated=false`）获取待补偿清单。
+
+**关键边界**：
+
+- **补偿不自动触发**（D18）：引擎只记录 FAILED 状态，**不自动调用** `compensate()`——补偿是业务语义，由业务侧按需发起；
+- **补偿幂等**：由各 `ActionHandler.compensate()` 实现自行保证（DB uk / Redis trySet / 外部幂等键），引擎不重复保证；
+- **补偿结果记录**：执行结果写入 `action_execution` 的补偿流水字段（`compensated` / `compensated_at` / `compensated_by`），详见 [`05-storage.md`](./05-storage.md) §action_execution 表；
+- **运营 UI 与对账配置**：见 [`06-frontend.md`](./06-frontend.md) §补偿操作台 + [`07-operability.md`](./07-operability.md) §补偿流水线。
 
 ---
 
@@ -878,4 +996,8 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / Context 构建 / AST
 | 一个事件进来到动作落地的代码级时序 | [02-runtime](./02-runtime.md) |
 | 前端怎么把这些概念画成 UI | [06-frontend](./06-frontend.md) |
 | 幂等 / 灰度 / dry-run / 监控的运营细节 | [07-operability](./07-operability.md) |
+| 生产评估持久化（字段表 / 四态 `status` 聚合） | §3.15 EvaluationSession |
+| dry-run 试算会话（隔离表、可重复运行） | §3.16 DryRunSession |
+| Action 失败后重试队列与退避策略 | §3.17 Action 重试队列 |
+| 已执行 Action 的逆向补偿触发与接口 | §3.18 Compensation Pipeline |
 | 历史决策时间线 / 路线图 | [08-evolution](./08-evolution.md) |

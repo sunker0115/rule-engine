@@ -4,7 +4,7 @@
 >
 > **不是什么**：不是某个已有项目的迁移或重构，不绑定任何具体业务领域。设计上可以为风控、营销、运营触达、活动奖励、AB 实验门控等场景服务。
 >
-> **状态**：草稿（2026-05-25 起）。21 条核心决策已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)，详细演进见 [`08-evolution.md`](./08-evolution.md)。
+> **状态**：草稿（2026-05-25 起）。25 条核心决策已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)，详细演进见 [`08-evolution.md`](./08-evolution.md)。
 >
 > **设计基调**：场景与性能按**优先级演进**——第一阶段实现聚焦运营/营销/活动 + 千级 QPS 起步，但**核心抽象按风控级别预留扩展点**，避免后期推倒重来。
 
@@ -82,6 +82,10 @@
 | D19 | **规则发布事务性** | **单条规则原子发布**（状态机 `DRAFT → PUBLISHING → PUBLISHED / PUBLISH_FAILED`，单 DB 事务完成状态机+新 version+audit_log）；批量由前端逐条提交 | 不可变快照（D6）下回滚 = 用旧版本快照建新草稿走标准发布产新版本号；不做批量原子 API（事务跨度大）；不做发布前自动 dry-run（留 07-operability 决策） |
 | D20 | **v1 高吞吐评估期落地范围** | metric 批量预拉 + 异步 Dispatcher + 输入闭合校验 + Watcher SPI 多态化（v1 落）；预编译 Predicate SPI 预留 v1.5 切换 | 评估线程不被 Action 同步派发拖慢；N+1 metric round-trip 压成 1 次 mget；强类型契约为预编译铺路。alpha 共享 / 嵌入式 SDK / EXPRESSION 叶子留 [`08-evolution.md`](./08-evolution.md) §2.13 / §2.14 |
 | D21 | **评估观测数据异步写入** | `TraceWriter` 异步批写（评估期内存累积 + session 结束入队列 + 消费者池 batch insert，复用 D20 §2 队列模型）；与 `audit_log` 同步事务严格分离 | 单次评估 50-1000 行 trace 同步写吃掉 P99 预算 10-40%；异步批写后热路径零阻塞，失败降级丢弃 + 告警，不影响 `EvalResult`；ConditionNode 与 Pre-Gate trace 同通道；运维参数（队列容量 / 批大小 / flush 间隔等）留 07-operability |
+| D22 | **Pre-Gate 拦截对账状态** | 引入第四态 `BLOCKED`；四态：`HIT / MISS / BLOCKED / ERROR`；`evaluation_session.blocked_by` 记录拦截 Gate 类型 | Pre-Gate 拦截语义不同于 AST 求值不满足（MISS）；命中率分母仅 HIT+MISS |
+| D23 | **`evaluation_session` 幂等键** | `(tenant_id, event_id)` 单一 UK，同一事件永远只评估一次（by design）；Replay 换新 eventId；版本切换后测新规则走 dry-run | 幂等最强、设计最简；Replay 符合 MQ 标准重推语义；v1 不引入 Replay 专用表 |
+| D24 | **Scene 变更热加载** | 新增独立 `SceneWatcher` SPI；v1 实现 `DbPollingSceneWatcher`（30s 轮询）；与 `RuleVersionWatcher` 平级，职责独立 | Scene 变更频率低于规则；bindings 变更触发 MetricSource/ActionHandler 资源预热/卸载，DISABLED 从 Matcher 路由表摘除 |
+| D25 | **Context 构建并发模型** | `CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源；Subject 加载（`SubjectLoader` SPI，v1 `UserProfileLoader`）与 metric 并行；单 metric 失败归 D15 METRIC_FETCH_FAIL，Subject 失败整 Context 失败 | 避免引擎侧共享线程池调优负担；最慢 IO 决定整体等待时间，而非串行累加 |
 
 > **派生约束**（由上述决策推出、值得单独标注的工程约定，详见 §六设计原则）：
 >
@@ -169,8 +173,9 @@
 | `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（D18：`retryable=true` 入重试队列；`failFast=true` 的 Action 失败后同 Rule 内后续 Action 标 SKIPPED） | ✅ |
 | `ActionRegistry` | 注册中心，启动扫 `@ActionType` 注解 + 声明式动作定义 | — |
 | `RuleEvalVisitor` | 遍历 AST，短路 + 节点级 trace | — |
-| `EvaluationSession` | 一次评估的整体快照（含 trace 引用） | — |
-| `ActionExecution` | 动作执行记录（独立表，支持重试和补偿） | — |
+| `EvaluationSession` | 一次评估的持久化记录（D23 幂等锚点）：1 行 per event；`status ∈ {HIT/MISS/BLOCKED/ERROR}`（D22 四态）；`(tenant_id, event_id)` DB uk；同步写（D21）；dry-run 写独立 `dry_run_session` 表 | — |
+| `DryRunSession` | 试算评估的隔离记录（D7 + §3.16）：无 UK 约束，同 eventId 可重复 dry-run；不计入生产统计报表；保留期短于生产 | — |
+| `ActionExecution` | 动作执行记录（独立表，支持重试和补偿）：`status ∈ {SUCCESS/FAILED/SKIPPED}`；`retryable=true` 进独立重试队列（§3.17）；失败最终态后补偿由外部补偿流水线调用 `ActionHandler.compensate()` | — |
 | `Gate` | 准入闸门接口（频次 / 互斥 / 黑名单 / 灰度命中） | — |
 | `IdempotencyGuard` | Redis trySet + DB uk 双兜底 | — |
 | `JobDefinition` | 定时任务配置：cron / 主体查询（SQL / 外部 HTTP / Metric 结果）/ eventType 模板 / payload 模板 / 并发与限流 | — |
@@ -179,6 +184,8 @@
 | `AuditLog` | 操作审计记录（D14）：`{tenant_id, actor, target_type, target_id, action, before_snapshot, after_snapshot, occurred_at, trace_id}`；与 `evaluation_session` / `node_trace` / `action_execution` 是不同维度（人的行为 vs 系统行为），严格分离 | ✅ |
 | `RuleVersionWatcher` | 规则变更感知接口（D17 + D20 §4 固化为正式 SPI）：`subscribe(callback) / pull(since) / status`；契约要求实现方满足"最终一致 + 至多一次 callback 重复（消费方幂等）+ 启动期一次性全量拉"。v1 唯一实现 `DbPollingRuleWatcher`（默认 15s）；多 backend（MQ / Nacos / ZK）切换详见 [`08-evolution.md`](./08-evolution.md) §2.14 | — |
 | `SceneWatcher` | Scene 配置变更感知接口（D24，与 `RuleVersionWatcher` 平级）：`subscribe(callback) / pull(since) / status`；监听 `scene_definition` + `scene_metric_binding` + `scene_action_binding` 变更，触发 MetricSource/ActionHandler 资源预热/卸载 + Matcher 路由表更新。v1 唯一实现 `DbPollingSceneWatcher`（默认 30s，Scene 变更频率低于规则）；SPI 契约与 `RuleVersionWatcher` 对齐 | — |
+| `SubjectLoader` | 主体加载 SPI（D25）：`load(subjectId, subjectType, event) → Subject`；v1 唯一实现 `UserProfileLoader`（`subjectType=USER`，查 `user_profile` 表）；与 metric 并行加载进 `EvalContext` | — |
+| `SubjectLoaderRegistry` | `SubjectLoader` 注册中心（D25）：按 `subjectType` 路由到对应实现；与 `MetricRegistry` 同款模式 | — |
 | `RuleVersionExecutor` | 规则版本执行 SPI（D20 §5）：`execute(RuleVersion, EvalContext) → EvalResult`。v1 默认实现 `InterpretedExecutor`（Visitor 树遍历）；v1.5 引入 `CompiledExecutor`（Janino / LambdaMetafactory 编译产物），由 `ExecutorRegistry` 按 RuleVersion 灰度切换。`rule_version.compiled_predicate_ref` 列预留供编译产物引用 | — |
 | `ExecutorRegistry` | `RuleVersionExecutor` 注册中心（D20 §5）：按 RuleVersion 选择 Executor 实现。v1 仅注册 `InterpretedExecutor`；v1.5 加 `CompiledExecutor` 并支持按版本灰度切换（兜底回退到 Interpreted）。注册时机与 `ConditionRegistry` / `ActionRegistry` 对齐 | — |
 | `TraceWriter` | 评估观测数据异步写入通道（D21）：评估线程在 `EvalContext` 内开 `TraceCollector` 累积内存级 `TraceRow`（无锁），`EvalResult` 出树时一次性 `submit(batch)` 入内部有界队列，独立消费者线程池按条数 / 时间阈值 batch insert `node_trace`（含 ConditionNode trace + Pre-Gate `PRE_GATE_BLOCKED` trace，同通道）。与 D20 §2 Dispatcher 队列**独立**（语义与生命周期不同）。失败降级丢弃 + counter 告警，不阻塞热路径、不抛异常、不回写 `EvalResult.errorCode`。与 `audit_log` 同步事务严格分离（审计强一致是 v1 红线，trace 是观察数据） | — |
@@ -279,3 +286,4 @@
 | 2026-05-26 | **D21 落定：评估观测数据异步写入**。`TraceWriter` 异步批写（评估期内存累积 → `EvalResult` 出树时 submit → `ArrayBlockingQueue` + 消费者池 + batch insert，复用 D20 §2 队列模型），与 `audit_log` 同步事务严格分离；队列满 / 入库失败降级丢弃 + counter 告警，**不**阻塞热路径、**不**回写 `EvalResult.errorCode`（trace 是旁路观察通道）；ConditionNode trace 与 Pre-Gate trace 走同一通道。`01-concepts.md §3.5 / §3.14` 关键边界 + `README §四` 抽象表 `TraceWriter` 行同步。 |
 | 2026-05-25 | **占位声明**（不独立成 D 决策）：①  `Metric.metricVersion` 字段（v1 固定 1，语义变更走版本化）；②  `MetricRegistry` 并发契约（读路径 thread-safe 且不阻塞热路径，评估期内快照稳定；具体策略由实现层选择）；③  实时性敏感场景 `cachePolicyDefault.ttl=0` 原则。敏感数据加密 / 脱敏的 v1 范围已纳入 D14 决策详情（详见 [`00-decisions.md`](./00-decisions.md) D14 "v1 不做的"），不在本行重复声明。详见 [`08-evolution.md`](./08-evolution.md) §2.2 Metric 版本化 / §2.8 合规演进。 |
 | 2026-05-30 | **D22-D24 落定（矛盾修正）**：(1) D22：Pre-Gate 拦截对账状态从"归 MISS"修正为独立 `BLOCKED` 第四态，`evaluation_session` 加 `blocked_by` 列，命中率分母仅含 HIT+MISS；(2) D23：`evaluation_session` 幂等键 `(tenant_id, event_id)` 语义显式落定为 by design，Replay 换 eventId，版本测试走 dry-run；(3) D24：新增 `SceneWatcher` SPI 与 `RuleVersionWatcher` 平级，v1 实现 `DbPollingSceneWatcher`（30s），承载 Scene 配置热加载。`README §四` 抽象表追加 `SceneWatcher`；`01-concepts §3.14` Pre-Gate 对账描述 + `§3.2` Scene 关键边界同步更新。 |
+| 2026-05-30 | **缺失概念补全 + D25 落定**：(1) `01-concepts §3.15` 新增 `EvaluationSession` 字段表 + 四态 status 聚合语义（D22 落地）；(2) `§3.16` 新增 `DryRunSession` 独立存储结构（与生产 session 隔离、无 UK 约束、短保留期）；(3) `§3.17` 新增 Action 重试队列（独立于主派发队列，指数退避，进程重启丢失可重推恢复）；(4) `§3.18` 新增 Compensation Pipeline（引擎提供 `ActionHandler.compensate()` SPI 接入点，补偿不自动触发，由外部对账/手动操作发起）；(5) D25 落定：Context 构建并发模型，`CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源 + `SubjectLoader` SPI（v1 `UserProfileLoader`），`README §四` 抽象表追加 `SubjectLoader` / `SubjectLoaderRegistry`，`01-concepts §3.13` Subject 关键边界同步。|

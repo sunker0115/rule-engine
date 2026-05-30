@@ -693,6 +693,58 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D25. Context 构建并发模型 ⭐⭐
+
+**为什么重要**：D20 §1 要求"metric 批量预拉后注入 EvalContext"，§3.13 Subject 要从 `user_profile` 加载，但**具体并发形态**没说——Subject 加载和 metric 批拉是串行还是并行？metric 并发内部用什么并发原语？某一个 metric 或 Subject 加载失败时怎么处理？不表态会出现：每个人实现一套并发风格、失败语义散乱、Metric 超时拖住整个 Context 构建。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☐ A. 串行取数（for-loop） | Subject → metric-1 → metric-2 → … 顺序执行 | 最简单；N 个 metric 延迟线性叠加，高吞吐场景不可接受 |
+| ☐ B. `CompletableFuture` 并行 + 共享线程池 | Subject 加载与全部 metric 取数 `CompletableFuture.allOf()` 并行 | 并发效率最高；线程池共享所有请求，不同 Scene 可能互相抢池 |
+| ☐ C. `CompletableFuture` 并行 + 各 MetricSource 自管线程 | `CompletableFuture` 包装，MetricSource 实现自管连接池 / 执行器（JDBC 连接池 / HTTP client 各自线程），引擎侧只 `allOf().join()` 等待 | 隔离性最好；各 Source 资源互不干扰；引擎侧不引入共享线程池（v1 避免参数调优）——延迟来自最慢那条 IO |
+
+**决定**：**C**（`CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源；Subject 加载与 metric 并行启动）
+
+**v1 落地范围**：
+
+1. **Context 构建启动顺序**：
+   - 按本次评估候选 RuleVersion 集合取 `metric_dependencies` 并集，同时从 RuleEvent 读 `subjectId`；
+   - **Subject 加载与 metric 批拉并行启动**：各自包装为 `CompletableFuture`，不互相等待；
+   - `CompletableFuture.allOf(subjectFuture, ...metricFutures).join()` 等待全部完成（或超时抛出）；
+   - Subject 加载通过 `SubjectLoader` SPI（v1 唯一实现：`UserProfileLoader`，按 `subjectId` 查 `user_profile` 表）执行；
+   - 每个 metric 通过对应 `MetricSource` 实现自管连接池/HTTP client 并发取数；引擎只拿 `Future<Value>` 集合 `allOf()` 等。
+
+2. **局部失败语义**（关键）：
+   - **Subject 加载失败**（主体不存在 / user_profile 超时）→ 整个 Context 构建失败，该 Rule 落 `EvalResult.errorCode = METRIC_FETCH_FAIL`（D15 归一，Subject 是 Context 必要字段）；
+   - **单个 metric 加载失败**（timeout / 熔断 / 反序列化异常）→ 仅该 metric 标记失败，其他 metric 结果仍有效；评估期若某 ConditionNode 引用了失败 metric → 该节点落 `EvalResult.errorCode = METRIC_FETCH_FAIL`（D15），其余节点按正常路径；
+   - **整体等待超时**（`allOf().join(timeout)`）→ 超时时已完成的 metric 有效，未完成的视同失败；timeout 默认值在 [`07-operability.md`](./07-operability.md) §Context 构建超时 给。
+
+3. **`SubjectLoader` SPI**（新增）：
+   - 接口：`SubjectLoader`：`load(subjectId, subjectType, RuleEvent) → Subject`；
+   - v1 唯一实现：`UserProfileLoader`（`subjectType=USER`，查 `user_profile` 表）；
+   - 未来 `ACCOUNT / DEVICE / ORDER` 类型扩展只加新实现，引擎核心不变；
+   - 加载超时 / 主体不存在的处理由实现方按 D15 规范向上抛受检异常（引擎捕获后归一为 `METRIC_FETCH_FAIL`）；
+   - `SubjectLoader` 注册到 `SubjectLoaderRegistry`（按 `subjectType` 路由，等同 `MetricRegistry` 同款模式）。
+
+4. **并发安全要求**：
+   - `EvalContext` 构建完成即不可变（只读，线程安全）；
+   - `MetricSource.fetch()` 必须线程安全（多线程同时从不同 RuleVersion 的 Context 并发调用）；
+   - `SubjectLoader.load()` 必须线程安全（同款要求）；
+   - 以上是 SPI 实现方义务，在 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南 + §SubjectLoader 实现指南 展开。
+
+**v1 不做的**：
+- 不做 Scene 级别的 Context 构建线程池隔离（留 [`08-evolution.md`](./08-evolution.md) §2.13 一并评估）；
+- 不做"partial metric" 策略（失败 metric 的 ConditionNode 从 AST 求值中剔除再继续）——v1 严格走 D15 METRIC_FETCH_FAIL，不做局部降级（降级语义复杂，正确性风险 > 可用性收益）；
+- 不做 Subject 属性的 payload 补充（D13 明定 payload 走 `event.payload.*` 路径，不补充 `subject.attributes`）。
+
+**派生约束**：
+- `SubjectLoader` 入 README §四 抽象表（与 MetricSource / MetricRegistry 平级）；
+- `01-concepts.md` §3.13 Subject 关键边界补"SubjectLoader SPI（D25），v1 实现 UserProfileLoader"；
+- `04-extension.md` 新增 §SubjectLoader 实现指南；
+- 07-operability 补 `context.build.timeout` 默认值 + Subject 加载失败 alert 阈值。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -721,5 +773,6 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D22 | Pre-Gate 拦截对账状态 | A    | 引入第四态 `BLOCKED`；四态：`HIT / MISS / BLOCKED / ERROR`；Pre-Gate 拦截 → BLOCKED；`evaluation_session.blocked_by` 记录拦截 Gate 类型；命中率分母仅含 HIT+MISS |
 | D23 | `evaluation_session` 幂等键语义 | A    | `(tenant_id, event_id)` 永远只评估一次，by design；Replay 换新 eventId；版本切换后测新规则走 dry-run |
 | D24 | Scene 变更热加载 | B    | 新增独立 `SceneWatcher` SPI；v1 实现 `DbPollingSceneWatcher`（30s 轮询）；与 `RuleVersionWatcher` 平级，职责独立 |
+| D25 | Context 构建并发模型 | C    | `CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源；Subject 加载与 metric 并行；单 metric 失败归 D15 METRIC_FETCH_FAIL，Subject 失败整 Context 失败；`SubjectLoader` SPI（v1 实现 `UserProfileLoader`） |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。
