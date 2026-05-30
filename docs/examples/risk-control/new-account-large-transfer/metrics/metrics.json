@@ -8,7 +8,8 @@
     "params": {
       "sql": "SELECT DATEDIFF(NOW(), created_at) FROM user_profile WHERE user_id = :subjectId"
     },
-    "cachePolicyDefault": { "ttl": 3600 }
+    "cachePolicyDefault": { "ttl": 3600 },
+    "allowProvided": false
   },
   {
     "metricCode": "user.kyc.level",
@@ -20,7 +21,8 @@
       "column": "kyc_level",
       "table": "user_profile"
     },
-    "cachePolicyDefault": { "ttl": 300 }
+    "cachePolicyDefault": { "ttl": 300 },
+    "allowProvided": false
   },
   {
     "metricCode": "user.transfer.count.7d",
@@ -31,7 +33,8 @@
     "params": {
       "sql": "SELECT COUNT(*) FROM transfer_history WHERE user_id = :subjectId AND created_at >= NOW() - INTERVAL 7 DAY"
     },
-    "cachePolicyDefault": { "ttl": 0 }
+    "cachePolicyDefault": { "ttl": 0 },
+    "allowProvided": false
   },
   {
     "metricCode": "user.transfer.dest.trust.score",
@@ -42,6 +45,7 @@
     "params": {
       "url": "http://trust-service/api/score?account={payload.dest_account}"
     },
-    "cachePolicyDefault": { "ttl": 60 }
+    "cachePolicyDefault": { "ttl": 60 },
+    "allowProvided": false
   }
 ]

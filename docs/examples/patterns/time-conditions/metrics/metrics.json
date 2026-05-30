@@ -8,6 +8,7 @@
     "params": {
       "sql": "SELECT COUNT(*) FROM user_login_log WHERE user_id = :subjectId AND created_at >= NOW() - INTERVAL 7 DAY"
     },
-    "cachePolicyDefault": { "ttl": 60 }
+    "cachePolicyDefault": { "ttl": 60 },
+    "allowProvided": true
   }
 ]
