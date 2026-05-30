@@ -1,0 +1,222 @@
+[
+  {
+    "eventId": "evt-tw-001",
+    "appliedRule": "rule-time-window",
+    "expectedResult": {
+      "finalDecision": "REWARD",
+      "hitDecisions": ["REWARD"],
+      "ruleHit": true,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": true,
+        "nodeTrace": {
+          "type": "AndNode",
+          "result": true,
+          "children": [
+            {
+              "type": "ConditionNode",
+              "conditionType": "time.window",
+              "result": true,
+              "inputs": { "now": "2026-06-10T10:00:00+08:00", "dayOfWeek": "WED" }
+            },
+            {
+              "type": "ConditionNode",
+              "conditionType": "event.payload.equals",
+              "result": true,
+              "inputs": { "action_type": "login" }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-tw-002",
+    "appliedRule": "rule-time-window",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "AndNode",
+          "result": false,
+          "children": [
+            {
+              "type": "ConditionNode",
+              "conditionType": "time.window",
+              "result": false,
+              "inputs": { "now": "2026-06-10T02:00:00+08:00", "dayOfWeek": "WED" },
+              "_note": "02:00 不在 09:00–22:00 窗口内"
+            },
+            {
+              "type": "ConditionNode",
+              "conditionType": "event.payload.equals",
+              "result": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-tw-003",
+    "appliedRule": "rule-time-window",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "AndNode",
+          "result": false,
+          "children": [
+            {
+              "type": "ConditionNode",
+              "conditionType": "time.window",
+              "result": false,
+              "inputs": { "now": "2026-06-13T11:00:00+08:00", "dayOfWeek": "SAT" },
+              "_note": "周六不在 daysOfWeek=[MON..FRI] 内"
+            },
+            {
+              "type": "ConditionNode",
+              "conditionType": "event.payload.equals",
+              "result": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-oat-001",
+    "appliedRule": "rule-occurred-at",
+    "expectedResult": {
+      "finalDecision": "REWARD",
+      "hitDecisions": ["REWARD"],
+      "ruleHit": true,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": true,
+        "nodeTrace": {
+          "type": "ConditionNode",
+          "conditionType": "time.occurred_at",
+          "result": true,
+          "inputs": {
+            "occurredAt": "2026-06-15T14:30:00+08:00",
+            "start": "2026-06-01T00:00:00+08:00",
+            "end":   "2026-06-30T23:59:59+08:00"
+          }
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-oat-002",
+    "appliedRule": "rule-occurred-at",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "ConditionNode",
+          "conditionType": "time.occurred_at",
+          "result": false,
+          "inputs": {
+            "occurredAt": "2026-05-31T23:59:59+08:00",
+            "_note": "早于活动开始时间 2026-06-01T00:00:00+08:00"
+          }
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-oat-003",
+    "appliedRule": "rule-occurred-at",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "ConditionNode",
+          "conditionType": "time.occurred_at",
+          "result": false,
+          "inputs": {
+            "occurredAt": "2026-07-01T00:00:00+08:00",
+            "_note": "晚于活动结束时间 2026-06-30T23:59:59+08:00"
+          }
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-mw-001",
+    "appliedRule": "rule-metric-window",
+    "expectedResult": {
+      "finalDecision": "REWARD",
+      "hitDecisions": ["REWARD"],
+      "ruleHit": true,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": true,
+        "nodeTrace": {
+          "type": "ConditionNode",
+          "conditionType": "metric.threshold",
+          "metricCode": "user.login.count.7d",
+          "result": true,
+          "inputs": { "metricValue": 5, "operator": "GTE", "threshold": 3 }
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-mw-002",
+    "appliedRule": "rule-metric-window",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "ConditionNode",
+          "conditionType": "metric.threshold",
+          "metricCode": "user.login.count.7d",
+          "result": false,
+          "inputs": { "metricValue": 2, "operator": "GTE", "threshold": 3 }
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-mw-003",
+    "appliedRule": "rule-metric-window",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "ConditionNode",
+          "conditionType": "metric.threshold",
+          "metricCode": "user.login.count.7d",
+          "result": false,
+          "inputs": { "metricValue": 0, "operator": "GTE", "threshold": 3 }
+        }
+      }
+    }
+  }
+]

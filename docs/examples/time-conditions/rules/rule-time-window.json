@@ -1,0 +1,42 @@
+{
+  "tenantId": "demo-tenant",
+  "sceneCode": "ops.promotion",
+  "code": "rule-time-window",
+  "name": "工作时段促活规则",
+  "description": "规则只在工作日 09:00–22:00（上海时间）生效，使用 time.window conditionType 对 EvalContext.now 做判断。",
+  "triggerEventTypes": ["user.action.login", "user.action.purchase"],
+  "preGates": [
+    { "type": "ROLLOUT", "params": { "percentage": 100 } }
+  ],
+  "conditionAst": {
+    "type": "AndNode",
+    "displayLabel": "工作时段内的登录行为",
+    "children": [
+      {
+        "type": "ConditionNode",
+        "conditionType": "time.window",
+        "displayLabel": "工作日 09:00–22:00",
+        "params": {
+          "start": "09:00",
+          "end": "22:00",
+          "timezone": "Asia/Shanghai",
+          "daysOfWeek": ["MON", "TUE", "WED", "THU", "FRI"]
+        }
+      },
+      {
+        "type": "ConditionNode",
+        "conditionType": "event.payload.equals",
+        "displayLabel": "事件类型为登录",
+        "params": {
+          "field": "action_type",
+          "operator": "EQ",
+          "value": "login"
+        }
+      }
+    ]
+  },
+  "decisionBindings": [
+    { "decisionCode": "REWARD" }
+  ],
+  "metricDependencies": []
+}

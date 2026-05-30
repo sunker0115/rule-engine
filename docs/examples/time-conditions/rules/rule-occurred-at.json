@@ -1,0 +1,25 @@
+{
+  "tenantId": "demo-tenant",
+  "sceneCode": "ops.promotion",
+  "code": "rule-occurred-at",
+  "name": "六月活动期间规则",
+  "description": "事件 occurredAt 落在 2026-06-01 至 2026-06-30 之间才触发奖励，使用 time.occurred_at conditionType。适合补录数据场景：活动结束后补发事件也能按业务时间正确判断。",
+  "triggerEventTypes": ["user.action.purchase"],
+  "preGates": [
+    { "type": "ROLLOUT", "params": { "percentage": 100 } }
+  ],
+  "conditionAst": {
+    "type": "ConditionNode",
+    "conditionType": "time.occurred_at",
+    "displayLabel": "六月活动期间（业务时间）",
+    "params": {
+      "operator": "BETWEEN",
+      "start": "2026-06-01T00:00:00+08:00",
+      "end":   "2026-06-30T23:59:59+08:00"
+    }
+  },
+  "decisionBindings": [
+    { "decisionCode": "REWARD" }
+  ],
+  "metricDependencies": []
+}
