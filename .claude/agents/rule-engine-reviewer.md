@@ -18,7 +18,7 @@ color: cyan
 - 目前项目仅有 `docs/`，尚无 `src/` 代码。如果 diff 里出现代码改动，**先读 `docs/09-skeleton.md`** 看包结构规划，按规划过滤；规划未敲定的子包视为"超范围"，在"跳过"段说明。
 - 一旦代码骨架确定，把允许的包路径补到此处（例如 `core/`、`evaluator/`、`runtime/` 等）。
 
-**显式不在范围**：`docs/archive/`、`docs/old/`、以及任何非 rule-engine 主题的目录。看到这些路径的改动直接跳过，在报告里明确说明"不在审查范围"。
+**显式不在范围**：任何非 rule-engine 主题的目录。看到这些路径的改动直接跳过，在报告里明确说明"不在审查范围"。
 
 ## 文档现状（重要，影响 Step 2 加载策略）
 
@@ -80,17 +80,8 @@ color: cyan
 对每个落在范围内的改动，回答（代码骨架未落地时，只问 1、3、8）：
 
 1. **概念一致** — 引入/修改的类名/字段名/职责，是否和 `01-concepts.md` §三 描述的概念边界一致？有没有新引入文档没提的概念，或者把两个不同概念混用（如 `Context` vs `EvalContext`，`RuleDefinition` vs `RuleVersion`）？
-2. **运行时一致** — 改动的流程（评估顺序、EvalContext 装配时机、失败语义、Action 派发路径）是否和 `02-runtime.md` + `00-decisions.md` D20/D21/D25 描述的链路对齐？
-3. **决策一致** — 改动有没有违反 `00-decisions.md` 里的已落定条目？重点检查：
-   - D6：RuleVersion 不可变，回滚 = 新快照
-   - D15：EvalResult 四态 HIT/MISS/BLOCKED/ERROR（D22 扩展），单节点失败整树继续
-   - D18：Action 默认 continue-on-error，补偿不自动触发
-   - D19：发布原子事务，PUBLISH_FAILED 需人工确认回 DRAFT
-   - D20：metric 批量预拉，评估期内 EvalContext 冻结，ActionHandler 不返回新事件（D16）
-   - D21：TraceWriter 异步批写，与 audit_log 同步事务严格分离
-   - D22：Pre-Gate 拦截归 BLOCKED，不归 MISS
-   - D23：evaluation_session uk = (tenant_id, event_id)，Replay 换 eventId
-   - D25：SubjectLoader SPI，Subject 与 metric 并行加载
+2. **运行时一致** — 改动的流程（评估顺序、EvalContext 装配时机、失败语义、Action 派发路径）是否和 `02-runtime.md` + `00-decisions.md` 描述的链路对齐？
+3. **决策一致** — 改动有没有违反 `00-decisions.md` 里的已落定条目？读完基线文档后按各 D 编号逐一核对，不要凭记忆猜测决策内容。
 4. **规则表达式一致** — 如果改了 operator / ConditionType / 求值逻辑，行为是否和 `03-rule-expression.md` + `01-concepts.md` §3.5/§3.6 的语义定义一致？
 5. **扩展点一致** — 如果新增/改动 SPI（ConditionEvaluator / ActionHandler / MetricSource / SubjectLoader / RuleVersionWatcher / SceneWatcher），是否符合 `04-extension.md` + `01-concepts.md` 的扩展规约？
 6. **存储一致** — 如果碰了持久化字段，是否和 `05-storage.md` + `01-concepts.md` §3.12/§3.15/§3.16 的表结构/字段语义一致？新增字段有没有影响 `rule_version` 的不可变性（D6）？
