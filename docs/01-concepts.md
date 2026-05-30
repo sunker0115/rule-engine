@@ -454,11 +454,22 @@ EvalContext {
 | `metricCode` | 全局唯一，命名 `<domain>.<entity>.<measure>[.<window>]` |
 | `metricVersion` | 指标定义版本号占位（v1 固定 1）。**v1 规则发布快照仅引用 `metricCode` 字符串，不带版本号**——指标语义变更（如"7d"换算口径调整）等同于新建一个新 `metricCode`（业务约定）。强制 `(metricCode, metricVersion)` 绑定的版本化演进留 [`08-evolution.md`](./08-evolution.md) §2.2 Metric 版本化 |
 | `tenantId` | 归属租户；`*` 表示平台级共享指标 |
-| `sourceType` | `ATTRIBUTE` / `SQL_AGGREGATE` / `EXTERNAL_HTTP` / `STREAM` |
-| `params` | 取数参数（SQL 模板 / HTTP URL / 流处理 topic） |
+| `sourceType` | 取数方式，见下方 sourceType 对比表 |
+| `params` | 取数参数（结构依 sourceType 而异，见下方对比表） |
 | `dataType` | `LONG` / `DOUBLE` / `STRING` / `BOOLEAN` / `LIST` |
 | `cachePolicyDefault` | 默认缓存策略（TTL / 不缓存 / 评估范围内缓存）；实时性敏感场景配 `ttl=0` 强制每次取数 |
 | `allowProvided` | 是否允许调用方通过 `providedMetrics` 覆盖本指标取数结果（D30）。按 `sourceType` 给推荐默认值：`ATTRIBUTE` / `EXTERNAL_HTTP` 默认 `true`（业务方通常手里就有这个值）；`SQL_AGGREGATE` / `STREAM` 默认 `false`（平台权威计算，不应被覆盖）。例外情况手动覆盖；`false` 时引擎忽略 `providedMetrics` 中对应 key 并 WARN |
+
+**sourceType 对比表**：
+
+| sourceType | 取数方式 | 适用场景 | `params` 关键字段 | `cacheTtl` 建议 | `allowProvided` 默认 |
+|------------|---------|---------|------------------|----------------|---------------------|
+| `ATTRIBUTE` | 从主体属性表（`subject_attribute` 或业务库指定表/列）读单值 | KYC 等级、会员等级、账户状态等慢变属性 | `table`, `column` | 60–300s | `true` |
+| `SQL_AGGREGATE` | 执行 SQL 聚合查询（支持 `:subjectId` / `:now` 占位符） | 近 N 天交易次数、累计金额、历史行为统计 | `sql` | 实时风控 `0`；营销统计 60–300s | `false` |
+| `EXTERNAL_HTTP` | 调外部 HTTP 服务，取 JSON 响应中的指定字段 | 设备指纹分、IP 信誉、第三方评分 | `url`（含 `{payload.xxx}` 占位符）, `jsonPath` | 60s 左右 | `true` |
+| `STREAM` | 从流处理平台（Flink / Kafka）读预聚合结果（v1 占位，v2 接入） | 实时 CEP 序列特征、滑动窗口计数 | `topic`, `keyExpr` | `0`（流结果已是最新） | `false` |
+
+> `params` 完整字段 schema 及 `EXTERNAL_HTTP` 的 `jsonPath` 语法、`STREAM` 适配协议见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南。
 
 **Scene 级可见性**（`scene_metric_binding` 表）：
 
