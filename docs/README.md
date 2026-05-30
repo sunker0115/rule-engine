@@ -4,7 +4,7 @@
 >
 > **不是什么**：不是某个已有项目的迁移或重构，不绑定任何具体业务领域。设计上可以为风控、营销、运营触达、活动奖励、AB 实验门控等场景服务。
 >
-> **状态**：草稿（2026-05-25 起）。27 条核心决策已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)，详细演进见 [`08-evolution.md`](./08-evolution.md)。
+> **状态**：草稿（2026-05-25 起）。30 条核心决策已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)，详细演进见 [`08-evolution.md`](./08-evolution.md)。
 >
 > **设计基调**：场景与性能按**优先级演进**——第一阶段实现聚焦运营/营销/活动 + 千级 QPS 起步，但**核心抽象按风控级别预留扩展点**，避免后期推倒重来。
 
@@ -57,7 +57,7 @@
 
 ## 二、核心设计决策（已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)）
 
-下表与 `00-decisions.md` 的 D1-D29 一一对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
+下表与 `00-decisions.md` 的 D1-D30 一一对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
 
 | # | 决策 | 选择 | 取舍 |
 |---|------|------|------|
@@ -90,7 +90,7 @@
 | D27 | **Action 归属从 Rule 迁移到 Decision** | Action 完全挂到 Decision，Rule 移除 `actions` 字段；仅 `finalDecision.actions` 被派发；幂等键变更为 `(tenantId, eventId, decisionCode, actionId)`；PULL Scene Decision 不配 Action 约束不变 | 同一决策码行为一致，配置集中；Rule 职责收窄为"判定条件"；Rule 级差异化 Action 留 v2 |
 | D28 | **Decision.actions 变更生效时机** | 快照语义不变；UI 在修改 Decision.actions 时提示引用该 Decision 的已发布规则需重新发布 | 设计最简；运营理解快照语义后无歧义；Decision 独立版本化留 v2 演进 |
 | D29 | **PUSH/HYBRID Scene decisionStrategy 默认值** | PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`，消灭 actions 静默不派发问题；PULL Scene 不参与合成 | `HIGHEST_PRIORITY` 覆盖绝大多数场景；消灭整类"漏配静默失效"问题，无配置成本 |
-| D30 | **providedMetrics — 业务方随评估携带指标值** | 评估请求体新增 `providedMetrics` 字段；Metric 注册新增 `allowProvided` 标志（默认 `true`）；`PROVIDED` 值优先于 sourceType 取数；只活在本次评估，不持久化 | 消灭注册/换绑等场景的冗余取数；平台按 metric 粒度控制信任边界；引擎不承担业务数据存储职责 |
+| D30 | **providedMetrics — 业务方随评估携带指标值** | 评估请求体新增 `providedMetrics` 字段；Metric 注册新增 `allowProvided` 标志（按 sourceType 给推荐默认值，详见 D30）；`PROVIDED` 值优先于 sourceType 取数；只活在本次评估，不持久化 | 消灭注册/换绑等场景的冗余取数；平台按 metric 粒度控制信任边界；引擎不承担业务数据存储职责 |
 
 > **派生约束**（由上述决策推出、值得单独标注的工程约定，详见 §六设计原则）：
 >

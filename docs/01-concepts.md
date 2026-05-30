@@ -157,6 +157,7 @@ Decision           actionType               │
 | `subjectType` | 业务主体类型枚举：`USER` / `ACCOUNT` / `DEVICE` / `ORDER` / `CUSTOM`；决定 EvalContext 构建时从哪张主体表取属性（v1 仅 `USER` 实装） |
 | `defaultParams` | Scene 级缺省 JSON：`timezone` / `currency` / `defaultRateLimit` / `defaultCacheTtl` 等；规则不显式配置的参数回落到此处 |
 | `eventTypes` | 该 Scene 允许的 eventType 白名单数组；事件接入按 (scene + eventType) 二元组校验，规则 trigger 下拉与 Job `eventTypeTemplate` 也按此过滤 |
+| `decisionStrategy` | 多规则命中时的合成策略。可选，PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`（D29）；PULL Scene 不参与合成，配置了也忽略。v1 仅实现 `HIGHEST_PRIORITY`（priority 最小者胜出） |
 
 Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `cache_policy_override`）；Scene 与 actionType 通过 `scene_action_binding` 多对多关联（含 Scene 级 `default_params` / `rate_limit_override`），仅 PUSH / HYBRID Scene 用到。Scene 与 `JobDefinition` 一对多关联，PULL Scene 不允许配置 Job（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
 
@@ -374,7 +375,7 @@ if (!r.satisfied()) {
 |-----------|------|------|
 | `HANDLER_EXCEPTION` | D18 | `ActionHandler.execute` 抛未捕获异常，引擎归一为 `status=FAILED, retryable=false` |
 | `TIMEOUT` | D18 | `ActionHandler.execute` 超过 handler 自身声明的超时阈值（同步等待 / 调外部 HTTP / MQ ack 等），引擎归一为 `status=FAILED, retryable=true`。超时阈值由 handler 在 `@ActionType` 注解 / 注册元数据声明（详见 04-extension），未声明回落引擎默认 |
-| `PREDECESSOR_FAILED` | D18 | 同 Rule 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED`，不入重试队列 |
+| `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED`，不入重试队列 |
 | `DRY_RUN_NOT_IMPLEMENTED` | D7 v1 | dry-run 调用时该 handler 未实装 `dryRun(action, context)` 入口，由 Dispatcher 短路返回 `status=SKIPPED`，仅 v1 阶段出现，v1.5 全量补齐后不再产生 |
 | `QUEUE_OVERFLOW` | D20 | 异步 Dispatcher 内部队列满拒绝该 ActionInstance；引擎归一为 `status=FAILED, retryable=true`，监控告警 |
 
@@ -421,7 +422,7 @@ EvalContext {
 | `tenantId` | `String` | 上游 + RuleEvent | 租户 ID，多租户隔离主键（D3） |
 | `scene` | `String` | RuleEvent | 业务域命名空间（Matcher 路由键） |
 | `eventType` | `String` | RuleEvent | 事件类型（Matcher 倒排索引第二级） |
-| `occurredAt` | `Instant` | RuleEvent | 业务事件发生时间（可早于 `now`） |
+| `occurredAt` | `Instant` | RuleEvent | 业务事件发生时间（可早于 `now`）；发布期闭合校验路径名为 `occurredAt`，是 `EvalContext.event.occurredAt` 的扁平化别名，两种写法等价 |
 | `subjectId` | `String` | RuleEvent | 业务主体 ID（用户 / 账户 / 设备 / 订单），灰度桶 hash 输入 |
 | `ruleVersionId` | `Long` | Matcher 锁定 | 当前评估的 RuleVersion id，与 `subjectId` 一同作为灰度桶稳定性输入（D6） |
 
@@ -907,7 +908,7 @@ interface Scheduler {
         │
         ▼
 9. 任一 Action 失败 → 引擎归一为 `ActionResult{status=FAILED, errorCode, retryable}`
-   - `retryable=true`：入重试队列；不阻塞同 Rule 内后续 Action（默认 continue-on-error）
+   - `retryable=true`：入重试队列；不阻塞同 Decision 内后续 Action（默认 continue-on-error）
    - `retryable=false`：直接落 `action_execution.status=FAILED`
    - 失败的 Action 若 `failFast=true`：同 Decision 内 `sortOrder` 更大的后续 Action 全部标 `SKIPPED`（errorCode=PREDECESSOR_FAILED），**不**进入重试队列
    - Action 失败不影响 `EvalResult.satisfied`（评估已完成才派发 Action），跨 Rule 隔离
