@@ -43,46 +43,54 @@
 
 ```
 Tenant ──── 1:N ────► Scene ──── N:N ────► Metric  (经 scene_metric_binding)
-                       │                     ▲
-                       │ N:N (仅 PUSH/HYBRID) │ 经 metricCode
-                       ▼                     │
-                  actionType                 │
-                       │                     │
-                       │ 1:N                 │
-                       ▼                     │
-              ┌────────────────────────────────────────────┐
-              │  Rule（心智概念，框内可视为一个整体）        │
-              │                                             │
-              │  RuleDefinition ◄── trigger ── RuleEvent    │
-              │       │                                     │
-              │   1:N │ current_version 指向                │
-              │       ▼                                     │
-              │  RuleVersion (不可变发布快照, D6/D19)       │
-              └────────────────────────────────────────────┘
-                       │
-                   1:1 │ (RuleVersion 持有冻结的 AST + Actions)
-                       ▼
-                  AST   Action  ──── 经 actionType ──► ActionHandler
-                   │                                      (代码层, 注解扫描)
-                   │ 叶子节点
-                   ▼
-              ConditionNode ── consults ──► Metric
-                   │
-                   │ (整个 AST 求值为 true)
-                   ▼
-            (PUSH) 异步派发 Action     │  (PULL) 同步返回 EvalResult, 调用方决策
-                                       │  (HYBRID) 两者皆可
+  │                    │                     ▲
+  │ 1:N                │ N:N (仅 PUSH/HYBRID) │ 经 metricCode
+  ▼                    ▼                     │
+Decision           actionType               │
+(code+priority     (白名单治理)              │
+ +actions)              │ 1:N               │
+  ▲                     ▼                   │
+  │ N:1 (经        ┌────────────────────────────────────────────┐
+  │  RuleDecision  │  Rule（心智概念，框内可视为一个整体）        │
+  │  Binding)      │                                             │
+  │                │  RuleDefinition ◄── trigger ── RuleEvent    │
+  │                │       │                                     │
+  │                │   1:N │ current_version 指向                │
+  │                │       ▼                                     │
+  └──────────────► │  RuleVersion (不可变发布快照, D6/D19)       │
+                   │  持有: AST + preGates + rollout              │
+                   │       + decision_bindings_snapshot           │
+                   └────────────────────────────────────────────┘
+                            │
+                        1:1 │ (RuleVersion 持有冻结的 AST，不含 Actions)
+                            ▼
+                           AST
+                            │ 叶子节点
+                            ▼
+                      ConditionNode ── consults ──► Metric
+                            │
+                            │ (整个 AST 求值为 true)
+                            ▼
+                   绑定的 Decision ──► decisionStrategy 合成 ──► finalDecision
+                                                                      │
+                                                          (PUSH/HYBRID) │ finalDecision.actions
+                                                                      ▼
+                                                               ActionHandler
+                                                               (代码层, 注解扫描)
+
+            (PULL) 同步返回 EvalResult{finalDecision, hitDecisions, ...}, 调用方决策，不派发 Action
 ```
 
 文字版：
 
-- 一个 **Tenant** 下有多个 **Scene**；
+- 一个 **Tenant** 下有多个 **Scene** 和多个 **Decision**；Decision 是 Tenant 级，所有 Scene 共享同一套 Decision 词汇表；
+- **Decision** 持有 `actions` 字段（D27 从 Rule 迁移）：命中该 Decision 时派发的动作列表；
 - 一个 **Scene** 有可见的 **Metric 集合**（白名单绑定）+（PUSH/HYBRID 模式下）可见的 **actionType 集合** + 多条 **Rule**；
 - **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（可编辑草稿，持 `current_version` 指针）+ **RuleVersion**（每次发布产生的不可变快照）；运行时评估锁定 RuleVersion，回滚 = 用旧版本快照建新草稿走标准发布（D6 / D17 / D19）；
-- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树；其他 kind 留 D12 演进）+ 零到多个 **Action**（PULL Scene 下通常为空）；
+- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树）+ `decision_bindings_snapshot`（Rule 绑定的 Decision 及其 actions 的快照）；**不再冻结 actions 列表**（D27）；
 - AST 内部由 `AndNode` / `OrNode` / `NotNode` 嵌套，叶子是 `ConditionNode`；
 - **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（限本 Scene 白名单内）构建 **EvalContext**，喂给 ConditionNode 做判定；
-- AST 求值为 true 后：**PUSH** 模式异步派发 Action；**PULL** 模式同步返回 `EvalResult`，调用方自行决策；**HYBRID** 两者皆可。
+- AST 求值为 true 后 → 取 Rule 绑定的 Decision → `decisionStrategy` 合成 `finalDecision`：**PUSH/HYBRID** 模式异步派发 `finalDecision.actions`；**PULL** 模式同步返回 `EvalResult{finalDecision, hitDecisions, ...}`，调用方自行决策，不派发 Action。
 
 ---
 
