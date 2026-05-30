@@ -57,7 +57,7 @@
 
 ## 二、核心设计决策（已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)）
 
-下表与 `00-decisions.md` 的 D1-D27 一一对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
+下表与 `00-decisions.md` 的 D1-D29 一一对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
 
 | # | 决策 | 选择 | 取舍 |
 |---|------|------|------|
@@ -88,6 +88,8 @@
 | D25 | **Context 构建并发模型** | `CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源；Subject 加载（`SubjectLoader` SPI，v1 `UserProfileLoader`）与 metric 并行；单 metric 失败归 D15 METRIC_FETCH_FAIL，Subject 失败整 Context 失败 | 避免引擎侧共享线程池调优负担；最慢 IO 决定整体等待时间，而非串行累加 |
 | D26 | **Decision 实体 + 多规则命中合成策略** | Decision 为 Tenant 级一等实体（code + priority）；Rule 通过 `RuleDecisionBinding` 关联 Decision（支持可选 score 区间，v1 仅 `AST_BOOLEAN` 场景直接 1:1 绑定）；Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）；`EvalResult` 新增 `finalDecision` + `hitDecisions`；Action 归属见 D27 | PULL 场景风控输出刚需；`HIGHEST_PRIORITY` 覆盖 95% 业务需求 |
 | D27 | **Action 归属从 Rule 迁移到 Decision** | Action 完全挂到 Decision，Rule 移除 `actions` 字段；仅 `finalDecision.actions` 被派发；幂等键变更为 `(tenantId, eventId, decisionCode, actionId)`；PULL Scene Decision 不配 Action 约束不变 | 同一决策码行为一致，配置集中；Rule 职责收窄为"判定条件"；Rule 级差异化 Action 留 v2 |
+| D28 | **Decision.actions 变更生效时机** | 快照语义不变；UI 在修改 Decision.actions 时提示引用该 Decision 的已发布规则需重新发布 | 设计最简；运营理解快照语义后无歧义；Decision 独立版本化留 v2 演进 |
+| D29 | **PUSH/HYBRID Scene decisionStrategy 默认值** | PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`，消灭 actions 静默不派发问题；PULL Scene 不参与合成 | `HIGHEST_PRIORITY` 覆盖绝大多数场景；消灭整类"漏配静默失效"问题，无配置成本 |
 
 > **派生约束**（由上述决策推出、值得单独标注的工程约定，详见 §六设计原则）：
 >
@@ -291,5 +293,6 @@
 | 2026-05-25 | **占位声明**（不独立成 D 决策）：①  `Metric.metricVersion` 字段（v1 固定 1，语义变更走版本化）；②  `MetricRegistry` 并发契约（读路径 thread-safe 且不阻塞热路径，评估期内快照稳定；具体策略由实现层选择）；③  实时性敏感场景 `cachePolicyDefault.ttl=0` 原则。敏感数据加密 / 脱敏的 v1 范围已纳入 D14 决策详情（详见 [`00-decisions.md`](./00-decisions.md) D14 "v1 不做的"），不在本行重复声明。详见 [`08-evolution.md`](./08-evolution.md) §2.2 Metric 版本化 / §2.8 合规演进。 |
 | 2026-05-30 | **D22-D24 落定（矛盾修正）**：(1) D22：Pre-Gate 拦截对账状态从"归 MISS"修正为独立 `BLOCKED` 第四态，`evaluation_session` 加 `blocked_by` 列，命中率分母仅含 HIT+MISS；(2) D23：`evaluation_session` 幂等键 `(tenant_id, event_id)` 语义显式落定为 by design，Replay 换 eventId，版本测试走 dry-run；(3) D24：新增 `SceneWatcher` SPI 与 `RuleVersionWatcher` 平级，v1 实现 `DbPollingSceneWatcher`（30s），承载 Scene 配置热加载。`README §四` 抽象表追加 `SceneWatcher`；`01-concepts §3.14` Pre-Gate 对账描述 + `§3.2` Scene 关键边界同步更新。 |
 | 2026-05-31 | **D27 落定：Action 归属从 Rule 迁移到 Decision**。Rule 移除 `actions` 字段；Decision 新增 `actions` 字段；仅 `finalDecision.actions` 被派发；幂等键变更为 `(tenantId, eventId, decisionCode, actionId)`；PULL Scene Decision.actions 必须为空。`README §二` 决策表追加 D27；`§四` 抽象表 `RuleDefinition` / `RuleVersion` / `Decision` / `ActionExecution` 行同步；`01-concepts §3.4 Rule` / `§3.7 Action` / `§3.19 Decision` 同步更新。 |
+| 2026-05-31 | **D28/D29 落定：Decision.actions 生效时机 + decisionStrategy 默认值**。D28：快照语义不变，UI 在修改 Decision.actions 时提示已发布规则需重新发布；D29：PUSH/HYBRID Scene 缺省 `decisionStrategy` 等价 `HIGHEST_PRIORITY`，消灭静默不派发问题。`00-decisions.md` 追加 D28 / D29；`README §二` 决策表同步；`01-concepts §3.19` 补充快照生效提示，`§3.20` decisionStrategy 说明更新。 |
 | 2026-05-30 | **D26 落定：Decision 实体 + 多规则命中合成策略**。Decision 为 Tenant 级一等实体（code + priority）；Rule 通过 `RuleDecisionBinding` 关联 Decision（版本快照化，支持可选 score 区间）；Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）；`EvalResult` 新增 `finalDecision` + `hitDecisions` 字段；Decision 与 Action 正交。`README §二` 决策表追加 D26；`§四` 抽象表追加 `Decision` / `RuleDecisionBinding`，`EvalResult` 行同步；`01-concepts §一` 命名清单追加 Decision，`§3.4 EvalResult` 结构更新，新增 `§3.19 Decision` + `§3.20 RuleDecisionBinding`。 |
 | 2026-05-30 | **缺失概念补全 + D25 落定**：(1) `01-concepts §3.15` 新增 `EvaluationSession` 字段表 + 四态 status 聚合语义（D22 落地）；(2) `§3.16` 新增 `DryRunSession` 独立存储结构（与生产 session 隔离、无 UK 约束、短保留期）；(3) `§3.17` 新增 Action 重试队列（独立于主派发队列，指数退避，进程重启丢失可重推恢复）；(4) `§3.18` 新增 Compensation Pipeline（引擎提供 `ActionHandler.compensate()` SPI 接入点，补偿不自动触发，由外部对账/手动操作发起）；(5) D25 落定：Context 构建并发模型，`CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源 + `SubjectLoader` SPI（v1 `UserProfileLoader`），`README §四` 抽象表追加 `SubjectLoader` / `SubjectLoaderRegistry`，`01-concepts §3.13` Subject 关键边界同步。|

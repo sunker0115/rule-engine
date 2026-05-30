@@ -855,6 +855,58 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D28. Decision.actions 变更生效时机 ⭐⭐
+
+**背景**：D27 将 Action 迁移到 Decision.actions，但 Decision.actions 在 Rule 发布时随 `decision_bindings_snapshot` 一同快照化——修改 Decision.actions 后，已发布的 Rule 版本仍使用旧快照，新配置不会自动生效。运营容易误以为"改了 Decision 就生效了"。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| A. 当前方案（快照 + UI 提示） | Decision.actions 按 Rule 发布时机快照；修改 Decision.actions 后，平台 UI 列出所有引用该 Decision 的已发布规则，提示"需重新发布才能生效" | 设计不变，实现简单；运营理解快照语义后无歧义 |
+| B. Decision 独立版本化 | Decision 引入 `(code, version)` 二层结构，Rule 快照绑定 `(decisionCode, decisionVersion)`；可选"跟随最新版"或"锁定版本" | 去除了使用歧义，但 Decision 变成二层，运营心智更重；演进成本高 |
+
+**你的决定**：A
+
+**v1 落地范围**：
+- Decision.actions 修改后引擎侧无感知，已发布 Rule 继续使用快照；
+- 平台 UI 在修改 Decision.actions 保存时，查询所有 `rule_version.decision_bindings_snapshot` 引用该 Decision 的已发布规则，弹出提示列表："以下 N 条规则使用旧快照，需重新发布才能使用最新 actions"；
+- 提示仅为运营警示，不阻断保存操作。
+
+**v1 不做的**：
+- Decision 版本化（选项 B）；
+- 引擎侧主动推送"快照已过期"通知。
+
+**派生约束**：
+- `01-concepts.md` §3.19 Decision 关键边界已补充此说明；
+- `06-frontend.md` 需在 Decision 编辑页补充 UI 提示逻辑（留后续前端设计阶段落地）。
+
+---
+
+## D29. PUSH/HYBRID Scene 的 decisionStrategy 默认值 ⭐⭐
+
+**背景**：`Scene.decisionStrategy` 当前为可选字段，未配置时 `finalDecision` 为空，actions 不派发。PUSH 模式下漏配静默失效无报错，排查成本高。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| A. 保持可选，文档提示 | Scene 不配则 finalDecision 为空，靠运营文档和排查指南规避 | 灵活但易踩坑，静默失效排查成本高 |
+| B. PUSH/HYBRID Scene 默认 `HIGHEST_PRIORITY` | Scene 不显式配 decisionStrategy 时，引擎对 PUSH/HYBRID Scene 自动按 `HIGHEST_PRIORITY` 合成；PULL Scene 不参与合成，不受影响 | 消灭静默失效类问题；HIGHEST_PRIORITY 覆盖绝大多数业务场景，极少需要其他策略 |
+
+**你的决定**：B
+
+**v1 落地范围**：
+- Scene 字段 `decisionStrategy` 保留可选，但引擎在评估阶段对 PUSH/HYBRID Scene 的缺省逻辑改为：`decisionStrategy == null` 时等价于 `HIGHEST_PRIORITY`；
+- PULL Scene `decisionStrategy` 保持无意义（PULL 不合成 finalDecision 也不派发 Action），配置了也忽略；
+- 前端 UI 在 PUSH/HYBRID Scene 编辑页将 `decisionStrategy` 下拉默认选中 `HIGHEST_PRIORITY`，显示"（默认）"标注。
+
+**v1 不做的**：
+- 强制要求 PUSH/HYBRID Scene 必须显式配 `decisionStrategy`（过于严格，影响现有 Scene 兼容）；
+- `MAJORITY` / `CUSTOM_SPI` 策略（D26 留 v2）。
+
+**派生约束**：
+- `01-concepts.md` §3.20 RuleDecisionBinding 的 `decisionStrategy` 说明需补充"PUSH/HYBRID Scene 缺省等价 HIGHEST_PRIORITY"；
+- `02-runtime.md` 评估链路实现需按此默认逻辑处理。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -886,5 +938,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D25 | Context 构建并发模型 | C    | `CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源；Subject 加载与 metric 并行；单 metric 失败归 D15 METRIC_FETCH_FAIL，Subject 失败整 Context 失败；`SubjectLoader` SPI（v1 实现 `UserProfileLoader`） |
 | D26 | Decision 实体 + 多规则命中合成策略 | B    | Decision 为 Tenant 级一等实体；`RuleDecisionBinding` 关联表（支持可选 score 区间）；Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）；Action 归属见 D27 |
 | D27 | Action 归属从 Rule 迁移到 Decision | B    | Action 完全挂到 Decision，Rule 不再持 actions 字段；finalDecision.actions 被派发；幂等键变更为 `(tenantId, eventId, decisionCode, actionId)`；PULL Scene Decision 不配 Action 约束不变 |
+| D28 | Decision.actions 变更生效时机 | A    | 快照语义不变；UI 在修改 Decision.actions 时提示引用该 Decision 的已发布规则需重新发布 |
+| D29 | PUSH/HYBRID Scene 的 decisionStrategy 默认值 | B    | PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`，消灭 actions 静默不派发问题；PULL Scene 不参与合成 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

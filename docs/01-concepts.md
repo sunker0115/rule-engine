@@ -829,7 +829,7 @@ interface Scheduler {
 | `MAJORITY` | 多数命中的 Decision 胜出 | v2 |
 | `CUSTOM_SPI` | 自定义合成器 SPI | v2 |
 
-`Scene.decisionStrategy` 为可选字段：Scene 不配则 `EvalResult.finalDecision` 为空，`hitDecisions` 列表仍填充供调用方自行处理。**PUSH 模式下漏配 `decisionStrategy` 会导致 actions 永远不派发且无报错，排查时需首先检查此项。**
+`Scene.decisionStrategy` 为可选字段：**PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`**（D29），不会因漏配导致 actions 静默不派发；PULL Scene 不参与合成，配置了也忽略。Scene 显式配置可覆盖默认值；`hitDecisions` 列表在所有模式下始终填充，供调用方自行处理。
 
 **关键边界**：
 
