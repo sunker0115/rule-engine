@@ -87,7 +87,7 @@ Decision           actionType               │
 - **Decision** 持有 `actions` 字段（D27 从 Rule 迁移）：命中该 Decision 时派发的动作列表；
 - 一个 **Scene** 有可见的 **Metric 集合**（白名单绑定）+（PUSH/HYBRID 模式下）可见的 **actionType 集合** + 多条 **Rule**；
 - **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（可编辑草稿，持 `current_version` 指针）+ **RuleVersion**（每次发布产生的不可变快照）；运行时评估锁定 RuleVersion，回滚 = 用旧版本快照建新草稿走标准发布（D6 / D17 / D19）；
-- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树）+ `decision_bindings_snapshot`（Rule 绑定的 Decision 及其 actions 的快照）；**不再冻结 actions 列表**（D27）；
+- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树）+ `decision_bindings_snapshot`（Rule 绑定的 Decision 及其 actions 的快照）；**不再含独立的 `actions_snapshot` 列**（D27，actions 随 `decision_bindings_snapshot` 一同快照化）；
 - AST 内部由 `AndNode` / `OrNode` / `NotNode` 嵌套，叶子是 `ConditionNode`；
 - **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（限本 Scene 白名单内）构建 **EvalContext**，喂给 ConditionNode 做判定；
 - AST 求值为 true 后 → 取 Rule 绑定的 Decision → `decisionStrategy` 合成 `finalDecision`：**PUSH/HYBRID** 模式异步派发 `finalDecision.actions`；**PULL** 模式同步返回 `EvalResult{finalDecision, hitDecisions, ...}`，调用方自行决策，不派发 Action。
@@ -165,8 +165,8 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 - **Scene 变更 30s 最终一致**（D24）：Scene 配置（bindings / payloadSchema / status）由 `SceneWatcher`（`DbPollingSceneWatcher`，默认 30s 轮询）热加载，无需重启；Scene `DISABLED` → 从 Matcher 路由表摘除，已进行中的 session 不中断；bindings 变更 → 触发对应 MetricSource / ActionHandler 资源重新预热/卸载。
 - **同一 Scene 不能跨 Tenant**：`acme.marketing.signup` 和 `beta.marketing.signup` 是两个 Scene。
 - **同一 Rule 属于唯一 Scene**：如果两个业务想要"看起来一样的规则"，请各自在自己 Scene 配一条。
-- **Scene 的白名单是发布时校验项**：规则发布前校验 AST 引用的全部 `metricCode` 在 metric 白名单内、Action 列表的全部 `actionType` 在 action 白名单内（PUSH/HYBRID 模式），否则发布拒绝。
-- **PULL 模式 Scene 拒收 Action 配置**：规则发布时如果 Action 列表非空，校验拒绝；前端 UI 也直接隐藏 Action 编辑区块。
+- **Scene 的白名单是发布时校验项**：规则发布前校验 AST 引用的全部 `metricCode` 在 metric 白名单内、规则绑定的 Decision.actions 中全部 `actionType` 在 action 白名单内（PUSH/HYBRID 模式），否则发布拒绝。
+- **PULL 模式 Scene 拒收 Action 配置**：规则发布时如果规则绑定的 Decision.actions 非空，校验拒绝；前端 UI 也直接隐藏 Action 编辑区块。
 - **`payloadSchema` / `eventTypes` 是发布与接入双校验项**（D13）：
   - 规则发布：trigger eventType 必须 ∈ `eventTypes`；AST 引用的 `event.payload.<field>` 必须 ∈ `payloadSchema`；
   - 事件接入：(scene + eventType) 不在白名单的事件拒收；payload 字段不符 schema 的事件拒收（v1 仅做"字段名 + 基础类型"校验，复杂约束留到 v2）；
@@ -202,7 +202,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 
 ### 3.4 Rule（规则）
 
-**是什么**：业务想表达的"在什么条件下，对谁，做什么动作"。
+**是什么**：业务想表达的"在什么条件下，对谁，满足后输出哪个 Decision"。
 
 **核心字段**：
 
@@ -328,7 +328,7 @@ sealed RuleNode {
 
 ### 3.7 Action（动作，可选）
 
-**是什么**：Rule 命中后要做的事。由 `actionType` 决定执行器，参数化配置。
+**是什么**：Decision 命中后要做的事。由 `actionType` 决定执行器，参数化配置。
 
 **为什么可选**：引擎支持两种使用模式（由 Scene 的 `dominantMode` 字段决定）：
 
@@ -361,11 +361,11 @@ if (!r.satisfied()) {
 | 字段 | 说明 |
 |------|------|
 | `actionId` | Action ID |
-| `ruleId` | 所属 Rule |
+| `decisionCode` | 所属 Decision |
 | `actionType` | 路由键，决定用哪个 `ActionHandler` 实现 |
 | `params` | JSON 参数（依 actionType 而异） |
-| `sortOrder` | Rule 内多 Action 的执行顺序 |
-| `failFast` | 布尔，默认 `false`。`true` 时本 Action 失败 → 同 Rule 内 `sortOrder` 大于本 Action 的后续 Action 全部标 `SKIPPED`，不进入重试队列（D18） |
+| `sortOrder` | Decision 内多 Action 的执行顺序 |
+| `failFast` | 布尔，默认 `false`。`true` 时本 Action 失败 → 同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部标 `SKIPPED`，不进入重试队列（D18） |
 | `compensateActionType` | 反向动作类型（用于补偿流水线，可选） |
 
 **`ActionResult.errorCode` 枚举（v1）**：与 `EvalResult.errorCode`（D15）不同维度，独立枚举：
@@ -581,7 +581,7 @@ interface Scheduler {
 | `trigger_event_types` | 冻结：发布瞬间的 eventType 数组 |
 | `ast_snapshot` | 冻结：完整 AST JSON |
 | `pre_gates_snapshot` | 冻结：preGates 列表 |
-| `actions_snapshot` | 冻结：Action 列表（含 `failFast` / `compensateActionType` / `sortOrder`） |
+| `decision_bindings_snapshot` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `compensateActionType` / `sortOrder`）；D27 取代原 `actions_snapshot` |
 | `rollout_snapshot` | 冻结：灰度配置 |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |
 | `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。发布期由 AST 静态分析得出；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
@@ -895,7 +895,7 @@ interface Scheduler {
 9. 任一 Action 失败 → 引擎归一为 `ActionResult{status=FAILED, errorCode, retryable}`
    - `retryable=true`：入重试队列；不阻塞同 Rule 内后续 Action（默认 continue-on-error）
    - `retryable=false`：直接落 `action_execution.status=FAILED`
-   - 失败的 Action 若 `failFast=true`：同 Rule 内 `sortOrder` 更大的后续 Action 全部标 `SKIPPED`（errorCode=PREDECESSOR_FAILED），**不**进入重试队列
+   - 失败的 Action 若 `failFast=true`：同 Decision 内 `sortOrder` 更大的后续 Action 全部标 `SKIPPED`（errorCode=PREDECESSOR_FAILED），**不**进入重试队列
    - Action 失败不影响 `EvalResult.satisfied`（评估已完成才派发 Action），跨 Rule 隔离
    补偿场景（如交易后续撤销）**不由引擎自动触发**，由 D4 补偿流水线（对账任务 / 手动回滚按钮）显式调用 `ActionHandler.compensate(...)`
 ```
@@ -1003,7 +1003,7 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 
 **Action 白名单**（PUSH / HYBRID Scene 生效）三处生效点：
 
-1. **规则发布时校验**：规则 Action 列表中的所有 `actionType` 必须在本 Scene 的 `scene_action_binding` 内，否则发布拒绝；PULL Scene 要求 Action 列表为空；
+1. **规则发布时校验**：规则绑定的 Decision.actions 中所有 `actionType` 必须在本 Scene 的 `scene_action_binding` 内，否则发布拒绝；PULL Scene 要求 Decision.actions 为空；
 2. **Scene 启动时预热**：按白名单批量预热 ActionHandler 的外部资源（HTTP client / MQ producer / RPC 连接池 / 限流器）；PULL Scene 跳过 ActionHandler 预热；
 3. **前端 UI 下拉过滤**：配规则页面的 actionType 下拉项按当前 Scene 的 action binding 过滤，运营选不到越界 actionType；PULL Scene 直接隐藏 Action 编辑区块。
 
