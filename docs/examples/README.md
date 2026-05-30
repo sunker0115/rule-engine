@@ -13,7 +13,8 @@ examples/
 ├── README.md           本文件
 ├── risk-control/       风控类（额度校验 / 黑名单 / 异常行为拦截）
 ├── marketing/          营销类（VIP 升级 / 满减 / 画像投放）
-└── activity/           活动类（任务进度 / 奖励发放 / 兑换券）
+├── activity/           活动类（任务进度 / 奖励发放 / 兑换券）
+└── patterns/           跨域技术模式（时间条件写法 / Metric sourceType 对比 / Pre-Gate 组合等）
 ```
 
 ⏳ 子目录内案例待逐步沉淀。
@@ -42,8 +43,9 @@ examples/
 
 ## 四、阅读路径建议
 
-- **新人首次** → 选 `marketing/` 下最简单案例 → 对照 [`../01-concepts.md`](../01-concepts.md) 一等概念
+- **新人首次** → 选 `risk-control/` 或 `marketing/` 下最简单案例 → 对照 [`../01-concepts.md`](../01-concepts.md) 一等概念
 - **接入新场景** → 找业务域最接近的案例 → 复制 → 改 Scene / Rule
+- **学习某个技术模式** → 看 `patterns/`（时间条件 / sourceType 对比 / providedMetrics 等）
 - **评审 / 设计参考** → 按相关决策反查案例
 
 ## 五、维护原则
