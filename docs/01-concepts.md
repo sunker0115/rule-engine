@@ -153,6 +153,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 
 **关键边界**：
 
+- **Scene 变更 30s 最终一致**（D24）：Scene 配置（bindings / payloadSchema / status）由 `SceneWatcher`（`DbPollingSceneWatcher`，默认 30s 轮询）热加载，无需重启；Scene `DISABLED` → 从 Matcher 路由表摘除，已进行中的 session 不中断；bindings 变更 → 触发对应 MetricSource / ActionHandler 资源重新预热/卸载。
 - **同一 Scene 不能跨 Tenant**：`acme.marketing.signup` 和 `beta.marketing.signup` 是两个 Scene。
 - **同一 Rule 属于唯一 Scene**：如果两个业务想要"看起来一样的规则"，请各自在自己 Scene 配一条。
 - **Scene 的白名单是发布时校验项**：规则发布前校验 AST 引用的全部 `metricCode` 在 metric 白名单内、Action 列表的全部 `actionType` 在 action 白名单内（PUSH/HYBRID 模式），否则发布拒绝。
@@ -621,7 +622,7 @@ interface Scheduler {
 
 **关键边界**：
 
-- **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 MISS 桶；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
+- **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 **`BLOCKED` 桶**（D22，第四态，独立于 `MISS`——`MISS` 是"通过 Pre-Gate 但 AST 求值不满足"，`BLOCKED` 是"Pre-Gate 拦截未进入 AST"）；`evaluation_session.blocked_by` 字段记录拦截 Gate 类型（`ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX`）；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
 - **Pre-Gate 与 AST 解耦**：Pre-Gate 不能引用 metric，也不能写 conditionType 自定义——只用 `Rule.preGates` 配置的内置类型；演进诉求（如"灰度按外部 AB 平台命中"）走 D6 留的接口替换，不在 Pre-Gate 层级开新类型；
 - **失败语义与 D15 区别**：Pre-Gate 内部执行异常（如 Redis 频次计数器超时）走与 D15 一致的归一——失败默认按"未通过该 Gate"处理（fail-closed，宁可漏发不可错发），具体 fail-open / fail-closed 默认由各 Gate 实现声明，详见 [`02-runtime.md`](./02-runtime.md) §Pre-Gate Chain；
 - **dry-run 行为**：见 §五 Q10——判定全部执行（运营需要看见命中/拦截结果），但**频次计数器与互斥锁不落副作用**；

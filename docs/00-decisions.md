@@ -341,7 +341,7 @@ EvalResult {
   - 风控类业务约定"`errorCode` 非空时按拦截处理"（fail-secure）；
   - 营销类业务约定"`errorCode` 非空时按放行处理"（fail-open）；
   - 引擎不替调用方决策；
-- **灰度对账**：评估结果分三类统计——`HIT` / `MISS` / `ERROR`，ERROR 不计入命中率分母，单独看 ERROR 率告警。
+- **灰度对账**：评估结果分**四类**统计——`HIT`（AST 求值满足）/ `MISS`（通过 Pre-Gate 但 AST 求值不满足）/ `BLOCKED`（Pre-Gate 拦截，未进入 AST）/ `ERROR`（AST 评估异常）；`BLOCKED` 和 `ERROR` 均不计入命中率分母；`evaluation_session.blocked_by` 字段（`ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX`）记录拦截 Gate 类型，可按类型下钻分析。
 
 **v1 不做的**：
 - 不做评估失败的自动重试（Action 重试已有，评估失败重试语义不清晰：重试可能加重 MetricSource 压力）；
@@ -610,6 +610,89 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D22. Pre-Gate 拦截的对账状态 ⭐⭐
+
+**为什么重要**：D15 定义了 `HIT / MISS / ERROR` 三态，但 Pre-Gate 拦截（灰度未命中 / 黑名单 / 频次超限 / 互斥）在语义上既不是"AST 求值不满足"（MISS），也不是"评估异常"（ERROR）——把它归入 MISS 导致报表无法区分"规则条件太严"和"灰度只放了 10%"，对应完全不同的优化动作。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☐ A. 引入第四态 `BLOCKED` | 四态：`HIT / MISS / BLOCKED / ERROR`；Pre-Gate 拦截 → `BLOCKED`，`evaluation_session.blocked_by` 记录拦截 Gate 类型 | 语义精确；所有用三态枚举的地方需扩容，但影响面可控（evaluation_session 表 + 对账报表） |
+| ☐ B. MISS 内加 `miss_reason` 子字段 | 三态不变，`evaluation_session` 加 `miss_reason` 列（`AST_FALSE / PRE_GATE`） | 外部枚举稳定；但两字段表达一个语义，别扭 |
+| ☐ C. 维持现状归 MISS | Pre-Gate 拦截靠 `node_trace.PRE_GATE_BLOCKED` 节点区分 | 最简；但运营无法在 evaluation_session 聚合粒度区分两种 MISS 原因 |
+
+**决定**：**A（引入 BLOCKED 第四态）**
+
+**v1 落地范围**：
+- `evaluation_session.status` 枚举扩为四态：`HIT / MISS / BLOCKED / ERROR`；
+- Pre-Gate 任一 Gate 拦截 → 写一条 `evaluation_session`，`status=BLOCKED`，`blocked_by` 列记录拦截 Gate 类型（`ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX`）；
+- **EvalResult 不变**：Pre-Gate 拦截时根本不进入 AST 评估，不产生 `EvalResult`；
+- **对账分母**：命中率 = `HIT / (HIT + MISS)`；`BLOCKED` 和 `ERROR` 均不参与命中率分母，各自独立监控指标；
+- **与 D15 区分**：D15 的 `ERROR` 是"进入 AST 评估后某节点异常"；`BLOCKED` 是"未进入 AST"，两者不同维度，不混用。
+
+**派生约束**：
+- `evaluation_session` 表加 `blocked_by` 列（`VARCHAR`，nullable，仅 `status=BLOCKED` 时有值）；
+- `01-concepts.md` §3.14 Pre-Gate 关键边界"对账归 MISS 桶"修正为"对账归 BLOCKED 桶"；
+- README §二 D15 决策表对账部分同步更新（已在 D15 v1 语义规范段更新）；
+- `07-operability.md` 监控指标清单补 `rule.eval.blocked.count{gate_type}` 指标。
+
+---
+
+## D23. `evaluation_session` 幂等键语义 ⭐⭐
+
+**为什么重要**：幂等键决定"同一事件能否被多次评估"，影响版本切换后的 Replay 可行性和异常事件重推策略。未明确表态会导致 Replay 场景和正常幂等语义产生分歧预期。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☐ A. `(tenant_id, event_id)` — 同一事件永远只评估一次 | Replay 须换新 eventId，版本切换后想重跑须上游重推 | 幂等最强，设计最简；Replay 对上游有要求，但符合 MQ 标准重推语义 |
+| ☐ B. 加版本维度：`(tenant_id, event_id, rule_version_snapshot_hash)` | 同 eventId 可在不同规则版本下独立评估 | 支持低成本版本重跑；幂等键复杂，同 eventId 多行增加查询注意点 |
+| ☐ C. 分表：Replay 走独立 `replay_session` 表 | 生产幂等干净，Replay 独立维护 | 主路径语义最干净；两套表需单独维护 |
+
+**决定**：**A（`(tenant_id, event_id)` 维持单一 uk，Replay 上游换 eventId）**
+
+**v1 落地范围**：
+- `evaluation_session` uk = `(tenant_id, event_id)`，语义：同一业务事件（由业务方保证 eventId 全局唯一）永远只评估一次；
+- **这是 by design**，不是缺陷：版本切换后同一历史事件不会被新版本规则重新评估；
+- **Replay 语义**：`source=REPLAY` 仅作来源标记，不改幂等语义——Replay 场景业务方上游重推时必须生成新 eventId（MQ 重推即新消息，eventId 换新是标准做法）；
+- **版本切换后测新规则**：走 dry-run 入口（传 mockEvent 指定 `ruleVersionId`），不走生产链路；
+- v1 不引入 Replay 专用表或专用 API——v1 Replay 场景极低频，过度设计。
+
+**v1 不做的**：
+- 不为 Replay 单独建表或特殊处理；
+- 不支持"同一 eventId 用新规则版本重新评估"的生产路径——这应该是运维操作，走 dry-run 或上游重推（换 eventId）。
+
+---
+
+## D24. Scene 变更热加载（`SceneWatcher` SPI）⭐⭐
+
+**为什么重要**：D17 / D20 定义了 `RuleVersionWatcher` 监听规则版本变更，但 Scene 自身也有需要热加载的生命周期事件：新增 `scene_metric_binding` 要重新预热 MetricSource，修改 `payloadSchema` 要刷新发布校验器，`Scene.status DISABLED` 要从路由表摘除。`RuleVersionWatcher` 只看 `rule_version` 表，完全感知不到这些变更——如果 Scene 变更不热加载，运营新加一条 metric 绑定要重启应用，不符合"配置热加载"基调。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☐ A. 扩展 `RuleVersionWatcher` 为 `ConfigWatcher` | 一个 Watcher 监听所有配置变更（规则 + Scene + Binding） | 实现简单；但接口职责变宽，替换实现时颗粒度过粗 |
+| ☐ B. 新增独立 `SceneWatcher` SPI，与 `RuleVersionWatcher` 平级 | 两个独立 SPI，各管各的变更域，各自触发对应热加载逻辑 | 职责清晰，可独立替换；多一个轮询任务，成本低 |
+| ☐ C. Scene 变更重启生效 | 不做热加载，Scene 是低频变更对象 | 最简；但有停服窗口，运营体验差，与整体热加载基调不符 |
+
+**决定**：**B（新增独立 `SceneWatcher` SPI）**
+
+**v1 落地范围**：
+- **`SceneWatcher` 接口**（与 `RuleVersionWatcher` 对称）：`subscribe(callback) / pull(since) / status()`；
+- **v1 唯一实现**：`DbPollingSceneWatcher`，默认轮询间隔 30s（Scene 变更频率远低于规则，间隔可比 `RuleVersionWatcher` 的 15s 长）；可配 `engine.scene.poll-interval`；
+- **变更触发逻辑**：
+  - `scene_metric_binding` 新增/删除 → 触发对应 Scene 的 MetricSource 预热/卸载；
+  - `scene_action_binding` 新增/删除 → 触发对应 Scene 的 ActionHandler 资源预热/卸载（仅 PUSH/HYBRID Scene）；
+  - `scene_definition.status = DISABLED` → 将该 Scene 从 Matcher 路由表摘除（拒绝新事件路由到此 Scene），但已进行中的评估 session 不中断；
+  - `scene_definition.status = ACTIVE`（重启用）→ 重新加入 Matcher 路由表 + 按绑定重新预热资源；
+  - `scene_definition` 其他字段变更（`payloadSchema` / `defaultParams` / `eventTypes`）→ 刷新内存中的 Scene 配置缓存；
+- **SPI 契约与 `RuleVersionWatcher` 对齐**：变更通知最终一致 + 至多一次 callback 重复（消费方幂等）+ 启动期一次性全量拉；
+- **多 backend 预留**：v2 可换 MQ 推 / Nacos，仅替换 `SceneWatcher` 实现，业务侧零改动。
+
+**派生约束**：
+- `SceneWatcher` 入 README §四 抽象表（与 `RuleVersionWatcher` 平级）；
+- `01-concepts.md` §3.2 Scene 关键边界补"Scene 变更由 `SceneWatcher` 热加载，30s 最终一致"；
+- `09-skeleton.md` SPI 落点章节补 `SceneWatcher` 接口位置。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -628,12 +711,15 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D12 | Rule.kind + 输出多态预留 | A    | 评分卡/决策树/决策表/脚本演进的 schema 占位，v1 仅实现 AST_BOOLEAN |
 | D13 | Scene 元数据 schema | A    | 4 字段：payloadSchema / subjectType / defaultParams / eventTypes；类型级 params schema 留到 04-extension |
 | D14 | 权限与审计 | A    | 占位字段 + audit_log 表；不内置 RBAC，鉴权交上游网关 |
-| D15 | 评估失败语义 | A    | 单节点降级 false + 整树继续 + EvalResult.errorCode 槽位；规则间隔离；ERROR 独立对账桶 |
+| D15 | 评估失败语义 | A    | 单节点降级 false + 整树继续 + EvalResult.errorCode 槽位；规则间隔离；四态对账：HIT / MISS / BLOCKED / ERROR |
 | D16 | 链式触发 | A    | 显式禁止 Action 产引擎事件；ActionHandler 不返回事件；业务自走外部 MQ 链式 |
 | D17 | 配置热加载 | A    | DB 轮询 15s + 评估快照锁定 + RuleVersionWatcher 接口预留 |
 | D18 | Action 失败补偿语义 | B    | 默认 continue-on-error，Action 级可声明 failFast；单 Action 失败不影响 Rule 内其他 Action；补偿不自动触发由外部调度 |
 | D19 | 规则发布事务性 | A    | 单条规则原子发布（状态机：DRAFT → PUBLISHING → PUBLISHED / PUBLISH_FAILED）；批量发布前端逐条提交；回滚 = 用旧版本快照建新草稿 |
 | D20 | v1 高吞吐评估期落地范围 | A    | metric 批量预拉 + 异步 Dispatcher + 输入闭合校验 + Watcher SPI 多态化；预编译 Predicate SPI 预留 v1.5 切换；alpha 共享 / 嵌入式 SDK / EXPRESSION 叶子留 08-evolution |
 | D21 | 评估观测数据异步写入 | B    | `TraceWriter` 异步批写（队列 + 消费者池 + batch insert，复用 D20 §2 模型）；与 `audit_log` 同步事务严格分离；失败降级丢弃 + 告警，不影响 EvalResult；ConditionNode 与 Pre-Gate trace 同通道；运维参数留 07-operability |
+| D22 | Pre-Gate 拦截对账状态 | A    | 引入第四态 `BLOCKED`；四态：`HIT / MISS / BLOCKED / ERROR`；Pre-Gate 拦截 → BLOCKED；`evaluation_session.blocked_by` 记录拦截 Gate 类型；命中率分母仅含 HIT+MISS |
+| D23 | `evaluation_session` 幂等键语义 | A    | `(tenant_id, event_id)` 永远只评估一次，by design；Replay 换新 eventId；版本切换后测新规则走 dry-run |
+| D24 | Scene 变更热加载 | B    | 新增独立 `SceneWatcher` SPI；v1 实现 `DbPollingSceneWatcher`（30s 轮询）；与 `RuleVersionWatcher` 平级，职责独立 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。
