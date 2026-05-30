@@ -25,12 +25,16 @@ examples/
 
 ```
 <example-name>/
-├── README.md          场景描述 + 业务目标 + 关键决策
-├── scene.json         Scene 定义（含 payloadSchema / eventTypes / metric 白名单 / action 白名单）
-├── rules/             该 Scene 下的 Rule 定义（含 AST + Action + rollout）
-├── metrics/           Scene 用到的 metric 注册（如非内置）
-├── mock-events.json   mock 的 RuleEvent 样本（用于 dry-run）
-└── expected-results.json   各 mock event 的预期 EvalResult / Action 派发结果
+├── README.md          场景描述 + 业务目标 + 关键决策引用
+├── scene.json         Scene 定义（含 payloadSchema / eventTypes / metricBindings /
+│                      actionBindings / decisions 列表及各 Decision.actions）
+├── rules/             该 Scene 下的 Rule 定义（含 AST + preGates + decisionBindings；
+│                      Action 挂在 Decision 上，rules/ 不含 Action 配置，见 D27）
+├── metrics/           Scene 用到的 metric 注册（含 sourceType / dataType /
+│                      cachePolicyDefault / allowProvided，见 D30）
+├── mock-events.json   mock 的 RuleEvent 样本（含 providedMetrics 字段，用于 dry-run）
+└── expected-results.json   各 mock event 的预期 EvalResult
+                            （含 finalDecision / hitDecisions / trace.metricSources）
 ```
 
 ## 三、案例编写约定
