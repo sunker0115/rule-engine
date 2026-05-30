@@ -792,6 +792,7 @@ interface Scheduler {
 
 - **Tenant 级，非 Scene 级**：同一 Tenant 的所有 Scene 共享 Decision 词汇表；不同 Tenant 的 Decision 严格隔离；
 - **Action 挂在 Decision 上**（D27）：Rule 不再持 `actions` 字段；PULL Scene 下 Decision.actions 必须为空（发布校验 + 前端屏蔽）；PUSH/HYBRID Scene 下 Decision.actions 的 `actionType` 须在 Rule 所属 Scene 的 `scene_action_binding` 内（Rule 发布时校验）；
+- **Decision.actions 快照在 Rule 发布时拍**：`decision_bindings_snapshot` 随 Rule 发布产生，此后修改 Decision.actions **不会**影响已发布的 Rule 版本；若要让新 actions 生效，必须重新发布 Rule——运营容易忽视这一点；
 - **priority 只用于合成排序**：priority 数值本身不影响 Rule 是否命中（Pre-Gate 和 AST 求值结果不读 priority）；priority 只在 `HIGHEST_PRIORITY` 合成策略里生效；
 - **Decision 不内置分类标签**：v1 不区分"拒绝类/通过类"，由 `priority` 数值隐式体现；分类标签留 [`08-evolution.md`](./08-evolution.md) §演进；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §decision_definition 表。
@@ -828,7 +829,7 @@ interface Scheduler {
 | `MAJORITY` | 多数命中的 Decision 胜出 | v2 |
 | `CUSTOM_SPI` | 自定义合成器 SPI | v2 |
 
-`Scene.decisionStrategy` 为可选字段：Scene 不配则 `EvalResult.finalDecision` 为空，`hitDecisions` 列表仍填充供调用方自行处理。
+`Scene.decisionStrategy` 为可选字段：Scene 不配则 `EvalResult.finalDecision` 为空，`hitDecisions` 列表仍填充供调用方自行处理。**PUSH 模式下漏配 `decisionStrategy` 会导致 actions 永远不派发且无报错，排查时需首先检查此项。**
 
 **关键边界**：
 
