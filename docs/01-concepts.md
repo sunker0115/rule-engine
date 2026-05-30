@@ -207,7 +207,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `triggerEventTypes` | 数组：哪些 eventType 触发本规则（如 `["trade.completed"]`） |
 | `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 kind 用各自的 JSON 内部结构，与 ast 互斥） |
 | `preGates` | 准入闸门列表（频次 / 互斥 / 黑白名单 / 灰度命中） |
-| `actions` | 命中后执行的动作列表 |
+| `actions` | **已迁移到 Decision**（D27）：Rule 不再直接持 actions；命中后要执行的动作由 Rule 绑定的 Decision.actions 决定 |
 | `status` | 状态机：`DRAFT` → `PUBLISHING`（瞬时）→ `PUBLISHED` / `PUBLISH_FAILED`；`PUBLISHED ↔ DISABLED` 独立分支；`PUBLISH_FAILED → DRAFT` 需 UI 显式确认（D19） |
 | `current_version` | 当前生效的版本号（`PUBLISHED` / `DISABLED` 状态下有值，指向 `rule_version` 表中对应 `(ruleId, version)` 的不可变快照行；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本）。版本号本身存在 `rule_version.version` 列，`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
 | `rollout` | 灰度配置（命中算法 + 比例 + 标签） |
@@ -374,14 +374,15 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 
 **关键边界**：
 
+- **Action 归属 Decision，不归属 Rule**（D27）：Action 配置在 `Decision.actions` 字段上，Rule 不再持 `actions` 字段；仅 `finalDecision`（合成后最终决策）的 actions 被 Dispatcher 派发；`hitDecisions` 列表中其他 Decision 的 actions 不派发（避免多规则命中时重复执行）。
 - **Action 是配置数据，ActionHandler 是代码** —— 两者关系类似"Condition 节点 vs ConditionEvaluator"。
-- **`actionType` 受 Scene 白名单约束**（PUSH/HYBRID）：发布时校验配置的 actionType 都在 `scene_action_binding` 内；前端配规则时下拉项按 Scene 过滤。
+- **`actionType` 受 Scene 白名单约束**（PUSH/HYBRID）：Rule 发布时引擎检查 Rule 绑定的 Decision.actions 内所有 `actionType` 都在本 Scene 的 `scene_action_binding` 内；PULL Scene 校验 Decision.actions 必须为空；前端配 Decision 时 actionType 下拉项按当前 Scene 过滤。
 - **每个 Action 独立事务 + 独立重试** —— 一个 Action 失败不影响其他（除非配置 `failFast`）。
 - **v1 Action 是平铺 forEach 顺序执行** —— 按 `sortOrder` 串行，编排（并行 / 等待 / 分支）留到 v2。
-- **失败补偿语义**（D18）：单 Action 失败 → 引擎将异常归一为 `ActionResult { status=FAILED, errorCode, retryable }`；`retryable=true` 入重试队列（不阻塞同 Rule 后续 Action），`retryable=false` 直接落 `action_execution.status=FAILED`。`failFast=true` 的 Action 失败后，同 Rule 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，**不**进入重试队列。Action 失败 **不影响** Rule 的 `EvalResult.satisfied`（评估已完成才会派发 Action）；跨 Rule 隔离（同 D15）。
-- **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。补偿流水线触发入口（对账任务 schema / 手动回滚 API）详见 [`07-operability.md`](./07-operability.md) §补偿流水线。
+- **失败补偿语义**（D18）：单 Action 失败 → 引擎将异常归一为 `ActionResult { status=FAILED, errorCode, retryable }`；`retryable=true` 入重试队列（不阻塞同 Decision 内后续 Action），`retryable=false` 直接落 `action_execution.status=FAILED`。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，**不**进入重试队列。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。
+- **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。补偿流水线触发入口详见 [`07-operability.md`](./07-operability.md) §补偿流水线。
 - **`action_execution` 对账三态**：`SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。
-- **幂等键**：`action_execution` 唯一键 = `(tenantId, eventId, ruleVersionId, actionId)`；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
+- **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
 - **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **接口已预留 `dryRun(action, context)` 入口**——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。**v1 范围（D7）**：评估层 dry-run 一等公民（走完整评估链路 + 节点 trace），ActionHandler 层的 `dryRun` 实装在 **v1.5** 由各 handler 补齐；v1 阶段未补齐的 handler 在 dry-run 时由 Dispatcher 短路返回占位预览（`status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`）。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
 - **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(action, context)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
@@ -775,13 +776,14 @@ interface Scheduler {
 | `name` | 显示名（中文/英文均可，给运营/风控看） |
 | `priority` | 合成优先级，数值越小优先级越高；如 REJECT=1, REVIEW=2, PASS=100；业务方自定，引擎只排序 |
 | `description` | 给运营/风控看的业务说明 |
+| `actions` | Action 列表（D27 从 Rule 迁移）：命中该 Decision 时执行的动作；与 Rule.actions 字段结构相同（`actionType` / `params` / `sortOrder` / `failFast` / `compensateActionType`）；PULL Scene 下必须为空 |
 
 （横切标准审计字段，见 §三 顶部横切说明）
 
 **关键边界**：
 
 - **Tenant 级，非 Scene 级**：同一 Tenant 的所有 Scene 共享 Decision 词汇表；不同 Tenant 的 Decision 严格隔离；
-- **Decision 与 Action 正交**（D26）：PULL Scene 配 Decision，不配 Action；PUSH Scene 配 Action，Decision 可选；HYBRID 两者均可；引擎 v1 不做 Decision 级 Action（"所有 REJECT 触发同一批 Action"）；
+- **Action 挂在 Decision 上**（D27）：Rule 不再持 `actions` 字段；PULL Scene 下 Decision.actions 必须为空（发布校验 + 前端屏蔽）；PUSH/HYBRID Scene 下 Decision.actions 的 `actionType` 须在 Rule 所属 Scene 的 `scene_action_binding` 内（Rule 发布时校验）；
 - **priority 只用于合成排序**：priority 数值本身不影响 Rule 是否命中（Pre-Gate 和 AST 求值结果不读 priority）；priority 只在 `HIGHEST_PRIORITY` 合成策略里生效；
 - **Decision 不内置分类标签**：v1 不区分"拒绝类/通过类"，由 `priority` 数值隐式体现；分类标签留 [`08-evolution.md`](./08-evolution.md) §演进；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §decision_definition 表。
@@ -873,8 +875,9 @@ interface Scheduler {
    求值期若引用了未预拉的 metric → EvalResult.errorCode = METRIC_FETCH_FAIL (D15)
         │
         ▼
-8. 对满足的 Rule → Action Dispatcher (D20 §2 异步)
-   - 评估线程：组装 List<ActionInstance> 入内部队列 (内存有界 BlockingQueue) → 返回 EvalResult
+8. 合成 finalDecision → Action Dispatcher (D20 §2 异步, D27)
+   - decisionStrategy 合成：取所有命中 Rule 绑定的 Decision 中 priority 最小者 → finalDecision
+   - 评估线程：取 finalDecision.actions，组装 List<ActionInstance> 入内部队列 (内存有界 BlockingQueue) → 返回 EvalResult
    - Dispatcher 多消费者线程池异步消费：
      · Action 1: coupon.issue (10 USD 券) → ActionHandler 执行 → 写 action_execution
      · Action 2: mq.send (发送站内信) → 声明式动作 → 推送 MQ

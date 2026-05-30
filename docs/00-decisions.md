@@ -783,16 +783,11 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
    - `DecisionRef = { code: String, name: String, priority: Int, fromRuleVersionId: Long }`；
    - 原 `EvalResult.decision?`（D12 `DECISION_TABLE` kind 的表格输出）语义正交，不冲突，继续保留。
 
-5. **Decision 与 Action 正交**（关键边界）：
-   - PULL Scene：配 Decision，不配 Action（现有 PULL Scene 禁止 Action 的约束继续生效）；
-   - PUSH Scene：配 Action，Decision 可选；
-   - HYBRID Scene：两者均可配，各自独立；
-   - **v1 不做** Decision 级 Action（"所有 REJECT 触发同一批 Action"），避免与 Rule→Action 模型摩擦；Decision 级 Action 留 [`08-evolution.md`](./08-evolution.md) §演进。
+5. **Decision 与 Action 的归属**：**已被 D27 覆盖**，见 D27。
 
 **v1 不做的**：
 - Decision 分类标签（拒绝类 / 通过类 / 其他），priority 数值已足够；
 - `MAJORITY` / `CUSTOM_SPI` 合成策略；
-- Decision 级 Action；
 - 分数区间 → Decision 映射的 v1 实现（SCORECARD kind v1 不实装，score 区间字段只建 schema 占位）。
 
 **派生约束**：
@@ -801,6 +796,62 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `01-concepts.md` §3.4 EvalResult 结构追加 `finalDecision` / `hitDecisions` / `DecisionRef`；
 - `05-storage.md` 新增 `decision_definition` + `rule_decision_binding` 表 DDL；
 - `10-api-contract.md` 对外 API 的 `EvalResult` DTO 追加两字段。
+
+---
+
+## D27. Action 归属从 Rule 迁移到 Decision ⭐⭐⭐
+
+**为什么重要**：D26 建立了 Decision 实体后，"Action 挂在 Rule 上还是 Decision 上"成为需要显式落定的决策。两种模型的数据流和配置模式截然不同：Rule→Action 模型下每条规则独立配置动作，同样输出 REJECT 的 100 条规则需要各自配一遍"发通知"；Decision→Action 模型下同一决策码的所有命中共享一套动作配置，减少重复但失去规则级差异化能力。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☐ A. Action 挂 Rule（现状） | Rule 命中 → 派发 Rule.actions；D26 Decision 仅作输出标签 | 规则级差异化 Action 能力最强；但相同 Decision 的 100 条规则各自配置 Action，重复度高；不符合"风控场景统一处置"直觉 |
+| ☐ B. Action 挂 Decision（完全替代） | Rule 命中 → 合成 finalDecision → 派发 finalDecision.actions；Rule 不再持有 actions 字段 | 配置集中、同一决策行为一致；Rule 层职责收窄为"判定条件"；PULL Scene Decision 不配 Action 约束继续生效 |
+| ☐ C. 两层并存（Decision 公共 + Rule 差异化） | Decision 配公共 Action，Rule 再配差异化 Action，两层叠加派发 | 最灵活；合并语义复杂（排序、failFast 跨层传播、幂等键如何构造、去重如何做）；v1 实现成本高 |
+
+**决定**：**B**（Action 完全迁移到 Decision，Rule 不再持有 actions 字段；PULL Scene 的 Decision 不配 Action，约束不变）
+
+**v1 落地范围**：
+
+1. **数据模型变更**：
+   - `rule_definition` / `rule_version` **移除** `actions` / `actions_snapshot` 字段；
+   - `decision_definition` **新增** `actions` 字段（Action 列表，JSON，与原 Rule.actions 结构相同）；
+   - Action 列表随 Decision 整体参与 `rule_version.decision_bindings_snapshot`（已含 decision_code，新增 decision_actions_snapshot 嵌入其中）—— 保证发布快照不可变（D6）；
+   - `action_execution` 幂等键从 `(tenantId, eventId, ruleVersionId, actionId)` 变更为 `(tenantId, eventId, decisionCode, actionId)`（同一 event + 同一决策码下每个 actionId 只执行一次）。
+
+2. **评估流程变更**（Action Dispatcher 入口前移）：
+   ```
+   旧：Rule AST true → Rule.actions → Dispatcher
+   新：Rule AST true → 绑定 Decision → decisionStrategy 合成 finalDecision
+                        → finalDecision.actions → Dispatcher
+   ```
+   - 仅 `finalDecision`（合成后的最终 Decision）的 actions 被派发；`hitDecisions` 里其他 Decision 的 actions **不派发**（避免多规则命中时重复执行）；
+   - Scene 未配 `decisionStrategy` 时无 `finalDecision`，此时：若有多个 hitDecisions，取 priority 最小者派发（退化为 `HIGHEST_PRIORITY`）；若无 hitDecisions，无 Action 派发；
+   - PULL Scene：`finalDecision` 填充并返回调用方，Action 不派发（Decision.actions 在 PULL Scene 下必须为空，发布校验拒绝）。
+
+3. **Scene 白名单治理迁移**：
+   - `scene_action_binding` 仍由 Scene 维护 actionType 白名单；
+   - 校验时机：**Rule 发布时**，引擎根据 Rule 绑定的 Decision，检查 `Decision.actions` 内的所有 `actionType` 都在本 Scene 的 `scene_action_binding` 内——Decision 是 Tenant 级，但 Rule 是 Scene 级，Rule 发布时隐式引入了"本 Scene 使用该 Decision 的动作白名单校验"；
+   - PULL Scene 发布时校验：Rule 绑定的 Decision 的 `actions` 必须为空，否则发布拒绝；
+   - 前端配规则时：Decision 的 actionType 下拉项按当前 Scene 的 action binding 过滤（同原 Rule.actions 编辑行为）。
+
+4. **幂等语义**：
+   - 新幂等键 `(tenantId, eventId, decisionCode, actionId)` 语义：同一事件 + 同一决策码下每个动作只执行一次；
+   - 多规则命中同一 Decision 时（`hitDecisions` 里出现同一 decisionCode），幂等键天然去重，不会重复派发；
+   - `action_execution` 表新增 `decision_code` 列（替换 `rule_version_id`），DDL 见 [`05-storage.md`](./05-storage.md)。
+
+**v1 不做的**：
+- Decision 级 failFast 跨 Decision（单个 Decision 内 failFast 语义与原 Rule 内一致，D18 约束不变）；
+- 多 Decision 之间的 Action 编排（顺序/并行），v1 finalDecision 只有一个，无跨 Decision 编排诉求；
+- Rule 级差异化 Action（Options C，按需在 v2 以"Rule override actions"形式演进）。
+
+**派生约束**：
+- `RuleDefinition` / `RuleVersion` 移除 `actions` / `actions_snapshot`；
+- `Decision` 新增 `actions` 字段 + `actions_snapshot` 进 `decision_bindings_snapshot`；
+- `action_execution` 幂等键列 `rule_version_id` → `decision_code`；
+- `01-concepts.md` §3.7 Action 关键边界更新（归属迁移 + 幂等键变更）+ §3.19 Decision 字段表追加 `actions`；
+- `README §四` 抽象表 `RuleDefinition` / `RuleVersion` / `ActionExecution` 行同步；
+- `04-extension.md` §ActionHandler 实现指南中"注册到 Scene"的描述随白名单校验时机迁移更新。
 
 ---
 
@@ -833,6 +884,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D23 | `evaluation_session` 幂等键语义 | A    | `(tenant_id, event_id)` 永远只评估一次，by design；Replay 换新 eventId；版本切换后测新规则走 dry-run |
 | D24 | Scene 变更热加载 | B    | 新增独立 `SceneWatcher` SPI；v1 实现 `DbPollingSceneWatcher`（30s 轮询）；与 `RuleVersionWatcher` 平级，职责独立 |
 | D25 | Context 构建并发模型 | C    | `CompletableFuture.allOf()` 并行 + 各 MetricSource 自管执行资源；Subject 加载与 metric 并行；单 metric 失败归 D15 METRIC_FETCH_FAIL，Subject 失败整 Context 失败；`SubjectLoader` SPI（v1 实现 `UserProfileLoader`） |
-| D26 | Decision 实体 + 多规则命中合成策略 | B    | Decision 为 Tenant 级一等实体；`RuleDecisionBinding` 关联表（支持可选 score 区间）；Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）；Decision 与 Action 正交 |
+| D26 | Decision 实体 + 多规则命中合成策略 | B    | Decision 为 Tenant 级一等实体；`RuleDecisionBinding` 关联表（支持可选 score 区间）；Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）；Action 归属见 D27 |
+| D27 | Action 归属从 Rule 迁移到 Decision | B    | Action 完全挂到 Decision，Rule 不再持 actions 字段；finalDecision.actions 被派发；幂等键变更为 `(tenantId, eventId, decisionCode, actionId)`；PULL Scene Decision 不配 Action 约束不变 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。
