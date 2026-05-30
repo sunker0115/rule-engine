@@ -11,7 +11,7 @@
 | **一、产品定位** | D1, D10 | 引擎是什么、边界在哪、不做什么 |
 | **二、核心数据模型** | D2, D3, D4, D5, D6, D11, D12, D13, D26, D27 | 概念边界、数据结构、核心协议 |
 | **三、评估运行时与可靠性** | D14, D15, D16, D17, D20, D22, D23, D24, D25, D7, D8, D9, D18, D19, D21 | 引擎执行、热路径优化、发布运维、排障 |
-| **四、精化与派生** | D28, D29 | 主决策的细节推论、易踩坑处理 |
+| **四、精化与派生** | D28, D29, D30 | 主决策的细节推论、易踩坑处理 |
 
 > 决策编号按历史追加顺序排列，阅读时建议按分组顺序（先一二、再三四、最后五）而非 D 编号顺序。
 
@@ -942,6 +942,50 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D30. providedMetrics — 业务方随评估携带指标值 ⭐⭐
+
+**背景**：部分场景（如用户注册、设备换绑）中，业务方本身就是数据源头，引擎再绕回去查 DB 或调外部服务既浪费又引入延迟。需要一种机制让业务方在触发评估时直接携带已知的指标值，引擎在 EvalContext 构建时优先使用这些值，跳过 sourceType 取数。
+
+**场景分类**：
+
+| 场景 | 数据上报 | 触发评估 | 说明 |
+|------|---------|---------|------|
+| 用户注册 | 是（设备分、IP 信誉、KYC 初始值） | 是（同步拿风控结论） | 业务方是数据源头 |
+| 大额转账 | 否 | 是（引擎自己取） | 历史数据在库，引擎直接查 |
+| KYC 升级 | 是（新 kyc_level） | 否（走 `PUT /subjects/{id}/attributes`） | 属性更新，后续评估才用 |
+| 设备换绑 | 是（新设备信息） | 是（同步检查异常） | 同注册场景 |
+| 批量用户打标 | 是（外部计算的风险分） | 否 | 后台任务写入，不实时触发 |
+
+**选项**：
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☑ A. `providedMetrics` 字段 + Metric 级 `allowProvided` 标志 | 评估请求携带指标值；Metric 注册时声明是否允许外部覆盖 | 职责清晰；平台按 metric 粒度控制信任边界；不引入新存储 |
+| ☐ B. 全部走 payload，条件层用 `event.payload.compare` | 把指标值塞进 payload 字段 | 最简，但 payload 是"本次事件上下文"语义，与指标语义混用，破坏类型闭合校验 |
+| ☐ C. 评估后引擎持久化 `providedMetrics` 到自己的存储 | 一次上报后续评估复用 | 引擎承担业务数据存储职责，TTL/失效/写失败全部变成引擎问题，不做 |
+
+**你的决定**：A
+
+**v1 落地范围**：
+
+1. **API 层**：`POST /api/scenes/{code}/evaluate` 请求体新增 `providedMetrics: Map<metricCode, value>` 可选字段。
+2. **校验**：`providedMetrics` 的 key 必须是本 Scene 白名单内已注册的 metricCode（发布期已有类型闭合，运行期入口校验类型一致性）；非法 key 返回 400。
+3. **EvalContext 构建优先级**：`providedMetrics` 中有值 → 跳过该 metric 的 sourceType 取数，直接用传入值；`allowProvided=false` 的 metric 即使传了也忽略（日志 WARN，不报错）。
+4. **Metric 注册新增字段** `allowProvided`（`BOOLEAN`，默认 `true`）：需要保护权威性的指标（如黑名单命中、官方风控分）设为 `false`，防止调用方伪造。
+5. **trace 记录来源**：每个 metric 的 trace 条目记录 `valueSource: PROVIDED | FETCHED`，方便排查。
+6. **不做持久化**：`providedMetrics` 的值只活在本次评估 EvalContext 中，评估完即丢弃。业务方如需持久化，走自己的系统存储，引擎后续用 sourceType 正常取。
+
+**不做（v1 明确排除）**：
+- 引擎不持久化 `providedMetrics` 的值（`persistedMetricCodes` 不做）
+- 不做 dry-run 时对 `providedMetrics` 值的额外限制（dry-run 本就不产生副作用）
+
+**派生约束**：
+- `01-concepts.md` §3.9 Metric 字段表需补充 `allowProvided` 字段说明
+- `01-concepts.md` §3.11 EvalContext 构建逻辑需说明 `providedMetrics` 优先级
+- `10-api-contract.md` 评估接口请求体需更新
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -975,5 +1019,6 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D27 | Action 归属从 Rule 迁移到 Decision | B    | Action 完全挂到 Decision，Rule 不再持 actions 字段；finalDecision.actions 被派发；幂等键变更为 `(tenantId, eventId, decisionCode, actionId)`；PULL Scene Decision 不配 Action 约束不变 |
 | D28 | Decision.actions 变更生效时机 | A    | 快照语义不变；UI 在修改 Decision.actions 时提示引用该 Decision 的已发布规则需重新发布 |
 | D29 | PUSH/HYBRID Scene 的 decisionStrategy 默认值 | B    | PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`，消灭 actions 静默不派发问题；PULL Scene 不参与合成 |
+| D30 | providedMetrics — 业务方随评估携带指标值 | A    | 评估请求携带 `providedMetrics`；Metric 级 `allowProvided` 控制是否可被覆盖；只活在本次评估，不持久化 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

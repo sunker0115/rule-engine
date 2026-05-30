@@ -1,0 +1,108 @@
+[
+  {
+    "_comment": "E1: REJECT — 设备分低 + IP 信誉低，AND 节点命中",
+    "eventId": "evt-reg-001",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.register",
+    "eventType": "user.registered",
+    "subjectId": "user-new-001",
+    "occurredAt": "2026-05-31T10:00:00+08:00",
+    "payload": {
+      "channel": "mobile",
+      "ip_country": "CN"
+    },
+    "providedMetrics": {
+      "user.device.trust.score": 35,
+      "user.ip.reputation.score": 20,
+      "user.kyc.level": 0
+    },
+    "_mockFetchedMetrics": {
+      "user.blacklist.hit": false
+    }
+  },
+  {
+    "_comment": "E2: REJECT — 命中黑名单（allowProvided=false，引擎走 SQL 查询，providedMetrics 中不应传此字段）",
+    "eventId": "evt-reg-002",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.register",
+    "eventType": "user.registered",
+    "subjectId": "user-new-002",
+    "occurredAt": "2026-05-31T10:01:00+08:00",
+    "payload": {
+      "channel": "web",
+      "ip_country": "CN"
+    },
+    "providedMetrics": {
+      "user.device.trust.score": 80,
+      "user.ip.reputation.score": 75,
+      "user.kyc.level": 1
+    },
+    "_mockFetchedMetrics": {
+      "user.blacklist.hit": true
+    }
+  },
+  {
+    "_comment": "E3: REJECT — KYC=0 + 渠道=unknown，AND 节点命中",
+    "eventId": "evt-reg-003",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.register",
+    "eventType": "user.registered",
+    "subjectId": "user-new-003",
+    "occurredAt": "2026-05-31T10:02:00+08:00",
+    "payload": {
+      "channel": "unknown",
+      "ip_country": "XX"
+    },
+    "providedMetrics": {
+      "user.device.trust.score": 70,
+      "user.ip.reputation.score": 60,
+      "user.kyc.level": 0
+    },
+    "_mockFetchedMetrics": {
+      "user.blacklist.hit": false
+    }
+  },
+  {
+    "_comment": "E4: PASS — 所有风险条件均不满足，正常注册",
+    "eventId": "evt-reg-004",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.register",
+    "eventType": "user.registered",
+    "subjectId": "user-new-004",
+    "occurredAt": "2026-05-31T10:03:00+08:00",
+    "payload": {
+      "channel": "mobile",
+      "ip_country": "CN"
+    },
+    "providedMetrics": {
+      "user.device.trust.score": 85,
+      "user.ip.reputation.score": 90,
+      "user.kyc.level": 2
+    },
+    "_mockFetchedMetrics": {
+      "user.blacklist.hit": false
+    }
+  },
+  {
+    "_comment": "E5: ERROR → fail-secure — user.blacklist.hit SQL 取数超时，引擎返回 METRIC_FETCH_FAIL，调用方按 fail-secure 拦截",
+    "eventId": "evt-reg-005",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.register",
+    "eventType": "user.registered",
+    "subjectId": "user-new-005",
+    "occurredAt": "2026-05-31T10:04:00+08:00",
+    "payload": {
+      "channel": "mobile",
+      "ip_country": "CN"
+    },
+    "providedMetrics": {
+      "user.device.trust.score": 80,
+      "user.ip.reputation.score": 75,
+      "user.kyc.level": 1
+    },
+    "_mockFetchedMetrics": {
+      "user.blacklist.hit": "__TIMEOUT__"
+    },
+    "_note": "allowProvided=false 的 user.blacklist.hit 必须 FETCHED，模拟超时 → METRIC_FETCH_FAIL"
+  }
+]

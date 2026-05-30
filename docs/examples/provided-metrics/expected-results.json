@@ -1,0 +1,153 @@
+[
+  {
+    "eventId": "evt-reg-001",
+    "expectedResult": {
+      "finalDecision": "REJECT",
+      "hitDecisions": ["REJECT"],
+      "ruleHit": true,
+      "errorCode": null,
+      "trace": {
+        "metricSources": {
+          "user.device.trust.score":  { "value": 35,    "valueSource": "PROVIDED" },
+          "user.ip.reputation.score": { "value": 20,    "valueSource": "PROVIDED" },
+          "user.kyc.level":           { "value": 0,     "valueSource": "PROVIDED" },
+          "user.blacklist.hit":       { "value": false,  "valueSource": "FETCHED"  }
+        },
+        "conditionResult": true,
+        "nodeTrace": {
+          "type": "OrNode",
+          "result": true,
+          "children": [
+            {
+              "type": "AndNode",
+              "displayLabel": "高风险设备 + 低信誉 IP",
+              "result": true,
+              "children": [
+                { "type": "ConditionNode", "metricCode": "user.device.trust.score",  "result": true,  "actualValue": 35 },
+                { "type": "ConditionNode", "metricCode": "user.ip.reputation.score", "result": true,  "actualValue": 20 }
+              ]
+            },
+            { "type": "ConditionNode", "metricCode": "user.blacklist.hit", "result": false, "actualValue": false, "_note": "短路，OrNode 已 true，不继续" },
+            { "type": "AndNode", "displayLabel": "未完成 KYC + 未知渠道", "result": null, "_note": "短路跳过" }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-reg-002",
+    "expectedResult": {
+      "finalDecision": "REJECT",
+      "hitDecisions": ["REJECT"],
+      "ruleHit": true,
+      "errorCode": null,
+      "trace": {
+        "metricSources": {
+          "user.device.trust.score":  { "value": 80,   "valueSource": "PROVIDED" },
+          "user.ip.reputation.score": { "value": 75,   "valueSource": "PROVIDED" },
+          "user.kyc.level":           { "value": 1,    "valueSource": "PROVIDED" },
+          "user.blacklist.hit":       { "value": true, "valueSource": "FETCHED"  }
+        },
+        "conditionResult": true,
+        "nodeTrace": {
+          "type": "OrNode",
+          "result": true,
+          "children": [
+            { "type": "AndNode", "displayLabel": "高风险设备 + 低信誉 IP", "result": false },
+            { "type": "ConditionNode", "metricCode": "user.blacklist.hit", "result": true, "actualValue": true }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-reg-003",
+    "expectedResult": {
+      "finalDecision": "REJECT",
+      "hitDecisions": ["REJECT"],
+      "ruleHit": true,
+      "errorCode": null,
+      "trace": {
+        "metricSources": {
+          "user.device.trust.score":  { "value": 70,    "valueSource": "PROVIDED" },
+          "user.ip.reputation.score": { "value": 60,    "valueSource": "PROVIDED" },
+          "user.kyc.level":           { "value": 0,     "valueSource": "PROVIDED" },
+          "user.blacklist.hit":       { "value": false,  "valueSource": "FETCHED"  }
+        },
+        "conditionResult": true,
+        "nodeTrace": {
+          "type": "OrNode",
+          "result": true,
+          "children": [
+            { "type": "AndNode", "displayLabel": "高风险设备 + 低信誉 IP", "result": false,
+              "children": [
+                { "type": "ConditionNode", "metricCode": "user.device.trust.score",  "result": false, "actualValue": 70 },
+                { "type": "ConditionNode", "metricCode": "user.ip.reputation.score", "result": null,  "_note": "短路跳过" }
+              ]
+            },
+            { "type": "ConditionNode", "metricCode": "user.blacklist.hit", "result": false, "actualValue": false },
+            {
+              "type": "AndNode",
+              "displayLabel": "未完成 KYC + 未知渠道",
+              "result": true,
+              "children": [
+                { "type": "ConditionNode", "metricCode": "user.kyc.level", "result": true, "actualValue": 0 },
+                { "type": "ConditionNode", "conditionType": "event.payload.equals", "field": "channel", "result": true, "actualValue": "unknown" }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-reg-004",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "metricSources": {
+          "user.device.trust.score":  { "value": 85,    "valueSource": "PROVIDED" },
+          "user.ip.reputation.score": { "value": 90,    "valueSource": "PROVIDED" },
+          "user.kyc.level":           { "value": 2,     "valueSource": "PROVIDED" },
+          "user.blacklist.hit":       { "value": false,  "valueSource": "FETCHED"  }
+        },
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "OrNode",
+          "result": false,
+          "children": [
+            { "type": "AndNode", "displayLabel": "高风险设备 + 低信誉 IP", "result": false },
+            { "type": "ConditionNode", "metricCode": "user.blacklist.hit", "result": false, "actualValue": false },
+            { "type": "AndNode", "displayLabel": "未完成 KYC + 未知渠道", "result": false,
+              "children": [
+                { "type": "ConditionNode", "metricCode": "user.kyc.level", "result": false, "actualValue": 2, "_note": "2 != 0" }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-reg-005",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "ruleHit": false,
+      "errorCode": "METRIC_FETCH_FAIL",
+      "failedMetrics": ["user.blacklist.hit"],
+      "trace": {
+        "metricSources": {
+          "user.device.trust.score":  { "value": 80, "valueSource": "PROVIDED" },
+          "user.ip.reputation.score": { "value": 75, "valueSource": "PROVIDED" },
+          "user.kyc.level":           { "value": 1,  "valueSource": "PROVIDED" },
+          "user.blacklist.hit":       { "valueSource": "FETCHED", "error": "TIMEOUT" }
+        },
+        "_note": "user.blacklist.hit 取数超时，该节点 satisfied=false，EvalResult.errorCode=METRIC_FETCH_FAIL；调用方应按 fail-secure 拦截"
+      }
+    }
+  }
+]

@@ -1,0 +1,55 @@
+[
+  {
+    "metricCode": "user.device.trust.score",
+    "tenantId": "demo-tenant",
+    "name": "设备信任分",
+    "sourceType": "EXTERNAL_HTTP",
+    "dataType": "LONG",
+    "params": {
+      "url": "http://device-service/api/trust?device_id={payload.device_id}"
+    },
+    "cachePolicyDefault": { "ttl": 60 },
+    "allowProvided": true,
+    "_note": "注册时设备信任分由业务方在注册流程中采集，直接通过 providedMetrics 传入，引擎跳过 HTTP 调用"
+  },
+  {
+    "metricCode": "user.ip.reputation.score",
+    "tenantId": "demo-tenant",
+    "name": "IP 信誉分",
+    "sourceType": "EXTERNAL_HTTP",
+    "dataType": "LONG",
+    "params": {
+      "url": "http://ip-service/api/reputation?ip={payload.client_ip}"
+    },
+    "cachePolicyDefault": { "ttl": 300 },
+    "allowProvided": true,
+    "_note": "业务方在注册流程中已查询 IP 信誉，通过 providedMetrics 传入避免重复调用"
+  },
+  {
+    "metricCode": "user.kyc.level",
+    "tenantId": "demo-tenant",
+    "name": "KYC 等级",
+    "sourceType": "ATTRIBUTE",
+    "dataType": "LONG",
+    "params": {
+      "column": "kyc_level",
+      "table": "user_profile"
+    },
+    "cachePolicyDefault": { "ttl": 300 },
+    "allowProvided": true,
+    "_note": "注册时 KYC 尚未入库，直接由业务方通过 providedMetrics 传入初始值（通常为 0）"
+  },
+  {
+    "metricCode": "user.blacklist.hit",
+    "tenantId": "demo-tenant",
+    "name": "黑名单命中",
+    "sourceType": "SQL_AGGREGATE",
+    "dataType": "BOOLEAN",
+    "params": {
+      "sql": "SELECT EXISTS(SELECT 1 FROM risk_blacklist WHERE subject_id = :subjectId AND status = 'ACTIVE')"
+    },
+    "cachePolicyDefault": { "ttl": 0 },
+    "allowProvided": false,
+    "_note": "权威黑名单，必须从平台自己的数据库取，不允许业务方通过 providedMetrics 覆盖"
+  }
+]

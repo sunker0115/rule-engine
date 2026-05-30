@@ -1,0 +1,28 @@
+{
+  "tenantId": "demo-tenant",
+  "code": "risk.register",
+  "name": "风控-注册检查",
+  "dominantMode": "PULL",
+  "decisionStrategy": "HIGHEST_PRIORITY",
+  "eventTypes": ["user.registered"],
+  "subjectType": "USER",
+  "payloadSchema": {
+    "channel":    { "type": "string", "required": true },
+    "ip_country": { "type": "string", "required": false }
+  },
+  "defaultParams": {
+    "timezone": "Asia/Shanghai"
+  },
+  "metricBindings": [
+    { "metricCode": "user.device.trust.score"  },
+    { "metricCode": "user.ip.reputation.score" },
+    { "metricCode": "user.kyc.level"           },
+    { "metricCode": "user.blacklist.hit"        }
+  ],
+  "actionBindings": [],
+  "decisions": [
+    { "code": "REJECT", "name": "拒绝激活",   "priority": 1,   "actions": [] },
+    { "code": "review", "name": "人工审核",   "priority": 2,   "actions": [] },
+    { "code": "PASS",   "name": "放行",       "priority": 100, "actions": [] }
+  ]
+}

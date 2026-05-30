@@ -432,6 +432,7 @@ EvalContext {
 - **EvalContext 是不可变的**：Evaluator / Handler 不能修改 EvalContext；如果 Action 产生了"新指标"，那是下次评估的事。
 - **EvalContext 按需构建**：扫 AST 收集涉及的 `metricCode`，并发取数，组成本次 EvalContext；没引用的指标不取（D5 派生）。
 - **EvalContext ≠ 数据库快照**：EvalContext 里的 `subject` 可能比 DB 新（如某个属性是从事件 payload 补的），以 EvalContext 为准。
+- **`providedMetrics` 优先于 sourceType 取数**（D30）：评估请求携带 `providedMetrics` 时，EvalContext 构建阶段对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；`allowProvided=false` 的 key 即使传了也忽略（WARN 日志）。`providedMetrics` 的值只活在本次评估，不持久化。trace 记录每个 metric 的 `valueSource: PROVIDED | FETCHED`。
 
 ### 3.9 Metric（指标）
 
@@ -457,6 +458,7 @@ EvalContext {
 | `params` | 取数参数（SQL 模板 / HTTP URL / 流处理 topic） |
 | `dataType` | `LONG` / `DOUBLE` / `STRING` / `BOOLEAN` / `LIST` |
 | `cachePolicyDefault` | 默认缓存策略（TTL / 不缓存 / 评估范围内缓存）；实时性敏感场景配 `ttl=0` 强制每次取数 |
+| `allowProvided` | `BOOLEAN`，默认 `true`。是否允许调用方通过评估请求的 `providedMetrics` 字段覆盖本指标的取数结果（D30）。需要保护权威性的指标（如黑名单命中、官方风控评分）设为 `false`，防止调用方伪造；引擎忽略 `providedMetrics` 中对应 key，仍走 sourceType 正常取数，日志 WARN |
 
 **Scene 级可见性**（`scene_metric_binding` 表）：
 
