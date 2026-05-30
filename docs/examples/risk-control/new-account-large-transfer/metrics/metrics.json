@@ -1,0 +1,47 @@
+[
+  {
+    "metricCode": "user.account.age.days",
+    "tenantId": "demo-tenant",
+    "name": "账户开立天数",
+    "sourceType": "SQL_AGGREGATE",
+    "dataType": "LONG",
+    "params": {
+      "sql": "SELECT DATEDIFF(NOW(), created_at) FROM user_profile WHERE user_id = :subjectId"
+    },
+    "cachePolicyDefault": { "ttl": 3600 }
+  },
+  {
+    "metricCode": "user.kyc.level",
+    "tenantId": "demo-tenant",
+    "name": "KYC 等级",
+    "sourceType": "ATTRIBUTE",
+    "dataType": "LONG",
+    "params": {
+      "column": "kyc_level",
+      "table": "user_profile"
+    },
+    "cachePolicyDefault": { "ttl": 300 }
+  },
+  {
+    "metricCode": "user.transfer.count.7d",
+    "tenantId": "demo-tenant",
+    "name": "近 7 天转账次数",
+    "sourceType": "SQL_AGGREGATE",
+    "dataType": "LONG",
+    "params": {
+      "sql": "SELECT COUNT(*) FROM transfer_history WHERE user_id = :subjectId AND created_at >= NOW() - INTERVAL 7 DAY"
+    },
+    "cachePolicyDefault": { "ttl": 0 }
+  },
+  {
+    "metricCode": "user.transfer.dest.trust.score",
+    "tenantId": "demo-tenant",
+    "name": "收款方信任分",
+    "sourceType": "EXTERNAL_HTTP",
+    "dataType": "LONG",
+    "params": {
+      "url": "http://trust-service/api/score?account={payload.dest_account}"
+    },
+    "cachePolicyDefault": { "ttl": 60 }
+  }
+]

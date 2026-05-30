@@ -1,0 +1,166 @@
+[
+  {
+    "eventId": "evt-001",
+    "expectedResult": {
+      "finalDecision": "REJECT",
+      "hitDecisions": ["REJECT"],
+      "preGatePassed": true,
+      "ruleHit": true,
+      "errorCode": null,
+      "trace": {
+        "preGates": [
+          { "type": "ROLLOUT",     "passed": true  },
+          { "type": "RATE_LIMIT",  "passed": true  },
+          { "type": "WHITELIST",   "passed": true  }
+        ],
+        "conditionResult": true,
+        "nodeTrace": {
+          "type": "AndNode",
+          "result": true,
+          "children": [
+            { "type": "OrNode",   "result": true,  "children": [
+                { "type": "ConditionNode", "metricCode": "user.account.age.days",          "result": true  },
+                { "type": "ConditionNode", "metricCode": "user.kyc.level",                 "result": true  }
+            ]},
+            { "type": "AndNode",  "result": true,  "children": [
+                { "type": "ConditionNode", "field": "amount",   "result": true  },
+                { "type": "ConditionNode", "field": "currency", "result": true  }
+            ]},
+            { "type": "ConditionNode", "metricCode": "user.transfer.count.7d",             "result": true  },
+            { "type": "NotNode",  "result": true,  "child":
+                { "type": "ConditionNode", "metricCode": "user.transfer.dest.trust.score", "result": false }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-002",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "preGatePassed": false,
+      "ruleHit": false,
+      "errorCode": null,
+      "preGateBlockedBy": "WHITELIST",
+      "trace": {
+        "preGates": [
+          { "type": "ROLLOUT",   "passed": true  },
+          { "type": "RATE_LIMIT","passed": true  },
+          { "type": "WHITELIST", "passed": false, "reason": "subject in whitelist, rule skipped" }
+        ]
+      }
+    }
+  },
+  {
+    "eventId": "evt-003",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "preGatePassed": true,
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "preGates": [
+          { "type": "ROLLOUT",   "passed": true },
+          { "type": "RATE_LIMIT","passed": true },
+          { "type": "WHITELIST", "passed": true }
+        ],
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "AndNode",
+          "result": false,
+          "children": [
+            { "type": "OrNode",  "result": true  },
+            { "type": "AndNode", "result": false, "children": [
+                { "type": "ConditionNode", "field": "amount",   "result": false, "_note": "30000 < 50000" },
+                { "type": "ConditionNode", "field": "currency", "result": true  }
+            ]},
+            { "type": "ConditionNode", "metricCode": "user.transfer.count.7d",             "result": true  },
+            { "type": "NotNode",       "result": true  }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-004",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "preGatePassed": true,
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "preGates": [
+          { "type": "ROLLOUT",   "passed": true },
+          { "type": "RATE_LIMIT","passed": true },
+          { "type": "WHITELIST", "passed": true }
+        ],
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "AndNode",
+          "result": false,
+          "children": [
+            { "type": "OrNode",  "result": true  },
+            { "type": "AndNode", "result": true  },
+            { "type": "ConditionNode", "metricCode": "user.transfer.count.7d",             "result": true  },
+            { "type": "NotNode", "result": false, "child":
+                { "type": "ConditionNode", "metricCode": "user.transfer.dest.trust.score", "result": true, "_note": "90 >= 80" }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "eventId": "evt-005",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "preGatePassed": false,
+      "ruleHit": false,
+      "errorCode": null,
+      "preGateBlockedBy": "RATE_LIMIT",
+      "trace": {
+        "preGates": [
+          { "type": "ROLLOUT",   "passed": true  },
+          { "type": "RATE_LIMIT","passed": false, "reason": "subject user-new-001 already hit once today" },
+          { "type": "WHITELIST", "passed": null,  "_note": "not reached" }
+        ]
+      }
+    }
+  },
+  {
+    "eventId": "evt-006",
+    "expectedResult": {
+      "finalDecision": null,
+      "hitDecisions": [],
+      "preGatePassed": true,
+      "ruleHit": false,
+      "errorCode": null,
+      "trace": {
+        "preGates": [
+          { "type": "ROLLOUT",   "passed": true },
+          { "type": "RATE_LIMIT","passed": true },
+          { "type": "WHITELIST", "passed": true }
+        ],
+        "conditionResult": false,
+        "nodeTrace": {
+          "type": "AndNode",
+          "result": false,
+          "children": [
+            { "type": "OrNode",  "result": true  },
+            { "type": "AndNode", "result": false, "children": [
+                { "type": "ConditionNode", "field": "amount",   "result": true  },
+                { "type": "ConditionNode", "field": "currency", "result": false, "_note": "USD != CNY" }
+            ]},
+            { "type": "ConditionNode", "metricCode": "user.transfer.count.7d",             "result": true  },
+            { "type": "NotNode",       "result": true  }
+          ]
+        }
+      }
+    }
+  }
+]

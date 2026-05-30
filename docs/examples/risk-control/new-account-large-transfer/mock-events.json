@@ -1,0 +1,118 @@
+[
+  {
+    "_comment": "E1: 命中 REJECT — 新账户 + 大额 CNY + 低频 + 不信任收款方",
+    "eventId": "evt-001",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-new-001",
+    "payload": {
+      "amount": 80000,
+      "currency": "CNY",
+      "dest_account": "acct-suspicious-001"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 10,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 1,
+      "user.transfer.dest.trust.score": 30
+    }
+  },
+  {
+    "_comment": "E2: 不命中 — 白名单用户，Pre-Gate WHITELIST 直接跳过",
+    "eventId": "evt-002",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-whitelist-001",
+    "payload": {
+      "amount": 100000,
+      "currency": "CNY",
+      "dest_account": "acct-suspicious-001"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 5,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 0,
+      "user.transfer.dest.trust.score": 20
+    }
+  },
+  {
+    "_comment": "E3: 不命中 — 金额低于 5 万，大额条件不满足",
+    "eventId": "evt-003",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-new-002",
+    "payload": {
+      "amount": 30000,
+      "currency": "CNY",
+      "dest_account": "acct-suspicious-002"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 20,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 2,
+      "user.transfer.dest.trust.score": 50
+    }
+  },
+  {
+    "_comment": "E4: 不命中 — 收款方信任分 ≥ 80，NotNode 为 false",
+    "eventId": "evt-004",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-new-003",
+    "payload": {
+      "amount": 60000,
+      "currency": "CNY",
+      "dest_account": "acct-trusted-001"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 15,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 1,
+      "user.transfer.dest.trust.score": 90
+    }
+  },
+  {
+    "_comment": "E5: 不命中 — 同用户当天第 2 次，RATE_LIMIT 拦截（Pre-Gate 未通过，规则不执行）",
+    "eventId": "evt-005",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-new-001",
+    "payload": {
+      "amount": 90000,
+      "currency": "CNY",
+      "dest_account": "acct-suspicious-001"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 10,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 2,
+      "user.transfer.dest.trust.score": 30
+    },
+    "_note": "subjectId 与 E1 相同，同日第 2 次触发，RATE_LIMIT maxHits=1 命中"
+  },
+  {
+    "_comment": "E6: 命中 REJECT — KYC=0（账户风险满足）+ 非 CNY 但 currency 条件失败 → 实际不命中，验证 currency 约束",
+    "eventId": "evt-006",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-new-004",
+    "payload": {
+      "amount": 80000,
+      "currency": "USD",
+      "dest_account": "acct-suspicious-003"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 5,
+      "user.kyc.level": 0,
+      "user.transfer.count.7d": 0,
+      "user.transfer.dest.trust.score": 10
+    },
+    "_note": "currency=USD，AndNode('大额 CNY 交易') 中 currency==CNY 为 false，整体不命中"
+  }
+]
