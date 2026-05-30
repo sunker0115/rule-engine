@@ -5,7 +5,7 @@
 > **前置阅读**：[README](./README.md) §一定位与边界 + §二 D1-D21 决策表。
 >
 > **解决什么疑问**：
-> - "Rule / Condition / Action / Context 到底指什么？"
+> - "Rule / Condition / Action / EvalContext 到底指什么？"
 > - "Scene 和 Tenant 有什么区别？Scene 为什么是 metric 的治理边界？"
 > - "运营心智里的'条件分组'在数据模型里是什么？为什么不固化 Group 实体？"
 > - "Metric 又是什么？为什么不直接在 Condition 里写 SQL？"
@@ -27,7 +27,7 @@
 | **Rule** | 一条规则定义：在什么条件下、对谁、做什么动作；带版本、灰度、Pre-Gate；条件用 **AST 树**表达（v1 仅 `kind=AST_BOOLEAN`；D12 预留 SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT 多态扩展位） | 业务运营 / 风控配置 |
 | **Condition** | AST 叶子节点：一条原子判断（`age >= 18` / `近 7 天交易额 > 1000`），由 `conditionType` 路由到具体评估器 | 业务运营选类型 + 配参数 |
 | **Action** | Rule 命中后要做的事（发券 / 调 webhook / 写库），由 `actionType` 路由到具体处理器；**可空**——PULL 模式 Scene 不需要 Action | 业务运营选类型 + 配参数 |
-| **Context** | 一次评估的运行时上下文：指标快照 + 用户画像 + 业务身份（不可变 POJO） | 引擎在评估前现场构建 |
+| **EvalContext** | 一次评估的运行时上下文：指标快照 + 用户画像 + 业务身份（不可变 POJO） | 引擎在评估前现场构建 |
 | **Metric** | 取数原子（按 `metricCode` 注册），同一指标可被多 Rule 共享、可缓存；**可见性由 Scene 白名单决定** | 平台 + 业务方共同治理 |
 
 > **三类支撑概念**（不是一等公民，但理解整体必须知道）：`ConditionEvaluator` / `ActionHandler` / `MetricSource` —— 它们是上面 Condition / Action / Metric 的"幕后执行者"，详见 §五边界辨析。
@@ -80,7 +80,7 @@ Tenant ──── 1:N ────► Scene ──── N:N ────► M
 - **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（可编辑草稿，持 `current_version` 指针）+ **RuleVersion**（每次发布产生的不可变快照）；运行时评估锁定 RuleVersion，回滚 = 用旧版本快照建新草稿走标准发布（D6 / D17 / D19）；
 - 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树；其他 kind 留 D12 演进）+ 零到多个 **Action**（PULL Scene 下通常为空）；
 - AST 内部由 `AndNode` / `OrNode` / `NotNode` 嵌套，叶子是 `ConditionNode`；
-- **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（限本 Scene 白名单内）构建 **Context**，喂给 ConditionNode 做判定；
+- **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（限本 Scene 白名单内）构建 **EvalContext**，喂给 ConditionNode 做判定；
 - AST 求值为 true 后：**PUSH** 模式异步派发 Action；**PULL** 模式同步返回 `EvalResult`，调用方自行决策；**HYBRID** 两者皆可。
 
 ---
@@ -145,7 +145,7 @@ Tenant ──── 1:N ────► Scene ──── N:N ────► M
 | `description` | 给运营看的业务说明 |
 | `dominantMode` | `PUSH` / `PULL` / `HYBRID`，决定 API 入口、UI 行为、预热范围 |
 | `payloadSchema` | RuleEvent.payload 允许字段 + 类型 + required（JSON Schema 子集）。规则发布校验 + 事件接入校验 + 前端变量补全都依赖（D13） |
-| `subjectType` | 业务主体类型枚举：`USER` / `ACCOUNT` / `DEVICE` / `ORDER` / `CUSTOM`；决定 Context 构建时从哪张主体表取属性（v1 仅 `USER` 实装） |
+| `subjectType` | 业务主体类型枚举：`USER` / `ACCOUNT` / `DEVICE` / `ORDER` / `CUSTOM`；决定 EvalContext 构建时从哪张主体表取属性（v1 仅 `USER` 实装） |
 | `defaultParams` | Scene 级缺省 JSON：`timezone` / `currency` / `defaultRateLimit` / `defaultCacheTtl` 等；规则不显式配置的参数回落到此处 |
 | `eventTypes` | 该 Scene 允许的 eventType 白名单数组；事件接入按 (scene + eventType) 二元组校验，规则 trigger 下拉与 Job `eventTypeTemplate` 也按此过滤 |
 
@@ -163,7 +163,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
   - 事件接入：(scene + eventType) 不在白名单的事件拒收；payload 字段不符 schema 的事件拒收（v1 仅做"字段名 + 基础类型"校验，复杂约束留到 v2）；
   - 类型级 `params` JSON schema（ConditionType / ActionType / MetricType 的参数校验）由各类型注册时附带，与 Scene `payloadSchema` 不在一层，详见 [04-extension](./04-extension.md)。
 - **`defaultParams` 是回落值，不是覆盖值**：规则显式配的参数优先；规则没配时引擎读 `Scene.defaultParams`；都没配时引擎用硬编码默认。前端编辑器在该字段位显示"继承自 Scene：xxx"灰字占位。
-- **`subjectType` v1 仅 `USER` 实装**：其他枚举值占位，发布时拒绝。Context 构建按 subjectType 选主体表（USER → user_profile / ACCOUNT → account / 等）。
+- **`subjectType` v1 仅 `USER` 实装**：其他枚举值占位，发布时拒绝。EvalContext 构建按 subjectType 选主体表（USER → user_profile / ACCOUNT → account / 等）。
 
 ### 3.3 RuleEvent（规则事件）
 
@@ -188,7 +188,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 - `RuleEvent` 是**纯数据**，不包含任何评估结果。
 - `payload` 在线协议层是 schemaless 的 Map，但**实际可消费字段由 `Scene.payloadSchema` 约束**（D13）：事件接入校验 + 规则发布校验 + 前端编辑器变量补全都按它走。schema 之外的字段被静默丢弃（v1）或拒收（v2 严格模式）。
 - `eventType` 必须 ∈ `Scene.eventTypes` 白名单，不在的事件直接拒收（D13）。
-- 不允许在 RuleEvent 里塞"指标"——指标按需在 Context 构建阶段取。
+- 不允许在 RuleEvent 里塞"指标"——指标按需在 EvalContext 构建阶段取。
 - **Job Trigger 同样产出标准 `RuleEvent`**：调度器到点查询主体集合 → 按模板批量合成 RuleEvent（`eventId = hash(jobRunId + subjectId)`）→ 注入标准评估链路；下游 Matcher / Rule / Action 完全无感（详见 §3.10）。
 
 ### 3.4 Rule（规则）
@@ -304,7 +304,7 @@ sealed RuleNode {
 
 **关键边界**：
 
-- **Condition 不取数**：取数是 Metric / Context 的职责；Condition 只判断**已经在 Context 里的数据**。
+- **Condition 不取数**：取数是 Metric / EvalContext 的职责；Condition 只判断**已经在 EvalContext 里的数据**。
 - **同一 conditionType 跨 Rule 复用**：通过 `@ConditionType("metric.threshold")` 注解的 Evaluator 是平台资产。
 - **Condition 是 AST 中的叶子，不能脱离 Rule 单独存在**：增删 Condition 即修改 AST，走 Rule 版本升级流程。
 
@@ -376,14 +376,14 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
 - **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(action, context)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
 
-### 3.8 Context（评估上下文）
+### 3.8 EvalContext（评估上下文）
 
 **是什么**：一次评估的运行时只读快照。**只为这一次评估存在**，评估完即丢弃。
 
 **结构**：
 
 ```
-Context {
+EvalContext {
     event:    RuleEvent              // 原始事件
     subject:  Subject                // 业务主体（用户 / 账户 / 设备）的属性快照
     metrics:  Map<metricCode, Value> // 本次评估涉及的指标快照
@@ -392,10 +392,12 @@ Context {
 }
 ```
 
-**EvalContext 标准字段**（D20 §3 闭合枚举——发布期输入引用闭合校验的根字段表）：
+**AST 条件表达式的内置可寻址路径**（D20 §3 闭合枚举——发布期输入引用闭合校验的根路径表）：
 
-| 字段 | 类型 | 来源 | 语义 |
-|------|------|------|------|
+这 7 条路径是 ConditionNode 表达式可以**按名字直接引用**的内置字段，来自 `RuleEvent` + 引擎注入，不需要注册 Metric。与 `Scene.payloadSchema` 字段集合、`Scene` metric 白名单**三者并集**构成发布期允许的完整引用范围。
+
+| 引用路径 | 类型 | 来源 | 语义 |
+|----------|------|------|------|
 | `now` | `Instant` | 引擎注入 | 评估开始时间（统一时钟，跨规则一致） |
 | `tenantId` | `String` | 上游 + RuleEvent | 租户 ID，多租户隔离主键（D3） |
 | `scene` | `String` | RuleEvent | 业务域命名空间（Matcher 路由键） |
@@ -404,13 +406,13 @@ Context {
 | `subjectId` | `String` | RuleEvent | 业务主体 ID（用户 / 账户 / 设备 / 订单），灰度桶 hash 输入 |
 | `ruleVersionId` | `Long` | Matcher 锁定 | 当前评估的 RuleVersion id，与 `subjectId` 一同作为灰度桶稳定性输入（D6） |
 
-> 该清单是发布期 `UNRESOLVED_VARIABLE` 校验的标准字段集合，与 `Scene.payloadSchema` 声明的字段名集合、`Scene` 绑定的 metric 白名单**三者并集**构成允许引用范围。新增标准字段需走决策（影响所有已发布 RuleVersion 的校验集合）。`subject` / `metrics` / `traceId` 属于运行时填充体，不参与该校验。
+> 新增内置路径需走决策（影响所有已发布 RuleVersion 的校验集合）。`subject` / `metrics` / `traceId` 属于运行时填充体，不参与发布期闭合校验。
 
 **关键边界**：
 
-- **Context 是不可变的**：Evaluator / Handler 不能修改 Context；如果 Action 产生了"新指标"，那是下次评估的事。
-- **Context 按需构建**：扫 AST 收集涉及的 `metricCode`，并发取数，组成本次 Context；没引用的指标不取（D5 派生）。
-- **Context ≠ 数据库快照**：Context 里的 `subject` 可能比 DB 新（如某个属性是从事件 payload 补的），以 Context 为准。
+- **EvalContext 是不可变的**：Evaluator / Handler 不能修改 EvalContext；如果 Action 产生了"新指标"，那是下次评估的事。
+- **EvalContext 按需构建**：扫 AST 收集涉及的 `metricCode`，并发取数，组成本次 EvalContext；没引用的指标不取（D5 派生）。
+- **EvalContext ≠ 数据库快照**：EvalContext 里的 `subject` 可能比 DB 新（如某个属性是从事件 payload 补的），以 EvalContext 为准。
 
 ### 3.9 Metric（指标）
 
@@ -464,7 +466,7 @@ Context {
 
 1. 按 `JobDefinition.subjectQuery` 查询本批次主体集合（用户列表 / 账户列表 / 订单列表）；
 2. 按 `eventTypeTemplate` / `payloadTemplate` 为每个主体合成 `RuleEvent`（`eventId = hash(jobRunId + subjectId)`，与 `record_no` 模式同构幂等）；
-3. 批量注入标准评估链路（Matcher → Pre-Gate → Context → AST → Action），下游完全无感。
+3. 批量注入标准评估链路（Matcher → Pre-Gate → EvalContext 构建 → AST → Action），下游完全无感。
 
 **字段（JobDefinition）**：
 
@@ -577,7 +579,7 @@ interface Scheduler {
 
 ### 3.13 Subject（业务主体，运行时填充体）
 
-**是什么**：Context 中表示"这次评估针对的主体对象"——RuleEvent.subjectId 解出来的具体业务实体（用户 / 账户 / 设备 / 订单）+ 其属性快照。**不是一等公民**，结构由 Scene.subjectType 决定取数路径。
+**是什么**：EvalContext 中表示"这次评估针对的主体对象"——RuleEvent.subjectId 解出来的具体业务实体（用户 / 账户 / 设备 / 订单）+ 其属性快照。**不是一等公民**，结构由 Scene.subjectType 决定取数路径。
 
 **结构（不可变 POJO，运行时构建）**：
 
@@ -595,9 +597,9 @@ interface Scheduler {
 
 **关键边界**：
 
-- **Subject 不可变**：与 Context 同生命周期，评估期内 Evaluator 不能修改 attributes；
+- **Subject 不可变**：与 EvalContext 同生命周期，评估期内 Evaluator 不能修改 attributes；
 - **Subject ≠ user_profile 实时**：Subject 是评估开始瞬间从主体表读出的**快照副本**，即使评估过程中主体属性发生变化（如运营改了 KYC 等级），本次评估读到的仍是初始快照值；
-- **SubjectLoader SPI**（D25）：Subject 取数由 `SubjectLoader.load(subjectId, subjectType, event) → Subject` 负责；v1 唯一实现 `UserProfileLoader`（`subjectType=USER`，查 `user_profile` 表）；与 metric 并行加载进 `EvalContext`（`CompletableFuture.allOf()`），Subject 加载失败整 Context 失败（D15 `METRIC_FETCH_FAIL`）；跨 subjectType 扩展见 [`04-extension.md`](./04-extension.md) §SubjectLoader 实现指南；
+- **SubjectLoader SPI**（D25）：Subject 取数由 `SubjectLoader.load(subjectId, subjectType, event) → Subject` 负责；v1 唯一实现 `UserProfileLoader`（`subjectType=USER`，查 `user_profile` 表）；与 metric 并行加载进 `EvalContext`（`CompletableFuture.allOf()`），Subject 加载失败整 EvalContext 失败（D15 `METRIC_FETCH_FAIL`）；跨 subjectType 扩展见 [`04-extension.md`](./04-extension.md) §SubjectLoader 实现指南；
 - **AST 引用路径**：`subject.<attribute>`（如 `subject.kycLevel`）；具体 conditionType（如 `user.attribute.equals`）的参数路径解析在 [`03-rule-expression.md`](./03-rule-expression.md) 定义。
 
 ### 3.14 Pre-Gate（准入闸门，不是一等公民）
@@ -919,9 +921,9 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 2. **Scene 启动时预热**：按白名单批量预热 ActionHandler 的外部资源（HTTP client / MQ producer / RPC 连接池 / 限流器）；PULL Scene 跳过 ActionHandler 预热；
 3. **前端 UI 下拉过滤**：配规则页面的 actionType 下拉项按当前 Scene 的 action binding 过滤，运营选不到越界 actionType；PULL Scene 直接隐藏 Action 编辑区块。
 
-### Q9: Context 里能放任意业务数据吗？
+### Q9: EvalContext 里能放任意业务数据吗？
 
-**不能任意**。Context 的字段是约定的（`event` / `subject` / `metrics` / `now` / `traceId`），扩展字段有明确入口（D13）：
+**不能任意**。EvalContext 的字段是约定的（`event` / `subject` / `metrics` / `now` / `traceId`），扩展字段有明确入口（D13）：
 
 - **事件维度的扩展**：通过 `RuleEvent.payload` 进入，但字段必须 ∈ `Scene.payloadSchema`；
 - **主体维度的扩展**：通过 subject 属性进入，主体来源由 `Scene.subjectType` 决定（USER → user_profile / ACCOUNT → account 等）；
@@ -935,7 +937,7 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 
 ### Q10: dry-run 试算时这些概念有何不同？
 
-dry-run 复用**全部**评估链路（Matcher / Pre-Gate / Context 构建 / AST 评估 / trace 落库），只在副作用入口短路：ActionHandler **不真发券 / 不真发消息**，但仍要返回"如果真执行会发什么"的预览。
+dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 / AST 评估 / trace 落库），只在副作用入口短路：ActionHandler **不真发券 / 不真发消息**，但仍要返回"如果真执行会发什么"的预览。
 
 **核心原则：判定执行，副作用不落**。dry-run 期望"看见会发生什么"，而不是"真的发生"，所以所有有副作用的环节都要透传 `dryRun=true` 标志并自行短路写副作用：
 
@@ -945,7 +947,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / Context 构建 / AST
 | **Pre-Gate 黑白名单** | 纯只读判定，无副作用差异 |
 | **Pre-Gate 频次门槛** | **读**频次计数器用于判定 + trace 展示，**不写**新计数（不污染真实运营频次记录） |
 | **Pre-Gate 互斥规则** | **读**互斥锁状态用于判定，**不占用**新锁 |
-| **Context 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
+| **EvalContext 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
 | **AST 评估 + 节点 trace** | 真实评估、真实节点 trace；trace 写入 `dry_run_session` 表，不进 `evaluation_session` |
 | **ActionHandler** | 调用 handler 的 `dryRun(action, context)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。**v1 范围**：接口已预留，全部 handler 实装在 **v1.5** 补齐（D7）；v1 阶段未补齐的 handler 由 Dispatcher 短路返回 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED` |
 | **`action_execution` 写入** | 不落生产表，预览结果随 dry-run 响应返回 |
