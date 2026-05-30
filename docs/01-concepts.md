@@ -26,7 +26,7 @@
 | **RuleEvent** | 触发评估的"一次发生"：谁、在哪、做了什么（不可变 POJO） | 上游业务方推 |
 | **Rule** | 一条规则定义：在什么条件下、对谁、做什么动作；带版本、灰度、Pre-Gate；条件用 **AST 树**表达（v1 仅 `kind=AST_BOOLEAN`；D12 预留 SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT 多态扩展位） | 业务运营 / 风控配置 |
 | **Condition** | AST 叶子节点：一条原子判断（`age >= 18` / `近 7 天交易额 > 1000`），由 `conditionType` 路由到具体评估器 | 业务运营选类型 + 配参数 |
-| **Action** | Rule 命中后要做的事（发券 / 调 webhook / 写库），由 `actionType` 路由到具体处理器；**可空**——PULL 模式 Scene 不需要 Action | 业务运营选类型 + 配参数 |
+| **Action** | Decision 命中后要做的事（发券 / 调 webhook / 写库），由 `actionType` 路由到具体处理器；配置在 **Decision.actions** 上（D27）；**可空**——PULL 模式 Scene 的 Decision 不配 Action | 业务运营选类型 + 配参数 |
 | **EvalContext** | 一次评估的运行时上下文：指标快照 + 用户画像 + 业务身份（不可变 POJO） | 引擎在评估前现场构建 |
 | **Metric** | 取数原子（按 `metricCode` 注册），同一指标可被多 Rule 共享、可缓存；**可见性由 Scene 白名单决定** | 平台 + 业务方共同治理 |
 | **Decision** | Tenant 级输出定义：规则命中后输出的语义结论（REJECT / REVIEW / PASS 等）；带 `priority` 字段，多规则命中时 Scene 按 `decisionStrategy` 合成最终 Decision；与 Action 正交（D26） | 平台运维 |
