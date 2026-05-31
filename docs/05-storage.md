@@ -366,12 +366,12 @@ CREATE TABLE dry_run_session (
   blocked_by       VARCHAR(64),
   error_code       VARCHAR(64),
   occurred_at      DATETIME(3)  NOT NULL,
-  evaluated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  completed_at     DATETIME(3),
+  started_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  finished_at      DATETIME(3),
   trigger          ENUM('MANUAL','API') NOT NULL DEFAULT 'API' COMMENT 'dry-run 触发来源',
   requested_by     VARCHAR(64)  COMMENT 'dry-run 发起人（来自请求头 X-Actor-Id，D14）',
   target_rule_version_id BIGINT COMMENT '指定预览的 RuleVersion id；null 时使用 current_version，可提前预览未发布版本',
-  KEY idx_tenant_evaluated (tenant_id, evaluated_at)
+  KEY idx_tenant_started (tenant_id, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 评估主记录（与 prod 隔离，D7）';
 ```
 
@@ -455,7 +455,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `evaluation_session` | 30 天 | 定时任务 `DELETE WHERE started_at < NOW() - INTERVAL 30 DAY LIMIT 5000` |
 | `node_trace` | 30 天 | 同上，`LIMIT 10000` |
 | `action_execution` | 30 天 | 同 evaluation_session（跟随其生命周期） |
-| `dry_run_session` | 7 天 | 定时任务 `DELETE WHERE evaluated_at < NOW() - INTERVAL 7 DAY LIMIT 2000` |
+| `dry_run_session` | 7 天 | 定时任务 `DELETE WHERE started_at < NOW() - INTERVAL 7 DAY LIMIT 2000` |
 | `dry_run_node_trace` | 7 天 | 同上 |
 | `audit_log` | **永久** | 不清理 |
 | 配置层所有表 | **永久** | 不清理（rule_version 不可删，D19） |
