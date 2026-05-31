@@ -1,13 +1,13 @@
 # 05 — 存储模型与 DDL（占位草稿）
 
-> **位置定位**：本文档承载 rule-engine 的**持久化层契约**——表清单 / 各表 DDL / 索引设计 / 数据迁移与不可变快照策略。当前**占位**，仅章节就位，内部具体内容待定。
+> **位置定位**：本文档承载 rule-engine 的**持久化层契约**——表清单 / 各表 DDL / 索引设计 / 不可变快照与数据保留策略。
 >
 > **前置阅读**：[`01-concepts.md`](./01-concepts.md) 各章节字段表、[`00-decisions.md`](./00-decisions.md) D17 / D19 / D21
 >
 > **解决什么疑问**："数据库里都有哪些表？""哪些字段有索引？""rule_version 怎么做不可变快照？""node_trace / audit_log 写入路径有什么区别？"
 >
 > **职责边界**——
-> - ✅ 表清单 / DDL / 索引 / 数据迁移路径 / 不可变快照实现
+> - ✅ 表清单 / DDL / 索引 / 不可变快照实现 / 数据保留策略
 > - ❌ 不写概念字段语义（→ 01-concepts，本文档只贴 SQL 类型 + 索引）、不写决策权衡（→ 00-decisions）、不写运维参数（→ 07-operability）、不写 API 字段（→ 10-api-contract）
 
 ---
@@ -16,73 +16,332 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 表清单总览 | ⏳ 未展开 |
-| §三 各表 DDL | ⏳ 未展开 |
-| §四 索引设计 | ⏳ 未展开 |
-| §五 数据迁移与不可变快照 | ⏳ 未展开 |
+| §二 表清单总览 | ✅ |
+| §三 各表 DDL | ✅ |
+| §四 索引设计 | ✅ |
+| §五 不可变快照与数据保留 | ✅ |
 
 ---
 
 ## 二、表清单总览
 
-⏳ 未展开。
+**配置层表（管理面，量小）：**
 
-> 展开时落定：v1 全部表的一句话职责 + 写入路径（同步事务 / 异步队列）+ 数据生命周期（永久 / TTL）+ 估算量级（行数 / QPS）——
->
-> | 表名 | 职责 | 写入路径 | 量级估算 |
-> |------|------|---------|---------|
-> | `rule_definition` | 规则主表（含 status / current_version） | 同步事务 | 千~万 |
-> | `rule_version` | 不可变版本快照（D19） | 同步事务（发布时） | 万~十万 |
-> | `scene_definition` | Scene 元数据 + payloadSchema 等 4 字段（D13） | 同步事务 | 百 |
-> | `scene_metric_binding` | Scene 可见 metric 白名单 | 同步事务 | 千~万 |
-> | `scene_action_binding` | Scene 可见 action 白名单 | 同步事务 | 千~万 |
-> | `metric_definition` | metric 注册表 + cachePolicy / params schema | 同步事务 | 百~千 |
-> | `condition_type` | ConditionType 注册表 + params schema | 同步事务 | 百 |
-> | `action_type` | ActionType 注册表 + failFast 等 | 同步事务 | 百 |
-> | `audit_log` | 人的行为审计（D14 同步事务红线） | 同步事务 | 万~百万/天 |
-> | `node_trace` | 节点级评估 trace（D21 异步批写） | 异步批量 insert | 百万~亿/天 |
-> | `evaluation_session` | 评估会话（幂等收口 / 对账分母 / 外键时序，v1 同步） | 同步事务 | 百万~亿/天 |
-> | `job_definition` | xxl-job Job 注册 + cron + scene 绑定（D11） | 同步事务 | 百 |
-> | `job_execution` | Job 执行流水 | 同步事务 | 万~十万/天 |
-> | `subject` | Subject 主体（v1 仅 USER） | 异步同步 | 万~千万 |
+| 表名 | 职责 | 写入路径 | 生命周期 |
+|---|---|---|---|
+| `tenant` | 租户注册 | 同步事务 | 永久 |
+| `scene` | 业务域元数据（dominantMode / payloadSchema / decisionStrategy） | 同步事务 | 永久 |
+| `metric_definition` | 指标元数据（sourceType / params / cacheTtl / allowProvided） | 同步事务 | 永久 |
+| `rule_definition` | 规则主记录（code / name / status） | 同步事务 | 永久 |
+| `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
+| `audit_log` | 配置变更审计——人的行为（D14，同步事务红线） | 同步事务 | 永久 |
+
+**评估层表（运行面，量大）：**
+
+| 表名 | 职责 | 写入路径 | 生命周期 |
+|---|---|---|---|
+| `evaluation_session` | 每次评估主记录 / 幂等锚点（D11 / D21 同步写） | **同步**（session 行） | 30 天 TTL（D9） |
+| `node_trace` | AST 各节点求值 trace（D7 / D21 异步批写） | **异步批写** | 30 天 TTL（D9） |
+| `action_execution` | Action 派发执行记录（D4） | 异步 | 30 天 TTL |
+| `dry_run_session` | dry-run 评估主记录（与 prod 隔离，D7） | 同步 | 7 天 TTL |
+| `dry_run_node_trace` | dry-run 节点 trace | 异步批写 | 7 天 TTL |
 
 ---
 
 ## 三、各表 DDL
 
-⏳ 未展开。
+> DDL 版本管理遵循 Flyway 命名规范：`V{major}_{minor}__{描述}.sql`，如 `V1_0__init_schema.sql`。v1 所有建表 SQL 合并到 `V1_0__init_schema.sql`，后续变更新增 `V1_1__xxx.sql`（不改已有 migration 文件）。
 
-> 展开时落定：每张表的完整 DDL（MySQL 5.7+ 语法） + 字段注释（与 01-concepts 字段表保持一致，本文档不重复语义说明，仅列 SQL 类型 + NOT NULL / DEFAULT / COMMENT）。
+### 3.1 配置层
+
+**tenant**
+
+```sql
+CREATE TABLE tenant (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  code        VARCHAR(64)  NOT NULL COMMENT '租户标识，全局唯一',
+  name        VARCHAR(128) NOT NULL COMMENT '租户名称',
+  status      ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='租户注册表';
+```
+
+**scene**
+
+```sql
+CREATE TABLE scene (
+  id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id         BIGINT       NOT NULL COMMENT '所属租户 id',
+  code              VARCHAR(64)  NOT NULL COMMENT '业务域标识，租户内唯一',
+  name              VARCHAR(128) NOT NULL,
+  dominant_mode     ENUM('PUSH','PULL','HYBRID') NOT NULL COMMENT 'PUSH=异步派发/PULL=同步返回/HYBRID=两者',
+  decision_strategy ENUM('HIGHEST_PRIORITY','MOST_STRICT') NOT NULL DEFAULT 'HIGHEST_PRIORITY' COMMENT 'D29 PUSH/HYBRID 缺省 HIGHEST_PRIORITY',
+  subject_type      ENUM('USER','ACCOUNT','DEVICE','ORDER','CUSTOM') NOT NULL DEFAULT 'USER',
+  payload_schema    JSON         COMMENT 'payloadSchema D13，字段类型 + required 声明',
+  default_params    JSON         COMMENT '如 timezone: Asia/Shanghai',
+  status            ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_tenant_code (tenant_id, code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='业务域（Scene）元数据';
+```
+
+**metric_definition**
+
+```sql
+CREATE TABLE metric_definition (
+  id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id           BIGINT       NOT NULL,
+  metric_code         VARCHAR(128) NOT NULL COMMENT 'metricCode，租户内唯一',
+  name                VARCHAR(128) NOT NULL,
+  source_type         ENUM('ATTRIBUTE','SQL_AGGREGATE','EXTERNAL_HTTP','STREAM') NOT NULL,
+  data_type           ENUM('LONG','DOUBLE','STRING','BOOLEAN','LIST') NOT NULL,
+  params              JSON         NOT NULL COMMENT 'sourceType 专属参数（sql/url/column 等）',
+  cache_ttl_seconds   INT          NOT NULL DEFAULT 60 COMMENT '取数结果缓存 TTL，0=不缓存',
+  allow_provided      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'D30：是否允许调用方通过 providedMetrics 覆盖',
+  status              ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  created_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_tenant_code (tenant_id, metric_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**rule_definition**
+
+```sql
+CREATE TABLE rule_definition (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id     BIGINT       NOT NULL,
+  scene_id      BIGINT       NOT NULL COMMENT '关联 scene.id',
+  code          VARCHAR(128) NOT NULL COMMENT '规则标识，租户内唯一',
+  name          VARCHAR(255) NOT NULL,
+  description   TEXT,
+  status        ENUM('ACTIVE','DISABLED','DRAFT') NOT NULL DEFAULT 'DRAFT',
+  created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_tenant_code (tenant_id, code),
+  KEY idx_scene_id (scene_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**rule_version**（不可变，D19 — 写入后永不 UPDATE/DELETE）
+
+```sql
+CREATE TABLE rule_version (
+  id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  rule_definition_id    BIGINT       NOT NULL COMMENT '关联 rule_definition.id',
+  version               INT          NOT NULL COMMENT '单调递增，per rule_definition',
+  condition_ast         JSON         NOT NULL COMMENT '完整 AST 节点树，不可变',
+  decision_bindings     JSON         NOT NULL COMMENT 'D27/D28：含 actions 快照的 Decision 绑定',
+  pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表',
+  trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
+  metric_dependencies   JSON         NOT NULL COMMENT 'AST 引用的 metricCode 列表（发布期静态收集）',
+  published_at          DATETIME(3)           COMMENT 'NULL = 草稿；非 NULL = 已发布',
+  published_by          VARCHAR(64),
+  status                ENUM('ACTIVE','SUPERSEDED','DISABLED') NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE=当前有效/SUPERSEDED=被新版本取代/DISABLED=手动禁用',
+  created_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_def_version (rule_definition_id, version),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则版本快照（不可变，D19）';
+```
+
+**audit_log**（D14：人的行为，同步事务，永久保留）
+
+```sql
+CREATE TABLE audit_log (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id     BIGINT       NOT NULL,
+  operator      VARCHAR(64)  NOT NULL COMMENT '操作人（用户名 / 系统账号）',
+  operation     VARCHAR(64)  NOT NULL COMMENT 'RULE_PUBLISH / RULE_DISABLE / SCENE_CREATE 等',
+  target_type   VARCHAR(64)  NOT NULL COMMENT 'rule_definition / scene / metric_definition',
+  target_id     VARCHAR(128) NOT NULL,
+  before_value  JSON         COMMENT '变更前快照',
+  after_value   JSON         COMMENT '变更后快照',
+  error_code    VARCHAR(64)  COMMENT '发布期校验失败时填写（UNRESOLVED_VARIABLE 等）',
+  operated_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_tenant_target (tenant_id, target_type, target_id),
+  KEY idx_operated_at (operated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配置变更审计（D14，同步事务写）';
+```
+
+### 3.2 评估层
+
+**evaluation_session**（D11/D21 同步写；幂等 UK；30 天 TTL）
+
+```sql
+CREATE TABLE evaluation_session (
+  id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id        BIGINT       NOT NULL,
+  event_id         VARCHAR(128) NOT NULL COMMENT '业务事件 id（幂等键第二列，D11）',
+  scene_code       VARCHAR(64)  NOT NULL,
+  subject_id       VARCHAR(128) NOT NULL,
+  rule_version_id  BIGINT       NOT NULL COMMENT '评估时锁定的 RuleVersion id（D17 快照）',
+  status           ENUM('PENDING','HIT','MISS','BLOCKED','ERROR','FAILED') NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING=进行中；HIT/MISS/BLOCKED/ERROR=D22 四态；FAILED=异常崩溃',
+  final_decision   VARCHAR(64)  COMMENT '最终决策码（nullable，未命中或 BLOCKED 时为 null）',
+  hit_decisions    JSON         COMMENT '命中的所有决策码列表',
+  blocked_by       VARCHAR(64)  COMMENT '仅 status=BLOCKED 时有值，记录首个拦截 Gate 类型（D22）',
+  error_code       VARCHAR(64)  COMMENT '仅 status=ERROR 时有值，D15 EvalResult.errorCode',
+  occurred_at      DATETIME(3)  NOT NULL COMMENT '业务事件时间',
+  evaluated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
+  completed_at     DATETIME(3)  COMMENT 'status 从 PENDING 更新为终态的时间',
+  UNIQUE KEY uk_tenant_event (tenant_id, event_id),
+  KEY idx_scene_subject (scene_code, subject_id),
+  KEY idx_evaluated_at (evaluated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评估会话主记录（D11/D21，v1 同步写）';
+```
+
+**node_trace**（D7/D21 异步批写；30 天 TTL）
+
+```sql
+CREATE TABLE node_trace (
+  id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  evaluation_session_id BIGINT       NOT NULL COMMENT '关联 evaluation_session.id',
+  tenant_id             BIGINT       NOT NULL,
+  rule_version_id       BIGINT       NOT NULL,
+  node_path             VARCHAR(256) NOT NULL COMMENT 'AST 路径，如 "0.1.2"（根=0）',
+  node_type             VARCHAR(64)  NOT NULL COMMENT 'AndNode / OrNode / NotNode / ConditionNode / PRE_GATE_BLOCKED',
+  condition_type        VARCHAR(64)  COMMENT 'nullable，仅 ConditionNode',
+  metric_code           VARCHAR(128) COMMENT 'nullable，仅 metric 类 conditionType',
+  params                JSON         COMMENT '节点参数快照',
+  actual_value          JSON         COMMENT '节点实际取到的值（nullable，短路跳过为 null）',
+  result                TINYINT(1)   COMMENT '1=满足/0=不满足/NULL=短路跳过',
+  error_code            VARCHAR(64)  COMMENT 'nullable，METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR 等',
+  value_source          ENUM('PROVIDED','FETCHED') COMMENT 'D30：指标来源（nullable，仅 metric 类 ConditionNode）',
+  evaluated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_session_id (evaluation_session_id),
+  KEY idx_tenant_evaluated (tenant_id, evaluated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AST 节点求值 trace（D7/D21，异步批写）';
+```
+
+**action_execution**
+
+```sql
+CREATE TABLE action_execution (
+  id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  evaluation_session_id BIGINT       NOT NULL COMMENT '关联 evaluation_session.id',
+  tenant_id             BIGINT       NOT NULL,
+  action_id             VARCHAR(128) NOT NULL COMMENT 'Decision.actions[n].actionId',
+  action_type           VARCHAR(64)  NOT NULL,
+  decision_code         VARCHAR(64)  NOT NULL COMMENT '触发本 Action 的 Decision 码（D27）',
+  status                ENUM('PENDING','SUCCESS','FAILED','SKIPPED','RETRYING') NOT NULL DEFAULT 'PENDING',
+  error_code            VARCHAR(64)  COMMENT 'TIMEOUT / BUSINESS_REJECTED / PREDECESSOR_FAILED 等',
+  retryable             TINYINT(1)   COMMENT '1=可重试；0=不可重试；NULL=尚未执行',
+  retry_count           INT          NOT NULL DEFAULT 0,
+  executed_at           DATETIME(3)  COMMENT '最后一次执行时间',
+  created_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_session_id (evaluation_session_id),
+  KEY idx_status_retryable (status, retryable)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+**dry_run_session**（与 prod evaluation_session 同结构，7 天 TTL，D7）
+
+```sql
+CREATE TABLE dry_run_session (
+  id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id        BIGINT       NOT NULL,
+  event_id         VARCHAR(128) NOT NULL,
+  scene_code       VARCHAR(64)  NOT NULL,
+  subject_id       VARCHAR(128) NOT NULL,
+  rule_version_id  BIGINT       NOT NULL,
+  status           ENUM('PENDING','HIT','MISS','BLOCKED','ERROR','FAILED') NOT NULL DEFAULT 'PENDING',
+  final_decision   VARCHAR(64),
+  hit_decisions    JSON,
+  blocked_by       VARCHAR(64),
+  error_code       VARCHAR(64),
+  occurred_at      DATETIME(3)  NOT NULL,
+  evaluated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  completed_at     DATETIME(3),
+  trigger          ENUM('MANUAL','API') NOT NULL DEFAULT 'API' COMMENT 'dry-run 触发来源',
+  KEY idx_tenant_evaluated (tenant_id, evaluated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 评估主记录（与 prod 隔离，D7）';
+```
+
+**dry_run_node_trace**（与 node_trace 同结构，7 天 TTL）
+
+```sql
+CREATE TABLE dry_run_node_trace (
+  id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  dry_run_session_id    BIGINT       NOT NULL,
+  tenant_id             BIGINT       NOT NULL,
+  rule_version_id       BIGINT       NOT NULL,
+  node_path             VARCHAR(256) NOT NULL,
+  node_type             VARCHAR(64)  NOT NULL,
+  condition_type        VARCHAR(64),
+  metric_code           VARCHAR(128),
+  params                JSON,
+  actual_value          JSON,
+  result                TINYINT(1),
+  error_code            VARCHAR(64),
+  value_source          ENUM('PROVIDED','FETCHED'),
+  evaluated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_session_id (dry_run_session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 节点 trace（与 prod 隔离，D7）';
+```
 
 ---
 
 ## 四、索引设计
 
-⏳ 未展开。
+### 评估热路径索引（运行期读，性能关键）
 
-> 展开时落定：每张表的索引清单 + 查询模式映射——
->
-> - **rule_definition**：`(scene_id, event_type, status)` 复合索引承载 D17 倒排索引初始化扫描
-> - **rule_version**：`(rule_id, version)` 唯一索引（不可变快照查找）
-> - **node_trace**：`(evaluation_session_id, created_at)` + 按 trace 落点查询模式优化
-> - **audit_log**：`(target_type, target_id, created_at)` + 按 actor 查询的副索引
-> - **evaluation_session**：`(scene_id, event_id, created_at)` 唯一约束（幂等收口）
->
-> 注：v1 索引以"覆盖 D17 倒排索引 + 主键 / 唯一约束"为主，宽表查询走 OLAP（v2 演进，[`08-evolution.md`](./08-evolution.md) §2.5 trace 冷热分级）。
+| 表 | 索引 | 查询模式 |
+|---|---|---|
+| `evaluation_session` | UK `uk_tenant_event (tenant_id, event_id)` | 幂等检查：D11 下半层 DB uk |
+| `evaluation_session` | `idx_evaluated_at (evaluated_at)` | 定时清理：按时间范围删除 30 天外数据 |
+| `node_trace` | `idx_session_id (evaluation_session_id)` | 按 session 查 trace（排障 / dry-run 对比） |
+
+Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
+
+### 运营查询索引（非热路径，管理面）
+
+| 表 | 索引 | 查询模式 |
+|---|---|---|
+| `evaluation_session` | `idx_scene_subject (scene_code, subject_id)` | 按用户查历史评估记录 |
+| `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
+| `action_execution` | `idx_status_retryable (status, retryable)` | 重试队列扫描（查 status=FAILED AND retryable=1） |
+| `action_execution` | `idx_session_id (evaluation_session_id)` | 按 session 查 action 执行记录 |
+| `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |
+| `rule_version` | UK `uk_def_version (rule_definition_id, version)` | 版本唯一性约束 + 按规则查所有版本 |
+| `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)` | 查某个规则/Scene 的所有变更记录 |
+| `audit_log` | `idx_operated_at (operated_at)` | 按时间范围查审计日志 |
+
+### 分区建议（v1 不做，v2 演进）
+
+`node_trace` 和 `evaluation_session` 数据量最大（百万~亿/天），v1 靠定时 DELETE 清理 30 天外数据，v2 按 `evaluated_at` 月分区（见 `08-evolution.md` §2.5 trace 冷热分级）。
 
 ---
 
-## 五、数据迁移与不可变快照
+## 五、不可变快照与数据保留
 
-⏳ 未展开。
+### 不可变快照策略（D19）
 
-> 展开时落定：
->
-> - **不可变快照**（D19）：`rule_version` 行写入后永不 UPDATE / DELETE，回滚 = 用旧 version 内容建新草稿走标准发布产新 version 号
-> - **DISABLED 切换不变更 current_version**（[`01-concepts.md`](./01-concepts.md) §3.4）
-> - **PUBLISHING 残留兜底清扫**（D19 v1 落地范围派生）
-> - **跨大版本字段迁移**（如 D12 `Rule.kind` v1 仅 AST_BOOLEAN，未来扩展不需要 alter）
-> - **schema 演进**（D13 payloadSchema 版本化指向 [`08-evolution.md`](./08-evolution.md) §2.12）
+`rule_version` 行一旦发布（`published_at` 非 null）永不 UPDATE / DELETE：
+
+- 修改规则 = 创建新 version（version 单调递增，per rule_definition）
+- 旧 version `status` 改为 `SUPERSEDED`（仍可被 `evaluation_session.rule_version_id` 外键引用，历史评估可追溯）
+- 新 version INSERT，Matcher 倒排索引热更指向新 version（≤15s 全实例收敛，D17）
+- 回滚 = 用旧 version 的 `condition_ast` / `decision_bindings` 内容新建草稿 → 走标准发布流程产出新 version 号，不是直接切回旧 version（避免 current_version 倒退造成审计断层）
+
+### 数据保留策略（D9：v1 全 MySQL，30 天保留）
+
+| 表 | 保留期 | 清理方式 |
+|---|---|---|
+| `evaluation_session` | 30 天 | 定时任务 `DELETE WHERE evaluated_at < NOW() - INTERVAL 30 DAY LIMIT 5000` |
+| `node_trace` | 30 天 | 同上，`LIMIT 10000` |
+| `action_execution` | 30 天 | 同 evaluation_session（跟随其生命周期） |
+| `dry_run_session` | 7 天 | 定时任务 `DELETE WHERE evaluated_at < NOW() - INTERVAL 7 DAY LIMIT 2000` |
+| `dry_run_node_trace` | 7 天 | 同上 |
+| `audit_log` | **永久** | 不清理 |
+| 配置层所有表 | **永久** | 不清理（rule_version 不可删，D19） |
+
+### Flyway 命名规范（DDL 版本管理）
+
+文件命名：`V{major}_{minor}__{描述}.sql`，如 `V1_0__init_schema.sql`
+
+v1 所有建表 SQL 合并到 `V1_0__init_schema.sql`，后续变更新增 `V1_1__xxx.sql`（不改已有 migration 文件）。
 
 ---
 
