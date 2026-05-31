@@ -1,6 +1,6 @@
 # 08 — 演进路线图（部分展开）
 
-> **位置定位**：本文档承载所有"v1 不做、未来做"的演进项与决策时间线。当前**部分展开**——已识别的演进锚点中 §2.1 / §2.12 / §2.13 / §2.14 / §2.15 已写细节；§三 决策时间线、§四 已否决方案仍待展开。
+> **位置定位**：本文档承载所有"v1 不做、未来做"的演进项与决策时间线。当前**部分展开**——已识别的演进锚点中 §2.1 / §2.12 / §2.13 / §2.14 / §2.15 已写细节；§三 决策时间线、§四 已否决方案已全部展开。
 >
 > **前置阅读**：[`README.md`](./README.md)、[`00-decisions.md`](./00-decisions.md)
 >
@@ -13,8 +13,8 @@
 | 章节 | 状态 |
 |------|------|
 | §二 演进锚点（roadmap） | ⏳ 部分展开（§2.1 / §2.12 / §2.13 / §2.14 / §2.15 已详细展开；§2.2–§2.11 四要素就位、路线概要级） |
-| §三 决策时间线 | ⏳ 未展开（建议从 README §七版本史 + `00-decisions.md` 汇总） |
-| §四 已否决方案 | ⏳ 未展开 |
+| §三 决策时间线 | ✅ |
+| §四 已否决方案 | ✅ |
 
 ---
 
@@ -179,26 +179,57 @@
 
 ---
 
-## 三、决策时间线（待展开）
+## 三、决策时间线
 
-> 展开本节时，建议从 [`README.md`](./README.md) §七 版本史 + [`00-decisions.md`](./00-decisions.md) D1-D21 汇总，按时间顺序整理"决策 → 派生约束 → 影响范围"。
+> 来源：`00-decisions.md` 各组标题 + `README.md` §七 版本史。按 D 编号顺序，标记"何时做了什么取舍"。
 
-⏳ 未展开。
+### 第一组：核心数据模型（D1–D7）
+
+核心 DDD 边界确立：Tenant / Scene / Rule / Condition / Metric / EvalContext 分层；D4 审计内建（不可关闭）；D5 Metric 按需取数（不预加载全量）；D6 不可变版本快照（评估与配置解耦基础）；D7 节点级 trace 落库（后续可运维性的基础决策）。
+
+### 第二组：指标与外部集成（D8–D11）
+
+D8 引入 MetricSource SPI（取数与评估解耦，后续可插拔）；D9 v1 全 MySQL 不引入列存 / 大数据；D10 基础 Pre-Gate 四类（ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT）；D11 幂等 Redis+DB 双层（调用方可重推无副作用）。
+
+### 第三组：Rule 结构与模式（D12–D17）
+
+D12 `kind` 字段预留（AST_BOOLEAN → 多态出口）；D13 payloadSchema v1 不做运行时强校验（闭合）；D14 审计强一致 + 敏感数据交给调用方处理；D15 单节点失败降级（不整树崩）；D16 发布期静态校验（UNRESOLVED_VARIABLE 等）；D17 倒排索引不可变快照热更（Matcher 无 DB 热路径，热更 ≤15s）。
+
+### 第四组：精化与派生（D18–D22）
+
+D18 Action 失败归一为 FAILED(retryable)，补偿不自动触发；D19 rule_version 不可变只读，rollback = 新草稿；D20 metric 批量预拉 + EvalContext 内冻结；D21 trace 异步批写 + session 同步写（双轨）；D22 四态对账（HIT/MISS/BLOCKED/ERROR）。
+
+### 第五组：最终精化（D23–D30）
+
+D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔）；D25 pre-gate 顺序固定（ROLLOUT → WHITELIST → BLACKLIST → RATE_LIMIT → MUTEX）；D26 Decision 实体（Tenant 级）+ 多规则命中合成（HIGHEST_PRIORITY）；D27 Action 从 Rule 迁移到 Decision（最大重构节点）；D28 actions 在发布时快照到 rule_version；D29 PUSH/HYBRID 默认 HIGHEST_PRIORITY；D30 providedMetrics + allowProvided per sourceType（最晚决策）。
+
+### 核心转折点
+
+| 时间节点 | 决策 | 影响 |
+|---------|------|------|
+| D6 确立 | 不可变版本快照 | 评估线程可安全持有 RuleVersion 引用；热更 = 新版本 + 索引切换，不是原地更新 |
+| D21 确立 | trace 异步批写 / session 同步写 | 双轨写入架构基础；P99 延迟保障；trace 成旁路观察通道 |
+| D27 确立 | Action 从 Rule 迁移到 Decision | 最大单次重构；同一 Decision 的所有命中共享 Action 配置 |
+| D30 确立 | providedMetrics allowProvided per sourceType | 调用方数据权威性最晚才表态；per-sourceType 粒度是 D30 讨论时才浮现的需求 |
 
 ---
 
-## 四、已否决方案（待展开）
+## 四、已否决方案
 
-> 展开本节时归档：曾经评估但最终未采纳的方案，注明否决原因和替代方案。
-
-⏳ 未展开。当前已知候选条目：
-
-- 三层模型（Rule / RuleGroup / Condition）→ 回退为两层（README §七版本史已记录原因）；
-- 批量原子发布 API（D19 否决）；
-- Action 内置链式触发（D16 否决）；
-- 完全延后权限与审计（D14 选项 C 否决）；
-- urule 风格的全局 FunctionLibrary（"注册任意 Java 方法供规则调用"）→ 与 D20 §3 闭合校验、D16 禁止副作用、§3.9 metric 只读三条决策正面冲突；v1 用 `ConditionType` 扩展（[`04-extension.md`](./04-extension.md)）承载条件原子；将来若出现高频自定义表达式需求，走 D12 `kind=EXPRESSION_SCRIPT` 多态（§2.1）而非全局函数库；
-- urule 风格的独立 ConstantLibrary 一等概念 → v1 用只读 metric 替代（§3.9 关键边界登记），复用 metric 治理 + 版本化通道；独立 ConstantLibrary 演进与 FunctionLibrary 配套评估，无独立优先级。
+| 方案 | 否决时间节点 | 否决理由 | 正式采用的替代方案 |
+|------|------------|---------|-----------------|
+| webhook.call ActionType（引擎主动发 HTTP 回调） | D27 讨论时 | 调用方需维护公网 endpoint；重试 / 超时由引擎管，复杂度爆炸 | `@ActionType` SPI（命令式 ActionHandler） |
+| 同步事务写 node_trace | D21 确立时 | 量大（10-1000 行/次），同步写直接吃风控 P99 预算；trace 是旁路观察通道，丢弃不影响正确性 | TraceWriter 异步批写 |
+| 全局 metric cache TTL（不区分 per-metric） | D5 / D20 讨论时 | 不同 metric 实效性差异大（account.age 3600s vs balance 0s）；全局 TTL 只能取最保守值 = 不 cache | per-metric `cachePolicyDefault.ttl` |
+| providedMetrics 全局 allowProvided=true | D30 讨论时 | 高权威 metric（如账户余额 SQL_AGGREGATE）不应被调用方覆盖 | per-sourceType 默认值（ATTRIBUTE / EXTERNAL_HTTP=true，SQL_AGGREGATE / STREAM=false） |
+| persistedMetricCodes（引擎持久化 provided 值） | D30 讨论时 | 引擎承担业务数据存储职责；与不可变快照语义冲突 | 不做，provided 值只活在本次评估 |
+| Action 留在 Rule 上（D27 之前） | D27 确立时 | 同一 Rule 命中只能派发一组 Action；不同 Decision 需要不同 Action 无法表达 | D27：Action 迁移到 Decision |
+| evaluation_session 全量异步写 | D21 讨论时 | session 行是幂等 UK 锚点，必须在评估开始前存在；极端情况下异步写导致幂等失效 | 仅 session 行同步写，trace 行异步写 |
+| 三层模型（Rule / RuleGroup / Condition） | 架构初期 | RuleGroup 概念冗余，树形 AST 已能表达 AND/OR 复合；两层更简洁 | 两层模型（Rule + ConditionNode AST） |
+| 批量原子发布 API | D19 讨论时 | 跨规则原子事务复杂度高，且失败回滚语义不清晰 | 前端逐条提交，批量由调用层拆分 |
+| 完全延后权限与审计 | D14 讨论时（选项 C） | 后期 ALTER TABLE 痛；合规要求不可等 | A：占位字段 + audit_log 表（D14） |
+| urule 风格 FunctionLibrary（全局函数注册） | D20 §3 / D16 / §3.9 讨论时 | 与闭合校验、禁止副作用、metric 只读三条决策正面冲突 | `@ConditionType` SPI；高频自定义表达式走 D12 `kind=EXPRESSION_SCRIPT` |
+| 独立 ConstantLibrary 一等概念 | 同上 | 与 FunctionLibrary 配套评估，无独立优先级；只读 metric 已覆盖需求 | 用只读 metric 替代（§3.9 关键边界） |
 
 ---
 
