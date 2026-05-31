@@ -16,109 +16,171 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 幂等 | ⏳ 未展开（IdempotencyGuard + record_no + eventId） |
-| §三 EvaluationSession 落库策略 | ⏳ 未展开（v1 同步事务 / v2 异步路径指向 [`08-evolution.md`](./08-evolution.md) §2.15） |
-| §四 dry-run 链路 | ⏳ 未展开 |
-| §五 灰度 | ⏳ 未展开（hash bucket 算法 + rollout 结构 + 灰度验证流程） |
-| §六 Prometheus 指标清单 | ⏳ 未展开 |
-| §七 告警阈值 | ⏳ 未展开（建议值，不强制） |
-| §八 可用性策略汇总 | ⏳ 未展开（v1 策略 + SPOF 清单 + 降级矩阵） |
-| §九 运维参数默认值表 | ⏳ 未展开（`engine.rule.*` 命名空间集中表） |
+| §二 幂等 | ✅ |
+| §三 EvaluationSession 落库策略 | ✅ |
+| §四 dry-run 链路 | ✅ |
+| §五 灰度 | ✅ |
+| §六 Prometheus 指标清单 | ✅ |
+| §七 告警阈值 | ✅ |
+| §八 可用性策略汇总 | ✅ |
+| §九 运维参数默认值表 | ✅ |
 
 ---
 
 ## 二、幂等
 
-⏳ 未展开。
+### 双层保障（D11）
 
-> 展开时落定：`IdempotencyGuard` 接口契约 + `RuleEvent.eventId` 生成约定（外部 `record_no` 直传 / Job 模式 `hash(jobRunId + subjectId)`，D11 派生）+ `evaluation_session` 唯一约束承载幂等收口（D21 §3 派生）+ 重复事件的语义（直接返回上次 EvalResult 或拒绝）。
+| 层 | 实现 | 失效场景 |
+|----|------|---------|
+| 上半层 | `SET rule:session:{tenantId}:{eventId} <evalResultJson> NX EX 3600` | Redis 宕机 / 键过期 |
+| 下半层 | `evaluation_session` UK `(tenant_id, event_id)` | 分布式竞争时最终一致 |
+
+**流程：**
+1. 评估前先 Redis SET NX：命中 → 返回缓存 EvalResult，不再评估
+2. 未命中 → 正常评估 → evaluation_session INSERT
+3. INSERT 遇 DuplicateKeyException → SELECT 已有行 → 返回已有 EvalResult
+
+**幂等范围**：一次"评估"（Matcher + Pre-Gate + AST + 记录 session）幂等；Action 派发**不**幂等（由 ActionHandler 自行保证 execute() 幂等，见 04-extension §三）。
 
 ---
 
 ## 三、EvaluationSession 落库策略
 
-⏳ 未展开。
+| 操作 | 模式 | 原因 |
+|------|------|------|
+| `evaluation_session` 行 INSERT | **同步事务** | 幂等 UK 需先存在；量小（1 行/次），P99 延迟可忽略 |
+| `node_trace` 批 INSERT | **异步批写** | 量大（10-1000 行/次）；旁路观察通道，失败降级丢弃，不影响主流程 |
+| `action_execution` INSERT | **异步** | Action 派发本身异步，执行结果与评估线程解耦 |
 
-> 展开时落定：v1 同步事务落 evaluation_session 行（D21 派生：含幂等收口 / 对账分母 / 外键时序三层角色）+ session 状态机 INIT → RUNNING → COMPLETED / ERROR + 与 audit_log（D14 同步事务）的写入边界 + 与 node_trace（D21 异步批写）的写入边界 + v2 异步化路径锚点指向 [`08-evolution.md`](./08-evolution.md) §2.15。
+TraceWriter 队列参数（建议默认值，可 `engine.rule.trace.*` 配置覆盖，见 §九）：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `queue.capacity` | 100,000 | 内存 LinkedBlockingQueue 容量 |
+| `batch.size` | 500 | 每批 INSERT 行数 |
+| `flush.interval.ms` | 200 | 超时强制 flush |
+| `consumer.threads` | 2 | 批写消费线程数 |
 
 ---
 
 ## 四、dry-run 链路
 
-⏳ 未展开。
+dry-run 走完整评估链路（Matcher / Pre-Gate / EvalContext / AST），但：
+- **不派发 Action**（Dispatcher 短路）
+- **不写** `evaluation_session` / `node_trace` prod 表
+- **写** `dry_run_session` / `dry_run_node_trace`（隔离表，D7）
+- 返回完整 `nodeTrace`（AST 每个节点的 result / actualValue / errorCode）
 
-> 展开时落定：dry-run 入口（[`10-api-contract.md`](./10-api-contract.md) 接口） + 不落 evaluation_session / audit_log / node_trace 的旁路语义 + Pre-Gate 在 dry-run 模式下的行为（[`01-concepts.md`](./01-concepts.md) §3.14 派生）+ 返回结构（节点级 trace + EvalResult + 命中 Action 列表但**不实际派发**）。
+**入口**：`POST /api/v1/scenes/{sceneCode}/evaluate/dry-run`（PULL 模式同步返回，见 10-api-contract §三）
+
+**用途**：
+1. 规则发布前验证：编辑器内构造 mockEvent → 查看每个节点求值结果
+2. 线上排障：用历史事件 eventId 重放 → 对比 trace 差异
+
+**dry_run_session 保留期**：默认 7 天（见 §九 `engine.rule.retention.dry-run-session-days`）。
 
 ---
 
 ## 五、灰度
 
-⏳ 未展开。
+### 灰度算法（ROLLOUT Gate）
 
-> 展开时落定：`Rule.rollout` 结构（type / percentage / tagConditions） + 灰度桶 hash 算法（基于 `(subjectId, ruleVersionId)`，不依赖实例 ID，D17 派生）+ 灰度桶在引擎 Pre-Gate 计算（D6 + D11 派生）+ 灰度验证流程（dry-run + 灰度小流量 → 全量）+ 回退路径（DISABLED 切换或新版本发布覆盖）。
+```
+bucket = (murmur3_32(subjectId + ":" + ruleVersionId) & 0x7FFFFFFF) % 100
+pass = bucket < rollout.percentage
+```
+
+- `ruleVersionId` 加入 hash：同一 subject 在不同版本间 bucket 独立（防止切版本导致 bucket 漂移）
+- murmur3_32 保证分布均匀；hash seed 固定（见 §九 `engine.rule.rollout.hash-seed`），上线后不要改，否则桶分布漂移
+
+### 灰度验证流程
+
+1. 新版规则发布为 `ACTIVE`，ROLLOUT Gate 设 `percentage=5`
+2. 监控 `evaluation_session.error_code` 分布 + Action 派发成功率（5% bucket）
+3. 对账无异常 → percentage 逐步调至 100
+4. 全量后将旧版 rule_version.status 改为 `SUPERSEDED`
+
+### 灰度回退
+
+将 ROLLOUT.percentage 调回 0（不删规则）→ 新流量全部走其他规则。若需立即停用，将 rule_definition.status 改为 DISABLED（Matcher 倒排索引热摘除，≤15s 生效）。
 
 ---
 
 ## 六、Prometheus 指标清单
 
-⏳ 未展开。
+所有指标前缀 `rule_engine_`，label 统一含 `tenant_id` / `scene_code`。
 
-> 展开时落定：核心指标分组——
->
-> - **吞吐**：RuleEvent QPS / 各 Scene QPS / 各 Rule 命中率
-> - **延迟**：评估 P50/P99 / metric 预拉 P99 / Action 派发 P99
-> - **失败**：D15 三态对账（HIT / MISS / ERROR） / errorCode 分布
-> - **队列**：D20 §2 Dispatcher 队列深度 / D21 TraceWriter 队列深度 / 溢出 counter
-> - **可用性**：DB 连接池 / 倒排索引刷新延迟 / xxl-job 调度健康
+| 指标名 | 类型 | labels | 说明 |
+|--------|------|--------|------|
+| `rule_engine_eval_total` | Counter | `result`(HIT/MISS/BLOCKED/ERROR) | 评估结果分布 |
+| `rule_engine_eval_duration_ms` | Histogram | `scene_code` | 评估 P50/P95/P99 延迟 |
+| `rule_engine_metric_fetch_duration_ms` | Histogram | `source_type`, `metric_code` | MetricSource 取数延迟 |
+| `rule_engine_metric_fetch_errors_total` | Counter | `source_type`, `error_type` | 取数失败计数 |
+| `rule_engine_action_dispatch_total` | Counter | `action_type`, `status` | Action 派发结果 |
+| `rule_engine_action_duration_ms` | Histogram | `action_type` | Action 执行延迟 |
+| `rule_engine_trace_queue_size` | Gauge | — | TraceWriter 队列深度 |
+| `rule_engine_trace_queue_overflow_total` | Counter | — | trace 丢弃计数（队满） |
+| `rule_engine_rule_version_cache_hit_total` | Counter | `scene_code` | Matcher 内存命中次数 |
+| `rule_engine_idempotency_hit_total` | Counter | `layer`(REDIS/DB) | 幂等命中次数 |
 
 ---
 
 ## 七、告警阈值
 
-⏳ 未展开。
+建议值，不强制；业务侧可按实际基线调整。
 
-> 展开时落定：每个指标的**建议**阈值（不强制，业务侧可覆盖）—— 队列溢出 counter > 0 直接 page / 评估 P99 超基线 X 倍持续 5 分钟 warn / DB 连接耗尽立即 page / 倒排索引刷新延迟 > 60s warn 等。
+| 告警规则 | 阈值 | 级别 | 说明 |
+|---------|------|------|------|
+| 评估 P99 延迟 | > 200ms 持续 5min | WARNING | 风控场景目标 < 100ms P99 |
+| 评估 ERROR 率 | > 1% 持续 2min | WARNING | METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR |
+| 评估 ERROR 率 | > 5% 持续 1min | CRITICAL | 批量失败 |
+| trace 队列溢出 | > 0 次/min 持续 5min | WARNING | 写入跟不上评估速率 |
+| Action 失败率 | > 5% 持续 5min（按 action_type） | WARNING | |
+| MetricSource P99 | > 500ms 持续 5min | WARNING | 按 source_type 分组 |
 
 ---
 
 ## 八、可用性策略汇总
 
-⏳ 未展开。
+### v1 SPOF 清单与降级矩阵
 
-> 展开时落定：
->
-> - **v1 策略**：无状态水平扩展 + 关键路径降级，不做主备切换 / 分布式协调
-> - **派生归纳**：D6（评估快照不可变 + 上游可重推） / D11（xxl-job 调度 HA） / D15（评估失败隔离：单节点 / 单规则 / 跨规则）/ D17（多实例最终一致 + 灰度桶不依赖实例）/ D21（trace 旁路降级，队列满丢弃 + 告警，不阻塞热路径）
-> - **SPOF 清单**：
->   - DB（rule_definition / rule_version / audit_log 等）—— 单点，依赖 DB HA（主从 / Galera 等）
->   - 内存倒排索引 —— 单实例本地缓存，可重建（启动期全量扫描 rule_version + 后续 15s 增量），非 SPOF
->   - 异步队列（D20 §2 / D21）—— 进程内内存队列，进程重启丢失未消费消息，依赖上游 RuleEvent 可重推补偿
->   - xxl-job 调度器 —— 单点，依赖 xxl-job 自身 HA
-> - **降级矩阵**：
->
->   | 路径 | 失败行为 | 降级策略 |
->   |------|---------|---------|
->   | metric 取数 | timeout / 熔断 | 归 `METRIC_FETCH_FAIL` + 该节点 satisfied=false（D15） |
->   | Action 派发 | Handler 异常 | continue-on-error（D18），单 Action 失败不影响同 Rule 后续 Action 也不影响 EvalResult.satisfied |
->   | TraceWriter 入库 | 队列满 / DB 写失败 | 丢弃 + counter 告警，不阻塞热路径（D21） |
->   | audit_log 入库 | DB 写失败 | 同步事务回滚，**不**降级（D14 "人的行为"红线） |
->   | Dispatcher 队列 | 队列溢出 | `QUEUE_OVERFLOW` errorCode + 该 Action 失败但不影响 EvalResult |
+| 依赖 | 失效影响 | v1 降级策略 |
+|------|---------|------------|
+| MySQL | 无法写 evaluation_session，评估阻塞 | 评估入口返回 503；Redis 幂等层仍可检查重复 |
+| Redis | 幂等上半层失效 | 降级走 DB UK 幂等；metric cache 全部击穿 DB / 外部服务 |
+| MetricSource (EXTERNAL_HTTP) | 取数超时 | D15 单节点降级 false，EvalResult.errorCode=METRIC_FETCH_FAIL |
+| MetricSource (SQL_AGGREGATE) | DB 慢查询 / 连接池耗尽 | 同上；建议对 SQL 指标设 cache_ttl > 0 |
+| TraceWriter 队列满 | trace 行丢弃 | trace 丢弃 + counter 告警；**不影响** EvalResult |
+| ActionHandler 外部系统不可用 | execute() 超时 | TIMEOUT retryable=true，入重试队列 |
+
+### v1 不做的高可用（见 08-evolution）
+
+- evaluation_session 异步化（§2.15）
+- 嵌入式 SDK 模式（§2.14，无跨进程网络依赖）
+- MySQL 分区自动归档（§2.5）
 
 ---
 
 ## 九、运维参数默认值表
 
-⏳ 未展开。
+所有参数均可通过 Spring 配置（`application.yml` 或配置中心）覆盖，命名空间 `engine.rule.*`。
 
-> 展开时落定：`engine.rule.*` 命名空间下所有参数的默认值清单（业务侧可在 application.yml 覆盖）——
->
-> - `engine.rule.poll-interval`（D17 默认 15s）
-> - `engine.rule.dispatcher.queue-size` / `consumer-pool` / `retry-max`（D20 §2）
-> - `engine.rule.trace-writer.queue-size` / `batch-size` / `consumer-pool`（D21）
-> - `engine.rule.metric.timeout-default` / `cache-ttl-default`（§3.9 + D20 §1）
-> - `engine.rule.job.cron-default-timezone`（D11 + B3 派生）
->
-> **本文档是默认值唯一持有者**——00-decisions / 04-extension §六 实现建议值只列"建议"，具体默认值数字落本表。
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `engine.rule.matcher.cache-refresh-interval-seconds` | 15 | Matcher 倒排索引热更间隔（D17 最终一致窗口） |
+| `engine.rule.scene.watch-interval-seconds` | 30 | Scene 配置热加载间隔 |
+| `engine.rule.idempotency.redis-ttl-seconds` | 3600 | 幂等 Redis key 过期时间 |
+| `engine.rule.trace.queue-capacity` | 100000 | TraceWriter 队列容量 |
+| `engine.rule.trace.batch-size` | 500 | 批写行数 |
+| `engine.rule.trace.flush-interval-ms` | 200 | 强制 flush 间隔 |
+| `engine.rule.trace.consumer-threads` | 2 | 批写消费线程数 |
+| `engine.rule.metric.default-cache-ttl-seconds` | 60 | metric 取数结果缓存 TTL（per-metric 可覆盖） |
+| `engine.rule.action.default-timeout-ms` | 3000 | ActionHandler 默认超时（per-handler 可覆盖） |
+| `engine.rule.retention.evaluation-session-days` | 30 | evaluation_session 保留天数（D9） |
+| `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |
+| `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session 保留天数 |
+| `engine.rule.rollout.hash-seed` | 0 | murmur3 hash seed（固定后不要改，否则桶分布漂移） |
 
 ---
 
