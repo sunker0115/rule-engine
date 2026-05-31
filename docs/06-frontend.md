@@ -1,6 +1,6 @@
-# 06 — 前端架构（占位草稿）
+# 06 — 前端架构
 
-> **位置定位**：本文档承载规则**编辑器与运营平台**的前端架构——三栏布局 / 元数据驱动渲染 / dry-run 交互 / 灰度配置 / 审计日志查看。当前**占位**，仅章节就位，内部具体内容待定。
+> **位置定位**：本文档承载规则**编辑器与运营平台**的前端架构——三栏布局 / 元数据驱动渲染 / dry-run 交互 / 灰度配置 / 审计日志查看。
 >
 > **前置阅读**：[`01-concepts.md`](./01-concepts.md)、[`04-extension.md`](./04-extension.md) §五 元数据契约、[`10-api-contract.md`](./10-api-contract.md)
 >
@@ -16,58 +16,105 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 三栏布局 | ⏳ 未展开 |
-| §三 元数据驱动渲染机制 | ⏳ 未展开 |
-| §四 dry-run UI | ⏳ 未展开 |
-| §五 灰度配置 UI | ⏳ 未展开 |
-| §六 审计日志查看 UI | ⏳ 未展开 |
+| §二 三栏布局 | ✅ |
+| §三 元数据驱动渲染机制 | ✅ |
+| §四 dry-run UI | ✅ |
+| §五 灰度配置 UI | ✅ |
+| §六 审计日志查看 UI | ✅ |
 
 ---
 
 ## 二、三栏布局
 
-⏳ 未展开。
+规则编辑器采用三栏布局：
 
-> 展开时落定：左栏（Scene / Rule 导航树）+ 中栏（AST 编辑画布）+ 右栏（属性面板 + 元数据预览 + dry-run 结果） 的视觉结构 + 交互流转。
+```
+┌──────────────────┬────────────────────────────────┬──────────────────┐
+│  左栏            │  中栏（主编辑区）                │  右栏            │
+│  Scene / Rule 树  │  AST 可视化编辑器               │  属性面板        │
+│  ─────────────── │  ──────────────────────────── │  ─────────────── │
+│  · Scene 列表    │  · 拖拽 / 点击编辑节点           │  · dry-run 结果  │
+│  · Rule 列表     │  · 节点类型下拉（元数据驱动）     │  · 每节点 ✅/❌/⏭ │
+│  · 版本历史      │  · 参数表单（动态渲染）           │  · actualValue   │
+│  · 状态标签      │  · Pre-Gate 配置                │  · 错误详情      │
+│                  │  · Decision 绑定配置             │  · audit_log 条目 │
+└──────────────────┴────────────────────────────────┴──────────────────┘
+```
+
+**交互原则：**
+- 左栏选中 Rule → 中栏加载对应 RuleVersion 的 conditionAst
+- 中栏编辑 → 临时草稿态（不触发自动保存）；点"保存草稿"才提交 POST
+- 右栏默认显示最近 dry-run 结果；每次点"试算"刷新
 
 ---
 
 ## 三、元数据驱动渲染机制
 
-⏳ 未展开。
+编辑器不硬编码 ConditionType / ActionType 表单，而是：
 
-> 展开时落定：
->
-> - 前端启动 / 切换 Scene 时拉取该 Scene 可见的 ConditionType / ActionType / MetricSource 元数据（[`10-api-contract.md`](./10-api-contract.md) 接口对齐）
-> - 根据元数据中 `paramSchema` 自动渲染参数表单（不写死字段）
-> - 元数据变更 → 前端热刷新可选项清单（无需前端代码改动配合后端扩展）
-> - i18n key 在元数据声明，文案在前端按当前语言取
->
-> 这是 README §六 "注册中心 + 元数据驱动" 抽象在前端的落地。
+1. 进入编辑器时调用 `GET /api/v1/scenes/{sceneCode}/metadata`，拿到：
+   - `conditionTypes[]`（含 paramsSchema）
+   - `actionTypes[]`（含 paramsSchema）
+   - `availableMetrics[]`
+2. 用户选择节点类型后，按 `paramsSchema`（JSON Schema）动态渲染参数表单
+3. `requiresMetric=true` 的 ConditionType（如 `metric.threshold`）同时渲染 metric 下拉框（来自 availableMetrics）
+
+**JSON Schema → 表单组件映射（v1 最小集）：**
+
+| JSON Schema 类型 | 表单控件 |
+|-----------------|---------|
+| `string` | 文本输入框 |
+| `string` + `enum` | 下拉选择框 |
+| `number` | 数字输入框 |
+| `boolean` | 开关 |
+| `object` | 嵌套表单 |
+
+**好处：** 业务方新注册 ConditionType（`@ConditionType` 注解 + paramsSchema）后，前端编辑器无需改代码即可渲染新类型的参数表单。详见 `04-extension.md §五` 元数据契约。
 
 ---
 
 ## 四、dry-run UI
 
-⏳ 未展开。
+1. 右栏点击"试算"按钮 → 弹出 mockEvent 编辑框（JSON 编辑器，预填 Schema 必填字段）
+2. 可选：指定 `ruleVersionId`（默认当前版本）；填写 `providedMetrics`（D30）
+3. 调用 `POST /api/v1/rule/dry-run` → 返回含 `nodeTrace` 的 Response（见 10-api-contract §3.3）
+4. 右栏渲染 AST trace 树：
+   - `result=true` → 节点显示 ✅
+   - `result=false` → 节点显示 ❌
+   - `result=null`（短路跳过）→ 节点显示 ⏭
+   - hover 节点 → tooltip 展示 `actualValue / valueSource / errorCode`
+5. Pre-Gate 失败时：显示 `PRE_GATE_BLOCKED: <gateType>`（大红色提示），AST 部分灰化
 
-> 展开时落定：用户在编辑器内构造 mockEvent + 选择某个 RuleVersion → 同步调用后端 dry-run 接口 → 返回每个节点的求值 trace → 前端可视化（每个 AST 节点上叠加 ✅/❌/⏭ 图标 + hover 显示输入与输出 + Pre-Gate 失败的节点显示 `PRE_GATE_BLOCKED`）。dry-run 接口定义在 [`10-api-contract.md`](./10-api-contract.md)。
+**dry-run 不派发 Action**，`actionResults` 中所有 Action 显示 `SKIPPED`（见 10-api-contract §3.3）。
 
 ---
 
 ## 五、灰度配置 UI
 
-⏳ 未展开。
+在 Rule 编辑器的 Pre-Gate 配置区：
+- **ROLLOUT Gate**：百分比滑块（0–100%）+ 实时显示"约 X% 流量命中此规则"
+- **WHITELIST / BLACKLIST**：名单 key 下拉框（来自平台预设名单列表）
+- **RATE_LIMIT**：QPS / QPM 数字输入框 + 时间窗口选择
 
-> 展开时落定：`Rule.rollout` 结构子表（type / percentage / tagConditions）的可视化配置 + 灰度桶基于 `(subjectId, ruleVersionId)` hash 的算法说明（[`01-concepts.md`](./01-concepts.md) §3.4 + D17 派生）+ 灰度状态实时展示（多少主体落在灰度桶内）。
+灰度发布建议工作流显示在侧边面板（仅 ROLLOUT Gate 显示）：
+
+```
+当前 percentage = 5%
+→ 可调至 20%（需二次确认）
+→ 可调至 100%（需二次确认）
+```
+
+回退路径：将 ROLLOUT.percentage 调回 0，或将 rule_definition.status 改为 DISABLED（UI 提供"立即停用"按钮）。
 
 ---
 
 ## 六、审计日志查看 UI
 
-⏳ 未展开。
-
-> 展开时落定：`audit_log` 表（D14）的检索 UI——按 actor / target / action / 时间过滤 + before/after 快照对比可视化 + `after_snapshot.errorCode` 已知值清单（`UNRESOLVED_VARIABLE` / `ZOMBIE_PUBLISHING` / `HANDLER_EXCEPTION`，[`01-concepts.md`](./01-concepts.md) §3.11）。
+在 Rule 详情页右侧抽屉（通过 `GET /api/v1/audit-logs` 查询）：
+- 按时间倒序列出 `audit_log` 条目（RULE_PUBLISH / RULE_DISABLE / SCENE_UPDATE 等）
+- 每条目展开 → diff 视图（before_snapshot vs after_snapshot，JSON diff 高亮）
+- 点击"操作人"→ 可按 actor 过滤；同时显示 actorType（USER / SYSTEM / JOB）
+- 发布失败条目（`action=PUBLISH_FAILED`）：红色标记 + `after_snapshot.errorCode` tooltip（`UNRESOLVED_VARIABLE` / `METRIC_NOT_BOUND` 等，完整清单见 10-api-contract §七）
 
 ---
 
