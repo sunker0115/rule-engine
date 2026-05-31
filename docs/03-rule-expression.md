@@ -1,6 +1,6 @@
-# 03 — 规则表达式（占位草稿）
+# 03 — 规则表达式
 
-> **位置定位**：本文档承载规则的**可写性边界**——AST 节点结构 / 操作符清单 / 短路求值规则 / 节点级 trace 落点 / 哪些表达式 v1 不支持。当前**占位**，仅章节就位，内部具体内容待定。
+> **位置定位**：本文档承载规则的**可写性边界**——AST 节点结构 / 操作符清单 / 短路求值规则 / 节点级 trace 落点 / 哪些表达式 v1 不支持。
 >
 > **前置阅读**：[`01-concepts.md`](./01-concepts.md) §3.5 AST 与"分组心智" + §3.6 Condition（含 ConditionType）、[`00-decisions.md`](./00-decisions.md) D12 / D15 / D20
 >
@@ -16,56 +16,182 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 AST 节点结构 | ⏳ 未展开 |
-| §三 操作符清单 | ⏳ 未展开 |
-| §四 短路求值规则 | ⏳ 未展开 |
-| §五 节点级 trace | ⏳ 未展开 |
-| §六 v1 不支持的表达式 | ⏳ 未展开 |
+| §二 AST 节点结构 | ✅ |
+| §三 操作符清单 | ✅ |
+| §四 短路求值规则 | ✅ |
+| §五 节点级 trace | ✅ |
+| §六 v1 不支持的表达式 | ✅ |
 | §七 内置时间类 conditionType | ✅ 已展开（time.window / time.occurred_at / 间接时间） |
 
 ---
 
 ## 二、AST 节点结构
 
-⏳ 未展开。
+AST 由四种节点类型组成，每种节点字段如下。
 
-> 展开时落定：AndNode / OrNode / NotNode / ConditionNode 各自的字段表 + 嵌套约束 + `displayLabel`（D19 派生：原 RuleGroup 信息降级为 AndNode/OrNode 的可选字段）+ `weight`（D12 派生：SCORECARD kind 启用）。
+### 2.1 AndNode（与节点）
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `"AndNode"` | 是 | 固定值 |
+| `displayLabel` | `string` | 否 | UI 显示名，不影响求值（D19 派生：原 RuleGroup 降级为可选标签） |
+| `children` | `Node[]` | 是 | 子节点列表，至少 1 个；按 `sortOrder`（列表顺序）依次求值 |
+| `weight` | `number` | 否 | SCORECARD kind 专用（D12），v1 AST_BOOLEAN 忽略此字段 |
+
+**求值语义**：所有子节点 satisfied=true 时整体 true；遇第一个 false 则短路，剩余子节点不再求值（见 §四）。
+
+### 2.2 OrNode（或节点）
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `"OrNode"` | 是 | 固定值 |
+| `displayLabel` | `string` | 否 | UI 显示名 |
+| `children` | `Node[]` | 是 | 子节点列表，至少 1 个 |
+| `weight` | `number` | 否 | SCORECARD kind 专用，v1 忽略 |
+
+**求值语义**：任一子节点 satisfied=true 时整体 true；遇第一个 true 则短路，剩余子节点不再求值。
+
+### 2.3 NotNode（非节点）
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `"NotNode"` | 是 | 固定值 |
+| `child` | `Node` | 是 | 单个子节点（AndNode / OrNode / ConditionNode 均可） |
+
+**求值语义**：对 `child.satisfied` 取反；child 出错时 NotNode 也归 ERROR（不翻转错误状态）。
+
+### 2.4 ConditionNode（条件叶子节点）
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `"ConditionNode"` | 是 | 固定值 |
+| `conditionType` | `string` | 是 | ConditionType 注册码，如 `metric.threshold` / `event.payload.compare` / `time.window` |
+| `displayLabel` | `string` | 否 | UI 显示名 |
+| `metricCode` | `string` | 仅 metric 类需填 | 引用的指标码；`conditionType` 非 metric 类时留 null |
+| `params` | `object` | 是 | 传给 ConditionEvaluator 的参数对象，结构由各 conditionType 定义 |
+
+**嵌套约束**：ConditionNode 是叶子节点，不能有 `children`；AndNode / OrNode / NotNode 是中间节点，不能作为最终叶子（children 不能为空）。
 
 ---
 
 ## 三、操作符清单
 
-⏳ 未展开。
+以下操作符由内置 `metric.threshold` 和 `event.payload.compare` ConditionType 使用（通过 `params.operator` 字段传入）。自定义 ConditionType 可定义私有操作符，不受本表约束。
 
-> 展开时落定：v1 支持的操作符（==/!=/>/</>=/<=/IN/NOT_IN/CONTAINS/MATCHES/...）+ 每个操作符的入参类型矩阵 + null 处理语义 + 类型强转规则（D20 §3 闭合校验前置：所有变量类型在发布时已知）。
+### 3.1 通用比较操作符
+
+| operator | 适用数据类型 | 语义 | null 处理 |
+|----------|------------|------|-----------|
+| `EQ` | LONG / DOUBLE / STRING / BOOLEAN | 相等 | 参数为 null → satisfied=false |
+| `NEQ` | LONG / DOUBLE / STRING / BOOLEAN | 不相等 | 同上 |
+| `GT` | LONG / DOUBLE | 严格大于 | 参数为 null → ERROR |
+| `GTE` | LONG / DOUBLE | 大于等于 | 同上 |
+| `LT` | LONG / DOUBLE | 严格小于 | 同上 |
+| `LTE` | LONG / DOUBLE | 小于等于 | 同上 |
+| `BETWEEN` | LONG / DOUBLE | `min <= value <= max`（双端闭区间） | 参数为 null → ERROR |
+
+### 3.2 集合操作符
+
+| operator | 适用数据类型 | 语义 | null 处理 |
+|----------|------------|------|-----------|
+| `IN` | LONG / STRING | value 在 `values[]` 集合内 | value 为 null → satisfied=false |
+| `NOT_IN` | LONG / STRING | value 不在 `values[]` 集合内 | value 为 null → satisfied=true |
+| `CONTAINS` | LIST | LIST 中包含指定元素 | list 为 null → satisfied=false |
+| `NOT_CONTAINS` | LIST | LIST 中不包含指定元素 | list 为 null → satisfied=true |
+
+### 3.3 字符串操作符
+
+| operator | 适用数据类型 | 语义 | null 处理 |
+|----------|------------|------|-----------|
+| `STARTS_WITH` | STRING | 前缀匹配 | value 为 null → satisfied=false |
+| `ENDS_WITH` | STRING | 后缀匹配 | 同上 |
+| `MATCHES` | STRING | 正则匹配（Java `Pattern.matches`）| value 为 null → satisfied=false |
+
+### 3.4 类型转换规则（D20 §3 闭合校验前置）
+
+发布时引擎静态校验 metric 数据类型与操作符是否匹配（如 STRING metric 不能用 GT/LT）。v1 **不做运行时类型转换**——metric 返回 DOUBLE 但配置了 LONG 类型 metric 时，引擎在 EvalContext 内以 DOUBLE 处理，ConditionEvaluator 收到的就是原始类型。类型不匹配在发布期拒绝，不在运行期推断。
 
 ---
 
 ## 四、短路求值规则
 
-⏳ 未展开。
+### 4.1 短路规则
 
-> 展开时落定：AND/OR/NOT 三种节点的短路顺序（按 sortOrder） + 节点失败时是否影响兄弟节点（D15 单节点失败 → satisfied=false 但整树继续）+ `EvalResult.partial=true` 何时置位 + `failedNodeIds` 收集规则。
+| 节点类型 | 短路条件 | 短路后行为 |
+|---------|---------|-----------|
+| `AndNode` | 子节点求值结果为 `false` | 停止求值剩余子节点；剩余节点 trace 中 `result=null`（"短路跳过"） |
+| `OrNode` | 子节点求值结果为 `true` | 停止求值剩余子节点；剩余节点 trace 中 `result=null` |
+| `NotNode` | 无短路 | 始终求值 child |
+
+子节点按列表顺序（`sortOrder`）依次求值，无并发求值。
+
+### 4.2 错误不短路（D15）
+
+若某子节点求值出错（MetricSource 取数失败 / ConditionEvaluator 抛异常）：
+- 该节点 `satisfied=false`，`errorCode` 记录失败原因
+- **兄弟节点继续求值**（不因单节点错误中断整棵树）
+- 父节点收到 `false` 后可能触发短路（如父节点是 AndNode 且已得到 false）
+
+这与"短路"的区别：短路是因为结果已确定（AND+false / OR+true）可以提前终止；错误是意外失败，引擎选择继续完成其他节点以收集最多信息。
+
+### 4.3 EvalResult 聚合
+
+| 情形 | `ruleHit` | `errorCode` |
+|------|-----------|-------------|
+| 根节点 satisfied=true，无节点出错 | true | null |
+| 根节点 satisfied=true，但有节点出错 | true | `CONDITION_EVAL_ERROR` |
+| 根节点 satisfied=false，无节点出错 | false | null |
+| 根节点 satisfied=false，有节点出错 | false | `CONDITION_EVAL_ERROR` |
+
+调用方若看到 `errorCode=CONDITION_EVAL_ERROR`，应查 node_trace 中 `errorCode` 非 null 的节点定位根因。
 
 ---
 
 ## 五、节点级 trace
 
-⏳ 未展开。
+每个节点求值后输出一条 trace 记录，落入 `node_trace` 表（D21 TraceWriter 异步批写，见 [`05-storage.md`](./05-storage.md) §3.2 node_trace 表）。
 
-> 展开时落定：每个节点求值后输出的 trace 结构（nodeId / nodeType / satisfied / inputs / errorCode? / errorMessage?） + Pre-Gate 失败节点的 `PRE_GATE_BLOCKED` 类型标记（[`01-concepts.md`](./01-concepts.md) §3.14 派生）+ 落库通道（D21 TraceWriter 异步批写，指向 [`05-storage.md`](./05-storage.md) node_trace 表）。
+### 5.1 trace 字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `node_path` | `string` | AST 路径，如 `"0"` = 根，`"0.1"` = 根的第 2 子节点（0-indexed） |
+| `node_type` | `string` | `AndNode` / `OrNode` / `NotNode` / `ConditionNode` / `PRE_GATE_BLOCKED` |
+| `condition_type` | `string` | 仅 ConditionNode，conditionType 注册码；其余节点为 null |
+| `metric_code` | `string` | 仅 metric 类 ConditionNode；其余为 null |
+| `params` | JSON | 节点参数快照（发布时冻结） |
+| `actual_value` | JSON | 节点实际取值；短路跳过的节点为 null |
+| `result` | `1 / 0 / null` | 1=满足 / 0=不满足 / null=短路跳过 |
+| `error_code` | `string` | nullable；`METRIC_FETCH_FAIL` / `CONDITION_EVAL_ERROR` 等 |
+| `value_source` | `PROVIDED / FETCHED / null` | D30：metric 取值来源；非 metric 类节点为 null |
+
+### 5.2 Pre-Gate 失败节点
+
+Pre-Gate 被拦截时不进入 AST 求值，但会在 `node_trace` 中写入一条 `node_type=PRE_GATE_BLOCKED` 记录：
+- `condition_type = null`（Pre-Gate 不是 ConditionType）
+- `actual_value = null`
+- `result = 0`（拦截即"不满足继续"）
+- `error_code = null`（拦截不是错误）
+
+该记录与普通 AST 节点共用 `node_trace` 表，通过 `node_type` 区分（见 [`01-concepts.md`](./01-concepts.md) §3.14 Pre-Gate）。
+
+### 5.3 异步写入语义
+
+trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不影响 EvalResult）。生产排障时，trace 可能有秒级延迟，查询时注意。
 
 ---
 
 ## 六、v1 不支持的表达式
 
-⏳ 未展开。
+以下表达式形态 v1 明确不支持，列出替代方案和演进锚点。
 
-> 展开时落定：v1 明确不支持的表达式形态 + 替代方案 + 演进锚点——
->
-> - 用户自定义 Java 函数调用（urule 风格 FunctionLibrary，已否决见 [`08-evolution.md`](./08-evolution.md) §四）
-> - EXPRESSION_SCRIPT 叶子节点（D20 v1 不做，演进锚点 [`08-evolution.md`](./08-evolution.md) §2.1 / §2.13）
-> - 跨规则引用 / 子规则调用（D6 评估即版本快照不可变 → 跨规则引用违背快照语义，留 v2）
+| 不支持的形态 | 原因 | v1 替代方案 | 演进锚点 |
+|------------|------|-----------|---------|
+| 用户自定义 Java 函数调用（urule FunctionLibrary 风格） | 与闭合校验（D20 §3）、禁止副作用（D16）、metric 只读（§3.9）三条决策正面冲突；已否决（见 [`08-evolution.md §四`](./08-evolution.md)） | 封装为 `@ConditionType` SPI（[`04-extension.md`](./04-extension.md)） | — |
+| `EXPRESSION_SCRIPT` 叶子节点（动态脚本表达式） | D12 占位，v1 发布时拒绝 kind=EXPRESSION_SCRIPT | 用 ConditionNode + 现有 conditionType 组合表达 | [`08-evolution.md §2.1`](./08-evolution.md) / `§2.13` |
+| 跨规则引用 / 子规则调用 | D6 评估即版本快照不可变；跨规则引用违背快照语义（被引用规则可能在引用期间发布新版） | 将共享逻辑提取为 Metric（SQL 或 HTTP）或拆分成多条独立规则 | [`08-evolution.md §2`](./08-evolution.md) |
+| 运行时动态参数绑定（`params` 字段引用 payload 变量） | D20 §3：所有变量类型在发布时已知，不做运行期参数解析 | 用 `event.payload.compare` conditionType（params 直接写死比较值）；动态值走 Metric | — |
+| 结果聚合函数（SUM/AVG/COUNT over 多节点结果） | AST 是布尔树，不产生数值聚合 | SCORECARD kind（D12，v2 演进）；v1 用 metric 预计算聚合值 | [`08-evolution.md §2`](./08-evolution.md)（SCORECARD） |
 
 ---
 
