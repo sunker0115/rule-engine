@@ -120,7 +120,22 @@ public interface ActionHandler {
 }
 ```
 
-### 3.2 ActionResult 契约（D15 / D18 派生）
+**ActionContext 字段说明：**
+
+```java
+ActionContext {
+    actionId:          String          // Action 实例 id（对应 Decision.actions[n].actionId）
+    actionType:        String          // 与 @ActionType.value 对应
+    params:            Map<String,Any> // Action 绑定参数（来自 Scene.decisions[x].actions[n].params）
+    evalContext:       EvalContext     // 本次评估上下文（含 eventId / subjectId / payload 等）
+    actionExecutionId: Long            // action_execution 表行 id（用于幂等键）
+    decisionCode:      String          // 触发本 Action 的 Decision 码（D27）
+}
+```
+
+> `ActionContext.evalContext.getEventId()` 是推荐幂等键组成之一，见 §3.5 实现约束。
+
+### 3.2 ActionResult 契约（D16 / D18 派生）
 
 ```java
 ActionResult {
@@ -140,7 +155,7 @@ public @interface ActionType {
     String value();                // 全局唯一，与规则 JSON 中 actionType 字段对应
     String displayName() default "";
     String paramsSchema() default "{}";   // 前端表单 schema
-    int timeoutMs() default 3000;        // 超时阈值（引擎归 TIMEOUT errorCode）
+    int timeoutMs() default 3000;  // Handler 声明的超时预算；引擎据此设置调用上限，超时归 TIMEOUT errorCode
     boolean compensatable() default false; // 是否声明补偿支持（前端提示）
 }
 ```
@@ -193,8 +208,10 @@ public class TicketCreateHandler implements ActionHandler {
 
 ### 3.5 实现约束
 
-- execute() 内**必须**做幂等检查（幂等键推荐：`tenantId + eventId + actionId`，与 D11 对齐）
-- 超时不要直接抛异常，catch 后返回 `ActionResult.failed("TIMEOUT", retryable=true)`
+- execute() 内**必须**做幂等检查（幂等键推荐：`tenantId + eventId + decisionCode + actionId`，与 D27 迁移后的幂等键设计对齐）
+- 超时处理分两种场景：
+  - **Handler 主动处理**：catch TimeoutException 后返回 `ActionResult.failed("TIMEOUT", true)`（推荐，便于区分业务超时和引擎中断）
+  - **引擎强制中断**：Handler 超过 timeoutMs 仍未返回时，引擎中断调用并归为 `ActionResult { status=FAILED, errorCode=TIMEOUT, retryable=true }`；Handler 无需额外处理，但不会收到任何回调
 - compensate() 如不支持，返回 `ActionResult.notSupported()`（不要抛异常）
 - Action 失败**不影响** EvalResult.satisfied（D18，评估阶段已结束）
 
@@ -241,7 +258,7 @@ public @interface MetricSourceType {
 ### 4.4 实现要求
 
 - fetch() 自行管 timeout / retry / circuit breaker（引擎核心不重试，D15）
-- 结果按 metric 的 `cachePolicyDefault.ttl` 写 Redis（key 格式见 07-operability）；ttl=0 则不缓存
+- 结果按 metric 的 `cachePolicyDefault.ttl` 写 Redis；key 格式占位规范：`rule:metric:{tenantId}:{metricCode}:{subjectId}`（待 `07-operability.md` §九展开时确认）；ttl=0 则不写缓存（强一致场景）
 - 无法取数时**抛异常**（不返回 null），引擎统一处理
 - `allowProvided` 在 metric_definition 配置，不在 Handler 里判断（Handler 不感知 providedMetrics，D30）
 
@@ -269,7 +286,12 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
       "displayName": "指标阈值比较",
       "paramsSchema": {
         "type": "object",
-        "properties": { "operator": { "type": "string", "enum": ["EQ","GT","GTE","LT","LTE","BETWEEN"] }, "value": { "type": "number" } }
+        "properties": {
+          "operator": { "type": "string", "enum": ["EQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
+          "value": { "type": "number" },
+          "min": { "type": "number" },
+          "max": { "type": "number" }
+        }
       },
       "requiresMetric": true
     },
