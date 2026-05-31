@@ -37,7 +37,7 @@
 | 规则管理 | `/api/v1/rules` | 创建 / 发布 / 禁用 / 查询规则 |
 | Scene 管理 | `/api/v1/scenes` | 创建 / 更新 / 禁用 Scene |
 | 指标管理 | `/api/v1/metrics` | 注册 / 更新 / 禁用 Metric |
-| 元数据接口 | `/api/v1/scenes/{sceneCode}/metadata` | 前端编辑器拉 ConditionType / ActionType 枚举 |
+| 元数据接口 | `/api/v1/scenes/{sceneCode}/metadata`，`/api/v1/scenes/{sceneCode}/provided-metrics` | 前端编辑器拉 ConditionType / ActionType 枚举；D30 allowProvided 发现 |
 | 审计与查询 | `/api/v1/evaluation-sessions` | 查 session / trace / action 执行 |
 
 ---
@@ -119,12 +119,20 @@ POST /api/v1/rule/dry-run
 
 **Request：** 同 3.1，额外可传 `ruleVersionId`（指定版本回放，null = 使用当前版本）。
 
-**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段：
+**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段；`actionResults` 中所有 Action 显示 `SKIPPED`（不实际派发）：
 ```json
 {
   "eventId": "evt-dry-001",
   "ruleHit": true,
   "finalDecision": { "code": "REVIEW" },
+  "actionResults": [
+    {
+      "actionId": "act-review-ticket",
+      "actionType": "ticket.create",
+      "status": "SKIPPED",
+      "errorCode": null
+    }
+  ],
   "nodeTrace": {
     "type": "AndNode",
     "result": true,
@@ -141,7 +149,7 @@ POST /api/v1/rule/dry-run
 }
 ```
 
-**不派发 Action**：dry-run 返回命中 Action 列表（在 `actionResults` 中显示 status=SKIPPED），但不实际执行（见 07-operability §四）。
+若 handler 未实装 dryRun() 接口，对应 Action 显示 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`（D7）。见 07-operability §四。
 
 ---
 
@@ -280,6 +288,8 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 | `EXTERNAL_SERVICE_ERROR` | true | 外部系统返回 5xx / 连接失败 |
 | `BUSINESS_REJECTED` | false | 外部系统明确拒绝（如工单系统返回 400） |
 | `PREDECESSOR_FAILED` | false | failFast 前置 Action 失败（D18） |
+| `QUEUE_OVERFLOW` | true | Action Dispatcher 队列满，Action 已丢弃入重试队列（D20） |
+| `DRY_RUN_NOT_IMPLEMENTED` | false | handler 未实装 dryRun()，dry-run 时 Dispatcher 短路返回 SKIPPED（D7） |
 | `NOT_SUPPORTED` | false | compensate() 不支持 |
 
 ### 发布期 errorCode（audit_log.after_snapshot.errorCode）
