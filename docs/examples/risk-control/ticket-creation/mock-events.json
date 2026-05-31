@@ -1,0 +1,106 @@
+[
+  {
+    "_comment": "E1: REVIEW 命中 — 开户 45 天 + KYC=1 + 2.5 万 CNY + 信任分 55，应建工单",
+    "eventId": "evt-tc-001",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-mid-001",
+    "occurredAt": "2026-05-31T14:00:00+08:00",
+    "payload": {
+      "amount": 25000,
+      "currency": "CNY",
+      "dest_account": "acct-medium-001"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 45,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 2,
+      "user.transfer.dest.trust.score": 55
+    }
+  },
+  {
+    "_comment": "E2: 不命中 — 信任分 85（超出 40–79 区间），无需审核",
+    "eventId": "evt-tc-002",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-mid-002",
+    "occurredAt": "2026-05-31T14:01:00+08:00",
+    "payload": {
+      "amount": 30000,
+      "currency": "CNY",
+      "dest_account": "acct-trusted-001"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 60,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 3,
+      "user.transfer.dest.trust.score": 85
+    }
+  },
+  {
+    "_comment": "E3: 不命中 — 白名单用户，WHITELIST Pre-Gate 直接跳过规则",
+    "eventId": "evt-tc-003",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-whitelist-001",
+    "occurredAt": "2026-05-31T14:02:00+08:00",
+    "payload": {
+      "amount": 50000,
+      "currency": "CNY",
+      "dest_account": "acct-medium-002"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 50,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 1,
+      "user.transfer.dest.trust.score": 60
+    }
+  },
+  {
+    "_comment": "E4: REVIEW 命中（重复事件） — eventId 与 E1 相同，ticket.create Handler 幂等跳过建单",
+    "eventId": "evt-tc-001",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-mid-001",
+    "occurredAt": "2026-05-31T14:00:00+08:00",
+    "payload": {
+      "amount": 25000,
+      "currency": "CNY",
+      "dest_account": "acct-medium-001"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 45,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 2,
+      "user.transfer.dest.trust.score": 55
+    },
+    "_note": "evaluation_session 幂等键 (tenantId, eventId) 命中，引擎直接返回上次结果，不重复评估（D23）"
+  },
+  {
+    "_comment": "E5: REVIEW 命中 + ticket.create 超时 → ActionResult FAILED retryable=true，进重试队列",
+    "eventId": "evt-tc-005",
+    "tenantId": "demo-tenant",
+    "sceneCode": "risk.transfer",
+    "eventType": "transfer.initiated",
+    "subjectId": "user-mid-003",
+    "occurredAt": "2026-05-31T14:03:00+08:00",
+    "payload": {
+      "amount": 22000,
+      "currency": "CNY",
+      "dest_account": "acct-medium-003"
+    },
+    "_mockMetrics": {
+      "user.account.age.days": 70,
+      "user.kyc.level": 1,
+      "user.transfer.count.7d": 1,
+      "user.transfer.dest.trust.score": 50
+    },
+    "_mockActionBehavior": {
+      "ticket.create": "__TIMEOUT__"
+    }
+  }
+]
