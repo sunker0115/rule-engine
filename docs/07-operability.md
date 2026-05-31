@@ -1,6 +1,6 @@
-# 07 — 可运维（占位草稿）
+# 07 — 可运维
 
-> **位置定位**：本文档承载 rule-engine 的**上线后视角**——幂等 / 审计 / 试算 / 灰度 / 监控 / 告警 / 可用性策略 / 运维参数默认值。当前**占位**，仅章节就位，内部具体内容待定。
+> **位置定位**：本文档承载 rule-engine 的**上线后视角**——幂等 / 审计 / 试算 / 灰度 / 监控 / 告警 / 可用性策略 / 运维参数默认值。
 >
 > **前置阅读**：[`00-decisions.md`](./00-decisions.md) D6 / D11 / D14 / D15 / D17 / D21、[`01-concepts.md`](./01-concepts.md) §3.11 audit_log + §3.14 Pre-Gate
 >
@@ -72,7 +72,7 @@ dry-run 走完整评估链路（Matcher / Pre-Gate / EvalContext / AST），但�
 - **写** `dry_run_session` / `dry_run_node_trace`（隔离表，D7）
 - 返回完整 `nodeTrace`（AST 每个节点的 result / actualValue / errorCode）
 
-**入口**：`POST /api/v1/scenes/{sceneCode}/evaluate/dry-run`（PULL 模式同步返回，见 10-api-contract §三）
+**入口**：`POST /api/v1/rule/dry-run`（PULL 模式同步返回，见 10-api-contract §三）
 
 **用途**：
 1. 规则发布前验证：编辑器内构造 mockEvent → 查看每个节点求值结果
@@ -158,7 +158,7 @@ pass = bucket < rollout.percentage
 
 - evaluation_session 异步化（§2.15）
 - 嵌入式 SDK 模式（§2.14，无跨进程网络依赖）
-- MySQL 分区自动归档（§2.5）
+- 节点级 trace 冷热分级（§2.5）
 
 ---
 
