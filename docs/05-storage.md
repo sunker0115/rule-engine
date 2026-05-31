@@ -36,6 +36,10 @@
 | `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
 | `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级 / actions（D26/D27） | 同步事务 | 永久 |
 | `rule_decision_binding` | 规则与 Decision 的绑定关系（支持可选 score 区间，D26 SCORECARD 占位） | 同步事务 | 永久 |
+| `scene_metric_binding` | Scene 可用 Metric 白名单（D30），Rule 发布时校验 | 同步事务 | 永久 |
+| `scene_action_binding` | Scene 可用 ActionType 白名单（D27），仅 PUSH/HYBRID Scene | 同步事务 | 永久 |
+| `job_definition` | 定时触发规则配置（§3.10），调度器到点合成 RuleEvent | 同步事务 | 永久 |
+| `job_execution` | Job 每次运行记录（§3.10） | 异步 | 永久 |
 | `audit_log` | 配置变更审计——人的行为（D14，同步事务红线） | 同步事务 | 永久 |
 
 **评估层表（运行面，量大）：**
@@ -159,17 +163,15 @@ CREATE TABLE rule_version (
 CREATE TABLE decision_definition (
   id          BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id   BIGINT       NOT NULL,
-  scene_id    BIGINT       NOT NULL COMMENT '关联 scene.id，Decision 在 Scene 范围内唯一',
-  code        VARCHAR(64)  NOT NULL COMMENT '决策码，Scene 内唯一，如 REJECT/REVIEW/PASS',
+  code        VARCHAR(64)  NOT NULL COMMENT '决策码，Tenant 内唯一，如 REJECT/REVIEW/PASS',
   name        VARCHAR(128) NOT NULL COMMENT '决策名称，如"拒绝"/"人工审核"/"放行"',
   priority    INT          NOT NULL COMMENT '优先级，值越小越高（D26：HIGHEST_PRIORITY 策略取 priority 最小的命中决策）',
   actions     JSON         NOT NULL DEFAULT '[]' COMMENT 'D27：Action 列表（命中此 Decision 时派发），含 actionId/actionType/sortOrder/failFast/compensateActionType/params',
   status      ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_scene_code (scene_id, code),
-  KEY idx_tenant_id (tenant_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Decision 实体（D26）；actions 字段在发布时快照到 rule_version.decision_bindings（D28）';
+  UNIQUE KEY uk_tenant_code (tenant_id, code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Decision 实体（D26，Tenant 级）；actions 字段在发布时快照到 rule_version.decision_bindings（D28）';
 ```
 
 **rule_decision_binding**（D26：规则绑定 Decision，支持 score 区间占位）
@@ -186,6 +188,71 @@ CREATE TABLE rule_decision_binding (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则与 Decision 绑定关系（D26）；score 区间 v1 为 null 占位，SCORECARD kind 时启用';
 ```
 
+**scene_metric_binding**（Scene 与 Metric 白名单关联）
+
+```sql
+CREATE TABLE scene_metric_binding (
+  id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  scene_id              BIGINT       NOT NULL COMMENT '关联 scene.id',
+  metric_definition_id  BIGINT       NOT NULL COMMENT '关联 metric_definition.id',
+  cache_policy_override JSON         COMMENT 'Scene 级缓存策略覆盖（ttl_seconds），null=使用 metric_definition 默认值',
+  created_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_scene_metric (scene_id, metric_definition_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Scene 可用 Metric 白名单（D30）；Rule 发布时校验 AST 引用的 metricCode 必须在此列表内';
+```
+
+**scene_action_binding**（Scene 与 ActionType 白名单关联，仅 PUSH/HYBRID Scene）
+
+```sql
+CREATE TABLE scene_action_binding (
+  id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+  scene_id          BIGINT       NOT NULL COMMENT '关联 scene.id',
+  action_type       VARCHAR(64)  NOT NULL COMMENT 'ActionHandler 注册的 actionType，如 ticket.create',
+  default_params    JSON         COMMENT 'Scene 级默认参数，与 Decision.actions[n].params 合并（Decision 级优先）',
+  rate_limit_override JSON       COMMENT 'Scene 级频控覆盖，null=使用 ActionHandler 默认',
+  created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_scene_action (scene_id, action_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Scene 可用 ActionType 白名单（D27）；仅 PUSH/HYBRID Scene 使用；PULL Scene 发布时校验 actions 为空';
+```
+
+**job_definition**（定时触发规则，非一等公民）
+
+```sql
+CREATE TABLE job_definition (
+  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id       BIGINT       NOT NULL,
+  scene_id        BIGINT       NOT NULL COMMENT '关联 scene.id，PULL Scene 不允许配置 Job（发布拒绝）',
+  code            VARCHAR(128) NOT NULL COMMENT 'Job 标识，Scene 内唯一',
+  name            VARCHAR(255) NOT NULL,
+  cron_expression VARCHAR(128) NOT NULL COMMENT 'Cron 表达式，如 0 2 * * *',
+  subject_query   JSON         NOT NULL COMMENT '主体集合查询配置（SQL / API），到点批量拉取触发主体',
+  event_type      VARCHAR(64)  NOT NULL COMMENT '合成 RuleEvent 时使用的 eventType',
+  payload_template JSON        COMMENT '合成 RuleEvent.payload 的模板（支持占位符替换）',
+  status          ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  created_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_scene_code (scene_id, code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时触发规则配置（§3.10）；调度器到点合成 RuleEvent 注入标准评估链路';
+```
+
+**job_execution**（每次 Job 运行记录）
+
+```sql
+CREATE TABLE job_execution (
+  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  job_definition_id BIGINT     NOT NULL COMMENT '关联 job_definition.id',
+  tenant_id       BIGINT       NOT NULL,
+  trigger_at      DATETIME(3)  NOT NULL COMMENT '调度器触发时间',
+  status          ENUM('RUNNING','SUCCESS','PARTIAL_FAIL','FAILED') NOT NULL DEFAULT 'RUNNING',
+  subject_count   INT          NOT NULL DEFAULT 0 COMMENT '本次批次主体总数',
+  success_count   INT          NOT NULL DEFAULT 0 COMMENT '成功注入评估链路的主体数',
+  error_count     INT          NOT NULL DEFAULT 0 COMMENT '失败数（含主体查询失败 + 事件注入失败）',
+  error_summary   TEXT         COMMENT '失败摘要（抽样错误信息）',
+  finished_at     DATETIME(3),
+  KEY idx_job_trigger (job_definition_id, trigger_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Job 每次运行记录（§3.10）';
+```
+
 **audit_log**（D14：人的行为，同步事务，永久保留）
 
 ```sql
@@ -193,6 +260,7 @@ CREATE TABLE audit_log (
   id              BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id       BIGINT       NOT NULL,
   actor           VARCHAR(64)  NOT NULL COMMENT '操作人（来自请求头 X-Actor-Id，D14）',
+  actor_type      ENUM('USER','SYSTEM','JOB') NOT NULL DEFAULT 'USER' COMMENT 'D14：操作方类型（来自请求头 X-Actor-Type）',
   action          VARCHAR(64)  NOT NULL COMMENT 'CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE',
   target_type     VARCHAR(64)  NOT NULL COMMENT 'rule_definition / scene / metric_definition 等',
   target_id       VARCHAR(128) NOT NULL,
@@ -217,18 +285,21 @@ CREATE TABLE evaluation_session (
   scene_code       VARCHAR(64)  NOT NULL,
   event_type       VARCHAR(64)  NOT NULL COMMENT '业务事件类型（Matcher 路由三元组之一）',
   subject_id       VARCHAR(128) NOT NULL,
-  rule_version_id  BIGINT       NOT NULL COMMENT '评估时锁定的 RuleVersion id（D17 快照）',
+  source           ENUM('PUSH','PULL','REPLAY') NOT NULL DEFAULT 'PUSH' COMMENT 'D23：触发来源，不改幂等语义',
   status           ENUM('PENDING','HIT','MISS','BLOCKED','ERROR','FAILED') NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING=进行中；HIT/MISS/BLOCKED/ERROR=D22 四态；FAILED=异常崩溃',
   final_decision   VARCHAR(64)  COMMENT '最终决策码（nullable，未命中或 BLOCKED 时为 null）',
   hit_decisions    JSON         COMMENT '命中的所有决策码列表',
   blocked_by       VARCHAR(64)  COMMENT '仅 status=BLOCKED 时有值，合法值：ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX（D22，共 5 种）',
   error_code       VARCHAR(64)  COMMENT '仅 status=ERROR 时有值，D15 EvalResult.errorCode',
+  candidate_rule_count INT      NOT NULL DEFAULT 0 COMMENT 'Matcher 命中的候选 RuleVersion 数量',
+  hit_rule_count   INT          NOT NULL DEFAULT 0 COMMENT 'AST 求值满足（HIT）的 Rule 数量',
   occurred_at      DATETIME(3)  NOT NULL COMMENT '业务事件时间',
-  evaluated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
-  completed_at     DATETIME(3)  COMMENT 'status 从 PENDING 更新为终态的时间',
+  started_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
+  finished_at      DATETIME(3)  COMMENT 'status 从 PENDING 更新为终态的时间',
+  eval_duration_ms INT          COMMENT '整 session 耗时（ms）',
   UNIQUE KEY uk_tenant_event (tenant_id, event_id),
   KEY idx_scene_subject (scene_code, subject_id),
-  KEY idx_evaluated_at (evaluated_at)
+  KEY idx_started_at (started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评估会话主记录（D11/D21，v1 同步写）';
 ```
 
@@ -262,6 +333,7 @@ CREATE TABLE action_execution (
   id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
   evaluation_session_id BIGINT       NOT NULL COMMENT '关联 evaluation_session.id',
   tenant_id             BIGINT       NOT NULL,
+  event_id              VARCHAR(128) NOT NULL COMMENT '来自 evaluation_session.event_id 的冗余字段，用于幂等 UK（D27）',
   action_id             VARCHAR(128) NOT NULL COMMENT 'Decision.actions[n].actionId',
   action_type           VARCHAR(64)  NOT NULL,
   decision_code         VARCHAR(64)  NOT NULL COMMENT '触发本 Action 的 Decision 码（D27）',
@@ -271,6 +343,7 @@ CREATE TABLE action_execution (
   retry_count           INT          NOT NULL DEFAULT 0,
   executed_at           DATETIME(3)  COMMENT '最后一次执行时间',
   created_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_idempotency (tenant_id, event_id, decision_code, action_id) COMMENT 'D27 幂等 UK：DB 层最终防重',
   KEY idx_session_id (evaluation_session_id),
   KEY idx_status_retryable (status, retryable)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Action 派发执行记录（D4/D27）';
@@ -284,6 +357,7 @@ CREATE TABLE dry_run_session (
   tenant_id        BIGINT       NOT NULL,
   event_id         VARCHAR(128) NOT NULL,
   scene_code       VARCHAR(64)  NOT NULL,
+  event_type       VARCHAR(64)  NOT NULL COMMENT '业务事件类型',
   subject_id       VARCHAR(128) NOT NULL,
   rule_version_id  BIGINT       NOT NULL,
   status           ENUM('PENDING','HIT','MISS','BLOCKED','ERROR','FAILED') NOT NULL DEFAULT 'PENDING',
@@ -295,6 +369,8 @@ CREATE TABLE dry_run_session (
   evaluated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   completed_at     DATETIME(3),
   trigger          ENUM('MANUAL','API') NOT NULL DEFAULT 'API' COMMENT 'dry-run 触发来源',
+  requested_by     VARCHAR(64)  COMMENT 'dry-run 发起人（来自请求头 X-Actor-Id，D14）',
+  target_rule_version_id BIGINT COMMENT '指定预览的 RuleVersion id；null 时使用 current_version，可提前预览未发布版本',
   KEY idx_tenant_evaluated (tenant_id, evaluated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 评估主记录（与 prod 隔离，D7）';
 ```
@@ -330,7 +406,7 @@ CREATE TABLE dry_run_node_trace (
 | 表 | 索引 | 查询模式 |
 |---|---|---|
 | `evaluation_session` | UK `uk_tenant_event (tenant_id, event_id)` | 幂等检查：D11 下半层 DB uk |
-| `evaluation_session` | `idx_evaluated_at (evaluated_at)` | 定时清理：按时间范围删除 30 天外数据 |
+| `evaluation_session` | `idx_started_at (started_at)` | 定时清理：按时间范围删除 30 天外数据 |
 | `node_trace` | `idx_session_id (evaluation_session_id)` | 按 session 查 trace（排障 / dry-run 对比） |
 
 Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
@@ -341,14 +417,19 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 |---|---|---|
 | `evaluation_session` | `idx_scene_subject (scene_code, subject_id)` | 按用户查历史评估记录 |
 | `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
+| `action_execution` | UK `uk_idempotency (tenant_id, event_id, decision_code, action_id)` | Action 派发幂等检查（D27 DB 层最终防重） |
 | `action_execution` | `idx_status_retryable (status, retryable)` | 重试队列扫描（查 status=FAILED AND retryable=1） |
 | `action_execution` | `idx_session_id (evaluation_session_id)` | 按 session 查 action 执行记录 |
 | `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |
 | `rule_version` | UK `uk_def_version (rule_definition_id, version)` | 版本唯一性约束 + 按规则查所有版本 |
 | `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)` | 查某个规则/Scene 的所有变更记录 |
 | `audit_log` | `idx_operated_at (operated_at)` | 按时间范围查审计日志 |
-| `decision_definition` | UK `uk_scene_code (scene_id, code)` | Scene 内 Decision 码唯一性约束 + 发布时查 Decision |
+| `decision_definition` | UK `uk_tenant_code (tenant_id, code)` | Tenant 内 Decision 码唯一性约束 + 发布时查 Decision |
 | `rule_decision_binding` | UK `uk_rule_decision (rule_definition_id, decision_id)` | 规则与 Decision 绑定唯一性 |
+| `scene_metric_binding` | UK `uk_scene_metric (scene_id, metric_definition_id)` | Rule 发布时验证 metricCode 在白名单内 |
+| `scene_action_binding` | UK `uk_scene_action (scene_id, action_type)` | Rule 发布时验证 actionType 在白名单内 |
+| `job_definition` | UK `uk_scene_code (scene_id, code)` | Scene 内 Job 唯一性约束 |
+| `job_execution` | `idx_job_trigger (job_definition_id, trigger_at)` | 按 Job 查运行历史 |
 
 ### 分区建议（v1 不做，v2 演进）
 
@@ -371,7 +452,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 
 | 表 | 保留期 | 清理方式 |
 |---|---|---|
-| `evaluation_session` | 30 天 | 定时任务 `DELETE WHERE evaluated_at < NOW() - INTERVAL 30 DAY LIMIT 5000` |
+| `evaluation_session` | 30 天 | 定时任务 `DELETE WHERE started_at < NOW() - INTERVAL 30 DAY LIMIT 5000` |
 | `node_trace` | 30 天 | 同上，`LIMIT 10000` |
 | `action_execution` | 30 天 | 同 evaluation_session（跟随其生命周期） |
 | `dry_run_session` | 7 天 | 定时任务 `DELETE WHERE evaluated_at < NOW() - INTERVAL 7 DAY LIMIT 2000` |
