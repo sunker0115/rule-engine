@@ -34,6 +34,8 @@
 | `metric_definition` | 指标元数据（sourceType / params / cacheTtl / allowProvided） | 同步事务 | 永久 |
 | `rule_definition` | 规则主记录（code / name / status） | 同步事务 | 永久 |
 | `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
+| `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级 / actions（D26/D27） | 同步事务 | 永久 |
+| `rule_decision_binding` | 规则与 Decision 的绑定关系（支持可选 score 区间，D26 SCORECARD 占位） | 同步事务 | 永久 |
 | `audit_log` | 配置变更审计——人的行为（D14，同步事务红线） | 同步事务 | 永久 |
 
 **评估层表（运行面，量大）：**
@@ -105,7 +107,7 @@ CREATE TABLE metric_definition (
   created_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_code (tenant_id, metric_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标元数据（sourceType / params / cacheTtl / allowProvided）';
 ```
 
 **rule_definition**
@@ -118,12 +120,16 @@ CREATE TABLE rule_definition (
   code          VARCHAR(128) NOT NULL COMMENT '规则标识，租户内唯一',
   name          VARCHAR(255) NOT NULL,
   description   TEXT,
-  status        ENUM('ACTIVE','DISABLED','DRAFT') NOT NULL DEFAULT 'DRAFT',
-  created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  status          ENUM('DRAFT','PUBLISHING','PUBLISHED','PUBLISH_FAILED','DISABLED') NOT NULL DEFAULT 'DRAFT' COMMENT 'D19 状态机：DRAFT→PUBLISHING→PUBLISHED/PUBLISH_FAILED；DISABLED=关停',
+  kind            ENUM('AST_BOOLEAN','SCORECARD','DECISION_TREE','DECISION_TABLE','EXPRESSION_SCRIPT') NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT 'D12：Rule 类型占位，v1 仅 AST_BOOLEAN 实装，其他枚举值发布时拒绝',
+  current_version BIGINT       COMMENT '当前有效 rule_version.id；DRAFT/PUBLISHING/PUBLISH_FAILED 时为 null',
+  published_by    VARCHAR(64)  COMMENT '最后发布人（来自 audit_log.actor）',
+  published_at    DATETIME(3)  COMMENT '最后发布时间',
+  created_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_code (tenant_id, code),
   KEY idx_scene_id (scene_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则主记录（D12 kind 占位，D19 状态机）';
 ```
 
 **rule_version**（不可变，D19 — 写入后永不 UPDATE/DELETE）
@@ -147,20 +153,53 @@ CREATE TABLE rule_version (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则版本快照（不可变，D19）';
 ```
 
+**decision_definition**（D26/D27）
+
+```sql
+CREATE TABLE decision_definition (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id   BIGINT       NOT NULL,
+  scene_id    BIGINT       NOT NULL COMMENT '关联 scene.id，Decision 在 Scene 范围内唯一',
+  code        VARCHAR(64)  NOT NULL COMMENT '决策码，Scene 内唯一，如 REJECT/REVIEW/PASS',
+  name        VARCHAR(128) NOT NULL COMMENT '决策名称，如"拒绝"/"人工审核"/"放行"',
+  priority    INT          NOT NULL COMMENT '优先级，值越小越高（D26：HIGHEST_PRIORITY 策略取 priority 最小的命中决策）',
+  actions     JSON         NOT NULL DEFAULT '[]' COMMENT 'D27：Action 列表（命中此 Decision 时派发），含 actionId/actionType/sortOrder/failFast/compensateActionType/params',
+  status      ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_scene_code (scene_id, code),
+  KEY idx_tenant_id (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Decision 实体（D26）；actions 字段在发布时快照到 rule_version.decision_bindings（D28）';
+```
+
+**rule_decision_binding**（D26：规则绑定 Decision，支持 score 区间占位）
+
+```sql
+CREATE TABLE rule_decision_binding (
+  id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+  rule_definition_id BIGINT      NOT NULL COMMENT '关联 rule_definition.id',
+  decision_id       BIGINT       NOT NULL COMMENT '关联 decision_definition.id',
+  score_range_min   DECIMAL(10,4) COMMENT '仅 Rule.kind=SCORECARD 时有意义，v1 留 null',
+  score_range_max   DECIMAL(10,4) COMMENT '仅 Rule.kind=SCORECARD 时有意义，v1 留 null',
+  created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_rule_decision (rule_definition_id, decision_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则与 Decision 绑定关系（D26）；score 区间 v1 为 null 占位，SCORECARD kind 时启用';
+```
+
 **audit_log**（D14：人的行为，同步事务，永久保留）
 
 ```sql
 CREATE TABLE audit_log (
-  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id     BIGINT       NOT NULL,
-  operator      VARCHAR(64)  NOT NULL COMMENT '操作人（用户名 / 系统账号）',
-  operation     VARCHAR(64)  NOT NULL COMMENT 'RULE_PUBLISH / RULE_DISABLE / SCENE_CREATE 等',
-  target_type   VARCHAR(64)  NOT NULL COMMENT 'rule_definition / scene / metric_definition',
-  target_id     VARCHAR(128) NOT NULL,
-  before_value  JSON         COMMENT '变更前快照',
-  after_value   JSON         COMMENT '变更后快照',
-  error_code    VARCHAR(64)  COMMENT '发布期校验失败时填写（UNRESOLVED_VARIABLE 等）',
-  operated_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id       BIGINT       NOT NULL,
+  actor           VARCHAR(64)  NOT NULL COMMENT '操作人（来自请求头 X-Actor-Id，D14）',
+  action          VARCHAR(64)  NOT NULL COMMENT 'CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE',
+  target_type     VARCHAR(64)  NOT NULL COMMENT 'rule_definition / scene / metric_definition 等',
+  target_id       VARCHAR(128) NOT NULL,
+  before_snapshot JSON         COMMENT '变更前快照',
+  after_snapshot  JSON         COMMENT '变更后快照（PUBLISH_FAILED 时含 errorCode 字段）',
+  trace_id        VARCHAR(128) COMMENT '请求链路 trace id，便于关联日志',
+  operated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY idx_tenant_target (tenant_id, target_type, target_id),
   KEY idx_operated_at (operated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配置变更审计（D14，同步事务写）';
@@ -176,12 +215,13 @@ CREATE TABLE evaluation_session (
   tenant_id        BIGINT       NOT NULL,
   event_id         VARCHAR(128) NOT NULL COMMENT '业务事件 id（幂等键第二列，D11）',
   scene_code       VARCHAR(64)  NOT NULL,
+  event_type       VARCHAR(64)  NOT NULL COMMENT '业务事件类型（Matcher 路由三元组之一）',
   subject_id       VARCHAR(128) NOT NULL,
   rule_version_id  BIGINT       NOT NULL COMMENT '评估时锁定的 RuleVersion id（D17 快照）',
   status           ENUM('PENDING','HIT','MISS','BLOCKED','ERROR','FAILED') NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING=进行中；HIT/MISS/BLOCKED/ERROR=D22 四态；FAILED=异常崩溃',
   final_decision   VARCHAR(64)  COMMENT '最终决策码（nullable，未命中或 BLOCKED 时为 null）',
   hit_decisions    JSON         COMMENT '命中的所有决策码列表',
-  blocked_by       VARCHAR(64)  COMMENT '仅 status=BLOCKED 时有值，记录首个拦截 Gate 类型（D22）',
+  blocked_by       VARCHAR(64)  COMMENT '仅 status=BLOCKED 时有值，合法值：ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX（D22，共 5 种）',
   error_code       VARCHAR(64)  COMMENT '仅 status=ERROR 时有值，D15 EvalResult.errorCode',
   occurred_at      DATETIME(3)  NOT NULL COMMENT '业务事件时间',
   evaluated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
@@ -233,7 +273,7 @@ CREATE TABLE action_execution (
   created_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY idx_session_id (evaluation_session_id),
   KEY idx_status_retryable (status, retryable)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Action 派发执行记录（D4/D27）';
 ```
 
 **dry_run_session**（与 prod evaluation_session 同结构，7 天 TTL，D7）
@@ -307,6 +347,8 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `rule_version` | UK `uk_def_version (rule_definition_id, version)` | 版本唯一性约束 + 按规则查所有版本 |
 | `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)` | 查某个规则/Scene 的所有变更记录 |
 | `audit_log` | `idx_operated_at (operated_at)` | 按时间范围查审计日志 |
+| `decision_definition` | UK `uk_scene_code (scene_id, code)` | Scene 内 Decision 码唯一性约束 + 发布时查 Decision |
+| `rule_decision_binding` | UK `uk_rule_decision (rule_definition_id, decision_id)` | 规则与 Decision 绑定唯一性 |
 
 ### 分区建议（v1 不做，v2 演进）
 
