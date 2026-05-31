@@ -167,6 +167,8 @@ RuleEvent
 - 若**全部**候选 RuleVersion 均被 Pre-Gate 拦截 → 写 `evaluation_session { status=BLOCKED, blocked_by=<首个拦截 Gate 类型> }`，返回 `EvalResult { ruleHit=false }`；
 - BLOCKED 对账不计入命中率分母（D22）。
 
+> `blocked_by` 共 5 种枚举值（ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX），与 Pre-Gate 类型一一对应。`00-decisions.md` D22 的枚举列举（"ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX"）是成文时遗漏了 WHITELIST，以本表为准。
+
 **Gate 内部异常**（如 Redis 频次计数器超时）：默认 fail-closed——失败视为"未通过该 Gate"，宁可漏发不可错发；具体各 Gate 的 fail-open/closed 默认值由各实现声明（→ 04-extension）。
 
 ### 3.4 EvalContext 构建
@@ -241,7 +243,7 @@ EvalResult {
 
 ### 3.6 Action Dispatcher
 
-**输入**：`EvalResult.finalDecision`（含 `actions` 快照，D28：发布时已快照化）
+**输入**：`RuleVersion.decision_bindings_snapshot` 中 `finalDecision` 对应的 `decision_actions_snapshot`（D28：发布时已快照化，运行时直读，不再查 rule_definition）
 
 **输出**：`action_execution` 行（异步写 DB）
 
@@ -255,6 +257,8 @@ EvalResult {
 - `retryable=true` → 入重试队列（独立调度，不阻塞同 Decision 后续 Action）；
 - `retryable=false` → 直接落 `action_execution.status=FAILED`；
 - `failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 更大的 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，不进入重试队列。
+
+**缺省 decisionStrategy**（D29）：PUSH/HYBRID Scene 未配 `decisionStrategy` 时，缺省等价 `HIGHEST_PRIORITY`；PULL Scene `decisionStrategy` 无效，`EvalResult` 直接返回调用方不做合成。
 
 **PULL 模式**：`Scene.dominantMode=PULL` 时，Dispatcher 不派发任何 Action（Decision.actions 发布校验已要求为空，D27），`EvalResult` 同步返回给调用方。
 
@@ -272,20 +276,30 @@ EvalResult {
 ```
  （幂等检查通过）
        │
-       ▼
-   PENDING ──AST 评估完成──▶ COMPLETED（正常完成，含 HIT / MISS / BLOCKED / ERROR 四态）
+       ├─ Pre-Gate 全部拦截 ──▶ 直接 INSERT status=BLOCKED（不经过 PENDING）
        │
-       └──评估期不可恢复异常──▶ FAILED（评估线程崩溃，异常监控另行处理）
+       └─ Pre-Gate 通过，进入 EvalContext 构建
+                │
+                ▼
+           PENDING（阶段④末尾 INSERT）
+                │
+      ┌─────────┼─────────┐
+      ↓         ↓         ↓
+  status=HIT  status=MISS  status=ERROR
+ （AST=true） （AST=false） （有节点失败）
+
+  若评估线程崩溃：
+  PENDING ──▶ FAILED（不可恢复异常，异常监控另行处理）
 ```
 
-> `PENDING` 是引擎内部中间状态，在 EvalContext 构建完毕、AST 评估开始前写入；正常路径下 `PENDING → COMPLETED` 在同一次评估链路内完成，外部系统通常只观察到 COMPLETED 和 FAILED 两个终态。`evaluation_session.status` 的外部枚举（对账聚合用）是 `HIT / MISS / BLOCKED / ERROR`（D22），由评估结果填充到 COMPLETED 行中。
+> `PENDING` 是引擎内部中间状态，在 EvalContext 构建完毕、AST 评估开始前写入。BLOCKED 路径由 Pre-Gate 阶段（③）直接写入，不经过 PENDING。DB `status` 列存储 6 种值：`PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态，完成态）/ `FAILED`（崩溃态）。
 
 **写入时机**：
 
 | 操作 | 时机 | 是否同步 |
 |------|------|---------|
 | `INSERT (status=PENDING)` | EvalContext 构建完毕，AST 评估开始前 | **同步**（D21） |
-| `UPDATE (status=HIT/MISS/BLOCKED/ERROR)` | EvalResult 出树后 | **同步**（同一链路，D21） |
+| `UPDATE (status=HIT/MISS/ERROR)` | EvalResult 出树后，用实际四态值直接 UPDATE（不经过 COMPLETED 中间态） | **同步**（同一链路，D21） |
 | `node_trace` batch INSERT | EvalResult 出树后入 TraceWriter 队列 | **异步**（D21） |
 | `action_execution` INSERT | ActionHandler.execute() 完成后 | **异步**（D20 §2） |
 
@@ -306,7 +320,7 @@ EvalResult {
 | `event_type` | VARCHAR | 事件类型 |
 | `subject_id` | VARCHAR | 主体 ID |
 | `rule_version_id` | BIGINT | 评估时锁定的 RuleVersion（多规则命中时取优先级最高的一条，详见 05-storage） |
-| `status` | VARCHAR | `HIT / MISS / BLOCKED / ERROR`（D22 四态） |
+| `status` | VARCHAR | `PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态，完成态）/ `FAILED`（异常态） |
 | `final_decision` | VARCHAR | 合成后 Decision.code（nullable；Scene 未配 decisionStrategy 且无 finalDecision 时为空） |
 | `hit_decisions` | JSON | 所有命中规则的 Decision 列表（始终填充） |
 | `blocked_by` | VARCHAR | nullable；仅 `status=BLOCKED` 时有值，记录首个拦截 Gate 类型 |
