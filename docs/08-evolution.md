@@ -1,6 +1,6 @@
-# 08 — 演进路线图（部分展开）
+# 08 — 演进路线图
 
-> **位置定位**：本文档承载所有"v1 不做、未来做"的演进项与决策时间线。当前**部分展开**——已识别的演进锚点中 §2.1 / §2.12 / §2.13 / §2.14 / §2.15 已写细节；§三 决策时间线、§四 已否决方案已全部展开。
+> **位置定位**：本文档承载所有"v1 不做、未来做"的演进项与决策时间线。
 >
 > **前置阅读**：[`README.md`](./README.md)、[`00-decisions.md`](./00-decisions.md)
 >
@@ -12,7 +12,7 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 演进锚点（roadmap） | ⏳ 部分展开（§2.1 / §2.12 / §2.13 / §2.14 / §2.15 已详细展开；§2.2–§2.11 四要素就位、路线概要级） |
+| §二 演进锚点（roadmap） | ✅ |
 | §三 决策时间线 | ✅ |
 | §四 已否决方案 | ✅ |
 
@@ -52,20 +52,34 @@
 
 ### 2.2 Metric 版本化（来源 #2 占位）
 
-- **v1 现状**：`Metric.metricVersion` 字段就位，固定值 1；规则引用按 `metricCode` 不带版本号。
-- **触发条件**：指标定义语义变更（如"近 7d 交易额"换算口径、时区基准变化）需要灰度切换，旧规则不应被静默影响。
-- **演进方向**：发布新版本时 `metricVersion` 递增 + 历史版本并存；规则版本快照锁定引用的 `(metricCode, metricVersion)`；运营 UI 展示"指标变更影响的规则数"。
-- **迁移成本**：中（需扩展规则与指标的多对多版本绑定表 + 评估期版本解析逻辑）。
+- **v1 现状**：`metric_definition.metric_code` 是指标唯一标识，`rule_version.metric_dependencies`（JSON 列）只存 `metricCode` 字符串，不带版本号；metric 元数据更新是原地覆盖，无历史版本记录。`Metric.metricVersion` 字段就位但固定值 1，暂未启用版本语义。
+- **触发条件**：metric 语义发生不兼容变更时（换算口径、时区基准、SQL 逻辑调整）——存量规则若继续跑旧定义会静默得到错误结果，但引擎无法感知，只能靠业务侧发现异常。
+- **演进方向**：
+  - `metric_definition` 加 `version INT` 列，发布新语义 = INSERT 新行（旧行不删，status 改为 SUPERSEDED）；
+  - `rule_version.metric_dependencies` 从 `["metricCode"]` 升级为 `[{"metricCode":"xxx","metricVersion":1}]`；
+  - 发布期校验：被引用的 `(metricCode, metricVersion)` 必须存在且为 ACTIVE 状态；
+  - 评估期：`EvalContext` 按 `(metricCode, metricVersion)` 拉取对应版本的 metric 定义，不再默认取最新版；
+  - 运营 UI：展示"修改此 metric 版本后受影响的规则数"，上线前可提前评估影响范围；
+  - 与 §2.12（payloadSchema 版本化）平行演进，schema 版本和 metric 版本同期落地可降低迁移成本。
+- **迁移成本**：中（`metric_definition` 表结构变更 + `rule_version` JSON schema 升级 + 发布期 / 评估期解析逻辑 + UI 影响面展示）。
 
 ### 2.3 跨 Scene 规则复用（来源 #1）
 
 - **v1 现状**：Rule 属于唯一 Scene，没有跨 Scene 复用机制；相似规则需在多个 Scene 重复配置。
-- **演进方向**：引入 `RuleTemplate`（参数化的规则模板）和 / 或 `RuleFragment`（可被多 Rule 引用的 AST 子树），运营自助实例化到不同 Scene。需新增模板表、引用关系表、发布时膨胀策略。
-- **迁移成本**：高（影响 schema + 发布事务 + 试算 + 灰度桶继承）。
+- **触发条件**：相同条件逻辑在多个 Scene 重复配置（如"账户开立 < 90 天"同时出现在 risk.transfer / risk.withdrawal / risk.payment），改动时需逐 Scene 同步，易漏、易产生版本漂移。
+- **演进方向**：
+  - **`RuleTemplate`**：参数化的规则骨架，变量用占位符，实例化时注入 Scene 专属参数值；发布时膨胀为普通 `rule_version`，评估期不感知模板，公共能力（灰度 / Pre-Gate / Action）完全复用；
+  - **`RuleFragment`**：可被 `Rule.conditionAst` 引用的 AST 子树（逻辑提取为独立实体），发布时展开内联，语义等价于手动复制；
+  - 两种形态适用场景不同：Template 适合大框架复用（同一规则结构不同参数）；Fragment 适合条件组复用（同一 AND/OR 子树在多处出现）；
+  - 新增 `rule_template` / `rule_fragment` 表 + 引用关系表；`rule_version` 发布时展开并生成不可变快照，与 D6 快照语义一致；
+  - 灰度：Template 实例化后继承普通 `rule_version` 的 ROLLOUT Gate 语义，不需要专门机制。
+- **迁移成本**：高（schema 变更 + 发布事务展开逻辑 + dry-run 兼容 + 灰度桶继承 + UI）。
+- **依赖**：§2.10 规则模板市场依赖本节就位。
 
 ### 2.4 规则间依赖与编排（来源 #3）
 
 - **v1 现状**：D16 显式禁止 Action 产引擎事件；规则间不存在内置依赖与顺序保证；业务需要顺序走外部 MQ 编排。
+- **触发条件**："先反欺诈再合规"类顺序依赖需求，或"Rule A 命中后才触发 Rule B"的流程依赖，目前只能通过外部 MQ 手工编排，依赖关系对运营不可见，排障成本高。
 - **演进方向**：v2 接 Camunda / Flowable 工作流引擎（D4 已说明），把"Rule 命中 → 触发下一 Rule"作为工作流节点而非 Rule 内能力。引擎仍保持单事件单评估，工作流引擎做编排。
 - **迁移成本**：高（引入新组件、运维形态变化）。
 
@@ -76,17 +90,17 @@
 - **演进方向**：热表保留 7 天 + 冷归档表（按月分区）+ 可选 ClickHouse / ES 列存；存储与查询接口隔离，业务侧零改动。
 - **接收内容**：本锚点在 05-storage 展开时迁入"§冷热分级" 章节。
 
-### 2.6 监控指标体系（来源 #10，并入 [`07-operability.md`](./07-operability.md) TODO）
+### 2.6 监控指标体系（来源 #10）
 
-- **v1 现状**：顶层架构旁路提到 `Metric Aggregator → Prometheus`，但具体监控指标清单未定义。
-- **演进方向**：在 07-operability.md 展开核心指标清单——评估耗时分位、命中率、Action 成功率、ERROR 率、Job 延迟、规则版本切换次数、热加载延迟、审计写入耗时等；告警阈值与通知渠道一并定义。
-- **接收内容**：本锚点在 07-operability 展开时迁入"§监控告警"。
+- **v1 现状**：顶层架构旁路提到 `Metric Aggregator → Prometheus`，v1 已在 `07-operability.md` 完整定义指标清单与告警阈值。
+- **触发条件**：无（已完成）。
+- **演进方向**：已迁入 [`07-operability.md §六 Prometheus 指标清单`](./07-operability.md) 与 [`§七 告警阈值`](./07-operability.md)，包含评估耗时分位、命中率、Action 成功率、ERROR 率、trace 队列深度等核心指标及建议告警阈值。
 
-### 2.7 灰度发布的验证与回退（来源 #12，并入 07-operability TODO）
+### 2.7 灰度发布的验证与回退（来源 #12）
 
-- **v1 现状**：D6 已定义灰度按 % 放量 + 按用户标签命中，hash bucket 算法稳定（基于 `(subjectId, ruleVersionId)`）。
-- **未覆盖**：灰度观察期 / 效果对比指标 / 自动放量与自动回退策略。
-- **演进方向**：在 07-operability 展开"灰度运营"章节——SLI 监控 + 红蓝指标对比 + 自动放量按 SLO 推进 + 异常自动回退到上一版本。
+- **v1 现状**：D6 已定义灰度按 % 放量 + 按用户标签命中，hash bucket 算法稳定（基于 `(subjectId, ruleVersionId)`）。灰度验证流程与回退操作已在 `07-operability.md` 完整定义。
+- **触发条件**：无（已完成）。
+- **演进方向**：已迁入 [`07-operability.md §五 灰度`](./07-operability.md)，涵盖灰度算法、验证流程（5% → 全量）、回退操作（调 percentage 回 0 或 DISABLE 规则）。更高级的自动放量 / 自动回退（按 SLO 推进）为 v2 范畴，届时回写本节。
 
 ### 2.8 合规演进（来源 D14 v1 不做的"敏感数据"占位）
 
@@ -99,8 +113,17 @@
 
 ### 2.9 规则导出 / 导入（来源 #15）
 
-- **v1 现状**：没有跨环境 / 跨租户的规则迁移工具。
-- **演进方向**：发布运营工具——按规则版本导出为可移植的 JSON Bundle（含规则定义 + 引用的 metric / actionType 元数据），目标环境导入时校验 Scene 兼容性 + metric 白名单匹配 + 版本号重映射。
+- **v1 现状**：没有跨环境 / 跨租户的规则迁移工具；跨环境迁移需人工重建规则。
+- **触发条件**：
+  - 跨环境迁移（dev → staging → prod）时规则需人工重建，操作繁琐且易出错；
+  - 租户入驻时需要批量导入模板规则；
+  - 线上 Incident 排查需要在测试环境精确复现生产规则版本。
+- **演进方向**：
+  - **导出格式**：JSON Bundle = `{ruleVersion, metricDefinitions[], actionTypeManifest[], sceneSnapshot}` 自包含包，目标环境无需额外查询即可完整重建；
+  - **导入校验**：Scene 白名单兼容性（目标环境 Scene 是否有相同 `metricCode` / `actionType` 白名单）+ metric 参数安全性（SQL 类型需人工审核标记）+ 版本号重映射（源环境主键 id 不照搬，按 `rule.code` 做 upsert）；
+  - **幂等**：重复导入 = 新建草稿版本，不覆盖已发布版本；
+  - **权限**：导出需 EXPORT 权限；导入需目标 Scene 的 PUBLISH 权限；
+  - **不做**：跨租户实时同步（由 §2.10 规则模板市场解决）。
 - **迁移成本**：中（独立工具链，不动核心引擎）。
 
 ### 2.10 规则模板市场（来源 #16）
@@ -112,6 +135,7 @@
 ### 2.11 外部系统集成契约标准化（来源 #17）
 
 - **v1 现状**：`MetricSource` 支持外部 HTTP，但未定义统一接口契约；不同业务自行约定。
+- **触发条件**：多业务团队各自实现 `EXTERNAL_HTTP` MetricSource，协议、错误码、超时行为各异，无法跨团队复用，联调成本高；新业务接入时无参考规范，接入周期长。
 - **演进方向**：定义标准化指标获取协议（参考 OpenTelemetry / OpenFeature 模型），引入 `MetricFetcher` 通用 SDK + 协议测试套件。
 - **迁移成本**：中。
 
