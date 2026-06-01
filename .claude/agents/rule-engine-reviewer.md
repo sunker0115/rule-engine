@@ -79,13 +79,13 @@ color: cyan
 
 对每个落在范围内的改动，回答（代码骨架未落地时，重点问 1、3、8；代码落地后全问）：
 
-1. **概念一致** — 引入/修改的类名/字段名/职责，是否和 `01-concepts.md` §三 描述的概念边界一致？有没有新引入文档没提的概念，或者把两个不同概念混用（如 `Context` vs `EvalContext`，`RuleDefinition` vs `RuleVersion`）？
-2. **运行时一致** — 改动的流程（评估顺序、EvalContext 装配时机、失败语义、Action 派发路径）是否和 `02-runtime.md` + `00-decisions.md` 描述的链路对齐？
-3. **决策一致** — 改动有没有违反 `00-decisions.md` 里的已落定条目？读完基线文档后按各 D 编号逐一核对，不要凭记忆猜测决策内容。
-4. **规则表达式一致** — 如果改了 operator / ConditionType / 求值逻辑，行为是否和 `03-rule-expression.md` + `01-concepts.md` §3.5/§3.6 的语义定义一致？
-5. **扩展点一致** — 如果新增/改动 SPI（ConditionEvaluator / ActionHandler / MetricSource / SubjectLoader / RuleVersionWatcher / SceneWatcher），是否符合 `04-extension.md` + `01-concepts.md` 的扩展规约？
-6. **存储一致** — 如果碰了持久化字段，是否和 `05-storage.md` + `01-concepts.md` §3.12/§3.15/§3.16 的表结构/字段语义一致？新增字段有没有影响 `rule_version` 的不可变性（D6）？
-7. **契约一致** — 如果改了对外签名，是否和 `10-api-contract.md` 的契约一致？
+1. **概念一致** — 引入/修改的类名/字段名/职责是否与概念边界一致？有没有新引入文档没提的概念，或把两个不同概念混用（如 `Context` vs `EvalContext`，`RuleDefinition` vs `RuleVersion`）？
+2. **运行时一致** — 改动的流程（评估顺序、EvalContext 装配时机、失败语义、Action 派发路径）是否与链路描述对齐？
+3. **决策一致** — 改动有没有违反已落定的决策条目？读完基线文档后按各 D 编号逐一核对，不要凭记忆猜测。
+4. **规则表达式一致** — 如果改了 operator / ConditionType / 求值逻辑，行为是否与语义定义一致？
+5. **扩展点一致** — 如果新增/改动 SPI（ConditionEvaluator / ActionHandler / MetricSource / SubjectLoader / RuleVersionWatcher / SceneWatcher），是否符合扩展规约？
+6. **存储一致** — 如果碰了持久化字段，是否与表结构/字段语义一致？新增字段有没有影响 `rule_version` 的不可变性（D6）？
+7. **契约一致** — 如果改了对外签名，是否与 API 契约一致？
 8. **文档过时** — 代码已有的行为是否在文档里**没体现** / **描述错** / **已删除但仍写着**？常见易漏点：`EvalContext` 命名（不再叫 `Context`）、四态 HIT/MISS/BLOCKED/ERROR（不再是三态）、evaluation_session 幂等键语义、DryRunSession 独立存储。
 
 对每个发现，代码落地后用 codegraph 工具（callers/callees/trace）而不是猜测来确认调用链。
