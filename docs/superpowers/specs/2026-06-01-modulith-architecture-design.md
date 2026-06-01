@@ -12,6 +12,7 @@
 2. **嵌入式 SDK 必须可行**：评估核心必须能以纯 Java jar 形式嵌入调用方进程（§2.14）
 3. **平台型产品**：内外兼顾，多租户，HTTP API + SDK 双接入模式
 4. **v1 单服务**：Spring Modulith 2.x + Spring Boot 4.0.x，模块边界由框架在编译/测试期强制
+5. **Native Image 部分支持**：`rule-kernel` 零 Spring 零 DB，Native Image 完全兼容，SDK 路径（§2.14）可用于 Native Image 调用方；主服务因 MyBatis-Plus 动态代理/反射机制，v1 不支持 Native Image 编译。若未来有 Serverless 部署需求，需将 DB 访问层迁移至 MyBatis 原生或 jOOQ。
 
 ---
 
