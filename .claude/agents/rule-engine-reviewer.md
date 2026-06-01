@@ -36,10 +36,10 @@ color: cyan
 | `06-frontend.md` | ✅ 完整 | 三栏布局 / 元数据驱动渲染 / dry-run UI / 灰度配置 UI / 审计日志 UI |
 | `07-operability.md` | ✅ 完整 | 幂等双层 / 落库策略 / dry-run 链路 / 灰度算法 / Prometheus 指标 / 告警阈值 / 可用性矩阵 / 运维参数表 |
 | `08-evolution.md` | ✅ 完整 | §2.1–§2.15 演进锚点全部展开 / 决策时间线 / 已否决方案 |
-| `09-skeleton.md` | 🚧 占位 | 章节骨架就位，内部工程决策待展开（技术栈已定：Java 21 / Spring Boot 4 / Modulith / Maven / MyBatis-Plus / com.sstlfsj.rule） |
+| `09-skeleton.md` | ✅ 完整 | 7 模块拆分（kernel/config-svc/eval-svc/audit-svc/observability/api/app）/ 包结构 / SPI 落点表 / 依赖方向与禁止环 / 配置命名空间 / 测试组织 / v1 不做的拆分 |
 | `10-api-contract.md` | ✅ 完整 | PUSH/PULL/dry-run 接口 / 规则管理接口 / 元数据接口 / 审计查询接口 / errorCode 清单 / SDK 用法 / 版本兼容策略 |
 
-**文档完整性说明**：02–08 和 10 已完整展开，可作为审查基线。09-skeleton 仍为占位（章节骨架就位，内部工程决策待展开）——涉及包结构 / 模块归属的改动，暂以 README + 00-decisions + 01-concepts 为准，不以 09-skeleton 否定改动。
+**文档完整性说明**：00–10 全部完整展开，均可作为审查基线。涉及包结构 / 模块归属 / SPI 落点的改动，以 09-skeleton.md 为准。
 
 ## 工作流
 
