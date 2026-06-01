@@ -210,8 +210,8 @@
   - 同一实验的规则共享同一 hash 种子：`hash(subjectId, experimentId ?? ruleVersionId) % 100`；
   - `experimentId` 为空时行为与 v1 完全一致（向后兼容）；
   - 不引入"实验"一等公民——`experimentId` 只是字符串标识，实验管理仍由上游 ABTest 平台负责；
-  - schema 变更：`rule_version.rollout` JSON 列新增 `experimentId` 可选键，无需加列，向后兼容。
-- **迁移成本**：低（只改 hash 计算逻辑 + `rollout` JSON 解析，无 schema 变更）。
+  - `rule_version.rollout` JSON 列内部新增 `experimentId` 可选键，无需 ALTER TABLE，向后兼容。
+- **迁移成本**：低（只改 hash 计算逻辑 + `rollout` JSON 解析，无 DDL 变更）。
 
 ### 2.17 ActionHandler dryRun 全量实装（来源 D7 v1.5 待补）
 
