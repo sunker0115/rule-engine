@@ -87,7 +87,7 @@ CREATE TABLE scene (
   name              VARCHAR(128) NOT NULL,
   description       TEXT         COMMENT '给运营看的业务说明',
   dominant_mode     ENUM('PUSH','PULL','HYBRID') NOT NULL COMMENT 'PUSH=异步派发/PULL=同步返回/HYBRID=两者',
-  decision_strategy ENUM('HIGHEST_PRIORITY') NOT NULL DEFAULT 'HIGHEST_PRIORITY' COMMENT 'D29 v1 仅实现 HIGHEST_PRIORITY；v2 扩展 MAJORITY / CUSTOM_SPI 时加列',
+  decision_strategy ENUM('HIGHEST_PRIORITY') NOT NULL DEFAULT 'HIGHEST_PRIORITY' COMMENT 'D29 v1 仅实现 HIGHEST_PRIORITY；v2 扩展 MAJORITY / CUSTOM_SPI 时需 ALTER TABLE MODIFY COLUMN（MySQL ENUM 增值为改列操作，非加列）',
   subject_type      ENUM('USER','ACCOUNT','DEVICE','ORDER','CUSTOM') NOT NULL DEFAULT 'USER',
   event_types       JSON         NOT NULL COMMENT 'D13：允许的 eventType 白名单数组，发布校验 + 事件接入双校验',
   payload_schema    JSON         COMMENT 'payloadSchema D13，字段类型 + required 声明',
@@ -374,7 +374,7 @@ CREATE TABLE action_execution (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Action 派发执行记录（D4/D27）';
 ```
 
-**dry_run_session**（与 prod evaluation_session 同结构，7 天 TTL，D7）
+**dry_run_session**（共享 evaluation_session 主体字段，追加 dry-run 专有列，7 天 TTL，D7）
 
 ```sql
 CREATE TABLE dry_run_session (

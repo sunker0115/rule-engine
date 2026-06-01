@@ -244,7 +244,7 @@ EvalResult {
 
 ### 3.6 Action Dispatcher
 
-**输入**：`RuleVersion.decision_bindings` 中 `finalDecision` 对应的 actions 列表（D28：Decision 及其 actions 在发布时已快照化进 `decision_bindings`，运行时直读，不再查 rule_definition）
+**输入**：`RuleVersion.decision_bindings` 中 `finalDecision` 对应的 actions 列表（D28：Decision 及其 actions 在发布时已快照化进 `decision_bindings`，运行时直读，不再查 rule_definition）。`ActionContext.params` 以 `scene_action_binding.default_params` 为底，Decision 快照中的 `params` 字段覆盖合并（Decision 级优先）
 
 **输出**：`action_execution` 行（异步写 DB）
 
