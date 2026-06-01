@@ -159,7 +159,7 @@ RuleEvent
 | `ROLLOUT` | `hash(subjectId, ruleVersionId) % 100 < percentage` | `ROLLOUT` |
 | `WHITELIST` | `subjectId` ∈ `listKey` 对应名单 | `WHITELIST` |
 | `BLACKLIST` | `subjectId` ∉ `listKey` 对应名单 | `BLACKLIST` |
-| `RATE_LIMIT` | 未触发 tenantId 级 QPS/QPM 限额 | `RATE_LIMIT` |
+| `RATE_LIMIT` | 按 (tenantId, ruleId, subjectId, 时间窗口) 检查命中次数是否超阈值 | `RATE_LIMIT` |
 | `MUTEX` | 当前 `tenantId+subjectId` 无同 `mutexGroup` 规则正在评估 | `MUTEX` |
 
 **结果语义**：

@@ -218,7 +218,7 @@ CREATE TABLE scene_metric_binding (
   updated_by            VARCHAR(64)  COMMENT '最近修改人（D14）',
   updated_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_scene_metric (scene_id, metric_definition_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Scene 可用 Metric 白名单（D30）；Rule 发布时校验 AST 引用的 metricCode 必须在此列表内';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Scene 可用 Metric 白名单；Rule 发布时校验 AST 引用的 metricCode 必须在此列表内（白名单来自早期 Scene 治理边界设计，D30 是 providedMetrics/allowProvided 特性）';
 ```
 
 **scene_action_binding**（Scene 与 ActionType 白名单关联，仅 PUSH/HYBRID Scene）

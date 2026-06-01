@@ -773,10 +773,10 @@ interface Scheduler {
 **关键边界**：
 
 - **独立于主队列**：重试项不占主队列容量，不影响新命中事件派发吞吐；
-- **退避策略**：指数退避（初始间隔 / 最大间隔 / 最大重试次数在 [`07-operability.md`](./07-operability.md) §重试策略 给默认值）；
+- **退避策略**：指数退避（初始间隔 / 最大间隔 / 最大重试次数在 [`07-operability.md`](./07-operability.md) §九 运维参数默认值表 给默认值）；
 - **v1 内存队列**：进程重启时未消费重试项丢失；上游重推 RuleEvent（D23 幂等需换新 eventId）可完整恢复；引入持久化重试留 [`08-evolution.md`](./08-evolution.md) §二；
 - **v1 不引入死信队列（DLQ）**（D20 §2）：`action_execution` FAILED 行即是终态游标，DLQ 在引入 MQ 时再考虑；
-- **运维参数**（`retry.queue.capacity` / `retry.initial.interval` / `retry.max.interval` / `retry.max.attempts`）留 [`07-operability.md`](./07-operability.md) §重试策略。
+- **运维参数**（`retry.queue.capacity` / `retry.initial.interval` / `retry.max.interval` / `retry.max.attempts`）留 [`07-operability.md`](./07-operability.md) §九 运维参数默认值表。
 
 ### 3.18 Compensation Pipeline（补偿流水线，外部过程）
 

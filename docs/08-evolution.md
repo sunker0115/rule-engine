@@ -213,7 +213,7 @@
 
 ### 第二组：指标与外部集成（D8–D11）
 
-D8 引入 MetricSource SPI（取数与评估解耦，后续可插拔）；D9 v1 全 MySQL 不引入列存 / 大数据；D10 基础 Pre-Gate 四类（ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT）；D11 幂等 Redis+DB 双层（调用方可重推无副作用）。
+D8 性能目标（千级 QPS，决定是否引入 RETE / 预编译 / 索引化匹配）；D9 v1 全 MySQL 不引入列存 / 大数据；D10 AI 评估节点预留（LLMConditionEvaluator 占位，v1 不实现）；D11 Job 模式 + 调度器选型（定时扫表 / 周期回查类规则纳入一等公民）。
 
 ### 第三组：Rule 结构与模式（D12–D17）
 

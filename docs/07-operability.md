@@ -57,7 +57,7 @@ TraceWriter 队列参数（建议默认值，可 `engine.rule.trace.*` 配置覆
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `queue.capacity` | 100,000 | 内存 LinkedBlockingQueue 容量 |
+| `queue.capacity` | 100,000 | 内存 ArrayBlockingQueue 容量 |
 | `batch.size` | 500 | 每批 INSERT 行数 |
 | `flush.interval.ms` | 200 | 超时强制 flush |
 | `consumer.threads` | 2 | 批写消费线程数 |
@@ -184,6 +184,10 @@ pass = bucket < rollout.percentage
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |
 | `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session 保留天数 |
 | `engine.rule.rollout.hash-seed` | 0 | murmur3 hash seed（固定后不要改，否则桶分布漂移） |
+| `engine.rule.action.retry-queue-capacity` | 10000 | Action 重试队列容量（内存，进程重启丢失） |
+| `engine.rule.action.retry-initial-interval-ms` | 1000 | 指数退避初始间隔 |
+| `engine.rule.action.retry-max-interval-ms` | 60000 | 指数退避最大间隔 |
+| `engine.rule.action.retry-max-attempts` | 5 | 最大重试次数，超出后落 FAILED 终态 |
 
 ---
 
