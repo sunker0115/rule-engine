@@ -362,7 +362,7 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 6.3 Bean 生命周期
 
-MetricSourceHandler 在 Scene 激活时由 SceneWatcher 触发 `init()`（可选接口），Scene 卸载时触发 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理。ActionHandler 类似，但 PULL Scene 不预热（只 PUSH/HYBRID Scene 预热，详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
+MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（SceneWatcher 负责感知 Scene 状态变更并通知引擎调度这些回调，不直接调用 init()）。ActionHandler 类似，但 PULL Scene 不预热（只 PUSH/HYBRID Scene 预热，详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
 
 ---
 
