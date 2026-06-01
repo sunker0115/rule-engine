@@ -246,7 +246,7 @@ hash(subjectId, experimentId ?? ruleVersionId) % 100
 | 字段 | 位置 | v1 行为 | 引入版本 |
 |------|------|--------|---------|
 | `Rule.kind` | `rule_definition` 表新增列，枚举 `AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT` | v1 仅写 `AST_BOOLEAN`，其他枚举值发布拒绝 | v1（占位） |
-| `EvalResult.output` | 评估结果对象多态：`{satisfied, score?, category?, decision?}` | v1 只填 `satisfied`，其余字段 null | v1（接口） |
+| `EvalResult.output`（概念预留名） | 评估结果多态扩展位：`{score?, category?, decision?}`，v1 只填 `satisfied`，其余 null；落地时为 `EvalResult` 顶级字段而非独立 `output` 包装对象（见 `01-concepts.md §3.4`） | v1 只填 `satisfied`，其余字段 null | v1（接口） |
 | `ConditionNode.weight` | AST JSON 节点可选字段 | v1 评估器忽略；SCORECARD kind 启用 | v1（JSON 字段） |
 
 **为什么这 3 个占位现在做、后面不痛**：
@@ -717,9 +717,9 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - **变更触发逻辑**：
   - `scene_metric_binding` 新增/删除 → 触发对应 Scene 的 MetricSource 预热/卸载；
   - `scene_action_binding` 新增/删除 → 触发对应 Scene 的 ActionHandler 资源预热/卸载（仅 PUSH/HYBRID Scene）；
-  - `scene_definition.status = DISABLED` → 将该 Scene 从 Matcher 路由表摘除（拒绝新事件路由到此 Scene），但已进行中的评估 session 不中断；
-  - `scene_definition.status = ACTIVE`（重启用）→ 重新加入 Matcher 路由表 + 按绑定重新预热资源；
-  - `scene_definition` 其他字段变更（`payloadSchema` / `defaultParams` / `eventTypes`）→ 刷新内存中的 Scene 配置缓存；
+  - `scene.status = DISABLED`（DDL 落地表名 `scene`；本 D 草稿曾称 `scene_definition`）→ 将该 Scene 从 Matcher 路由表摘除（拒绝新事件路由到此 Scene），但已进行中的评估 session 不中断；
+  - `scene.status = ACTIVE`（重启用）→ 重新加入 Matcher 路由表 + 按绑定重新预热资源；
+  - `scene` 其他字段变更（`payloadSchema` / `defaultParams` / `eventTypes`）→ 刷新内存中的 Scene 配置缓存；
 - **SPI 契约与 `RuleVersionWatcher` 对齐**：变更通知最终一致 + 至多一次 callback 重复（消费方幂等）+ 启动期一次性全量拉；
 - **多 backend 预留**：v2 可换 MQ 推 / Nacos，仅替换 `SceneWatcher` 实现，业务侧零改动。
 

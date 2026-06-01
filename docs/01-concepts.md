@@ -722,7 +722,7 @@ interface Scheduler {
 - **同步写（D21）**：`evaluation_session` 行在 `EvalResult` 返回前同步写入；单行 INSERT，量小，延迟可忽略；
 - **生产专用**：dry-run 场景写独立的 `dry_run_session` 表（§3.16），不污染生产幂等键；
 - **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键关联，可从 session 横向拉出完整评估链路；
-- **与 `rule_version` 的关联**：`action_execution` 额外记 `(rule_id, rule_version)` 二元组，按版本对账（§3.12 派生）；
+- **与 `rule_version` 的关联**：`action_execution` 记 `decision_code`（D27 幂等键变更），可与 `rule_version.decision_bindings` 关联追溯对应 Decision 快照；`node_trace` 记 `rule_version_id` 提供按版本对账路径（§3.12 派生）；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §evaluation_session 表。
 
 ### 3.16 DryRunSession（试算会话，非一等公民）
@@ -843,8 +843,8 @@ interface Scheduler {
 
 | 字段 | 说明 |
 |------|------|
-| `rule_id` | 关联规则 |
-| `decision_code` | 命中后输出的 Decision.code |
+| `rule_id` | 关联规则（DDL 列名 `rule_definition_id`，外键） |
+| `decision_code` | 命中后输出的 Decision.code（概念层引用业务码；DDL 实现用 `decision_id` 外键关联 `decision_definition.id`，业务码通过 JOIN 取） |
 | `score_range_min?` | 可选；仅 `Rule.kind=SCORECARD` 时生效，`EvalResult.score` ≥ 此值时匹配 |
 | `score_range_max?` | 可选；仅 `Rule.kind=SCORECARD` 时生效，`EvalResult.score` < 此值时匹配（左闭右开） |
 
@@ -1102,7 +1102,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 ### 6.3 版本号
 
 - Rule 版本号为单调递增 `Long`（不用 SemVer，太重），列名统一为 `version`（见 §3.12 `rule_version.version`）；
-- 引用 Rule 的下游（evaluation_session / action_execution）都记录 `(rule_id, version)` 二元组。
+- 引用 Rule 的下游：`evaluation_session` / `node_trace` 以 `session_id` 关联；`node_trace` 记 `rule_version_id` 支持按版本对账；`action_execution` D27 后幂等键改为 `decision_code`，不再直接记 `rule_version_id`（可通过 `decision_code → rule_version.decision_bindings` 反查版本）。
 
 ---
 

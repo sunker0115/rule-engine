@@ -72,7 +72,7 @@
 | D9 | **持久化分层** | **全 MySQL 起步**，数据保留 30 天 | 运维一致、起步最简。观测到日志表膨胀或查询慢，切冷热分级或引 ClickHouse / ES |
 | D10 | **AI 评估节点** | **预留 `LLMConditionEvaluator` 接口**，v1 不实现 | `ConditionEvaluator` 接口本就开放，预留零成本；当前 LLM 不确定性大，不适合做核心决策 |
 | D11 | **Job 模式 + 调度器** | **Job 作为 Trigger 适配器**（不是独立第四概念）；**xxl-job 作首个 Scheduler 实现，接口化预留可换** | 定时类规则共用标准评估链路（`eventId = hash(jobRunId + subjectId)` 幂等）；xxl-job 提供 HA / 重试 / admin UI，未来换 Quartz / 云调度仅替换 `Scheduler` Adapter。Job 仅对 PUSH / HYBRID Scene 开放 |
-| D12 | **Rule.kind 多态 + 输出预留** | **v1 仅实现 `AST_BOOLEAN`**；`Rule.kind` / `EvalResult.output` / `ConditionNode.weight` 三个占位字段就位 | 评分卡 / 决策树 / 决策表 / 脚本类形态的演进锚点；现在加列零成本，后期加列要 alter / 改 API 签名。决策流由 D4 工作流引擎扩展点承载，决策集留到 08-evolution `Scene.executionStrategy` |
+| D12 | **Rule.kind 多态 + 输出预留** | **v1 仅实现 `AST_BOOLEAN`**；`Rule.kind` / `EvalResult.output`（后落地为顶级字段 `score?/category?`，无独立 `output` 包装层）/ `ConditionNode.weight` 三个占位字段就位 | 评分卡 / 决策树 / 决策表 / 脚本类形态的演进锚点；现在加列零成本，后期加列要 alter / 改 API 签名。决策流由 D4 工作流引擎扩展点承载，决策集留到 08-evolution `Scene.executionStrategy` |
 | D13 | **Scene 元数据 schema** | Scene 上落 **4 个字段**：`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`；类型级 `params` schema 留到 04-extension | 发布校验 / dry-run mockEvent / 事件接入校验都依赖；现在加 JSON 列零成本，后期补要 alter + 数据迁移。v1 仅 `payloadSchema` + `eventTypes` 启用校验，`subjectType` 仅 USER 实装 |
 | D14 | **权限与审计** | **占位字段（`created_by` / `updated_by` / `published_by`）+ `audit_log` 表**；鉴权交上游网关（JWT/SSO），actor 由 header 注入 | 公司身份系统统一管，引擎不内置 RBAC；占位 0 成本，后期接入零阻力。跨租户管理员靠特殊 actor 约定，不入 schema |
 | D15 | **评估失败语义** | **单节点失败 → 整树继续按短路求值** + `EvalResult.errorCode` 槽位 + 规则间隔离 + `HIT/MISS/BLOCKED/ERROR` **四态**对账（D22） | PUSH 默认安静失败不派发 Action；PULL 返回 `{satisfied, errorCode}`，调用方按业务策略（fail-secure / fail-open）决策 |
@@ -173,9 +173,9 @@
 | `SceneMetricBinding` | Scene 与 Metric 的可见性绑定，规则只能引用本 Scene 绑定的 metric | — |
 | `SceneActionBinding` | Scene 与 actionType 的可见性绑定（仅 PUSH / HYBRID Scene 需要），规则只能配置本 Scene 绑定的 actionType；含 Scene 级默认参数与速率覆盖 | — |
 | `MetricSource` | 按 `metricCode` 取指标，支持实时 / 预计算 / 外部指标平台 | — |
-| `MetricRegistry` | 注册中心，启动扫 `@MetricType` 注解 + 数据库声明式指标；并发契约：读路径 thread-safe 且不阻塞热路径，评估期内快照稳定（具体并发策略——不可变快照 / ConcurrentHashMap / copy-on-write 等——由实现层选择） | — |
+| `MetricRegistry` | 注册中心，启动扫 `@MetricSourceType` 注解 + 数据库声明式指标；并发契约：读路径 thread-safe 且不阻塞热路径，评估期内快照稳定（具体并发策略——不可变快照 / ConcurrentHashMap / copy-on-write 等——由实现层选择） | — |
 | `ConditionEvaluator` | 纯函数判定 `(params, context) → boolean + actualValue` | — |
-| `ConditionRegistry` | 注册中心，启动扫 `@ConditionType` 注解 | — |
+| `ConditionTypeRegistry` | 注册中心，启动扫 `@ConditionType` 注解 | — |
 | `ActionHandler` | 动作执行三件套：`execute` / `compensate` / `dryRun`（仅 PUSH / HYBRID Scene 用到）；`execute` 返回 `ActionResult`，**不返回新事件**（D16 禁止链式）。**注**：v1 仅评估层 dry-run 一等公民，`dryRun` 接口已在签名内，全部 handler 实装在 **v1.5** 补齐（D7） | — |
 | `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（D18：`retryable=true` 入重试队列；`failFast=true` 的 Action 失败后同 **Decision** 内后续 Action 标 SKIPPED） | ✅ |
 | `ActionRegistry` | 注册中心，启动扫 `@ActionType` 注解 + 声明式动作定义 | — |
@@ -255,7 +255,7 @@
 
 1. **取数 vs 判定分层** —— `MetricSource` 纯 IO，`ConditionEvaluator` 纯函数。条件判断无副作用、不依赖 Spring，单测覆盖率天然高。
 2. **不可变运行时契约** —— Event / Context / EvalResult / RuleNode 全 `@Value`。跨层只传值，无共享可变状态。
-3. **注册中心 + 元数据驱动** —— 新增条件 / 动作 / 指标 = 新建 Spring Bean + 对应注解（`@ConditionType` / `@ActionType` / `@MetricType`）。前端 UI 由元数据派生，零前端发版。
+3. **注册中心 + 元数据驱动** —— 新增条件 / 动作 / 指标 = 新建 Spring Bean + 对应注解（`@ConditionType` / `@ActionType` / `@MetricSourceType`）。前端 UI 由元数据派生，零前端发版。
 4. **判定与动作解耦** —— "规则是否满足"和"满足之后怎么做"是两个独立维度。AST 只判定，Action 只执行；中间通过 EvalResult POJO 衔接。
 5. **Metric 一等公民** —— 指标独立注册（按 `metricCode`），规则 AST 只引用 `metricCode` 不内嵌 SQL；同一指标跨规则复用、Scene 级白名单治理、cache 与预热由 MetricSource 自管。
 6. **节点级 trace 一等公民** —— AST 每个节点的求值过程必须可观测，作为产品基础能力而非可选项。
@@ -273,7 +273,7 @@
 | 2026-05-25 | D1-D10 决策落定（见 [`00-decisions.md`](./00-decisions.md)）。场景与性能按优先级演进：第一阶段聚焦运营/营销/活动 + 千级 QPS，抽象按风控级别预留。§一 / §二 同步更新。 |
 | 2026-05-25 | 派生决策：Scene 作为 RuleEvent 必填字段（业务域命名空间，用于 Matcher 缩小搜索范围）；Rule/RuleGroup/Condition **三层模型**（RuleGroup 是独立实体，跨 Rule 可复用、可命名、可权限化）。§四 抽象表追加 `RuleGroup`。 |
 | 2026-05-25 | **回退为两层模型**（Rule → AST → Condition）。原因：三层 → 两层有信息损耗（Group 实体降级为 AST `displayLabel` 字段），方向反向不可逆，重审后采纳更轻的方案。`AndNode` / `OrNode` 携可选 `displayLabel` 字段供前端渲染"分组卡片"，保留运营分组心智但不在数据模型固化 Group。 |
-| 2026-05-25 | 派生决策：**Scene 是 metric 治理边界 + 数据源初始化锚点**。Metric 定义仍在租户/全局级，Scene 显式声明可见的 metric 集合（白名单）；Scene 启动时按绑定预热 MetricSource（连接池 / HTTP client / 缓存）。新增表 `scene_definition` + `scene_metric_binding`。§四 抽象表追加 `Scene` / `SceneMetricBinding`。 |
+| 2026-05-25 | 派生决策：**Scene 是 metric 治理边界 + 数据源初始化锚点**。Metric 定义仍在租户/全局级，Scene 显式声明可见的 metric 集合（白名单）；Scene 启动时按绑定预热 MetricSource（连接池 / HTTP client / 缓存）。新增表 `scene`（DDL 落地表名，早期设计文档中曾称 `scene_definition`）+ `scene_metric_binding`。§四 抽象表追加 `Scene` / `SceneMetricBinding`。 |
 | 2026-05-25 | 派生决策：**Action 可选 + Scene.dominantMode**。引擎支持两种使用模式——`PUSH`（异步触发，必配 Action）/ `PULL`（同步评估，返回 EvalResult，Action 通常为空）/ `HYBRID`（两者皆可）。Scene 声明 `dominantMode` 决定 API 入口与前端 UI 行为。同时对称引入 `scene_action_binding`（仅 PUSH / HYBRID Scene 需要），actionType 治理与 Metric 对齐，防止跨域越权。 |
 | 2026-05-25 | **D11 落定：Job 模式 + xxl-job 调度器**。Job 作为 Trigger 适配器（不引入第四个一等公民），到点查询主体→批量合成 `RuleEvent` 注入标准评估链路。调度器抽象为 `Scheduler` 接口，xxl-job 为首个实现（HA / 重试 / admin UI），未来可替换。Job 仅对 PUSH / HYBRID Scene 开放，`eventId = hash(jobRunId + subjectId)` 与 `record_no` 模式一致幂等。§四 抽象表追加 `JobDefinition` / `JobExecution` / `Scheduler`。 |
 | 2026-05-25 | **D12 落定：Rule.kind 多态 + 输出类型预留**。为评分卡 / 决策树 / 决策表 / 脚本等未来形态落 3 个 v1 占位：`Rule.kind` 枚举字段（v1 仅 `AST_BOOLEAN`）、`EvalResult.output` 多态（`{satisfied, score?, category?, decision?}`，v1 仅填 satisfied）、`ConditionNode.weight` 可选字段（v1 评估器忽略，SCORECARD kind 启用）。决策流由 D4 工作流引擎扩展点承载，决策集策略留到 08-evolution `Scene.executionStrategy`。§四 抽象表 `RuleDefinition` / `EvalResult` 行同步更新。 |
