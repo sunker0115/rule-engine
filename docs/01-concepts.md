@@ -59,7 +59,7 @@ Decision           actionType               │
   │                │       ▼                                     │
   └──────────────► │  RuleVersion (不可变发布快照, D6/D19)       │
                    │  持有: AST + preGates + rollout              │
-                   │       + decision_bindings_snapshot           │
+                   │       + decision_bindings                    │
                    └────────────────────────────────────────────┘
                             │
                         1:1 │ (RuleVersion 持有冻结的 AST，不含 Actions)
@@ -87,7 +87,7 @@ Decision           actionType               │
 - **Decision** 持有 `actions` 字段（D27 从 Rule 迁移）：命中该 Decision 时派发的动作列表；
 - 一个 **Scene** 有可见的 **Metric 集合**（白名单绑定）+（PUSH/HYBRID 模式下）可见的 **actionType 集合** + 多条 **Rule**；
 - **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（可编辑草稿，持 `current_version` 指针）+ **RuleVersion**（每次发布产生的不可变快照）；运行时评估锁定 RuleVersion，回滚 = 用旧版本快照建新草稿走标准发布（D6 / D17 / D19）；
-- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树）+ `decision_bindings_snapshot`（Rule 绑定的 Decision 及其 actions 的快照）；**不再含独立的 `actions_snapshot` 列**（D27，actions 随 `decision_bindings_snapshot` 一同快照化）；
+- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树）+ `decision_bindings`（Rule 绑定的 Decision 及其 actions 的快照，DDL 列名；D27，actions 随 `decision_bindings` 一同快照化，不再有独立的 `actions_snapshot` 列）；
 - AST 内部由 `AndNode` / `OrNode` / `NotNode` 嵌套，叶子是 `ConditionNode`；
 - **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（限本 Scene 白名单内）构建 **EvalContext**，喂给 ConditionNode 做判定；
 - AST 求值为 true 后 → 取 Rule 绑定的 Decision → `decisionStrategy` 合成 `finalDecision`：**PUSH/HYBRID** 模式异步派发 `finalDecision.actions`；**PULL** 模式同步返回 `EvalResult{finalDecision, hitDecisions, ...}`，调用方自行决策，不派发 Action。
@@ -157,7 +157,7 @@ Decision           actionType               │
 | `subjectType` | 业务主体类型枚举：`USER` / `ACCOUNT` / `DEVICE` / `ORDER` / `CUSTOM`；决定 EvalContext 构建时从哪张主体表取属性（v1 仅 `USER` 实装） |
 | `defaultParams` | Scene 级缺省 JSON：`timezone` / `currency` / `defaultRateLimit` / `defaultCacheTtl` 等；规则不显式配置的参数回落到此处 |
 | `eventTypes` | 该 Scene 允许的 eventType 白名单数组；事件接入按 (scene + eventType) 二元组校验，规则 trigger 下拉与 Job `eventTypeTemplate` 也按此过滤 |
-| `decisionStrategy` | 多规则命中时的合成策略。可选，PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`（D29）；PULL Scene 不参与合成，配置了也忽略。v1 仅实现 `HIGHEST_PRIORITY`（priority 最小者胜出） |
+| `decisionStrategy` | 多规则命中时的合成策略。v1 固定为 `HIGHEST_PRIORITY`（priority 最小者胜出），DDL 层 NOT NULL DEFAULT，PUSH/HYBRID Scene 强制生效（D29）；PULL Scene 不参与合成，配置了也忽略。v2 预留 `MAJORITY` / `CUSTOM_SPI` 扩展位（届时加列） |
 
 Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `cache_policy_override`）；Scene 与 actionType 通过 `scene_action_binding` 多对多关联（含 Scene 级 `default_params` / `rate_limit_override`），仅 PUSH / HYBRID Scene 用到。Scene 与 `JobDefinition` 一对多关联，PULL Scene 不允许配置 Job（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
 
@@ -378,6 +378,9 @@ if (!r.satisfied()) {
 | `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED`，不入重试队列 |
 | `DRY_RUN_NOT_IMPLEMENTED` | D7 v1 | dry-run 调用时该 handler 未实装 `dryRun(action, context)` 入口，由 Dispatcher 短路返回 `status=SKIPPED`，仅 v1 阶段出现，v1.5 全量补齐后不再产生 |
 | `QUEUE_OVERFLOW` | D20 | 异步 Dispatcher 内部队列满拒绝该 ActionInstance；引擎归一为 `status=FAILED, retryable=true`，监控告警 |
+| `EXTERNAL_SERVICE_ERROR` | D18 | Handler 调用外部系统返回 5xx / 连接失败；`retryable=true` |
+| `BUSINESS_REJECTED` | D18 | 外部系统明确拒绝（如工单系统返回 400）；`retryable=false` |
+| `NOT_SUPPORTED` | D18 | `ActionHandler.compensate()` 未实装（返回 `ActionResult.notSupported()`）；`retryable=false` |
 
 handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 errorCode（带分类前缀），引擎不对未知 errorCode 做特判但要求**全部新增枚举回填到本表**——避免散落各处导致后续遗漏对齐。
 
@@ -579,7 +582,18 @@ interface Scheduler {
 - **审计表只增不改**：DELETE 操作只删 `target` 对象本身，audit_log 行永远保留（合规需要）。
 - **不做篡改防护**（hash chain / WORM 存储）：v1 信任 DB；高合规场景留到 v2。
 - **跨租户管理员**：使用 `tenant_id = "__platform__"` 的特殊 actor 实现，业务约定，不入 schema。
-- **错误诊断信息走 `after_snapshot`**：`PUBLISH_FAILED` 记录的 `errorCode` / `stackTrace` 摘要（D19）以及发布期校验错误码（D20 §3 `UNRESOLVED_VARIABLE` 等）统一放入 `after_snapshot` JSON 字段，不为此另加表列；查询时按 JSON path 取（具体 path 由 05-storage 定义）。**已知 `after_snapshot.errorCode` 值（v1）**：`UNRESOLVED_VARIABLE`（D20 §3 输入引用闭合校验失败）/ `ZOMBIE_PUBLISHING`（D19 PUBLISHING 残留清扫修正）/ `HANDLER_EXCEPTION`（发布事务内未分类异常，含 stackTrace 摘要）；新增码需在本清单回填——与运行期 `EvalResult.errorCode` / `ActionResult.errorCode` 三套枚举互不相交（D20 派生约束）。
+- **错误诊断信息走 `after_snapshot`**：`PUBLISH_FAILED` 记录的 `errorCode` / `stackTrace` 摘要（D19）以及发布期校验错误码（D20 §3 `UNRESOLVED_VARIABLE` 等）统一放入 `after_snapshot` JSON 字段，不为此另加表列；查询时按 JSON path 取（具体 path 由 05-storage 定义）。**已知 `after_snapshot.errorCode` 值（v1，发布期校验错误码）**：
+
+| errorCode | 含义 |
+|-----------|------|
+| `UNRESOLVED_VARIABLE` | D20 §3 输入引用闭合校验失败：conditionAst 引用了未在 Schema/Metric 白名单/EvalContext 标准字段中声明的变量名 |
+| `METRIC_NOT_BOUND` | 规则 AST 引用的 metricCode 不在 `scene_metric_binding` 白名单内 |
+| `ACTION_TYPE_NOT_BOUND` | Rule 绑定的 Decision.actions 中存在 actionType 不在 `scene_action_binding` 白名单内（PUSH/HYBRID Scene） |
+| `DECISION_CODE_NOT_FOUND` | Rule 的 `decisionBindings` 引用了 Scene 所属 Tenant 未定义的 Decision code |
+| `ZOMBIE_PUBLISHING` | D19 PUBLISHING 残留清扫修正：后台清扫检测到 PUBLISHING 状态超过阈值，强制修正为 PUBLISH_FAILED |
+| `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
+
+新增码需在本清单回填——与运行期 `EvalResult.errorCode` / `ActionResult.errorCode` 三套枚举互不相交（D20 派生约束）。
 
 ### 3.12 RuleVersion（规则版本快照，不是一等公民）
 
@@ -593,10 +607,10 @@ interface Scheduler {
 | `version` | 单调递增 `Long`，`(rule_id, version)` 唯一 |
 | `tenant_id / scene` | 归属（冗余但便于按 Scene 查所有候选版本） |
 | `trigger_event_types` | 冻结：发布瞬间的 eventType 数组 |
-| `ast_snapshot` | 冻结：完整 AST JSON |
-| `pre_gates_snapshot` | 冻结：preGates 列表 |
-| `decision_bindings_snapshot` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `compensateActionType` / `sortOrder`）；D27 取代原 `actions_snapshot` |
-| `rollout_snapshot` | 冻结：灰度配置 |
+| `condition_ast` | 冻结：完整 AST JSON（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
+| `pre_gates` | 冻结：preGates 列表（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
+| `decision_bindings` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `compensateActionType` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
+| `rollout` | 冻结：灰度配置（含 type / percentage / tagConditions） |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |
 | `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。发布期由 AST 静态分析得出；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
 | `compiled_predicate_ref?` | 可选字符串，编译产物引用键（D20 §5）。v1 留空；v1.5 启用，由 `CompiledExecutor` + `ExecutorRegistry` 按版本 id 检索编译产物 |
@@ -608,7 +622,7 @@ interface Scheduler {
 - **回滚不是覆盖**（D19）：回滚到 `version=N-2` = 把 N-2 的快照内容拷回 `rule_definition` 草稿，走标准发布产出 `version=N+1`（内容等于 N-2），审计链完整可追溯，N-1 / N-2 行均原样保留。
 - **运行时锁定**（D17 派生）：`evaluation_session` 开始时按 `(scene, eventType)` **倒排索引**拿当前候选 `rule_version` 列表（`current_version` 在索引预热时已解析）并拍快照，整 session 用同一组版本——即使中途切版本，本次评估不受影响。
 - **灰度桶稳定性**（D6 派生）：`hash(subjectId, ruleVersionId)` 计算桶号，每个不可变版本对应稳定的桶分布；版本切换会触发桶漂移，这是 D6 的固有语义。`subjectId` 由 Scene.subjectType 决定语义（v1 仅 USER 实装），与 §3.10 Job / §3.4 rollout 子表口径一致。
-- **与 `evaluation_session` / `action_execution` 的关联**：两者都记 `(rule_id, rule_version)` 二元组，按版本对账。
+- **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键，且 `node_trace` 记 `rule_version_id` 便于按版本对账 trace；`action_execution` 记 `decision_code`，可与 `rule_version.decision_bindings` 关联溯源。
 
 ### 3.13 Subject（业务主体，运行时填充体）
 
@@ -674,10 +688,10 @@ interface Scheduler {
 
 | 字段 | 说明 |
 |------|------|
-| `session_id` | PK，雪花 BIGINT |
+| `id` | PK，雪花 BIGINT（概念上称 session_id） |
 | `tenant_id` | 租户 ID |
 | `event_id` | 业务事件 ID；与 `tenant_id` 构成 **DB 唯一键**（D23），防重复评估 |
-| `scene` | 场景（Matcher 路由键） |
+| `scene_code` | 场景码（Matcher 路由键，DDL 列名 `scene_code`） |
 | `event_type` | 事件类型 |
 | `subject_id` | 主体 ID |
 | `status` | `PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态终态）/ `FAILED`（引擎异常崩溃，未正常结束）；D22 四态是对账统计口径，`PENDING` / `FAILED` 是运行时中间态，不参与对账分母 |
@@ -685,7 +699,7 @@ interface Scheduler {
 | `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
 | `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
 | `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |
-| `source` | `PUSH / PULL / REPLAY`；来源标记，不改幂等语义（D23） |
+| `source` | `PUSH / PULL / REPLAY`；记录**评估触发方式**（PUSH=异步推送 / PULL=同步调用 / REPLAY=事件回放）；与 `RuleEvent.source`（HTTP / MQ / JOB / SDK / REPLAY）含义不同——RuleEvent.source 记录事件来源渠道，session.source 记录引擎调用方式；不改幂等语义（D23） |
 | `started_at` | 评估开始时间 |
 | `finished_at` | 评估结束时间 |
 | `eval_duration_ms` | 整 session 耗时（ms） |
@@ -727,8 +741,10 @@ interface Scheduler {
 
 | 字段 | 说明 |
 |------|------|
+| `rule_version_id` | NOT NULL；本次 dry-run 实际评估使用的 RuleVersion id（由 `target_rule_version_id` 或 `current_version` 解析得出） |
+| `trigger` | `MANUAL` / `API`；dry-run 触发来源（MANUAL=运营从管理台手动发起，API=调用方通过接口触发） |
 | `requested_by` | 发起 dry-run 的操作人 ID（来源 `X-Actor-Id` header，D14） |
-| `target_rule_version_id` | nullable；指定 dry-run 的 RuleVersion；未指定时使用 `current_version`（可提前预览未发布版本效果） |
+| `target_rule_version_id` | nullable；调用方指定 dry-run 的目标 RuleVersion；未指定时使用 `current_version`（可提前预览未发布版本效果） |
 
 **关键边界**：
 
@@ -807,7 +823,7 @@ interface Scheduler {
 
 - **Tenant 级，非 Scene 级**：同一 Tenant 的所有 Scene 共享 Decision 词汇表；不同 Tenant 的 Decision 严格隔离；
 - **Action 挂在 Decision 上**（D27）：Rule 不再持 `actions` 字段；PULL Scene 下 Decision.actions 必须为空（发布校验 + 前端屏蔽）；PUSH/HYBRID Scene 下 Decision.actions 的 `actionType` 须在 Rule 所属 Scene 的 `scene_action_binding` 内（Rule 发布时校验）；
-- **Decision.actions 快照在 Rule 发布时拍**：`decision_bindings_snapshot` 随 Rule 发布产生，此后修改 Decision.actions **不会**影响已发布的 Rule 版本；若要让新 actions 生效，必须重新发布 Rule——运营容易忽视这一点；
+- **Decision.actions 快照在 Rule 发布时拍**：`rule_version.decision_bindings` JSON 随 Rule 发布产生，此后修改 Decision.actions **不会**影响已发布的 Rule 版本；若要让新 actions 生效，必须重新发布 Rule——运营容易忽视这一点；
 - **priority 只用于合成排序**：priority 数值本身不影响 Rule 是否命中（Pre-Gate 和 AST 求值结果不读 priority）；priority 只在 `HIGHEST_PRIORITY` 合成策略里生效；
 - **Decision 不内置分类标签**：v1 不区分"拒绝类/通过类"，由 `priority` 数值隐式体现；分类标签留 [`08-evolution.md`](./08-evolution.md) §演进；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §decision_definition 表。
@@ -819,7 +835,7 @@ interface Scheduler {
 **为什么不把 decisionCode 直接放 Rule 字段上**：
 - 支持 `SCORECARD` kind 下按 score 区间映射多个 Decision（如 score 0-30 → REJECT，31-60 → REVIEW，61-100 → PASS）；
 - Rule 与 Decision 松耦合，多个 Rule 可以映射到同一个 Decision，Decision 改名不影响 Rule；
-- 关联关系快照化进 `rule_version`，行为与 actions_snapshot 对齐。
+- 关联关系快照化进 `rule_version.decision_bindings` JSON 列（D27/D28，含各 Decision 绑定及其 actions 快照）。
 
 **字段**：
 
@@ -834,7 +850,7 @@ interface Scheduler {
 
 - `AST_BOOLEAN` kind（v1 主场景）：一条 Rule 绑一个 Decision（1:1），score 区间字段为空；Rule AST 求值 true → 直接取该 Decision；
 - `SCORECARD` kind（v2 启用）：一条 Rule 可绑多个 Decision（按区间），引擎取 `EvalResult.score` 匹配区间后取对应 Decision；无匹配区间 → 该 Rule 不贡献 Decision；
-- 快照字段：发布时将当前绑定列表序列化为 `rule_version.decision_bindings_snapshot` JSON 列。
+- 快照字段：发布时将当前绑定列表序列化为 `rule_version.decision_bindings` JSON 列（DDL 落地列名无 `_snapshot` 后缀）。
 
 **Scene.decisionStrategy（多规则命中合成）**：
 
@@ -844,7 +860,7 @@ interface Scheduler {
 | `MAJORITY` | 多数命中的 Decision 胜出 | v2 |
 | `CUSTOM_SPI` | 自定义合成器 SPI | v2 |
 
-`Scene.decisionStrategy` 为可选字段：**PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`**（D29），不会因漏配导致 actions 静默不派发；PULL Scene 不参与合成，配置了也忽略。Scene 显式配置可覆盖默认值；`hitDecisions` 列表在所有模式下始终填充，供调用方自行处理。
+`Scene.decisionStrategy` DDL 层 NOT NULL DEFAULT 'HIGHEST_PRIORITY'（D29），逻辑上无需显式配置：**PUSH/HYBRID Scene 缺省即 `HIGHEST_PRIORITY`**，不会因漏配导致 actions 静默不派发；PULL Scene 不参与合成，配置了也忽略。Scene 显式配置可覆盖默认值；`hitDecisions` 列表在所有模式下始终填充，供调用方自行处理。
 
 **关键边界**：
 

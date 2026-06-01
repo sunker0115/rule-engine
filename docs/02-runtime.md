@@ -30,7 +30,7 @@ RuleEvent
   │
   ▼
 ① Trigger 接入层
-  │  · HTTP /evaluate 或 /evaluate/sync（PUSH/PULL 入口）
+  │  · HTTP /api/v1/rule/event（PUSH）或 /api/v1/rule/evaluate（PULL）
   │  · MQ Consumer（Job Trigger 批量合成的 RuleEvent）
   │  · 校验 payloadSchema + eventType 注册
   ▼
@@ -119,9 +119,9 @@ RuleEvent
 
 | 入口 | 模式 | 同步等待结果 | 返回内容 |
 |------|------|------------|---------|
-| `POST /evaluate` | PUSH | 否 | `{ eventId, accepted: true }` |
-| `POST /evaluate/sync` | PULL | 是 | `EvalResult { ... }` |
-| `POST /evaluate/dry-run` | PULL（试算） | 是 | `EvalResult + nodeTrace` |
+| `POST /api/v1/rule/event` | PUSH | 否 | `{ eventId, accepted: true }` |
+| `POST /api/v1/rule/evaluate` | PULL | 是 | `EvalResult { ... }` |
+| `POST /api/v1/rule/dry-run` | PULL（试算） | 是 | `EvalResult + nodeTrace` |
 
 **异常语义**：
 - 400 系列：schema 校验失败，不进入评估链路；
@@ -136,7 +136,7 @@ RuleEvent
 **核心动作**：
 - 按 `(tenantId, sceneCode, eventType)` 三元组查内存倒排索引（`ConcurrentHashMap`）；
 - 倒排索引 value = `List<RuleVersion>`（仅含 `PUBLISHED` 状态规则的当前版本快照，`DISABLED` 规则已从索引中剔除）；
-- 每个 `RuleVersion` 快照包含：完整预解析的 AST 节点树（`ast_snapshot`）+ `decision_bindings_snapshot`（含 Decision.actions）+ `pre_gates_snapshot` + `rollout_snapshot` + `metric_dependencies`；
+- 每个 `RuleVersion` 快照包含：完整预解析的 AST 节点树（`condition_ast`）+ `decision_bindings`（含 Decision.actions）+ `pre_gates` + `rollout` + `metric_dependencies`；
 - 索引在规则发布/禁用时增量热更（D17）：单服务模式由 Modulith `RulePublishedEvent` 触发（近实时）；嵌入式 SDK 模式由 `DbPollingRuleWatcher` 轮询触发（15s 最终一致）；Scene 变更同理（D24，单服务 `SceneChangedEvent` / SDK 模式 `DbPollingSceneWatcher` 30s）。
 
 **异常语义**：
@@ -149,7 +149,7 @@ RuleEvent
 **输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或 `EvalResult { ruleHit=false, preGateBlockedBy=<Gate 类型> }`
 
 **核心动作**：
-- 对每条候选 RuleVersion，按固定顺序（ROLLOUT → WHITELIST/BLACKLIST → RATE_LIMIT → MUTEX）串行评估 `pre_gates_snapshot` 中声明的 Gate；
+- 对每条候选 RuleVersion，按固定顺序（ROLLOUT → WHITELIST/BLACKLIST → RATE_LIMIT → MUTEX）串行评估 `pre_gates` 中声明的 Gate；
 - 任一 Gate 不通过 → 该 RuleVersion **跳过 AST 评估**，trace 落 `node_trace`（节点类型 `PRE_GATE_BLOCKED`，走同一 `TraceWriter`，D21）；
 
 **Gate 类型与通过条件**：
@@ -241,12 +241,12 @@ EvalResult {
 
 ### 3.6 Action Dispatcher
 
-**输入**：`RuleVersion.decision_bindings_snapshot` 中 `finalDecision` 对应的 `decision_actions_snapshot`（D28：发布时已快照化，运行时直读，不再查 rule_definition）
+**输入**：`RuleVersion.decision_bindings` 中 `finalDecision` 对应的 actions 列表（D28：Decision 及其 actions 在发布时已快照化进 `decision_bindings`，运行时直读，不再查 rule_definition）
 
 **输出**：`action_execution` 行（异步写 DB）
 
 **核心动作**：
-- 从 `decision_bindings_snapshot` 取 `finalDecision.actions` 列表，按 `sortOrder` 顺序提交给 ActionExecutor 线程池（D20 §2）；
+- 从 `decision_bindings` 取 `finalDecision.actions` 列表，按 `sortOrder` 顺序提交给 ActionExecutor 线程池（D20 §2）；
 - **评估线程不等待 Action 完成**：提交入队即返回 `EvalResult`（PULL 模式同步返回；PUSH 模式调用方收到 accepted=true）；
 - Handler 执行结果写 `action_execution` 表（异步，不阻塞评估线程）；
 - 队列满 → `ActionResult { status=FAILED, errorCode=QUEUE_OVERFLOW, retryable=true }`（D20 §2）。
@@ -311,20 +311,24 @@ EvalResult {
 
 | 列名 | 类型 | 说明 |
 |------|------|------|
-| `session_id` | BIGINT PK | 主键，雪花 |
+| `id` | BIGINT PK | 主键，雪花（概念上称 session_id） |
 | `tenant_id` | VARCHAR | 租户 ID |
 | `event_id` | VARCHAR | 业务事件 ID；与 tenant_id 构成 UK（D23） |
 | `scene_code` | VARCHAR | 场景码 |
 | `event_type` | VARCHAR | 事件类型 |
 | `subject_id` | VARCHAR | 主体 ID |
-| `rule_version_id` | BIGINT | 评估时锁定的 RuleVersion（多规则命中时取优先级最高的一条，详见 05-storage） |
+| `source` | ENUM | 评估触发方式：`PUSH` / `PULL` / `REPLAY`（与 RuleEvent.source 不同维度，D23） |
 | `status` | VARCHAR | `PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态，完成态）/ `FAILED`（异常态） |
-| `final_decision` | VARCHAR | 合成后 Decision.code（nullable；Scene 未配 decisionStrategy 且无 finalDecision 时为空） |
+| `final_decision` | VARCHAR | 合成后 Decision.code（nullable；D29：PUSH/HYBRID Scene 缺省 HIGHEST_PRIORITY，无命中规则时为 null；PULL Scene 不参与合成，始终 null） |
 | `hit_decisions` | JSON | 所有命中规则的 Decision 列表（始终填充） |
 | `blocked_by` | VARCHAR | nullable；仅 `status=BLOCKED` 时有值，记录首个拦截 Gate 类型 |
 | `error_code` | VARCHAR | nullable；D15 EvalResult.errorCode；仅 `status=ERROR` 时有值 |
+| `candidate_rule_count` | INT | Matcher 命中的候选 RuleVersion 数量 |
+| `hit_rule_count` | INT | AST 求值满足（HIT）的 Rule 数量 |
 | `occurred_at` | DATETIME | 业务事件发生时间（来自 RuleEvent.occurredAt） |
-| `evaluated_at` | DATETIME | 引擎完成评估时间 |
+| `started_at` | DATETIME | 引擎开始评估时间 |
+| `finished_at` | DATETIME | status 从 PENDING 更新为终态的时间（nullable） |
+| `eval_duration_ms` | INT | 整 session 耗时（ms） |
 
 > DDL 完整定义见 [`05-storage.md`](./05-storage.md) §evaluation_session 表。
 

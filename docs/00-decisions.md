@@ -897,6 +897,8 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `README §四` 抽象表 `RuleDefinition` / `RuleVersion` / `ActionExecution` 行同步；
 - `04-extension.md` §ActionHandler 实现指南中"注册到 Scene"的描述随白名单校验时机迁移更新。
 
+> **DDL 命名注**：实际 DDL 落地列名为 `decision_bindings`（无 `_snapshot` 后缀），本决策文档沿用概念期命名 `decision_bindings_snapshot`，两者指同一列，见 [`05-storage.md`](./05-storage.md) `rule_version` 表。
+
 ---
 
 ## 四、精化与派生
