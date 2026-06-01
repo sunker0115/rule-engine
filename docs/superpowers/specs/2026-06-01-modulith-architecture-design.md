@@ -132,7 +132,7 @@ SDK 模式下调用方只依赖 `rule-kernel` jar：
 - `SceneWatcher` SPI 同理（`DbPollingSceneWatcher`）
 - Action 派发走调用方提供的 `ActionHandler` 实现，不经过中心服务
 - `TraceWriter` 由调用方提供实现，或使用 `NoopTraceWriter`
-- `DbPollingRuleWatcher` / `DbPollingSceneWatcher` 是 `rule-kernel` 的可选依赖实现，不在 kernel 内，由使用方选择引入
+- `DbPollingRuleWatcher` / `DbPollingSceneWatcher` 独立打包为 `rule-kernel-polling` artifact，不内嵌在 `rule-kernel` 中；SDK 使用方按需引入该依赖
 
 ---
 

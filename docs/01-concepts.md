@@ -163,7 +163,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 
 **关键边界**：
 
-- **Scene 变更 30s 最终一致**（D24）：Scene 配置（bindings / payloadSchema / status）由 `SceneWatcher`（`DbPollingSceneWatcher`，默认 30s 轮询）热加载，无需重启；Scene `DISABLED` → 从 Matcher 路由表摘除，已进行中的 session 不中断；bindings 变更 → 触发对应 MetricSource / ActionHandler 资源重新预热/卸载。
+- **Scene 变更热加载**（D24）：Scene 配置（bindings / payloadSchema / status）变更后无需重启；单服务模式下由 Modulith `SceneChangedEvent` 触发（毫秒级）；嵌入式 SDK 模式下由 `SceneWatcher`（`DbPollingSceneWatcher`，默认 30s 轮询）触发（30s 最终一致）；Scene `DISABLED` → 从 Matcher 路由表摘除，已进行中的 session 不中断；bindings 变更 → 触发对应 MetricSource / ActionHandler 资源重新预热/卸载。
 - **同一 Scene 不能跨 Tenant**：`acme.marketing.signup` 和 `beta.marketing.signup` 是两个 Scene。
 - **同一 Rule 属于唯一 Scene**：如果两个业务想要"看起来一样的规则"，请各自在自己 Scene 配一条。
 - **Scene 的白名单是发布时校验项**：规则发布前校验 AST 引用的全部 `metricCode` 在 metric 白名单内、规则绑定的 Decision.actions 中全部 `actionType` 在 action 白名单内（PUSH/HYBRID 模式），否则发布拒绝。
@@ -267,9 +267,9 @@ DecisionRef {
 - **AST 节点上的 `displayLabel`** 是给运营 UI 看的分组标题，后端评估时忽略它，只看逻辑结构。
 - **v1 仅实现 `kind = AST_BOOLEAN`**：发布校验拒绝其他 kind，前端 UI 也只暴露"AST 编辑器"一种类型（D12 占位字段保留扩展位，演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态）。
 - **评估失败单节点降级，整树继续短路求值**（D15）：单个 `ConditionNode` 失败 → 该节点 satisfied=false，其他节点正常评估；整树评估完毕后若有失败节点，`EvalResult.errorCode` 非空。规则间隔离：单条 Rule 失败不影响同 (scene + eventType) 下其他 Rule。PUSH 默认安静失败不派发 Action；PULL 返回 `{satisfied, errorCode}`，调用方按 fail-secure / fail-open 决策。对账四态：`HIT / MISS / BLOCKED / ERROR`（D22）。
-- **运行时锁定快照版本**（D17 派生）：evaluation_session 开始时拍当前候选规则版本快照，整 session 用同一快照——即使中途发生 publish 切版本，本次评估不受影响。多实例最终一致（默认 15s 窗口）。
+- **运行时锁定快照版本**（D17 派生）：evaluation_session 开始时拍当前候选规则版本快照，整 session 用同一快照——即使中途发生 publish 切版本，本次评估不受影响。索引热更：单服务模式由 Modulith `RulePublishedEvent` 触发（毫秒级）；嵌入式 SDK 模式由 `DbPollingRuleWatcher`（默认 15s 轮询）触发（15s 最终一致）。
 - **发布是单条规则原子事务**（D19）：状态机迁移 + 新 version 行写入 + audit_log 在同一 DB 事务；事务失败 → 状态落 `PUBLISH_FAILED`（不是自动回 DRAFT），同时追加一条 `audit_log.action = PUBLISH_FAILED` 记录失败原因；运营从 UI 看到 `PUBLISH_FAILED` 后显式点"重新编辑"才会迁回 DRAFT，避免静默丢失发布上下文。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。"回滚到旧版本" = 用旧版本快照建新草稿走标准发布流程产出新版本号，不可变快照永不覆盖。
-- **DISABLED 状态从倒排索引剔除**（D17 + D19 派生）：`PUBLISHED → DISABLED` 切换后，下次 `RuleVersionWatcher` 轮询周期内将该 RuleVersion 从内存 `(scene, eventType) → List<RuleVersionSnapshot>` 倒排索引中剔除；`DISABLED → PUBLISHED` 切换则按同一窗口重新入索引。`current_version` 指针在切换过程中**不变**（D19）——索引剔除/回填只动运行时视图，不动 `rule_version` 表内容。生效窗口与 D17 一致（默认 15s 最终一致）。
+- **DISABLED 状态从倒排索引剔除**（D17 + D19 派生）：`PUBLISHED → DISABLED` 切换后，下一次索引热更（单服务模式：事件触发，毫秒级；SDK 模式：15s 轮询）将该 RuleVersion 从内存 `(scene, eventType) → List<RuleVersionSnapshot>` 倒排索引中剔除；`DISABLED → PUBLISHED` 切换则按同一窗口重新入索引。`current_version` 指针在切换过程中**不变**（D19）——索引剔除/回填只动运行时视图，不动 `rule_version` 表内容。
 
 ### 3.5 AST 与"分组心智"
 

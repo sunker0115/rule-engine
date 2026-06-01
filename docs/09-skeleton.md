@@ -28,11 +28,12 @@
 
 ## 二、Maven 模块拆分
 
-v1 阶段 7 个模块，单 Spring Boot 服务部署。
+v1 阶段 8 个模块（7 个 Spring 模块 + 1 个可选 SDK 工具包），单 Spring Boot 服务部署。
 
 | 模块 | 职责 | 部署形态 |
 |------|------|---------|
 | `rule-kernel` | 零 Spring 零 DB，所有 SPI 接口定义 + 纯评估逻辑 | 库（jar），未来 = 嵌入式 SDK jar |
+| `rule-kernel-polling` | `DbPollingRuleWatcher` / `DbPollingSceneWatcher` 实现，SDK 使用方按需引入 | 可选库（jar），仅 SDK 模式使用 |
 | `rule-config-svc` | 规则/Scene/元数据 CRUD、发布、快照生成 | Spring 模块，内嵌于主服务 |
 | `rule-eval-svc` | 评估入口（PUSH/PULL/dry-run）、metric 预拉、session 落库、调度任务 | Spring 模块，内嵌于主服务 |
 | `rule-audit-svc` | 审计查询、dry-run 结果存储、日志聚合 | Spring 模块，内嵌于主服务 |
@@ -111,7 +112,7 @@ com.sstlfsj.rule
 | Rule / RuleVersion | `config.internal.domain` / `kernel.api.model` |
 | Condition / AST | `kernel.api.model` |
 | Action / ActionHandler | `kernel.api.spi` / 业务方自实现 |
-| Metric / MetricSource | `kernel.api.spi` / 业务方自实现 |
+| Metric / MetricSource（即 `MetricSourceHandler` 接口） | `kernel.api.spi` / 业务方自实现 |
 | Subject / SubjectLoader | `kernel.api.spi` / 业务方自实现 |
 | Pre-Gate | `kernel.api.spi` |
 | RuleEvent / EvalResult | `kernel.api.model` |
@@ -141,13 +142,14 @@ com.sstlfsj.rule
 
 | SPI 实现类 | 所在模块 | 用途 |
 |-----------|---------|------|
-| `SpringEventRuleVersionWatcher` | `rule-eval-svc` | 单服务模式，监听 Modulith `RulePublishedEvent` |
-| `DbPollingRuleWatcher` | `rule-kernel`（可选依赖） | 嵌入式 SDK 模式（§2.14） |
-| `DbPollingSceneWatcher` | `rule-kernel`（可选依赖） | 嵌入式 SDK 模式（§2.14） |
+| `DbPollingRuleWatcher` | `rule-kernel-polling`（独立 artifact） | 嵌入式 SDK 模式（§2.14），无共享 Spring 容器时 polling |
+| `DbPollingSceneWatcher` | `rule-kernel-polling`（独立 artifact） | 嵌入式 SDK 模式（§2.14），同上 |
 | `InterpretedExecutor` | `rule-kernel` | v1 默认 RuleVersionExecutor |
 | `TraceWriterDbImpl` | `rule-observability` | 主服务，异步批写 DB |
 | `NoopTraceWriter` | `rule-observability` | SDK 模式 / 测试环境 |
 | `SpringSchedulerAdapter` | `rule-eval-svc` | Spring `@Scheduled` 包装 |
+
+> **单服务模式热加载**：`rule-eval-svc` 内部直接以 `@ApplicationModuleListener` 订阅 `RulePublishedEvent` / `SceneChangedEvent`，不经 `RuleVersionWatcher` / `SceneWatcher` SPI 通道（D17 Modulith 补充段）。这是框架内部机制，不对外暴露为可替换 SPI；替换方向是切到 MQ（加 `@Externalized`），而非换 Watcher 实现。
 
 新增 SPI 接口必须回填本表，并同步 [`04-extension.md`](./04-extension.md)。
 

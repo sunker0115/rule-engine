@@ -417,7 +417,7 @@ EvalResult {
 **决定**：**A + `RuleVersionWatcher` 接口预留可换**
 
 **v1 落地范围**：
-- **轮询粒度**：默认 15 秒，可配置 `engine.rule.poll-interval`；
+- **轮询粒度**：默认 15 秒，可配置 `engine.rule.matcher.cache-refresh-interval-seconds`；
 - **增量查询**：按 `(tenant, scene, updated_at)` 三元组拉变更（不全表扫）；
 - **运行时缓存**：内存中维护 `(scene, eventType) → List<RuleVersionSnapshot>` 倒排索引；
 - **评估快照锁定**：每次 evaluation_session 开始时拍一份"当前候选规则版本快照"，整个 session 用同一快照——即使评估期间发生切版本，本次评估不受影响（D6 派生）；
@@ -713,7 +713,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 **v1 落地范围**：
 - **`SceneWatcher` 接口**（与 `RuleVersionWatcher` 对称）：`subscribe(callback) / pull(since) / status()`；
-- **v1 唯一实现**：`DbPollingSceneWatcher`，默认轮询间隔 30s（Scene 变更频率远低于规则，间隔可比 `RuleVersionWatcher` 的 15s 长）；可配 `engine.scene.poll-interval`；
+- **v1 唯一实现**：`DbPollingSceneWatcher`，默认轮询间隔 30s（Scene 变更频率远低于规则，间隔可比 `RuleVersionWatcher` 的 15s 长）；可配 `engine.rule.scene.watch-interval-seconds`；
 - **变更触发逻辑**：
   - `scene_metric_binding` 新增/删除 → 触发对应 Scene 的 MetricSource 预热/卸载；
   - `scene_action_binding` 新增/删除 → 触发对应 Scene 的 ActionHandler 资源预热/卸载（仅 PUSH/HYBRID Scene）；
