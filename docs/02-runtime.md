@@ -372,7 +372,7 @@ failFast=true 的 Action 失败时：
 
 Action 失败**不影响** `EvalResult.satisfied`（评估阶段已结束，Action 是命中后行为）。
 
-**补偿不自动触发**（D18）：引擎只记录 FAILED 状态，补偿由 D4 补偿流水线外部调度（对账任务 / 运营手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用。
+**补偿不自动触发**（D18）：引擎只记录 FAILED 状态，补偿由 D4 补偿流水线外部调度（对账任务 / 运营手动回滚按钮）发起 `ActionHandler.compensate(ActionContext ctx)` 调用。
 
 ### 5.3 整体降级矩阵（对账用）
 

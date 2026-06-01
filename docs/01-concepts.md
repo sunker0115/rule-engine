@@ -376,7 +376,7 @@ if (!r.satisfied()) {
 | `HANDLER_EXCEPTION` | D18 | `ActionHandler.execute` 抛未捕获异常，引擎归一为 `status=FAILED, retryable=false` |
 | `TIMEOUT` | D18 | `ActionHandler.execute` 超过 handler 自身声明的超时阈值（同步等待 / 调外部 HTTP / MQ ack 等），引擎归一为 `status=FAILED, retryable=true`。超时阈值由 handler 在 `@ActionType` 注解 / 注册元数据声明（详见 04-extension），未声明回落引擎默认 |
 | `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED`，不入重试队列 |
-| `DRY_RUN_NOT_IMPLEMENTED` | D7 v1 | dry-run 调用时该 handler 未实装 `dryRun(action, context)` 入口，由 Dispatcher 短路返回 `status=SKIPPED`，仅 v1 阶段出现，v1.5 全量补齐后不再产生 |
+| `DRY_RUN_NOT_IMPLEMENTED` | D7 v1 | dry-run 调用时该 handler 未实装 `dryRun(ActionContext ctx)` 方法，由 Dispatcher 短路返回 `status=SKIPPED`，仅 v1 阶段出现，v1.5 全量补齐后不再产生 |
 | `QUEUE_OVERFLOW` | D20 | 异步 Dispatcher 内部队列满拒绝该 ActionInstance；引擎归一为 `status=FAILED, retryable=true`，监控告警 |
 | `EXTERNAL_SERVICE_ERROR` | D18 | Handler 调用外部系统返回 5xx / 连接失败；`retryable=true` |
 | `BUSINESS_REJECTED` | D18 | 外部系统明确拒绝（如工单系统返回 400）；`retryable=false` |
@@ -1068,7 +1068,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | **Pre-Gate 互斥规则** | **读**互斥锁状态用于判定，**不占用**新锁 |
 | **EvalContext 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
 | **AST 评估 + 节点 trace** | 真实评估、真实节点 trace；trace 写入 `dry_run_session` 表，不进 `evaluation_session` |
-| **ActionHandler** | 调用 handler 的 `dryRun(action, context)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。**v1 范围**：接口已预留，全部 handler 实装在 **v1.5** 补齐（D7）；v1 阶段未补齐的 handler 由 Dispatcher 短路返回 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED` |
+| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。**v1 范围**：接口已预留，全部 handler 实装在 **v1.5** 补齐（D7）；v1 阶段未补齐的 handler 由 Dispatcher 短路返回 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED` |
 | **`action_execution` 写入** | 不落生产表，预览结果随 dry-run 响应返回 |
 | **审计 `audit_log`** | 不写入（dry-run 不是发布操作） |
 

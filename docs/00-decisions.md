@@ -145,7 +145,7 @@ hash(subjectId, experimentId ?? ruleVersionId) % 100
 
 **v1 落地范围**：
 - 评估层 dry-run 一等公民：走完整评估链路（Matcher / Pre-Gate / Context / AST），节点 trace 落 `dry_run_session` 表（与 `evaluation_session` 隔离）；
-- `ActionHandler` 接口已在签名内预留 `dryRun(action, context)` 入口；
+- `ActionHandler` 接口已在签名内预留 `dryRun(ActionContext ctx)` 入口（实现签名见 04-extension §三）；
 - **v1 未实装 handler 的兜底契约**：调用 `dryRun` 但 handler 未补齐时，由 Dispatcher 短路返回 `ActionResult { status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED }`——不抛异常、不阻塞试算面板渲染；
 - v1.5 全量补齐后该 `errorCode` 不再产生（完整 `ActionResult.errorCode` 枚举见 [`01-concepts.md`](./01-concepts.md) §3.7）。
 
@@ -325,7 +325,7 @@ hash(subjectId, experimentId ?? ruleVersionId) % 100
 
 **v1 落地范围**：
 - **审计字段**（所有核心表）：`created_by` / `created_at` / `updated_by` / `updated_at`；Rule 额外加 `published_by` / `published_at`。详细落点（横切原则、各表字段表如何省略横切字段）见 [`01-concepts.md`](./01-concepts.md) §三 顶部横切说明；
-- **审计表 `audit_log`**：`tenant_id` / `actor` / `target_type`（RULE / SCENE / METRIC_BINDING / ACTION_BINDING / JOB / ...）/ `target_id` / `action`（CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE）/ `before_snapshot` JSON / `after_snapshot` JSON / `occurred_at` / `trace_id`；
+- **审计表 `audit_log`**：`tenant_id` / `actor` / `target_type`（RULE / SCENE / METRIC_BINDING / ACTION_BINDING / JOB / ...）/ `target_id` / `action`（CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE）/ `before_snapshot` JSON / `after_snapshot` JSON / `operated_at` / `trace_id`；
 - **actor 来源**：上游网关在请求头注入 `X-Actor-Id` / `X-Actor-Type`（USER / SYSTEM / JOB），引擎不验签——验签是网关职责；
 - **跨租户管理员**：通过特殊 `tenant_id = "__platform__"` 的 actor 实现，业务约定，不入 schema。
 
@@ -890,7 +890,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 **派生约束**：
 - `RuleDefinition` / `RuleVersion` 移除 `actions` / `actions_snapshot`；
-- `Decision` 新增 `actions` 字段 + `actions_snapshot` 进 `decision_bindings_snapshot`；
+- `Decision` 新增 `actions` 字段；Action 快照随 Rule 发布序列化进 `rule_version.decision_bindings`（DDL 落地列名，无 `_snapshot` 后缀）；
 - `action_execution` 幂等键列 `rule_version_id` → `decision_code`；
 - `01-concepts.md` §3.7 Action 关键边界更新（归属迁移 + 幂等键变更）+ §3.19 Decision 字段表追加 `actions`；
 - `README §四` 抽象表 `RuleDefinition` / `RuleVersion` / `ActionExecution` 行同步；
@@ -980,7 +980,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 **v1 落地范围**：
 
-1. **API 层**：`POST /api/scenes/{code}/evaluate` 请求体新增 `providedMetrics: Map<metricCode, value>` 可选字段。
+1. **API 层**：`POST /api/v1/rule/event`（PUSH）或 `POST /api/v1/rule/evaluate`（PULL）请求体新增 `providedMetrics: Map<metricCode, value>` 可选字段（见 10-api-contract §三）。
 2. **校验**：`providedMetrics` 的 key 必须是本 Scene 白名单内已注册的 metricCode（发布期已有类型闭合，运行期入口校验类型一致性）；非法 key 返回 400。
 3. **EvalContext 构建优先级**：`providedMetrics` 中有值 → 跳过该 metric 的 sourceType 取数，直接用传入值；`allowProvided=false` 的 metric 即使传了也忽略（日志 WARN，不报错）。
 4. **Metric 注册新增字段** `allowProvided`（`BOOLEAN`）：按 `sourceType` 给出推荐默认值，注册时无需每次手填——
@@ -1005,7 +1005,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `01-concepts.md` §3.11 EvalContext 构建逻辑需说明 `providedMetrics` 优先级
 - `10-api-contract.md` 需补充两处：
   - 评估接口请求体新增 `providedMetrics` 字段
-  - 新增 `GET /api/scenes/{code}/provided-metrics` 发现接口，返回本 Scene 内 `allowProvided=true` 的 metric 列表（含 `metricCode / dataType / description`），供业务方接入时查询，响应可缓存
+  - 新增 `GET /api/v1/scenes/{sceneCode}/provided-metrics` 发现接口，返回本 Scene 内 `allowProvided=true` 的 metric 列表（含 `metricCode / dataType / description`），供业务方接入时查询，响应可缓存（见 10-api-contract §5.2）
 
 ---
 
