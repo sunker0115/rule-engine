@@ -78,7 +78,7 @@
 | D15 | **评估失败语义** | **单节点失败 → 整树继续按短路求值** + `EvalResult.errorCode` 槽位 + 规则间隔离 + `HIT/MISS/BLOCKED/ERROR` **四态**对账（D22） | PUSH 默认安静失败不派发 Action；PULL 返回 `{satisfied, errorCode}`，调用方按业务策略（fail-secure / fail-open）决策 |
 | D16 | **链式触发** | **显式禁止** Action 产引擎事件；`ActionHandler.execute` 返回 `ActionResult`，不返回新事件；链式需求走外部 MQ | 引擎边界清晰，无环检测 / 深度限制 / 桶继承复杂度。v1 运营营销场景链式需求少 |
 | D17 | **配置热加载** | **DB 轮询 15s + 评估快照锁定** + `RuleVersionWatcher` 接口预留；多实例最终一致 | 评估开始时拍快照（D6 派生），session 内不受切版本影响。v2 可换 MQ 推 / 配置中心，业务侧零改动 |
-| D18 | **Action 失败补偿语义** | **默认 continue-on-error**（每 Action 独立事务/重试）；Action 级可声明 `failFast`；补偿不自动触发 | 单 Action 失败不影响 Rule 内其他 Action 也不影响 `EvalResult.satisfied`；`failFast=true` 后续 Action 标 SKIPPED；补偿由 D4 流水线外部调度发起 |
+| D18 | **Action 失败补偿语义** | **默认 continue-on-error**（每 Action 独立事务/重试）；Action 级可声明 `failFast`；补偿不自动触发 | 单 Action 失败不影响 **Decision** 内其他 Action 也不影响 `EvalResult.satisfied`；`failFast=true` 后续 Action 标 SKIPPED；补偿由 D4 流水线外部调度发起 |
 | D19 | **规则发布事务性** | **单条规则原子发布**（状态机 `DRAFT → PUBLISHING → PUBLISHED / PUBLISH_FAILED`，单 DB 事务完成状态机+新 version+audit_log）；批量由前端逐条提交 | 不可变快照（D6）下回滚 = 用旧版本快照建新草稿走标准发布产新版本号；不做批量原子 API（事务跨度大）；不做发布前自动 dry-run（留 07-operability 决策） |
 | D20 | **v1 高吞吐评估期落地范围** | metric 批量预拉 + 异步 Dispatcher + 输入闭合校验 + Watcher SPI 多态化（v1 落）；预编译 Predicate SPI 预留 v1.5 切换 | 评估线程不被 Action 同步派发拖慢；N+1 metric round-trip 压成 1 次 mget；强类型契约为预编译铺路。alpha 共享 / 嵌入式 SDK / EXPRESSION 叶子留 [`08-evolution.md`](./08-evolution.md) §2.13 / §2.14 |
 | D21 | **评估观测数据异步写入** | `TraceWriter` 异步批写（评估期内存累积 + session 结束入队列 + 消费者池 batch insert，复用 D20 §2 队列模型）；与 `audit_log` 同步事务严格分离 | 单次评估 50-1000 行 trace 同步写吃掉 P99 预算 10-40%；异步批写后热路径零阻塞，失败降级丢弃 + 告警，不影响 `EvalResult`；ConditionNode 与 Pre-Gate trace 同通道；运维参数（队列容量 / 批大小 / flush 间隔等）留 07-operability |
@@ -162,7 +162,7 @@
 |------|------|--------|
 | `RuleEvent` | 触发器翻译后的纯 POJO 事件契约（含 tenant / scene / payload / occurredAt） | ✅ |
 | `EvalContext` | 单次评估的指标快照 + 用户画像 + 业务身份 | ✅ |
-| `Subject` | 业务主体快照：`{id, type, attributes}`，结构由 `Scene.subjectType` 决定；v1 仅 `USER` 实装（D13），未来扩展 `MERCHANT` / `DEVICE` 等仅扩 enum 不改契约 | ✅ |
+| `Subject` | 业务主体快照：`{id, type, attributes}`，结构由 `Scene.subjectType` 决定；v1 仅 `USER` 实装（D13），未来扩展 `ACCOUNT / DEVICE / ORDER` 等仅扩 enum 不改契约（枚举定义见 01-concepts §3.2） | ✅ |
 | `RuleNode` (sealed) | AST 节点：`AndNode` / `OrNode` / `NotNode` / `ConditionNode`；`AndNode` / `OrNode` 可携可选 `displayLabel`，用于前端"分组卡片"视觉渲染（数据模型不固化 Group 实体） | ✅ |
 | `RuleDefinition` | 持久化规则定义（kind + trigger + ast + preGates + current_version + rollout + status）；**不再含 actions**（D27：Action 迁移到 Decision）；`kind ∈ {AST_BOOLEAN, SCORECARD, DECISION_TREE, DECISION_TABLE, EXPRESSION_SCRIPT}`，v1 仅实现 `AST_BOOLEAN`；`status ∈ {DRAFT, PUBLISHING, PUBLISHED, PUBLISH_FAILED, DISABLED}`，`PUBLISH_FAILED` 为待人工确认状态，UI 显式点"重新编辑"才回 DRAFT（D19）；`current_version` 指向 `rule_version` 表中当前生效的不可变快照；发布是单条原子事务（D19） | — |
 | `RuleVersion` | 规则发布产生的不可变版本快照行（D6 + D19）：含 `(ruleId, version)` 主键 + AST/preGates/rollout/**decision_bindings**（含 Decision.actions 快照）冻结副本；**不含 actions_snapshot**（D27）；运行时按 `(scene, eventType)` **倒排索引**直接拿 RuleVersion 快照列表（D17：`current_version` 在索引预热时已解析，无运行时二次查询） | ✅ |
@@ -177,7 +177,7 @@
 | `ConditionEvaluator` | 纯函数判定 `(params, context) → boolean + actualValue` | — |
 | `ConditionRegistry` | 注册中心，启动扫 `@ConditionType` 注解 | — |
 | `ActionHandler` | 动作执行三件套：`execute` / `compensate` / `dryRun`（仅 PUSH / HYBRID Scene 用到）；`execute` 返回 `ActionResult`，**不返回新事件**（D16 禁止链式）。**注**：v1 仅评估层 dry-run 一等公民，`dryRun` 接口已在签名内，全部 handler 实装在 **v1.5** 补齐（D7） | — |
-| `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（D18：`retryable=true` 入重试队列；`failFast=true` 的 Action 失败后同 Rule 内后续 Action 标 SKIPPED） | ✅ |
+| `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（D18：`retryable=true` 入重试队列；`failFast=true` 的 Action 失败后同 **Decision** 内后续 Action 标 SKIPPED） | ✅ |
 | `ActionRegistry` | 注册中心，启动扫 `@ActionType` 注解 + 声明式动作定义 | — |
 | `RuleEvalVisitor` | 遍历 AST，短路 + 节点级 trace | — |
 | `EvaluationSession` | 一次评估的持久化记录（D23 幂等锚点）：1 行 per event；`status ∈ {HIT/MISS/BLOCKED/ERROR}`（D22 四态）；`(tenant_id, event_id)` DB uk；同步写（D21）；dry-run 写独立 `dry_run_session` 表 | — |

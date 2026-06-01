@@ -1030,7 +1030,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D15 | 评估失败语义 | A    | 单节点降级 false + 整树继续 + EvalResult.errorCode 槽位；规则间隔离；四态对账：HIT / MISS / BLOCKED / ERROR |
 | D16 | 链式触发 | A    | 显式禁止 Action 产引擎事件；ActionHandler 不返回事件；业务自走外部 MQ 链式 |
 | D17 | 配置热加载 | A    | DB 轮询 15s + 评估快照锁定 + RuleVersionWatcher 接口预留 |
-| D18 | Action 失败补偿语义 | B    | 默认 continue-on-error，Action 级可声明 failFast；单 Action 失败不影响 Rule 内其他 Action；补偿不自动触发由外部调度 |
+| D18 | Action 失败补偿语义 | B    | 默认 continue-on-error，Action 级可声明 failFast；单 Action 失败不影响 **Decision** 内其他 Action（D27 迁移后语义）；补偿不自动触发由外部调度 |
 | D19 | 规则发布事务性 | A    | 单条规则原子发布（状态机：DRAFT → PUBLISHING → PUBLISHED / PUBLISH_FAILED）；批量发布前端逐条提交；回滚 = 用旧版本快照建新草稿 |
 | D20 | v1 高吞吐评估期落地范围 | A    | metric 批量预拉 + 异步 Dispatcher + 输入闭合校验 + Watcher SPI 多态化；预编译 Predicate SPI 预留 v1.5 切换；alpha 共享 / 嵌入式 SDK / EXPRESSION 叶子留 08-evolution |
 | D21 | 评估观测数据异步写入 | B    | `TraceWriter` 异步批写（队列 + 消费者池 + batch insert，复用 D20 §2 模型）；与 `audit_log` 同步事务严格分离；失败降级丢弃 + 告警，不影响 EvalResult；ConditionNode 与 Pre-Gate trace 同通道；运维参数留 07-operability |
