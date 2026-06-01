@@ -459,7 +459,7 @@ EvalContext {
 | 字段 | 说明 |
 |------|------|
 | `metricCode` | 全局唯一，命名 `<domain>.<entity>.<measure>[.<window>]` |
-| `metricVersion` | 指标定义版本号占位（v1 固定 1）。**v1 规则发布快照仅引用 `metricCode` 字符串，不带版本号**——指标语义变更（如"7d"换算口径调整）等同于新建一个新 `metricCode`（业务约定）。强制 `(metricCode, metricVersion)` 绑定的版本化演进留 [`08-evolution.md`](./08-evolution.md) §2.2 Metric 版本化 |
+| `metricVersion` | 指标定义版本号概念占位（**v1 DDL 无此列**，v1 规则发布快照仅引用 `metricCode` 字符串，不带版本号）——指标语义变更等同于新建新 `metricCode`（业务约定）。强制 `(metricCode, metricVersion)` 绑定的版本化演进留 [`08-evolution.md §2.2`](./08-evolution.md) |
 | `tenantId` | 归属租户；`*` 表示平台级共享指标 |
 | `sourceType` | 取数方式，见下方 sourceType 对比表 |
 | `params` | 取数参数（结构依 sourceType 而异，见下方对比表） |
@@ -679,7 +679,7 @@ interface Scheduler {
 
 - **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 **`BLOCKED` 桶**（D22，第四态，独立于 `MISS`——`MISS` 是"通过 Pre-Gate 但 AST 求值不满足"，`BLOCKED` 是"Pre-Gate 拦截未进入 AST"）；`evaluation_session.blocked_by` 字段记录拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
 - **Pre-Gate 与 AST 解耦**：Pre-Gate 不能引用 metric，也不能写 conditionType 自定义——只用 `Rule.preGates` 配置的内置类型；演进诉求（如"灰度按外部 AB 平台命中"）走 D6 留的接口替换，不在 Pre-Gate 层级开新类型；
-- **失败语义与 D15 区别**：Pre-Gate 内部执行异常（如 Redis 频次计数器超时）走与 D15 一致的归一——失败默认按"未通过该 Gate"处理（fail-closed，宁可漏发不可错发），具体 fail-open / fail-closed 默认由各 Gate 实现声明，详见 [`02-runtime.md`](./02-runtime.md) §Pre-Gate Chain；
+- **失败语义与 D15 区别**：Pre-Gate 内部执行异常（如 Redis 频次计数器超时）走与 D15 一致的归一——失败默认按"未通过该 Gate"处理（fail-closed，宁可漏发不可错发），具体 fail-open / fail-closed 默认由各 Gate 实现声明，详见 [`02-runtime.md §3.3`](./02-runtime.md)；
 - **dry-run 行为**：见 §五 Q10——判定全部执行（运营需要看见命中/拦截结果），但**频次计数器与互斥锁不落副作用**；
 - **顶层架构图对齐**：README §三 `Pre-Gate Chain` 框就是本节落地。
 
@@ -1118,7 +1118,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | Rule 版本快照（不可变快照、回滚语义、运行时锁定） | §3.12 RuleVersion |
 | AST 节点类型 / 操作符 / `displayLabel` 渲染 | [03-rule-expression](./03-rule-expression.md) |
 | 加新的 ConditionEvaluator / ActionHandler / MetricSource | [04-extension](./04-extension.md) |
-| 定时类规则：`JobDefinition` 字段 / Scheduler 接口 / xxl-job 适配 | §3.10 + [02-runtime](./02-runtime.md) §Job 触发链路 |
+| 定时类规则：`JobDefinition` 字段 / Scheduler 接口 / xxl-job 适配 | §3.10 + [02-runtime §3.1](./02-runtime.md)（Trigger 接入层 JobScheduler 条目） |
 | 一个事件进来到动作落地的代码级时序 | [02-runtime](./02-runtime.md) |
 | 前端怎么把这些概念画成 UI | [06-frontend](./06-frontend.md) |
 | 幂等 / 灰度 / dry-run / 监控的运营细节 | [07-operability](./07-operability.md) |
