@@ -232,7 +232,7 @@ EvalResult {
     finalDecision?:  DecisionRef       // D26：合成后最终 Decision（Scene 配了 decisionStrategy 时填充）
     hitDecisions:    List<DecisionRef> // D26：所有命中规则的 Decision 按 priority 排序
     trace:           List<NodeTrace>   // 节点级 trace（PULL/dry-run 同步返回；PUSH 仅异步落库）
-    errorCode?:      String            // D15：非空表示有节点失败（METRIC_FETCH_FAIL / EVAL_TIMEOUT / ...）
+    errorCode?:      String            // D15：非空表示有节点失败（METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR，见 10-api-contract §七）
     errorMessage?:   String
     failedNodeIds?:  List<String>
     partial?:        Boolean
@@ -339,7 +339,7 @@ EvalResult {
 **触发条件**：`ConditionEvaluator.evaluate()` 抛异常 / MetricSource 取数失败（D15 / D25）
 
 **传播规则**：
-- 节点 `satisfied=false`，trace 行 `error_code` 填写失败原因（`METRIC_FETCH_FAIL` / `EVALUATOR_EXCEPTION` / `EVAL_TIMEOUT`）；
+- 节点 `satisfied=false`，trace 行 `error_code` 填写失败原因（`METRIC_FETCH_FAIL` / `CONDITION_EVAL_ERROR`）；
 - **不**中断整树求值；`AND`/`OR`/`NOT` 节点按正常短路逻辑继续，失败节点视为 false；
 - 整树求值完毕后若有任意节点失败 → `EvalResult.errorCode` 非空（v1 取第一个失败节点的 errorCode）；`EvalResult.failedNodeIds` 填写所有失败节点 ID。
 
