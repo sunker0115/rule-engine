@@ -997,6 +997,44 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D31. 前端技术栈
+
+**为什么重要**：前端是规则引擎的主要操作界面，核心交互是 AST 可视化条件编辑器，技术栈选型直接决定开发路径。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☐ A. react-querybuilder + React | 条件规则构建器领域专用库，内置嵌套 AND/OR/NOT 编辑 | 与本项目 AST 数据结构天然匹配，定制成本低 |
+| ☐ B. Vue 3 + Ant Design Vue | 通用方案，自行实现 AST 编辑器 | 灵活，但核心编辑器需从头写 |
+| ☐ C. AMIS (百度低代码) | JSON schema 驱动，适合表单密集型后台 | AST 编辑器无内置支持，需大量逃逸，不适合 |
+
+**决定**：✅ A — react-querybuilder + React 18
+
+**技术栈**：
+
+| 层 | 选择 |
+|---|---|
+| 框架 | React 18 |
+| 条件编辑器 | react-querybuilder |
+| UI 组件库 | Ant Design 5 |
+| 构建工具 | Vite |
+| 状态管理 | Zustand |
+
+**v1 落地范围**：
+- 前端工程放 `frontend/` 目录，与 `src/` 平级
+- 覆盖核心操作：Scene/规则树浏览、AST 条件编辑、dry-run 执行与结果展示、审计日志查询
+- 无登录/注册（D14），`X-Actor-Id` 由前端 header 传入
+
+**不做（v1 明确排除）**：
+- 不做权限管理 UI（无 RBAC，D14）
+- 不做 SSR / Next.js（纯管理页面无需服务端渲染）
+- 不引入 Redux（Zustand 够用）
+
+**派生约束**：
+- `09-skeleton.md` §九（前端工程结构）记录 `frontend/` 目录规划
+- `06-frontend.md` 承载前端架构细节，本决策仅记技术栈选型
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1031,5 +1069,6 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D28 | Decision.actions 变更生效时机 | A    | 快照语义不变；UI 在修改 Decision.actions 时提示引用该 Decision 的已发布规则需重新发布 |
 | D29 | PUSH/HYBRID Scene 的 decisionStrategy 默认值 | B    | PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`，消灭 actions 静默不派发问题；PULL Scene 不参与合成 |
 | D30 | providedMetrics — 业务方随评估携带指标值 | A    | 评估请求携带 `providedMetrics`；Metric 级 `allowProvided` 控制是否可被覆盖；只活在本次评估，不持久化 |
+| D31 | 前端技术栈 | A    | React 18 + react-querybuilder + Ant Design 5 + Vite + Zustand；前端工程放 `frontend/` 目录，与 `src/` 平级 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

@@ -23,6 +23,8 @@
 | §六 配置文件分布 | ✅ 已展开 |
 | §七 测试组织 | ✅ 已展开 |
 | §八 v1 不做的拆分 | ✅ 已展开 |
+| §九 维护原则 | ✅ 已展开 |
+| §十 前端工程结构 | ✅ 已展开 |
 
 ---
 
@@ -312,4 +314,52 @@ v1 阶段以下模块暂时合并，v2 触发时按对应演进锚点拆分：
 - 模块边界 / 包结构变更必须回写本文档对应章节，且若变更影响业务方依赖（如 SPI 模块更名 / 拆分），同步在 [`README.md`](./README.md) §七 版本史登记。
 - 新增 SPI 接口必须回填 §四 SPI 接口落点表，并同步 [`04-extension.md`](./04-extension.md)。
 - 新增测试维度（如契约测试 / 混沌测试）必须回填 §七 测试组织。
+
+---
+
+## 十、前端工程结构
+
+技术栈决策见 [`00-decisions.md`](./00-decisions.md) D31。前端工程放 `frontend/` 目录，与 `src/` 平级。
+
+```
+frontend/
+├── index.html
+├── vite.config.ts
+├── package.json
+├── tsconfig.json
+├── src/
+│   ├── main.tsx                        # React 入口
+│   ├── App.tsx                         # 路由根组件
+│   ├── store/                          # Zustand store
+│   │   ├── sceneStore.ts               # Scene / Rule 树状态
+│   │   └── dryRunStore.ts              # dry-run 执行状态与结果
+│   ├── api/                            # HTTP 请求封装（对接 10-api-contract.md）
+│   │   ├── client.ts                   # axios 实例，注入 X-Actor-Id header
+│   │   ├── scene.ts                    # Scene / Rule CRUD
+│   │   ├── eval.ts                     # 评估 / dry-run 接口
+│   │   └── audit.ts                    # 审计日志接口
+│   ├── pages/
+│   │   ├── SceneList/                  # Scene 列表页
+│   │   ├── RuleEditor/                 # 规则编辑主页（三栏布局）
+│   │   │   ├── index.tsx               # 布局骨架（左：规则树 | 中：AST 编辑器 | 右：属性面板）
+│   │   │   ├── RuleTree.tsx            # 左栏：Scene/Rule 树（Ant Design Tree）
+│   │   │   ├── ConditionEditor.tsx     # 中栏：react-querybuilder 封装
+│   │   │   └── PropertyPanel.tsx       # 右栏：规则属性 / paramsSchema 动态表单
+│   │   ├── DryRun/                     # dry-run 执行与结果展示
+│   │   └── Audit/                      # 审计日志查询与 diff 展示
+│   └── components/
+│       ├── DryRunResult/               # 节点级 ✅/❌/⏭ + actualValue 叠加层
+│       └── ParamsSchemaForm/           # 根据 paramsSchema JSON 动态渲染表单控件
+└── public/
+```
+
+**关键设计约定**：
+
+| 约定 | 说明 |
+|------|------|
+| `X-Actor-Id` | `api/client.ts` 统一注入，值从 localStorage 读取（无登录，D14） |
+| AST ↔ react-querybuilder 转换 | `ConditionEditor.tsx` 内完成，其他组件只看引擎 AST 格式 |
+| paramsSchema 渲染 | `ParamsSchemaForm` 根据 `conditionType / actionType` 的 schema 动态生成输入控件 |
+| dry-run 结果叠加 | `DryRunResult` 用 react-querybuilder 的 `ruleGroupProps` 覆盖，不修改 AST 数据结构 |
+| 前后端跨域 | Vite dev proxy 转发到本地后端；生产由 Nginx 同域反代 |
 - v1 阶段任何"暂时合并"的模块在演进时拆分前，回写 §八 + [`08-evolution.md`](./08-evolution.md) 对应演进锚点。
