@@ -2,7 +2,7 @@
 
 > **位置定位**：所有后续文档的"共同语言"。这里只讲名词、关系、边界，**不讲实现**（实现在 02-runtime / 03-rule-expression / 04-extension）。
 >
-> **前置阅读**：[README](./README.md) §一定位与边界 + §二 D1-D26 决策表。
+> **前置阅读**：[README](./README.md) §一定位与边界 + §二 D1-D30 决策表。
 >
 > **解决什么疑问**：
 > - "Rule / Condition / Action / EvalContext 到底指什么？"

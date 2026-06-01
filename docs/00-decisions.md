@@ -670,7 +670,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `evaluation_session` 表加 `blocked_by` 列（`VARCHAR`，nullable，仅 `status=BLOCKED` 时有值）；
 - `01-concepts.md` §3.14 Pre-Gate 关键边界"对账归 MISS 桶"修正为"对账归 BLOCKED 桶"；
 - README §二 D15 决策表对账部分同步更新（已在 D15 v1 语义规范段更新）；
-- `07-operability.md` 监控指标清单补 `rule.eval.blocked.count{gate_type}` 指标。
+- `07-operability.md` 监控指标清单补 `rule_engine_eval_blocked_total{gate_type}` 指标（已落地）。
 
 ---
 
