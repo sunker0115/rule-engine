@@ -75,6 +75,24 @@ color: cyan
 
 **文档基线兜底**：如果发现两份文档**自身就互相矛盾**（而非改动 vs 文档），不要自行选边判定。在报告"范围确认"段标注 `⚠ 文档基线本身存疑：<file-a>:<line> 与 <file-b>:<line> 矛盾，建议先跑 doc-consistency-review skill 修齐文档`，并跳过受影响维度的对齐（其余维度照常）。
 
+### 已知设计歧义（不要误报）
+
+以下均为经过多轮审查确认的"刻意设计"，不是错误，遇到直接跳过：
+
+1. `satisfied`（Java POJO 内部字段）vs `ruleHit`（API JSON 字段）—— 两层命名刻意设计，见 10-api-contract §三
+2. `evaluation_session.source` 3 值 ENUM（PUSH/PULL/REPLAY）≠ `RuleEvent.source` 5 值（HTTP/MQ/JOB/SDK/REPLAY）—— 刻意区分，前者是会话来源，后者是事件触发源
+3. `PAYLOAD_SCHEMA_MISMATCH` / `INVALID_EVENT_TYPE` / `SCENE_NOT_FOUND` 是入口层 400 错误，不进评估链路，不是 EvalResult.errorCode
+4. `PENDING` 是 `action_execution` 表的 DB 过程状态，不是 ActionResult.status POJO 枚举值（枚举只含 SUCCESS/FAILED/SKIPPED）
+5. `scene_metric_binding` DDL 字段是 `metric_definition_id`（BIGINT FK），不是 `metric_code`——外键指向 metric_definition 表主键
+6. `metricVersion` v1 DDL 无此列——概念占位，已在文档中标注，不是漏写
+7. `decisionStrategy` v2 扩展需 ALTER TABLE MODIFY COLUMN（ENUM 扩展，非加列），已在文档中标注
+8. Pre-Gate 短路：Matcher 阶段无候选规则 → `evaluation_session` 不写入，不是遗漏
+9. `rule_definition.current_version` 存 `rule_version.id`（主键 BIGINT），不是 `rule_version.version`（序号）
+10. `failFast` 作用域 = 同 Decision 内后续 Action，不是同 Rule 或全局
+11. EvalResult.errorCode = 第一个失败节点的 errorCode（METRIC_FETCH_FAIL 或 CONDITION_EVAL_ERROR），不是所有节点的汇总
+12. `ConditionEvaluator` 接口只返回 `boolean`；`actualValue` 由 AST Evaluator 在 node_trace 写入，不是 evaluator 返回
+13. 01-concepts §一 一等概念为 9 个（含 Action；Action D27 后归属 Decision.actions 但保留独立概念地位）
+
 ### Step 3：对齐检查
 
 对每个落在范围内的改动，回答（代码骨架未落地时，重点问 1、3、8；代码落地后全问）：
