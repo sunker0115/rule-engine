@@ -414,5 +414,5 @@ public class AccountLoader implements SubjectLoader {
 ## 八、维护原则
 
 - 本文档只描述**SPI 接口契约 + 注册指南**，不重复 SPI 模块归属（→ 09-skeleton §四）、不写运维参数默认值（→ 07-operability §九）。
-- 新增第四类 SPI（如未来 Watcher / Scheduler / TraceWriter 开放给业务方实现）必须在本文档增章节 + 同步 09-skeleton §四 SPI 落点表。
+- 新增第四类 SPI（如未来进一步开放给业务方实现的扩展点）必须在本文档增章节 + 同步 09-skeleton §四 SPI 落点表。
 - 实现建议值（§六）只列**建议**，不列默认值；默认值由 07-operability 集中管理。

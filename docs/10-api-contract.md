@@ -2,7 +2,7 @@
 
 > **位置定位**：本文档承载 rule-engine 对调用方的**外部接口契约**——HTTP / RPC / SDK 签名 / 请求响应 DTO / errorCode + i18n 清单。前后端联调、对接方接入、SDK 升级都以本文档为准。
 >
-> **前置阅读**：[`01-concepts.md`](./01-concepts.md) §3.3 RuleEvent / §3.4 Rule（含 EvalResult 输出契约）/ §3.8 Context（含 EvalContext 标准字段）、[`04-extension.md`](./04-extension.md) §五 元数据契约
+> **前置阅读**：[`01-concepts.md`](./01-concepts.md) §3.3 RuleEvent / §3.4 Rule（含 EvalResult 输出契约）/ §3.8 EvalContext（含标准字段）、[`04-extension.md`](./04-extension.md) §五 元数据契约
 >
 > **解决什么疑问**："调用方要传什么 / 收到什么？""有哪些错误码 / 怎么对应文案？""SDK 怎么用？""dry-run 接口签名是什么？""前端拉元数据走哪个接口？"
 >

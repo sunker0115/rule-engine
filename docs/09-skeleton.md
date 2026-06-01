@@ -2,7 +2,7 @@
 
 > **位置定位**：本文档承载 rule-engine 的**工程契约层**——Maven 模块拆分、包命名根、SPI 接口落点、依赖方向、配置分布。
 >
-> **前置阅读**：[`README.md`](./README.md) §四 抽象表、[`00-decisions.md`](./00-decisions.md)、[`01-concepts.md`](./01-concepts.md) §三 名词全景、[架构设计文档](./superpowers/specs/2026-06-01-modulith-architecture-design.md)
+> **前置阅读**：[`README.md`](./README.md) §四 抽象表、[`00-decisions.md`](./00-decisions.md)、[`01-concepts.md`](./01-concepts.md) §三 名词全景
 >
 > **解决什么疑问**："新代码放哪个模块 / 哪个包？""业务方接入要依赖哪个 jar？""SPI 接口在哪个模块？""模块间依赖方向是什么？"
 >
