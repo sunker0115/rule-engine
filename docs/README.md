@@ -172,7 +172,7 @@
 | `Scene` | Tenant 内的业务域命名空间 + metric / action 治理白名单 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID）+ 元数据 schema（`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`）+ 决策合成策略（`decisionStrategy`，D26） | — |
 | `SceneMetricBinding` | Scene 与 Metric 的可见性绑定，规则只能引用本 Scene 绑定的 metric | — |
 | `SceneActionBinding` | Scene 与 actionType 的可见性绑定（仅 PUSH / HYBRID Scene 需要），规则只能配置本 Scene 绑定的 actionType；含 Scene 级默认参数与速率覆盖 | — |
-| `MetricSource` | 按 `metricCode` 取指标，支持实时 / 预计算 / 外部指标平台（Java SPI 接口名 `MetricSourceHandler`，见 [`04-extension.md`](./docs/04-extension.md) §四） | — |
+| `MetricSource` | 按 `metricCode` 取指标，支持实时 / 预计算 / 外部指标平台（Java SPI 接口名 `MetricSourceHandler`，见 [`04-extension.md`](./04-extension.md) §四） | — |
 | `MetricRegistry` | 注册中心，启动扫 `@MetricSourceType` 注解 + 数据库声明式指标；并发契约：读路径 thread-safe 且不阻塞热路径，评估期内快照稳定（具体并发策略——不可变快照 / ConcurrentHashMap / copy-on-write 等——由实现层选择） | — |
 | `ConditionEvaluator` | 纯函数判定 `(params, context) → boolean + actualValue` | — |
 | `ConditionTypeRegistry` | 注册中心，启动扫 `@ConditionType` 注解 | — |
