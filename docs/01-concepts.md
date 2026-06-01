@@ -98,7 +98,7 @@ Decision           actionType               │
 
 > **横切：核心配置表共享审计字段**（D14）
 >
-> 所有可由人编辑的配置对象（`tenant`、`scene_definition`、`rule_definition`、`metric_definition`、`scene_metric_binding`、`scene_action_binding`、`job_definition` 等）的表结构都横切包含以下审计字段，下方各章节字段表**默认不再重复列出**：
+> 所有可由人编辑的配置对象（`tenant`、`scene`（DDL 落地表名，旧称 `scene_definition`）、`rule_definition`、`metric_definition`、`scene_metric_binding`、`scene_action_binding`、`job_definition` 等）的表结构都横切包含以下审计字段，下方各章节字段表**默认不再重复列出**：
 >
 > | 字段 | 说明 |
 > |------|------|
@@ -469,7 +469,7 @@ EvalContext {
 | sourceType | 取数方式 | 适用场景 | `params` 关键字段 | `cacheTtl` 建议 | `allowProvided` 默认 |
 |------------|---------|---------|------------------|----------------|---------------------|
 | `ATTRIBUTE` | 从主体属性表（`subject_attribute` 或业务库指定表/列）读单值 | KYC 等级、会员等级、账户状态等慢变属性 | `table`, `column` | 60–300s | `true` |
-| `SQL_AGGREGATE` | 执行 SQL 聚合查询（支持 `:subjectId` / `:now` 占位符） | 近 N 天交易次数、累计金额、历史行为统计 | `sql` | 实时风控 `0`；营销统计 60–300s | `false` |
+| `SQL_AGGREGATE` | 执行 SQL 聚合查询（支持 `:subjectId` / `:now` 占位符） | 近 N 天交易次数、累计金额、历史行为统计 | `sql` | 3600s（聚合结果更新慢；见 04-extension §4.3） | `false` |
 | `EXTERNAL_HTTP` | 调外部 HTTP 服务，取 JSON 响应中的指定字段 | 设备指纹分、IP 信誉、第三方评分 | `url`（含 `{payload.xxx}` 占位符）, `jsonPath` | 60s 左右 | `true` |
 | `STREAM` | 从流处理平台（Flink / Kafka）读预聚合结果（v1 占位，v2 接入） | 实时 CEP 序列特征、滑动窗口计数 | `topic`, `keyExpr` | `0`（流结果已是最新） | `false` |
 
@@ -1110,7 +1110,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 
 | 想找 | 看 |
 |------|----|
-| 字段 / DDL 细节（含 `scene_definition` / `scene_metric_binding` / `rule_definition` / `rule_version`） | [05-storage](./05-storage.md) |
+| 字段 / DDL 细节（含 `scene`（旧称 `scene_definition`）/ `scene_metric_binding` / `rule_definition` / `rule_version`） | [05-storage](./05-storage.md) |
 | Rule 版本快照（不可变快照、回滚语义、运行时锁定） | §3.12 RuleVersion |
 | AST 节点类型 / 操作符 / `displayLabel` 渲染 | [03-rule-expression](./03-rule-expression.md) |
 | 加新的 ConditionEvaluator / ActionHandler / MetricSource | [04-extension](./04-extension.md) |

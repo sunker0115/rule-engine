@@ -107,7 +107,7 @@ CREATE TABLE metric_definition (
   data_type           ENUM('LONG','DOUBLE','STRING','BOOLEAN','LIST') NOT NULL,
   params              JSON         NOT NULL COMMENT 'sourceType 专属参数（sql/url/column 等）',
   cache_ttl_seconds   INT          NOT NULL DEFAULT 60 COMMENT '取数结果缓存 TTL，0=不缓存',
-  allow_provided      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'D30：是否允许调用方通过 providedMetrics 覆盖',
+  allow_provided      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'D30：是否允许调用方通过 providedMetrics 覆盖；DEFAULT 0 为 SQL_AGGREGATE/STREAM 兜底，ATTRIBUTE/EXTERNAL_HTTP 应用层写入时需显式设为 1（见 04-extension §4.3）',
   status              ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),

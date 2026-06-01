@@ -92,9 +92,11 @@ POST /api/v1/rule/evaluate
   "finalDecision": {
     "code": "REVIEW",
     "name": "人工审核",
-    "priority": 2
+    "priority": 2,
+    "fromRuleVersionId": 42
   },
-  "hitDecisions": [{"code": "REVIEW", "name": "人工审核", "priority": 2}],
+  "hitDecisions": [{"code": "REVIEW", "name": "人工审核", "priority": 2, "fromRuleVersionId": 42}],
+  "nodeTrace": [],
   "errorCode": null,
   "actionResults": []
 }
