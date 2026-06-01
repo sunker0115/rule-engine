@@ -174,7 +174,7 @@
 | `SceneActionBinding` | Scene 与 actionType 的可见性绑定（仅 PUSH / HYBRID Scene 需要），规则只能配置本 Scene 绑定的 actionType；含 Scene 级默认参数与速率覆盖 | — |
 | `MetricSource` | 按 `metricCode` 取指标，支持实时 / 预计算 / 外部指标平台（Java SPI 接口名 `MetricSourceHandler`，见 [`04-extension.md`](./04-extension.md) §四） | — |
 | `MetricRegistry` | 注册中心，启动扫 `@MetricSourceType` 注解 + 数据库声明式指标；并发契约：读路径 thread-safe 且不阻塞热路径，评估期内快照稳定（具体并发策略——不可变快照 / ConcurrentHashMap / copy-on-write 等——由实现层选择） | — |
-| `ConditionEvaluator` | 纯函数判定 `(params, context) → boolean + actualValue` | — |
+| `ConditionEvaluator` | 纯函数判定 `(ConditionNode node, EvalContext ctx) → boolean`；`actualValue` 由 AST Evaluator 从 EvalContext 提取后写入 node_trace，不在返回值中（见 [`04-extension.md`](./04-extension.md) §2.1） | — |
 | `ConditionTypeRegistry` | 注册中心，启动扫 `@ConditionType` 注解 | — |
 | `ActionHandler` | 动作执行三件套：`execute` / `compensate` / `dryRun`（仅 PUSH / HYBRID Scene 用到）；`execute` 返回 `ActionResult`，**不返回新事件**（D16 禁止链式）。**注**：v1 仅评估层 dry-run 一等公民，`dryRun` 接口已在签名内，全部 handler 实装在 **v1.5** 补齐（D7） | — |
 | `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（D18：`retryable=true` 入重试队列；`failFast=true` 的 Action 失败后同 **Decision** 内后续 Action 标 SKIPPED） | ✅ |

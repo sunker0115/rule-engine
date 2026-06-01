@@ -209,7 +209,7 @@
 
 ### 第一组：核心数据模型（D1–D7）
 
-核心 DDD 边界确立：Tenant / Scene / Rule / Condition / Metric / EvalContext 分层；D4 审计内建（不可关闭）；D5 Metric 按需取数（不预加载全量）；D6 不可变版本快照（评估与配置解耦基础）；D7 节点级 trace 落库（后续可运维性的基础决策）。
+核心 DDD 边界确立：Tenant / Scene / Rule / Condition / Metric / EvalContext 分层；D4 动作协议（声明式优先 + SPI 兜底）；D5 Metric 按需取数（不预加载全量）；D6 不可变版本快照（评估与配置解耦基础）；D7 Dry-run 一等公民（节点级 trace 落库，后续可运维性基础）。
 
 ### 第二组：指标与外部集成（D8–D11）
 

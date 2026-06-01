@@ -111,7 +111,7 @@
 ## 六、审计日志查看 UI
 
 在 Rule 详情页右侧抽屉（通过 `GET /api/v1/audit-logs` 查询）：
-- 按时间倒序列出 `audit_log` 条目（RULE_PUBLISH / RULE_DISABLE / SCENE_UPDATE 等）
+- 按时间倒序列出 `audit_log` 条目（PUBLISH / DISABLE / UPDATE 等，枚举值同 05-storage DDL `audit_log.action`）
 - 每条目展开 → diff 视图（before_snapshot vs after_snapshot，JSON diff 高亮）
 - 点击"操作人"→ 可按 actor 过滤；同时显示 actorType（USER / SYSTEM / JOB）
 - 发布失败条目（`action=PUBLISH_FAILED`）：红色标记 + `after_snapshot.errorCode` tooltip（`UNRESOLVED_VARIABLE` / `METRIC_NOT_BOUND` 等，完整清单见 10-api-contract §七）

@@ -28,7 +28,7 @@
 
 ## 二、Maven 模块拆分
 
-v1 阶段 8 个模块（7 个 Spring 模块 + 1 个可选 SDK 工具包），单 Spring Boot 服务部署。
+v1 阶段 8 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个可选轮询库），单 Spring Boot 服务部署。
 
 | 模块 | 职责 | 部署形态 |
 |------|------|---------|
@@ -217,7 +217,7 @@ engine:
       node-trace-days: ...
       dry-run-session-days: ...
     rollout:
-      hash-seed: ...                        # murmur3 seed，上线后不要改（D7）
+      hash-seed: ...                        # murmur3 seed，上线后不要改（D6）
     observability:
       # 告警阈值，由 rule-observability 模块绑定
       eval-error-rate-threshold: ...
