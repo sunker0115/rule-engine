@@ -146,7 +146,9 @@ CREATE TABLE rule_version (
   version               INT          NOT NULL COMMENT '单调递增，per rule_definition',
   condition_ast         JSON         NOT NULL COMMENT '完整 AST 节点树，不可变',
   decision_bindings     JSON         NOT NULL COMMENT 'D27/D28：含 actions 快照的 Decision 绑定',
-  pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表',
+  pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表（含 ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX 各类型配置）',
+  rollout               JSON         NOT NULL COMMENT 'D6 灰度配置快照（type / percentage / tagConditions）；空对象表示无灰度限制，全量放行',
+  kind                  ENUM('AST_BOOLEAN','SCORECARD','DECISION_TREE','DECISION_TABLE','EXPRESSION_SCRIPT') NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT 'D12：规则形态冻结；v1 仅 AST_BOOLEAN 实装，其他占位',
   trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
   metric_dependencies   JSON         NOT NULL COMMENT 'AST 引用的 metricCode 列表（发布期静态收集）',
   compiled_predicate_ref VARCHAR(256) NULL     COMMENT 'D20 §5：编译产物引用键，v1 留空，v1.5 预编译优化时启用',
@@ -287,7 +289,7 @@ CREATE TABLE evaluation_session (
   scene_code       VARCHAR(64)  NOT NULL,
   event_type       VARCHAR(64)  NOT NULL COMMENT '业务事件类型（Matcher 路由三元组之一）',
   subject_id       VARCHAR(128) NOT NULL,
-  source           ENUM('PUSH','PULL','REPLAY') NOT NULL DEFAULT 'PUSH' COMMENT 'D23：触发来源，不改幂等语义',
+  source           ENUM('PUSH','PULL','REPLAY') NOT NULL DEFAULT 'PUSH' COMMENT 'D23：评估触发方式（PUSH=异步推送 / PULL=同步调用 / REPLAY=事件回放），与 RuleEvent.source（HTTP/MQ/JOB/SDK/REPLAY）不同维度，不改幂等语义',
   status           ENUM('PENDING','HIT','MISS','BLOCKED','ERROR','FAILED') NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING=进行中；HIT/MISS/BLOCKED/ERROR=D22 四态；FAILED=异常崩溃',
   final_decision   VARCHAR(64)  COMMENT '最终决策码（nullable，未命中或 BLOCKED 时为 null）',
   hit_decisions    JSON         COMMENT '命中的所有决策码列表',
@@ -446,7 +448,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 `rule_version` 行一旦发布（`published_at` 非 null）永不 UPDATE / DELETE：
 
 - 修改规则 = 创建新 version（version 单调递增，per rule_definition）
-- 旧 version `status` 改为 `SUPERSEDED`（仍可被 `evaluation_session.rule_version_id` 外键引用，历史评估可追溯）
+- 旧 version `status` 改为 `SUPERSEDED`（仍可被 `node_trace.rule_version_id` 引用，历史评估节点 trace 可追溯至对应版本；同时可通过 `action_execution.decision_code` 关联 `rule_version.decision_bindings`，追溯 Action 派发时所绑定的 Decision 快照）
 - 新 version INSERT，Matcher 倒排索引热更指向新 version（≤15s 全实例收敛，D17）
 - 回滚 = 用旧 version 的 `condition_ast` / `decision_bindings` 内容新建草稿 → 走标准发布流程产出新 version 号，不是直接切回旧 version（避免 current_version 倒退造成审计断层）
 

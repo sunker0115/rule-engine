@@ -230,7 +230,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `percentage` | Int (0-100) | `PERCENTAGE` / `HYBRID` 类型下生效；`type=USER_TAG` 时为 null |
 | `tagConditions` | List | `USER_TAG` / `HYBRID` 类型下生效；标签命中条件列表（具体节点 schema 与 `ConditionNode` 同源，由 [`03-rule-expression.md`](./03-rule-expression.md) 定义） |
 
-桶号算法固定为 `hash(subjectId, ruleVersionId) % 100`（D6 派生），**不在 `rollout` 内开放自定义 hash 种子或灰度计算降级策略**——稳定哈希是 D6 灰度桶稳定性的承诺；版本切换触发桶漂移是 D6 固有语义，不在 Rollout 配置层兜底。
+桶号算法固定为 `hash(subjectId, ruleVersionId) % 100`（D6 派生），**不在 `rollout` 内开放自定义 hash 种子或灰度计算降级策略**——稳定哈希是 D6 灰度桶稳定性的承诺；版本切换触发桶漂移是 D6 固有语义，不在 Rollout 配置层兜底。**空对象（`{}`）或 null 表示无灰度限制，全量放行。**
 
 **EvalResult 输出契约（多态，v1 仅填 `satisfied`）**：
 

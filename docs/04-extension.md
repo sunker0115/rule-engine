@@ -113,6 +113,7 @@ public interface ActionHandler {
 
     /**
      * 补偿（回滚）。由外部对账任务调用，非引擎自动触发（D18）。
+     * @return ActionResult
      */
     default ActionResult compensate(ActionContext ctx) {
         return ActionResult.notSupported();
@@ -122,6 +123,7 @@ public interface ActionHandler {
      * dry-run 预览。不发起任何外部副作用（HTTP/MQ/DB 写入），返回预测 ActionResult。
      * v1 阶段未实装时由 Dispatcher 短路返回 SKIPPED + DRY_RUN_NOT_IMPLEMENTED（D7）。
      * v1.5 全量补齐后该 errorCode 不再产生。
+     * @return ActionResult
      */
     default ActionResult dryRun(ActionContext ctx) {
         return ActionResult.skipped("DRY_RUN_NOT_IMPLEMENTED");

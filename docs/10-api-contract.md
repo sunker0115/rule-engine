@@ -292,7 +292,7 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 
 | errorCode | 含义 |
 |-----------|------|
-| `UNRESOLVED_VARIABLE` | conditionAst 引用了未绑定的 metricCode |
+| `UNRESOLVED_VARIABLE` | conditionAst / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内） |
 | `METRIC_NOT_BOUND` | metric 不在 Scene.scene_metric_binding 白名单内 |
 | `ACTION_TYPE_NOT_BOUND` | actionType 不在 Scene.scene_action_binding 白名单内 |
 | `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了 Scene 未定义的 Decision |
