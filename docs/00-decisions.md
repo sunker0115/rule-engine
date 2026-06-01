@@ -904,7 +904,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ## D28. Decision.actions 变更生效时机 ⭐⭐
 
-**背景**：D27 将 Action 迁移到 Decision.actions，但 Decision.actions 在 Rule 发布时随 `decision_bindings_snapshot` 一同快照化——修改 Decision.actions 后，已发布的 Rule 版本仍使用旧快照，新配置不会自动生效。运营容易误以为"改了 Decision 就生效了"。
+**背景**：D27 将 Action 迁移到 Decision.actions，但 Decision.actions 在 Rule 发布时随 `rule_version.decision_bindings`（DDL 落地列名，概念期有时称 `decision_bindings_snapshot`）一同快照化——修改 Decision.actions 后，已发布的 Rule 版本仍使用旧快照，新配置不会自动生效。运营容易误以为"改了 Decision 就生效了"。
 
 | 选项 | 说明 | 权衡 |
 |------|------|------|
@@ -915,7 +915,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 **v1 落地范围**：
 - Decision.actions 修改后引擎侧无感知，已发布 Rule 继续使用快照；
-- 平台 UI 在修改 Decision.actions 保存时，查询所有 `rule_version.decision_bindings_snapshot` 引用该 Decision 的已发布规则，弹出提示列表："以下 N 条规则使用旧快照，需重新发布才能使用最新 actions"；
+- 平台 UI 在修改 Decision.actions 保存时，查询所有 `rule_version.decision_bindings`（DDL 落地列名，无 `_snapshot` 后缀）引用该 Decision 的已发布规则，弹出提示列表："以下 N 条规则使用旧快照，需重新发布才能使用最新 actions"；
 - 提示仅为运营警示，不阻断保存操作。
 
 **v1 不做的**：
@@ -940,7 +940,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 **你的决定**：B
 
 **v1 落地范围**：
-- Scene 字段 `decisionStrategy` 保留可选，但引擎在评估阶段对 PUSH/HYBRID Scene 的缺省逻辑改为：`decisionStrategy == null` 时等价于 `HIGHEST_PRIORITY`；
+- Scene 字段 `decisionStrategy`：DDL 层 NOT NULL DEFAULT 'HIGHEST_PRIORITY'，API 层可不传（引擎用 DDL DEFAULT）；引擎对 PUSH/HYBRID Scene 缺省逻辑：DB 值即 `HIGHEST_PRIORITY`，评估时不产生 null；
 - PULL Scene `decisionStrategy` 保持无意义（PULL 不合成 finalDecision 也不派发 Action），配置了也忽略；
 - 前端 UI 在 PUSH/HYBRID Scene 编辑页将 `decisionStrategy` 下拉默认选中 `HIGHEST_PRIORITY`，显示"（默认）"标注。
 

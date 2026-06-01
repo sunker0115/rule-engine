@@ -297,7 +297,7 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 | `ACTION_TYPE_NOT_BOUND` | actionType 不在 Scene.scene_action_binding 白名单内 |
 | `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了 Scene 未定义的 Decision |
 | `ZOMBIE_PUBLISHING` | 后台清扫检测到 PUBLISHING 状态残留超时，强制修正为 PUBLISH_FAILED（D19） |
-| `HANDLER_EXCEPTION` | 发布事务内未分类异常 |
+| `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
 
 ---
 

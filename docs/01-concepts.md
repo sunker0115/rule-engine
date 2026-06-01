@@ -184,7 +184,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `tenantId` | String | 必填 |
-| `scene` | String | 必填，路由键 |
+| `scene` | String | 必填，路由键（内部 POJO 字段名；API 层 JSON 字段名为 `sceneCode`，见 10-api-contract §三） |
 | `eventType` | String | 业务事件类型，如 `user.signup` / `trade.completed` |
 | `eventId` | String | 唯一 ID，用于幂等 |
 | `subjectId` | String | 业务主体 ID（用户 ID / 账户 ID / 订单 ID） |
@@ -395,7 +395,7 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。补偿流水线触发入口详见 [`07-operability.md`](./07-operability.md) §补偿流水线。
 - **`action_execution` 对账三态**：`SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。
 - **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
-- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **接口已预留 `dryRun(action, context)` 入口**——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。**v1 范围（D7）**：评估层 dry-run 一等公民（走完整评估链路 + 节点 trace），ActionHandler 层的 `dryRun` 实装在 **v1.5** 由各 handler 补齐；v1 阶段未补齐的 handler 在 dry-run 时由 Dispatcher 短路返回占位预览（`status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`）。dry-run 完整行为契约见 §五 Q10。
+- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **接口已预留 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。**v1 范围（D7）**：评估层 dry-run 一等公民（走完整评估链路 + 节点 trace），ActionHandler 层的 `dryRun` 实装在 **v1.5** 由各 handler 补齐；v1 阶段未补齐的 handler 在 dry-run 时由 Dispatcher 短路返回占位预览（`status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`）。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
 - **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(action, context)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
 
@@ -700,6 +700,7 @@ interface Scheduler {
 | `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
 | `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |
 | `source` | `PUSH / PULL / REPLAY`；记录**评估触发方式**（PUSH=异步推送 / PULL=同步调用 / REPLAY=事件回放）；与 `RuleEvent.source`（HTTP / MQ / JOB / SDK / REPLAY）含义不同——RuleEvent.source 记录事件来源渠道，session.source 记录引擎调用方式；不改幂等语义（D23） |
+| `occurred_at` | 业务事件发生时间（来自 RuleEvent.occurredAt，非引擎收到时间） |
 | `started_at` | 评估开始时间 |
 | `finished_at` | 评估结束时间 |
 | `eval_duration_ms` | 整 session 耗时（ms） |
