@@ -289,6 +289,7 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 | `BUSINESS_REJECTED` | false | 外部系统明确拒绝（如工单系统返回 400） |
 | `PREDECESSOR_FAILED` | false | failFast 前置 Action 失败（D18） |
 | `QUEUE_OVERFLOW` | true | Action Dispatcher 队列满，Action 已丢弃入重试队列（D20） |
+| `HANDLER_EXCEPTION` | false | ActionHandler.execute() 抛出未捕获异常（D18） |
 | `DRY_RUN_NOT_IMPLEMENTED` | false | handler 未实装 dryRun()，dry-run 时 Dispatcher 短路返回 SKIPPED（D7） |
 | `NOT_SUPPORTED` | false | compensate() 不支持 |
 
@@ -300,6 +301,7 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 | `METRIC_NOT_BOUND` | metric 不在 Scene.scene_metric_binding 白名单内 |
 | `ACTION_TYPE_NOT_BOUND` | actionType 不在 Scene.scene_action_binding 白名单内 |
 | `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了 Scene 未定义的 Decision |
+| `ZOMBIE_PUBLISHING` | 后台清扫检测到 PUBLISHING 状态残留超时，强制修正为 PUBLISH_FAILED（D19） |
 
 ---
 

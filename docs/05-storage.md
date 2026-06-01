@@ -148,6 +148,7 @@ CREATE TABLE rule_version (
   pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表',
   trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
   metric_dependencies   JSON         NOT NULL COMMENT 'AST 引用的 metricCode 列表（发布期静态收集）',
+  compiled_predicate_ref VARCHAR(256) NULL     COMMENT 'D20 §5：编译产物引用键，v1 留空，v1.5 预编译优化时启用',
   published_at          DATETIME(3)           COMMENT 'NULL = 草稿；非 NULL = 已发布',
   published_by          VARCHAR(64),
   status                ENUM('ACTIVE','SUPERSEDED','DISABLED') NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE=当前有效/SUPERSEDED=被新版本取代/DISABLED=手动禁用',

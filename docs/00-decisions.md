@@ -360,7 +360,7 @@ EvalResult {
     satisfied:       boolean
     score? category? decision?         // D12 各 kind 多态
     trace:           List<NodeTrace>
-    errorCode?:      String            // EVAL_TIMEOUT / METRIC_FETCH_FAIL / EVALUATOR_EXCEPTION / SCHEMA_VIOLATION
+    errorCode?:      String            // METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR / PAYLOAD_SCHEMA_MISMATCH（见 10-api-contract §七）
     errorMessage?:   String
     failedNodeIds?:  List<String>      // 哪些 AST 节点失败
     partial?:        Boolean           // true=部分成功，false=完全失败

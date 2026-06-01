@@ -243,7 +243,7 @@ EvalResult {
     finalDecision?:  DecisionRef          // D26：合成后最终 Decision（Scene 配了 decisionStrategy 时填充）
     hitDecisions:    List<DecisionRef>    // D26：所有命中规则的 Decision 按 priority 排序（始终填充，无绑定时为空列表）
     trace:           List<NodeTrace>      // 节点级 trace（D7），所有 kind 都填
-    errorCode?:      String               // D15：EVAL_TIMEOUT / METRIC_FETCH_FAIL / EVALUATOR_EXCEPTION / SCHEMA_VIOLATION
+    errorCode?:      String               // D15：METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR / PAYLOAD_SCHEMA_MISMATCH（见 10-api-contract §七）
     errorMessage?:   String               // D15：人读错误信息
     failedNodeIds?:  List<String>         // D15：哪些 AST 节点失败
     partial?:        Boolean              // D15：true=部分成功，false=完全失败
@@ -626,7 +626,7 @@ interface Scheduler {
 
 - 仅 `type=USER` 实装；其他枚举值在 Scene 发布时拒绝；
 - `attributes` 取数路径：按 `subjectId` 查 `user_profile` 表加载，**RuleEvent.payload 不补充 attributes**——payload 数据走 `event.payload.*` 引用路径，与 `subject.*` 严格分离（避免运营心智混乱、避免 payload 字段意外覆盖主体属性）；
-- 缺失属性（user_profile 无该字段或主体不存在）→ 引用该属性的 ConditionNode 走 D15 `EVALUATOR_EXCEPTION` 失败语义，不静默兜底为 null。
+- 缺失属性（user_profile 无该字段或主体不存在）→ 引用该属性的 ConditionNode 走 D15 `CONDITION_EVAL_ERROR` 失败语义，不静默兜底为 null。
 
 **关键边界**：
 
@@ -680,7 +680,7 @@ interface Scheduler {
 | `scene` | 场景（Matcher 路由键） |
 | `event_type` | 事件类型 |
 | `subject_id` | 主体 ID |
-| `status` | `HIT / MISS / BLOCKED / ERROR`（D22 四态，聚合自本次评估的规则集合结果） |
+| `status` | `PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态终态）/ `FAILED`（引擎异常崩溃，未正常结束）；D22 四态是对账统计口径，`PENDING` / `FAILED` 是运行时中间态，不参与对账分母 |
 | `blocked_by` | nullable；拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
 | `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
 | `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
