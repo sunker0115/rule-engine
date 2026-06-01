@@ -415,6 +415,7 @@ EvalContext {
     metrics:  Map<metricCode, Value> // 本次评估涉及的指标快照
     now:      Instant                // 评估开始时间（统一时钟）
     traceId:  String                 // 链路 ID
+    dryRun:   Boolean                // 引擎内部路由标志（D7/D21）：true 时 TraceWriter 写 dry_run_session 系列表而非 prod 表
 }
 ```
 
@@ -439,6 +440,7 @@ EvalContext {
 - **EvalContext 是不可变的**：Evaluator / Handler 不能修改 EvalContext；如果 Action 产生了"新指标"，那是下次评估的事。
 - **EvalContext 按需构建**：扫 AST 收集涉及的 `metricCode`，并发取数，组成本次 EvalContext；没引用的指标不取（D5 派生）。
 - **EvalContext ≠ 数据库快照**：EvalContext 里的 `subject` 可能比 DB 新（如某个属性是从事件 payload 补的），以 EvalContext 为准。
+- **`dryRun` 不参与 AST 引用**：`dryRun` 是引擎内部路由标志，不在 D20 §3 闭合校验的可寻址路径表中，ConditionNode 表达式不能引用它；仅 TraceWriter / Dispatcher 内部按此标记路由写入目标（D7 / D21）。
 - **`providedMetrics` 优先于 sourceType 取数**（D30）：评估请求携带 `providedMetrics` 时，EvalContext 构建阶段对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；`allowProvided=false` 的 key 即使传了也忽略（WARN 日志）。`providedMetrics` 的值只活在本次评估，不持久化。trace 记录每个 metric 的 `valueSource: PROVIDED | FETCHED`。
 
 ### 3.9 Metric（指标）
