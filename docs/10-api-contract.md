@@ -261,7 +261,7 @@ GET /api/v1/evaluation-sessions?tenantId=demo-tenant&sceneCode=risk.transfer&sub
 GET /api/v1/evaluation-sessions/{sessionId}/trace?tenantId=demo-tenant
 ```
 
-**Response 200：** AST 节点树结构，每节点含 `type / result / actualValue / errorCode / valueSource`。
+**Response 200：** AST 节点树结构，每节点含 `type / result / actualValue / errorCode / valueSource`。响应格式与 §3.3 dry-run 的 `nodeTrace` 相同（嵌套树）；数据来源是 `node_trace` 表的扁平行，由 API 层按 `node_path` 重建树后返回。dry-run 路径则直接序列化内存中的 AST 求值树，不落 `node_trace` 表。
 
 ### 6.3 查询 audit_log
 
