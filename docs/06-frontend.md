@@ -153,17 +153,17 @@ frontend/
 │   │   ├── eval.ts                     # 评估 / dry-run 接口
 │   │   └── audit.ts                    # 审计日志接口
 │   ├── pages/
-│   │   ├── SceneList/                  # Scene 列表页
-│   │   ├── RuleEditor/                 # 规则编辑主页（三栏布局）
+│   │   ├── scene-list/                 # Scene 列表页
+│   │   ├── rule-editor/                # 规则编辑主页（三栏布局）
 │   │   │   ├── index.tsx               # 布局骨架（左：规则树 | 中：AST 编辑器 | 右：属性面板）
 │   │   │   ├── RuleTree.tsx            # 左栏：Scene/Rule 树（Ant Design Tree）
 │   │   │   ├── ConditionEditor.tsx     # 中栏：react-querybuilder 封装
 │   │   │   └── PropertyPanel.tsx       # 右栏：规则属性 / paramsSchema 动态表单
-│   │   ├── DryRun/                     # dry-run 执行与结果展示
-│   │   └── Audit/                      # 审计日志查询与 diff 展示
+│   │   ├── dry-run/                    # dry-run 执行与结果展示
+│   │   └── audit/                      # 审计日志查询与 diff 展示
 │   └── components/
-│       ├── DryRunResult/               # 节点级 ✅/❌/⏭ + actualValue 叠加层
-│       └── ParamsSchemaForm/           # 根据 paramsSchema JSON 动态渲染表单控件
+│       ├── dry-run-result/             # 节点级 ✅/❌/⏭ + actualValue 叠加层
+│       └── params-schema-form/         # 根据 paramsSchema JSON 动态渲染表单控件
 └── public/
 ```
 
