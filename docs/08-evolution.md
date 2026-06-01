@@ -30,7 +30,7 @@
 
 **设计原则**：D12 引入 `Rule.kind` 是为评分卡 / 决策树 / 决策表 / 脚本类规则演进**预留 schema 占位**，不是 v1 要实现的功能。
 
-**各 kind 共享 Rule 的公共属性**：trigger / preGates / actions / version / rollout / Scene 治理都不变，多态只在"判定主体"内部——
+**各 kind 共享 Rule 的公共属性**：trigger / preGates / decisionBindings / version / rollout / Scene 治理都不变，多态只在"判定主体"内部——（注：actions 已迁移到 Decision，不再是 Rule 的直接字段，D27）
 
 > 下表"判定主体字段"列只指示**形态**与**承载方式**，具体字段命名留待 v2 设计时定稿，避免占名误导后续设计。
 
@@ -217,7 +217,7 @@ D8 性能目标（千级 QPS，决定是否引入 RETE / 预编译 / 索引化�
 
 ### 第三组：Rule 结构与模式（D12–D17）
 
-D12 `kind` 字段预留（AST_BOOLEAN → 多态出口）；D13 payloadSchema v1 不做运行时强校验（闭合）；D14 审计强一致 + 敏感数据交给调用方处理；D15 单节点失败降级（不整树崩）；D16 发布期静态校验（UNRESOLVED_VARIABLE 等）；D17 倒排索引不可变快照热更（Matcher 无 DB 热路径，热更 ≤15s）。
+D12 `kind` 字段预留（AST_BOOLEAN → 多态出口）；D13 payloadSchema v1 不做运行时强校验（闭合）；D14 审计强一致 + 敏感数据交给调用方处理；D15 单节点失败降级（不整树崩）；D16 链式触发显式禁止（ActionHandler 不返回新事件，业务链式走外部 MQ）；D17 倒排索引不可变快照热更（Matcher 无 DB 热路径，热更 ≤15s）。
 
 ### 第四组：精化与派生（D18–D22）
 
@@ -225,7 +225,7 @@ D18 Action 失败归一为 FAILED(retryable)，补偿不自动触发；D19 rule_
 
 ### 第五组：最终精化（D23–D30）
 
-D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔）；D25 pre-gate 顺序固定（ROLLOUT → WHITELIST → BLACKLIST → RATE_LIMIT → MUTEX）；D26 Decision 实体（Tenant 级）+ 多规则命中合成（HIGHEST_PRIORITY）；D27 Action 从 Rule 迁移到 Decision（最大重构节点）；D28 actions 在发布时快照到 rule_version；D29 PUSH/HYBRID 默认 HIGHEST_PRIORITY；D30 providedMetrics + allowProvided per sourceType（最晚决策）。
+D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔）；D25 Context 构建并发模型（CompletableFuture.allOf() 并行 + SubjectLoader SPI，主体加载与 metric 并行）；D26 Decision 实体（Tenant 级）+ 多规则命中合成（HIGHEST_PRIORITY）；D27 Action 从 Rule 迁移到 Decision（最大重构节点）；D28 actions 在发布时快照到 rule_version；D29 PUSH/HYBRID 默认 HIGHEST_PRIORITY；D30 providedMetrics + allowProvided per sourceType（最晚决策）。
 
 ### 核心转折点
 

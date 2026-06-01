@@ -102,7 +102,7 @@ POST /api/v1/rule/evaluate
 }
 ```
 
-> **注**：PULL Scene 的 `Decision.actions` 必须为空（发布校验拒绝），`actionResults` 始终为空数组；HYBRID Scene 的 Action **异步**派发（评估线程入队后即返回，不等待 Handler 完成，见 02-runtime §二约束），`actionResults` 中 `status` 可能为 `SUCCESS` / `FAILED` / `PENDING`（取决于 Action 是否在接口响应前已执行完毕）。
+> **注**：PULL Scene 的 `Decision.actions` 必须为空（发布校验拒绝），`actionResults` 始终为空数组；HYBRID Scene 的 Action **异步**派发（评估线程入队后即返回，不等待 Handler 完成，见 02-runtime §二约束），`actionResults` 为空数组（异步派发进行中时尚无结果）或含 `status=SUCCESS / FAILED / SKIPPED` 的记录（Handler 已执行完毕时）；`PENDING` 仅是 `action_execution` DB 过程态，不出现在 API 响应的 `ActionResult.status` 枚举中。
 
 **超时建议**：调用方设 HTTP timeout ≥ 500ms（v1 P99 目标 < 500ms；风控高频场景 < 100ms 目标见 [`07-operability.md`](./07-operability.md) §七）。
 
