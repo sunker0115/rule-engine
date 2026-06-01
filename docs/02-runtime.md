@@ -181,7 +181,7 @@ RuleEvent
 2. **providedMetrics 优先匹配**（D30）：检查评估请求中 `providedMetrics` 字段，对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；
 3. **并发取数**（D25）：Subject 加载（`SubjectLoader.load()`）与剩余 metric 批拉（各 `MetricSource` 自管连接池/HTTP client）并行启动，`CompletableFuture.allOf()` 等待全部完成；
 4. **组装 EvalContext**：将 Subject + metrics + RuleEvent + `now`（评估开始时间）+ traceId 封装为不可变 POJO；
-5. **同步写 evaluation_session**（D21）：INSERT `evaluation_session { status=PENDING（中间状态）, tenant_id, event_id, scene, subject_id, ... }`，与 event_id DB uk 构成幂等双兜底下半层。（注：Pre-Gate 全部拦截时在阶段③直接写 `status=BLOCKED`，不经过本步骤）
+5. **同步写 evaluation_session**（D21）：INSERT `evaluation_session { status=PENDING（中间状态）, tenant_id, event_id, scene_code, subject_id, ... }`，与 event_id DB uk 构成幂等双兜底下半层。（注：Pre-Gate 全部拦截时在阶段③直接写 `status=BLOCKED`，不经过本步骤）
 
 **EvalContext 标准字段**（v1 闭合枚举，发布期引用闭合校验根路径，D20 §3）：
 

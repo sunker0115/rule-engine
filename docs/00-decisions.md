@@ -457,8 +457,8 @@ EvalResult {
 **v1 语义规范**：
 - **执行顺序**：单 Rule 内 Action 按 `sortOrder` 顺序串行执行（v1 不并行，D4 已说明 v2 接工作流引擎才考虑编排）；
 - **单 Action 失败定义**：`ActionHandler.execute` 返回 `ActionResult.status = FAILED` 或抛出未捕获异常；引擎将异常转为 `ActionResult { status: FAILED, errorCode: HANDLER_EXCEPTION, retryable: false }`；
-- **重试**：`retryable=true` 的失败入重试队列（独立调度，不阻塞同 Rule 后续 Action）；`retryable=false` 直接落 `action_execution.status = FAILED`；
-- **隔离默认**：除非显式 `Action.failFast = true`，单条 Action 失败 / 跳过 / 重试中 → 同 Rule 后续 Action **继续正常执行**；
+- **重试**：`retryable=true` 的失败入重试队列（独立调度，不阻塞同 Decision 内后续 Action）；`retryable=false` 直接落 `action_execution.status = FAILED`；
+- **隔离默认**：除非显式 `Action.failFast = true`，单条 Action 失败 / 跳过 / 重试中 → 同 Decision 内后续 Action **继续正常执行**；
 - **failFast 语义**：`failFast=true` 的 Action 失败后，**同一 Decision** 内 `sortOrder` 大于本 Action 的后续 Action 全部标记 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，不进入重试队列（D27 迁移后语义，Action 归属 Decision）；
 - **Rule 状态独立**：单 Action 失败 **不影响** Rule 的 `EvalResult.satisfied`（评估已完成才会派发 Action，Action 是命中后行为）；
 - **跨 Rule 隔离**：与 D15 一致——同 (scene + eventType) 下其他 Rule 的 Action 不受影响；

@@ -482,8 +482,8 @@ EvalContext {
 
 | 字段 | 说明 |
 |------|------|
-| `scene_id` | Scene 主键 |
-| `metric_code` | 引用 Metric |
+| `scene_id` | Scene 主键（外键引用 `scene.id`，BIGINT） |
+| `metric_definition_id` | 引用 Metric（外键引用 `metric_definition.id`，BIGINT；通过 JOIN 取 `metric_code`） |
 | `cache_policy_override` | Scene 级缓存策略覆盖（可选） |
 
 **关键边界**：
