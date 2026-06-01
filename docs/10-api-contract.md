@@ -102,18 +102,18 @@ POST /api/v1/rule/evaluate
 }
 ```
 
-> **注**：PULL Scene 的 `Decision.actions` 必须为空（发布校验拒绝），`actionResults` 始终为空数组；HYBRID Scene 的 Action 在评估返回**前**同步等待派发完成，因此 `actionResults` 中 `status` 为 `SUCCESS` 或 `FAILED`，不会出现 `PENDING`（`PENDING` 仅为 action_execution 表的过程态，不暴露给同步调用方）。
+> **注**：PULL Scene 的 `Decision.actions` 必须为空（发布校验拒绝），`actionResults` 始终为空数组；HYBRID Scene 的 Action **异步**派发（评估线程入队后即返回，不等待 Handler 完成，见 02-runtime §二约束），`actionResults` 中 `status` 可能为 `SUCCESS` / `FAILED` / `PENDING`（取决于 Action 是否在接口响应前已执行完毕）。
 
 **超时建议**：调用方设 HTTP timeout ≥ 500ms（v1 P99 目标 < 100ms，500ms 留有余量）。
 
 **失败语义（D15）**：`errorCode` 非 null 表示评估期有节点出错；调用方按 fail-secure（拒绝）或 fail-open（放行）自行决策，引擎不代为决定。
 
 **`ruleHit=false` 三种情形**：
-- **Pre-Gate 拦截**：`ruleHit=false`，`finalDecision=null`，`evaluation_session.status=BLOCKED`，`blocked_by` 含拦截门类型
-- **无候选规则**：`ruleHit=false`，`finalDecision=null`，`evaluation_session.status=MISS`（Matcher 未匹配到任何 RuleVersion）
-- **AST 不满足**：`ruleHit=false`，`finalDecision=null`，`evaluation_session.status=MISS`（AST 求值返回 false）
+- **Pre-Gate 全部拦截**：`ruleHit=false`，`finalDecision=null`，`evaluation_session.status=BLOCKED`，`blocked_by` 含首个拦截门类型（evaluation_session 已落库）
+- **无候选规则**：`ruleHit=false`，`finalDecision=null`，**evaluation_session 不落库**（Matcher 在阶段②短路返回，不进入 EvalContext 构建，见 02-runtime §3.2）
+- **AST 不满足**：`ruleHit=false`，`finalDecision=null`，`evaluation_session.status=MISS`（AST 求值返回 false，evaluation_session 已落库）
 
-调用方若需区分三种情形，查 `evaluation_session.status` + `blocked_by`。
+调用方若需区分三种情形，查 `evaluation_session.status` + `blocked_by`；无候选规则时 evaluation_session 不存在，查询返回空。
 
 ### 3.3 dry-run 评估
 

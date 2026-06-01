@@ -218,7 +218,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `preGates` | 准入闸门列表（频次 / 互斥 / 黑白名单 / 灰度命中） |
 | `actions` | **已迁移到 Decision**（D27）：Rule 不再直接持 actions；命中后要执行的动作由 Rule 绑定的 Decision.actions 决定 |
 | `status` | 状态机：`DRAFT` → `PUBLISHING`（瞬时）→ `PUBLISHED` / `PUBLISH_FAILED`；`PUBLISHED ↔ DISABLED` 独立分支；`PUBLISH_FAILED → DRAFT` 需 UI 显式确认（D19） |
-| `current_version` | 当前生效的版本号（`PUBLISHED` / `DISABLED` 状态下有值，指向 `rule_version` 表中对应 `(ruleId, version)` 的不可变快照行；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本）。版本号本身存在 `rule_version.version` 列，`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
+| `current_version` | 指向当前生效 `rule_version` 行的**主键 id**（`BIGINT`，即 `rule_version.id`，而非业务版本序号 `rule_version.version`）。`PUBLISHED` / `DISABLED` 状态下有值；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本。`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
 | `rollout` | 灰度配置（命中算法 + 比例 + 标签） |
 | `published_by / published_at` | 发布审计字段（D14，仅 PUBLISHED 状态有值；通用 `created_by` / `updated_by` 见 §三 顶部横切说明） |
 
@@ -463,7 +463,7 @@ EvalContext {
 | `params` | 取数参数（结构依 sourceType 而异，见下方对比表） |
 | `dataType` | `LONG` / `DOUBLE` / `STRING` / `BOOLEAN` / `LIST` |
 | `cachePolicyDefault` | 默认缓存策略（TTL / 不缓存 / 评估范围内缓存）；实时性敏感场景配 `ttl=0` 强制每次取数 |
-| `allowProvided` | 是否允许调用方通过 `providedMetrics` 覆盖本指标取数结果（D30）。按 `sourceType` 给推荐默认值：`ATTRIBUTE` / `EXTERNAL_HTTP` 默认 `true`（业务方通常手里就有这个值）；`SQL_AGGREGATE` / `STREAM` 默认 `false`（平台权威计算，不应被覆盖）。例外情况手动覆盖；`false` 时引擎忽略 `providedMetrics` 中对应 key 并 WARN |
+| `allowProvided` | 是否允许调用方通过 `providedMetrics` 覆盖本指标取数结果（D30）。按 `sourceType` 给推荐默认值：`ATTRIBUTE` / `EXTERNAL_HTTP` 建议创建时显式设为 `true`（业务方通常手里就有这个值）；`SQL_AGGREGATE` / `STREAM` 保持 `false`（平台权威计算，不应被覆盖）。DDL 列级 `DEFAULT 0` 是保守兜底，应用层 API 按 `sourceType` 写入正确值，不依赖列默认。例外情况手动覆盖；`false` 时引擎忽略 `providedMetrics` 中对应 key 并 WARN |
 
 **sourceType 对比表**：
 
