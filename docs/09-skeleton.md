@@ -147,7 +147,8 @@ com.sstlfsj.rule
 | `InterpretedExecutor` | `rule-kernel` | v1 默认 RuleVersionExecutor |
 | `TraceWriterDbImpl` | `rule-observability` | 主服务，异步批写 DB |
 | `NoopTraceWriter` | `rule-observability` | SDK 模式 / 测试环境 |
-| `SpringSchedulerAdapter` | `rule-eval-svc` | Spring `@Scheduled` 包装 |
+| `XxlJobScheduler` | `rule-eval-svc` | v1 首个正式 Scheduler 实现，对接 xxl-job 执行器集群（D11） |
+| `SpringSchedulerAdapter` | `rule-eval-svc` | Spring `@Scheduled` 包装，零外部依赖兜底实现 |
 
 > **单服务模式热加载**：`rule-eval-svc` 内部直接以 `@ApplicationModuleListener` 订阅 `RulePublishedEvent` / `SceneChangedEvent`，不经 `RuleVersionWatcher` / `SceneWatcher` SPI 通道（D17 Modulith 补充段）。这是框架内部机制，不对外暴露为可替换 SPI；替换方向是切到 MQ（加 `@Externalized`），而非换 Watcher 实现。
 
