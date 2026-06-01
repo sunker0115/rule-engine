@@ -168,7 +168,7 @@
 | `RuleVersion` | 规则发布产生的不可变版本快照行（D6 + D19）：含 `(ruleId, version)` 主键 + AST/preGates/rollout/**decision_bindings**（含 Decision.actions 快照）冻结副本；**不含 actions_snapshot**（D27）；运行时按 `(scene, eventType)` **倒排索引**直接拿 RuleVersion 快照列表（D17：`current_version` 在索引预热时已解析，无运行时二次查询） | ✅ |
 | `EvalResult` | 评估输出契约多态：`{satisfied, score?, category?, decision?, finalDecision?, hitDecisions, trace, errorCode?, errorMessage?, failedNodeIds?, partial?}`；D12 多态 + D15 失败槽位 + D26 Decision 合成输出 | ✅ |
 | `Decision` | Tenant 级决策定义（D26 + D27）：`{tenant_id, code, name, priority, description, actions}`；Tenant 内 `code` 唯一；`priority` 数值越小优先级越高（如 REJECT=1, REVIEW=2, PASS=100）；`actions` 为 Action 列表（D27 迁移自 Rule），仅 `finalDecision.actions` 被派发；PULL Scene 下 Decision.actions 必须为空 | — |
-| `RuleDecisionBinding` | Rule 与 Decision 的关联（D26，版本快照化）：`{rule_id, decision_code, score_range_min?, score_range_max?}`；v1 `AST_BOOLEAN` kind 直接 1:1 绑定；score 区间在 D12 SCORECARD kind 时启用；发布时冻结进 `rule_version.decision_bindings_snapshot` | — |
+| `RuleDecisionBinding` | Rule 与 Decision 的关联（D26，版本快照化）：`{rule_id, decision_code, score_range_min?, score_range_max?}`；v1 `AST_BOOLEAN` kind 直接 1:1 绑定；score 区间在 D12 SCORECARD kind 时启用；发布时冻结进 `rule_version.decision_bindings`（DDL 落地列名，无 `_snapshot` 后缀） | — |
 | `Scene` | Tenant 内的业务域命名空间 + metric / action 治理白名单 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID）+ 元数据 schema（`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`）+ 决策合成策略（`decisionStrategy`，D26） | — |
 | `SceneMetricBinding` | Scene 与 Metric 的可见性绑定，规则只能引用本 Scene 绑定的 metric | — |
 | `SceneActionBinding` | Scene 与 actionType 的可见性绑定（仅 PUSH / HYBRID Scene 需要），规则只能配置本 Scene 绑定的 actionType；含 Scene 级默认参数与速率覆盖 | — |
