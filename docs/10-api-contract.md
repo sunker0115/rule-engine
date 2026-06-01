@@ -74,7 +74,7 @@ POST /api/v1/rule/event
 }
 ```
 
-**幂等**：相同 (tenantId, eventId) 重复提交返回 202 + 同样 eventId，不重复评估（D11）。
+**幂等**：相同 (tenantId, eventId) 重复提交返回 202 + 同样 eventId，不重复评估（D23）。
 
 ### 3.2 PULL 评估（同步，Scene.dominantMode = PULL / HYBRID）
 

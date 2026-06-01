@@ -115,9 +115,11 @@ Decision           actionType               │
 
 | 字段 | 说明 |
 |------|------|
-| `tenant_id` | 字符串 ID，如 `acme-corp` |
+| `code` | 对外业务标识（字符串，如 `acme-corp`；DDL 中 `tenant.code`，UNIQUE） |
 | `name` | 显示名 |
-| `default` | 是否默认租户（单业务线启动时只有一个 `default` 租户） |
+| `is_default` | 是否默认租户（DDL 列名，单业务线启动时只有一个默认租户） |
+
+> **注**：`tenant.id` 是 BIGINT 自增主键，关联表中的 `tenant_id` 列是指向 `tenant.id` 的外键（BIGINT），不是字符串 `code`。对外 API 请求体使用 `tenantId` 字段传字符串 code，引擎在接入层解析为内部 id。
 
 **关键边界**：
 
@@ -236,7 +238,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 
 ```
 EvalResult {
-    satisfied:       boolean              // 所有 kind 都填；AST_BOOLEAN 表"整树求值结果"
+    satisfied:       boolean              // 所有 kind 都填；AST_BOOLEAN 表"整树求值结果"；API 层序列化为 ruleHit（见 10-api-contract §三）
     score?:          Number               // SCORECARD 启用
     category?:       String               // DECISION_TREE 启用
     decision?:       Map<String, Object>  // DECISION_TABLE 启用，输出列的命中行（与 finalDecision 正交）
