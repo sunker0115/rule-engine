@@ -397,7 +397,7 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
 - **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **接口已预留 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。**v1 范围（D7）**：评估层 dry-run 一等公民（走完整评估链路 + 节点 trace），ActionHandler 层的 `dryRun` 实装在 **v1.5** 由各 handler 补齐；v1 阶段未补齐的 handler 在 dry-run 时由 Dispatcher 短路返回占位预览（`status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`）。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
-- **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(action, context)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
+- **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(ActionContext ctx)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
 
 ### 3.8 EvalContext（评估上下文）
 
@@ -572,7 +572,7 @@ interface Scheduler {
 | `action` | 动作：`CREATE` / `UPDATE` / `PUBLISH` / `PUBLISH_FAILED` / `ENABLE` / `DISABLE` / `DELETE`（D19：发布事务回滚后单独追加 PUBLISH_FAILED 记录） |
 | `before_snapshot` | 变更前的 JSON 全量快照（DELETE / UPDATE 时填） |
 | `after_snapshot` | 变更后的 JSON 全量快照（CREATE / UPDATE / PUBLISH 时填）；`PUBLISH_FAILED` 时填错误诊断 JSON（含 `errorCode` / `stackTrace` 摘要，详见下方关键边界） |
-| `occurred_at` | 操作时间 |
+| `operated_at` | 操作时间（DDL 列名；与 `evaluation_session.occurred_at` 含义不同，后者是业务事件时间） |
 | `trace_id` | 关联请求链路 ID |
 
 **关键边界**：
@@ -790,7 +790,7 @@ interface Scheduler {
 
 **引擎提供的接入点**：
 
-- `ActionHandler.compensate(action, context): ActionResult`：SPI 方法，各 Handler 实现逆向逻辑（退券 / 扣回积分 / 关闭通知），返回类型与 `execute` 一致；
+- `ActionHandler.compensate(ActionContext ctx): ActionResult`：SPI 方法，各 Handler 实现逆向逻辑（退券 / 扣回积分 / 关闭通知），返回类型与 `execute` 一致（实现签名见 04-extension §三）；
 - `Action.compensateActionType`：标记该 Action 的反向 handler 类型（如 `coupon.revoke`），补偿流水线按此字段路由；
 - 查询接口：补偿流水线通过管理 API 查 `action_execution`（`status=SUCCESS, compensated=false`）获取待补偿清单。
 

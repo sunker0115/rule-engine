@@ -393,7 +393,7 @@ EvalResult {
 **决定**：**A**（已确认）
 
 **v1 协议规范**：
-- `ActionHandler.execute(action, context)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**；
+- `ActionHandler.execute(ActionContext ctx)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**；
 - ActionHandler **可以**调用外部 MQ / HTTP（这是 Action 的本职），但上游若要把这条 MQ 消息再翻译成 RuleEvent 推回引擎，是**业务方主动行为**，引擎不感知；
 - `RuleEvent.source` 字段记录来源（`HTTP` / `MQ` / `JOB` / `SDK` / `REPLAY`），**不**记录"链式"标识；
 - 由此推论：环检测、深度限制、子事件灰度桶继承都不存在——业务方要自己防环（如外部链路加 hop 计数）。
@@ -462,7 +462,7 @@ EvalResult {
 - **failFast 语义**：`failFast=true` 的 Action 失败后，**同一 Rule** 内 `sortOrder` 大于本 Action 的后续 Action 全部标记 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，不进入重试队列；
 - **Rule 状态独立**：单 Action 失败 **不影响** Rule 的 `EvalResult.satisfied`（评估已完成才会派发 Action，Action 是命中后行为）；
 - **跨 Rule 隔离**：与 D15 一致——同 (scene + eventType) 下其他 Rule 的 Action 不受影响；
-- **补偿**：`compensateActionType` **不自动触发**——补偿是 D4 的补偿流水线职责，由外部调度（如对账任务、手动回滚按钮）发起 `compensate(action, context)` 调用；引擎不在 Action 失败时自动跑补偿；
+- **补偿**：`compensateActionType` **不自动触发**——补偿是 D4 的补偿流水线职责，由外部调度（如对账任务、手动回滚按钮）发起 `compensate(ActionContext ctx)` 调用；引擎不在 Action 失败时自动跑补偿；
 - **对账三态**：与 D15 对齐，`action_execution` 按 `SUCCESS / FAILED / SKIPPED` 三类统计，SKIPPED 不计入失败率分母。
 
 **v1 不做的**：
@@ -502,7 +502,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 **v1 落地范围**：
 - **发布事务**（单条规则）单次 DB 事务内完成：
   1. `rule_definition` 行：`status = DRAFT → PUBLISHING`（CAS 防并发发布）
-  2. `rule_version` 表插入新版本快照行（`version` 单调递增，含完整 AST + actions + preGates + rollout 不可变冻结）
+  2. `rule_version` 表插入新版本快照行（`version` 单调递增，含完整 AST + decision_bindings + preGates + rollout 不可变冻结；`actions` 字段已由 D27 迁移到 Decision，以 `decision_bindings` JSON 快照形式存储）
   3. `rule_definition` 行：`status = PUBLISHED`、`current_version = N`、`published_by` / `published_at` 填充
   4. `audit_log` 表插入一条 `action=PUBLISH` 记录（before/after 快照）
   5. 事务提交
@@ -859,7 +859,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 1. **数据模型变更**：
    - `rule_definition` / `rule_version` **移除** `actions` / `actions_snapshot` 字段；
    - `decision_definition` **新增** `actions` 字段（Action 列表，JSON，与原 Rule.actions 结构相同）；
-   - Action 列表随 Decision 整体参与 `rule_version.decision_bindings_snapshot`（已含 decision_code，新增 decision_actions_snapshot 嵌入其中）—— 保证发布快照不可变（D6）；
+   - Action 列表随 Decision 整体参与 `rule_version.decision_bindings`（DDL 落地列名；已含 decision_code，actions 嵌入其中）—— 保证发布快照不可变（D6）；
    - `action_execution` 幂等键从 `(tenantId, eventId, ruleVersionId, actionId)` 变更为 `(tenantId, eventId, decisionCode, actionId)`（同一 event + 同一决策码下每个 actionId 只执行一次）。
 
 2. **评估流程变更**（Action Dispatcher 入口前移）：

@@ -188,7 +188,7 @@
 | `JobDefinition` | 定时任务配置：cron / 主体查询（SQL / 外部 HTTP / Metric 结果）/ eventType 模板 / payload 模板 / 并发与限流 | — |
 | `JobExecution` | 单次 Job 运行的记录（含 `jobRunId`、主体数、合成事件数、错误明细），与 `EvaluationSession` 关联 | — |
 | `Scheduler` | 调度器抽象接口：`register` / `unregister` / `triggerOnce` / `status`；`XxlJobScheduler` 为首个实现，未来可替换 Quartz / 云调度 | — |
-| `AuditLog` | 操作审计记录（D14）：`{tenant_id, actor, target_type, target_id, action, before_snapshot, after_snapshot, occurred_at, trace_id}`；与 `evaluation_session` / `node_trace` / `action_execution` 是不同维度（人的行为 vs 系统行为），严格分离 | ✅ |
+| `AuditLog` | 操作审计记录（D14）：`{tenant_id, actor, target_type, target_id, action, before_snapshot, after_snapshot, operated_at, trace_id}`；与 `evaluation_session` / `node_trace` / `action_execution` 是不同维度（人的行为 vs 系统行为），严格分离 | ✅ |
 | `RuleVersionWatcher` | 规则变更感知接口（D17 + D20 §4 固化为正式 SPI）：`subscribe(callback) / pull(since) / status`；契约要求实现方满足"最终一致 + 至多一次 callback 重复（消费方幂等）+ 启动期一次性全量拉"。v1 唯一实现 `DbPollingRuleWatcher`（默认 15s）；多 backend（MQ / Nacos / ZK）切换详见 [`08-evolution.md`](./08-evolution.md) §2.14 | — |
 | `SceneWatcher` | Scene 配置变更感知接口（D24，与 `RuleVersionWatcher` 平级）：`subscribe(callback) / pull(since) / status`；监听 `scene_definition` + `scene_metric_binding` + `scene_action_binding` 变更，触发 MetricSource/ActionHandler 资源预热/卸载 + Matcher 路由表更新。v1 唯一实现 `DbPollingSceneWatcher`（默认 30s，Scene 变更频率低于规则）；SPI 契约与 `RuleVersionWatcher` 对齐 | — |
 | `SubjectLoader` | 主体加载 SPI（D25）：`load(subjectId, subjectType, event) → Subject`；v1 唯一实现 `UserProfileLoader`（`subjectType=USER`，查 `user_profile` 表）；与 metric 并行加载进 `EvalContext` | — |
