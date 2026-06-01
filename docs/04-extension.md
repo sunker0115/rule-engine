@@ -69,7 +69,7 @@ Spring Bean + 注解扫描：引擎启动时扫 `@ConditionType` 注解的 Bean�
           "type": "object",
           "required": ["operator"],
           "properties": {
-            "operator": { "type": "string", "enum": ["EQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
+            "operator": { "type": "string", "enum": ["EQ","NEQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
             "value":    { "type": "number" },
             "min":      { "type": "number" },
             "max":      { "type": "number" }
@@ -116,6 +116,15 @@ public interface ActionHandler {
      */
     default ActionResult compensate(ActionContext ctx) {
         return ActionResult.notSupported();
+    }
+
+    /**
+     * dry-run 预览。不发起任何外部副作用（HTTP/MQ/DB 写入），返回预测 ActionResult。
+     * v1 阶段未实装时由 Dispatcher 短路返回 SKIPPED + DRY_RUN_NOT_IMPLEMENTED（D7）。
+     * v1.5 全量补齐后该 errorCode 不再产生。
+     */
+    default ActionResult dryRun(ActionContext ctx) {
+        return ActionResult.skipped("DRY_RUN_NOT_IMPLEMENTED");
     }
 }
 ```
@@ -287,7 +296,7 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "operator": { "type": "string", "enum": ["EQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
+          "operator": { "type": "string", "enum": ["EQ","NEQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
           "value": { "type": "number" },
           "min": { "type": "number" },
           "max": { "type": "number" }

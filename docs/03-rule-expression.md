@@ -90,6 +90,7 @@ AST 由四种节点类型组成，每种节点字段如下。
 | `LT` | LONG / DOUBLE | 严格小于 | 同上 |
 | `LTE` | LONG / DOUBLE | 小于等于 | 同上 |
 | `BETWEEN` | LONG / DOUBLE | `min <= value <= max`（双端闭区间） | 参数为 null → ERROR |
+| `NOT_BETWEEN` | LONG / DOUBLE | `value < min 或 value > max`（BETWEEN 取反） | 参数为 null → ERROR |
 
 ### 3.2 集合操作符
 

@@ -459,7 +459,7 @@ EvalResult {
 - **单 Action 失败定义**：`ActionHandler.execute` 返回 `ActionResult.status = FAILED` 或抛出未捕获异常；引擎将异常转为 `ActionResult { status: FAILED, errorCode: HANDLER_EXCEPTION, retryable: false }`；
 - **重试**：`retryable=true` 的失败入重试队列（独立调度，不阻塞同 Rule 后续 Action）；`retryable=false` 直接落 `action_execution.status = FAILED`；
 - **隔离默认**：除非显式 `Action.failFast = true`，单条 Action 失败 / 跳过 / 重试中 → 同 Rule 后续 Action **继续正常执行**；
-- **failFast 语义**：`failFast=true` 的 Action 失败后，**同一 Rule** 内 `sortOrder` 大于本 Action 的后续 Action 全部标记 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，不进入重试队列；
+- **failFast 语义**：`failFast=true` 的 Action 失败后，**同一 Decision** 内 `sortOrder` 大于本 Action 的后续 Action 全部标记 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，不进入重试队列（D27 迁移后语义，Action 归属 Decision）；
 - **Rule 状态独立**：单 Action 失败 **不影响** Rule 的 `EvalResult.satisfied`（评估已完成才会派发 Action，Action 是命中后行为）；
 - **跨 Rule 隔离**：与 D15 一致——同 (scene + eventType) 下其他 Rule 的 Action 不受影响；
 - **补偿**：`compensateActionType` **不自动触发**——补偿是 D4 的补偿流水线职责，由外部调度（如对账任务、手动回滚按钮）发起 `compensate(ActionContext ctx)` 调用；引擎不在 Action 失败时自动跑补偿；
@@ -896,7 +896,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `README §四` 抽象表 `RuleDefinition` / `RuleVersion` / `ActionExecution` 行同步；
 - `04-extension.md` §ActionHandler 实现指南中"注册到 Scene"的描述随白名单校验时机迁移更新。
 
-> **DDL 命名注**：实际 DDL 落地列名为 `decision_bindings`（无 `_snapshot` 后缀），本决策文档沿用概念期命名 `decision_bindings_snapshot`，两者指同一列，见 [`05-storage.md`](./05-storage.md) `rule_version` 表。
+> **DDL 命名注**：本文档正文已统一使用 DDL 落地列名 `decision_bindings`（无 `_snapshot` 后缀）；概念期草稿曾用 `decision_bindings_snapshot`，两者指同一物理列，见 [`05-storage.md`](./05-storage.md) `rule_version` 表。
 
 ---
 
