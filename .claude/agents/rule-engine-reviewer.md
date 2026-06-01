@@ -26,20 +26,20 @@ color: cyan
 
 | 文档 | 状态 | 内容说明 |
 |------|------|---------|
-| `README.md` | ✅ 完整 | 定位、D1-D25 决策表、顶层架构图、抽象表、文档导航、设计原则、版本史 |
-| `00-decisions.md` | ✅ 完整 | D1-D25 全部决策展开，含背景/选项/权衡/落地范围 |
-| `01-concepts.md` | ✅ 完整 | 8 个一等概念 + §3.1–§3.18 全景 + 心智时序 + FAQ + 词典 |
-| `02-runtime.md` | 🚧 占位 | 章节骨架就位，内部内容待定 |
-| `03-rule-expression.md` | 🚧 占位 | 章节骨架就位，内部内容待定 |
-| `04-extension.md` | 🚧 占位 | 章节骨架就位，内部内容待定 |
-| `05-storage.md` | 🚧 占位 | 章节骨架就位，内部内容待定 |
-| `06-frontend.md` | 🚧 占位 | 章节骨架就位，内部内容待定 |
-| `07-operability.md` | 🚧 占位 | 章节骨架就位，内部内容待定 |
-| `08-evolution.md` | 🚧 占位 | 章节骨架就位，演进锚点已标注 |
-| `09-skeleton.md` | 🚧 占位 | 章节骨架就位，内部工程决策待定 |
-| `10-api-contract.md` | 🚧 占位 | 章节骨架就位，内部内容待定 |
+| `README.md` | ✅ 完整 | 定位、D1-D30 决策表、顶层架构图、抽象表、文档导航、设计原则、版本史 |
+| `00-decisions.md` | ✅ 完整 | D1-D30 全部决策展开，含背景/选项/权衡/落地范围 |
+| `01-concepts.md` | ✅ 完整 | 8 个一等概念 + §3.1–§3.20 全景 + 心智时序 + FAQ + 词典 |
+| `02-runtime.md` | ✅ 完整 | 整体时序 / 六阶段链路 / EvalContext 装配 / 失败语义 / dry-run 链路 |
+| `03-rule-expression.md` | ✅ 完整 | AST 节点结构 / 操作符清单 / 短路求值 / 节点级 trace / v1 不支持表达式 / 时间类 conditionType |
+| `04-extension.md` | ✅ 完整 | ConditionType / ActionType / MetricSource SPI 接口签名 / 元数据契约 / 实现指南 |
+| `05-storage.md` | ✅ 完整 | 17 张表 DDL（11 配置层 + 6 评估层）/ 索引设计 / 不可变快照 / 数据保留策略 |
+| `06-frontend.md` | ✅ 完整 | 三栏布局 / 元数据驱动渲染 / dry-run UI / 灰度配置 UI / 审计日志 UI |
+| `07-operability.md` | ✅ 完整 | 幂等双层 / 落库策略 / dry-run 链路 / 灰度算法 / Prometheus 指标 / 告警阈值 / 可用性矩阵 / 运维参数表 |
+| `08-evolution.md` | ✅ 完整 | §2.1–§2.15 演进锚点全部展开 / 决策时间线 / 已否决方案 |
+| `09-skeleton.md` | 🚧 占位 | 章节骨架就位，内部工程决策待展开（技术栈已定：Java 21 / Spring Boot 4 / Modulith / Maven / MyBatis-Plus / com.sstlfsj.rule） |
+| `10-api-contract.md` | ✅ 完整 | PUSH/PULL/dry-run 接口 / 规则管理接口 / 元数据接口 / 审计查询接口 / errorCode 清单 / SDK 用法 / 版本兼容策略 |
 
-**占位文档的审查原则**：占位文档内部尚无实质内容，不能作为"文档说应该 Y"的依据——**如果 diff 涉及 02-10 文档内部章节的增补，审查方向反转：看新增内容是否与 README + 00-decisions + 01-concepts 的已有决策对齐**，而非用占位文档否定改动。
+**文档完整性说明**：02–08 和 10 已完整展开，可作为审查基线。09-skeleton 仍为占位（章节骨架就位，内部工程决策待展开）——涉及包结构 / 模块归属的改动，暂以 README + 00-decisions + 01-concepts 为准，不以 09-skeleton 否定改动。
 
 ## 工作流
 
@@ -77,7 +77,7 @@ color: cyan
 
 ### Step 3：对齐检查
 
-对每个落在范围内的改动，回答（代码骨架未落地时，只问 1、3、8）：
+对每个落在范围内的改动，回答（代码骨架未落地时，重点问 1、3、8；代码落地后全问）：
 
 1. **概念一致** — 引入/修改的类名/字段名/职责，是否和 `01-concepts.md` §三 描述的概念边界一致？有没有新引入文档没提的概念，或者把两个不同概念混用（如 `Context` vs `EvalContext`，`RuleDefinition` vs `RuleVersion`）？
 2. **运行时一致** — 改动的流程（评估顺序、EvalContext 装配时机、失败语义、Action 派发路径）是否和 `02-runtime.md` + `00-decisions.md` 描述的链路对齐？
