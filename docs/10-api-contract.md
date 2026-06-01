@@ -136,7 +136,7 @@ POST /api/v1/rule/dry-run
       "actionId": "act-review-ticket",
       "actionType": "ticket.create",
       "status": "SKIPPED",
-      "errorCode": null
+      "errorCode": "DRY_RUN_NOT_IMPLEMENTED"
     }
   ],
   "nodeTrace": {

@@ -644,7 +644,8 @@ interface Scheduler {
 
 - 仅 `type=USER` 实装；其他枚举值在 Scene 发布时拒绝；
 - `attributes` 取数路径：按 `subjectId` 查 `user_profile` 表加载，**RuleEvent.payload 不补充 attributes**——payload 数据走 `event.payload.*` 引用路径，与 `subject.*` 严格分离（避免运营心智混乱、避免 payload 字段意外覆盖主体属性）；
-- 缺失属性（user_profile 无该字段或主体不存在）→ 引用该属性的 ConditionNode 走 D15 `CONDITION_EVAL_ERROR` 失败语义，不静默兜底为 null。
+- 缺失属性（user_profile 无该字段）→ 引用该属性的 ConditionNode 走 D15 `CONDITION_EVAL_ERROR` 失败语义，不静默兜底为 null。
+- **主体不存在**（`SubjectLoader.load()` 返回 null 或抛出异常）→ 整 EvalContext 构建失败，归 `METRIC_FETCH_FAIL`（D25），不进入 ConditionNode 求值。
 
 **关键边界**：
 

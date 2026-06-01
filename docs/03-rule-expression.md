@@ -143,11 +143,11 @@ AST 由四种节点类型组成，每种节点字段如下。
 | 情形 | `ruleHit`（API）/ `satisfied`（内部） | `errorCode` |
 |------|-----------|-------------|
 | 根节点 satisfied=true，无节点出错 | true | null |
-| 根节点 satisfied=true，但有节点出错 | true | `CONDITION_EVAL_ERROR` |
+| 根节点 satisfied=true，但有节点出错 | true | 第一个失败节点的 errorCode（`METRIC_FETCH_FAIL` / `CONDITION_EVAL_ERROR`） |
 | 根节点 satisfied=false，无节点出错 | false | null |
-| 根节点 satisfied=false，有节点出错 | false | `CONDITION_EVAL_ERROR` |
+| 根节点 satisfied=false，有节点出错 | false | 第一个失败节点的 errorCode（`METRIC_FETCH_FAIL` / `CONDITION_EVAL_ERROR`） |
 
-调用方若看到 `errorCode=CONDITION_EVAL_ERROR`，应查 node_trace 中 `errorCode` 非 null 的节点定位根因。
+调用方若看到 `errorCode` 非 null，应查 node_trace 中 `errorCode` 非 null 的节点定位根因；`METRIC_FETCH_FAIL` 表示取数失败，`CONDITION_EVAL_ERROR` 表示条件评估器异常（见 10-api-contract §七）。
 
 ---
 
