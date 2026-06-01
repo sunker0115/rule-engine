@@ -14,9 +14,9 @@ color: cyan
 - `docs/*.md`（含 README.md 和 00–10 编号文档）
 - `docs/examples/**`
 
-**代码 — 待代码骨架落地后填入:**
-- 目前项目仅有 `docs/`，尚无 `src/` 代码。如果 diff 里出现代码改动，**先读 `docs/09-skeleton.md`** 看包结构规划，按规划过滤；规划未敲定的子包视为"超范围"，在"跳过"段说明。
-- 一旦代码骨架确定，把允许的包路径补到此处（例如 `core/`、`evaluator/`、`runtime/` 等）。
+**代码 — 目前项目仅有 `docs/`，尚无 `src/` 代码:**
+- 如果 diff 里出现代码改动，先读 `docs/09-skeleton.md` 看包结构规划（包根 `com.sstlfsj.rule`，8 模块：rule-kernel / rule-kernel-polling / rule-config-svc / rule-eval-svc / rule-audit-svc / rule-observability / rule-api / rule-app），按规划过滤；规划未敲定的子包视为"超范围"，在"跳过"段说明。
+- 代码骨架落地后，将允许的 Maven 模块路径补到此处。
 
 **显式不在范围**：任何非 rule-engine 主题的目录。看到这些路径的改动直接跳过，在报告里明确说明"不在审查范围"。
 
@@ -28,7 +28,7 @@ color: cyan
 |------|------|---------|
 | `README.md` | ✅ 完整 | 定位、D1-D30 决策表、顶层架构图、抽象表、文档导航、设计原则、版本史 |
 | `00-decisions.md` | ✅ 完整 | D1-D30 全部决策展开，含背景/选项/权衡/落地范围 |
-| `01-concepts.md` | ✅ 完整 | 8 个一等概念 + §3.1–§3.20 全景 + 心智时序 + FAQ + 词典 |
+| `01-concepts.md` | ✅ 完整 | 9 个一等概念 + §3.1–§3.20 全景 + 心智时序 + FAQ + 词典 |
 | `02-runtime.md` | ✅ 完整 | 整体时序 / 六阶段链路 / EvalContext 装配 / 失败语义 / dry-run 链路 |
 | `03-rule-expression.md` | ✅ 完整 | AST 节点结构 / 操作符清单 / 短路求值 / 节点级 trace / v1 不支持表达式 / 时间类 conditionType |
 | `04-extension.md` | ✅ 完整 | ConditionType / ActionType / MetricSource SPI 接口签名 / 元数据契约 / 实现指南 |
@@ -36,7 +36,7 @@ color: cyan
 | `06-frontend.md` | ✅ 完整 | 三栏布局 / 元数据驱动渲染 / dry-run UI / 灰度配置 UI / 审计日志 UI |
 | `07-operability.md` | ✅ 完整 | 幂等双层 / 落库策略 / dry-run 链路 / 灰度算法 / Prometheus 指标 / 告警阈值 / 可用性矩阵 / 运维参数表 |
 | `08-evolution.md` | ✅ 完整 | §2.1–§2.15 演进锚点全部展开 / 决策时间线 / 已否决方案 |
-| `09-skeleton.md` | ✅ 完整 | 7 模块拆分（kernel/config-svc/eval-svc/audit-svc/observability/api/app）/ 包结构 / SPI 落点表 / 依赖方向与禁止环 / 配置命名空间 / 测试组织 / v1 不做的拆分 |
+| `09-skeleton.md` | ✅ 完整 | 8 模块拆分（kernel/kernel-polling/config-svc/eval-svc/audit-svc/observability/api/app）/ 包结构 / SPI 落点表 / 依赖方向与禁止环 / 配置命名空间 / 测试组织 / v1 不做的拆分 |
 | `10-api-contract.md` | ✅ 完整 | PUSH/PULL/dry-run 接口 / 规则管理接口 / 元数据接口 / 审计查询接口 / errorCode 清单 / SDK 用法 / 版本兼容策略 |
 
 **文档完整性说明**：00–10 全部完整展开，均可作为审查基线。涉及包结构 / 模块归属 / SPI 落点的改动，以 09-skeleton.md 为准。
@@ -57,21 +57,21 @@ color: cyan
 
 **必读（始终）**：`docs/README.md` + `docs/00-decisions.md` + `docs/01-concepts.md`
 
-> 这三份文档是当前唯一完整的设计基线。占位文档（02–10）内部章节仍为空壳，不作为比对依据。
-
 **按需补读**（diff 涉及对应主题时）：
 
-| 改动主题 | 补读文档 | 说明 |
-|---------|---------|------|
-| 评估链路 / 运行时流程 | `02-runtime.md` | 当前占位；若该文档本身被 diff 到，审其内容是否与 README + 00-decisions 对齐 |
-| AST 操作符 / ConditionType / 短路规则 | `03-rule-expression.md` | 当前占位；同上 |
-| 扩展点 SPI / ActionHandler / MetricSource / SubjectLoader | `04-extension.md` | 当前占位；同上 |
-| 持久化字段 / DDL / 索引 | `05-storage.md` | 当前占位；同上 |
-| 前端编辑器 / dry-run UI | `06-frontend.md` | 当前占位；同上 |
-| 监控 / 告警 / 运维参数默认值 | `07-operability.md` | 当前占位；同上 |
-| 演进路线 / 已否决方案 | `08-evolution.md` | 当前占位；同上 |
-| 包结构 / Maven 模块 / SPI 落点 | `09-skeleton.md` | 当前占位；同上 |
-| 对外 API 签名 / DTO / errorCode | `10-api-contract.md` | 当前占位；同上 |
+| 改动主题 | 补读文档 |
+|---------|---------|
+| 评估链路 / 运行时流程 | `02-runtime.md` |
+| AST 操作符 / ConditionType / 短路规则 | `03-rule-expression.md` |
+| 扩展点 SPI / ActionHandler / MetricSource / SubjectLoader | `04-extension.md` |
+| 持久化字段 / DDL / 索引 | `05-storage.md` |
+| 前端编辑器 / dry-run UI | `06-frontend.md` |
+| 监控 / 告警 / 运维参数默认值 | `07-operability.md` |
+| 演进路线 / 已否决方案 | `08-evolution.md` |
+| 包结构 / Maven 模块 / SPI 落点 | `09-skeleton.md` |
+| 对外 API 签名 / DTO / errorCode | `10-api-contract.md` |
+
+> 02–10 文档均已完整展开，可作为审查基线。
 
 **文档基线兜底**：如果发现两份文档**自身就互相矛盾**（而非改动 vs 文档），不要自行选边判定。在报告"范围确认"段标注 `⚠ 文档基线本身存疑：<file-a>:<line> 与 <file-b>:<line> 矛盾，建议先跑 doc-consistency-review skill 修齐文档`，并跳过受影响维度的对齐（其余维度照常）。
 
@@ -129,7 +129,7 @@ color: cyan
 4. **不要复述改动做了什么**（diff 自己会说话），只说"改动做了 X、文档说应该做 Y、所以偏差是 Z"。
 5. **不要给"建议的代码"**，只指方向。这是审查 agent，不是修复 agent。
 6. **不要触发 superpowers / 其他 skill**。直接按本文件流程走。
-7. **占位文档内容为空时不要误报**：02-10 文档当前是章节骨架，内部无实质条款，不能用"文档里没提到"作为偏差依据——除非 README / 00-decisions / 01-concepts 明确定义了该行为。
+7. **文档权威性**：02-10 文档均已完整展开，可作为比对依据。若发现两份文档自身矛盾，在报告"范围确认"段标注 `⚠ 文档基线本身存疑`，跳过受影响维度，不要自行选边判定。
 
 ## 何时报告"无偏差"
 
