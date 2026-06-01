@@ -115,19 +115,7 @@
 
 **你的决定**：
 
-**v1 已知缺陷（待 v1.5 修）**：
-
-当前 hash 种子是 `(subjectId, ruleVersionId)`，两条规则各自独立计算桶号——A/B 实验场景下同一用户可能同时命中规则 A 和规则 B，也可能都不命中，无法保证互斥。
-
-修法：`rollout` 新增可选字段 `experimentId: String`；同一实验的规则共享同一 hash 种子：
-
-```
-hash(subjectId, experimentId ?? ruleVersionId) % 100
-```
-
-- `experimentId` 为空时行为与 v1 完全一致（向后兼容）；
-- 同一实验内的规则配置相同 `experimentId`，桶协调互斥；
-- 不引入"实验"一等公民——`experimentId` 只是一个字符串标识，实验管理仍由上游 ABTest 平台负责。
+**v1 已知缺陷（待 v1.5 修）**：当前 hash 种子为 `(subjectId, ruleVersionId)`，A/B 实验场景下无法保证互斥。演进方向：`rollout` 新增可选字段 `experimentId`，同实验规则共享 hash 种子。详见 [`08-evolution.md §2.16`](./08-evolution.md)。
 
 ---
 

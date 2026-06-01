@@ -44,7 +44,7 @@
 
 **`EvalResult` 是稳定多态**：v1 PULL 模式调用方拿到的对象 shape 是 `{satisfied, score?, category?, decision?, trace}`，v1.5 引入 SCORECARD 时多填一个 `score` 字段，PULL API 签名不变；节点 trace 跨 kind 统一，运营自助排障的能力 100% 复用。
 
-**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy`（决策集策略，v2 引入 `ALL_HITS` / `FIRST_HIT` / `HIGHEST_PRIORITY`）是 Scene 字段；Action 编排（决策流）由 D4 工作流引擎扩展点承载，两者都是 Rule 层级之外。
+**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；v2 在此基础上扩展 `ALL_HITS` / `FIRST_HIT`。Action 编排（决策流）由 D4 工作流引擎扩展点承载，两者都是 Rule 层级之外。
 
 **为什么不另起表**：评分卡 / 决策树仍需要 Rule 的全部公共属性（触发 / 准入 / 灰度 / Action / 版本快照），独立表会复制 80% 的列且数据散布、跨形态报表困难；用 `kind` 字段 + 多态 JSON 列在同一张表里，公共能力天然共享。
 
@@ -200,6 +200,29 @@
   - Prometheus counter 埋点（D20 监控体系 / §2.6 已覆盖）—— v2 切对账数据源时基线已具备。
 - **迁移成本**：高（幂等基础设施切换 + 对账数据源切换 + 父子表时序重设计 + D9 红线松动）。
 - **依赖与联动**：与 §2.5 trace 冷热分级（存储分层）正交可独立做，与 §2.14 嵌入式 SDK（评估下沉）同期评估更划算；若 v2 整体转 event sourcing，本节方案废弃。
+
+### 2.16 灰度 A/B 实验互斥（来源 D6 v1 已知缺陷）
+
+- **v1 现状**：灰度 hash 种子为 `hash(subjectId, ruleVersionId) % 100`，两条规则各自独立计算桶号——A/B 实验场景下同一用户可能同时命中两条规则，也可能都不命中，无法保证互斥。
+- **触发条件**：业务方需要同一用户在同一实验组内仅命中互斥规则之一（典型：价格实验、权益实验）。
+- **演进方向（v1.5）**：
+  - `rollout` 新增可选字段 `experimentId: String`；
+  - 同一实验的规则共享同一 hash 种子：`hash(subjectId, experimentId ?? ruleVersionId) % 100`；
+  - `experimentId` 为空时行为与 v1 完全一致（向后兼容）；
+  - 不引入"实验"一等公民——`experimentId` 只是字符串标识，实验管理仍由上游 ABTest 平台负责；
+  - schema 变更：`rule_version.rollout` JSON 列新增 `experimentId` 可选键，无需加列，向后兼容。
+- **迁移成本**：低（只改 hash 计算逻辑 + `rollout` JSON 解析，无 schema 变更）。
+
+### 2.17 ActionHandler dryRun 全量实装（来源 D7 v1.5 待补）
+
+- **v1 现状**：`ActionHandler` 接口已预留 `dryRun(ActionContext ctx)` 入口；v1 handler 均未实装，Dispatcher 短路返回 `ActionResult{status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED}`，试算面板显示 Action 全部跳过。
+- **触发条件**：运营需要在 dry-run 时预览"会发什么短信 / 给什么优惠券"等 Action 输出，而不只是 AST 节点 trace。
+- **演进方向（v1.5）**：
+  - 各 `ActionHandler` 实现类补齐 `dryRun()` 方法，返回真实预览 `ActionResult`；
+  - `DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生（全量实装后）；
+  - dry-run 响应体 `actionResults` 从 `[{status:SKIPPED}]` 升级为含真实预览输出；
+  - 不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
+- **迁移成本**：低（各 handler 独立补实现，不改协议）。
 
 ---
 
