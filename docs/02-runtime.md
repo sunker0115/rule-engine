@@ -37,7 +37,7 @@ RuleEvent
 ② Matcher 路由
   │  · (tenantId, sceneCode, eventType) → 倒排索引
   │  · 命中候选 RuleVersion 列表（快照锁定）
-  │  · 无候选：直接返回 EvalResult{ruleHit=false}
+  │  · 无候选：直接返回 EvalResult{satisfied=false}（API 字段名 ruleHit）
   ▼
 ③ Pre-Gate 拦截
   │  · 按顺序评估每个 Gate（ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX）
@@ -140,13 +140,13 @@ RuleEvent
 - 索引在规则发布/禁用时增量热更（D17）：单服务模式由 Modulith `RulePublishedEvent` 触发（近实时）；嵌入式 SDK 模式由 `DbPollingRuleWatcher` 轮询触发（15s 最终一致）；Scene 变更同理（D24，单服务 `SceneChangedEvent` / SDK 模式 `DbPollingSceneWatcher` 30s）。
 
 **异常语义**：
-- 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { ruleHit=false }`（内部字段名 `satisfied`），不写 `evaluation_session`，不进入后续阶段。此路径下幂等依赖 Redis 上半层（TTL 默认 3600s）；TTL 过期后相同 eventId 再次推送被视为新事件。
+- 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { satisfied=false }`（API 字段名 `ruleHit`），不写 `evaluation_session`，不进入后续阶段。此路径下幂等依赖 Redis 上半层（TTL 默认 3600s）；TTL 过期后相同 eventId 再次推送被视为新事件。
 
 ### 3.3 Pre-Gate 拦截
 
 **输入**：候选 `RuleVersion` 快照列表 + `RuleEvent`
 
-**输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或写 `evaluation_session { status=BLOCKED, blocked_by=<Gate 类型> }` + 返回 `EvalResult { ruleHit=false }`
+**输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或写 `evaluation_session { status=BLOCKED, blocked_by=<Gate 类型> }` + 返回 `EvalResult { satisfied=false }`（API 字段名 `ruleHit`）
 
 **核心动作**：
 - 对每条候选 RuleVersion，按固定顺序（ROLLOUT → WHITELIST/BLACKLIST → RATE_LIMIT → MUTEX）串行评估 `pre_gates` 中声明的 Gate；
@@ -164,7 +164,7 @@ RuleEvent
 
 **结果语义**：
 - 某条 RuleVersion 被任一 Gate 拦截 → 该 RuleVersion 不进入 EvalContext 构建与 AST 评估；
-- 若**全部**候选 RuleVersion 均被 Pre-Gate 拦截 → 写 `evaluation_session { status=BLOCKED, blocked_by=<首个拦截 Gate 类型> }`，返回 `EvalResult { ruleHit=false }`；
+- 若**全部**候选 RuleVersion 均被 Pre-Gate 拦截 → 写 `evaluation_session { status=BLOCKED, blocked_by=<首个拦截 Gate 类型> }`，返回 `EvalResult { satisfied=false }`；
 - BLOCKED 对账不计入命中率分母（D22）。
 
 **Gate 内部异常**（如 Redis 频次计数器超时）：默认 fail-closed——失败视为"未通过该 Gate"，宁可漏发不可错发；具体各 Gate 的 fail-open/closed 默认值由各实现声明（→ 04-extension）。
@@ -315,7 +315,7 @@ EvalResult {
 | 列名 | 类型 | 说明 |
 |------|------|------|
 | `id` | BIGINT PK | 主键，雪花（概念上称 session_id） |
-| `tenant_id` | VARCHAR | 租户 ID |
+| `tenant_id` | BIGINT | 租户 ID（关联 tenant.id 外键） |
 | `event_id` | VARCHAR | 业务事件 ID；与 tenant_id 构成 UK（D23） |
 | `scene_code` | VARCHAR | 场景码 |
 | `event_type` | VARCHAR | 事件类型 |

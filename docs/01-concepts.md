@@ -245,7 +245,7 @@ EvalResult {
     finalDecision?:  DecisionRef          // D26：合成后最终 Decision（Scene 配了 decisionStrategy 时填充）
     hitDecisions:    List<DecisionRef>    // D26：所有命中规则的 Decision 按 priority 排序（始终填充，无绑定时为空列表）
     trace:           List<NodeTrace>      // 节点级 trace（D7），所有 kind 都填
-    errorCode?:      String               // D15：METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR / PAYLOAD_SCHEMA_MISMATCH（见 10-api-contract §七）
+    errorCode?:      String               // D15：METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR（见 10-api-contract §七；PAYLOAD_SCHEMA_MISMATCH 是入口层 400，不进入评估链路）
     errorMessage?:   String               // D15：人读错误信息
     failedNodeIds?:  List<String>         // D15：哪些 AST 节点失败
     partial?:        Boolean              // D15：true=部分成功，false=完全失败

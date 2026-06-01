@@ -360,7 +360,7 @@ EvalResult {
     satisfied:       boolean
     score? category? decision?         // D12 各 kind 多态
     trace:           List<NodeTrace>
-    errorCode?:      String            // METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR / PAYLOAD_SCHEMA_MISMATCH（见 10-api-contract §七）
+    errorCode?:      String            // METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR（见 10-api-contract §七；PAYLOAD_SCHEMA_MISMATCH 是入口层 400，不进入评估链路）
     errorMessage?:   String
     failedNodeIds?:  List<String>      // 哪些 AST 节点失败
     partial?:        Boolean           // true=部分成功，false=完全失败
@@ -1013,7 +1013,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 | # | 决策 | 你的选择 | 备注              |
 |---|------|------|-----------------|
-| D1 | 第一阶段场景定位 | BACD | 按优先级设计，可以预留后续扩展 |
+| D1 | 第一阶段场景定位 | A | v1 起步 A（运营/营销/活动），抽象按 B（风控）级别预留；演进优先级 B>A>C>D |
 | D2 | 规则表达式语言 | A    |                 |
 | D3 | 多租户模型 | A    |                 |
 | D4 | 动作协议 | A    |                 |
