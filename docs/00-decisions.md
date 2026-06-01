@@ -256,7 +256,7 @@ hash(subjectId, experimentId ?? ruleVersionId) % 100
 
 **v1 不做的**：
 - 不实现 SCORECARD / DECISION_TREE / DECISION_TABLE 的 evaluator —— 留到 v1.5 / v2，按业务实际需求驱动；
-- 不实现 `executionStrategy` —— 决策集策略留到 08-evolution 路线图，v1 默认 `ALL_HITS`；
+- 不实现 `executionStrategy` —— 决策集策略留到 08-evolution 路线图，v1 默认 `HIGHEST_PRIORITY`（D29 落定，覆盖本条原写的 `ALL_HITS`）；
 - 不实现脚本沙箱 —— 表达式 evaluator 留到 v1.5。
 
 **你的决定**：A（按上述 3 个占位落地）
