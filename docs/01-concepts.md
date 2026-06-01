@@ -607,7 +607,7 @@ interface Scheduler {
 |------|------|
 | `rule_id` | 归属规则（与 `rule_definition.rule_id` 一致） |
 | `version` | 单调递增 `Long`，`(rule_id, version)` 唯一 |
-| `tenant_id / scene` | 归属（冗余但便于按 Scene 查所有候选版本） |
+| `rule_definition_id` | 归属规则（FK → `rule_definition.id`）；按 Scene 查所有候选版本通过 JOIN rule_definition 实现，不冗余 scene_id |
 | `trigger_event_types` | 冻结：发布瞬间的 eventType 数组 |
 | `condition_ast` | 冻结：完整 AST JSON（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
 | `pre_gates` | 冻结：preGates 列表（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |

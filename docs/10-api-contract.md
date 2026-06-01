@@ -123,7 +123,7 @@ POST /api/v1/rule/dry-run
 
 **Request：** 同 3.1，额外可传 `ruleVersionId`（指定版本回放，null = 使用当前版本）。
 
-**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段；`actionResults` 中所有 Action 显示 `SKIPPED`（不实际派发）：
+**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段；v1 阶段 handler 均未实装 `dryRun()`，`actionResults` 中所有 Action 显示 `SKIPPED`（不实际派发）；v1.5 后 handler 实装 `dryRun()` 时返回真实预览 ActionResult：
 ```json
 {
   "eventId": "evt-dry-001",
@@ -303,7 +303,7 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 | `UNRESOLVED_VARIABLE` | conditionAst / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内） |
 | `METRIC_NOT_BOUND` | metric 不在 Scene.scene_metric_binding 白名单内 |
 | `ACTION_TYPE_NOT_BOUND` | actionType 不在 Scene.scene_action_binding 白名单内 |
-| `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了 Scene 未定义的 Decision |
+| `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了该 Rule 所属 Tenant 未定义的 Decision（Decision 是 Tenant 级实体，D26） |
 | `ZOMBIE_PUBLISHING` | 后台清扫检测到 PUBLISHING 状态残留超时，强制修正为 PUBLISH_FAILED（D19） |
 | `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
 
