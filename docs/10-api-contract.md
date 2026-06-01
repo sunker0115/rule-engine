@@ -104,7 +104,7 @@ POST /api/v1/rule/evaluate
 
 > **注**：PULL Scene 的 `Decision.actions` 必须为空（发布校验拒绝），`actionResults` 始终为空数组；HYBRID Scene 的 Action **异步**派发（评估线程入队后即返回，不等待 Handler 完成，见 02-runtime §二约束），`actionResults` 中 `status` 可能为 `SUCCESS` / `FAILED` / `PENDING`（取决于 Action 是否在接口响应前已执行完毕）。
 
-**超时建议**：调用方设 HTTP timeout ≥ 500ms（v1 P99 目标 < 100ms，500ms 留有余量）。
+**超时建议**：调用方设 HTTP timeout ≥ 500ms（v1 P99 目标 < 500ms；风控高频场景 < 100ms 目标见 [`07-operability.md`](./07-operability.md) §七）。
 
 **查 trace**：PULL 评估不在响应体直接返回 sessionId；调用方若需查 node_trace，通过 `GET /api/v1/evaluation-sessions?tenantId=&eventId={eventId}` 取对应 session，再调 §6.2 `GET /api/v1/evaluation-sessions/{sessionId}/trace`。
 

@@ -455,7 +455,7 @@ EvalResult {
 **决定**：**B**（默认 continue-on-error；Action 级可声明 `failFast`）
 
 **v1 语义规范**：
-- **执行顺序**：单 Rule 内 Action 按 `sortOrder` 顺序串行执行（v1 不并行，D4 已说明 v2 接工作流引擎才考虑编排）；
+- **执行顺序**：同 Decision 内 Action 按 `sortOrder` 顺序串行执行（v1 不并行，D4 已说明 v2 接工作流引擎才考虑编排；D27 迁移后 Action 归属 Decision）；
 - **单 Action 失败定义**：`ActionHandler.execute` 返回 `ActionResult.status = FAILED` 或抛出未捕获异常；引擎将异常转为 `ActionResult { status: FAILED, errorCode: HANDLER_EXCEPTION, retryable: false }`；
 - **重试**：`retryable=true` 的失败入重试队列（独立调度，不阻塞同 Decision 内后续 Action）；`retryable=false` 直接落 `action_execution.status = FAILED`；
 - **隔离默认**：除非显式 `Action.failFast = true`，单条 Action 失败 / 跳过 / 重试中 → 同 Decision 内后续 Action **继续正常执行**；

@@ -113,7 +113,7 @@ RuleEvent
 - `eventId` 为空时引擎生成 UUID v4；
 - 校验 `eventType` ∈ `Scene.eventTypes` 白名单，不在则返回 400 `INVALID_EVENT_TYPE`；
 - 校验 `payload` 字段符合 `Scene.payloadSchema`（字段名 + 基础类型），不符则返回 400 `PAYLOAD_SCHEMA_MISMATCH`；
-- 幂等上半层：`SET rule:session:{tenantId}:{eventId} 1 NX EX 3600`（Redis trySet），命中说明已处理过，直接返回缓存结果，不进入后续阶段。
+- 幂等上半层：`SET rule:session:{tenantId}:{eventId} <evalResultJson> NX EX 3600`（Redis trySet），命中说明已处理过，直接返回缓存结果，不进入后续阶段。
 
 **PUSH vs PULL vs dry-run 入口对比**：
 
@@ -306,7 +306,7 @@ EvalResult {
 
 **幂等处理**（D11 / D23）：
 
-1. **上半层（Redis trySet）**：Trigger 接入时 `SET rule:session:{tenantId}:{eventId} 1 NX EX 3600`；成功则继续；失败（key 已存在）则直接返回上次缓存的 `EvalResult`，不再进入评估链路；
+1. **上半层（Redis trySet）**：Trigger 接入时 `SET rule:session:{tenantId}:{eventId} <evalResultJson> NX EX 3600`；成功则继续；失败（key 已存在）则直接返回上次缓存的 `EvalResult`，不再进入评估链路；
 2. **下半层（DB uk）**：INSERT `evaluation_session` 时若 `(tenant_id, event_id)` uk 冲突 → catch `DuplicateKeyException` → 查询已有行返回已有结果；
 3. **Redis 宕机降级**：上半层不可用时降级走 DB uk；DB uk 并发竞争时，后提交者 SELECT 已有行返回。
 
