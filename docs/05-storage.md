@@ -433,8 +433,7 @@ CREATE TABLE dry_run_node_trace (
 
 | 表 | 索引 | 查询模式 |
 |---|---|---|
-| `evaluation_session` | UK `uk_tenant_event (tenant_id, event_id)` | 幂等检查：D11 下半层 DB uk |
-| `evaluation_session` | `idx_started_at (started_at)` | 定时清理：按时间范围删除 30 天外数据 |
+| `evaluation_session` | UK `uk_tenant_event (tenant_id, event_id)`<br>`idx_started_at (started_at)` | 幂等检查：D11 下半层 DB uk<br>定时清理：按时间范围删除 30 天外数据 |
 | `node_trace` | `idx_session_id (evaluation_session_id)` | 按 session 查 trace（排障 / dry-run 对比） |
 
 Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
@@ -445,13 +444,10 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 |---|---|---|
 | `evaluation_session` | `idx_scene_subject (scene_code, subject_id)` | 按用户查历史评估记录 |
 | `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
-| `action_execution` | UK `uk_idempotency (tenant_id, event_id, decision_code, action_id)` | Action 派发幂等检查（D27 DB 层最终防重） |
-| `action_execution` | `idx_status_retryable (status, retryable)` | 重试队列扫描（查 status=FAILED AND retryable=1） |
-| `action_execution` | `idx_session_id (evaluation_session_id)` | 按 session 查 action 执行记录 |
+| `action_execution` | UK `uk_idempotency (tenant_id, event_id, decision_code, action_id)`<br>`idx_status_retryable (status, retryable)`<br>`idx_session_id (evaluation_session_id)` | Action 派发幂等检查（D27 DB 层最终防重）<br>重试队列扫描（查 status=FAILED AND retryable=1）<br>按 session 查 action 执行记录 |
 | `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |
 | `rule_version` | UK `uk_def_version (rule_definition_id, version)` | 版本唯一性约束 + 按规则查所有版本 |
-| `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)` | 查某个规则/Scene 的所有变更记录 |
-| `audit_log` | `idx_operated_at (operated_at)` | 按时间范围查审计日志 |
+| `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)`<br>`idx_operated_at (operated_at)` | 查某个规则/Scene 的所有变更记录<br>按时间范围查审计日志 |
 | `decision_definition` | UK `uk_tenant_code (tenant_id, code)` | Tenant 内 Decision 码唯一性约束 + 发布时查 Decision |
 | `rule_decision_binding` | UK `uk_rule_decision (rule_definition_id, decision_id)` | 规则与 Decision 绑定唯一性 |
 | `scene_metric_binding` | UK `uk_scene_metric (scene_id, metric_definition_id)` | Rule 发布时验证 metricCode 在白名单内 |
