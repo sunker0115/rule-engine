@@ -275,15 +275,24 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 
 ## 七、errorCode 清单与 i18n
 
+### 入口层错误（HTTP 4xx，不进入评估链路）
+
+这些错误在评估链路启动前由入口层短路返回，**不写入 `EvalResult.errorCode`**：
+
+| errorCode | HTTP 状态 | 含义 | 调用方建议 |
+|-----------|-----------|------|-----------|
+| `PAYLOAD_SCHEMA_MISMATCH` | 400 | payload 字段缺必填 / 类型错 | 修复请求体重试 |
+| `INVALID_EVENT_TYPE` | 400 | eventType 不在 Scene 白名单内 | 确认 sceneCode + eventType |
+| `SCENE_NOT_FOUND` | 404 | sceneCode 未注册或 DISABLED | 确认 tenantId + sceneCode |
+
 ### 评估期 errorCode（EvalResult.errorCode）
+
+评估链路内部错误，以第一个失败节点的 errorCode 为准（D15）：
 
 | errorCode | HTTP 状态 | 含义 | 调用方建议 |
 |-----------|-----------|------|-----------|
 | `METRIC_FETCH_FAIL` | 200 | 有节点 MetricSource 取数失败（D15） | 查 nodeTrace 定位失败节点；fail-secure → 拒绝，fail-open → 放行 |
 | `CONDITION_EVAL_ERROR` | 200 | ConditionEvaluator 抛异常（D15） | 同上 |
-| `PAYLOAD_SCHEMA_MISMATCH` | 400 | payload 字段缺必填 / 类型错 | 修复请求体重试 |
-| `INVALID_EVENT_TYPE` | 400 | eventType 不在 Scene 白名单内 | 确认 sceneCode + eventType |
-| `SCENE_NOT_FOUND` | 404 | sceneCode 未注册或 DISABLED | 确认 tenantId + sceneCode |
 
 ### Action 执行 errorCode（ActionResult.errorCode）
 

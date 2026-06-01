@@ -393,12 +393,13 @@ public interface SubjectLoader {
 
 ```java
 @Component
-@SubjectType(SubjectType.ACCOUNT)
 public class AccountLoader implements SubjectLoader {
     @Override public Subject load(...) { ... }
     @Override public List<SubjectType> supportedTypes() { return List.of(SubjectType.ACCOUNT); }
 }
 ```
+
+> **注**：`SubjectLoader` 通过 `supportedTypes()` 方法注册（无需额外注解），与 `@ConditionType` / `@ActionType` / `@MetricSourceType` 注解风格略有不同。
 
 `SubjectLoaderRegistry` 启动时扫描所有 `SubjectLoader` Bean，按 `supportedTypes()` 建索引；运行时由 `EvalContext` 构建阶段按 `Scene.subjectType` 路由。
 
