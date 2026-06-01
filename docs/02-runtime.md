@@ -137,7 +137,7 @@ RuleEvent
 - 按 `(tenantId, sceneCode, eventType)` 三元组查内存倒排索引（`ConcurrentHashMap`）；
 - 倒排索引 value = `List<RuleVersion>`（仅含 `PUBLISHED` 状态规则的当前版本快照，`DISABLED` 规则已从索引中剔除）；
 - 每个 `RuleVersion` 快照包含：完整预解析的 AST 节点树（`ast_snapshot`）+ `decision_bindings_snapshot`（含 Decision.actions）+ `pre_gates_snapshot` + `rollout_snapshot` + `metric_dependencies`；
-- 索引在规则发布/禁用时增量热更（由 `RuleVersionWatcher` 轮询触发，15s 最终一致，D17）；Scene 变更由 `SceneWatcher` 热更（30s，D24）。
+- 索引在规则发布/禁用时增量热更（D17）：单服务模式由 Modulith `RulePublishedEvent` 触发（近实时）；嵌入式 SDK 模式由 `DbPollingRuleWatcher` 轮询触发（15s 最终一致）；Scene 变更同理（D24，单服务 `SceneChangedEvent` / SDK 模式 `DbPollingSceneWatcher` 30s）。
 
 **异常语义**：
 - 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { ruleHit=false }`，不写 `evaluation_session`，不进入后续阶段。

@@ -434,6 +434,12 @@ EvalResult {
 - 不做主动 push（业务方调发布接口立即推到所有实例）——15s 窗口足够运营营销场景；
 - 不做规则变更的"金丝雀实例"（一台实例先切，验证后全量切），留到 07-operability。
 
+**Spring Modulith 单服务模式补充**（与 09-skeleton 模块拆分对齐）：
+- v1 以 Spring Modulith 单服务部署时，`rule-config-svc` 模块在规则发布成功后通过 Spring `ApplicationEventPublisher` 发出 `RulePublishedEvent`；`rule-eval-svc` 模块以 `@ApplicationModuleListener` 订阅，立即触发倒排索引刷新——不再依赖 15s 轮询，变更在同一进程内近实时生效。
+- `DbPollingRuleWatcher` 保留为 `RuleVersionWatcher` SPI 实现，但**仅供嵌入式 SDK 模式使用**（§2.14）：SDK jar 嵌入调用方进程，无共享 Spring 容器，无法收 Modulith 事件，只能轮询或接 MQ（`MqRuleWatcher`）。
+- `SpringEventRuleVersionWatcher` 作为单服务模式的 v1 实现，由 `rule-eval-svc` 模块内部持有，不对外暴露为可替换 SPI（Spring 事件是框架内部机制，替换方向是切到 MQ 而非换 Watcher 实现）。
+- "15s 最终一致"语义仍适用于 SDK 模式；单服务模式下一致性窗口降至毫秒级（同进程事件回调）。
+
 ---
 
 ## D18. Action 失败补偿语义 ⭐⭐
@@ -716,6 +722,11 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
   - `scene_definition` 其他字段变更（`payloadSchema` / `defaultParams` / `eventTypes`）→ 刷新内存中的 Scene 配置缓存；
 - **SPI 契约与 `RuleVersionWatcher` 对齐**：变更通知最终一致 + 至多一次 callback 重复（消费方幂等）+ 启动期一次性全量拉；
 - **多 backend 预留**：v2 可换 MQ 推 / Nacos，仅替换 `SceneWatcher` 实现，业务侧零改动。
+
+**Spring Modulith 单服务模式补充**（与 D17 保持对称）：
+- `rule-config-svc` 模块在 Scene 配置变更（metric binding / action binding / status / payloadSchema）落库后发出对应 Modulith 事件（如 `SceneChangedEvent`）；`rule-eval-svc` 以 `@ApplicationModuleListener` 订阅，按变更类型触发对应热加载逻辑（与上方"变更触发逻辑"一一对应）——不再依赖 30s 轮询。
+- `DbPollingSceneWatcher` 保留为 `SceneWatcher` SPI 实现，**仅供嵌入式 SDK 模式使用**（§2.14），与 D17 的 `DbPollingRuleWatcher` 归属相同。
+- 单服务模式下 Scene 变更生效窗口降至毫秒级；"30s 最终一致"语义仅适用于 SDK 模式。
 
 **派生约束**：
 - `SceneWatcher` 入 README §四 抽象表（与 `RuleVersionWatcher` 平级）；
