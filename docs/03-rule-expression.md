@@ -138,7 +138,9 @@ AST 由四种节点类型组成，每种节点字段如下。
 
 ### 4.3 EvalResult 聚合
 
-| 情形 | `ruleHit` | `errorCode` |
+> **命名说明**：`satisfied` 是 Java POJO 内部字段名（`EvalResult.satisfied`）；`ruleHit` 是对外 API JSON 字段名（10-api-contract §3.1）。两者语义相同，均表示整棵 AST 的求值结果。
+
+| 情形 | `ruleHit`（API）/ `satisfied`（内部） | `errorCode` |
 |------|-----------|-------------|
 | 根节点 satisfied=true，无节点出错 | true | null |
 | 根节点 satisfied=true，但有节点出错 | true | `CONDITION_EVAL_ERROR` |

@@ -136,7 +136,7 @@
                                   ▼ if satisfied (or dryRun)
 ┌──────────────────────────────────────────────────────────────────┐
 │  Action Dispatcher                                               │
-│  rule.actions[] → ActionHandlerRegistry                          │
+│  finalDecision.actions[] → ActionHandlerRegistry（D27：actions 挂 Decision 而非 Rule）│
 │   ├─ 声明式: webhook / mq.send / sql.update / log              │
 │   ├─ 命令式 (SPI): @ActionType("xxx") class XxxHandler          │
 │   ├─ 每动作独立事务 + try/catch + retry/dlq                     │

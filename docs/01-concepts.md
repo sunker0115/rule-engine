@@ -31,7 +31,7 @@
 | **Decision** | Tenant 级输出定义：规则命中后输出的语义结论（REJECT / REVIEW / PASS 等）；带 `priority` 字段，多规则命中时 Scene 按 `decisionStrategy` 合成最终 Decision；持有 **actions 列表**（D27） | 平台运维 |
 | **Action** | Decision 命中后要做的事（发券 / 调 webhook / 写库），由 `actionType` 路由到具体处理器；配置在 **Decision.actions** 上（D27）；**可空**——PULL 模式 Scene 的 Decision 不配 Action | 业务运营选类型 + 配参数 |
 
-> **三类支撑概念**（不是一等公民，但理解整体必须知道）：`ConditionEvaluator` / `ActionHandler` / `MetricSource` —— 它们是上面 Condition / Action / Metric 的"幕后执行者"，详见 §五边界辨析。
+> **三类支撑概念**（不是一等公民，但理解整体必须知道）：`ConditionEvaluator` / `ActionHandler` / `MetricSource` —— 它们是上面 Condition / Action / Metric 的"幕后执行者"，详见 §五边界辨析。注：`MetricSource` 是概念层名称；04-extension 中对应的 Java SPI 接口名为 `MetricSourceHandler`（与 `ConditionEvaluator` / `ActionHandler` 命名风格保持一致）。
 >
 > **Job 不是一等公民**：定时类规则通过 `JobDefinition` + `Scheduler` 适配为"到点合成 RuleEvent → 注入标准评估链路"，不引入新概念。详见 §3.10。
 
@@ -393,7 +393,7 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **v1 Action 是平铺 forEach 顺序执行** —— 按 `sortOrder` 串行，编排（并行 / 等待 / 分支）留到 v2。
 - **失败补偿语义**（D18）：单 Action 失败 → 引擎将异常归一为 `ActionResult { status=FAILED, errorCode, retryable }`；`retryable=true` 入重试队列（不阻塞同 Decision 内后续 Action），`retryable=false` 直接落 `action_execution.status=FAILED`。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，**不**进入重试队列。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。
 - **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。补偿流水线触发入口详见 [`07-operability.md`](./07-operability.md) §补偿流水线。
-- **`action_execution` 对账三态**：`SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。
+- **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。DDL 另有 `PENDING`（已入队待执行）和 `RETRYING`（重试进行中）两个过程态——对账、监控、失败率统计只看最终三态，过程态由引擎内部维护。
 - **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
 - **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **接口已预留 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。**v1 范围（D7）**：评估层 dry-run 一等公民（走完整评估链路 + 节点 trace），ActionHandler 层的 `dryRun` 实装在 **v1.5** 由各 handler 补齐；v1 阶段未补齐的 handler 在 dry-run 时由 Dispatcher 短路返回占位预览（`status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`）。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
@@ -508,29 +508,30 @@ EvalContext {
 
 | 字段 | 说明 |
 |------|------|
-| `jobId` | 主键 |
-| `tenantId / scene` | 归属（PULL Scene 拒绝绑定） |
+| `id` | 主键（DDL 列名；概念层有时称 `jobId`） |
+| `tenantId / sceneId` | 归属（DDL 列 `tenant_id` / `scene_id`；PULL Scene 拒绝绑定） |
 | `name` | 给运营看的名称 |
-| `cron` | 标准 cron 表达式；时区可选——cron 自带时区时以 cron 为准（如 `CRON_TZ=Asia/Shanghai 0 30 0 * * *`），未指定时回落 `Scene.defaultParams.timezone`，仍未配回落引擎默认（`UTC`） |
-| `subjectQueryType` | `SQL` / `EXTERNAL_HTTP` / `METRIC_RESULT` |
-| `subjectQueryParams` | 查询参数（SQL 模板 / HTTP URL / metric 引用） |
-| `eventTypeTemplate` | 合成事件的 eventType，如 `cron.daily.settlement` |
+| `cronExpression` | 标准 cron 表达式（DDL 列名 `cron_expression`）；时区可选——cron 自带时区时以 cron 为准（如 `CRON_TZ=Asia/Shanghai 0 30 0 * * *`），未指定时回落 `Scene.defaultParams.timezone`，仍未配回落引擎默认（`UTC`） |
+| `subjectQuery` | 主体集合查询配置 JSON（DDL 单列，包含 `type`（`SQL`/`EXTERNAL_HTTP`/`METRIC_RESULT`）和查询参数） |
+| `eventType` | 合成 RuleEvent 时使用的 eventType（DDL 列名 `event_type`；概念层有时称 `eventTypeTemplate`） |
 | `payloadTemplate` | 合成事件的 payload 模板（占位符填充主体字段） |
-| `concurrency` | 单次运行的并发 fan-out 上限 |
-| `rateLimit` | 注入引擎的事件速率上限（保护下游） |
-| `status` | `ACTIVE` / `PAUSED` |
+| `concurrency` | 单次运行并发 fan-out 上限（调度器运行时配置，非 DDL 独立列，存于 `subject_query` JSON 或外部配置） |
+| `rateLimit` | 注入引擎事件速率上限（保护下游；同 `concurrency` 为运行时配置） |
+| `status` | `ACTIVE` / `DISABLED`（DDL ENUM；概念层有时写 `PAUSED`，DDL 对应值为 `DISABLED`） |
 
 **字段（JobExecution，每次运行的记录）**：
 
 | 字段 | 说明 |
 |------|------|
-| `jobRunId` | 单次运行 ID（雪花 / UUID） |
-| `jobId` | 归属 Job |
-| `startedAt / finishedAt` | 起止时间 |
-| `subjectCount` | 查询到的主体数 |
-| `eventCount` | 实际合成并注入的事件数 |
-| `status` | `RUNNING` / `SUCCESS` / `PARTIAL_FAILED` / `FAILED` |
-| `errorSummary` | 错误明细引用（不内嵌大文本） |
+| `id` | 主键（DDL 列名；概念层有时称 `jobRunId`，指同一字段） |
+| `jobDefinitionId` | 归属 Job（DDL 列名 `job_definition_id`） |
+| `triggerAt` | 调度器触发时间（DDL 列名 `trigger_at`） |
+| `finishedAt` | 完成时间（DDL 列名 `finished_at`，nullable） |
+| `subjectCount` | 查询到的主体总数 |
+| `successCount` | 成功注入评估链路的主体数（DDL 列名 `success_count`） |
+| `errorCount` | 失败数（DDL 列名 `error_count`） |
+| `status` | `RUNNING` / `SUCCESS` / `PARTIAL_FAIL` / `FAILED`（DDL ENUM 值，`PARTIAL_FAIL` 无 ED 后缀） |
+| `errorSummary` | 错误明细摘要（DDL 列名 `error_summary`） |
 
 **调度器接口（`Scheduler`）**：
 

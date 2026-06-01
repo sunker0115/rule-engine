@@ -94,7 +94,7 @@ POST /api/v1/rule/evaluate
     "name": "人工审核",
     "priority": 2
   },
-  "hitDecisions": ["REVIEW"],
+  "hitDecisions": [{"code": "REVIEW", "name": "人工审核", "priority": 2}],
   "errorCode": null,
   "actionResults": []
 }

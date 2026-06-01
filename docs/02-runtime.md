@@ -140,13 +140,13 @@ RuleEvent
 - 索引在规则发布/禁用时增量热更（D17）：单服务模式由 Modulith `RulePublishedEvent` 触发（近实时）；嵌入式 SDK 模式由 `DbPollingRuleWatcher` 轮询触发（15s 最终一致）；Scene 变更同理（D24，单服务 `SceneChangedEvent` / SDK 模式 `DbPollingSceneWatcher` 30s）。
 
 **异常语义**：
-- 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { ruleHit=false }`，不写 `evaluation_session`，不进入后续阶段。
+- 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { satisfied=false }`（对外 JSON 字段名为 `ruleHit`，见 10-api-contract §3.1），不写 `evaluation_session`，不进入后续阶段。
 
 ### 3.3 Pre-Gate 拦截
 
 **输入**：候选 `RuleVersion` 快照列表 + `RuleEvent`
 
-**输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或 `EvalResult { ruleHit=false, preGateBlockedBy=<Gate 类型> }`
+**输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或 `EvalResult { satisfied=false, preGateBlockedBy=<Gate 类型> }`（对外 JSON 字段名 `ruleHit`）
 
 **核心动作**：
 - 对每条候选 RuleVersion，按固定顺序（ROLLOUT → WHITELIST/BLACKLIST → RATE_LIMIT → MUTEX）串行评估 `pre_gates` 中声明的 Gate；
