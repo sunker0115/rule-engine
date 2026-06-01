@@ -96,7 +96,7 @@ POST /api/v1/rule/evaluate
     "fromRuleVersionId": 42
   },
   "hitDecisions": [{"code": "REVIEW", "name": "人工审核", "priority": 2, "fromRuleVersionId": 42}],
-  "nodeTrace": [],
+  "nodeTrace": null,
   "errorCode": null,
   "actionResults": []
 }
