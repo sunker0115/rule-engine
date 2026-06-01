@@ -137,7 +137,7 @@ public interface ActionHandler {
 ActionContext {
     actionId:          String          // Action 实例 id（对应 Decision.actions[n].actionId）
     actionType:        String          // 与 @ActionType.value 对应
-    params:            Map<String,Any> // Action 绑定参数（来自 Scene.decisions[x].actions[n].params）
+    params:            Map<String,Any> // Action 绑定参数（来自 Decision.actions[n].params，发布时已快照到 rule_version.decision_bindings）
     evalContext:       EvalContext     // 本次评估上下文（含 eventId / subjectId / payload 等）
     actionExecutionId: Long            // action_execution 表行 id（用于幂等键）
     decisionCode:      String          // 触发本 Action 的 Decision 码（D27）

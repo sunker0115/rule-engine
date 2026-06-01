@@ -949,7 +949,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `MAJORITY` / `CUSTOM_SPI` 策略（D26 留 v2）。
 
 **派生约束**：
-- `01-concepts.md` §3.20 RuleDecisionBinding 的 `decisionStrategy` 说明需补充"PUSH/HYBRID Scene 缺省等价 HIGHEST_PRIORITY"；
+- `01-concepts.md` §3.20 RuleDecisionBinding 已包含 `decisionStrategy` 三值表及 PUSH/HYBRID Scene 缺省等价 HIGHEST_PRIORITY 的说明；
 - `02-runtime.md` 评估链路实现需按此默认逻辑处理。
 
 ---

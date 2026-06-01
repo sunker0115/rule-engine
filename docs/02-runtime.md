@@ -140,13 +140,13 @@ RuleEvent
 - 索引在规则发布/禁用时增量热更（D17）：单服务模式由 Modulith `RulePublishedEvent` 触发（近实时）；嵌入式 SDK 模式由 `DbPollingRuleWatcher` 轮询触发（15s 最终一致）；Scene 变更同理（D24，单服务 `SceneChangedEvent` / SDK 模式 `DbPollingSceneWatcher` 30s）。
 
 **异常语义**：
-- 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { satisfied=false }`（对外 JSON 字段名为 `ruleHit`，见 10-api-contract §3.1），不写 `evaluation_session`，不进入后续阶段。
+- 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { ruleHit=false }`（内部字段名 `satisfied`），不写 `evaluation_session`，不进入后续阶段。此路径下幂等依赖 Redis 上半层（TTL 默认 3600s）；TTL 过期后相同 eventId 再次推送被视为新事件。
 
 ### 3.3 Pre-Gate 拦截
 
 **输入**：候选 `RuleVersion` 快照列表 + `RuleEvent`
 
-**输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或 `EvalResult { satisfied=false, preGateBlockedBy=<Gate 类型> }`（对外 JSON 字段名 `ruleHit`）
+**输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或写 `evaluation_session { status=BLOCKED, blocked_by=<Gate 类型> }` + 返回 `EvalResult { ruleHit=false }`
 
 **核心动作**：
 - 对每条候选 RuleVersion，按固定顺序（ROLLOUT → WHITELIST/BLACKLIST → RATE_LIMIT → MUTEX）串行评估 `pre_gates` 中声明的 Gate；
@@ -156,7 +156,7 @@ RuleEvent
 
 | Gate 类型 | 通过条件 | `blocked_by` 值 |
 |-----------|---------|----------------|
-| `ROLLOUT` | `hash(subjectId + ruleVersionId) % 100 < percentage` | `ROLLOUT` |
+| `ROLLOUT` | `hash(subjectId, ruleVersionId) % 100 < percentage` | `ROLLOUT` |
 | `WHITELIST` | `subjectId` ∈ `listKey` 对应名单 | `WHITELIST` |
 | `BLACKLIST` | `subjectId` ∉ `listKey` 对应名单 | `BLACKLIST` |
 | `RATE_LIMIT` | 未触发 tenantId 级 QPS/QPM 限额 | `RATE_LIMIT` |
@@ -181,7 +181,7 @@ RuleEvent
 2. **providedMetrics 优先匹配**（D30）：检查评估请求中 `providedMetrics` 字段，对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；
 3. **并发取数**（D25）：Subject 加载（`SubjectLoader.load()`）与剩余 metric 批拉（各 `MetricSource` 自管连接池/HTTP client）并行启动，`CompletableFuture.allOf()` 等待全部完成；
 4. **组装 EvalContext**：将 Subject + metrics + RuleEvent + `now`（评估开始时间）+ traceId 封装为不可变 POJO；
-5. **同步写 evaluation_session**（D21）：INSERT `evaluation_session { status=PENDING（中间状态）, tenant_id, event_id, scene, subject_id, ... }`，与 event_id DB uk 构成幂等双兜底下半层。
+5. **同步写 evaluation_session**（D21）：INSERT `evaluation_session { status=PENDING（中间状态）, tenant_id, event_id, scene, subject_id, ... }`，与 event_id DB uk 构成幂等双兜底下半层。（注：Pre-Gate 全部拦截时在阶段③直接写 `status=BLOCKED`，不经过本步骤）
 
 **EvalContext 标准字段**（v1 闭合枚举，发布期引用闭合校验根路径，D20 §3）：
 

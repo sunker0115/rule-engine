@@ -168,8 +168,7 @@ POST /api/v1/rules
   "conditionAst": { "type": "AndNode", "children": [] },
   "decisionBindings": [{ "decisionCode": "REVIEW" }],
   "preGates": [{ "type": "ROLLOUT", "params": { "percentage": 100 } }],
-  "triggerEventTypes": ["transfer.initiated"],
-  "metricDependencies": ["user.account.age.days"]
+  "triggerEventTypes": ["transfer.initiated"]
 }
 ```
 

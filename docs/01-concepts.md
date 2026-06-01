@@ -277,14 +277,15 @@ DecisionRef {
 
 ```
 sealed RuleNode {
-    AndNode { children: List<RuleNode>,  displayLabel?: String }
-    OrNode  { children: List<RuleNode>,  displayLabel?: String }
+    AndNode { children: List<RuleNode>,  displayLabel?: String,  weight?: Number }  // weight: D12 SCORECARD kind 专用，v1 忽略
+    OrNode  { children: List<RuleNode>,  displayLabel?: String,  weight?: Number }  // weight: D12 SCORECARD kind 专用，v1 忽略
     NotNode { child:    RuleNode }
     ConditionNode {
         conditionType: String,
         params:        Map<String, Object>,
         metricCode?:   String,
-        displayLabel?: String
+        displayLabel?: String,
+        weight?:       Number  // D12 SCORECARD kind 专用，v1 忽略
     }
 }
 ```
@@ -700,7 +701,7 @@ interface Scheduler {
 | `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
 | `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
 | `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |
-| `source` | `PUSH / PULL / REPLAY`；记录**评估触发方式**（PUSH=异步推送 / PULL=同步调用 / REPLAY=事件回放）；与 `RuleEvent.source`（HTTP / MQ / JOB / SDK / REPLAY）含义不同——RuleEvent.source 记录事件来源渠道，session.source 记录引擎调用方式；不改幂等语义（D23） |
+| `source` | `PUSH / PULL / REPLAY`；记录**评估触发方式**（PUSH=异步推送 / PULL=同步调用 / REPLAY=事件回放）；与 `RuleEvent.source`（HTTP / MQ / JOB / SDK / REPLAY）含义不同——RuleEvent.source 记录事件来源渠道，session.source 记录引擎调用方式；Job 触发时 session.source 填 `PUSH`（Job 是异步推送的一种，与业务方 HTTP 推送同属 PUSH 语义）；不改幂等语义（D23） |
 | `occurred_at` | 业务事件发生时间（来自 RuleEvent.occurredAt，非引擎收到时间） |
 | `started_at` | 评估开始时间 |
 | `finished_at` | 评估结束时间 |
@@ -854,7 +855,7 @@ interface Scheduler {
 - `SCORECARD` kind（v2 启用）：一条 Rule 可绑多个 Decision（按区间），引擎取 `EvalResult.score` 匹配区间后取对应 Decision；无匹配区间 → 该 Rule 不贡献 Decision；
 - 快照字段：发布时将当前绑定列表序列化为 `rule_version.decision_bindings` JSON 列（DDL 落地列名无 `_snapshot` 后缀）。
 
-**Scene.decisionStrategy（多规则命中合成）**：
+**Scene.decisionStrategy（多规则命中合成）**——属于 Scene 配置（§3.2），此处说明是因为合成行为与 RuleDecisionBinding 紧密相关；完整字段定义见 §3.2 Scene 字段表：
 
 | 值 | 语义 | 状态 |
 |----|------|------|
