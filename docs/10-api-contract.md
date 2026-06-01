@@ -84,7 +84,7 @@ POST /api/v1/rule/evaluate
 
 **Request：** 同 3.1 PUSH 评估。
 
-**Response 200：**
+**Response 200（PULL Scene 示例）：**
 ```json
 {
   "eventId": "evt-001",
@@ -96,16 +96,11 @@ POST /api/v1/rule/evaluate
   },
   "hitDecisions": ["REVIEW"],
   "errorCode": null,
-  "actionResults": [
-    {
-      "actionId": "act-review-ticket",
-      "actionType": "ticket.create",
-      "status": "SUCCESS",
-      "errorCode": null
-    }
-  ]
+  "actionResults": []
 }
 ```
+
+> **注**：PULL Scene 的 `Decision.actions` 必须为空（发布校验拒绝），`actionResults` 始终为空数组；HYBRID Scene 的 `actionResults` 含异步派发状态（status 可能为 `SUCCESS` / `FAILED` / `PENDING`，取决于 Action 是否已完成）。
 
 **超时建议**：调用方设 HTTP timeout ≥ 500ms（v1 P99 目标 < 100ms，500ms 留有余量）。
 
@@ -302,6 +297,7 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 | `ACTION_TYPE_NOT_BOUND` | actionType 不在 Scene.scene_action_binding 白名单内 |
 | `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了 Scene 未定义的 Decision |
 | `ZOMBIE_PUBLISHING` | 后台清扫检测到 PUBLISHING 状态残留超时，强制修正为 PUBLISH_FAILED（D19） |
+| `HANDLER_EXCEPTION` | 发布事务内未分类异常 |
 
 ---
 

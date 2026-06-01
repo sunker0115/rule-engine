@@ -796,7 +796,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | 选项 | 说明 | 权衡 |
 |------|------|------|
 | ☐ A. Rule 直挂 `decisionCode` 字段 | Rule 命中后直接输出一个 decisionCode 字符串 | 最简单；但无法支持 score 区间 → Decision 映射（SCORECARD 场景必要）；Decision 无独立管理入口 |
-| ☐ B. 独立 `RuleDecisionBinding` 关联表 | Rule 通过绑定表关联 Decision，支持可选 score 区间；多对多松耦合 | 灵活、支持评分卡场景；发布时快照化进 `rule_version.decision_bindings_snapshot`，保证不可变性（D6） |
+| ☐ B. 独立 `RuleDecisionBinding` 关联表 | Rule 通过绑定表关联 Decision，支持可选 score 区间；多对多松耦合 | 灵活、支持评分卡场景；发布时快照化进 `rule_version.decision_bindings`（DDL 落地列名，无 `_snapshot` 后缀），保证不可变性（D6） |
 | ☐ C. Decision 挂载 Action | Action 挂在 Decision 上，Rule 只出 Decision，所有 REJECT 触发同一批 Action | 配置量少；但失去 Rule 级别差异化 Action 能力；与现有 Rule→Action 设计摩擦大，v1 不适合 |
 
 **决定**：**B**（独立 `RuleDecisionBinding` 关联表）+ Decision 为 **Tenant 级**一等实体 + Scene 声明 `decisionStrategy`（v1 仅 `HIGHEST_PRIORITY`）+ Decision 与 Action **正交**
@@ -812,14 +812,13 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 2. **RuleDecisionBinding（Rule 与 Decision 的关联，版本快照化）**：
    - 字段：`rule_id` / `decision_code` / `score_range_min?` / `score_range_max?`（仅 `Rule.kind=SCORECARD` + `EvalResult.score` 在区间内时生效；v1 `AST_BOOLEAN` kind 直接绑一个 decisionCode，score 区间留空）；
    - 一条 Rule 可绑多个 Decision（按 score 区间划分），最常见是 1:1；
-   - 发布时随 `rule_version` 整体快照化（存入 `rule_version.decision_bindings_snapshot`），保证不可变性（D6）；
+   - 发布时随 `rule_version` 整体快照化（存入 `rule_version.decision_bindings`，DDL 落地列名无 `_snapshot` 后缀），保证不可变性（D6）；
    - v1 `AST_BOOLEAN` kind 命中后直接取唯一绑定的 decisionCode；score 区间匹配在 D12 SCORECARD kind 实现时启用。
 
 3. **Scene.decisionStrategy（多规则命中合成）**：
-   - 可选字段（Scene 不配则 `EvalResult.finalDecision` 为空，调用方自行处理 `hitDecisions` 列表）；
-   - v1 仅实现 `HIGHEST_PRIORITY`：取所有命中规则对应 Decision 中 `priority` 值最小者作为最终决策；
+   - v1 仅实现 `HIGHEST_PRIORITY`：取所有命中规则对应 Decision 中 `priority` 值最小者作为最终决策；**已被 D29 覆盖**：DDL NOT NULL DEFAULT 'HIGHEST_PRIORITY'，PUSH/HYBRID Scene 缺省等价此值，不再是可选字段（D29 决定保留运行时缺省语义，DDL 层已加 DEFAULT）；
    - v2 补充 `MAJORITY`（多数命中）/ `CUSTOM_SPI`（自定义合成器 SPI）；
-   - PULL Scene 最常配此字段（风控"REJECT/REVIEW/PASS 合成"是刚需）；PUSH Scene 可选。
+   - PULL Scene 不参与合成，配置了也忽略。
 
 4. **EvalResult 新增字段**：
    - `finalDecision?: DecisionRef`：合成后最终 Decision（Scene 配了 `decisionStrategy` 时填充）；

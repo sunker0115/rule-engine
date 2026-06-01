@@ -106,7 +106,7 @@ RuleEvent
 
 **输入**：HTTP 请求体 / MQ 消息
 
-**输出**：`RuleEvent { tenantId, sceneCode, eventType, subjectId, eventId, occurredAt, payload }`
+**输出**：`RuleEvent { tenantId, scene, eventType, subjectId, eventId, occurredAt, payload }`（内部 POJO 字段名；API 层 `sceneCode` 映射到此处的 `scene`）
 
 **核心动作**：
 - 解析请求体，反序列化为 RuleEvent POJO；
@@ -325,7 +325,7 @@ EvalResult {
 | `error_code` | VARCHAR | nullable；D15 EvalResult.errorCode；仅 `status=ERROR` 时有值 |
 | `candidate_rule_count` | INT | Matcher 命中的候选 RuleVersion 数量 |
 | `hit_rule_count` | INT | AST 求值满足（HIT）的 Rule 数量 |
-| `occurred_at` | DATETIME | 业务事件发生时间（来自 RuleEvent.occurredAt） |
+| `occurred_at` | DATETIME | 业务事件发生时间（来自 RuleEvent.occurredAt，非引擎收到时间） |
 | `started_at` | DATETIME | 引擎开始评估时间 |
 | `finished_at` | DATETIME | status 从 PENDING 更新为终态的时间（nullable） |
 | `eval_duration_ms` | INT | 整 session 耗时（ms） |
