@@ -657,7 +657,7 @@ interface Scheduler {
 
 **关键边界**：
 
-- **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 **`BLOCKED` 桶**（D22，第四态，独立于 `MISS`——`MISS` 是"通过 Pre-Gate 但 AST 求值不满足"，`BLOCKED` 是"Pre-Gate 拦截未进入 AST"）；`evaluation_session.blocked_by` 字段记录拦截 Gate 类型（`ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX`）；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
+- **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 **`BLOCKED` 桶**（D22，第四态，独立于 `MISS`——`MISS` 是"通过 Pre-Gate 但 AST 求值不满足"，`BLOCKED` 是"Pre-Gate 拦截未进入 AST"）；`evaluation_session.blocked_by` 字段记录拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
 - **Pre-Gate 与 AST 解耦**：Pre-Gate 不能引用 metric，也不能写 conditionType 自定义——只用 `Rule.preGates` 配置的内置类型；演进诉求（如"灰度按外部 AB 平台命中"）走 D6 留的接口替换，不在 Pre-Gate 层级开新类型；
 - **失败语义与 D15 区别**：Pre-Gate 内部执行异常（如 Redis 频次计数器超时）走与 D15 一致的归一——失败默认按"未通过该 Gate"处理（fail-closed，宁可漏发不可错发），具体 fail-open / fail-closed 默认由各 Gate 实现声明，详见 [`02-runtime.md`](./02-runtime.md) §Pre-Gate Chain；
 - **dry-run 行为**：见 §五 Q10——判定全部执行（运营需要看见命中/拦截结果），但**频次计数器与互斥锁不落副作用**；
@@ -680,7 +680,7 @@ interface Scheduler {
 | `event_type` | 事件类型 |
 | `subject_id` | 主体 ID |
 | `status` | `HIT / MISS / BLOCKED / ERROR`（D22 四态，聚合自本次评估的规则集合结果） |
-| `blocked_by` | nullable；拦截 Gate 类型（`ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
+| `blocked_by` | nullable；拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
 | `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
 | `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
 | `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |

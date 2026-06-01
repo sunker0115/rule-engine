@@ -372,7 +372,7 @@ EvalResult {
   - 风控类业务约定"`errorCode` 非空时按拦截处理"（fail-secure）；
   - 营销类业务约定"`errorCode` 非空时按放行处理"（fail-open）；
   - 引擎不替调用方决策；
-- **灰度对账**：评估结果分**四类**统计——`HIT`（AST 求值满足）/ `MISS`（通过 Pre-Gate 但 AST 求值不满足）/ `BLOCKED`（Pre-Gate 拦截，未进入 AST）/ `ERROR`（AST 评估异常）；`BLOCKED` 和 `ERROR` 均不计入命中率分母；`evaluation_session.blocked_by` 字段（`ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX`）记录拦截 Gate 类型，可按类型下钻分析。
+- **灰度对账**：评估结果分**四类**统计——`HIT`（AST 求值满足）/ `MISS`（通过 Pre-Gate 但 AST 求值不满足）/ `BLOCKED`（Pre-Gate 拦截，未进入 AST）/ `ERROR`（AST 评估异常）；`BLOCKED` 和 `ERROR` 均不计入命中率分母；`evaluation_session.blocked_by` 字段（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）记录拦截 Gate 类型，可按类型下钻分析。
 
 **v1 不做的**：
 - 不做评估失败的自动重试（Action 重试已有，评估失败重试语义不清晰：重试可能加重 MetricSource 压力）；
@@ -661,7 +661,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 **v1 落地范围**：
 - `evaluation_session.status` 枚举扩为四态：`HIT / MISS / BLOCKED / ERROR`；
-- Pre-Gate 任一 Gate 拦截 → 写一条 `evaluation_session`，`status=BLOCKED`，`blocked_by` 列记录拦截 Gate 类型（`ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX`）；
+- Pre-Gate 任一 Gate 拦截 → 写一条 `evaluation_session`，`status=BLOCKED`，`blocked_by` 列记录拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；
 - **EvalResult 不变**：Pre-Gate 拦截时根本不进入 AST 评估，不产生 `EvalResult`；
 - **对账分母**：命中率 = `HIT / (HIT + MISS)`；`BLOCKED` 和 `ERROR` 均不参与命中率分母，各自独立监控指标；
 - **与 D15 区分**：D15 的 `ERROR` 是"进入 AST 评估后某节点异常"；`BLOCKED` 是"未进入 AST"，两者不同维度，不混用。

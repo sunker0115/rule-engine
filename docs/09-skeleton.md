@@ -229,7 +229,7 @@ engine:
 | 模块 | AutoConfiguration 类 | 说明 |
 |------|---------------------|------|
 | `rule-observability` | `ObservabilityAutoConfiguration` | 注册 `TraceWriterDbImpl` Bean，绑定 `engine.rule.observability.*` |
-| `rule-eval-svc` | `EvalAutoConfiguration` | 注册 `SpringSchedulerAdapter`、`SpringEventRuleVersionWatcher` |
+| `rule-eval-svc` | `EvalAutoConfiguration` | 注册 `SpringSchedulerAdapter`；内置 `@ApplicationModuleListener` 订阅 `RulePublishedEvent` / `SceneChangedEvent` 触发索引热更（不经 SPI 通道，见 §四注记） |
 | `rule-config-svc` | `ConfigAutoConfiguration` | 注册发布流程 Bean |
 
 Spring Boot 4.0.x 使用 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 注册（替代旧版 `spring.factories`）。
@@ -301,7 +301,7 @@ v1 阶段以下模块暂时合并，v2 触发时按对应演进锚点拆分：
 | `rule-eval-svc` 含调度任务（Scheduler） | v1 评估量不足以独立部署调度服务 | 调度任务资源抢占影响评估 P99 | [`08-evolution.md`](./08-evolution.md) §2.4 |
 | `rule-audit-svc` 含 dry-run 结果存储 | v1 审计量小，独立部署成本高 | 审计查询影响热路径或存储独立扩容需求出现 | [`08-evolution.md`](./08-evolution.md) §2.15 |
 | `rule-kernel` 不单独发布到 Maven 仓库 | v1 无外部 SDK 使用方 | 外部业务方需要嵌入式 SDK 接入 | [`08-evolution.md`](./08-evolution.md) §2.14 |
-| `DbPollingRuleWatcher` / `DbPollingSceneWatcher` 作为可选依赖随 kernel 打包 | v1 SDK 场景未启用 | 同上 | [`08-evolution.md`](./08-evolution.md) §2.14 |
+| `rule-kernel-polling`（独立 artifact）未发布到 Maven 仓库 | v1 无外部 SDK 使用方，无需对外发布 | 外部业务方需要嵌入式 SDK 接入 | [`08-evolution.md`](./08-evolution.md) §2.14 |
 
 ---
 

@@ -167,8 +167,6 @@ RuleEvent
 - 若**全部**候选 RuleVersion 均被 Pre-Gate 拦截 → 写 `evaluation_session { status=BLOCKED, blocked_by=<首个拦截 Gate 类型> }`，返回 `EvalResult { ruleHit=false }`；
 - BLOCKED 对账不计入命中率分母（D22）。
 
-> `blocked_by` 共 5 种枚举值（ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX），与 Pre-Gate 类型一一对应。`00-decisions.md` D22 的枚举列举（"ROLLOUT / BLACKLIST / RATE_LIMIT / MUTEX"）是成文时遗漏了 WHITELIST，以本表为准。
-
 **Gate 内部异常**（如 Redis 频次计数器超时）：默认 fail-closed——失败视为"未通过该 Gate"，宁可漏发不可错发；具体各 Gate 的 fail-open/closed 默认值由各实现声明（→ 04-extension）。
 
 ### 3.4 EvalContext 构建
