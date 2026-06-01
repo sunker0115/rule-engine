@@ -177,7 +177,7 @@
 
 > **本节是触发条件达成后的重构方向，v1 阶段无任何专项准备动作，标准工程实践即可**——避免读者把"演进路径"误读为"v1 待办"。
 
-- **v1 现状**：每次评估 1 行同步写，承担三层角色：①**幂等收口**（DB uk on `event_id`，与 Redis trySet 形成双兜底，D11 / §3.10）；②**对账分母**（HIT / MISS / ERROR 三态统计源，D15）；③**外键时序**（`node_trace` / `action_execution` 引用 `session_id`）。单行同步 insert 1–3 ms，对 D8 千级 QPS 目标是零头，故 D21 仅把 `node_trace`（50–1000 行 / 次）异步化，**`evaluation_session` 保持同步**。
+- **v1 现状**：每次评估 1 行同步写，承担三层角色：①**幂等收口**（DB uk on `event_id`，与 Redis trySet 形成双兜底，D11 / §3.10）；②**对账分母**（HIT / MISS / BLOCKED / ERROR 四态统计源，D15 + D22）；③**外键时序**（`node_trace` / `action_execution` 引用 `session_id`）。单行同步 insert 1–3 ms，对 D8 千级 QPS 目标是零头，故 D21 仅把 `node_trace`（50–1000 行 / 次）异步化，**`evaluation_session` 保持同步**。
 - **触发条件**：
   - profile 显示 `evaluation_session` 同步 insert 进入热路径 P99；或
   - v2 整体演进路径触达——比如转 event sourcing（RuleEvent → MQ → 评估服务消费）时 `evaluation_session` 表的语义会被 MQ + 消费 offset 取代，本节方案废弃。
