@@ -117,7 +117,7 @@ com.sstlfsj.rule
 | Pre-Gate | `kernel.api.spi` |
 | RuleEvent / EvalResult | `kernel.api.model` |
 | EvalContext | `kernel.api.model` |
-| evaluation_session | `eval.internal.session` |
+| EvaluationSession | `eval.internal.session` |
 
 ---
 
