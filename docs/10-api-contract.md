@@ -106,6 +106,8 @@ POST /api/v1/rule/evaluate
 
 **超时建议**：调用方设 HTTP timeout ≥ 500ms（v1 P99 目标 < 100ms，500ms 留有余量）。
 
+**查 trace**：PULL 评估不在响应体直接返回 sessionId；调用方若需查 node_trace，通过 `GET /api/v1/evaluation-sessions?tenantId=&eventId={eventId}` 取对应 session，再调 §6.2 `GET /api/v1/evaluation-sessions/{sessionId}/trace`。
+
 **失败语义（D15）**：`errorCode` 非 null 表示评估期有节点出错；调用方按 fail-secure（拒绝）或 fail-open（放行）自行决策，引擎不代为决定。
 
 **`ruleHit=false` 三种情形**：

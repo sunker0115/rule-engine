@@ -366,7 +366,51 @@ MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()
 
 ---
 
-## 七、维护原则
+## 七、SubjectLoader 实现指南
+
+> 扩展入口：为新的 `subjectType`（如 ACCOUNT / DEVICE / ORDER）提供主体加载实现（D25）。v1 仅 `UserProfileLoader`（USER 类型）实装。
+
+### 7.1 SPI 接口
+
+```java
+public interface SubjectLoader {
+    /**
+     * @param subjectId   主体 id（来自 RuleEvent.subjectId）
+     * @param subjectType 主体类型（来自 Scene.subjectType）
+     * @param event       完整 RuleEvent（含 payload，可辅助加载）
+     * @return Subject（不可变 POJO，含 attributes Map）；取数失败抛 RuntimeException
+     */
+    Subject load(String subjectId, SubjectType subjectType, RuleEvent event);
+
+    /**
+     * 声明本实现支持的 subjectType 列表
+     */
+    List<SubjectType> supportedTypes();
+}
+```
+
+### 7.2 注册
+
+```java
+@Component
+@SubjectType(SubjectType.ACCOUNT)
+public class AccountLoader implements SubjectLoader {
+    @Override public Subject load(...) { ... }
+    @Override public List<SubjectType> supportedTypes() { return List.of(SubjectType.ACCOUNT); }
+}
+```
+
+`SubjectLoaderRegistry` 启动时扫描所有 `SubjectLoader` Bean，按 `supportedTypes()` 建索引；运行时由 `EvalContext` 构建阶段按 `Scene.subjectType` 路由。
+
+### 7.3 实现约束
+
+- `load()` 超时建议 ≤ 200ms（`engine.rule.subject.load-timeout-ms` 配置，见 07-operability §九）；
+- `load()` 失败抛出 RuntimeException → 引擎按 D15 语义整 EvalContext 失败（`METRIC_FETCH_FAIL`）；
+- 返回的 `Subject.attributes` 键名与 AST 中 `subject.<attribute>` 引用路径对应；v1 USER 类型键名见 `01-concepts.md §3.13 Subject 字段`。
+
+---
+
+## 八、维护原则
 
 - 本文档只描述**SPI 接口契约 + 注册指南**，不重复 SPI 模块归属（→ 09-skeleton §四）、不写运维参数默认值（→ 07-operability §九）。
 - 新增第四类 SPI（如未来 Watcher / Scheduler / TraceWriter 开放给业务方实现）必须在本文档增章节 + 同步 09-skeleton §四 SPI 落点表。

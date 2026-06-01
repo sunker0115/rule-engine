@@ -393,7 +393,7 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **每个 Action 独立事务 + 独立重试** —— 一个 Action 失败不影响其他（除非配置 `failFast`）。
 - **v1 Action 是平铺 forEach 顺序执行** —— 按 `sortOrder` 串行，编排（并行 / 等待 / 分支）留到 v2。
 - **失败补偿语义**（D18）：单 Action 失败 → 引擎将异常归一为 `ActionResult { status=FAILED, errorCode, retryable }`；`retryable=true` 入重试队列（不阻塞同 Decision 内后续 Action），`retryable=false` 直接落 `action_execution.status=FAILED`。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，**不**进入重试队列。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。
-- **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。补偿流水线触发入口详见 [`07-operability.md`](./07-operability.md) §补偿流水线。
+- **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。
 - **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。DDL 另有 `PENDING`（已入队待执行）和 `RETRYING`（重试进行中）两个过程态——对账、监控、失败率统计只看最终三态，过程态由引擎内部维护。
 - **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
 - **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **接口已预留 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。**v1 范围（D7）**：评估层 dry-run 一等公民（走完整评估链路 + 节点 trace），ActionHandler 层的 `dryRun` 实装在 **v1.5** 由各 handler 补齐；v1 阶段未补齐的 handler 在 dry-run 时由 Dispatcher 短路返回占位预览（`status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`）。dry-run 完整行为契约见 §五 Q10。
@@ -801,7 +801,7 @@ interface Scheduler {
 - **补偿不自动触发**（D18）：引擎只记录 FAILED 状态，**不自动调用** `compensate()`——补偿是业务语义，由业务侧按需发起；
 - **补偿幂等**：由各 `ActionHandler.compensate()` 实现自行保证（DB uk / Redis trySet / 外部幂等键），引擎不重复保证；
 - **补偿结果记录**：执行结果写入 `action_execution` 的补偿流水字段（`compensated` / `compensated_at` / `compensated_by`），详见 [`05-storage.md`](./05-storage.md) §action_execution 表；
-- **运营 UI 与对账配置**：见 [`06-frontend.md`](./06-frontend.md) §补偿操作台 + [`07-operability.md`](./07-operability.md) §补偿流水线。
+- **运营 UI 与对账配置**：补偿操作台与运维流程为 v2 规划功能，v1 由运营通过 `GET /api/v1/evaluation-sessions` + `action_execution` 查询接口人工核查待补偿清单（`compensated=false, status=SUCCESS`）。
 
 ### 3.19 Decision（决策定义，一等公民）
 

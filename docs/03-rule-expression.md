@@ -34,7 +34,7 @@ AST 由四种节点类型组成，每种节点字段如下。
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `type` | `"AndNode"` | 是 | 固定值 |
-| `displayLabel` | `string` | 否 | UI 显示名，不影响求值（D19 派生：原 RuleGroup 降级为可选标签） |
+| `displayLabel` | `string` | 否 | UI 显示名，不影响求值（原 RuleGroup 降级为可选 AST 标签，见 README §七 版本史） |
 | `children` | `Node[]` | 是 | 子节点列表，至少 1 个；按 `sortOrder`（列表顺序）依次求值 |
 | `weight` | `number` | 否 | SCORECARD kind 专用（D12），v1 AST_BOOLEAN 忽略此字段 |
 

@@ -176,6 +176,8 @@ pass = bucket < rollout.percentage
 | `engine.rule.trace.batch-size` | 500 | 批写行数 |
 | `engine.rule.trace.flush-interval-ms` | 200 | 强制 flush 间隔 |
 | `engine.rule.trace.consumer-threads` | 2 | 批写消费线程数 |
+| `engine.rule.context.build-timeout-ms` | 500 | EvalContext 构建超时（含 Subject 加载 + metric 批拉，超时整 session 失败，D25） |
+| `engine.rule.subject.load-timeout-ms` | 200 | SubjectLoader 单次加载超时（D25，超出则 EvalContext 失败） |
 | `engine.rule.metric.default-cache-ttl-seconds` | 60 | metric 取数结果缓存 TTL（per-metric 可覆盖） |
 | `engine.rule.action.default-timeout-ms` | 3000 | ActionHandler 默认超时（per-handler 可覆盖） |
 | `engine.rule.retention.evaluation-session-days` | 30 | evaluation_session 保留天数（D9） |
