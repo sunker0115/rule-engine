@@ -58,4 +58,10 @@ class ConditionTypeTest {
         assertEquals(1, target.value().length);
         assertEquals(ElementType.TYPE, target.value()[0]);
     }
+
+    @Test
+    void isDocumentedAnnotationType() {
+        assertTrue(ConditionType.class.isAnnotation());
+        assertNotNull(ConditionType.class.getAnnotation(java.lang.annotation.Documented.class));
+    }
 }

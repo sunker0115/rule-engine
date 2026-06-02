@@ -55,4 +55,10 @@ class MetricSourceTypeTest {
         Target target = MetricSourceType.class.getAnnotation(Target.class);
         assertEquals(ElementType.TYPE, target.value()[0]);
     }
+
+    @Test
+    void isDocumentedAnnotationType() {
+        assertTrue(MetricSourceType.class.isAnnotation());
+        assertNotNull(MetricSourceType.class.getAnnotation(java.lang.annotation.Documented.class));
+    }
 }

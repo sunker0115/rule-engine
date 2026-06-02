@@ -59,4 +59,10 @@ class ActionTypeTest {
         assertNotNull(target);
         assertEquals(ElementType.TYPE, target.value()[0]);
     }
+
+    @Test
+    void isDocumentedAnnotationType() {
+        assertTrue(ActionType.class.isAnnotation());
+        assertNotNull(ActionType.class.getAnnotation(java.lang.annotation.Documented.class));
+    }
 }
