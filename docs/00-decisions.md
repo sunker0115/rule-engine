@@ -1035,6 +1035,29 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D32. ArchUnit 版本与 rule-kernel 编译目标
+
+**为什么重要**：rule-kernel 启用了 ArchUnit 架构约束测试，需确保 ArchUnit 能分析 rule-kernel 产出的字节码。
+
+| 选项 | 说明 | 权衡 |
+|------|------|------|
+| ☐ A. 坚持 ArchUnit 1.3.x + Java 25 字节码 | 不修改版本 | ArchUnit 1.3 内置 ASM 9.6，Java 25 字节码（major 69）超出其解析上限，测试启动即崩溃 |
+| ☐ B. 升级 ArchUnit 1.4.0 + maven.compiler.release=21 | 小版本升级 + 降编译目标 | 解决解析问题；rule-kernel 编译为 Java 21 字节码，与其余模块（Java 25）不一致 |
+| ☐ C. 升级 ArchUnit 1.5+ | 较大版本升级 | ASM 9.8 支持 Java 25 字节码；但 1.5 与 Spring Boot 4 / Java 25 的实际兼容性尚未验证 |
+
+**决定**：✅ B（临时方案）— 升级 ArchUnit 1.3.0 → 1.4.0，rule-kernel 加 `maven.compiler.release=21`
+
+**v1 落地范围**：
+- `rule-kernel/pom.xml` 新增 `<maven.compiler.release>21</maven.compiler.release>`，仅影响 rule-kernel
+- rule-kernel 所有主代码仅使用 Java 21 稳定特性（sealed interface、switch 模式匹配均在 Java 21 正式发布）
+- 其余 7 个模块维持 Java 25 编译目标
+
+**已知妥协**：rule-kernel 字节码版本与其他模块不一致；日后升级到 ArchUnit 1.5+（ASM 9.8 支持 Java 25）后应删除 `maven.compiler.release` override。
+
+**派生约束**：需在升级 ArchUnit 至 1.5+ 后验证兼容性，届时删除 rule-kernel 的 `maven.compiler.release=21`。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1070,5 +1093,6 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D29 | PUSH/HYBRID Scene 的 decisionStrategy 默认值 | B    | PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`，消灭 actions 静默不派发问题；PULL Scene 不参与合成 |
 | D30 | providedMetrics — 业务方随评估携带指标值 | A    | 评估请求携带 `providedMetrics`；Metric 级 `allowProvided` 控制是否可被覆盖；只活在本次评估，不持久化 |
 | D31 | 前端技术栈 | A    | React 18 + react-querybuilder + Ant Design 5 + Vite + Zustand；前端工程放 `frontend/` 目录，与 `src/` 平级 |
+| D32 | ArchUnit 版本与 rule-kernel 编译目标 | B（临时） | ArchUnit 1.4.0 + rule-kernel maven.compiler.release=21；升级至 ArchUnit 1.5+ 后需删除 override |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。
