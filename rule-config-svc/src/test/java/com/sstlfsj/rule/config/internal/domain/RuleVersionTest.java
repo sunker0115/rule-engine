@@ -4,33 +4,45 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Verifies RuleVersion getter/setter round-trips. */
+/** 验证 RuleVersion Lombok getter/setter 及字段覆盖。 */
 class RuleVersionTest {
 
     @Test
     void getterSetter_roundTrip() {
         RuleVersion ver = new RuleVersion();
         ver.setId(5L);
-        ver.setTenantId("tenant1");
         ver.setRuleDefinitionId(10L);
-        ver.setConditionAstJson("{\"type\":\"GT\"}");
-        ver.setPreGatesJson("[]");
-        ver.setDecisionBindingsJson("{}");
+        ver.setVersion(1L);
+        ver.setConditionAst("{\"type\":\"ConditionNode\"}");
+        ver.setDecisionBindings("[]");
+        ver.setPreGates("[]");
+        ver.setRollout("{}");
+        ver.setKind("AST_BOOLEAN");
+        ver.setTriggerEventTypes("[\"payment.initiated\"]");
+        ver.setMetricDependencies("[\"user.age\"]");
         ver.setStatus("ACTIVE");
+        ver.setPublishedBy("operator1");
 
         assertEquals(5L, ver.getId());
-        assertEquals("tenant1", ver.getTenantId());
         assertEquals(10L, ver.getRuleDefinitionId());
-        assertEquals("{\"type\":\"GT\"}", ver.getConditionAstJson());
-        assertEquals("[]", ver.getPreGatesJson());
-        assertEquals("{}", ver.getDecisionBindingsJson());
+        assertEquals(1L, ver.getVersion());
+        assertEquals("{\"type\":\"ConditionNode\"}", ver.getConditionAst());
+        assertEquals("[]", ver.getDecisionBindings());
+        assertEquals("[]", ver.getPreGates());
+        assertEquals("{}", ver.getRollout());
+        assertEquals("AST_BOOLEAN", ver.getKind());
+        assertEquals("[\"payment.initiated\"]", ver.getTriggerEventTypes());
+        assertEquals("[\"user.age\"]", ver.getMetricDependencies());
         assertEquals("ACTIVE", ver.getStatus());
+        assertEquals("operator1", ver.getPublishedBy());
     }
 
     @Test
     void defaultValues_areNull() {
         RuleVersion ver = new RuleVersion();
         assertNull(ver.getId());
-        assertNull(ver.getConditionAstJson());
+        assertNull(ver.getConditionAst());
+        assertNull(ver.getPublishedAt());
+        assertNull(ver.getCreatedAt());
     }
 }

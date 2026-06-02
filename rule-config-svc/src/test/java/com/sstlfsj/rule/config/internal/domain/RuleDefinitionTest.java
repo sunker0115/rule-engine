@@ -4,31 +4,45 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Verifies RuleDefinition getter/setter round-trips. */
+/** 验证 RuleDefinition Lombok getter/setter 及字段覆盖。 */
 class RuleDefinitionTest {
 
     @Test
     void getterSetter_roundTrip() {
         RuleDefinition def = new RuleDefinition();
         def.setId(10L);
-        def.setTenantId("tenant1");
-        def.setSceneCode("SCENE_A");
-        def.setName("规则1");
-        def.setStatus("ACTIVE");
-        def.setCurrentVersionId(99L);
+        def.setTenantId(1L);
+        def.setSceneId(5L);
+        def.setCode("rule.demo");
+        def.setName("测试规则");
+        def.setDescription("规则描述");
+        def.setStatus("DRAFT");
+        def.setKind("AST_BOOLEAN");
+        def.setCurrentVersion(99L);
+        def.setPublishedBy("operator1");
+        def.setCreatedBy("operator1");
+        def.setUpdatedBy("operator2");
 
         assertEquals(10L, def.getId());
-        assertEquals("tenant1", def.getTenantId());
-        assertEquals("SCENE_A", def.getSceneCode());
-        assertEquals("规则1", def.getName());
-        assertEquals("ACTIVE", def.getStatus());
-        assertEquals(99L, def.getCurrentVersionId());
+        assertEquals(1L, def.getTenantId());
+        assertEquals(5L, def.getSceneId());
+        assertEquals("rule.demo", def.getCode());
+        assertEquals("测试规则", def.getName());
+        assertEquals("规则描述", def.getDescription());
+        assertEquals("DRAFT", def.getStatus());
+        assertEquals("AST_BOOLEAN", def.getKind());
+        assertEquals(99L, def.getCurrentVersion());
+        assertEquals("operator1", def.getPublishedBy());
+        assertEquals("operator1", def.getCreatedBy());
+        assertEquals("operator2", def.getUpdatedBy());
     }
 
     @Test
     void defaultValues_areNull() {
         RuleDefinition def = new RuleDefinition();
         assertNull(def.getId());
-        assertNull(def.getCurrentVersionId());
+        assertNull(def.getCurrentVersion());
+        assertNull(def.getPublishedAt());
+        assertNull(def.getCreatedAt());
     }
 }

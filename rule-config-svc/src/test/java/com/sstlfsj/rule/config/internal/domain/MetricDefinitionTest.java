@@ -4,32 +4,45 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Verifies MetricDefinition getter/setter round-trips. */
+/** 验证 MetricDefinition Lombok getter/setter 及字段覆盖。 */
 class MetricDefinitionTest {
 
     @Test
     void getterSetter_roundTrip() {
         MetricDefinition metric = new MetricDefinition();
         metric.setId(3L);
-        metric.setTenantId("tenant1");
-        metric.setMetricCode("age");
+        metric.setTenantId(1L);
+        metric.setMetricCode("user.age");
         metric.setName("年龄");
-        metric.setDataType("INTEGER");
-        metric.setSourceType("DB");
+        metric.setSourceType("ATTRIBUTE");
+        metric.setDataType("LONG");
+        metric.setParams("{\"field\":\"age\"}");
+        metric.setCacheTtlSeconds(60);
         metric.setAllowProvided(true);
+        metric.setStatus("ACTIVE");
+        metric.setCreatedBy("operator1");
+        metric.setUpdatedBy("operator2");
 
         assertEquals(3L, metric.getId());
-        assertEquals("tenant1", metric.getTenantId());
-        assertEquals("age", metric.getMetricCode());
+        assertEquals(1L, metric.getTenantId());
+        assertEquals("user.age", metric.getMetricCode());
         assertEquals("年龄", metric.getName());
-        assertEquals("INTEGER", metric.getDataType());
-        assertEquals("DB", metric.getSourceType());
-        assertTrue(metric.isAllowProvided());
+        assertEquals("ATTRIBUTE", metric.getSourceType());
+        assertEquals("LONG", metric.getDataType());
+        assertEquals("{\"field\":\"age\"}", metric.getParams());
+        assertEquals(60, metric.getCacheTtlSeconds());
+        assertTrue(metric.getAllowProvided());
+        assertEquals("ACTIVE", metric.getStatus());
+        assertEquals("operator1", metric.getCreatedBy());
+        assertEquals("operator2", metric.getUpdatedBy());
     }
 
     @Test
-    void allowProvided_defaultFalse() {
+    void defaultValues_areNull() {
         MetricDefinition metric = new MetricDefinition();
-        assertFalse(metric.isAllowProvided());
+        assertNull(metric.getId());
+        assertNull(metric.getAllowProvided());
+        assertNull(metric.getCreatedAt());
+        assertNull(metric.getUpdatedAt());
     }
 }

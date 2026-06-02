@@ -3,31 +3,32 @@ package com.sstlfsj.rule.config.internal.domain;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Getter;
+import lombok.Setter;
 
-/** MyBatis-Plus entity for the {@code scene} table. */
+/** scene 表实体，对应 05-storage.md §3.1 scene DDL。 */
+@Getter
+@Setter
 @TableName("scene")
 public class SceneDef {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private String tenantId;
+    private Long tenantId;
     private String code;
     private String name;
-    private String status;
+    private String description;
     private String dominantMode;
+    private String decisionStrategy;
     private String subjectType;
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getTenantId() { return tenantId; }
-    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
-    public String getCode() { return code; }
-    public void setCode(String code) { this.code = code; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    public String getDominantMode() { return dominantMode; }
-    public void setDominantMode(String dominantMode) { this.dominantMode = dominantMode; }
-    public String getSubjectType() { return subjectType; }
-    public void setSubjectType(String subjectType) { this.subjectType = subjectType; }
+    /** JSON 数组字符串，存储允许的 eventType 白名单。 */
+    private String eventTypes;
+    /** JSON 对象字符串，存储 payloadSchema 字段类型声明。 */
+    private String payloadSchema;
+    /** JSON 对象字符串，存储 Scene 默认参数。 */
+    private String defaultParams;
+    private String status;
+    private String createdBy;
+    private java.time.LocalDateTime createdAt;
+    private String updatedBy;
+    private java.time.LocalDateTime updatedAt;
 }
