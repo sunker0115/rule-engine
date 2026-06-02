@@ -1,0 +1,39 @@
+package com.sstlfsj.rule.web.config;
+
+import com.sstlfsj.rule.config.api.service.MetadataService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.util.List;
+
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+class MetadataControllerTest {
+
+    private MockMvc mockMvc;
+    private MetadataService metadataService;
+
+    @BeforeEach
+    void setUp() {
+        metadataService = mock(MetadataService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new MetadataController(metadataService)).build();
+    }
+
+    @Test
+    void getMetadata_returns200_withResponse() throws Exception {
+        MetadataService.MetadataResponse resp = new MetadataService.MetadataResponse(
+                List.of(), List.of(), List.of());
+        when(metadataService.getSceneMetadata("t1", "PAYMENT")).thenReturn(resp);
+
+        mockMvc.perform(get("/api/v1/scenes/PAYMENT/metadata")
+                        .param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(metadataService).getSceneMetadata("t1", "PAYMENT");
+    }
+}
