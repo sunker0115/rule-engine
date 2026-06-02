@@ -3,7 +3,7 @@ target/
 .flattened-pom.xml
 
 # IDE
-.idea/
+.idea/*
 *.iml
 *.iws
 *.ipr
