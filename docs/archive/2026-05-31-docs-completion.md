@@ -1,3 +1,5 @@
+> ⚠️ **已归档**：本计划已全部执行完毕（7 个文档 02/04/05/06/07/08/10 均已展开并提交），归档保留。
+
 # Rule Engine Docs Completion Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
