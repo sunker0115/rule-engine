@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.app;
+package com.sstlfsj.rule;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -11,7 +11,11 @@ class RuleEngineApplicationTest {
     void hasSpringBootApplicationAnnotation() {
         SpringBootApplication ann = RuleEngineApplication.class.getAnnotation(SpringBootApplication.class);
         assertNotNull(ann);
-        // 确认扫描根包正确，避免漏扫子模块
-        assertArrayEquals(new String[]{"com.sstlfsj.rule"}, ann.scanBasePackages());
+    }
+
+    @Test
+    void isInRootPackage() {
+        // Modulith 要求主类在所有业务模块的公共父包 com.sstlfsj.rule
+        assertEquals("com.sstlfsj.rule", RuleEngineApplication.class.getPackageName());
     }
 }

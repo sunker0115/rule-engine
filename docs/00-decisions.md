@@ -1094,5 +1094,6 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D30 | providedMetrics — 业务方随评估携带指标值 | A    | 评估请求携带 `providedMetrics`；Metric 级 `allowProvided` 控制是否可被覆盖；只活在本次评估，不持久化 |
 | D31 | 前端技术栈 | A    | React 18 + react-querybuilder + Ant Design 5 + Vite + Zustand；前端工程放 `frontend/` 目录，与 `src/` 平级 |
 | D32 | ArchUnit 版本与 rule-kernel 编译目标 | B（临时） | ArchUnit 1.4.0 + rule-kernel maven.compiler.release=21；升级至 ArchUnit 1.5+ 后需删除 override |
+| D33 | Modulith verify() 不适用于多 JAR 共享库 | A | rule-kernel 是跨模块共享库（SPI+模型），Modulith 在多 JAR 结构下将其视为 Modulith 模块导致 exposed 检查误报；骨架阶段跳过 verify()，架构边界由 ArchUnit（KernelArchTest）保证；等 v2 业务实现时视 Modulith 版本再评估是否启用 verify() |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。
