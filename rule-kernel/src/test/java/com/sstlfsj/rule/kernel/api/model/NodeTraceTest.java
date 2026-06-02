@@ -1,0 +1,53 @@
+package com.sstlfsj.rule.kernel.api.model;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class NodeTraceTest {
+
+    @Test
+    void children_defaultToEmptyWhenNull() {
+        NodeTrace trace = new NodeTrace("CONDITION", "AMOUNT_GT", "balance",
+                true, 100, "FETCHED", null, null);
+        assertNotNull(trace.children());
+        assertTrue(trace.children().isEmpty());
+    }
+
+    @Test
+    void children_areImmutable() {
+        NodeTrace leaf = new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null);
+        List<NodeTrace> mutable = new ArrayList<>(List.of(leaf));
+        NodeTrace parent = new NodeTrace("AND", null, null, true, null, null, null, mutable);
+        mutable.add(leaf);
+        assertEquals(1, parent.children().size(), "构造后修改原始列表不应影响 NodeTrace");
+    }
+
+    @Test
+    void children_listIsUnmodifiable() {
+        NodeTrace trace = new NodeTrace("AND", null, null, true, null, null, null, List.of());
+        assertThrows(UnsupportedOperationException.class,
+                () -> trace.children().add(
+                        new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null)));
+    }
+
+    @Test
+    void nullableFields_allowNull() {
+        NodeTrace trace = new NodeTrace("AND", null, null, null, null, null, null, null);
+        assertNull(trace.conditionType());
+        assertNull(trace.metricCode());
+        assertNull(trace.result());
+        assertNull(trace.errorCode());
+    }
+
+    @Test
+    void nestedChildren_areRetained() {
+        NodeTrace leaf = new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null);
+        NodeTrace parent = new NodeTrace("AND", null, null, true, null, null, null, List.of(leaf));
+        assertEquals(1, parent.children().size());
+        assertEquals(leaf, parent.children().get(0));
+    }
+}
