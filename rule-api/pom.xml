@@ -17,6 +17,10 @@
             <artifactId>lombok</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-config-svc</artifactId>
         </dependency>
