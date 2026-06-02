@@ -1,0 +1,44 @@
+package com.sstlfsj.rule.kernel.api.spi.condition;
+
+import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class ConditionEvaluatorTest {
+
+    private static final ConditionEvaluator ALWAYS_TRUE = (node, ctx) -> true;
+    private static final ConditionEvaluator ALWAYS_FALSE = (node, ctx) -> false;
+
+    private static EvalContext buildCtx() {
+        RuleEvent event = new RuleEvent("t1", "SCENE1", "PAYMENT",
+                "u1", "e1", Instant.now(), Map.of(), Map.of());
+        return new EvalContext("t1", event, null, Map.<String, MetricValue>of());
+    }
+
+    @Test
+    void evaluate_returnsTrue_whenImplementationReturnsTrue() {
+        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of());
+        assertTrue(ALWAYS_TRUE.evaluate(node, buildCtx()));
+    }
+
+    @Test
+    void evaluate_returnsFalse_whenImplementationReturnsFalse() {
+        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of());
+        assertFalse(ALWAYS_FALSE.evaluate(node, buildCtx()));
+    }
+
+    @Test
+    void evaluate_isFunctionalInterface() {
+        // Lambda assignment confirms the interface has exactly one abstract method.
+        ConditionEvaluator evaluator = (node, ctx) -> node.conditionType().startsWith("AMOUNT");
+        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of());
+        assertTrue(evaluator.evaluate(node, buildCtx()));
+    }
+}
