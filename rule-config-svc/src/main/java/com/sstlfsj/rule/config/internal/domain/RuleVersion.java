@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+/** MyBatis-Plus entity for the {@code rule_version} table, storing the serialized AST and gate configuration. */
 @TableName("rule_version")
 public class RuleVersion {
     @TableId(type = IdType.AUTO)

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+/** MyBatis-Plus entity for the {@code metric_definition} table. */
 @TableName("metric_definition")
 public class MetricDefinition {
     @TableId(type = IdType.AUTO)

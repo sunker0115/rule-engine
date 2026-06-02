@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+/** MyBatis-Plus entity for the {@code scene} table. */
 @TableName("scene")
 public class SceneDef {
     @TableId(type = IdType.AUTO)
