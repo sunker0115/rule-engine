@@ -1,0 +1,28 @@
+# Maven
+target/
+.flattened-pom.xml
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+.factorypath
+
+# Spring Boot AOT / native
+src/main/resources/META-INF/native-image/
+src/checkstyle/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# CodeGraph index (local tooling)
+.codegraph/
