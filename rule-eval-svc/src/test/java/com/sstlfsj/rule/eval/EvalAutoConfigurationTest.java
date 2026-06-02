@@ -6,7 +6,7 @@ import org.springframework.context.annotation.ComponentScan;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Verifies EvalAutoConfiguration carries the required Spring annotations. */
+/** 验证 EvalAutoConfiguration 带有必要的 Spring 注解。 */
 class EvalAutoConfigurationTest {
 
     @Test

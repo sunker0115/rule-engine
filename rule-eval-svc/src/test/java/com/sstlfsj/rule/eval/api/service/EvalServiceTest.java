@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Verifies EvalService is a public interface with the expected method signatures. */
+/** 验证 EvalService 是公开接口且具有预期的方法签名。 */
 class EvalServiceTest {
 
     @Test

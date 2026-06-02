@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** Verifies EvalServiceImpl stub methods throw UnsupportedOperationException. */
+/** 验证 EvalServiceImpl 桩方法抛出 UnsupportedOperationException。 */
 class EvalServiceImplTest {
 
     private final EvalServiceImpl impl = new EvalServiceImpl();

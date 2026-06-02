@@ -8,7 +8,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Verifies SceneRuleIndex match/update/remove behaviour. */
+/** 验证 SceneRuleIndex 的 match / update / remove 行为。 */
 class SceneRuleIndexTest {
 
     private SceneRuleIndex index;

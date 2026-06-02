@@ -3,31 +3,31 @@ package com.sstlfsj.rule.eval.api.service;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 
-/** Evaluates rule events using the scene rule index and registered SPI components. */
+/** 使用场景规则索引和已注册 SPI 组件对规则事件进行评估。 */
 public interface EvalService {
 
     /**
-     * Accepts a rule event for asynchronous PUSH-mode evaluation.
+     * 接收规则事件，异步 PUSH 模式评估。
      *
-     * @param event the rule event to evaluate
-     * @return true if the event was accepted for processing, false if rejected
+     * @param event 待评估的规则事件
+     * @return 事件被接受返回 true，被拒绝返回 false
      */
     boolean acceptEvent(RuleEvent event);
 
     /**
-     * Synchronously evaluates a rule event in PULL mode and returns the full result.
+     * 同步 PULL 模式评估规则事件，返回完整结果。
      *
-     * @param event the rule event to evaluate
-     * @return the complete evaluation result including decisions and action results
+     * @param event 待评估的规则事件
+     * @return 包含决策和 Action 结果的完整评估结果
      */
     EvalResult evaluate(RuleEvent event);
 
     /**
-     * Performs a dry-run evaluation without dispatching actions.
+     * 执行 dry-run 评估，返回含节点 trace 的结果，不派发 Action。
      *
-     * @param event         the rule event to evaluate
-     * @param ruleVersionId specific rule version to test, or null to use the active version
-     * @return the evaluation result including detailed node trace, with no actions dispatched
+     * @param event         待评估的规则事件
+     * @param ruleVersionId 指定测试的规则版本 ID，null 表示使用当前活跃版本
+     * @return 包含详细节点 trace 的评估结果，不执行任何 Action
      */
     EvalResult dryRun(RuleEvent event, Long ruleVersionId);
 }
