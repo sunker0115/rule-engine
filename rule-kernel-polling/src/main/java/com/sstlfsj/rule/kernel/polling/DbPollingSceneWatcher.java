@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.polling;
 
 import com.sstlfsj.rule.kernel.api.spi.watcher.SceneWatcher;
+import com.sstlfsj.rule.kernel.api.spi.watcher.SceneWatcher.SceneChangeEvent;
 
 import java.util.function.Consumer;
 
