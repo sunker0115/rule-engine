@@ -70,9 +70,9 @@ CREATE TABLE tenant (
   is_default  TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否默认租户（单业务线启动时只有一个 default 租户）',
   status      ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_by  VARCHAR(64)  COMMENT '创建人（来自 X-Actor-Id header，D14）',
-  created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by  VARCHAR(64)  COMMENT '最近修改人（来自 X-Actor-Id header，D14）',
-  updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_code (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='租户注册表';
 ```
@@ -94,9 +94,9 @@ CREATE TABLE scene (
   default_params    JSON         COMMENT '如 timezone: Asia/Shanghai',
   status            ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_by        VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at        TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by        VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_at        TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_code (tenant_id, code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='业务域（Scene）元数据';
 ```
@@ -116,9 +116,9 @@ CREATE TABLE metric_definition (
   allow_provided      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'D30：是否允许调用方通过 providedMetrics 覆盖；DEFAULT 0 为 SQL_AGGREGATE/STREAM 兜底，ATTRIBUTE/EXTERNAL_HTTP 应用层写入时需显式设为 1（见 04-extension §4.3）',
   status              ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_by          VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by          VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_code (tenant_id, metric_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标元数据（sourceType / params / cacheTtl / allowProvided）';
 ```
@@ -137,11 +137,11 @@ CREATE TABLE rule_definition (
   kind            ENUM('AST_BOOLEAN','SCORECARD','DECISION_TREE','DECISION_TABLE','EXPRESSION_SCRIPT') NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT 'D12：Rule 类型占位，v1 仅 AST_BOOLEAN 实装，其他枚举值发布时拒绝',
   current_version BIGINT       COMMENT '当前有效 rule_version.id（注意：存的是 rule_version 表的主键 id，而非 rule_version.version 字段）；DRAFT/PUBLISHING/PUBLISH_FAILED 时为 null',
   published_by    VARCHAR(64)  COMMENT '最后发布人（来自 audit_log.actor）',
-  published_at    DATETIME(3)  COMMENT '最后发布时间',
+  published_at    TIMESTAMP(3)  COMMENT '最后发布时间',
   created_by      VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by      VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_code (tenant_id, code),
   KEY idx_scene_id (scene_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则主记录（D12 kind 占位，D19 状态机）';
@@ -162,10 +162,10 @@ CREATE TABLE rule_version (
   trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
   metric_dependencies   JSON         NOT NULL COMMENT 'AST 引用的 metricCode 列表（发布期静态收集）',
   compiled_predicate_ref VARCHAR(256) NULL     COMMENT 'D20 §5：编译产物引用键，v1 留空，v1.5 预编译优化时启用',
-  published_at          DATETIME(3)           COMMENT 'NULL = 草稿；非 NULL = 已发布',
+  published_at          TIMESTAMP(3)           COMMENT 'NULL = 草稿；非 NULL = 已发布',
   published_by          VARCHAR(64),
   status                ENUM('ACTIVE','SUPERSEDED','DISABLED') NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE=当前有效/SUPERSEDED=被新版本取代/DISABLED=手动禁用',
-  created_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at            TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_def_version (rule_definition_id, version),
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则版本快照（不可变，D19）';
@@ -184,9 +184,9 @@ CREATE TABLE decision_definition (
   actions     JSON         NOT NULL DEFAULT '[]' COMMENT 'D27：Action 列表（命中此 Decision 时派发），含 actionId/actionType/sortOrder/failFast/compensateActionType/params',
   status      ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_by  VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by  VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_code (tenant_id, code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Decision 实体（D26，Tenant 级）；actions 字段在发布时快照到 rule_version.decision_bindings（D28）';
 ```
@@ -200,7 +200,7 @@ CREATE TABLE rule_decision_binding (
   decision_id       BIGINT       NOT NULL COMMENT '关联 decision_definition.id',
   score_range_min   DECIMAL(10,4) COMMENT '仅 Rule.kind=SCORECARD 时有意义，v1 留 null',
   score_range_max   DECIMAL(10,4) COMMENT '仅 Rule.kind=SCORECARD 时有意义，v1 留 null',
-  created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at        TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_rule_decision (rule_definition_id, decision_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则与 Decision 绑定关系（D26）；score 区间 v1 为 null 占位，SCORECARD kind 时启用';
 ```
@@ -214,9 +214,9 @@ CREATE TABLE scene_metric_binding (
   metric_definition_id  BIGINT       NOT NULL COMMENT '关联 metric_definition.id',
   cache_policy_override JSON         COMMENT 'Scene 级缓存策略覆盖（ttl_seconds），null=使用 metric_definition 默认值',
   created_by            VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at            TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by            VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_at            TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_scene_metric (scene_id, metric_definition_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Scene 可用 Metric 白名单；Rule 发布时校验 AST 引用的 metricCode 必须在此列表内（白名单来自早期 Scene 治理边界设计，D30 是 providedMetrics/allowProvided 特性）';
 ```
@@ -231,9 +231,9 @@ CREATE TABLE scene_action_binding (
   default_params    JSON         COMMENT 'Scene 级默认参数，与 Decision.actions[n].params 合并（Decision 级优先）',
   rate_limit_override JSON       COMMENT 'Scene 级频控覆盖，null=使用 ActionHandler 默认',
   created_by        VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at        TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by        VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_at        TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_scene_action (scene_id, action_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Scene 可用 ActionType 白名单（D27）；仅 PUSH/HYBRID Scene 使用；PULL Scene 发布时校验 actions 为空';
 ```
@@ -253,9 +253,9 @@ CREATE TABLE job_definition (
   payload_template JSON        COMMENT '合成 RuleEvent.payload 的模板（支持占位符替换）',
   status          ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_by      VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by      VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_scene_code (scene_id, code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时触发规则配置（§3.10）；调度器到点合成 RuleEvent 注入标准评估链路';
 ```
@@ -267,13 +267,13 @@ CREATE TABLE job_execution (
   id              BIGINT AUTO_INCREMENT PRIMARY KEY,
   job_definition_id BIGINT     NOT NULL COMMENT '关联 job_definition.id',
   tenant_id       BIGINT       NOT NULL,
-  trigger_at      DATETIME(3)  NOT NULL COMMENT '调度器触发时间',
+  trigger_at      TIMESTAMP(3)  NOT NULL COMMENT '调度器触发时间',
   status          ENUM('RUNNING','SUCCESS','PARTIAL_FAIL','FAILED') NOT NULL DEFAULT 'RUNNING',
   subject_count   INT          NOT NULL DEFAULT 0 COMMENT '本次批次主体总数',
   success_count   INT          NOT NULL DEFAULT 0 COMMENT '成功注入评估链路的主体数',
   error_count     INT          NOT NULL DEFAULT 0 COMMENT '失败数（含主体查询失败 + 事件注入失败）',
   error_summary   TEXT         COMMENT '失败摘要（抽样错误信息）',
-  finished_at     DATETIME(3),
+  finished_at     TIMESTAMP(3),
   KEY idx_job_trigger (job_definition_id, trigger_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Job 每次运行记录（§3.10）';
 ```
@@ -292,7 +292,7 @@ CREATE TABLE audit_log (
   before_snapshot JSON         COMMENT '变更前快照',
   after_snapshot  JSON         COMMENT '变更后快照（PUBLISH_FAILED 时含 errorCode 字段）',
   trace_id        VARCHAR(128) COMMENT '请求链路 trace id，便于关联日志',
-  operated_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  operated_at     TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY idx_tenant_target (tenant_id, target_type, target_id),
   KEY idx_operated_at (operated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配置变更审计（D14，同步事务写）';
@@ -318,9 +318,9 @@ CREATE TABLE evaluation_session (
   error_code       VARCHAR(64)  COMMENT '仅 status=ERROR 时有值，D15 EvalResult.errorCode',
   candidate_rule_count INT      NOT NULL DEFAULT 0 COMMENT 'Matcher 命中的候选 RuleVersion 数量',
   hit_rule_count   INT          NOT NULL DEFAULT 0 COMMENT 'AST 求值满足（HIT）的 Rule 数量',
-  occurred_at      DATETIME(3)  NOT NULL COMMENT '业务事件时间',
-  started_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
-  finished_at      DATETIME(3)  COMMENT 'status 从 PENDING 更新为终态的时间',
+  occurred_at      TIMESTAMP(3)  NOT NULL COMMENT '业务事件时间',
+  started_at       TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
+  finished_at      TIMESTAMP(3)  COMMENT 'status 从 PENDING 更新为终态的时间',
   eval_duration_ms INT          COMMENT '整 session 耗时（ms）',
   UNIQUE KEY uk_tenant_event (tenant_id, event_id),
   KEY idx_scene_subject (scene_code, subject_id),
@@ -345,7 +345,7 @@ CREATE TABLE node_trace (
   result                TINYINT(1)   COMMENT '1=满足/0=不满足/NULL=短路跳过',
   error_code            VARCHAR(64)  COMMENT 'nullable，METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR 等',
   value_source          ENUM('PROVIDED','FETCHED') COMMENT 'D30：指标来源（nullable，仅 metric 类 ConditionNode）',
-  evaluated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  evaluated_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY idx_session_id (evaluation_session_id),
   KEY idx_tenant_evaluated (tenant_id, evaluated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AST 节点求值 trace（D7/D21，异步批写）';
@@ -366,11 +366,11 @@ CREATE TABLE action_execution (
   error_code            VARCHAR(64)  COMMENT 'TIMEOUT / BUSINESS_REJECTED / PREDECESSOR_FAILED 等',
   retryable             TINYINT(1)   COMMENT '1=可重试；0=不可重试；NULL=尚未执行',
   retry_count           INT          NOT NULL DEFAULT 0,
-  executed_at           DATETIME(3)  COMMENT '最后一次执行时间',
+  executed_at           TIMESTAMP(3)  COMMENT '最后一次执行时间',
   compensated           TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否已补偿（§3.18 补偿流水线）',
-  compensated_at        DATETIME(3)  COMMENT '补偿完成时间',
+  compensated_at        TIMESTAMP(3)  COMMENT '补偿完成时间',
   compensated_by        VARCHAR(64)  COMMENT '发起补偿的操作人（来自 X-Actor-Id header）',
-  created_at            DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at            TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_idempotency (tenant_id, event_id, decision_code, action_id) COMMENT 'D27 幂等 UK：DB 层最终防重',
   KEY idx_session_id (evaluation_session_id),
   KEY idx_status_retryable (status, retryable)
@@ -393,9 +393,9 @@ CREATE TABLE dry_run_session (
   hit_decisions    JSON,
   blocked_by       VARCHAR(64),
   error_code       VARCHAR(64),
-  occurred_at      DATETIME(3)  NOT NULL,
-  started_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  finished_at      DATETIME(3),
+  occurred_at      TIMESTAMP(3)  NOT NULL,
+  started_at       TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  finished_at      TIMESTAMP(3),
   trigger          ENUM('MANUAL','API') NOT NULL DEFAULT 'API' COMMENT 'dry-run 触发来源',
   requested_by     VARCHAR(64)  COMMENT 'dry-run 发起人（来自请求头 X-Actor-Id，D14）',
   target_rule_version_id BIGINT COMMENT '指定预览的 RuleVersion id；null 时使用 current_version，可提前预览未发布版本',
@@ -420,7 +420,7 @@ CREATE TABLE dry_run_node_trace (
   result                TINYINT(1),
   error_code            VARCHAR(64),
   value_source          ENUM('PROVIDED','FETCHED'),
-  evaluated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  evaluated_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY idx_session_id (dry_run_session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 节点 trace（与 prod 隔离，D7）';
 ```
