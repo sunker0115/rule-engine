@@ -17,12 +17,11 @@ class TraceWriterDbImplTest {
     }
 
     @Test
-    void write_doesNotThrow_beforeInit() {
-        // afterPropertiesSet 未调用时 queue 为 null，write 应直接忽略（骨架行为）
+    void write_throwsNpe_beforeInit() {
         TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50);
         NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null);
-        // 骨架阶段：未初始化时 queue.offer 会 NPE，此测试记录当前预期行为
-        // 初始化后行为由下方测试覆盖
+        // queue 未初始化时调用 write 抛 NPE，调用方须在 afterPropertiesSet 后使用
+        assertThrows(NullPointerException.class, () -> writer.write("t1", "s1", List.of(trace)));
     }
 
     @Test

@@ -10,6 +10,5 @@ public class NoopTraceWriter implements TraceWriter {
 
     @Override
     public void write(String tenantId, String sessionId, List<NodeTrace> traces) {
-        // 空实现，不做任何操作
     }
 }

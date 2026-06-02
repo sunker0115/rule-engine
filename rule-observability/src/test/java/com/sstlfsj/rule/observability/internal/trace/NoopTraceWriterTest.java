@@ -20,7 +20,6 @@ class NoopTraceWriterTest {
     @Test
     void write_doesNotThrow_withNormalInput() {
         NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null);
-        // 空实现不抛异常即为正确行为
         assertDoesNotThrow(() -> writer.write("t1", "s1", List.of(trace)));
     }
 

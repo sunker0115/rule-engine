@@ -58,7 +58,6 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
     }
 
     private void flushBatch() {
-        // 骨架：从 queue 取 batchSize 条批量写入 node_trace 表（v2 实现时注入 NodeTraceMapper）
     }
 
     @Override
