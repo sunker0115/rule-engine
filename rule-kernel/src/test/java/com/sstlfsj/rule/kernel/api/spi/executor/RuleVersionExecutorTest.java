@@ -17,6 +17,9 @@ class RuleVersionExecutorTest {
     private static final RuleVersionExecutor MISS_EXECUTOR =
             (snapshot, ctx) -> EvalResult.miss();
 
+    private static final RuleVersionExecutor HIT_EXECUTOR =
+            (snapshot, ctx) -> EvalResult.hit();
+
     private static EvalContext buildCtx() {
         RuleEvent event = new RuleEvent("t1", "SCENE1", "PAYMENT",
                 "u1", "e1", Instant.now(), Map.of(), Map.of());
@@ -31,6 +34,13 @@ class RuleVersionExecutorTest {
     void execute_returnsMissResult() {
         EvalResult result = MISS_EXECUTOR.execute(buildSnapshot(), buildCtx());
         assertFalse(result.ruleHit());
+        assertNull(result.finalDecision());
+    }
+
+    @Test
+    void execute_returnsHitResult() {
+        EvalResult result = HIT_EXECUTOR.execute(buildSnapshot(), buildCtx());
+        assertTrue(result.ruleHit());
         assertNull(result.finalDecision());
     }
 

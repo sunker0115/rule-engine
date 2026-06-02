@@ -25,8 +25,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         boolean satisfied = evaluate(snapshot.conditionAst(), ctx);
-        return new EvalResult(satisfied, null, java.util.List.of(),
-                java.util.List.of(), null, java.util.List.of());
+        return satisfied ? EvalResult.hit() : EvalResult.miss();
     }
 
     private boolean evaluate(AstNode node, EvalContext ctx) {

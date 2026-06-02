@@ -17,6 +17,11 @@ public record EvalResult(
         actionResults = actionResults == null ? List.of() : List.copyOf(actionResults);
     }
 
+    /** 规则命中时的标准结果。 */
+    public static EvalResult hit() {
+        return new EvalResult(true, null, List.of(), List.of(), null, List.of());
+    }
+
     /** 规则未命中时的标准结果。 */
     public static EvalResult miss() {
         return new EvalResult(false, null, List.of(), List.of(), null, List.of());

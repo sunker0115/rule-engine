@@ -10,6 +10,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class EvalResultTest {
 
     @Test
+    void hit_returnsTrueWithEmptyLists() {
+        EvalResult r = EvalResult.hit();
+        assertTrue(r.ruleHit());
+        assertNull(r.finalDecision());
+        assertNull(r.errorCode());
+        assertTrue(r.hitDecisions().isEmpty());
+        assertTrue(r.nodeTrace().isEmpty());
+        assertTrue(r.actionResults().isEmpty());
+    }
+
+    @Test
     void miss_returnsFalseWithEmptyLists() {
         EvalResult r = EvalResult.miss();
         assertFalse(r.ruleHit());

@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.kernel.evaluator;
 
+// execute() 委托给 EvalResult.hit()/miss() 工厂方法；ruleHit 断言覆盖两条路径。
+
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
