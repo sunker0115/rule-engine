@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.sstlfsj.rule</groupId>
         <artifactId>rule-engine</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>rule-kernel</artifactId>
 
