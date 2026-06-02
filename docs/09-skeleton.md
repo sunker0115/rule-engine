@@ -235,6 +235,8 @@ engine:
 
 Spring Boot 4.0.x 使用 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 注册（替代旧版 `spring.factories`）。
 
+**Spring Boot AOT（JVM 模式）**：各 AutoConfiguration 模块（`rule-config-svc` / `rule-eval-svc` / `rule-audit-svc` / `rule-observability`）加 `spring-boot-autoconfigure-processor`（`optional=true`），编译期生成 condition metadata；`rule-app` 的 `spring-boot-maven-plugin` 配 `process-aot` goal，预生成 BeanDefinition，加速 JVM 启动。此为 JVM 模式加速，与 GraalVM Native Image 无关（主服务 v1 不支持 Native Image，见 §二说明）。
+
 ---
 
 ## 七、测试组织

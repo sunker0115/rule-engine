@@ -10,7 +10,8 @@
 
 > **注意事项：**
 > - 运行 `mvn` 命令前必须先用 `mvn-env` skill 设置环境（本机 mvn 不在 PATH）
-> - 不使用 Lombok，改用 Java 25 record + 显式构造器
+> - 使用 Lombok 1.18.36（支持 Java 25）；model/AST 类用 record，Service/Component 类可用 `@Slf4j` / `@RequiredArgsConstructor`；**不要把 Lombok 注解加在 record 上**
+> - 启用 Spring Boot AOT（JVM 模式）：有 AutoConfiguration 的模块加 `spring-boot-autoconfigure-processor`（optional），rule-app 的 maven plugin 加 `process-aot` execution
 > - Spring Boot 4.0.6 GA + Spring Modulith 2.0.6 GA，版本已确认可用，无需在 Task 1 执行时再查
 
 ---
@@ -153,6 +154,7 @@ rule-engine/
         <mybatis-plus.version>3.5.16</mybatis-plus.version>
         <archunit.version>1.3.0</archunit.version>
         <guava.version>33.2.1-jre</guava.version>
+        <lombok.version>1.18.36</lombok.version>
     </properties>
 
     <dependencyManagement>
@@ -185,6 +187,14 @@ rule-engine/
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
                 <version>${guava.version}</version>
+            </dependency>
+
+            <!-- Lombok 1.18.36+：支持 Java 25，可与 record 共存；不加在 record 类上 -->
+            <dependency>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+                <version>${lombok.version}</version>
+                <optional>true</optional>
             </dependency>
 
             <!-- ArchUnit -->
@@ -300,6 +310,10 @@ rule-engine/
             <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
@@ -330,6 +344,10 @@ rule-engine/
             <artifactId>rule-kernel</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-starter-core</artifactId>
         </dependency>
@@ -341,6 +359,12 @@ rule-engine/
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <!-- AOT: 编译期生成 AutoConfiguration condition metadata -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure-processor</artifactId>
+            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -377,6 +401,10 @@ rule-engine/
             <artifactId>rule-observability</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-starter-core</artifactId>
         </dependency>
@@ -388,6 +416,12 @@ rule-engine/
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <!-- AOT: 编译期生成 AutoConfiguration condition metadata -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure-processor</artifactId>
+            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -420,6 +454,10 @@ rule-engine/
             <artifactId>rule-kernel</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-starter-core</artifactId>
         </dependency>
@@ -431,6 +469,12 @@ rule-engine/
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <!-- AOT: 编译期生成 AutoConfiguration condition metadata -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure-processor</artifactId>
+            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -463,6 +507,10 @@ rule-engine/
             <artifactId>rule-kernel</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
@@ -477,6 +525,12 @@ rule-engine/
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+        </dependency>
+        <!-- AOT: 编译期生成 AutoConfiguration condition metadata -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure-processor</artifactId>
+            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -504,6 +558,10 @@ rule-engine/
     <artifactId>rule-api</artifactId>
 
     <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-config-svc</artifactId>
@@ -546,6 +604,10 @@ rule-engine/
     <artifactId>rule-app</artifactId>
 
     <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-kernel</artifactId>
@@ -596,6 +658,15 @@ rule-engine/
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <!-- AOT: 预生成 BeanDefinition，加速 JVM 启动 -->
+                    <execution>
+                        <id>process-aot</id>
+                        <goals>
+                            <goal>process-aot</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
