@@ -1,3 +1,5 @@
+> ⚠️ **已归档**：本文档已由 [`09-skeleton.md`](../../09-skeleton.md) 取代，作为历史输入基线保留。内容可能不再与当前工程结构完全同步。
+
 # rule-engine v1 工程架构设计
 
 **目标**：确定 v1 Spring Modulith 单服务的模块拆分方案，使模块边界既是当前的内聚单元，也是未来任意微服务拓扑的自然切割点，同时满足嵌入式 SDK 模式需求。
@@ -11,7 +13,7 @@
 1. **终态微服务拓扑不锁定**：模块边界按"最大未来灵活性"设计，不预设最终拆几个服务
 2. **嵌入式 SDK 必须可行**：评估核心必须能以纯 Java jar 形式嵌入调用方进程（§2.14）
 3. **平台型产品**：内外兼顾，多租户，HTTP API + SDK 双接入模式
-4. **v1 单服务**：Spring Modulith 2.x + Spring Boot 4.0.x，模块边界由框架在编译/测试期强制
+4. **v1 单服务**：Spring Modulith 2.0.6 + Spring Boot 4.0.6，模块边界由框架在编译/测试期强制
 5. **Native Image 部分支持**：`rule-kernel` 零 Spring 零 DB，Native Image 完全兼容，SDK 路径（§2.14）可用于 Native Image 调用方；主服务因 MyBatis-Plus 动态代理/反射机制，v1 不支持 Native Image 编译。若未来有 Serverless 部署需求，需将 DB 访问层迁移至 MyBatis 原生或 jOOQ。
 
 ---
@@ -21,6 +23,7 @@
 ```
 com.sstlfsj.rule
 ├── rule-kernel          # 零 Spring，零 DB，纯评估逻辑 + 所有 SPI 接口定义
+├── rule-kernel-polling  # DbPollingRuleWatcher / DbPollingSceneWatcher，SDK 模式按需引入（可选 jar）
 ├── rule-config-svc      # 规则/Scene/元数据 CRUD、发布、快照生成
 ├── rule-eval-svc        # 评估入口、metric 预拉、session 落库、调度任务
 ├── rule-audit-svc       # 审计查询、dry-run 结果存储、日志聚合
@@ -59,7 +62,7 @@ rule-app ──► 所有模块（仅组装，不含业务逻辑）
 
 ### rule-kernel
 
-- **SPI 接口**：`RuleVersionWatcher`、`SceneWatcher`、`RuleVersionExecutor`、`TraceWriter`、`ConditionEvaluator`、`ActionHandler`、`MetricSource`、`SubjectLoader`、`Scheduler`、Pre-Gate 各接口
+- **SPI 接口**：`RuleVersionWatcher`、`SceneWatcher`、`RuleVersionExecutor`、`TraceWriter`、`ConditionEvaluator`、`ActionHandler`、`MetricSourceHandler`、`SubjectLoader`、`Scheduler`、Pre-Gate 各接口
 - **核心数据结构**：`EvalContext`、`EvalResult`、`RuleVersionSnapshot`、`DryRunResult`、AST 节点树
 - **默认实现**：`InterpretedExecutor`（`RuleVersionExecutor` v1 实现，在 kernel 内，无 Spring 依赖）
 - **不包含**：任何 `@Component`、Spring 注解、JDBC、HTTP 依赖
