@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.eval.internal.mapper;
+package com.sstlfsj.rule.eval.internal.repository;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;

@@ -1,8 +1,8 @@
 package com.sstlfsj.rule.eval.internal.session;
 
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
-import com.sstlfsj.rule.eval.internal.mapper.DryRunSessionMapper;
-import com.sstlfsj.rule.eval.internal.mapper.EvaluationSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import org.junit.jupiter.api.Test;

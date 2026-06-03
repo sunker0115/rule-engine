@@ -5,8 +5,8 @@ import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
-import com.sstlfsj.rule.eval.internal.mapper.DryRunSessionMapper;
-import com.sstlfsj.rule.eval.internal.mapper.EvaluationSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
@@ -48,9 +48,9 @@ class EvalIntegrationTest {
             }
     )
     @MapperScan({
-            "com.sstlfsj.rule.eval.internal.mapper",
+            "com.sstlfsj.rule.eval.internal.repository",
             "com.sstlfsj.rule.config.internal.repository",
-            "com.sstlfsj.rule.observability.internal.mapper"
+            "com.sstlfsj.rule.observability.internal.repository"
     })
     static class TestApp {}
 

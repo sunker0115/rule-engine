@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.observability.internal.mapper;
+package com.sstlfsj.rule.observability.internal.repository;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.observability.internal.domain.NodeTraceEntity;
@@ -17,7 +17,6 @@ class NodeTraceMapperTest {
 
     @Test
     void extendsBaseMapper() {
-        // 确认泛型父接口为 BaseMapper<NodeTraceEntity>
         boolean extendsBaseMapper = false;
         for (Class<?> iface : NodeTraceMapper.class.getInterfaces()) {
             if (iface.equals(BaseMapper.class)) {
@@ -25,13 +24,11 @@ class NodeTraceMapperTest {
                 break;
             }
         }
-        // getInterfaces() 返回原始类型，泛型擦除后就是 BaseMapper
         assertTrue(extendsBaseMapper, "NodeTraceMapper 须继承 BaseMapper");
     }
 
     @Test
     void genericTypeIsNodeTraceEntity() throws Exception {
-        // 通过 getGenericInterfaces() 验证泛型参数为 NodeTraceEntity
         java.lang.reflect.Type[] types = NodeTraceMapper.class.getGenericInterfaces();
         assertEquals(1, types.length);
         java.lang.reflect.ParameterizedType pt = (java.lang.reflect.ParameterizedType) types[0];
