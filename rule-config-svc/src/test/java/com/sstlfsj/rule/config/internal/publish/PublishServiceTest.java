@@ -191,4 +191,21 @@ class PublishServiceTest {
                 publishService.createDraft(1L, "nonexistent", "rule.test", "测试",
                         "{}", "[]", "[]", "[]", "actor1"));
     }
+
+    @Test
+    void createDraft_duplicateCode_throwsIllegalArgument() {
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setTenantId(1L);
+        scene.setCode("risk.transfer");
+        when(sceneMapper.selectOne(any())).thenReturn(scene);
+        // 模拟同 tenant+scene 下已存在同 code 的规则
+        when(ruleDefinitionMapper.selectCount(any())).thenReturn(1L);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                publishService.createDraft(1L, "risk.transfer", "rule.test", "测试",
+                        "{}", "[]", "[]", "[]", "actor1"));
+
+        verify(ruleDefinitionMapper, never()).insert(any(RuleDefinition.class));
+    }
 }

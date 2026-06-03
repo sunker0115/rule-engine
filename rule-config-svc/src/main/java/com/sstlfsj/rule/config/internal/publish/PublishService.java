@@ -190,7 +190,18 @@ public class PublishService {
             throw new IllegalArgumentException("Scene 不存在: code=" + sceneCode);
         }
 
-        // 2. INSERT rule_definition（status=DRAFT）
+        // 2. 校验 code 在同 tenant+scene 下唯一，提前给出友好错误
+        long codeExists = ruleDefinitionMapper.selectCount(
+                new LambdaQueryWrapper<RuleDefinition>()
+                        .eq(RuleDefinition::getTenantId, tenantId)
+                        .eq(RuleDefinition::getSceneId, scene.getId())
+                        .eq(RuleDefinition::getCode, code)
+        );
+        if (codeExists > 0) {
+            throw new IllegalArgumentException("规则编码已存在: code=" + code);
+        }
+
+        // 3. INSERT rule_definition（status=DRAFT）
         RuleDefinition rd = new RuleDefinition();
         rd.setTenantId(tenantId);
         rd.setSceneId(scene.getId());
@@ -202,7 +213,7 @@ public class PublishService {
         rd.setCreatedAt(LocalDateTime.now());
         ruleDefinitionMapper.insert(rd);
 
-        // 3. INSERT rule_version（version=1，status=DRAFT）
+        // 4. INSERT rule_version（version=1，status=DRAFT）
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(rd.getId());
         rv.setVersion(1L);

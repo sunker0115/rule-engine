@@ -96,6 +96,27 @@ class RuleControllerTest {
     }
 
     @Test
+    void createDraft_nullJsonFields_useDefaults() throws Exception {
+        // conditionAst / decisionBindings 等 JsonNode 字段为 null 时，nodeToString 应返回默认值
+        DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
+        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(result);
+
+        mockMvc.perform(post("/api/v1/rules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {"tenantId":"t1","sceneCode":"risk.transfer","code":"rule.a","name":"规则A"}
+                            """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.ruleDefinitionId").value(10));
+
+        // 验证 null JsonNode 字段传入了默认值字符串而非 null
+        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
+                eq("{}"), eq("[]"), eq("[]"), eq("[]"), eq("user1"));
+    }
+
+    @Test
     void createDraft_returns400_whenTenantIdMissing() throws Exception {
         mockMvc.perform(post("/api/v1/rules")
                         .contentType(MediaType.APPLICATION_JSON)

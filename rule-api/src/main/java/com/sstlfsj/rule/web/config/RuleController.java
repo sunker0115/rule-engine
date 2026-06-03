@@ -2,7 +2,6 @@ package com.sstlfsj.rule.web.config;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
@@ -16,8 +15,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/rules")
 public class RuleController {
-
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final ConfigService configService;
 
@@ -102,6 +99,6 @@ public class RuleController {
     /** 将 {@link JsonNode} 序列化为 JSON 字符串，节点为空时返回 defaultVal。 */
     private static String nodeToString(JsonNode node, String defaultVal) {
         if (node == null || node.isNull()) return defaultVal;
-        try { return MAPPER.writeValueAsString(node); } catch (Exception e) { return defaultVal; }
+        return node.toString();
     }
 }
