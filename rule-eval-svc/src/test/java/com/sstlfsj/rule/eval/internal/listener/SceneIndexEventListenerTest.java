@@ -37,11 +37,11 @@ class SceneIndexEventListenerTest {
     @Test
     void onSceneChanged_enabled_reloadsSnapshots() {
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
-        when(loader.loadByScene(1L, "fraud_check")).thenReturn(Map.of());
+        when(loader.loadByScene("1", "fraud_check")).thenReturn(Map.of());
 
         listener.onSceneChanged(event);
 
-        verify(loader).loadByScene(1L, "fraud_check");
+        verify(loader).loadByScene("1", "fraud_check");
         verifyNoMoreInteractions(index);
     }
 
@@ -51,7 +51,7 @@ class SceneIndexEventListenerTest {
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(42L, "fraud_check", "1",
                 null, List.of(), List.of());
-        when(loader.loadByScene(1L, "fraud_check"))
+        when(loader.loadByScene("1", "fraud_check"))
                 .thenReturn(Map.of("*", List.of(snap)));
 
         listener.onSceneChanged(event);

@@ -35,9 +35,8 @@ public class SceneIndexEventListener {
             index.remove(event.tenantId(), event.sceneCode());
             return;
         }
-        Long tenantId = Long.valueOf(event.tenantId());
         Map<String, List<RuleVersionSnapshot>> byEventType =
-                loader.loadByScene(tenantId, event.sceneCode());
+                loader.loadByScene(event.tenantId(), event.sceneCode());
         for (Map.Entry<String, List<RuleVersionSnapshot>> entry : byEventType.entrySet()) {
             index.update(event.tenantId(), event.sceneCode(),
                          entry.getKey(), entry.getValue());

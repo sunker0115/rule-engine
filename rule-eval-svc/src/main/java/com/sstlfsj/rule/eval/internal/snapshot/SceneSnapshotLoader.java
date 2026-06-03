@@ -40,12 +40,12 @@ public class SceneSnapshotLoader {
      * 加载指定租户 + 场景的所有 ACTIVE 规则版本，按 eventType 分组。
      * v1 中 triggerEventTypes 未在快照模型中，使用 "*" 通配。
      *
-     * @param tenantId  租户 ID（Long）
+     * @param tenantId  租户 ID 字符串（需可解析为 Long）
      * @param sceneCode 场景编码
      * @return key = eventType，value = 快照列表
      */
-    public Map<String, List<RuleVersionSnapshot>> loadByScene(Long tenantId, String sceneCode) {
-        List<RuleVersionRow> rows = mapper.loadActiveByScene(tenantId, sceneCode);
+    public Map<String, List<RuleVersionSnapshot>> loadByScene(String tenantId, String sceneCode) {
+        List<RuleVersionRow> rows = mapper.loadActiveByScene(Long.parseLong(tenantId), sceneCode);
         List<RuleVersionSnapshot> snapshots = assembler.assembleAll(rows);
         return groupByEventType(snapshots);
     }

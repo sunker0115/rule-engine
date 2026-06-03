@@ -40,7 +40,7 @@ class SceneSnapshotLoaderTest {
         when(mapper.loadActiveByScene(1L, "fraud_check")).thenReturn(List.of());
         when(assembler.assembleAll(List.of())).thenReturn(List.of());
 
-        Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene(1L, "fraud_check");
+        Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene("1", "fraud_check");
 
         assertTrue(result.isEmpty());
     }
@@ -59,7 +59,7 @@ class SceneSnapshotLoaderTest {
         when(mapper.loadActiveByScene(1L, "fraud_check")).thenReturn(List.of(row));
         when(assembler.assembleAll(List.of(row))).thenReturn(List.of(snap));
 
-        Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene(1L, "fraud_check");
+        Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene("1", "fraud_check");
 
         // v1 使用 "*" 通配，精确 eventType 不存在
         assertEquals(1, result.size());
@@ -76,7 +76,7 @@ class SceneSnapshotLoaderTest {
         when(mapper.loadActiveByScene(1L, "scene")).thenReturn(List.of());
         when(assembler.assembleAll(anyList())).thenReturn(List.of(snap1, snap2));
 
-        Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene(1L, "scene");
+        Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene("1", "scene");
 
         List<RuleVersionSnapshot> bucket = result.get("*");
         assertNotNull(bucket);

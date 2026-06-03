@@ -32,7 +32,7 @@ class RuleIndexEventListenerTest {
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 42L, "fraud_check", "1", condNode, List.of(),
                 List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)));
-        when(loader.loadByScene(1L, "fraud_check")).thenReturn(
+        when(loader.loadByScene("1", "fraud_check")).thenReturn(
                 Map.of("RISK_EVENT", List.of(snap)));
 
         ruleListener.onRulePublished(event);
@@ -52,11 +52,15 @@ class RuleIndexEventListenerTest {
 
     @Test
     void onSceneEnabled_reloadsSnapshots() {
+        ConditionNode condNode = new ConditionNode("EQ", "status", null, Map.of());
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+                10L, "fraud_check", "1", condNode, List.of(), List.of());
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
-        when(loader.loadByScene(1L, "fraud_check")).thenReturn(Map.of());
+        when(loader.loadByScene("1", "fraud_check")).thenReturn(Map.of("*", List.of(snap)));
 
         sceneListener.onSceneChanged(event);
 
-        verify(loader).loadByScene(1L, "fraud_check");
+        verify(loader).loadByScene("1", "fraud_check");
+        verify(index).update("1", "fraud_check", "*", List.of(snap));
     }
 }
