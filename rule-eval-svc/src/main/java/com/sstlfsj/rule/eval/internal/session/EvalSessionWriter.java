@@ -48,11 +48,14 @@ public class EvalSessionWriter {
             return session.getId();
         } catch (DuplicateKeyException e) {
             // 幂等：相同 eventId 已处理过，查回已有 id
-            return sessionMapper.selectOne(
+            EvaluationSession existing = sessionMapper.selectOne(
                     new LambdaQueryWrapper<EvaluationSession>()
                             .eq(EvaluationSession::getTenantId, Long.valueOf(event.tenantId()))
-                            .eq(EvaluationSession::getEventId, event.eventId())
-            ).getId();
+                            .eq(EvaluationSession::getEventId, event.eventId()));
+            if (existing == null) {
+                throw new IllegalStateException("幂等查询失败：eventId=" + event.eventId() + " 记录不存在");
+            }
+            return existing.getId();
         }
     }
 
@@ -166,7 +169,7 @@ public class EvalSessionWriter {
     }
 
     private LocalDateTime toLocalDateTime(java.time.Instant instant) {
-        return instant == null ? LocalDateTime.now()
-                : LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
+        if (instant == null) throw new IllegalArgumentException("occurredAt 不得为 null");
+        return LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
     }
 }

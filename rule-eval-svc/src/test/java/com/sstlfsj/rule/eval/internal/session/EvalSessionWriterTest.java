@@ -16,6 +16,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.springframework.dao.DuplicateKeyException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -47,6 +50,27 @@ class EvalSessionWriterTest {
         assertEquals(1L, saved.getTenantId());
         assertEquals(3, saved.getCandidateRuleCount());
         assertEquals("PULL", saved.getSource());
+    }
+
+    @Test
+    void insertPending_duplicateKey_returnsExistingId() {
+        // DuplicateKeyException 时走幂等查询分支，返回已有行 id
+        EvaluationSession existing = new EvaluationSession();
+        existing.setId(99L);
+        when(sessionMapper.insert((EvaluationSession) any())).thenThrow(new DuplicateKeyException("dup"));
+        when(sessionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existing);
+
+        Long id = writer.insertPending(event(), 1, "PULL");
+
+        assertEquals(99L, id);
+    }
+
+    @Test
+    void insertPending_nullOccurredAt_throwsIllegalArgument() {
+        // occurredAt=null 不允许静默兜底为 now()，必须快速失败
+        RuleEvent nullTime = new RuleEvent("1", "scene", "E", "u1", "evt-x", null, Map.of(), Map.of());
+        assertThrows(IllegalArgumentException.class,
+                () -> writer.insertPending(nullTime, 1, "PULL"));
     }
 
     @Test

@@ -9,6 +9,8 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -18,6 +20,8 @@ import java.util.stream.Collectors;
 /** EvalService 完整实现：串联 Matcher → Pre-Gate → EvalContext → AST 评估 → Session 写入（D11/D21）。 */
 @Service
 class EvalServiceImpl implements EvalService {
+
+    private static final Logger log = LoggerFactory.getLogger(EvalServiceImpl.class);
 
     private final SceneRuleIndex index;
     private final SceneSnapshotLoader snapshotLoader;
@@ -47,7 +51,8 @@ class EvalServiceImpl implements EvalService {
     @Override
     public boolean acceptEvent(RuleEvent event) {
         // PUSH 模式：异步投递，不阻塞调用方
-        CompletableFuture.runAsync(() -> evaluate(event));
+        CompletableFuture.runAsync(() -> evaluate(event))
+                .exceptionally(ex -> { log.error("异步评估失败 eventId={}", event.eventId(), ex); return null; });
         return true;
     }
 
@@ -106,8 +111,9 @@ class EvalServiceImpl implements EvalService {
                 EvalResult r = executor.execute(snap, ctx);
                 if (r.ruleHit()) {
                     // 从 decisionBindings 取最高优先级（priority 最小值）的 Decision
+                    // priority 越大越优先，取最大值
                     snap.decisionBindings().stream()
-                            .min(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
+                            .max(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
                             .ifPresent(binding -> hitDecisions.add(
                                     new Decision(binding.decisionCode(), "", binding.priority(),
                                             snap.ruleVersionId())));
@@ -120,9 +126,9 @@ class EvalServiceImpl implements EvalService {
             }
         }
 
-        // ⑥ Decision 合成（HIGHEST_PRIORITY = priority 值最小者）
+        // ⑥ Decision 合成（priority 越大越优先，取最大值）
         Decision finalDecision = hitDecisions.stream()
-                .min(Comparator.comparingInt(Decision::priority))
+                .max(Comparator.comparingInt(Decision::priority))
                 .orElse(null);
 
         EvalResult result = new EvalResult(
