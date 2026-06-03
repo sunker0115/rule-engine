@@ -246,6 +246,7 @@
   - `node_trace` 数据量大时配合 §2.5 冷热分级同步推进，避免全表扫描；
   - 查询路径与写路径完全隔离（只读 Mapper），不影响评估性能。
 - **迁移成本**：中（需要补 Mapper 查询 + Service 实现 + Controller 端点 + 分页协议，但无 DDL 变更；`node_trace` 量大时需结合 §2.5 存储分层一起评估）。
+- **已实装（v2）**：`rule-audit-svc` 内建 `EvalSessionRow` / `NodeTraceRow` / `AuditLogRow` 只读 entity + 对应三个 `@Mapper` 接口（Modulith 隔离，不引用其他模块 internal）；`AuditServiceImpl` 用 MyBatis-Plus 分页查询实现 `queryAuditLogs` / `queryEvalSessions` / `queryTrace`（v1 返回扁平列表，树重建留 §2.21）；`AuditController` 补全 `GET /api/v1/evaluation-sessions/{sessionId}/trace` 端点；`AuditService` 新增 `TraceNodeEntry` + `queryTrace` 方法签名。
 
 ### 2.20 规则草稿创建 API（来源 10-api-contract.md §4.1）
 

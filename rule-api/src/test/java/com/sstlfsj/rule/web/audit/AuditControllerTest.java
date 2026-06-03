@@ -48,4 +48,31 @@ class AuditControllerTest {
 
         verify(auditService).queryAuditLogs("t1", null, null, 0, 20);
     }
+
+    @Test
+    void queryTrace_returns200_withNodes() throws Exception {
+        AuditService.TraceNodeEntry node = new AuditService.TraceNodeEntry(
+                "0", "AND", null, null, null, true, null, null);
+        when(auditService.queryTrace("t1", 42L)).thenReturn(List.of(node));
+
+        mockMvc.perform(get("/api/v1/evaluation-sessions/42/trace").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].nodePath").value("0"))
+                .andExpect(jsonPath("$.data[0].result").value(true));
+
+        verify(auditService).queryTrace("t1", 42L);
+    }
+
+    @Test
+    void queryTrace_returns200_whenEmpty() throws Exception {
+        when(auditService.queryTrace("t1", 99L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/evaluation-sessions/99/trace").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+
+        verify(auditService).queryTrace("t1", 99L);
+    }
 }
