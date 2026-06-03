@@ -1,13 +1,19 @@
 package com.sstlfsj.rule.web.config;
 
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,9 +28,13 @@ class RuleControllerTest {
     @BeforeEach
     void setUp() {
         configService = mock(ConfigService.class);
+        // 显式注册带 JsonNode 支持的 Jackson 转换器；禁用 Java8 time handler 要求以兼容 LocalDateTime 序列化
+        ObjectMapper mapper = new ObjectMapper()
+                .disable(MapperFeature.REQUIRE_HANDLERS_FOR_JAVA8_TIMES);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new RuleController(configService))
                 .setControllerAdvice(new GlobalExceptionHandler())
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper))
                 .build();
     }
 
@@ -55,22 +65,45 @@ class RuleControllerTest {
     }
 
     @Test
-    void createDraft_returns501_notImplemented() throws Exception {
+    void createDraft_returns201_withValidBody() throws Exception {
+        DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
+        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(result);
+
         mockMvc.perform(post("/api/v1/rules")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Actor-Id", "user1")
                         .content("""
-                            {"tenantId":"t1","sceneId":1,"code":"r1","name":"规则1"}
+                            {
+                              "tenantId": "t1",
+                              "sceneCode": "risk.transfer",
+                              "code": "rule.a",
+                              "name": "规则A",
+                              "conditionAst": {"type":"AndNode","children":[]},
+                              "decisionBindings": [],
+                              "preGates": [],
+                              "triggerEventTypes": []
+                            }
                             """))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.ruleDefinitionId").value(10))
+                .andExpect(jsonPath("$.data.ruleVersionId").value(20))
+                .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
+                any(), any(), any(), any(), eq("user1"));
     }
 
     @Test
-    void createDraft_withoutBody_stillReturns501() throws Exception {
-        // 移除 @RequestBody 后，无请求体也应直接返回 501，不触发 400
+    void createDraft_returns400_whenTenantIdMissing() throws Exception {
         mockMvc.perform(post("/api/v1/rules")
-                        .header("X-Actor-Id", "user1"))
-                .andExpect(status().isNotImplemented());
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {"sceneCode":"risk.transfer","code":"rule.a","name":"规则A"}
+                            """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
