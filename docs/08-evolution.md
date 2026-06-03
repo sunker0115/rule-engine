@@ -224,6 +224,28 @@
   - 不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
 - **迁移成本**：低（各 handler 独立补实现，不改协议）。
 
+### 2.18 规则列表查询 API（来源 10-api-contract.md §4.4）
+
+- **v1 现状**：`GET /api/v1/rules` 在 `10-api-contract.md §4.4` 已定义契约，但 v1 不实现——`rule_definition` 表无 list 查询 Mapper，`RuleController` 无对应端点，`AuditService` list 方法为空骨架。
+- **触发条件**：前端规则管理列表页需要展示规则列表（筛选 / 分页 / 按场景过滤）。
+- **演进方向**：
+  - `RuleDefinitionMapper` 补充 `findBySceneCode(tenantId, sceneCode, Pageable)` 查询；
+  - `ConfigService` 暴露 `listRules(tenantId, sceneCode, page)` 接口；
+  - `RuleController` 实现 `GET /api/v1/rules?sceneCode=&page=&size=`，返回分页结果；
+  - 响应体复用 `ApiResponse<Page<RuleVersionVO>>` 结构，无 DDL 变更。
+- **迁移成本**：低（纯查询，不涉及写路径，无状态变更）。
+
+### 2.19 审计查询 API（来源 10-api-contract.md §6.x）
+
+- **v1 现状**：`GET /api/v1/sessions`（evaluation_session）、`GET /api/v1/traces`（node_trace）、`GET /api/v1/audit-logs`（audit_log）在 `10-api-contract.md §6.x` 已定义契约；`rule-audit-svc` 有 `AuditService` 骨架但 Service 实现为空，v1 跳过。
+- **触发条件**：运营 / 风控需要在控制台查询历史评估结果、节点 trace 详情、操作审计日志（排障、合规审计场景）。
+- **演进方向**：
+  - `AuditService` 补充 `querySession / queryTrace / queryAuditLog` 查询实现，走 `EvaluationSessionMapper` / `NodeTraceMapper` / `AuditLogMapper`；
+  - `AuditController`（或在 `RuleController` 扩展）挂载对应端点，支持 tenantId + sceneCode + sessionId + 时间区间过滤；
+  - `node_trace` 数据量大时配合 §2.5 冷热分级同步推进，避免全表扫描；
+  - 查询路径与写路径完全隔离（只读 Mapper），不影响评估性能。
+- **迁移成本**：中（需要补 Mapper 查询 + Service 实现 + Controller 端点 + 分页协议，但无 DDL 变更；`node_trace` 量大时需结合 §2.5 存储分层一起评估）。
+
 ---
 
 ## 三、决策时间线
