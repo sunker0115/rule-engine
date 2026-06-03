@@ -139,7 +139,7 @@
 - **v1 未实装 handler 的兜底契约**：调用 `dryRun` 但 handler 未补齐时，由 Dispatcher 短路返回 `ActionResult { status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED }`——不抛异常、不阻塞试算面板渲染；
 - v1.5 全量补齐后该 `errorCode` 不再产生（完整 `ActionResult.errorCode` 枚举见 [`01-concepts.md`](./01-concepts.md) §3.7）。
 
-**你的决定**：
+**v1 实装状态（已完成）**：`DryRunTraceWriter` SPI（`rule-kernel`）+ `DryRunTraceWriterDbImpl`（`rule-observability`，异步批写 `dry_run_node_trace` 表）+ `EvalServiceImpl` 按 `isDryRun` 路由到独立 SPI；stub `ActionHandler`（`BlockTransactionHandler` / `SendAlertHandler`）+ `ActionDispatchService` 同步派发并落库 `action_execution`（干跑不派发）。详见 [`docs/superpowers/plans/2026-06-03-eval-chain-completion.md`](./superpowers/plans/2026-06-03-eval-chain-completion.md)。
 
 ---
 
@@ -608,9 +608,9 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
    - `node_trace`（每次评估 50-1000 行）**异步批写**（本决策）；
    - `action_execution`（每次 Action 派发 1 行）由 D20 §2 Dispatcher 异步写，与本决策同款但**独立队列**。
 
-4. **Pre-Gate trace 走同一 TraceWriter**：
+4. **Pre-Gate trace 走同一 TraceWriter；dry-run trace 走独立 SPI**：
    - §3.14 Pre-Gate 失败节点（`nodeType=PRE_GATE_BLOCKED`）与 ConditionNode trace 走同一 `TraceWriter`，不另起通道；
-   - dry-run 模式（D7）trace 同样走 `TraceWriter` 异步通道，但**写入目标表是独立的 `dry_run_session` 系列表**（与 prod `evaluation_session` / `node_trace` 隔离，D7 明定）——`TraceWriter` 内部按 `EvalContext.dryRun` 标记路由到不同表，**不**靠同表字段区分；
+   - dry-run 模式（D7）trace 走独立 `DryRunTraceWriter` SPI（与 `TraceWriter` 并列），写入 `dry_run_node_trace` 表，与 prod `node_trace` 完全隔离；`EvalServiceImpl` 在 `doEvaluate()` 末尾按 `isDryRun` 标记路由到对应 Writer，两路互不干扰；
    - 具体 `node_trace` 表的 schema 差异（如 Pre-Gate 不持有 `conditionType` / `actualValue`）由 [`05-storage.md`](./05-storage.md) §node_trace 表展开。
 
 5. **运维参数留 07-operability**（决策层只声明参数 + 决定因素，**不列具体数字**，与 D20 §2 同款规范）：

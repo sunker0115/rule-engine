@@ -1,6 +1,6 @@
 # 评估链路补全实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 补全 v1 评估链路的两个遗漏：dry-run NodeTrace 隔离写入 `dry_run_node_trace` 表；规则命中后 ActionHandler 调用并落库 `action_execution`。
 
@@ -54,7 +54,7 @@ MVN=/Users/sunke/.m2/wrapper/dists/apache-maven-3.9.9-bin/4nf9hui3q3djbarqar9g71
 - Create: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/api/spi/trace/NoopDryRunTraceWriter.java`
 - Create test: `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/api/spi/trace/DryRunTraceWriterTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```java
 // rule-kernel/src/test/java/com/sstlfsj/rule/kernel/api/spi/trace/DryRunTraceWriterTest.java
@@ -105,7 +105,7 @@ class DryRunTraceWriterTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 export JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-25.jdk/Contents/Home
@@ -116,7 +116,7 @@ $MVN -pl rule-kernel -am test -Dtest='DryRunTraceWriterTest' -Dsurefire.failIfNo
 
 期望：FAIL — `DryRunTraceWriter` 类不存在
 
-- [ ] **Step 3: 实现 SPI 接口**
+- [x] **Step 3: 实现 SPI 接口**
 
 ```java
 // rule-kernel/src/main/java/com/sstlfsj/rule/kernel/api/spi/trace/DryRunTraceWriter.java
@@ -152,7 +152,7 @@ public class NoopDryRunTraceWriter implements DryRunTraceWriter {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 $MVN -pl rule-kernel -am test -Dtest='DryRunTraceWriterTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -160,7 +160,7 @@ $MVN -pl rule-kernel -am test -Dtest='DryRunTraceWriterTest' -Dsurefire.failIfNo
 
 期望：BUILD SUCCESS，3 tests passed
 
-- [ ] **Step 5: 运行 rule-kernel 全量测试**
+- [x] **Step 5: 运行 rule-kernel 全量测试**
 
 ```bash
 $MVN -pl rule-kernel -am test
@@ -168,7 +168,7 @@ $MVN -pl rule-kernel -am test
 
 期望：BUILD SUCCESS，全部通过
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add rule-kernel/src/main/java/com/sstlfsj/rule/kernel/api/spi/trace/DryRunTraceWriter.java \
@@ -186,7 +186,7 @@ git commit -m "feat(kernel): 新增 DryRunTraceWriter SPI 及 Noop 实现"
 - Create: `rule-observability/src/main/java/com/sstlfsj/rule/observability/internal/repository/DryRunNodeTraceMapper.java`
 - Create test: `rule-observability/src/test/java/com/sstlfsj/rule/observability/internal/repository/DryRunNodeTraceMapperTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```java
 // rule-observability/src/test/java/com/sstlfsj/rule/observability/internal/repository/DryRunNodeTraceMapperTest.java
@@ -239,7 +239,7 @@ class DryRunNodeTraceMapperTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 $MVN -pl rule-observability -am test -Dtest='DryRunNodeTraceMapperTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -247,7 +247,7 @@ $MVN -pl rule-observability -am test -Dtest='DryRunNodeTraceMapperTest' -Dsurefi
 
 期望：FAIL — 类不存在
 
-- [ ] **Step 3: 实现 DryRunNodeTraceEntity**
+- [x] **Step 3: 实现 DryRunNodeTraceEntity**
 
 字段按 `dry_run_node_trace` DDL 映射，`dry_run_session_id` 对应主服务的 `evaluation_session_id`。
 
@@ -325,7 +325,7 @@ public class DryRunNodeTraceEntity {
 }
 ```
 
-- [ ] **Step 4: 实现 DryRunNodeTraceMapper**
+- [x] **Step 4: 实现 DryRunNodeTraceMapper**
 
 SQL 结构与 `NodeTraceMapper.insertBatch` 一致，目标表改为 `dry_run_node_trace`，`evaluation_session_id` 改为 `dry_run_session_id`。
 
@@ -366,7 +366,7 @@ public interface DryRunNodeTraceMapper extends BaseMapper<DryRunNodeTraceEntity>
 }
 ```
 
-- [ ] **Step 5: 运行测试确认通过**
+- [x] **Step 5: 运行测试确认通过**
 
 ```bash
 $MVN -pl rule-observability -am test -Dtest='DryRunNodeTraceMapperTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -374,7 +374,7 @@ $MVN -pl rule-observability -am test -Dtest='DryRunNodeTraceMapperTest' -Dsurefi
 
 期望：BUILD SUCCESS，4 tests passed
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add rule-observability/src/main/java/com/sstlfsj/rule/observability/internal/domain/DryRunNodeTraceEntity.java \
@@ -391,7 +391,7 @@ git commit -m "feat(observability): DryRunNodeTraceEntity + DryRunNodeTraceMappe
 - Create: `rule-observability/src/main/java/com/sstlfsj/rule/observability/internal/trace/DryRunTraceWriterDbImpl.java`
 - Create test: `rule-observability/src/test/java/com/sstlfsj/rule/observability/internal/trace/DryRunTraceWriterDbImplTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```java
 // rule-observability/src/test/java/com/sstlfsj/rule/observability/internal/trace/DryRunTraceWriterDbImplTest.java
@@ -523,7 +523,7 @@ class DryRunTraceWriterDbImplTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 $MVN -pl rule-observability -am test -Dtest='DryRunTraceWriterDbImplTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -531,7 +531,7 @@ $MVN -pl rule-observability -am test -Dtest='DryRunTraceWriterDbImplTest' -Dsure
 
 期望：FAIL — `DryRunTraceWriterDbImpl` 不存在
 
-- [ ] **Step 3: 实现 DryRunTraceWriterDbImpl**
+- [x] **Step 3: 实现 DryRunTraceWriterDbImpl**
 
 内部结构与 `TraceWriterDbImpl` 完全相同，区别：使用 `DryRunNodeTraceMapper`；`flattenToList` 构建的实体用 `setDryRunSessionId`。
 
@@ -672,7 +672,7 @@ public class DryRunTraceWriterDbImpl implements DryRunTraceWriter, InitializingB
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 $MVN -pl rule-observability -am test -Dtest='DryRunTraceWriterDbImplTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -680,7 +680,7 @@ $MVN -pl rule-observability -am test -Dtest='DryRunTraceWriterDbImplTest' -Dsure
 
 期望：BUILD SUCCESS，7 tests passed
 
-- [ ] **Step 5: 运行 rule-observability 全量测试**
+- [x] **Step 5: 运行 rule-observability 全量测试**
 
 ```bash
 $MVN -pl rule-observability -am test
@@ -688,7 +688,7 @@ $MVN -pl rule-observability -am test
 
 期望：BUILD SUCCESS，全部通过
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add rule-observability/src/main/java/com/sstlfsj/rule/observability/internal/trace/DryRunTraceWriterDbImpl.java \
@@ -706,7 +706,7 @@ git commit -m "feat(observability): DryRunTraceWriterDbImpl 异步批写 dry_run
 - Modify: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImpl.java`
 - Modify test: `rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImplTest.java`
 
-- [ ] **Step 1: 更新 ObservabilityAutoConfigurationTest（先写测试）**
+- [x] **Step 1: 更新 ObservabilityAutoConfigurationTest（先写测试）**
 
 在现有测试类中追加两个测试方法，并增加 `DryRunNodeTraceMapper` mock 配置：
 
@@ -796,7 +796,7 @@ class ObservabilityAutoConfigurationTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认新测试失败**
+- [x] **Step 2: 运行测试确认新测试失败**
 
 ```bash
 $MVN -pl rule-observability -am test -Dtest='ObservabilityAutoConfigurationTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -804,7 +804,7 @@ $MVN -pl rule-observability -am test -Dtest='ObservabilityAutoConfigurationTest'
 
 期望：FAIL — `dryRunTraceWriterDb_registeredByDefault` 和 `dryRunTraceWriterDb_registeredWhenEnabled` 失败
 
-- [ ] **Step 3: 更新 ObservabilityAutoConfiguration**
+- [x] **Step 3: 更新 ObservabilityAutoConfiguration**
 
 ```java
 // rule-observability/src/main/java/com/sstlfsj/rule/observability/ObservabilityAutoConfiguration.java
@@ -854,7 +854,7 @@ public class ObservabilityAutoConfiguration {
 }
 ```
 
-- [ ] **Step 4: 运行 ObservabilityAutoConfigurationTest 确认通过**
+- [x] **Step 4: 运行 ObservabilityAutoConfigurationTest 确认通过**
 
 ```bash
 $MVN -pl rule-observability -am test -Dtest='ObservabilityAutoConfigurationTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -862,7 +862,7 @@ $MVN -pl rule-observability -am test -Dtest='ObservabilityAutoConfigurationTest'
 
 期望：BUILD SUCCESS，5 tests passed
 
-- [ ] **Step 5: 更新 EvalServiceImplTest（先加 mock 字段，再改调用验证）**
+- [x] **Step 5: 更新 EvalServiceImplTest（先加 mock 字段，再改调用验证）**
 
 在现有测试类中：
 1. 增加 `@Mock DryRunTraceWriter dryRunTraceWriter;` 字段
@@ -1048,7 +1048,7 @@ class EvalServiceImplTest {
 }
 ```
 
-- [ ] **Step 6: 运行测试确认失败（新增测试因代码还未改）**
+- [x] **Step 6: 运行测试确认失败（新增测试因代码还未改）**
 
 ```bash
 $MVN -pl rule-eval-svc -am test -Dtest='EvalServiceImplTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -1056,7 +1056,7 @@ $MVN -pl rule-eval-svc -am test -Dtest='EvalServiceImplTest' -Dsurefire.failIfNo
 
 期望：FAIL — `dryRun_writesDryRunTraceWriter_notProdWriter` 失败（当前 trace 路由错误）
 
-- [ ] **Step 7: 修改 EvalServiceImpl 注入 DryRunTraceWriter 并修复 trace 路由**
+- [x] **Step 7: 修改 EvalServiceImpl 注入 DryRunTraceWriter 并修复 trace 路由**
 
 在现有 `EvalServiceImpl.java` 中：
 1. 添加 import: `import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;`
@@ -1101,7 +1101,7 @@ if (isDryRun) {
 return result;
 ```
 
-- [ ] **Step 8: 运行 EvalServiceImplTest 确认通过**
+- [x] **Step 8: 运行 EvalServiceImplTest 确认通过**
 
 ```bash
 $MVN -pl rule-eval-svc -am test -Dtest='EvalServiceImplTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -1109,7 +1109,7 @@ $MVN -pl rule-eval-svc -am test -Dtest='EvalServiceImplTest' -Dsurefire.failIfNo
 
 期望：BUILD SUCCESS，9 tests passed
 
-- [ ] **Step 9: 运行全量测试**
+- [x] **Step 9: 运行全量测试**
 
 ```bash
 $MVN -pl rule-observability,rule-eval-svc -am test
@@ -1117,7 +1117,7 @@ $MVN -pl rule-observability,rule-eval-svc -am test
 
 期望：BUILD SUCCESS，全部通过
 
-- [ ] **Step 10: 提交**
+- [x] **Step 10: 提交**
 
 ```bash
 git add rule-observability/src/main/java/com/sstlfsj/rule/observability/ObservabilityAutoConfiguration.java \
@@ -1139,7 +1139,7 @@ git commit -m "feat(eval): DryRunTraceWriter 注入 + dry-run trace 路由修复
 - Create test: `rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/repository/ActionExecutionMapperTest.java`
 - Create test: `rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/repository/SceneActionBindingReadMapperTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```java
 // rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/repository/ActionExecutionMapperTest.java
@@ -1210,7 +1210,7 @@ class SceneActionBindingReadMapperTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 $MVN -pl rule-eval-svc -am test \
@@ -1220,7 +1220,7 @@ $MVN -pl rule-eval-svc -am test \
 
 期望：FAIL — 类不存在
 
-- [ ] **Step 3: 实现 ActionExecutionEntity**
+- [x] **Step 3: 实现 ActionExecutionEntity**
 
 ```java
 // rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/domain/ActionExecutionEntity.java
@@ -1304,7 +1304,7 @@ public class ActionExecutionEntity {
 }
 ```
 
-- [ ] **Step 4: 实现 SceneActionBindingRow**
+- [x] **Step 4: 实现 SceneActionBindingRow**
 
 ```java
 // rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/domain/SceneActionBindingRow.java
@@ -1314,7 +1314,7 @@ package com.sstlfsj.rule.eval.internal.domain;
 public record SceneActionBindingRow(String actionType, String defaultParamsJson) {}
 ```
 
-- [ ] **Step 5: 实现 ActionExecutionMapper**
+- [x] **Step 5: 实现 ActionExecutionMapper**
 
 ```java
 // rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/repository/ActionExecutionMapper.java
@@ -1329,7 +1329,7 @@ import org.apache.ibatis.annotations.Mapper;
 public interface ActionExecutionMapper extends BaseMapper<ActionExecutionEntity> {}
 ```
 
-- [ ] **Step 6: 实现 SceneActionBindingReadMapper**
+- [x] **Step 6: 实现 SceneActionBindingReadMapper**
 
 JOIN scene 表通过 `tenant_id + scene.code` 查询绑定列表。
 
@@ -1366,7 +1366,7 @@ public interface SceneActionBindingReadMapper {
 }
 ```
 
-- [ ] **Step 7: 运行测试确认通过**
+- [x] **Step 7: 运行测试确认通过**
 
 ```bash
 $MVN -pl rule-eval-svc -am test \
@@ -1376,7 +1376,7 @@ $MVN -pl rule-eval-svc -am test \
 
 期望：BUILD SUCCESS，5 tests passed
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/domain/ActionExecutionEntity.java \
@@ -1396,7 +1396,7 @@ git commit -m "feat(eval): ActionExecutionEntity + SceneActionBindingRow + Mappe
 - Create: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/action/ActionDispatchService.java`
 - Create test: `rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/action/ActionDispatchServiceTest.java`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```java
 // rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/action/ActionDispatchServiceTest.java
@@ -1493,7 +1493,7 @@ class ActionDispatchServiceTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 $MVN -pl rule-eval-svc -am test -Dtest='ActionDispatchServiceTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -1501,7 +1501,7 @@ $MVN -pl rule-eval-svc -am test -Dtest='ActionDispatchServiceTest' -Dsurefire.fa
 
 期望：FAIL — `ActionDispatchService` 不存在
 
-- [ ] **Step 3: 实现 ActionDispatchService**
+- [x] **Step 3: 实现 ActionDispatchService**
 
 ```java
 // rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/action/ActionDispatchService.java
@@ -1608,7 +1608,7 @@ public class ActionDispatchService {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 $MVN -pl rule-eval-svc -am test -Dtest='ActionDispatchServiceTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -1616,7 +1616,7 @@ $MVN -pl rule-eval-svc -am test -Dtest='ActionDispatchServiceTest' -Dsurefire.fa
 
 期望：BUILD SUCCESS，4 tests passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/action/ActionDispatchService.java \
@@ -1634,7 +1634,7 @@ git commit -m "feat(eval): ActionDispatchService 同步派发 ActionHandler + ac
 
 这两个 handler 由 `ActionDispatchServiceTest` 间接覆盖（v1 stub 逻辑极简，无需独立单测）。
 
-- [ ] **Step 1: 实现 BlockTransactionHandler**
+- [x] **Step 1: 实现 BlockTransactionHandler**
 
 ```java
 // rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/action/BlockTransactionHandler.java
@@ -1658,7 +1658,7 @@ public class BlockTransactionHandler implements ActionHandler {
 }
 ```
 
-- [ ] **Step 2: 实现 SendAlertHandler**
+- [x] **Step 2: 实现 SendAlertHandler**
 
 ```java
 // rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/action/SendAlertHandler.java
@@ -1682,7 +1682,7 @@ public class SendAlertHandler implements ActionHandler {
 }
 ```
 
-- [ ] **Step 3: 运行 rule-eval-svc 当前测试确认不破坏已有测试**
+- [x] **Step 3: 运行 rule-eval-svc 当前测试确认不破坏已有测试**
 
 ```bash
 $MVN -pl rule-eval-svc -am test
@@ -1690,7 +1690,7 @@ $MVN -pl rule-eval-svc -am test
 
 期望：BUILD SUCCESS，全部通过
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/action/BlockTransactionHandler.java \
@@ -1707,7 +1707,7 @@ git commit -m "feat(eval): BlockTransactionHandler + SendAlertHandler v1 stub �
 - Modify: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImpl.java`
 - Modify test: `rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImplTest.java`
 
-- [ ] **Step 1: 更新 EvalServiceImplTest（先加 mock 字段 + 新增测试）**
+- [x] **Step 1: 更新 EvalServiceImplTest（先加 mock 字段 + 新增测试）**
 
 在现有 `EvalServiceImplTest` 中追加：
 1. 字段：`@Mock ActionDispatchService actionDispatchService;`
@@ -1770,7 +1770,7 @@ void dryRun_doesNotDispatchAction() {
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 ```
 
-- [ ] **Step 2: 运行测试确认新增测试失败**
+- [x] **Step 2: 运行测试确认新增测试失败**
 
 ```bash
 $MVN -pl rule-eval-svc -am test -Dtest='EvalServiceImplTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -1778,7 +1778,7 @@ $MVN -pl rule-eval-svc -am test -Dtest='EvalServiceImplTest' -Dsurefire.failIfNo
 
 期望：FAIL — `evaluate_ruleHit_dispatchesAction` 等新测试失败
 
-- [ ] **Step 3: 修改 EvalServiceImpl 注入 ActionDispatchService + dispatch 调用**
+- [x] **Step 3: 修改 EvalServiceImpl 注入 ActionDispatchService + dispatch 调用**
 
 在 `EvalServiceImpl.java` 中：
 1. 追加 import: `import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;`
@@ -1832,7 +1832,7 @@ private static Long parseTenantId(String tenantId) {
 }
 ```
 
-- [ ] **Step 4: 运行 EvalServiceImplTest 确认通过**
+- [x] **Step 4: 运行 EvalServiceImplTest 确认通过**
 
 ```bash
 $MVN -pl rule-eval-svc -am test -Dtest='EvalServiceImplTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -1840,7 +1840,7 @@ $MVN -pl rule-eval-svc -am test -Dtest='EvalServiceImplTest' -Dsurefire.failIfNo
 
 期望：BUILD SUCCESS，12 tests passed
 
-- [ ] **Step 5: 更新 EvalAutoConfiguration 注册 ActionDispatchService bean**
+- [x] **Step 5: 更新 EvalAutoConfiguration 注册 ActionDispatchService bean**
 
 ```java
 // rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/EvalAutoConfiguration.java
@@ -1908,7 +1908,7 @@ public class EvalAutoConfiguration {
 }
 ```
 
-- [ ] **Step 6: 运行 rule-eval-svc 全量测试**
+- [x] **Step 6: 运行 rule-eval-svc 全量测试**
 
 ```bash
 $MVN -pl rule-eval-svc -am test
@@ -1916,7 +1916,7 @@ $MVN -pl rule-eval-svc -am test
 
 期望：BUILD SUCCESS，全部通过
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/EvalAutoConfiguration.java \
@@ -1929,7 +1929,7 @@ git commit -m "feat(eval): EvalAutoConfiguration 注册 ActionDispatchService + 
 
 ## Task 9: 全量测试验证
 
-- [ ] **Step 1: 运行所有受影响模块的全量测试**
+- [x] **Step 1: 运行所有受影响模块的全量测试**
 
 ```bash
 $MVN -pl rule-kernel,rule-observability,rule-eval-svc -am test
@@ -1937,7 +1937,7 @@ $MVN -pl rule-kernel,rule-observability,rule-eval-svc -am test
 
 期望：BUILD SUCCESS，全部通过（无跳过、无失败）
 
-- [ ] **Step 2: 确认 Testcontainers 集成测试通过（如有）**
+- [x] **Step 2: 确认 Testcontainers 集成测试通过（如有）**
 
 ```bash
 $MVN -pl rule-eval-svc -am test -Dgroups=integration
@@ -1945,7 +1945,7 @@ $MVN -pl rule-eval-svc -am test -Dgroups=integration
 
 如无集成测试标记，此步骤跳过。
 
-- [ ] **Step 3: 最终提交（如有未提交的改动）**
+- [x] **Step 3: 最终提交（如有未提交的改动）**
 
 ```bash
 git status
