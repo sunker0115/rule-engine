@@ -122,4 +122,12 @@ class ConfigServiceImplTest {
         verify(ruleDefinitionMapper).selectPage(any(), any());
         verifyNoInteractions(sceneMapper);
     }
+
+    @Test
+    void createDraft_throwsUnsupportedUntilTask2() {
+        // Task 2 实装前，调用应抛出 UnsupportedOperationException
+        org.junit.jupiter.api.Assertions.assertThrows(UnsupportedOperationException.class,
+                () -> configService.createDraft("1", "SCENE_A", "RULE_001", "规则名",
+                        null, null, null, null, "actor"));
+    }
 }

@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
@@ -90,5 +91,15 @@ class ConfigServiceImpl implements ConfigService {
                 ))
                 .toList());
         return voPage;
+    }
+
+    @Override
+    public DraftCreatedResult createDraft(String tenantId, String sceneCode,
+            String code, String name,
+            String conditionAstJson, String decisionBindingsJson,
+            String preGatesJson, String triggerEventTypesJson,
+            String actorId) {
+        // Task 2 实装：委托 PublishService 完成草稿创建
+        throw new UnsupportedOperationException("createDraft 尚未实装，将在 Task 2 完成");
     }
 }

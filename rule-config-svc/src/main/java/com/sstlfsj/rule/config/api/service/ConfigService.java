@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.api.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 
@@ -37,4 +38,24 @@ public interface ConfigService {
      * @return 分页规则列表
      */
     Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status, int page, int size);
+
+    /**
+     * 创建规则草稿：新建 rule_definition（DRAFT）+ rule_version（DRAFT）。
+     *
+     * @param tenantId              租户 ID
+     * @param sceneCode             场景编码
+     * @param code                  规则编码
+     * @param name                  规则名称
+     * @param conditionAstJson      条件 AST JSON 字符串
+     * @param decisionBindingsJson  决策绑定 JSON 字符串
+     * @param preGatesJson          前置门 JSON 字符串
+     * @param triggerEventTypesJson 触发事件类型 JSON 字符串
+     * @param actorId               操作人 ID
+     * @return 新建草稿的 ID 信息
+     */
+    DraftCreatedResult createDraft(String tenantId, String sceneCode,
+            String code, String name,
+            String conditionAstJson, String decisionBindingsJson,
+            String preGatesJson, String triggerEventTypesJson,
+            String actorId);
 }
