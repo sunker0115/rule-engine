@@ -1,11 +1,13 @@
 package com.sstlfsj.rule.web.config;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-/** 规则版本生命周期管理入口：发布、禁用。 */
+/** 规则版本生命周期管理入口：发布、禁用、查询。 */
 @RestController
 @RequestMapping("/api/v1/rules")
 public class RuleController {
@@ -60,5 +62,25 @@ public class RuleController {
             @RequestHeader("X-Actor-Id") String actorId) {
         configService.disable(tenantId, ruleId, actorId);
         return ApiResponse.ok(null);
+    }
+
+    /**
+     * GET /api/v1/rules — 查询规则列表，支持 sceneCode / status 过滤与分页。
+     *
+     * @param tenantId  租户 ID
+     * @param sceneCode Scene 编码（可选）
+     * @param status    规则状态（可选；DRAFT / PUBLISHED / DISABLED）
+     * @param page      页码，默认 1
+     * @param size      每页条数，默认 20
+     * @return 分页规则列表
+     */
+    @GetMapping
+    public ApiResponse<Page<RuleListItemVO>> listRules(
+            @RequestParam String tenantId,
+            @RequestParam(required = false) String sceneCode,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(configService.listRules(tenantId, sceneCode, status, page, size));
     }
 }

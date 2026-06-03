@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -70,5 +71,48 @@ class RuleControllerTest {
         mockMvc.perform(post("/api/v1/rules")
                         .header("X-Actor-Id", "user1"))
                 .andExpect(status().isNotImplemented());
+    }
+
+    @Test
+    void listRules_returns200_withPageResult() throws Exception {
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<
+                com.sstlfsj.rule.config.api.dto.RuleListItemVO> page =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 1);
+        page.setRecords(java.util.List.of(
+                new com.sstlfsj.rule.config.api.dto.RuleListItemVO(
+                        10L, "rule.a", "规则A", "PUBLISHED", 42L,
+                        java.time.LocalDateTime.of(2026, 6, 1, 0, 0))
+        ));
+        when(configService.listRules("t1", "risk.transfer", "PUBLISHED", 1, 20)).thenReturn(page);
+
+        mockMvc.perform(get("/api/v1/rules")
+                        .param("tenantId", "t1")
+                        .param("sceneCode", "risk.transfer")
+                        .param("status", "PUBLISHED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].ruleDefinitionId").value(10))
+                .andExpect(jsonPath("$.data.records[0].code").value("rule.a"))
+                .andExpect(jsonPath("$.data.records[0].status").value("PUBLISHED"));
+
+        verify(configService).listRules("t1", "risk.transfer", "PUBLISHED", 1, 20);
+    }
+
+    @Test
+    void listRules_withoutOptionalParams_usesDefaults() throws Exception {
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<
+                com.sstlfsj.rule.config.api.dto.RuleListItemVO> emptyPage =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
+        emptyPage.setRecords(java.util.List.of());
+        when(configService.listRules("t1", null, null, 1, 20)).thenReturn(emptyPage);
+
+        mockMvc.perform(get("/api/v1/rules")
+                        .param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(0));
+
+        verify(configService).listRules("t1", null, null, 1, 20);
     }
 }
