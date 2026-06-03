@@ -32,7 +32,7 @@ class ConfigServiceImplTest {
         RuleVersionSnapshot expected = new RuleVersionSnapshot(
                 42L, "PAYMENT", "1",
                 new ConditionNode("c.type", null, null, Map.of()),
-                List.of(), List.of()
+                List.of(), List.of(), null
         );
         when(publishService.publish(1L, 10L, "actor1")).thenReturn(expected);
 

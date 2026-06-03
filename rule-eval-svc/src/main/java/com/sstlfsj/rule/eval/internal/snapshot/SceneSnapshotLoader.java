@@ -26,7 +26,7 @@ public class SceneSnapshotLoader {
 
     /**
      * 全量加载所有 ACTIVE 规则版本，按 (tenantId:sceneCode, eventType) 分组。
-     * 外层 key = "tenantId:sceneCode"，内层 key = eventType（v1 使用 "*" 通配）。
+     * 外层 key = "tenantId:sceneCode"，内层 key = eventType（空 triggerEventTypes 归入 "*" 通配）。
      *
      * @return 双层 Map，外层 key = tenantId:sceneCode，内层 key = eventType
      */
@@ -38,7 +38,7 @@ public class SceneSnapshotLoader {
 
     /**
      * 加载指定租户 + 场景的所有 ACTIVE 规则版本，按 eventType 分组。
-     * v1 中 triggerEventTypes 未在快照模型中，使用 "*" 通配。
+     * triggerEventTypes 为空时归入 "*" 通配桶；非空时按实际值分桶。
      *
      * @param tenantId  租户 ID 字符串（需可解析为 Long）
      * @param sceneCode 场景编码
@@ -68,10 +68,11 @@ public class SceneSnapshotLoader {
         Map<String, Map<String, List<RuleVersionSnapshot>>> result = new HashMap<>();
         for (RuleVersionSnapshot snap : snapshots) {
             String outerKey = snap.tenantId() + ":" + snap.sceneCode();
-            // v1：RuleVersionSnapshot 不含 triggerEventTypes，使用 "*" 通配
-            result.computeIfAbsent(outerKey, k -> new HashMap<>())
-                    .computeIfAbsent("*", k -> new ArrayList<>())
-                    .add(snap);
+            Map<String, List<RuleVersionSnapshot>> inner =
+                    result.computeIfAbsent(outerKey, k -> new HashMap<>());
+            for (String key : eventTypeKeys(snap)) {
+                inner.computeIfAbsent(key, k -> new ArrayList<>()).add(snap);
+            }
         }
         return result;
     }
@@ -80,9 +81,19 @@ public class SceneSnapshotLoader {
             List<RuleVersionSnapshot> snapshots) {
         Map<String, List<RuleVersionSnapshot>> result = new HashMap<>();
         for (RuleVersionSnapshot snap : snapshots) {
-            // v1：triggerEventTypes 未在 RuleVersionSnapshot 模型中，用 "*" 作通配符
-            result.computeIfAbsent("*", k -> new ArrayList<>()).add(snap);
+            for (String key : eventTypeKeys(snap)) {
+                result.computeIfAbsent(key, k -> new ArrayList<>()).add(snap);
+            }
         }
         return result;
+    }
+
+    /**
+     * 返回快照应归入的 eventType key 列表。
+     * triggerEventTypes 为空时归入 "*" 通配桶，否则按实际值分桶。
+     */
+    private static List<String> eventTypeKeys(RuleVersionSnapshot snap) {
+        List<String> types = snap.triggerEventTypes();
+        return (types == null || types.isEmpty()) ? List.of("*") : types;
     }
 }

@@ -31,7 +31,7 @@ class RuleIndexEventListenerTest {
         ConditionNode condNode = new ConditionNode("GT", "score", null, Map.of());
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 42L, "fraud_check", "1", condNode, List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)));
+                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), null);
         when(loader.loadByScene("1", "fraud_check")).thenReturn(
                 Map.of("RISK_EVENT", List.of(snap)));
 

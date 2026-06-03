@@ -31,13 +31,17 @@ public class SnapshotAssembler {
         List<RuleVersionSnapshot.DecisionBinding> decisionBindings =
                 codec.deserializeDecisionBindings(row.decisionBindingsJson());
 
+        List<String> triggerEventTypes = codec.deserializeStringList(
+                row.triggerEventTypesJson() == null ? "[]" : row.triggerEventTypesJson());
+
         return new RuleVersionSnapshot(
                 row.ruleVersionId(),
                 row.sceneCode(),
                 String.valueOf(row.tenantId()),
                 conditionAst,
                 preGates,
-                decisionBindings
+                decisionBindings,
+                triggerEventTypes
         );
     }
 
