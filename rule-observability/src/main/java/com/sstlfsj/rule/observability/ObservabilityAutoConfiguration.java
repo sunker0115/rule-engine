@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.observability;
 
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
-import com.sstlfsj.rule.observability.internal.mapper.NodeTraceMapper;
+import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
 import org.springframework.boot.autoconfigure.AutoConfiguration;

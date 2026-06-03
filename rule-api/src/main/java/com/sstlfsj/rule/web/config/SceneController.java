@@ -2,6 +2,8 @@ package com.sstlfsj.rule.web.config;
 
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import com.sstlfsj.rule.web.config.dto.CreateSceneRequest;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -17,16 +19,18 @@ public class SceneController {
         this.sceneService = sceneService;
     }
 
-    /** POST /api/v1/scenes — 创建场景
-     * @param body 包含 tenantId/code/name 的请求体
-     * @param actorId 操作人
-     * @return 新建场景 ID */
+    /**
+     * POST /api/v1/scenes — 创建场景。
+     *
+     * @param req     请求体（tenantId / sceneCode / name）
+     * @param actorId 操作人（来自 X-Actor-Id header）
+     * @return 新建场景 ID
+     */
     @PostMapping
     public ApiResponse<Map<String, Object>> createScene(
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody CreateSceneRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        Long id = sceneService.createScene(body.get("tenantId"), body.get("code"),
-                body.get("name"), actorId);
+        Long id = sceneService.createScene(req.tenantId(), req.sceneCode(), req.name(), actorId);
         return ApiResponse.ok(Map.of("id", id));
     }
 }

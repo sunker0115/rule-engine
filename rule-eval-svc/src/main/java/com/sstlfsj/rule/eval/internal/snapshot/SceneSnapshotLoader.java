@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.snapshot;
 
-import com.sstlfsj.rule.eval.internal.mapper.RuleVersionReadMapper;
+import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import org.springframework.stereotype.Component;
 

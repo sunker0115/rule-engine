@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.eval.internal.mapper;
+package com.sstlfsj.rule.eval.internal.repository;
 
 import com.sstlfsj.rule.eval.internal.snapshot.RuleVersionRow;
 import org.apache.ibatis.annotations.Mapper;

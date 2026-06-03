@@ -3,7 +3,7 @@ package com.sstlfsj.rule.observability.internal.trace;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import com.sstlfsj.rule.observability.internal.domain.NodeTraceEntity;
-import com.sstlfsj.rule.observability.internal.mapper.NodeTraceMapper;
+import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
