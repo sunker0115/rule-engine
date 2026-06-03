@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.web.config.mapper;
+package com.sstlfsj.rule.web.convert;
 
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.web.config.dto.SceneResponse;
@@ -6,10 +6,10 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 验证 MapStruct 生成的 SceneMapper 正确映射所有字段。 */
-class SceneMapperTest {
+/** 验证 MapStruct 生成的 SceneConvert 正确映射所有字段。 */
+class SceneConvertTest {
 
-    private final SceneMapper mapper = new SceneMapperImpl();
+    private final SceneConvert convert = new SceneConvertImpl();
 
     @Test
     void toResponse_mapsAllFields() {
@@ -24,7 +24,7 @@ class SceneMapperTest {
         scene.setSubjectType("USER");
         scene.setStatus("ACTIVE");
 
-        SceneResponse resp = mapper.toResponse(scene);
+        SceneResponse resp = convert.toResponse(scene);
 
         assertThat(resp.getId()).isEqualTo(1L);
         assertThat(resp.getTenantId()).isEqualTo(100L);
@@ -39,7 +39,7 @@ class SceneMapperTest {
 
     @Test
     void toResponse_nullInput_returnsNull() {
-        assertThat(mapper.toResponse(null)).isNull();
+        assertThat(convert.toResponse(null)).isNull();
     }
 
     @Test
@@ -48,7 +48,7 @@ class SceneMapperTest {
         scene.setId(2L);
         scene.setCode("RISK");
 
-        SceneResponse resp = mapper.toResponse(scene);
+        SceneResponse resp = convert.toResponse(scene);
 
         assertThat(resp.getId()).isEqualTo(2L);
         assertThat(resp.getCode()).isEqualTo("RISK");
