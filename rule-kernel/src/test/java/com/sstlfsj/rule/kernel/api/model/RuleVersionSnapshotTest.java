@@ -17,11 +17,13 @@ class RuleVersionSnapshotTest {
 
     @Test
     void nullLists_defaultToEmpty() {
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "scene1", "t1", leaf(), null, null);
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "scene1", "t1", leaf(), null, null, null);
         assertNotNull(snap.preGates());
         assertTrue(snap.preGates().isEmpty());
         assertNotNull(snap.decisionBindings());
         assertTrue(snap.decisionBindings().isEmpty());
+        assertNotNull(snap.triggerEventTypes());
+        assertTrue(snap.triggerEventTypes().isEmpty());
     }
 
     @Test
@@ -29,7 +31,7 @@ class RuleVersionSnapshotTest {
         RuleVersionSnapshot.PreGateConfig gate =
                 new RuleVersionSnapshot.PreGateConfig("RATE_LIMIT", Map.of("limit", 10));
         List<RuleVersionSnapshot.PreGateConfig> mutable = new ArrayList<>(List.of(gate));
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "s1", "t1", leaf(), mutable, null);
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "s1", "t1", leaf(), mutable, null, null);
         mutable.add(gate);
         assertEquals(1, snap.preGates().size(), "构造后修改原始列表不应影响 preGates");
     }
@@ -39,9 +41,24 @@ class RuleVersionSnapshotTest {
         RuleVersionSnapshot.DecisionBinding binding =
                 new RuleVersionSnapshot.DecisionBinding("BLOCK", 100);
         List<RuleVersionSnapshot.DecisionBinding> mutable = new ArrayList<>(List.of(binding));
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "s1", "t1", leaf(), null, mutable);
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "s1", "t1", leaf(), null, mutable, null);
         mutable.add(binding);
         assertEquals(1, snap.decisionBindings().size(), "构造后修改原始列表不应影响 decisionBindings");
+    }
+
+    @Test
+    void triggerEventTypes_areImmutable() {
+        List<String> mutable = new ArrayList<>(List.of("login"));
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "s1", "t1", leaf(), null, null, mutable);
+        mutable.add("payment");
+        assertEquals(1, snap.triggerEventTypes().size(), "构造后修改原始列表不应影响 triggerEventTypes");
+    }
+
+    @Test
+    void triggerEventTypes_withValues_retained() {
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+                1L, "s1", "t1", leaf(), null, null, List.of("login", "payment"));
+        assertEquals(List.of("login", "payment"), snap.triggerEventTypes());
     }
 
     @Test

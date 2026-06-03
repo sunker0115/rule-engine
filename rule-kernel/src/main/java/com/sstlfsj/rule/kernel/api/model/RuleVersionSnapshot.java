@@ -12,11 +12,14 @@ public record RuleVersionSnapshot(
         String tenantId,
         AstNode conditionAst,
         List<PreGateConfig> preGates,
-        List<DecisionBinding> decisionBindings
+        List<DecisionBinding> decisionBindings,
+        /** 该版本监听的事件类型列表；空列表表示通配（匹配任意 eventType）。 */
+        List<String> triggerEventTypes
 ) {
     public RuleVersionSnapshot {
         preGates = preGates == null ? List.of() : List.copyOf(preGates);
         decisionBindings = decisionBindings == null ? List.of() : List.copyOf(decisionBindings);
+        triggerEventTypes = triggerEventTypes == null ? List.of() : List.copyOf(triggerEventTypes);
     }
 
     /** Pre-Gate 配置快照。 */

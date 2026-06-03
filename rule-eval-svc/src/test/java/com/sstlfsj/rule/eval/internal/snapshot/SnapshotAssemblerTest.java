@@ -37,6 +37,7 @@ class SnapshotAssemblerTest {
         assertEquals(1, snapshot.decisionBindings().size());
         assertEquals("REJECT", snapshot.decisionBindings().get(0).decisionCode());
         assertTrue(snapshot.preGates().isEmpty());
+        assertEquals(List.of("RISK_EVENT"), snapshot.triggerEventTypes());
     }
 
     @Test
@@ -78,5 +79,34 @@ class SnapshotAssemblerTest {
     void assembleAll_emptyInput_returnsEmptyList() {
         List<RuleVersionSnapshot> results = assembler.assembleAll(List.of());
         assertTrue(results.isEmpty());
+    }
+
+    /** triggerEventTypesJson 为空数组时，快照 triggerEventTypes 为空列表（通配）。 */
+    @Test
+    void assemble_emptyTriggerEventTypes_defaultsToEmptyList() throws Exception {
+        RuleVersionRow row = new RuleVersionRow(
+                1L, "scene1", 1L,
+                "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
+                "[]", "[]", "[]"
+        );
+
+        RuleVersionSnapshot snapshot = assembler.assemble(row);
+
+        assertNotNull(snapshot.triggerEventTypes());
+        assertTrue(snapshot.triggerEventTypes().isEmpty());
+    }
+
+    /** triggerEventTypesJson 含多个事件类型时，全部保留。 */
+    @Test
+    void assemble_multipleTriggerEventTypes_allRetained() throws Exception {
+        RuleVersionRow row = new RuleVersionRow(
+                2L, "scene1", 1L,
+                "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
+                "[]", "[]", "[\"login\",\"payment\"]"
+        );
+
+        RuleVersionSnapshot snapshot = assembler.assemble(row);
+
+        assertEquals(List.of("login", "payment"), snapshot.triggerEventTypes());
     }
 }

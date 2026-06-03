@@ -46,7 +46,8 @@ class EvalServiceImplTest {
                 id, "fraud_check", "1",
                 new ConditionNode("EQ", null, null, Map.of()),
                 List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding(decisionCode, 10)));
+                List.of(new RuleVersionSnapshot.DecisionBinding(decisionCode, 10)),
+                null);
     }
 
     @Test
@@ -98,10 +99,10 @@ class EvalServiceImplTest {
         // priority 越大越优先（Decision.priority 语义），两条规则命中时 finalDecision 应为 priority=20 的 REJECT
         RuleVersionSnapshot snapLow  = new RuleVersionSnapshot(1L, "fraud_check", "1",
                 new ConditionNode("EQ", null, null, Map.of()), List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("LOW_RISK", 5)));
+                List.of(new RuleVersionSnapshot.DecisionBinding("LOW_RISK", 5)), null);
         RuleVersionSnapshot snapHigh = new RuleVersionSnapshot(2L, "fraud_check", "1",
                 new ConditionNode("EQ", null, null, Map.of()), List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 20)));
+                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 20)), null);
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snapLow, snapHigh));
         when(contextAssembler.assemble(any(), any()))
                 .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));

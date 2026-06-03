@@ -54,7 +54,7 @@ class RuleIndexEventListenerTest {
     void onSceneEnabled_reloadsSnapshots() {
         ConditionNode condNode = new ConditionNode("EQ", "status", null, Map.of());
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
-                10L, "fraud_check", "1", condNode, List.of(), List.of());
+                10L, "fraud_check", "1", condNode, List.of(), List.of(), null);
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
         when(loader.loadByScene("1", "fraud_check")).thenReturn(Map.of("*", List.of(snap)));
 

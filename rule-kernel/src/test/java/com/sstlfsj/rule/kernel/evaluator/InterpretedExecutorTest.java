@@ -41,7 +41,7 @@ class InterpretedExecutorTest {
     }
 
     private RuleVersionSnapshot snapshot(AstNode ast) {
-        return new RuleVersionSnapshot(1L, "scene1", "t1", ast, null, null);
+        return new RuleVersionSnapshot(1L, "scene1", "t1", ast, null, null, null);
     }
 
     private ConditionNode trueNode() {

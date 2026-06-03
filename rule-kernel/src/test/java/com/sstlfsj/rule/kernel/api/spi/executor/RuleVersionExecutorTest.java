@@ -27,7 +27,7 @@ class RuleVersionExecutorTest {
     }
 
     private static RuleVersionSnapshot buildSnapshot() {
-        return new RuleVersionSnapshot(1L, "SCENE1", "t1", null, null, null);
+        return new RuleVersionSnapshot(1L, "SCENE1", "t1", null, null, null, null);
     }
 
     @Test

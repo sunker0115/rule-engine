@@ -17,7 +17,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * 验证 SceneSnapshotLoader 的分组逻辑：
- * v1 快照不含 triggerEventTypes，所有快照归入 "*" 通配桶。
+ * triggerEventTypes 为空时归入 "*" 通配桶，非空时按实际值分桶。
  */
 @ExtendWith(MockitoExtension.class)
 class SceneSnapshotLoaderTest {
@@ -45,33 +45,65 @@ class SceneSnapshotLoaderTest {
         assertTrue(result.isEmpty());
     }
 
-    /** loadByScene 有数据时，所有快照归入 "*" 桶。 */
+    /** triggerEventTypes 为空时，快照归入 "*" 通配桶。 */
     @Test
-    void loadByScene_withSnapshots_groupedUnderWildcard() {
+    void loadByScene_emptyTriggerEventTypes_groupedUnderWildcard() {
         RuleVersionRow row = new RuleVersionRow(
                 42L, "fraud_check", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"score\",\"params\":{}}",
                 "[]", "[{\"decisionCode\":\"REJECT\",\"priority\":10}]", "[]"
         );
         RuleVersionSnapshot snap = new RuleVersionSnapshot(42L, "fraud_check", "1", null, List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)));
+                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), List.of());
 
         when(mapper.loadActiveByScene(1L, "fraud_check")).thenReturn(List.of(row));
         when(assembler.assembleAll(List.of(row))).thenReturn(List.of(snap));
 
         Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene("1", "fraud_check");
 
-        // v1 使用 "*" 通配，精确 eventType 不存在
         assertEquals(1, result.size());
         assertTrue(result.containsKey("*"));
         assertEquals(List.of(snap), result.get("*"));
     }
 
-    /** loadByScene 多条快照全部归入同一 "*" 桶，顺序与 assembleAll 输出一致。 */
+    /** triggerEventTypes 非空时，快照按实际 eventType 分桶，不归入通配桶。 */
     @Test
-    void loadByScene_multipleSnapshots_allInWildcardBucket() {
-        RuleVersionSnapshot snap1 = new RuleVersionSnapshot(1L, "scene", "1", null, List.of(), List.of());
-        RuleVersionSnapshot snap2 = new RuleVersionSnapshot(2L, "scene", "1", null, List.of(), List.of());
+    void loadByScene_withTriggerEventTypes_groupedByExactEventType() {
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+                10L, "fraud_check", "1", null, List.of(), List.of(), List.of("login", "payment"));
+
+        when(mapper.loadActiveByScene(1L, "fraud_check")).thenReturn(List.of());
+        when(assembler.assembleAll(anyList())).thenReturn(List.of(snap));
+
+        Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene("1", "fraud_check");
+
+        assertFalse(result.containsKey("*"), "精确 eventType 不应归入通配桶");
+        assertEquals(List.of(snap), result.get("login"));
+        assertEquals(List.of(snap), result.get("payment"));
+    }
+
+    /** 混合场景：部分快照通配，部分精确，各自归入对应桶。 */
+    @Test
+    void loadByScene_mixedSnapshots_correctBuckets() {
+        RuleVersionSnapshot snapWild = new RuleVersionSnapshot(
+                1L, "scene", "1", null, List.of(), List.of(), List.of());
+        RuleVersionSnapshot snapExact = new RuleVersionSnapshot(
+                2L, "scene", "1", null, List.of(), List.of(), List.of("login"));
+
+        when(mapper.loadActiveByScene(1L, "scene")).thenReturn(List.of());
+        when(assembler.assembleAll(anyList())).thenReturn(List.of(snapWild, snapExact));
+
+        Map<String, List<RuleVersionSnapshot>> result = loader.loadByScene("1", "scene");
+
+        assertEquals(List.of(snapWild), result.get("*"));
+        assertEquals(List.of(snapExact), result.get("login"));
+    }
+
+    /** loadByScene 多条空 triggerEventTypes 快照全部归入同一 "*" 桶。 */
+    @Test
+    void loadByScene_multipleWildcardSnapshots_allInWildcardBucket() {
+        RuleVersionSnapshot snap1 = new RuleVersionSnapshot(1L, "scene", "1", null, List.of(), List.of(), null);
+        RuleVersionSnapshot snap2 = new RuleVersionSnapshot(2L, "scene", "1", null, List.of(), List.of(), null);
 
         when(mapper.loadActiveByScene(1L, "scene")).thenReturn(List.of());
         when(assembler.assembleAll(anyList())).thenReturn(List.of(snap1, snap2));
@@ -103,7 +135,7 @@ class SceneSnapshotLoaderTest {
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
                 "[]", "[]", "[]"
         );
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(7L, "s1", "1", null, List.of(), List.of());
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(7L, "s1", "1", null, List.of(), List.of(), null);
 
         when(mapper.loadById(7L)).thenReturn(row);
         when(assembler.assembleAll(List.of(row))).thenReturn(List.of(snap));
@@ -125,11 +157,11 @@ class SceneSnapshotLoaderTest {
         assertTrue(result.isEmpty());
     }
 
-    /** loadAll 按 tenantId:sceneCode 分外层，"*" 分内层。 */
+    /** loadAll 空 triggerEventTypes 时按 tenantId:sceneCode 分外层，"*" 分内层。 */
     @Test
-    void loadAll_groupsByTenantAndScene() {
-        RuleVersionSnapshot snapA = new RuleVersionSnapshot(1L, "sceneA", "t1", null, List.of(), List.of());
-        RuleVersionSnapshot snapB = new RuleVersionSnapshot(2L, "sceneB", "t1", null, List.of(), List.of());
+    void loadAll_groupsByTenantAndScene_wildcard() {
+        RuleVersionSnapshot snapA = new RuleVersionSnapshot(1L, "sceneA", "t1", null, List.of(), List.of(), null);
+        RuleVersionSnapshot snapB = new RuleVersionSnapshot(2L, "sceneB", "t1", null, List.of(), List.of(), null);
 
         when(mapper.loadAllActive()).thenReturn(List.of());
         when(assembler.assembleAll(anyList())).thenReturn(List.of(snapA, snapB));
@@ -141,5 +173,20 @@ class SceneSnapshotLoaderTest {
         assertTrue(result.containsKey("t1:sceneB"));
         assertEquals(List.of(snapA), result.get("t1:sceneA").get("*"));
         assertEquals(List.of(snapB), result.get("t1:sceneB").get("*"));
+    }
+
+    /** loadAll 精确 triggerEventTypes 时按实际 eventType 分内层桶。 */
+    @Test
+    void loadAll_groupsByTenantAndScene_exactEventType() {
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+                3L, "sceneA", "t1", null, List.of(), List.of(), List.of("login"));
+
+        when(mapper.loadAllActive()).thenReturn(List.of());
+        when(assembler.assembleAll(anyList())).thenReturn(List.of(snap));
+
+        Map<String, Map<String, List<RuleVersionSnapshot>>> result = loader.loadAll();
+
+        assertFalse(result.get("t1:sceneA").containsKey("*"));
+        assertEquals(List.of(snap), result.get("t1:sceneA").get("login"));
     }
 }
