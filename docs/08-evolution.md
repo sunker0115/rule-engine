@@ -247,6 +247,14 @@
   - 查询路径与写路径完全隔离（只读 Mapper），不影响评估性能。
 - **迁移成本**：中（需要补 Mapper 查询 + Service 实现 + Controller 端点 + 分页协议，但无 DDL 变更；`node_trace` 量大时需结合 §2.5 存储分层一起评估）。
 
+### 2.20 规则草稿创建 API（来源 10-api-contract.md §4.1）
+
+- **v1 现状**：`POST /api/v1/rules` 在 `10-api-contract.md §4.1` 已定义契约，但 v1 仅留占位实现（返回 501 NOT_IMPLEMENTED）。
+- **触发条件**：前端规则编辑器需要保存新规则草稿（AST + bindings + preGates），前端在 publish 前先 createDraft 获取 `ruleDefinitionId`。
+- **演进方向**：实装完整的草稿写入路径，事务内插入 `rule_definition`（DRAFT）+ `rule_version`（DRAFT）+ `audit_log`（CREATE）；同 tenant+scene 下 code 唯一性前置校验；返回 201 + `{ruleDefinitionId, ruleVersionId, version, status}`。
+- **迁移成本**：低（纯写路径，无 DDL 变更，无索引热更，无事件发布）。
+- **已实装（v2）**：`DraftCreatedResult`（`rule-config-svc` api 包）+ `CreateRuleRequest` 字段更新（`sceneCode` + 4 个 `JsonNode` 字段）+ `ConfigService.createDraft` + `PublishService.createDraft`（事务、code 唯一性校验）+ `ConfigServiceImpl` 委托 + `RuleController POST /api/v1/rules`（`@Valid` + 201）；无 DDL 变更。
+
 ---
 
 ## 三、决策时间线
