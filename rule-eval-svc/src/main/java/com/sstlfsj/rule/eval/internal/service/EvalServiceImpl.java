@@ -2,6 +2,7 @@ package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.context.EvalContextAssembler;
+import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
 import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
@@ -11,15 +12,16 @@ import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /** EvalService 完整实现：串联 Matcher → Pre-Gate → EvalContext → AST 评估 → Session 写入（D11/D21）。 */
 @Service
-class EvalServiceImpl implements EvalService {
+class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(EvalServiceImpl.class);
 
@@ -30,6 +32,7 @@ class EvalServiceImpl implements EvalService {
     private final RuleVersionExecutor executor;
     private final EvalSessionWriter sessionWriter;
     private final TraceWriter traceWriter;
+    private final EvalActionDispatcher dispatcher;
 
     EvalServiceImpl(SceneRuleIndex index,
                     SceneSnapshotLoader snapshotLoader,
@@ -46,14 +49,24 @@ class EvalServiceImpl implements EvalService {
         this.executor = executor;
         this.sessionWriter = sessionWriter;
         this.traceWriter = traceWriter;
+        // 构造器末尾创建 dispatcher，不调用 start
+        this.dispatcher = new EvalActionDispatcher(10000, this::evaluate);
+    }
+
+    @Override
+    public void afterPropertiesSet() {
+        dispatcher.start();
+    }
+
+    @Override
+    public void destroy() {
+        dispatcher.stop();
     }
 
     @Override
     public boolean acceptEvent(RuleEvent event) {
-        // PUSH 模式：异步投递，不阻塞调用方
-        CompletableFuture.runAsync(() -> evaluate(event))
-                .exceptionally(ex -> { log.error("异步评估失败 eventId={}", event.eventId(), ex); return null; });
-        return true;
+        // PUSH 模式：通过 dispatcher 异步投递，队列满时返回 false（背压信号）
+        return dispatcher.submit(event);
     }
 
     @Override
@@ -102,15 +115,17 @@ class EvalServiceImpl implements EvalService {
                     specificVersionId != null ? specificVersionId : passed.get(0).ruleVersionId())
                 : sessionWriter.insertPending(event, candidates.size(), "PULL");
 
-        // ⑤ AST 评估：逐条规则求值，收集命中 Decision
+        // ⑤ AST 评估：逐条规则求值，收集命中 Decision 和 NodeTrace
         List<Decision> hitDecisions = new ArrayList<>();
+        List<NodeTrace> allTraces = new ArrayList<>();
         String errorCode = null;
 
         for (RuleVersionSnapshot snap : passed) {
             try {
                 EvalResult r = executor.execute(snap, ctx);
+                // 收集本条规则的 NodeTrace
+                allTraces.addAll(r.nodeTrace());
                 if (r.ruleHit()) {
-                    // 从 decisionBindings 取最高优先级（priority 最小值）的 Decision
                     // priority 越大越优先，取最大值
                     snap.decisionBindings().stream()
                             .max(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
@@ -135,19 +150,18 @@ class EvalServiceImpl implements EvalService {
                 !hitDecisions.isEmpty(),
                 finalDecision,
                 List.copyOf(hitDecisions),
-                List.of(),   // trace v1 为空列表
+                List.copyOf(allTraces),
                 errorCode,
                 List.of()
         );
 
-        // ⑦ 更新 session 终态 + 提交 trace
+        // ⑦ 更新 session 终态 + 提交真实 traces
         if (isDryRun) {
             sessionWriter.updateDryRunFinal(sessionId, result);
         } else {
             sessionWriter.updateFinal(sessionId, result);
         }
-        // trace 列表 v1 为空（TraceWriter 扩展点，InterpretedExecutor 增强后填充）
-        traceWriter.write(event.tenantId(), sessionId.toString(), List.of());
+        traceWriter.write(event.tenantId(), sessionId.toString(), allTraces);
 
         return result;
     }

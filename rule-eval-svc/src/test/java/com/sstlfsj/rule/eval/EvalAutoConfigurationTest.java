@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.eval;
 
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
-import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
@@ -26,17 +26,17 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
-    void ruleVersionExecutor_nullEvaluators_returnsInterpretedExecutor() {
+    void ruleVersionExecutor_nullEvaluators_returnsTracingInterpretedExecutor() {
         // conditionEvaluators 为 null（无注册实现时 Spring 传入 null）
         RuleVersionExecutor executor = config.ruleVersionExecutor(null);
         assertNotNull(executor);
-        assertInstanceOf(InterpretedExecutor.class, executor);
+        assertInstanceOf(TracingInterpretedExecutor.class, executor);
     }
 
     @Test
-    void ruleVersionExecutor_emptyEvaluators_returnsInterpretedExecutor() {
+    void ruleVersionExecutor_emptyEvaluators_returnsTracingInterpretedExecutor() {
         RuleVersionExecutor executor = config.ruleVersionExecutor(java.util.Map.of());
         assertNotNull(executor);
-        assertInstanceOf(InterpretedExecutor.class, executor);
+        assertInstanceOf(TracingInterpretedExecutor.class, executor);
     }
 }

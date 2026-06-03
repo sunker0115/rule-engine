@@ -116,11 +116,16 @@ class EvalServiceImplTest {
     }
 
     @Test
-    void acceptEvent_returnsTrueAndDoesNotBlock() {
-        // acceptEvent 异步投递，不阻塞调用方，直接返回 true
-        boolean accepted = impl.acceptEvent(event());
-
-        assertTrue(accepted);
+    void acceptEvent_returnsTrueAndDoesNotBlock() throws Exception {
+        // dispatcher 需要 afterPropertiesSet 启动，@InjectMocks 不会自动调用
+        impl.afterPropertiesSet();
+        try {
+            // acceptEvent 异步投递，队列有容量时返回 true，不阻塞调用方
+            boolean accepted = impl.acceptEvent(event());
+            assertTrue(accepted);
+        } finally {
+            impl.destroy();
+        }
     }
 
     @Test
