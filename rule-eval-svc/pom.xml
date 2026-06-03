@@ -16,6 +16,16 @@
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-kernel</artifactId>
         </dependency>
+        <!-- 消费 config-svc 发布的领域事件（RulePublishedEvent / SceneChangedEvent） -->
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-config-svc</artifactId>
+        </dependency>
+        <!-- @ApplicationModuleListener 注解 -->
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-events-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-observability</artifactId>

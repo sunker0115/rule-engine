@@ -78,4 +78,41 @@ class SceneRuleIndexTest {
         List<RuleVersionSnapshot> result = index.match("t1", "scene1", "E1");
         assertThrows(UnsupportedOperationException.class, () -> result.add(snapshot));
     }
+
+    /** 只有通配 "*" 条目时，match 任意 eventType 均返回通配桶内容。 */
+    @Test
+    void match_wildcardOnly_returnedForAnyEventType() {
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(10L, "scene1", "t1", null, null, null);
+        index.update("t1", "scene1", "*", List.of(snap));
+
+        List<RuleVersionSnapshot> result = index.match("t1", "scene1", "ORDER_PLACED");
+        assertEquals(1, result.size());
+        assertEquals(10L, result.get(0).ruleVersionId());
+    }
+
+    /** 精确 key 和通配 key 同时存在时，match 返回两者去重合并。 */
+    @Test
+    void match_exactAndWildcard_returnsMerged() {
+        RuleVersionSnapshot snapExact    = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null);
+        RuleVersionSnapshot snapWildcard = new RuleVersionSnapshot(2L, "scene1", "t1", null, null, null);
+        index.update("t1", "scene1", "ORDER_PLACED", List.of(snapExact));
+        index.update("t1", "scene1", "*", List.of(snapWildcard));
+
+        List<RuleVersionSnapshot> result = index.match("t1", "scene1", "ORDER_PLACED");
+        assertEquals(2, result.size());
+        assertTrue(result.stream().anyMatch(s -> s.ruleVersionId().equals(1L)));
+        assertTrue(result.stream().anyMatch(s -> s.ruleVersionId().equals(2L)));
+    }
+
+    /** 精确 key 和通配 key 中有相同快照时，合并结果不出现重复。 */
+    @Test
+    void match_exactAndWildcard_deduplicatesBySameVersionId() {
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(5L, "scene1", "t1", null, null, null);
+        index.update("t1", "scene1", "ORDER_PLACED", List.of(snap));
+        index.update("t1", "scene1", "*", List.of(snap));
+
+        List<RuleVersionSnapshot> result = index.match("t1", "scene1", "ORDER_PLACED");
+        assertEquals(1, result.size());
+        assertEquals(5L, result.get(0).ruleVersionId());
+    }
 }
