@@ -35,9 +35,23 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         // 顶层 trace 列表，每个根节点产生一条记录
-        List<NodeTrace> traces = new ArrayList<>();
-        boolean satisfied = evalAndTrace(snapshot.conditionAst(), ctx, traces);
-        return new EvalResult(satisfied, null, List.of(), List.copyOf(traces), null, List.of());
+        List<NodeTrace> rawTraces = new ArrayList<>();
+        boolean satisfied = evalAndTrace(snapshot.conditionAst(), ctx, rawTraces);
+        // 顶层 trace 打上 ruleVersionId，供 TraceWriter 写库时使用
+        Long rvId = snapshot.ruleVersionId();
+        List<NodeTrace> traces = rawTraces.stream()
+                .map(t -> withRuleVersionId(t, rvId))
+                .toList();
+        return new EvalResult(satisfied, null, List.of(), traces, null, List.of());
+    }
+
+    /** 递归将 ruleVersionId 注入 trace 树（顶层和所有子节点）。 */
+    private static NodeTrace withRuleVersionId(NodeTrace t, Long rvId) {
+        List<NodeTrace> children = t.children().stream()
+                .map(c -> withRuleVersionId(c, rvId))
+                .toList();
+        return new NodeTrace(t.nodeType(), t.conditionType(), t.metricCode(),
+                t.result(), t.actualValue(), t.valueSource(), t.errorCode(), children, rvId);
     }
 
     /**
@@ -72,7 +86,7 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
                 break;
             }
         }
-        sink.add(new NodeTrace("AndNode", null, null, result, null, null, null, childTraces));
+        sink.add(new NodeTrace("AndNode", null, null, result, null, null, null, childTraces, null));
         return result;
     }
 
@@ -91,7 +105,7 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
                 break;
             }
         }
-        sink.add(new NodeTrace("OrNode", null, null, result, null, null, null, childTraces));
+        sink.add(new NodeTrace("OrNode", null, null, result, null, null, null, childTraces, null));
         return result;
     }
 
@@ -102,7 +116,7 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
         List<NodeTrace> childTraces = new ArrayList<>();
         boolean childResult = evalAndTrace(not.child(), ctx, childTraces);
         boolean result = !childResult;
-        sink.add(new NodeTrace("NotNode", null, null, result, null, null, null, childTraces));
+        sink.add(new NodeTrace("NotNode", null, null, result, null, null, null, childTraces, null));
         return result;
     }
 
@@ -114,12 +128,12 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
         if (evaluator == null) {
             // 未注册 evaluator，记录错误码并返回 false
             sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                    false, null, null, "NO_EVALUATOR", List.of()));
+                    false, null, null, "NO_EVALUATOR", List.of(), null));
             return false;
         }
         boolean result = evaluator.evaluate(node, ctx);
         sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                result, null, null, null, List.of()));
+                result, null, null, null, List.of(), null));
         return result;
     }
 }

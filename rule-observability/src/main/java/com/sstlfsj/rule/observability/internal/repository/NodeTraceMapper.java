@@ -18,12 +18,12 @@ public interface NodeTraceMapper extends BaseMapper<NodeTraceEntity> {
     @Insert("""
             <script>
             INSERT INTO node_trace
-              (evaluation_session_id, tenant_id, node_path, node_type,
+              (evaluation_session_id, tenant_id, rule_version_id, node_path, node_type,
                condition_type, metric_code, actual_value, result,
                error_code, value_source, evaluated_at)
             VALUES
             <foreach collection="list" item="e" separator=",">
-              (#{e.evaluationSessionId}, #{e.tenantId}, #{e.nodePath}, #{e.nodeType},
+              (#{e.evaluationSessionId}, #{e.tenantId}, #{e.ruleVersionId}, #{e.nodePath}, #{e.nodeType},
                #{e.conditionType}, #{e.metricCode}, #{e.actualValue}, #{e.result},
                #{e.errorCode}, #{e.valueSource}, #{e.evaluatedAt})
             </foreach>

@@ -109,6 +109,7 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
             entity.setResult(trace.result());
             entity.setErrorCode(trace.errorCode());
             entity.setValueSource(trace.valueSource());
+            entity.setRuleVersionId(trace.ruleVersionId());
             entity.setEvaluatedAt(LocalDateTime.now());
             out.add(entity);
 

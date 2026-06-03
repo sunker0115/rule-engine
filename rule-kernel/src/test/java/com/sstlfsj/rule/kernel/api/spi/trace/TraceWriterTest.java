@@ -23,7 +23,7 @@ class TraceWriterTest {
         };
 
         NodeTrace trace = new NodeTrace("CONDITION", "AMOUNT_GT", null,
-                true, 100, "PROVIDED", null, null);
+                true, 100, "PROVIDED", null, null, null);
         writer.write("t1", "sess-001", List.of(trace));
 
         assertEquals("t1", capturedTenant.get(0));
