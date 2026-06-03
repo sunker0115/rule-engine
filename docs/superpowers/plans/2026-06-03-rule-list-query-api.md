@@ -1,5 +1,7 @@
 # 规则列表查询 API 实现计划
 
+> **Status: 已完成**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现 `GET /api/v1/rules` 规则列表分页查询端点，对应 10-api-contract.md §4.4 / 08-evolution.md §2.18。

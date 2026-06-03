@@ -1,5 +1,7 @@
 # v1.5：ActionHandler dryRun 实装 + 灰度 A/B 互斥 实现计划
 
+> **Status: 已完成**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 补全两个 v1 遗留项：① `BlockTransactionHandler` / `SendAlertHandler` 补齐 `dryRun()` 方法（消除 `DRY_RUN_NOT_IMPLEMENTED` errorCode）；② `RolloutPreGate` 支持 `experimentId` 字段，同实验内多规则共享 hash 种子（保证 A/B 互斥）。

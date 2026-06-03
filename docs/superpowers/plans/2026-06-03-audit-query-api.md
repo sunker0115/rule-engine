@@ -1,5 +1,7 @@
 # 审计查询 API 实装计划（§2.19）
 
+> **Status: 已完成**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实装 `GET /api/v1/evaluation-sessions`、`GET /api/v1/evaluation-sessions/{sessionId}/trace`、`GET /api/v1/audit-logs` 三个查询端点，替换 `AuditServiceImpl` 的 `UnsupportedOperationException` 占位实现。

@@ -1,5 +1,7 @@
 # 评估链路补全实现计划
 
+> **Status: 已完成**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 补全 v1 评估链路的两个遗漏：dry-run NodeTrace 隔离写入 `dry_run_node_trace` 表；规则命中后 ActionHandler 调用并落库 `action_execution`。
