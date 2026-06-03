@@ -44,4 +44,13 @@ class DryRunNodeTraceMapperTest {
         assertNotNull(method);
         assertNotNull(method.getAnnotation(Insert.class));
     }
+
+    @Test
+    void insertBatch_sql_containsParamsColumn() throws Exception {
+        Method method = DryRunNodeTraceMapper.class.getDeclaredMethod("insertBatch", List.class);
+        String sql = method.getAnnotation(Insert.class).value()[0];
+        // 验证列定义和绑定参数都包含 params，确保字段未被遗漏
+        assertTrue(sql.contains("params"), "INSERT 列列表须包含 params 列");
+        assertTrue(sql.contains("#{e.params}"), "VALUES 绑定须包含 #{e.params}");
+    }
 }
