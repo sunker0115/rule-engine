@@ -9,6 +9,7 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
+import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     private final RuleVersionExecutor executor;
     private final EvalSessionWriter sessionWriter;
     private final TraceWriter traceWriter;
+    private final DryRunTraceWriter dryRunTraceWriter;
     private final EvalActionDispatcher dispatcher;
 
     EvalServiceImpl(SceneRuleIndex index,
@@ -40,7 +42,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                     EvalContextAssembler contextAssembler,
                     RuleVersionExecutor executor,
                     EvalSessionWriter sessionWriter,
-                    TraceWriter traceWriter) {
+                    TraceWriter traceWriter,
+                    DryRunTraceWriter dryRunTraceWriter) {
         this.index = index;
         this.snapshotLoader = snapshotLoader;
         this.preGateMap = preGates == null ? Map.of()
@@ -49,6 +52,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         this.executor = executor;
         this.sessionWriter = sessionWriter;
         this.traceWriter = traceWriter;
+        this.dryRunTraceWriter = dryRunTraceWriter;
         // 构造器末尾创建 dispatcher，不调用 start
         this.dispatcher = new EvalActionDispatcher(10000, this::evaluate);
     }
@@ -155,13 +159,14 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                 List.of()
         );
 
-        // ⑦ 更新 session 终态 + 提交真实 traces
+        // ⑦ 更新 session 终态 + 提交 traces 到隔离写库
         if (isDryRun) {
             sessionWriter.updateDryRunFinal(sessionId, result);
+            dryRunTraceWriter.write(event.tenantId(), sessionId.toString(), allTraces);
         } else {
             sessionWriter.updateFinal(sessionId, result);
+            traceWriter.write(event.tenantId(), sessionId.toString(), allTraces);
         }
-        traceWriter.write(event.tenantId(), sessionId.toString(), allTraces);
 
         return result;
     }

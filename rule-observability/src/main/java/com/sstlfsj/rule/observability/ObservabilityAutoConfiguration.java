@@ -1,19 +1,23 @@
 package com.sstlfsj.rule.observability;
 
+import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
+import com.sstlfsj.rule.kernel.api.spi.trace.NoopDryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import com.sstlfsj.rule.observability.internal.repository.DryRunNodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
+import com.sstlfsj.rule.observability.internal.trace.DryRunTraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 
-/** 自动装配规则可观测性模块（指标 + TraceWriter）。 */
+/** 自动装配规则可观测性模块（指标 + TraceWriter + DryRunTraceWriter）。 */
 @AutoConfiguration
 public class ObservabilityAutoConfiguration {
 
     /**
-     * 默认启用异步 DB 批写 TraceWriter。
+     * 默认启用异步 DB 批写 TraceWriter（主服务）。
      * 可通过 engine.rule.trace.enabled=false 切换为 Noop 实现。
      */
     @Bean
@@ -27,5 +31,22 @@ public class ObservabilityAutoConfiguration {
     @ConditionalOnProperty(name = "engine.rule.trace.enabled", havingValue = "false")
     public TraceWriter noopTraceWriter() {
         return new NoopTraceWriter();
+    }
+
+    /**
+     * 默认启用异步 DB 批写 DryRunTraceWriter（dry-run 隔离写 dry_run_node_trace）。
+     * 与 TraceWriter 共享 engine.rule.trace.enabled 开关。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "engine.rule.trace.enabled", havingValue = "true", matchIfMissing = true)
+    public DryRunTraceWriter dryRunTraceWriterDb(DryRunNodeTraceMapper dryRunNodeTraceMapper) {
+        return new DryRunTraceWriterDbImpl(10000, 500, 200, dryRunNodeTraceMapper);
+    }
+
+    /** 当 engine.rule.trace.enabled=false 时注册空实现，与 noopTraceWriter 对称。 */
+    @Bean
+    @ConditionalOnProperty(name = "engine.rule.trace.enabled", havingValue = "false")
+    public DryRunTraceWriter noopDryRunTraceWriter() {
+        return new NoopDryRunTraceWriter();
     }
 }

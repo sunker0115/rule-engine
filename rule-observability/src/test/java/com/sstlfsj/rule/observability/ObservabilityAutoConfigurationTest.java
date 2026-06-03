@@ -1,7 +1,11 @@
 package com.sstlfsj.rule.observability;
 
+import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
+import com.sstlfsj.rule.kernel.api.spi.trace.NoopDryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import com.sstlfsj.rule.observability.internal.repository.DryRunNodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
+import com.sstlfsj.rule.observability.internal.trace.DryRunTraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
 import org.junit.jupiter.api.Test;
@@ -15,12 +19,16 @@ import static org.mockito.Mockito.mock;
 
 class ObservabilityAutoConfigurationTest {
 
-    /** 提供 NodeTraceMapper mock Bean，满足 traceWriterDb() 的依赖注入。 */
     @Configuration
     static class MapperMockConfig {
         @Bean
         NodeTraceMapper nodeTraceMapper() {
             return mock(NodeTraceMapper.class);
+        }
+
+        @Bean
+        DryRunNodeTraceMapper dryRunNodeTraceMapper() {
+            return mock(DryRunNodeTraceMapper.class);
         }
     }
 
@@ -32,7 +40,6 @@ class ObservabilityAutoConfigurationTest {
 
     @Test
     void traceWriterDb_registeredByDefault() {
-        // 未设置任何属性时，matchIfMissing=true 应注册 TraceWriterDbImpl
         runnerWithMapper.run(ctx -> {
             assertThat(ctx).hasSingleBean(TraceWriter.class);
             assertThat(ctx.getBean(TraceWriter.class)).isInstanceOf(TraceWriterDbImpl.class);
@@ -50,11 +57,36 @@ class ObservabilityAutoConfigurationTest {
 
     @Test
     void noopTraceWriter_registeredWhenDisabled() {
-        // 禁用时不需要 NodeTraceMapper，使用基础 runner
         runner.withPropertyValues("engine.rule.trace.enabled=false")
                 .run(ctx -> {
                     assertThat(ctx).hasSingleBean(TraceWriter.class);
                     assertThat(ctx.getBean(TraceWriter.class)).isInstanceOf(NoopTraceWriter.class);
+                });
+    }
+
+    @Test
+    void dryRunTraceWriterDb_registeredByDefault() {
+        runnerWithMapper.run(ctx -> {
+            assertThat(ctx).hasSingleBean(DryRunTraceWriter.class);
+            assertThat(ctx.getBean(DryRunTraceWriter.class)).isInstanceOf(DryRunTraceWriterDbImpl.class);
+        });
+    }
+
+    @Test
+    void dryRunTraceWriterDb_registeredWhenEnabled() {
+        runnerWithMapper.withPropertyValues("engine.rule.trace.enabled=true")
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(DryRunTraceWriter.class);
+                    assertThat(ctx.getBean(DryRunTraceWriter.class)).isInstanceOf(DryRunTraceWriterDbImpl.class);
+                });
+    }
+
+    @Test
+    void noopDryRunTraceWriter_registeredWhenDisabled() {
+        runner.withPropertyValues("engine.rule.trace.enabled=false")
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(DryRunTraceWriter.class);
+                    assertThat(ctx.getBean(DryRunTraceWriter.class)).isInstanceOf(NoopDryRunTraceWriter.class);
                 });
     }
 }

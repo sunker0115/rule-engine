@@ -8,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
+import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +33,7 @@ class EvalServiceImplTest {
     @Mock RuleVersionExecutor executor;
     @Mock EvalSessionWriter sessionWriter;
     @Mock TraceWriter traceWriter;
+    @Mock DryRunTraceWriter dryRunTraceWriter;
 
     // EvalServiceImpl 构造器接受 List<PreGate>，Mockito @InjectMocks 会注入空列表
     @InjectMocks EvalServiceImpl impl;
@@ -143,5 +145,35 @@ class EvalServiceImplTest {
         assertFalse(result.ruleHit());
         verify(sessionWriter).insertDryRunPending(any(), eq(42L));
         verify(sessionWriter, never()).insertPending(any(), anyInt(), anyString());
+    }
+
+    @Test
+    void evaluate_ruleHit_callsProdTraceWriter_notDryRunWriter() {
+        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
+        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.hit());
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+
+        impl.evaluate(event());
+
+        verify(traceWriter).write(anyString(), anyString(), anyList());
+        verifyNoInteractions(dryRunTraceWriter);
+    }
+
+    @Test
+    void dryRun_writesDryRunTraceWriter_notProdWriter() {
+        RuleVersionSnapshot snap = snapshot(42L, "PASS");
+        when(snapshotLoader.loadById(42L)).thenReturn(snap);
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.miss());
+        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
+
+        impl.dryRun(event(), 42L);
+
+        verify(dryRunTraceWriter).write(anyString(), anyString(), anyList());
+        verifyNoInteractions(traceWriter);
     }
 }
