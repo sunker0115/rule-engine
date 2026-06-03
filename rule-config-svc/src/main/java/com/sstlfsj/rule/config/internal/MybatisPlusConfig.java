@@ -6,10 +6,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * MyBatis-Plus 拦截器配置，供 rule-config-svc 使用；app 层已注册时自动跳过。
+ * MyBatis-Plus 拦截器占位配置。
  *
- * <p>注：MyBatis-Plus 3.5.16 已内置分页支持，不再需要手动注册 PaginationInnerInterceptor。
- * 分页由框架的 MybatisPlusInnerInterceptorAutoConfiguration 自动处理。
+ * <p>3.5.16 已将分页支持内置到 spring-boot-autoconfigure，不再需要手动注册 PaginationInnerInterceptor。
+ * 本 bean 仅用于 @ConditionalOnMissingBean 防止自动配置重复注册。
  */
 @Configuration
 class MybatisPlusConfig {
@@ -17,7 +17,6 @@ class MybatisPlusConfig {
     @Bean
     @ConditionalOnMissingBean(MybatisPlusInterceptor.class)
     MybatisPlusInterceptor mybatisPlusInterceptor() {
-        // 3.5.16 移除了 PaginationInnerInterceptor；分页由框架内置处理
         return new MybatisPlusInterceptor();
     }
 }

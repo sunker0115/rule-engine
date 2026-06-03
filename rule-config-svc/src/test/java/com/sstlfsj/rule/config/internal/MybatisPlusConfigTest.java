@@ -15,8 +15,7 @@ class MybatisPlusConfigTest {
 
     @Test
     void mybatisPlusInterceptor_interceptorListIsEmpty() {
-        // 3.5.16 移除了 PaginationInnerInterceptor，分页由框架内置；
-        // 本 bean 仅作占位，避免 MybatisPlusInnerInterceptorAutoConfiguration 注册冲突
+        // 3.5.16 移除了 PaginationInnerInterceptor，分页由框架内置处理
         MybatisPlusConfig config = new MybatisPlusConfig();
         MybatisPlusInterceptor interceptor = config.mybatisPlusInterceptor();
         assertThat(interceptor.getInterceptors()).isEmpty();
