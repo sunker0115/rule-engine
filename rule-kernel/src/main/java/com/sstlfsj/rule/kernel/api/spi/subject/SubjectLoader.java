@@ -6,7 +6,7 @@ import com.sstlfsj.rule.kernel.api.model.SubjectType;
 
 import java.util.List;
 
-/** Loads subject entity data for rule evaluation. */
+/** 为规则评估加载主体实体数据的 SPI 接口。 */
 public interface SubjectLoader {
     Subject load(String subjectId, SubjectType subjectType, RuleEvent event);
     List<SubjectType> supportedTypes();

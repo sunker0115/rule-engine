@@ -16,7 +16,7 @@ class SchedulerTest {
         Scheduler scheduler = new Scheduler() {
             @Override
             public void schedule(String jobCode, String cronExpression, Runnable task) {
-                // Inline execution simulates the scheduler running the task.
+                // 内联执行模拟调度器触发任务。
                 task.run();
             }
 

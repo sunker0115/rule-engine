@@ -33,7 +33,7 @@ class TraceWriterTest {
 
     @Test
     void write_isFunctionalInterface() {
-        // Lambda assignment confirms single abstract method contract.
+        // Lambda 赋值验证接口为单抽象方法的函数式接口契约。
         TraceWriter writer = (tenantId, sessionId, traces) -> {};
         assertDoesNotThrow(() -> writer.write("t1", "s1", List.of()));
     }

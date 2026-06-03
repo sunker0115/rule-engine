@@ -13,7 +13,7 @@ import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 
 import java.util.Map;
 
-/** Evaluates a RuleVersionSnapshot AST tree using registered ConditionEvaluator implementations. */
+/** 使用已注册的 ConditionEvaluator 对 RuleVersionSnapshot AST 树进行解释执行。 */
 public class InterpretedExecutor implements RuleVersionExecutor {
 
     private final Map<String, ConditionEvaluator> evaluators;
@@ -39,14 +39,14 @@ public class InterpretedExecutor implements RuleVersionExecutor {
 
     private boolean evaluateAnd(AndNode and, EvalContext ctx) {
         for (AstNode child : and.children()) {
-            if (!evaluate(child, ctx)) return false; // short-circuit
+            if (!evaluate(child, ctx)) return false; // 短路：任一子节点为 false 即返回
         }
         return true;
     }
 
     private boolean evaluateOr(OrNode or, EvalContext ctx) {
         for (AstNode child : or.children()) {
-            if (evaluate(child, ctx)) return true; // short-circuit
+            if (evaluate(child, ctx)) return true; // 短路：任一子节点为 true 即返回
         }
         return false;
     }

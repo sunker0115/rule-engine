@@ -2,7 +2,7 @@ package com.sstlfsj.rule.kernel.api.annotation;
 
 import java.lang.annotation.*;
 
-/** Marks an ActionHandler implementation with its action type identifier and metadata. */
+/** 标注 ActionHandler 实现类的动作类型标识与元数据。 */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

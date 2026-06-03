@@ -6,7 +6,7 @@ import org.springframework.context.annotation.ComponentScan;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Verifies ConfigAutoConfiguration carries the required Spring annotations. */
+/** 验证 ConfigAutoConfiguration 携带必要的 Spring 注解。 */
 class ConfigAutoConfigurationTest {
 
     @Test

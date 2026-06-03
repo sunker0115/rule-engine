@@ -81,7 +81,7 @@ class InterpretedExecutorTest {
             callCount.incrementAndGet();
             return false;
         };
-        // AND(counting_false, counting_false, counting_false) — must stop after first false
+        // AND(counting_false, counting_false, counting_false) — 第一个 false 后必须短路停止
         ConditionNode countingNode = new ConditionNode("COUNTING", null, null, Map.of());
         AstNode ast = new AndNode(List.of(countingNode, countingNode, countingNode), null, null);
         InterpretedExecutor executor = executorWith(Map.of("COUNTING", counting));
@@ -136,7 +136,7 @@ class InterpretedExecutorTest {
 
     @Test
     void nested_and_or_evaluated_correctly() {
-        // AND(true, OR(false, true)) = true
+        // AND(true, OR(false, true)) = true，验证嵌套求值正确性
         AstNode orNode = new OrNode(List.of(falseNode(), trueNode()), null, null);
         AstNode ast = new AndNode(List.of(trueNode(), orNode), null, null);
         InterpretedExecutor executor = executorWith(Map.of(

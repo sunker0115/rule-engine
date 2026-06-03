@@ -4,10 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/**
- * Verifies SceneService contract: method signatures compile and a stub
- * implementation correctly propagates UnsupportedOperationException.
- */
+/** 验证 SceneService 契约：方法签名可编译，Stub 实现能正确抛出 UnsupportedOperationException。 */
 class SceneServiceTest {
 
     private final SceneService stub = new SceneService() {

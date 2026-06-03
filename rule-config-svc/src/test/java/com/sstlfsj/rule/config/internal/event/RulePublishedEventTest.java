@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Verifies RulePublishedEvent record construction and accessor correctness. */
+/** 验证 RulePublishedEvent record 构造与 accessor 的正确性。 */
 class RulePublishedEventTest {
 
     @Test

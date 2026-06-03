@@ -1,34 +1,34 @@
 package com.sstlfsj.rule.config.api.service;
 
-/** Manages scene lifecycle: creation, update, and disabling. */
+/** 场景生命周期管理：创建、更新、禁用。 */
 public interface SceneService {
 
     /**
-     * Creates a new scene for the given tenant.
+     * 为指定租户创建新场景。
      *
-     * @param tenantId  tenant owning the scene
-     * @param sceneCode unique scene code within the tenant
-     * @param name      human-readable scene name
-     * @param actorId   ID of the operator creating the scene
-     * @return ID of the newly created scene
+     * @param tenantId  场景所属租户 ID
+     * @param sceneCode 租户内唯一的场景编码
+     * @param name      场景展示名称
+     * @param actorId   创建操作人 ID
+     * @return 新创建场景的 ID
      */
     Long createScene(String tenantId, String sceneCode, String name, String actorId);
 
     /**
-     * Updates the metadata of an existing scene.
+     * 更新已有场景的元数据。
      *
-     * @param tenantId  tenant owning the scene
-     * @param sceneCode scene to update
-     * @param actorId   ID of the operator making the update
+     * @param tenantId  场景所属租户 ID
+     * @param sceneCode 待更新的场景编码
+     * @param actorId   更新操作人 ID
      */
     void updateScene(String tenantId, String sceneCode, String actorId);
 
     /**
-     * Disables a scene, preventing new evaluations from matching it.
+     * 禁用场景，禁用后该场景不再参与规则评估匹配。
      *
-     * @param tenantId  tenant owning the scene
-     * @param sceneCode scene to disable
-     * @param actorId   ID of the operator disabling the scene
+     * @param tenantId  场景所属租户 ID
+     * @param sceneCode 待禁用的场景编码
+     * @param actorId   禁用操作人 ID
      */
     void disableScene(String tenantId, String sceneCode, String actorId);
 }

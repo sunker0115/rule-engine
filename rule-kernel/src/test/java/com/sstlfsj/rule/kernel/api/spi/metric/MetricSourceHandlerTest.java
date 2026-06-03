@@ -27,7 +27,7 @@ class MetricSourceHandlerTest {
 
     @Test
     void fetch_isFunctionalInterface() {
-        // Lambda assignment confirms single abstract method contract.
+        // Lambda 赋值验证接口为单抽象方法的函数式接口契约。
         MetricSourceHandler handler = query -> new MetricValue(0.0, "DOUBLE", "FETCHED");
         assertNotNull(handler.fetch(buildQuery()));
     }

@@ -3,7 +3,7 @@ package com.sstlfsj.rule.kernel.api.spi.action;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
 
-/** Executes a rule action after a rule fires. */
+/** 规则命中后执行对应动作的 SPI 接口。 */
 public interface ActionHandler {
     ActionResult execute(ActionContext ctx);
 

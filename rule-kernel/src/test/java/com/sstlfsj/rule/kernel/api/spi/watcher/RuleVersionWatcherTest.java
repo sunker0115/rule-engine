@@ -18,7 +18,7 @@ class RuleVersionWatcherTest {
         RuleVersionWatcher watcher = new RuleVersionWatcher() {
             @Override
             public void watch(Consumer<RuleVersionSnapshot> onUpdate) {
-                // Immediately deliver one snapshot to simulate an update.
+                // 立即推送一个快照，模拟更新通知。
                 RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
                         1L, "SCENE1", "t1", null, null, null);
                 onUpdate.accept(snapshot);

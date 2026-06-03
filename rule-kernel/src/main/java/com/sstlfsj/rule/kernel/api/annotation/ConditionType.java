@@ -2,7 +2,7 @@ package com.sstlfsj.rule.kernel.api.annotation;
 
 import java.lang.annotation.*;
 
-/** Marks a ConditionEvaluator implementation with its condition type identifier and metadata. */
+/** 标注 ConditionEvaluator 实现类的条件类型标识与元数据。 */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

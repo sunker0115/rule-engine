@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Verifies SceneChangedEvent record construction and accessor correctness. */
+/** 验证 SceneChangedEvent record 构造与 accessor 的正确性。 */
 class SceneChangedEventTest {
 
     @Test

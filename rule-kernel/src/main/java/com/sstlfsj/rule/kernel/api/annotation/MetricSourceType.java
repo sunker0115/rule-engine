@@ -2,7 +2,7 @@ package com.sstlfsj.rule.kernel.api.annotation;
 
 import java.lang.annotation.*;
 
-/** Marks a MetricSourceHandler implementation with its metric source type identifier and metadata. */
+/** 标注 MetricSourceHandler 实现类的指标来源类型标识与元数据。 */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

@@ -6,10 +6,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Verifies MetadataService nested record types can be constructed and
- * their accessors return the expected values.
- */
+/** 验证 MetadataService 内嵌 record 类型可正常构造，accessor 返回预期值。 */
 class MetadataServiceTest {
 
     @Test

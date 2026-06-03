@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.config.internal.event;
 
-/** Published when a rule version is successfully activated. */
+/** 规则版本成功激活时发布的领域事件。 */
 public record RulePublishedEvent(
         String tenantId,
         String sceneCode,

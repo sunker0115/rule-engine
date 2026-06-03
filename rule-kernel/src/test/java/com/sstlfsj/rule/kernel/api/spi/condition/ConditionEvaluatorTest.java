@@ -36,7 +36,7 @@ class ConditionEvaluatorTest {
 
     @Test
     void evaluate_isFunctionalInterface() {
-        // Lambda assignment confirms the interface has exactly one abstract method.
+        // Lambda 赋值验证接口恰好只有一个抽象方法（函数式接口契约）。
         ConditionEvaluator evaluator = (node, ctx) -> node.conditionType().startsWith("AMOUNT");
         ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of());
         assertTrue(evaluator.evaluate(node, buildCtx()));
