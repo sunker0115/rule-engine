@@ -13,10 +13,8 @@ class EvalSessionReadMapperTest {
 
     @Test
     void 接口继承BaseMapper且泛型参数正确() {
-        // 验证接口本身继承了 BaseMapper
         assertThat(BaseMapper.class).isAssignableFrom(EvalSessionReadMapper.class);
 
-        // 验证泛型参数是 EvalSessionRow
         ParameterizedType superInterface = (ParameterizedType)
                 EvalSessionReadMapper.class.getGenericInterfaces()[0];
         assertThat(superInterface.getActualTypeArguments()[0]).isEqualTo(EvalSessionRow.class);

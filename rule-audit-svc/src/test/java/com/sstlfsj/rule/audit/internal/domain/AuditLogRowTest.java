@@ -17,6 +17,8 @@ class AuditLogRowTest {
         row.setAction("PUBLISH");
         row.setTargetType("RULE");
         row.setTargetId("rule-99");
+        row.setBeforeSnapshot("{}");
+        row.setAfterSnapshot("{\"code\":\"rule-a\"}");
         row.setOperatedAt(now);
 
         assertThat(row.getId()).isEqualTo(3L);
@@ -26,6 +28,8 @@ class AuditLogRowTest {
         assertThat(row.getAction()).isEqualTo("PUBLISH");
         assertThat(row.getTargetType()).isEqualTo("RULE");
         assertThat(row.getTargetId()).isEqualTo("rule-99");
+        assertThat(row.getBeforeSnapshot()).isEqualTo("{}");
+        assertThat(row.getAfterSnapshot()).isEqualTo("{\"code\":\"rule-a\"}");
         assertThat(row.getOperatedAt()).isEqualTo(now);
     }
 }
