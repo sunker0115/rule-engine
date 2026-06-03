@@ -24,4 +24,27 @@ class SendAlertHandlerTest {
         assertThat(result.actionId()).isEqualTo("action-2");
         assertThat(result.actionType()).isEqualTo("SEND_ALERT");
     }
+
+    @Test
+    void dryRun_returnsSuccess_withCorrectActionIdAndType() {
+        ActionContext ctx = new ActionContext(
+                "action-2", "SEND_ALERT", Map.of(), null, null, null);
+
+        ActionResult result = handler.dryRun(ctx);
+
+        assertThat(result.status()).isEqualTo(ActionResult.ActionStatus.SUCCESS);
+        assertThat(result.actionId()).isEqualTo("action-2");
+        assertThat(result.actionType()).isEqualTo("SEND_ALERT");
+    }
+
+    @Test
+    void dryRun_doesNotReturnSkipped() {
+        ActionContext ctx = new ActionContext(
+                "action-2", "SEND_ALERT", Map.of(), null, null, null);
+
+        ActionResult result = handler.dryRun(ctx);
+
+        assertThat(result.status()).isNotEqualTo(ActionResult.ActionStatus.SKIPPED);
+        assertThat(result.errorCode()).isNull();
+    }
 }
