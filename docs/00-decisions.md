@@ -1045,18 +1045,16 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 |------|------|------|
 | ☐ A. 坚持 ArchUnit 1.3.x + Java 25 字节码 | 不修改版本 | ArchUnit 1.3 内置 ASM 9.6，Java 25 字节码（major 69）超出其解析上限，测试启动即崩溃 |
 | ☐ B. 升级 ArchUnit 1.4.0 + maven.compiler.release=21 | 小版本升级 + 降编译目标 | 解决解析问题；rule-kernel 编译为 Java 21 字节码，与其余模块（Java 25）不一致 |
-| ☐ C. 升级 ArchUnit 1.5+ | 较大版本升级 | ASM 9.8 支持 Java 25 字节码；但 1.5 与 Spring Boot 4 / Java 25 的实际兼容性尚未验证 |
+| ✅ C. 升级 ArchUnit 1.4.2 | 补丁升级 | 1.4.2 内置 ASM 9.8，原生支持 Java 25 字节码；无需 maven.compiler.release override，1.5 尚未发布 |
 
-**决定**：✅ B（临时方案）— 升级 ArchUnit 1.3.0 → 1.4.0，rule-kernel 加 `maven.compiler.release=21`
+**决定**：✅ C — 升级 ArchUnit 1.4.0 → 1.4.2，移除 rule-kernel 的 `maven.compiler.release=21` override
 
-**v1 落地范围**：
-- `rule-kernel/pom.xml` 新增 `<maven.compiler.release>21</maven.compiler.release>`，仅影响 rule-kernel
-- rule-kernel 所有主代码仅使用 Java 21 稳定特性（sealed interface、switch 模式匹配均在 Java 21 正式发布）
-- 其余 7 个模块维持 Java 25 编译目标
+**落地范围**：
+- `pom.xml` `archunit.version` 从 1.4.0 改为 1.4.2
+- `rule-kernel/pom.xml` 删除 `<maven.compiler.release>21</maven.compiler.release>` 及相关注释
+- 全模块统一使用 Java 25 编译目标，ArchUnit 日志确认 `Detected Java version 25.0.3`，150 项测试全部通过
 
-**已知妥协**：rule-kernel 字节码版本与其他模块不一致；日后升级到 ArchUnit 1.5+（ASM 9.8 支持 Java 25）后应删除 `maven.compiler.release` override。
-
-**派生约束**：需在升级 ArchUnit 至 1.5+ 后验证兼容性，届时删除 rule-kernel 的 `maven.compiler.release=21`。
+**变更原因**：实测 ArchUnit 1.4.2（而非预期的 1.5+）已内置 ASM 9.8，支持 Java 25 字节码；B 方案的模块字节码不一致问题因此得到完全消除。
 
 ---
 
