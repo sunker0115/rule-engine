@@ -123,4 +123,12 @@ class DryRunTraceWriterDbImplTest {
 
         verifyNoInteractions(nodeTraceMapper);
     }
+
+    @Test
+    void destroy_doesNotThrow_whenConsumerRunning() throws Exception {
+        DryRunTraceWriterDbImpl writer = new DryRunTraceWriterDbImpl(100, 10, 50,
+                mock(DryRunNodeTraceMapper.class));
+        writer.afterPropertiesSet();
+        assertDoesNotThrow(writer::destroy);
+    }
 }

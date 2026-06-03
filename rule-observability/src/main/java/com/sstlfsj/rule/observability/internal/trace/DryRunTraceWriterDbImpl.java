@@ -110,6 +110,7 @@ public class DryRunTraceWriterDbImpl implements DryRunTraceWriter, InitializingB
             entity.setValueSource(trace.valueSource());
             entity.setRuleVersionId(trace.ruleVersionId());
             entity.setEvaluatedAt(LocalDateTime.now());
+            // params 字段暂不填充：NodeTrace 未携带 ConditionNode 原始 params，v1.5 扩展模型时补全
             out.add(entity);
 
             // 递归处理子节点
