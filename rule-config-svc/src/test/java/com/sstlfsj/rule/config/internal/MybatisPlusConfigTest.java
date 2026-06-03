@@ -14,10 +14,9 @@ class MybatisPlusConfigTest {
     }
 
     @Test
-    void mybatisPlusInterceptor_interceptorListIsEmpty() {
-        // 3.5.16 移除了 PaginationInnerInterceptor，分页由框架内置处理
+    void mybatisPlusInterceptor_hasPaginationPlugin() {
         MybatisPlusConfig config = new MybatisPlusConfig();
         MybatisPlusInterceptor interceptor = config.mybatisPlusInterceptor();
-        assertThat(interceptor.getInterceptors()).isEmpty();
+        assertThat(interceptor.getInterceptors()).hasSize(1);
     }
 }
