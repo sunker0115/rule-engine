@@ -103,6 +103,7 @@ class AuditServiceImplTest {
         assertThat(entry.resourceId()).isEqualTo(42L);
         assertThat(entry.action()).isEqualTo("CREATE");
         assertThat(entry.actorId()).isEqualTo("user-1");
+        assertThat(entry.occurredAt()).isEqualTo(java.time.Instant.parse("2026-06-01T09:00:00Z"));
     }
 
     @Test

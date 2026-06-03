@@ -100,4 +100,13 @@ class AuditServiceTest {
         assertThat(entry.errorCode()).isEqualTo("EVAL_ERROR");
         assertThat(entry.conditionType()).isNull();
     }
+
+    @Test
+    void traceNodeEntry_nodePath字典序语义_多位节点编号() {
+        // "0.1.10" 字典序排在 "0.1.2" 之前，验证 record 存储格式与排序说明一致
+        TraceNodeEntry a = new TraceNodeEntry("0.1.10", "CONDITION", null, null, null, null, null, null);
+        TraceNodeEntry b = new TraceNodeEntry("0.1.2", "CONDITION", null, null, null, null, null, null);
+
+        assertThat(a.nodePath().compareTo(b.nodePath())).isLessThan(0);
+    }
 }

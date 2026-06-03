@@ -72,7 +72,11 @@ public interface AuditService {
     /**
      * 查询指定评估会话的节点 trace 列表（扁平，按 node_path 字典序排列）。
      *
-     * @param tenantId  租户标识
+     * <p>注意：node_path 格式为点分数字字符串（如 "0.1.10"），VARCHAR 字典序在节点数
+     * 超过 9 时与数字顺序不同（"0.1.10" 排在 "0.1.2" 之前）。v1 返回扁平列表，
+     * 树重建留 §2.21 演进处理。</p>
+     *
+     * @param tenantId  租户标识（需为数字字符串，非数字将抛 NumberFormatException）
      * @param sessionId 评估会话 ID
      * @return 节点 trace 列表（无分页，单次 session 通常 < 200 行）
      */
