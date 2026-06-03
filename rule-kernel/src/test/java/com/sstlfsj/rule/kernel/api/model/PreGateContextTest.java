@@ -9,25 +9,40 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PreGateContextTest {
 
-    private static RuleEvent event() {
-        return new RuleEvent("t1", "s1", "LOGIN", "u1", "e1", Instant.EPOCH, Map.of(), null);
-    }
-
     @Test
-    void fields_areRetained() {
-        RuleEvent ev = event();
-        PreGateContext ctx = new PreGateContext("t1", "scene1", "u1", ev);
+    void constructor_setsAllFields() {
+        RuleEvent event = new RuleEvent("t1", "scene1", "EVENT_A", "u1",
+                "eid1", Instant.now(), Map.of(), Map.of());
+        PreGateContext ctx = new PreGateContext(
+                "t1", "scene1", "u1", event, 42L,
+                Map.of("percentage", 50));
+
         assertEquals("t1", ctx.tenantId());
         assertEquals("scene1", ctx.sceneCode());
         assertEquals("u1", ctx.subjectId());
-        assertSame(ev, ctx.event());
+        assertEquals(event, ctx.event());
+        assertEquals(42L, ctx.ruleVersionId());
+        assertEquals(50, ctx.gateParams().get("percentage"));
     }
 
     @Test
-    void recordEquality_byValue() {
-        RuleEvent ev = event();
-        PreGateContext a = new PreGateContext("t1", "s1", "u1", ev);
-        PreGateContext b = new PreGateContext("t1", "s1", "u1", ev);
-        assertEquals(a, b);
+    void nullGateParams_defaultsToEmptyMap() {
+        RuleEvent event = new RuleEvent("t1", "scene1", "EVENT_A", "u1",
+                "eid1", Instant.now(), Map.of(), Map.of());
+        PreGateContext ctx = new PreGateContext("t1", "scene1", "u1", event, 1L, null);
+
+        assertNotNull(ctx.gateParams());
+        assertTrue(ctx.gateParams().isEmpty());
+    }
+
+    @Test
+    void gateParams_isImmutable() {
+        RuleEvent event = new RuleEvent("t1", "scene1", "EVENT_A", "u1",
+                "eid1", Instant.now(), Map.of(), Map.of());
+        PreGateContext ctx = new PreGateContext("t1", "scene1", "u1", event, 1L,
+                Map.of("percentage", 30));
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> ctx.gateParams().put("k", "v"));
     }
 }

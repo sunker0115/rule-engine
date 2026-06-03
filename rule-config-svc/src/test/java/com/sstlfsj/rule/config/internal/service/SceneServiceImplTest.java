@@ -2,7 +2,7 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.event.SceneChangedEvent;
+import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import org.junit.jupiter.api.Test;

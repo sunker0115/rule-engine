@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.config.internal.event;
+package com.sstlfsj.rule.config.api.event;
 
 import org.junit.jupiter.api.Test;
 

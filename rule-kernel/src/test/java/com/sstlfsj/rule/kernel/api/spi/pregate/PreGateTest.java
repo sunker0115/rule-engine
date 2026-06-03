@@ -15,7 +15,7 @@ class PreGateTest {
     private static PreGateContext buildCtx(String gateType) {
         RuleEvent event = new RuleEvent("t1", "SCENE1", "PAYMENT",
                 "u1", "e1", Instant.now(), Map.of(), Map.of());
-        return new PreGateContext("t1", "SCENE1", "u1", event);
+        return new PreGateContext("t1", "SCENE1", "u1", event, null, null);
     }
 
     private static final PreGate PASS_GATE = new PreGate() {
