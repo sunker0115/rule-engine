@@ -28,17 +28,16 @@ public class RolloutPreGate implements PreGate {
             // 无配置时 fail-open
             return PreGateResult.pass();
         }
-        int percentage = ((Number) percentageParam).intValue();
+        int percentage = Integer.parseInt(percentageParam.toString());
         if (percentage >= 100) return PreGateResult.pass();
         if (percentage <= 0)   return PreGateResult.blocked("ROLLOUT");
 
         // murmur3_32(subjectId:ruleVersionId) 确保不同规则版本独立分桶
+        // 用 & 0x7fffffff 屏蔽符号位，避免 Integer.MIN_VALUE 取绝对值仍为负数的 JVM 陷阱
         String hashInput = ctx.subjectId() + ":" + ctx.ruleVersionId();
-        int bucket = Math.abs(
-                Hashing.murmur3_32_fixed()
-                        .hashString(hashInput, StandardCharsets.UTF_8)
-                        .asInt()
-        ) % 100;
+        int bucket = (Hashing.murmur3_32_fixed()
+                .hashString(hashInput, StandardCharsets.UTF_8)
+                .asInt() & 0x7fffffff) % 100;
 
         return bucket < percentage ? PreGateResult.pass() : PreGateResult.blocked("ROLLOUT");
     }

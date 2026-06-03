@@ -75,4 +75,29 @@ class RolloutPreGateTest {
         PreGateContext ctx = new PreGateContext("1", "scene", "u1", event, 1L, Map.of());
         assertTrue(gate.evaluate(ctx).passed(), "缺少 percentage 配置时 fail-open");
     }
+
+    @Test
+    void stringPercentage_parsedCorrectly() {
+        // percentage 以 String 类型传入（从 JSON/YAML 反序列化场景），不应抛出异常
+        RuleEvent event = new RuleEvent("1", "scene", "E", "u1",
+                "eid", Instant.now(), Map.of(), Map.of());
+        PreGateContext ctx100 = new PreGateContext("1", "scene", "u1", event, 1L,
+                Map.of("percentage", "100"));
+        PreGateContext ctx0 = new PreGateContext("1", "scene", "u1", event, 1L,
+                Map.of("percentage", "0"));
+        assertTrue(gate.evaluate(ctx100).passed(), "字符串 '100' 应解析为全量放行");
+        assertFalse(gate.evaluate(ctx0).passed(), "字符串 '0' 应解析为全量拦截");
+    }
+
+    @Test
+    void bucketAlwaysInRange() {
+        // & 0x7fffffff 保证桶值在 [0, 99]，即使哈希值为 Integer.MIN_VALUE 也不越界
+        for (int i = 0; i < 200; i++) {
+            PreGateContext c = ctx("u" + i, (long) i, 50);
+            PreGateResult r = gate.evaluate(c);
+            // 结果只可能是 pass 或 blocked("ROLLOUT")，不可能抛异常
+            assertTrue(r.passed() || "ROLLOUT".equals(r.blockedBy()),
+                    "桶值必须在合法范围，subject=u" + i);
+        }
+    }
 }
