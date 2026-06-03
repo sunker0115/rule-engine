@@ -234,6 +234,7 @@
   - `RuleController` 实现 `GET /api/v1/rules?sceneCode=&page=&size=`，返回分页结果；
   - 响应体复用 `ApiResponse<Page<RuleVersionVO>>` 结构，无 DDL 变更。
 - **迁移成本**：低（纯查询，不涉及写路径，无状态变更）。
+- **已实装（v2）**：`RuleListItemVO`（`rule-config-svc` api 包）+ `MybatisPlusConfig`（`PaginationInnerInterceptor` + `@ConditionalOnMissingBean`）+ `ConfigService.listRules` + `ConfigServiceImpl` 分页查询实现（先按 sceneCode 解析 sceneId，再 LambdaQueryWrapper 分页查 `rule_definition`）+ `RuleController GET /api/v1/rules` 端点，返回 `ApiResponse<Page<RuleListItemVO>>`；无 DDL 变更。
 
 ### 2.19 审计查询 API（来源 10-api-contract.md §6.x）
 
