@@ -72,7 +72,7 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
             Long sessionId = parseLong(entry.sessionId());
             Long tenantId = parseLong(entry.tenantId());
             List<NodeTraceEntity> entities = new ArrayList<>();
-            flattenToList(entry.traces(), sessionId, tenantId, "", 0, entities);
+            flattenToList(entry.traces(), sessionId, tenantId, "", entities);
             if (!entities.isEmpty()) {
                 nodeTraceMapper.insertBatch(entities);
             }
@@ -90,13 +90,13 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
      * @param out         收集结果的输出列表
      */
     private void flattenToList(List<NodeTrace> traces, Long sessionId, Long tenantId,
-                                String pathPrefix, int indexOffset, List<NodeTraceEntity> out) {
+                                String pathPrefix, List<NodeTraceEntity> out) {
         for (int i = 0; i < traces.size(); i++) {
             NodeTrace trace = traces.get(i);
             // 根节点 pathPrefix 为空时直接用下标，子节点拼接父路径
             String nodePath = pathPrefix.isEmpty()
-                    ? String.valueOf(i + indexOffset)
-                    : pathPrefix + "." + (i + indexOffset);
+                    ? String.valueOf(i)
+                    : pathPrefix + "." + i;
 
             NodeTraceEntity entity = new NodeTraceEntity();
             entity.setEvaluationSessionId(sessionId);
@@ -114,7 +114,7 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
 
             // 递归处理子节点
             if (trace.children() != null && !trace.children().isEmpty()) {
-                flattenToList(trace.children(), sessionId, tenantId, nodePath, 0, out);
+                flattenToList(trace.children(), sessionId, tenantId, nodePath, out);
             }
         }
     }

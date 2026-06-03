@@ -77,6 +77,25 @@ class TraceWriterDbImplTest {
     }
 
     @Test
+    void flushBatch_nodePath_rootUsesIndex_childAppendsDot() throws Exception {
+        NodeTraceMapper mapper = mock(NodeTraceMapper.class);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper);
+        w.afterPropertiesSet();
+
+        // root[0] → "0"；root[0].child[0] → "0.0"
+        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "DB", null, null);
+        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, List.of(child));
+        w.write("1", "42", List.of(root));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list -> {
+            if (list.size() != 2) return false;
+            return "0".equals(list.get(0).getNodePath())
+                    && "0.0".equals(list.get(1).getNodePath());
+        }));
+    }
+
+    @Test
     void flushBatch_callsInsertBatch_notInsert() throws Exception {
         NodeTraceMapper mapper = mock(NodeTraceMapper.class);
         // flushIntervalMs 超大，手动触发 destroy() 来触发最后一次 flush
