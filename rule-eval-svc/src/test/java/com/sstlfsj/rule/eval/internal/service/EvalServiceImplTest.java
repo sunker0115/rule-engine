@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.service;
 
+import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
@@ -34,6 +35,7 @@ class EvalServiceImplTest {
     @Mock EvalSessionWriter sessionWriter;
     @Mock TraceWriter traceWriter;
     @Mock DryRunTraceWriter dryRunTraceWriter;
+    @Mock ActionDispatchService actionDispatchService;
 
     // EvalServiceImpl 构造器接受 List<PreGate>，Mockito @InjectMocks 会注入空列表
     @InjectMocks EvalServiceImpl impl;
@@ -175,5 +177,47 @@ class EvalServiceImplTest {
 
         verify(dryRunTraceWriter).write(anyString(), anyString(), anyList());
         verifyNoInteractions(traceWriter);
+    }
+
+    @Test
+    void evaluate_ruleHit_dispatchesAction() {
+        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
+        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.hit());
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+
+        impl.evaluate(event());
+
+        verify(actionDispatchService).dispatch(anyLong(), anyLong(), anyString(), anyString(), anyList());
+    }
+
+    @Test
+    void evaluate_ruleMiss_doesNotDispatchAction() {
+        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
+        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.miss());
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+
+        impl.evaluate(event());
+
+        verifyNoInteractions(actionDispatchService);
+    }
+
+    @Test
+    void dryRun_doesNotDispatchAction() {
+        RuleVersionSnapshot snap = snapshot(42L, "PASS");
+        when(snapshotLoader.loadById(42L)).thenReturn(snap);
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.hit());
+        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
+
+        impl.dryRun(event(), 42L);
+
+        verifyNoInteractions(actionDispatchService);
     }
 }

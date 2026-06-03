@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
+import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
 import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
@@ -34,6 +35,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     private final EvalSessionWriter sessionWriter;
     private final TraceWriter traceWriter;
     private final DryRunTraceWriter dryRunTraceWriter;
+    private final ActionDispatchService actionDispatchService;
     private final EvalActionDispatcher dispatcher;
 
     EvalServiceImpl(SceneRuleIndex index,
@@ -43,7 +45,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                     RuleVersionExecutor executor,
                     EvalSessionWriter sessionWriter,
                     TraceWriter traceWriter,
-                    DryRunTraceWriter dryRunTraceWriter) {
+                    DryRunTraceWriter dryRunTraceWriter,
+                    ActionDispatchService actionDispatchService) {
         this.index = index;
         this.snapshotLoader = snapshotLoader;
         this.preGateMap = preGates == null ? Map.of()
@@ -53,6 +56,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         this.sessionWriter = sessionWriter;
         this.traceWriter = traceWriter;
         this.dryRunTraceWriter = dryRunTraceWriter;
+        this.actionDispatchService = actionDispatchService;
         // 构造器末尾创建 dispatcher，不调用 start
         this.dispatcher = new EvalActionDispatcher(10000, this::evaluate);
     }
@@ -168,7 +172,22 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             traceWriter.write(event.tenantId(), sessionId.toString(), allTraces);
         }
 
+        // ⑧ 非 dry-run 且有命中 Decision 时派发 Action（dry-run 不派发，见设计文档 D7）
+        if (!isDryRun && !hitDecisions.isEmpty()) {
+            actionDispatchService.dispatch(sessionId, parseTenantId(event.tenantId()),
+                    event.eventId(), event.sceneCode(), hitDecisions);
+        }
+
         return result;
+    }
+
+    /** 将字符串租户 ID 转换为 Long，转换失败时返回 null。 */
+    private static Long parseTenantId(String tenantId) {
+        try {
+            return Long.parseLong(tenantId);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** 确定本次评估的候选快照列表。dry-run 指定 ruleVersionId 时从 DB 直接加载。 */
