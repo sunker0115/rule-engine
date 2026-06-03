@@ -1,11 +1,16 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,6 +26,7 @@ class ConfigServiceImpl implements ConfigService {
     private final PublishService publishService;
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final AuditLogMapper auditLogMapper;
+    private final SceneMapper sceneMapper;
 
     @Override
     public RuleVersionSnapshot publish(String tenantId, Long ruleDefinitionId, String actorId) {
@@ -46,5 +52,43 @@ class ConfigServiceImpl implements ConfigService {
         log.setTargetId(ruleDefinitionId.toString());
         log.setOperatedAt(LocalDateTime.now());
         auditLogMapper.insert(log);
+    }
+
+    @Override
+    public Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status, int page, int size) {
+        // 按 sceneCode 解析 sceneId（未传时不过滤）
+        Long sceneId = null;
+        if (sceneCode != null && !sceneCode.isBlank()) {
+            SceneDef scene = sceneMapper.selectOne(
+                    new LambdaQueryWrapper<SceneDef>()
+                            .eq(SceneDef::getTenantId, Long.valueOf(tenantId))
+                            .eq(SceneDef::getCode, sceneCode)
+            );
+            if (scene == null) {
+                return new Page<>(page, size);
+            }
+            sceneId = scene.getId();
+        }
+
+        LambdaQueryWrapper<RuleDefinition> wrapper = new LambdaQueryWrapper<RuleDefinition>()
+                .eq(RuleDefinition::getTenantId, Long.valueOf(tenantId));
+        if (sceneId != null) {
+            wrapper.eq(RuleDefinition::getSceneId, sceneId);
+        }
+        if (status != null && !status.isBlank()) {
+            wrapper.eq(RuleDefinition::getStatus, status);
+        }
+        wrapper.orderByDesc(RuleDefinition::getId);
+
+        Page<RuleDefinition> rdPage = ruleDefinitionMapper.selectPage(new Page<>(page, size), wrapper);
+
+        Page<RuleListItemVO> voPage = new Page<>(rdPage.getCurrent(), rdPage.getSize(), rdPage.getTotal());
+        voPage.setRecords(rdPage.getRecords().stream()
+                .map(rd -> new RuleListItemVO(
+                        rd.getId(), rd.getCode(), rd.getName(),
+                        rd.getStatus(), rd.getCurrentVersion(), rd.getPublishedAt()
+                ))
+                .toList());
+        return voPage;
     }
 }

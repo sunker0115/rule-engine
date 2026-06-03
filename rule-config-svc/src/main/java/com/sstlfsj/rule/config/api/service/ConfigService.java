@@ -1,8 +1,10 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 
-/** 规则定义生命周期管理：发布与禁用。 */
+/** 规则定义生命周期管理：发布、禁用、查询。 */
 public interface ConfigService {
 
     /**
@@ -23,4 +25,16 @@ public interface ConfigService {
      * @param actorId          触发禁用的操作人 ID
      */
     void disable(String tenantId, Long ruleDefinitionId, String actorId);
+
+    /**
+     * 查询规则列表，支持按 sceneCode / status 过滤，结果分页返回。
+     *
+     * @param tenantId  租户 ID
+     * @param sceneCode Scene 编码（null 或空字符串时不过滤）
+     * @param status    规则状态过滤（null 时不过滤；DRAFT / PUBLISHED / DISABLED）
+     * @param page      页码（从 1 开始）
+     * @param size      每页条数
+     * @return 分页规则列表
+     */
+    Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status, int page, int size);
 }

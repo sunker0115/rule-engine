@@ -2,9 +2,11 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ class ConfigServiceImplTest {
     @Mock PublishService publishService;
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
     @Mock AuditLogMapper auditLogMapper;
+    @Mock SceneMapper sceneMapper;
     @InjectMocks ConfigServiceImpl configService;
 
     @Test
@@ -59,5 +62,64 @@ class ConfigServiceImplTest {
         assertThat(rdCaptor.getValue().getStatus()).isEqualTo("DISABLED");
 
         verify(auditLogMapper).insert((AuditLog) any());
+    }
+
+    @Test
+    void listRules_withSceneCodeAndStatus_filtersAndReturnsPage() {
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setTenantId(1L);
+        scene.setCode("risk.transfer");
+        when(sceneMapper.selectOne(any())).thenReturn(scene);
+
+        RuleDefinition rd = new RuleDefinition();
+        rd.setId(10L);
+        rd.setCode("rule.a");
+        rd.setName("规则A");
+        rd.setStatus("PUBLISHED");
+        rd.setCurrentVersion(42L);
+        rd.setPublishedAt(java.time.LocalDateTime.of(2026, 6, 1, 0, 0));
+
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> mockPage =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 1);
+        mockPage.setRecords(java.util.List.of(rd));
+        when(ruleDefinitionMapper.selectPage(any(), any())).thenReturn(mockPage);
+
+        var result = configService.listRules("1", "risk.transfer", "PUBLISHED", 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(1);
+        assertThat(result.getRecords()).hasSize(1);
+        var item = result.getRecords().get(0);
+        assertThat(item.ruleDefinitionId()).isEqualTo(10L);
+        assertThat(item.code()).isEqualTo("rule.a");
+        assertThat(item.status()).isEqualTo("PUBLISHED");
+        assertThat(item.currentVersion()).isEqualTo(42L);
+        verify(sceneMapper).selectOne(any());
+        verify(ruleDefinitionMapper).selectPage(any(), any());
+    }
+
+    @Test
+    void listRules_sceneNotFound_returnsEmptyPage() {
+        when(sceneMapper.selectOne(any())).thenReturn(null);
+
+        var result = configService.listRules("1", "nonexistent.scene", null, 1, 20);
+
+        assertThat(result.getRecords()).isEmpty();
+        assertThat(result.getTotal()).isEqualTo(0);
+        verifyNoInteractions(ruleDefinitionMapper);
+    }
+
+    @Test
+    void listRules_noSceneCodeFilter_queriesAllRulesForTenant() {
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> emptyPage =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
+        emptyPage.setRecords(java.util.List.of());
+        when(ruleDefinitionMapper.selectPage(any(), any())).thenReturn(emptyPage);
+
+        var result = configService.listRules("1", null, null, 1, 20);
+
+        assertThat(result.getRecords()).isEmpty();
+        verify(ruleDefinitionMapper).selectPage(any(), any());
+        verifyNoInteractions(sceneMapper);
     }
 }
