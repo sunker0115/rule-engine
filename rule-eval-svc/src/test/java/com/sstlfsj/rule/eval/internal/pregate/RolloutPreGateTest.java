@@ -100,4 +100,48 @@ class RolloutPreGateTest {
                     "桶值必须在合法范围，subject=u" + i);
         }
     }
+
+    @Test
+    void experimentId_presentAndSame_sameBucketForBothVersions() {
+        // 两条规则 ruleVersionId 不同但 experimentId 相同 → 同一 subject 分桶相同（互斥保证）
+        RuleEvent event = new RuleEvent("1", "scene", "E", "userX",
+                "eid", Instant.now(), Map.of(), Map.of());
+        PreGateContext ctx1 = new PreGateContext("1", "scene", "userX", event,
+                1L, Map.of("percentage", 50, "experimentId", "exp-001"));
+        PreGateContext ctx2 = new PreGateContext("1", "scene", "userX", event,
+                2L, Map.of("percentage", 50, "experimentId", "exp-001"));
+
+        // 两个 ruleVersionId 下，相同 experimentId 使结果一致
+        assertEquals(gate.evaluate(ctx1).passed(), gate.evaluate(ctx2).passed(),
+                "同 experimentId 下同一 subject 在不同规则版本的分桶应相同");
+    }
+
+    @Test
+    void experimentId_differentValues_differentBuckets() {
+        // 不同 experimentId → 分桶独立（不同实验互不影响）
+        // 统计 100 个 subject，至少 1 个在两个 experimentId 下结果不同
+        boolean anyDifference = false;
+        for (int i = 0; i < 100; i++) {
+            RuleEvent event = new RuleEvent("1", "scene", "E", "user" + i,
+                    "eid", Instant.now(), Map.of(), Map.of());
+            PreGateContext ctxA = new PreGateContext("1", "scene", "user" + i, event,
+                    1L, Map.of("percentage", 50, "experimentId", "exp-A"));
+            PreGateContext ctxB = new PreGateContext("1", "scene", "user" + i, event,
+                    1L, Map.of("percentage", 50, "experimentId", "exp-B"));
+            if (gate.evaluate(ctxA).passed() != gate.evaluate(ctxB).passed()) {
+                anyDifference = true;
+                break;
+            }
+        }
+        assertTrue(anyDifference, "不同 experimentId 应产生不同分桶");
+    }
+
+    @Test
+    void experimentId_absent_behaviorUnchanged() {
+        // 无 experimentId 时与 v1 行为一致：percentage=100 全量通过
+        for (int i = 0; i < 20; i++) {
+            PreGateResult result = gate.evaluate(ctx("user" + i, (long) i, 100));
+            assertTrue(result.passed(), "无 experimentId + percentage=100 应全量放行");
+        }
+    }
 }
