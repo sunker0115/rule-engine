@@ -14,6 +14,7 @@ public interface DryRunNodeTraceMapper extends BaseMapper<DryRunNodeTraceEntity>
     /**
      * 批量插入 dry_run_node_trace 行，生成单条多值 INSERT 语句。
      * 列表为空时不执行（由调用方保证）。
+     * 与 NodeTraceMapper 相比额外持久化 params 字段，供 dry-run 回放调试使用。
      */
     @Insert("""
             <script>

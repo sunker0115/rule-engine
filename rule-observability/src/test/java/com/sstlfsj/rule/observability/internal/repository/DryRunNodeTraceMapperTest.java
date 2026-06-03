@@ -11,6 +11,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/** DryRunNodeTraceMapper 接口定义验证（注解 + 继承关系 + insertBatch 方法）。 */
 class DryRunNodeTraceMapperTest {
 
     @Test
