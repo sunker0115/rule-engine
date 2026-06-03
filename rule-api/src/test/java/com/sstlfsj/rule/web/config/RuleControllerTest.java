@@ -63,4 +63,12 @@ class RuleControllerTest {
                             """))
                 .andExpect(status().isNotImplemented());
     }
+
+    @Test
+    void createDraft_withoutBody_stillReturns501() throws Exception {
+        // 移除 @RequestBody 后，无请求体也应直接返回 501，不触发 400
+        mockMvc.perform(post("/api/v1/rules")
+                        .header("X-Actor-Id", "user1"))
+                .andExpect(status().isNotImplemented());
+    }
 }

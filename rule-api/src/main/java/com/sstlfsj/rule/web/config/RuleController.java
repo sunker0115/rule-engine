@@ -2,8 +2,6 @@ package com.sstlfsj.rule.web.config;
 
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.web.common.ApiResponse;
-import com.sstlfsj.rule.web.config.dto.CreateRuleRequest;
-import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,14 +19,12 @@ public class RuleController {
     /**
      * POST /api/v1/rules — 创建规则草稿（v1 占位，v1.5 实现）。
      *
-     * @param req     请求体
      * @param actorId 操作人
      * @return 501 Not Implemented
      */
     @PostMapping
     @ResponseStatus(HttpStatus.NOT_IMPLEMENTED)
     public ApiResponse<Void> createDraft(
-            @Valid @RequestBody CreateRuleRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
         return ApiResponse.error("NOT_IMPLEMENTED", "规则草稿创建接口将在 v1.5 实现");
     }
