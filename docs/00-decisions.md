@@ -115,7 +115,7 @@
 
 **你的决定**：A
 
-**v1 已知缺陷（待 v1.5 修）**：当前 hash 种子为 `(subjectId, ruleVersionId)`，A/B 实验场景下无法保证互斥。演进方向：`rollout` 新增可选字段 `experimentId`，同实验规则共享 hash 种子。详见 [`08-evolution.md §2.16`](./08-evolution.md)。
+**v1.5 已修**：`RolloutPreGate` 支持 `gateParams.experimentId` 可选字段。存在时以 `hash(subjectId:experimentId)` 作种子，同实验内多规则版本共享分桶（A/B 互斥）；不存在时行为与 v1 完全一致（向后兼容，无 DDL 变更）。
 
 ---
 
@@ -139,7 +139,7 @@
 - **v1 未实装 handler 的兜底契约**：调用 `dryRun` 但 handler 未补齐时，由 Dispatcher 短路返回 `ActionResult { status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED }`——不抛异常、不阻塞试算面板渲染；
 - v1.5 全量补齐后该 `errorCode` 不再产生（完整 `ActionResult.errorCode` 枚举见 [`01-concepts.md`](./01-concepts.md) §3.7）。
 
-**v1 实装状态（已完成）**：`DryRunTraceWriter` SPI（`rule-kernel`）+ `DryRunTraceWriterDbImpl`（`rule-observability`，异步批写 `dry_run_node_trace` 表）+ `EvalServiceImpl` 按 `isDryRun` 路由到独立 SPI；stub `ActionHandler`（`BlockTransactionHandler` / `SendAlertHandler`）+ `ActionDispatchService` 同步派发并落库 `action_execution`（干跑不派发）。详见 [`docs/superpowers/plans/2026-06-03-eval-chain-completion.md`](./superpowers/plans/2026-06-03-eval-chain-completion.md)。
+**v1 实装状态（已完成）**：`DryRunTraceWriter` SPI（`rule-kernel`）+ `DryRunTraceWriterDbImpl`（`rule-observability`，异步批写 `dry_run_node_trace` 表）+ `EvalServiceImpl` 按 `isDryRun` 路由到独立 SPI；stub `ActionHandler`（`BlockTransactionHandler` / `SendAlertHandler`）+ `ActionDispatchService` 同步派发并落库 `action_execution`（干跑不派发）。详见 [`docs/superpowers/plans/2026-06-03-eval-chain-completion.md`](./superpowers/plans/2026-06-03-eval-chain-completion.md)。v1.5 已实装：`BlockTransactionHandler.dryRun()` + `SendAlertHandler.dryRun()` 均 override 返回 `ActionResult.success()`；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。
 
 ---
 
