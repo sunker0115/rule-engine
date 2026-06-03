@@ -99,7 +99,10 @@ class ConfigServiceImpl implements ConfigService {
             String conditionAstJson, String decisionBindingsJson,
             String preGatesJson, String triggerEventTypesJson,
             String actorId) {
-        // Task 2 实装：委托 PublishService 完成草稿创建
-        throw new UnsupportedOperationException("createDraft 尚未实装，将在 Task 2 完成");
+        return publishService.createDraft(Long.valueOf(tenantId), sceneCode,
+                code, name,
+                conditionAstJson, decisionBindingsJson,
+                preGatesJson, triggerEventTypesJson,
+                actorId);
     }
 }

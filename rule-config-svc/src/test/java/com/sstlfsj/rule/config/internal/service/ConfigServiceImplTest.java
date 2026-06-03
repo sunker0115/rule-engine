@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -124,10 +125,16 @@ class ConfigServiceImplTest {
     }
 
     @Test
-    void createDraft_throwsUnsupportedUntilTask2() {
-        // Task 2 实装前，调用应抛出 UnsupportedOperationException
-        org.junit.jupiter.api.Assertions.assertThrows(UnsupportedOperationException.class,
-                () -> configService.createDraft("1", "SCENE_A", "RULE_001", "规则名",
-                        null, null, null, null, "actor"));
+    void createDraft_delegatesToPublishService() {
+        DraftCreatedResult expected = new DraftCreatedResult(1L, 2L, 1L, "DRAFT");
+        when(publishService.createDraft(1L, "risk.transfer", "rule.a", "规则A",
+                "{}", "[]", "[]", "[]", "actor1")).thenReturn(expected);
+
+        DraftCreatedResult result = configService.createDraft("1", "risk.transfer",
+                "rule.a", "规则A", "{}", "[]", "[]", "[]", "actor1");
+
+        assertThat(result.ruleDefinitionId()).isEqualTo(1L);
+        verify(publishService).createDraft(1L, "risk.transfer", "rule.a", "规则A",
+                "{}", "[]", "[]", "[]", "actor1");
     }
 }

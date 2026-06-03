@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
@@ -18,6 +19,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -137,5 +139,56 @@ class PublishServiceTest {
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("没有找到草稿版本");
+    }
+
+    @Test
+    void createDraft_insertsRuleDefinitionAndVersion() {
+        SceneDef draftScene = new SceneDef();
+        draftScene.setId(5L);
+        draftScene.setTenantId(1L);
+        draftScene.setCode("risk.transfer");
+        when(sceneMapper.selectOne(any())).thenReturn(draftScene);
+
+        doAnswer(inv -> {
+            RuleDefinition rd = inv.getArgument(0);
+            rd.setId(10L);
+            return 1;
+        }).when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
+
+        doAnswer(inv -> {
+            RuleVersion rv = inv.getArgument(0);
+            rv.setId(20L);
+            return 1;
+        }).when(ruleVersionMapper).insert(any(RuleVersion.class));
+
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        DraftCreatedResult result = publishService.createDraft(
+                1L, "risk.transfer", "rule.test", "测试规则",
+                "{\"type\":\"AndNode\"}", "[]", "[]", "[]", "actor1");
+
+        assertThat(result.ruleDefinitionId()).isEqualTo(10L);
+        assertThat(result.ruleVersionId()).isEqualTo(20L);
+        assertThat(result.version()).isEqualTo(1L);
+        assertThat(result.status()).isEqualTo("DRAFT");
+
+        ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
+        verify(ruleDefinitionMapper).insert(rdCaptor.capture());
+        assertThat(rdCaptor.getValue().getStatus()).isEqualTo("DRAFT");
+        assertThat(rdCaptor.getValue().getCode()).isEqualTo("rule.test");
+
+        ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(rvCaptor.capture());
+        assertThat(rvCaptor.getValue().getVersion()).isEqualTo(1L);
+        assertThat(rvCaptor.getValue().getStatus()).isEqualTo("DRAFT");
+    }
+
+    @Test
+    void createDraft_sceneNotFound_throwsIllegalArgument() {
+        when(sceneMapper.selectOne(any())).thenReturn(null);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                publishService.createDraft(1L, "nonexistent", "rule.test", "测试",
+                        "{}", "[]", "[]", "[]", "actor1"));
     }
 }
