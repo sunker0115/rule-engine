@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 class TraceWriterDbImplTest {
@@ -76,17 +77,19 @@ class TraceWriterDbImplTest {
     }
 
     @Test
-    void flushBatch_callsMapperInsertForEachTrace() throws Exception {
+    void flushBatch_callsInsertBatch_notInsert() throws Exception {
         NodeTraceMapper mapper = mock(NodeTraceMapper.class);
-        when(mapper.insert(any(NodeTraceEntity.class))).thenReturn(1);
         // flushIntervalMs 超大，手动触发 destroy() 来触发最后一次 flush
         TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper);
         w.afterPropertiesSet();
 
-        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null);
-        w.write("1", "42", List.of(trace));
+        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "DB", null, null);
+        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, List.of(child));
+        w.write("1", "42", List.of(root));
         w.destroy(); // destroy() 内先 flushBatch()
 
-        verify(mapper, atLeastOnce()).insert(any(NodeTraceEntity.class));
+        // 批量写库：insertBatch 被调用，insert 不再被调用
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list -> list.size() == 2));
+        verify(mapper, never()).insert(any(NodeTraceEntity.class));
     }
 }

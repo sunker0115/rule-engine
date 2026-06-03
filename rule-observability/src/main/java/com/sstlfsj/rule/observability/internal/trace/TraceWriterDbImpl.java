@@ -71,21 +71,26 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
             // sessionId / tenantId 来自业务入队时的字符串，转 Long 时容错
             Long sessionId = parseLong(entry.sessionId());
             Long tenantId = parseLong(entry.tenantId());
-            flattenAndInsert(entry.traces(), sessionId, tenantId, "", 0);
+            List<NodeTraceEntity> entities = new ArrayList<>();
+            flattenToList(entry.traces(), sessionId, tenantId, "", 0, entities);
+            if (!entities.isEmpty()) {
+                nodeTraceMapper.insertBatch(entities);
+            }
         }
     }
 
     /**
-     * 递归展开树形 NodeTrace 为行，并逐行写库。
+     * 递归展开树形 NodeTrace，将所有节点追加到 {@code out} 列表，不执行数据库操作。
      *
      * @param traces      当前层节点列表
      * @param sessionId   评估会话 ID
      * @param tenantId    租户 ID
      * @param pathPrefix  父节点路径前缀（根节点传空串）
      * @param indexOffset 当前层起始下标（通常为 0）
+     * @param out         收集结果的输出列表
      */
-    private void flattenAndInsert(List<NodeTrace> traces, Long sessionId, Long tenantId,
-                                   String pathPrefix, int indexOffset) {
+    private void flattenToList(List<NodeTrace> traces, Long sessionId, Long tenantId,
+                                String pathPrefix, int indexOffset, List<NodeTraceEntity> out) {
         for (int i = 0; i < traces.size(); i++) {
             NodeTrace trace = traces.get(i);
             // 根节点 pathPrefix 为空时直接用下标，子节点拼接父路径
@@ -105,12 +110,11 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
             entity.setErrorCode(trace.errorCode());
             entity.setValueSource(trace.valueSource());
             entity.setEvaluatedAt(LocalDateTime.now());
-
-            nodeTraceMapper.insert(entity);
+            out.add(entity);
 
             // 递归处理子节点
             if (trace.children() != null && !trace.children().isEmpty()) {
-                flattenAndInsert(trace.children(), sessionId, tenantId, nodePath, 0);
+                flattenToList(trace.children(), sessionId, tenantId, nodePath, 0, out);
             }
         }
     }
