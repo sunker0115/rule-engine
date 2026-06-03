@@ -58,4 +58,20 @@ class EvalContextAssemblerTest {
         assertEquals(subject, ctx.getSubject());
         assertEquals(25, ctx.getSubject().getAttribute("age"));
     }
+
+    @Test
+    void assemble_subjectLoaderThrows_degradesToEmptySubject() {
+        // SubjectLoader 抛出异常时应降级返回空 Subject，不阻断评估
+        SubjectLoader loader = mock(SubjectLoader.class);
+        when(loader.supportedTypes()).thenReturn(List.of(SubjectType.USER));
+        when(loader.load(any(), any(), any())).thenThrow(new RuntimeException("外部服务不可用"));
+
+        EvalContextAssembler assembler = new EvalContextAssembler(List.of(loader), List.of());
+        RuleEvent event = new RuleEvent("1", "scene", "E", "u1",
+                "eid", Instant.now(), Map.of(), Map.of());
+
+        EvalContext ctx = assertDoesNotThrow(() -> assembler.assemble(event, List.of()));
+        assertNotNull(ctx.getSubject());
+        assertEquals("u1", ctx.getSubject().subjectId());
+    }
 }

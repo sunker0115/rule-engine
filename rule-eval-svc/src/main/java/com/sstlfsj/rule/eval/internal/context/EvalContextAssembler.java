@@ -6,12 +6,11 @@ import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * 装配 EvalContext：SubjectLoader（可选 SPI）+ providedMetrics 优先匹配 + MetricSourceHandler（可选 SPI）。
  * v1 无真实 MetricSourceHandler 实现时，仅 providedMetrics 生效。
- * 并发框架已到位（CompletableFuture.allOf），添加实现无需修改本类。
+ * v2 引入 MetricSourceHandler 实现后可在此加入 CompletableFuture.allOf 并发装配。
  */
 @Component
 public class EvalContextAssembler {
@@ -44,9 +43,7 @@ public class EvalContextAssembler {
      */
     public EvalContext assemble(RuleEvent event,
                                 List<RuleVersionSnapshot> candidates) {
-        // Subject 加载（并发起点之一）
-        CompletableFuture<Subject> subjectFuture = CompletableFuture.supplyAsync(
-                () -> loadSubject(event));
+        Subject subject = loadSubject(event);
 
         // providedMetrics 转为 MetricValue Map（valueSource=PROVIDED）
         Map<String, MetricValue> metrics = new HashMap<>();
@@ -54,9 +51,6 @@ public class EvalContextAssembler {
             metrics.put(entry.getKey(),
                     new MetricValue(entry.getValue(), "UNKNOWN", "PROVIDED"));
         }
-
-        // 等待 Subject 就绪
-        Subject subject = subjectFuture.join();
 
         return new EvalContext(event.tenantId(), event, subject, metrics);
     }
