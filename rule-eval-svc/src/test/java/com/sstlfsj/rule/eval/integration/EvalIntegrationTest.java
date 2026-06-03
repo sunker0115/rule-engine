@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -46,6 +47,11 @@ class EvalIntegrationTest {
                     "com.sstlfsj.rule.observability.internal"
             }
     )
+    @MapperScan({
+            "com.sstlfsj.rule.eval.internal.mapper",
+            "com.sstlfsj.rule.config.internal.repository",
+            "com.sstlfsj.rule.observability.internal.mapper"
+    })
     static class TestApp {}
 
     /** MySQL 8.0 容器，整个测试类共享（@Container + static = 容器生命周期绑定到类）。 */
