@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** RuleController 单元测试：publish / disable / createDraft。 */
+/** RuleController 单元测试：publish / disable / createDraft / listRules。 */
 class RuleControllerTest {
 
     private MockMvc mockMvc;
