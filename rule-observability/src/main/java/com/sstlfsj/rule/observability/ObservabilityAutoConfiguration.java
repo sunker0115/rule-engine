@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.observability;
 
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import com.sstlfsj.rule.observability.internal.mapper.NodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -17,8 +18,8 @@ public class ObservabilityAutoConfiguration {
      */
     @Bean
     @ConditionalOnProperty(name = "engine.rule.trace.enabled", havingValue = "true", matchIfMissing = true)
-    public TraceWriter traceWriterDb() {
-        return new TraceWriterDbImpl(10000, 500, 200);
+    public TraceWriter traceWriterDb(NodeTraceMapper nodeTraceMapper) {
+        return new TraceWriterDbImpl(10000, 500, 200, nodeTraceMapper);
     }
 
     /** 当 engine.rule.trace.enabled=false 时注册空实现，用于测试或 SDK 嵌入模式。 */
