@@ -24,4 +24,27 @@ class BlockTransactionHandlerTest {
         assertThat(result.actionId()).isEqualTo("action-1");
         assertThat(result.actionType()).isEqualTo("BLOCK_TRANSACTION");
     }
+
+    @Test
+    void dryRun_returnsSuccess_withCorrectActionIdAndType() {
+        ActionContext ctx = new ActionContext(
+                "action-1", "BLOCK_TRANSACTION", Map.of(), null, null, null);
+
+        ActionResult result = handler.dryRun(ctx);
+
+        assertThat(result.status()).isEqualTo(ActionResult.ActionStatus.SUCCESS);
+        assertThat(result.actionId()).isEqualTo("action-1");
+        assertThat(result.actionType()).isEqualTo("BLOCK_TRANSACTION");
+    }
+
+    @Test
+    void dryRun_doesNotReturnSkipped() {
+        ActionContext ctx = new ActionContext(
+                "action-1", "BLOCK_TRANSACTION", Map.of(), null, null, null);
+
+        ActionResult result = handler.dryRun(ctx);
+
+        assertThat(result.status()).isNotEqualTo(ActionResult.ActionStatus.SKIPPED);
+        assertThat(result.errorCode()).isNull();
+    }
 }
