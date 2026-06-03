@@ -56,4 +56,25 @@ public interface AuditService {
      */
     PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String eventId,
                                                     int page, int size);
+
+    /** 节点 trace 条目，对应 node_trace 表一行。 */
+    record TraceNodeEntry(
+            String nodePath,
+            String nodeType,
+            String conditionType,
+            String metricCode,
+            String actualValue,
+            Boolean result,
+            String errorCode,
+            String valueSource
+    ) {}
+
+    /**
+     * 查询指定评估会话的节点 trace 列表（扁平，按 node_path 字典序排列）。
+     *
+     * @param tenantId  租户标识
+     * @param sessionId 评估会话 ID
+     * @return 节点 trace 列表（无分页，单次 session 通常 < 200 行）
+     */
+    List<TraceNodeEntry> queryTrace(String tenantId, Long sessionId);
 }
