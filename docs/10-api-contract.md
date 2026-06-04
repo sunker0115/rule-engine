@@ -380,9 +380,215 @@ GET /api/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&li
 
 ## 八、SDK 用法
 
-v1 调用方通过 HTTP 直接调用本文档各接口，无独立 SDK 包装。
+### 8.1 规则来源模式总览
 
-v2 嵌入式 SDK 模式详见 [`08-evolution.md`](./08-evolution.md) §2.14（评估引擎下沉到调用方进程，消除跨进程网络依赖）。
+嵌入式 SDK（`rule-sdk`）支持四种规则来源，通过统一的 `RuleSource` SPI 装载到本地评估索引，`evaluate()` 路径始终零网络跳转：
+
+| 模式 | Builder 入口 | 适用场景 |
+|------|-------------|---------|
+| **HTTP 轮询** | `serverUrl()` + `tenantId()` | 生产，规则由服务端管理，定时热更新 |
+| **JSON 文件** | `ruleFile("classpath:rules.json")` | 离线、测试、规则随代码打包 |
+| **代码 DSL** | `localSnapshot()` + `Condition` DSL | 单测、演示、CI 验证规则逻辑 |
+| **注解扫描** | `scanEvaluators()`（D35 后续） | 声明式，`@RuleDef` 标注规则类 |
+
+多种来源可混用（如文件兜底 + HTTP 热更新），各来源独立写入同一索引。
+
+---
+
+### 8.2 HTTP 轮询模式
+
+`SnapshotPoller` 后台定时拉取 `/api/v1/sdk/snapshots`：
+
+```java
+// 非 Spring 项目
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .serverUrl("http://rule-engine:8080")
+        .tenantId("1001")
+        .fetchMode(FetchMode.DECLARED)
+        .scenes("fraud", "payment")
+        .pollInterval(Duration.ofSeconds(30))
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+Spring Boot 项目通过 `application.yml` 自动装配：
+
+```yaml
+rule:
+  sdk:
+    server-url: http://rule-engine:8080
+    tenant-id: "1001"
+    fetch-mode: DECLARED
+    scenes: fraud, payment
+    poll-interval: 30s
+```
+
+```java
+@Autowired RuleEngineClient client;
+EvalResult result = client.evaluate(event);
+```
+
+---
+
+### 8.3 JSON 文件模式
+
+规则以 JSON 文件随代码打包，适合离线 / 测试环境，文件格式与服务端 `GET /api/v1/sdk/snapshots` 响应 `data` 数组一致，可直接从服务端导出后存为文件：
+
+```java
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .ruleFile("classpath:rules/fraud.json")
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+文件结构示例（`src/main/resources/rules/fraud.json`）：
+
+```json
+[
+  {
+    "ruleVersionId": 1,
+    "sceneCode": "fraud",
+    "tenantId": "t1",
+    "kind": "AST_BOOLEAN",
+    "triggerEventTypes": ["TRANSACTION"],
+    "decisionBindings": [{"decisionCode": "BLOCK", "priority": 100}],
+    "preGates": [],
+    "conditionAst": {
+      "type": "AND",
+      "children": [
+        { "type": "CONDITION", "conditionType": "GT", "metricCode": "amount",
+          "params": {"threshold": 1000}, "weight": 0.0 }
+      ]
+    }
+  }
+]
+```
+
+---
+
+### 8.4 代码 DSL 模式
+
+不连接服务端，通过 `Condition` DSL 构造规则，适合单测 / 演示 / CI 验证：
+
+```java
+// 规则：amount > 1000 AND country IN ["CN", "HK"]
+RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+        .ruleVersionId(1L)
+        .tenantId("t1")
+        .sceneCode("fraud")
+        .conditionAst(
+            Condition.gt("amount", 1000)
+                     .and(Condition.in("country", "CN", "HK"))
+                     .toAst()
+        )
+        .addTriggerEventType("TRANSACTION")
+        .addDecisionBinding("BLOCK", 100)
+        .build();
+
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .localSnapshot(snap)
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+---
+
+### 8.5 Condition DSL 速查
+
+`Condition` 类（`rule-sdk`）封装 AST 构造细节，`toAst()` 生成标准 `AstNode`：
+
+```java
+// 数值比较
+Condition.gt("amount", 1000)          // amount > 1000
+Condition.gte("amount", 1000)         // amount >= 1000
+Condition.lt("score", 60)             // score < 60
+Condition.lte("score", 60)            // score <= 60
+
+// 相等判断
+Condition.eq("status", "ACTIVE")      // status == ACTIVE
+Condition.neq("status", "BLOCKED")    // status != BLOCKED
+
+// 集合 / 区间
+Condition.in("country", "CN", "HK")   // country IN [CN, HK]
+Condition.notIn("country", "US")      // country NOT IN [US]
+Condition.between("age", 18, 65)      // age BETWEEN [18, 65]
+
+// 字符串
+Condition.contains("name", "corp")    // name 包含 "corp"
+Condition.matches("email", ".*@corp\\.com")  // 正则
+Condition.startsWith("code", "VIP")
+Condition.endsWith("code", "PRO")
+
+// 自定义算子（需配合 addEvaluator 注册）
+Condition.of("BLACKLIST_HIT", "device_id", Map.of("list", blocklist))
+
+// 逻辑组合（链式，同级 and/or 自动展平）
+Condition.gt("amount", 1000).and(Condition.in("country", "CN", "HK"))
+Condition.gt("amount", 1000).or(Condition.eq("vip", true))
+Condition.eq("blocked", true).not()
+
+// 恒真 / 恒假
+Condition.always()   // 空 AND 节点，永远返回 true
+Condition.never()    // 空 OR 节点，永远返回 false
+```
+
+---
+
+### 8.6 自定义算子（addEvaluator）
+
+注册自定义 `ConditionEvaluator`，叠加在内置算子之上（同名自定义可覆盖内置）：
+
+```java
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .localSnapshot(snap)
+        .addEvaluator("BLACKLIST_HIT", (node, ctx) -> {
+            List<?> list = (List<?>) node.params().get("list");
+            Object val = ctx.providedMetrics().get(node.metricCode());
+            return val != null && list.contains(val);
+        })
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+Spring 项目中，`@ConditionType` 标注的 Bean 由 `AutoConfiguration` 自动收集注入，无需手动 `addEvaluator()`。
+
+---
+
+### 8.7 快照拉取端点
+
+`SnapshotPoller`（HTTP 轮询模式）内部调用的服务端接口：
+
+```
+GET /api/v1/sdk/snapshots
+  ?tenantId=1001
+  &scenes=fraud,payment   # 可选；不传则返回该租户所有 ACTIVE 快照
+  &since=1717200000000    # 可选；预留增量拉取（v1 忽略，全量返回）
+```
+
+响应格式与 `ApiResponse<List<RuleVersionSnapshot>>` 一致（见 §一），`data` 数组即为 JSON 文件模式的合法输入。
+
+---
+
+### 8.8 RuleEvent 构造
+
+```java
+RuleEvent event = new RuleEvent(
+        tenantId,       // String，与规则快照的 tenantId 一致
+        sceneCode,      // String，如 "fraud"
+        eventType,      // String，如 "TRANSACTION"
+        subjectId,      // String，业务主体唯一标识
+        eventId,        // String，业务幂等 ID（建议 UUID）
+        Instant.now(),  // occurredAt
+        payload,        // Map<String, Object>，事件 payload
+        providedMetrics // Map<String, Object>，预计算指标（可为 null）
+);
+```
+
+`providedMetrics` 的 key 须与规则中 `ConditionNode.metricCode` 完全一致，引擎直接从此 Map 取值与 `params` 中的阈值比较。
 
 ---
 
