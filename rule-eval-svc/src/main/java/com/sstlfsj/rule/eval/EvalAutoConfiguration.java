@@ -7,10 +7,12 @@ import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
+import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
+import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
@@ -85,6 +87,32 @@ public class EvalAutoConfiguration {
         return new EvalContextAssembler(
                 subjectLoaders == null ? List.of() : subjectLoaders,
                 metricHandlers == null ? List.of() : metricHandlers);
+    }
+
+    /**
+     * 纯 Java 评估编排器：Matcher → Pre-Gate → EvalContext → Executor。
+     * 无 DB 写入、无 Action 派发；key 映射 kind 字段到对应 executor。
+     *
+     * @param sceneRuleIndex       倒排索引
+     * @param evalContextAssembler 上下文装配
+     * @param preGates             可选 PreGate SPI 实现列表
+     * @param ruleVersionExecutor  AST_BOOLEAN executor
+     * @param scorecardExecutor    SCORECARD executor
+     * @return EvalEngine 实例
+     */
+    @Bean
+    public EvalEngine evalEngine(
+            SceneRuleIndex sceneRuleIndex,
+            EvalContextAssembler evalContextAssembler,
+            @Autowired(required = false) List<PreGate> preGates,
+            RuleVersionExecutor ruleVersionExecutor,
+            ScorecardExecutor scorecardExecutor) {
+        Map<String, PreGate> gateMap = new HashMap<>();
+        if (preGates != null) {
+            preGates.forEach(g -> gateMap.put(g.gateType(), g));
+        }
+        return new EvalEngine(sceneRuleIndex, evalContextAssembler, gateMap,
+                Map.of("AST_BOOLEAN", ruleVersionExecutor, "SCORECARD", scorecardExecutor));
     }
 
     /**

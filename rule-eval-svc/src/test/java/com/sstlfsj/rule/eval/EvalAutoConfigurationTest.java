@@ -10,6 +10,7 @@ import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
+import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
@@ -83,6 +84,28 @@ class EvalAutoConfigurationTest {
     void snapshotAssembler_returnsInstance() {
         SnapshotAssembler assembler = config.snapshotAssembler();
         assertNotNull(assembler);
+    }
+
+    @Test
+    void evalEngine_nullPreGates_returnsInstance() {
+        EvalEngine engine = config.evalEngine(
+                config.sceneRuleIndex(),
+                config.evalContextAssembler(null, null),
+                null,
+                config.ruleVersionExecutor(),
+                config.scorecardExecutor());
+        assertNotNull(engine);
+    }
+
+    @Test
+    void evalEngine_emptyPreGates_returnsInstance() {
+        EvalEngine engine = config.evalEngine(
+                config.sceneRuleIndex(),
+                config.evalContextAssembler(null, null),
+                List.of(),
+                config.ruleVersionExecutor(),
+                config.scorecardExecutor());
+        assertNotNull(engine);
     }
 
     @Test
