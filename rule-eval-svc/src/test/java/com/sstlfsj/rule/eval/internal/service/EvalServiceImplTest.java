@@ -8,12 +8,13 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -32,13 +33,21 @@ class EvalServiceImplTest {
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock EvalContextAssembler contextAssembler;
     @Mock RuleVersionExecutor executor;
+    @Mock ScorecardExecutor scorecardExecutor;
     @Mock EvalSessionWriter sessionWriter;
     @Mock TraceWriter traceWriter;
     @Mock DryRunTraceWriter dryRunTraceWriter;
     @Mock ActionDispatchService actionDispatchService;
 
-    // EvalServiceImpl 构造器接受 List<PreGate>，Mockito @InjectMocks 会注入空列表
-    @InjectMocks EvalServiceImpl impl;
+    // 显式构造，避免 Mockito 对两个 RuleVersionExecutor 类型 mock 的注入歧义
+    EvalServiceImpl impl;
+
+    @BeforeEach
+    void setUp() {
+        impl = new EvalServiceImpl(index, snapshotLoader, List.of(), contextAssembler,
+                executor, scorecardExecutor, sessionWriter, traceWriter, dryRunTraceWriter,
+                actionDispatchService);
+    }
 
     private RuleEvent event() {
         return new RuleEvent("1", "fraud_check", "RISK_EVENT", "u1",

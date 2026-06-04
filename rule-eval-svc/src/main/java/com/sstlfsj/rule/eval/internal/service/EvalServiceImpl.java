@@ -9,6 +9,7 @@ import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
@@ -32,6 +33,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     private final Map<String, PreGate> preGateMap;
     private final EvalContextAssembler contextAssembler;
     private final RuleVersionExecutor executor;
+    private final ScorecardExecutor scorecardExecutor;
     private final EvalSessionWriter sessionWriter;
     private final TraceWriter traceWriter;
     private final DryRunTraceWriter dryRunTraceWriter;
@@ -43,6 +45,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                     List<PreGate> preGates,
                     EvalContextAssembler contextAssembler,
                     RuleVersionExecutor executor,
+                    ScorecardExecutor scorecardExecutor,
                     EvalSessionWriter sessionWriter,
                     TraceWriter traceWriter,
                     DryRunTraceWriter dryRunTraceWriter,
@@ -53,12 +56,18 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                 : preGates.stream().collect(Collectors.toMap(PreGate::gateType, g -> g));
         this.contextAssembler = contextAssembler;
         this.executor = executor;
+        this.scorecardExecutor = scorecardExecutor;
         this.sessionWriter = sessionWriter;
         this.traceWriter = traceWriter;
         this.dryRunTraceWriter = dryRunTraceWriter;
         this.actionDispatchService = actionDispatchService;
         // 构造器末尾创建 dispatcher，不调用 start
         this.dispatcher = new EvalActionDispatcher(10000, this::evaluate);
+    }
+
+    /** 根据 kind 选择对应的 executor：SCORECARD 走评分卡，其余走 AST 布尔解释执行。 */
+    private RuleVersionExecutor selectExecutor(RuleVersionSnapshot snapshot) {
+        return "SCORECARD".equals(snapshot.kind()) ? scorecardExecutor : executor;
     }
 
     @Override
@@ -127,10 +136,12 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         List<Decision> hitDecisions = new ArrayList<>();
         List<NodeTrace> allTraces = new ArrayList<>();
         String errorCode = null;
+        // SCORECARD 场景下透传评分卡返回的 score（取命中规则中的最大值；AST_BOOLEAN 保持 null）
+        Double aggregatedScore = null;
 
         for (RuleVersionSnapshot snap : passed) {
             try {
-                EvalResult r = executor.execute(snap, ctx);
+                EvalResult r = selectExecutor(snap).execute(snap, ctx);
                 // 收集本条规则的 NodeTrace
                 allTraces.addAll(r.nodeTrace());
                 if (r.ruleHit()) {
@@ -143,6 +154,11 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                 }
                 if (r.errorCode() != null && errorCode == null) {
                     errorCode = r.errorCode();
+                }
+                // 透传 score：取所有规则中的最大值（通常 SCORECARD 场景只有一条规则）
+                if (r.score() != null) {
+                    aggregatedScore = aggregatedScore == null ? r.score()
+                            : Math.max(aggregatedScore, r.score());
                 }
             } catch (Exception e) {
                 if (errorCode == null) errorCode = "CONDITION_EVAL_ERROR";
@@ -161,7 +177,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                 List.copyOf(allTraces),
                 errorCode,
                 List.of(),
-                null
+                aggregatedScore
         );
 
         // ⑦ 更新 session 终态 + 提交 traces 到隔离写库

@@ -6,6 +6,7 @@ import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -34,6 +35,19 @@ public class EvalAutoConfiguration {
             Map<String, com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator> conditionEvaluators) {
         return new TracingInterpretedExecutor(
                 conditionEvaluators == null ? Map.of() : conditionEvaluators);
+    }
+
+    /**
+     * 注册 ScorecardExecutor，供 kind=SCORECARD 的规则版本评估使用。
+     *
+     * @param conditionEvaluators 所有注册的 ConditionEvaluator，按 conditionType 索引
+     * @return ScorecardExecutor 实例
+     */
+    @Bean
+    public ScorecardExecutor scorecardExecutor(
+            @Autowired(required = false)
+            Map<String, com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator> conditionEvaluators) {
+        return new ScorecardExecutor(conditionEvaluators == null ? Map.of() : conditionEvaluators);
     }
 
     /**

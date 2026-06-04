@@ -8,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -80,6 +81,21 @@ class EvalAutoConfigurationTest {
                 mock(SceneActionBindingReadMapper.class),
                 mock(ActionExecutionMapper.class));
         assertNotNull(svc);
+    }
+
+    @Test
+    void scorecardExecutor_nullEvaluators_returnsScorecardExecutor() {
+        // conditionEvaluators 为 null（无注册实现时 Spring 传入 null）
+        ScorecardExecutor executor = config.scorecardExecutor(null);
+        assertNotNull(executor);
+        assertInstanceOf(ScorecardExecutor.class, executor);
+    }
+
+    @Test
+    void scorecardExecutor_emptyEvaluators_returnsScorecardExecutor() {
+        ScorecardExecutor executor = config.scorecardExecutor(java.util.Map.of());
+        assertNotNull(executor);
+        assertInstanceOf(ScorecardExecutor.class, executor);
     }
 
     /** 测试用 stub，带 @ActionType 注解。 */
