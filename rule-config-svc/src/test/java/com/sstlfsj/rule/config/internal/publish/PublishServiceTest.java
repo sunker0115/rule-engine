@@ -243,4 +243,78 @@ class PublishServiceTest {
 
         verify(ruleDefinitionMapper, never()).insert(any(RuleDefinition.class));
     }
+
+    @Test
+    void publish_triggerEventType不在Scene白名单_抛IllegalArgument() {
+        draftVersion.setTriggerEventTypes("[\"order.placed\"]");
+        scene.setEventTypes("[\"payment.initiated\"]");   // 只允许 payment 类型
+
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("order.placed");
+    }
+
+    @Test
+    void publish_triggerEventType在Scene白名单内_正常发布() {
+        draftVersion.setTriggerEventTypes("[\"payment.initiated\"]");
+        scene.setEventTypes("[\"payment.initiated\",\"payment.refunded\"]");
+
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(astSerializer.fromJson(any()))
+                .thenReturn(new ConditionNode("EQ", "metric1", null, Map.of(), 0.0));
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        // 不应抛异常，发布成功
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> publishService.publish(1L, 10L, "actor"));
+    }
+
+    @Test
+    void publish_triggerEventTypes为空_跳过校验() {
+        draftVersion.setTriggerEventTypes("[]");
+        scene.setEventTypes("[\"payment.initiated\"]");
+
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(astSerializer.fromJson(any()))
+                .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        // 空 triggerEventTypes 应跳过校验，正常发布
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> publishService.publish(1L, 10L, "actor"));
+    }
+
+    @Test
+    void publish_sceneEventTypes为空_跳过校验() {
+        // scene.eventTypes 为空（Scene 尚未配置白名单），发布不应被阻断
+        draftVersion.setTriggerEventTypes("[\"payment.initiated\"]");
+        scene.setEventTypes("[]");
+
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(astSerializer.fromJson(any()))
+                .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> publishService.publish(1L, 10L, "actor"));
+    }
 }

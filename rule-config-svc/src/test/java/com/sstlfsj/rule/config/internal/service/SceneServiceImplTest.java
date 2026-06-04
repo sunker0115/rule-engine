@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.config.internal.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
@@ -32,9 +31,9 @@ class SceneServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        // objectMapper 是 Spring 注入 bean，测试中直接传入默认实例
+        // objectMapper 内部 new ObjectMapper()，不再需要外部传入
         sceneService = new SceneServiceImpl(sceneMapper, auditLogMapper,
-                schemaHistoryMapper, eventPublisher, new ObjectMapper());
+                schemaHistoryMapper, eventPublisher);
     }
 
     @Test

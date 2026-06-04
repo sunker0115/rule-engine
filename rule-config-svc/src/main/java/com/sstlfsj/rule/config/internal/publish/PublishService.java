@@ -90,6 +90,9 @@ public class PublishService {
             throw new IllegalStateException("没有找到草稿版本，请先保存规则草稿");
         }
 
+        // 3.5. 校验 triggerEventTypes ⊆ Scene.eventTypes（D13）
+        validateTriggerEventTypes(draftVersion.getTriggerEventTypes(), scene.getEventTypes());
+
         // 4. 反序列化 AST，收集 metricDependencies
         AstNode ast = astSerializer.fromJson(draftVersion.getConditionAst());
         // SCORECARD kind 校验：根节点必须是 ScorecardRootNode，叶子 weight 必须 > 0
@@ -257,6 +260,37 @@ public class PublishService {
         auditLogMapper.insert(log);
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, "DRAFT");
+    }
+
+    /**
+     * 校验规则的 triggerEventTypes 是否均在 Scene 允许的 eventTypes 白名单内。
+     * scene.eventTypes 为空时跳过（Scene 尚未配置白名单，容错）；
+     * triggerEventTypes 为空时也跳过（规则通配所有事件）。
+     */
+    private void validateTriggerEventTypes(String triggerEventTypesJson, String sceneEventTypesJson) {
+        try {
+            if (triggerEventTypesJson == null || triggerEventTypesJson.isBlank()) return;
+            java.util.List<String> ruleTypes = objectMapper.readValue(triggerEventTypesJson,
+                    new com.fasterxml.jackson.core.type.TypeReference<>() {});
+            if (ruleTypes.isEmpty()) return;
+
+            java.util.List<String> sceneTypes = objectMapper.readValue(sceneEventTypesJson,
+                    new com.fasterxml.jackson.core.type.TypeReference<>() {});
+            if (sceneTypes.isEmpty()) return;   // Scene 未设置白名单，容错通过
+
+            java.util.Set<String> allowed = new java.util.HashSet<>(sceneTypes);
+            java.util.List<String> invalid = ruleTypes.stream()
+                    .filter(et -> !allowed.contains(et))
+                    .toList();
+            if (!invalid.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "triggerEventType 不在 Scene 允许列表，非法值: " + invalid);
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            // JSON 解析失败时容错（不阻断发布）
+        }
     }
 
     /** 判断字符串是否为 null 或空白。 */
