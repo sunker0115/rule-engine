@@ -10,5 +10,4 @@ public @interface ConditionType {
     String value();
     String displayName() default "";
     String paramsSchema() default "{}";
-    boolean requiresMetric() default false;
 }

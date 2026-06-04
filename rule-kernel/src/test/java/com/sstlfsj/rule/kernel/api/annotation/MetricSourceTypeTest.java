@@ -14,7 +14,7 @@ class MetricSourceTypeTest {
     @MetricSourceType("ACCOUNT_BALANCE")
     static class MinimalSource {}
 
-    @MetricSourceType(value = "RISK_SCORE", paramsSchema = "{}", defaultTimeoutMs = 2000, defaultCacheTtlSeconds = 120)
+    @MetricSourceType(value = "RISK_SCORE", paramsSchema = "{}")
     static class FullSource {}
 
     @Test
@@ -32,16 +32,13 @@ class MetricSourceTypeTest {
     void defaults_areApplied() {
         MetricSourceType ann = MinimalSource.class.getAnnotation(MetricSourceType.class);
         assertEquals("{}", ann.paramsSchema());
-        assertEquals(1000, ann.defaultTimeoutMs());
-        assertEquals(60, ann.defaultCacheTtlSeconds());
     }
 
     @Test
     void allAttributes_areReadCorrectly() {
         MetricSourceType ann = FullSource.class.getAnnotation(MetricSourceType.class);
         assertEquals("RISK_SCORE", ann.value());
-        assertEquals(2000, ann.defaultTimeoutMs());
-        assertEquals(120, ann.defaultCacheTtlSeconds());
+        assertEquals("{}", ann.paramsSchema());
     }
 
     @Test
