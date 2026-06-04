@@ -9,8 +9,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /** SceneController 单元测试。 */
@@ -33,7 +34,8 @@ class SceneControllerTest {
 
     @Test
     void createScene_returns200_withId() throws Exception {
-        when(sceneService.createScene(any(), any(), any(), any())).thenReturn(42L);
+        when(sceneService.createScene(any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any())).thenReturn(42L);
 
         mockMvc.perform(post("/api/v1/scenes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -45,7 +47,37 @@ class SceneControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value(42));
 
-        verify(sceneService).createScene("t1", "fraud", "欺诈检测", "user1");
+        verify(sceneService).createScene(
+                eq("t1"), eq("fraud"), eq("欺诈检测"),
+                isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), eq("user1"));
+    }
+
+    @Test
+    void createScene_withPayloadSchema_传入序列化后的字符串() throws Exception {
+        when(sceneService.createScene(any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any())).thenReturn(99L);
+
+        mockMvc.perform(post("/api/v1/scenes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {
+                              "tenantId":"t1",
+                              "sceneCode":"payment",
+                              "name":"支付场景",
+                              "eventTypes":["payment.initiated"],
+                              "payloadSchema":[{"name":"amount","type":"NUMBER","required":true}]
+                            }
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(99));
+
+        verify(sceneService).createScene(
+                eq("t1"), eq("payment"), eq("支付场景"),
+                isNull(), isNull(), isNull(),
+                eq("[\"payment.initiated\"]"),
+                argThat(s -> s != null && s.contains("amount")),
+                isNull(), eq("user1"));
     }
 
     @Test
