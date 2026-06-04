@@ -18,7 +18,7 @@ public class ScenePayloadSchemaHistory {
     private Long sceneId;
     /** 快照对应的 payloadSchema 版本号（变更前的版本，用于溯源）。 */
     private Integer version;
-    /** payloadSchema JSON 数组字符串快照。 */
+    /** payloadSchema JSON 数组字符串快照；调用方负责序列化，直接存入原始 JSON 字符串。 */
     private String schemaJson;
     private String createdBy;
     private LocalDateTime createdAt;

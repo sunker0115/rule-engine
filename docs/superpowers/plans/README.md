@@ -16,7 +16,7 @@
 | 10 | [create-draft-api](2026-06-03-create-draft-api.md) | POST /api/v1/rules 创建规则草稿 | ✅ |
 | 11 | [audit-query-api](2026-06-03-audit-query-api.md) | GET /api/v1/audit/sessions 审计查询 + trace 端点 | ✅ |
 | 12 | [v2-phase2](2026-06-03-v2-phase2.md) | v2 第二阶段：provided-metrics API / node_trace 树重建 / docker-compose / CompiledExecutor | ⏳ |
-| 13 | [d12-scorecard-evaluator](2026-06-03-d12-scorecard-evaluator.md) | D12：SCORECARD evaluator（权重打分 + score 字段 + 发布校验） | 🔲 |
+| 13 | [d12-scorecard-evaluator](2026-06-03-d12-scorecard-evaluator.md) | D12：SCORECARD evaluator（权重打分 + score 字段 + 发布校验） | ✅ |
 | 14 | [d13-payload-schema](2026-06-03-d13-payload-schema.md) | D13：payloadSchema 白名单校验（eventType 字段约束） | 🔲 |
 | 15 | [d20-embedded-sdk](2026-06-03-d20-embedded-sdk.md) | D20：Embedded SDK（EvalEngine 下沉 + rule-sdk + Spring Boot Starter） | 🔲 |
 | 16 | [d5c-cep](2026-06-03-d5c-cep.md) | D5-C：CEP 复杂事件处理（Flink + 频率/序列/聚合三种模式） | 🔲 |
