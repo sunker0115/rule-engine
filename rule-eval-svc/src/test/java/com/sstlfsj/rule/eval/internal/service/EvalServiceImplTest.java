@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.service;
 
+import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
@@ -8,6 +9,7 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
+import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +34,8 @@ class EvalServiceImplTest {
     @Mock RuleVersionExecutor executor;
     @Mock EvalSessionWriter sessionWriter;
     @Mock TraceWriter traceWriter;
+    @Mock DryRunTraceWriter dryRunTraceWriter;
+    @Mock ActionDispatchService actionDispatchService;
 
     // EvalServiceImpl 构造器接受 List<PreGate>，Mockito @InjectMocks 会注入空列表
     @InjectMocks EvalServiceImpl impl;
@@ -46,7 +50,8 @@ class EvalServiceImplTest {
                 id, "fraud_check", "1",
                 new ConditionNode("EQ", null, null, Map.of()),
                 List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding(decisionCode, 10)));
+                List.of(new RuleVersionSnapshot.DecisionBinding(decisionCode, 10)),
+                null);
     }
 
     @Test
@@ -98,10 +103,10 @@ class EvalServiceImplTest {
         // priority 越大越优先（Decision.priority 语义），两条规则命中时 finalDecision 应为 priority=20 的 REJECT
         RuleVersionSnapshot snapLow  = new RuleVersionSnapshot(1L, "fraud_check", "1",
                 new ConditionNode("EQ", null, null, Map.of()), List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("LOW_RISK", 5)));
+                List.of(new RuleVersionSnapshot.DecisionBinding("LOW_RISK", 5)), null);
         RuleVersionSnapshot snapHigh = new RuleVersionSnapshot(2L, "fraud_check", "1",
                 new ConditionNode("EQ", null, null, Map.of()), List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 20)));
+                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 20)), null);
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snapLow, snapHigh));
         when(contextAssembler.assemble(any(), any()))
                 .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
@@ -142,5 +147,77 @@ class EvalServiceImplTest {
         assertFalse(result.ruleHit());
         verify(sessionWriter).insertDryRunPending(any(), eq(42L));
         verify(sessionWriter, never()).insertPending(any(), anyInt(), anyString());
+    }
+
+    @Test
+    void evaluate_ruleHit_callsProdTraceWriter_notDryRunWriter() {
+        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
+        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.hit());
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+
+        impl.evaluate(event());
+
+        verify(traceWriter).write(anyString(), anyString(), anyList());
+        verifyNoInteractions(dryRunTraceWriter);
+    }
+
+    @Test
+    void dryRun_writesDryRunTraceWriter_notProdWriter() {
+        RuleVersionSnapshot snap = snapshot(42L, "PASS");
+        when(snapshotLoader.loadById(42L)).thenReturn(snap);
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.miss());
+        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
+
+        impl.dryRun(event(), 42L);
+
+        verify(dryRunTraceWriter).write(anyString(), anyString(), anyList());
+        verifyNoInteractions(traceWriter);
+    }
+
+    @Test
+    void evaluate_ruleHit_dispatchesAction() {
+        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
+        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.hit());
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+
+        impl.evaluate(event());
+
+        verify(actionDispatchService).dispatch(anyLong(), anyLong(), anyString(), anyString(), anyList());
+    }
+
+    @Test
+    void evaluate_ruleMiss_doesNotDispatchAction() {
+        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
+        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.miss());
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+
+        impl.evaluate(event());
+
+        verifyNoInteractions(actionDispatchService);
+    }
+
+    @Test
+    void dryRun_doesNotDispatchAction() {
+        RuleVersionSnapshot snap = snapshot(42L, "PASS");
+        when(snapshotLoader.loadById(42L)).thenReturn(snap);
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.hit());
+        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
+
+        impl.dryRun(event(), 42L);
+
+        verifyNoInteractions(actionDispatchService);
     }
 }

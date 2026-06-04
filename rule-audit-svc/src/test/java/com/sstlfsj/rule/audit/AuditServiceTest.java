@@ -4,6 +4,7 @@ import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.audit.api.service.AuditService.AuditLogEntry;
 import com.sstlfsj.rule.audit.api.service.AuditService.EvalSessionEntry;
 import com.sstlfsj.rule.audit.api.service.AuditService.PageResult;
+import com.sstlfsj.rule.audit.api.service.AuditService.TraceNodeEntry;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -69,5 +70,43 @@ class AuditServiceTest {
                 "{}", null, Instant.now()
         );
         assertThat(entry.resourceId()).isNull();
+    }
+
+    @Test
+    void traceNodeEntry_字段赋值与读取正确() {
+        TraceNodeEntry entry = new TraceNodeEntry(
+                "0.1", "CONDITION", "GT", "amount",
+                "500.00", true, null, "EVENT"
+        );
+
+        assertThat(entry.nodePath()).isEqualTo("0.1");
+        assertThat(entry.nodeType()).isEqualTo("CONDITION");
+        assertThat(entry.conditionType()).isEqualTo("GT");
+        assertThat(entry.metricCode()).isEqualTo("amount");
+        assertThat(entry.actualValue()).isEqualTo("500.00");
+        assertThat(entry.result()).isTrue();
+        assertThat(entry.errorCode()).isNull();
+        assertThat(entry.valueSource()).isEqualTo("EVENT");
+    }
+
+    @Test
+    void traceNodeEntry_result和errorCode允许为null() {
+        TraceNodeEntry entry = new TraceNodeEntry(
+                "0", "AND", null, null,
+                null, null, "EVAL_ERROR", null
+        );
+
+        assertThat(entry.result()).isNull();
+        assertThat(entry.errorCode()).isEqualTo("EVAL_ERROR");
+        assertThat(entry.conditionType()).isNull();
+    }
+
+    @Test
+    void traceNodeEntry_nodePath字典序语义_多位节点编号() {
+        // "0.1.10" 字典序排在 "0.1.2" 之前，验证 record 存储格式与排序说明一致
+        TraceNodeEntry a = new TraceNodeEntry("0.1.10", "CONDITION", null, null, null, null, null, null);
+        TraceNodeEntry b = new TraceNodeEntry("0.1.2", "CONDITION", null, null, null, null, null, null);
+
+        assertThat(a.nodePath().compareTo(b.nodePath())).isLessThan(0);
     }
 }

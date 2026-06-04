@@ -33,7 +33,7 @@
         <java.version>25</java.version>
         <spring-modulith.version>2.0.6</spring-modulith.version>
         <mybatis-plus.version>3.5.16</mybatis-plus.version>
-        <archunit.version>1.4.0</archunit.version>
+        <archunit.version>1.4.2</archunit.version>
         <guava.version>33.2.1-jre</guava.version>
         <lombok.version>1.18.44</lombok.version>
         <mysql-connector-j.version>9.0.0</mysql-connector-j.version>
@@ -122,6 +122,13 @@
             <dependency>
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <!-- MyBatis-Plus JSQLParser：3.5.9+ 将 PaginationInnerInterceptor 拆分到此模块 -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-jsqlparser</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
 

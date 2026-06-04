@@ -10,7 +10,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** CreateRuleRequest @NotBlank / @NotNull 约束校验测试。 */
+/** CreateRuleRequest @NotBlank 约束校验测试。 */
 class CreateRuleRequestTest {
 
     private static Validator validator;
@@ -22,35 +22,35 @@ class CreateRuleRequestTest {
 
     @Test
     void valid_request_passesValidation() {
-        var req = new CreateRuleRequest("t1", 10L, "RULE_001", "欺诈规则");
+        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "欺诈规则", null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).isEmpty();
     }
 
     @Test
     void blank_tenantId_failsValidation() {
-        var req = new CreateRuleRequest("", 10L, "RULE_001", "欺诈规则");
+        var req = new CreateRuleRequest("", "SCENE_A", "RULE_001", "欺诈规则", null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("tenantId"));
     }
 
     @Test
-    void null_sceneId_failsValidation() {
-        var req = new CreateRuleRequest("t1", null, "RULE_001", "欺诈规则");
+    void blank_sceneCode_failsValidation() {
+        var req = new CreateRuleRequest("t1", "  ", "RULE_001", "欺诈规则", null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("sceneId"));
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("sceneCode"));
     }
 
     @Test
     void blank_code_failsValidation() {
-        var req = new CreateRuleRequest("t1", 10L, "  ", "欺诈规则");
+        var req = new CreateRuleRequest("t1", "SCENE_A", "  ", "欺诈规则", null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("code"));
     }
 
     @Test
-    void null_name_failsValidation() {
-        var req = new CreateRuleRequest("t1", 10L, "RULE_001", null);
+    void blank_name_failsValidation() {
+        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "", null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("name"));
     }

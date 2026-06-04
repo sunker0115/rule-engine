@@ -1,5 +1,8 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +21,20 @@ class ConfigServiceTest {
         public void disable(String tenantId, Long ruleDefinitionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
+
+        @Override
+        public Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status, int page, int size) {
+            throw new UnsupportedOperationException("stub");
+        }
+
+        @Override
+        public DraftCreatedResult createDraft(String tenantId, String sceneCode,
+                String code, String name,
+                String conditionAstJson, String decisionBindingsJson,
+                String preGatesJson, String triggerEventTypesJson,
+                String actorId) {
+            throw new UnsupportedOperationException("stub");
+        }
     };
 
     @Test
@@ -30,5 +47,18 @@ class ConfigServiceTest {
     void disable_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.disable("t1", 1L, "actor"));
+    }
+
+    @Test
+    void listRules_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.listRules("t1", null, null, 1, 20));
+    }
+
+    @Test
+    void createDraft_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.createDraft("t1", "SCENE_A", "RULE_001", "规则名",
+                        null, null, null, null, "actor"));
     }
 }

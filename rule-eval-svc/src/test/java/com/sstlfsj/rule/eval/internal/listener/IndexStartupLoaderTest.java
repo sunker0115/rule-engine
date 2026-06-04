@@ -35,7 +35,7 @@ class IndexStartupLoaderTest {
     @Test
     void onApplicationReady_withSnapshots_updatesIndex() {
         RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "fraud_check", "t1",
-                null, List.of(), List.of());
+                null, List.of(), List.of(), null);
         Map<String, Map<String, List<RuleVersionSnapshot>>> all = Map.of(
                 "t1:fraud_check", Map.of("*", List.of(snap))
         );
@@ -49,8 +49,8 @@ class IndexStartupLoaderTest {
     /** 多个场景各自独立写入索引，每个 (tenantId, sceneCode, eventType) 都调用一次 update。 */
     @Test
     void onApplicationReady_multipleScenes_updatesEachSeparately() {
-        RuleVersionSnapshot snapA = new RuleVersionSnapshot(1L, "sceneA", "t1", null, List.of(), List.of());
-        RuleVersionSnapshot snapB = new RuleVersionSnapshot(2L, "sceneB", "t1", null, List.of(), List.of());
+        RuleVersionSnapshot snapA = new RuleVersionSnapshot(1L, "sceneA", "t1", null, List.of(), List.of(), null);
+        RuleVersionSnapshot snapB = new RuleVersionSnapshot(2L, "sceneB", "t1", null, List.of(), List.of(), null);
         Map<String, Map<String, List<RuleVersionSnapshot>>> all = Map.of(
                 "t1:sceneA", Map.of("*", List.of(snapA)),
                 "t1:sceneB", Map.of("*", List.of(snapB))

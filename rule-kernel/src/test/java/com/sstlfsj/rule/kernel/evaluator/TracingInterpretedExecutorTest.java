@@ -40,7 +40,7 @@ class TracingInterpretedExecutorTest {
     }
 
     private RuleVersionSnapshot snapshot(AstNode ast) {
-        return new RuleVersionSnapshot(1L, "scene1", "t1", ast, null, null);
+        return new RuleVersionSnapshot(1L, "scene1", "t1", ast, null, null, null);
     }
 
     private ConditionNode trueNode() {
@@ -135,5 +135,34 @@ class TracingInterpretedExecutorTest {
         assertThat(orTrace.children()).hasSize(1);
         assertThat(orTrace.children().get(0).nodeType()).isEqualTo("ConditionNode");
         assertThat(orTrace.children().get(0).result()).isTrue();
+    }
+
+    @Test
+    void conditionNode_noEvaluator_traceHasErrorCode() {
+        // 无对应 evaluator 时 result=false，errorCode=NO_EVALUATOR
+        AstNode ast = new ConditionNode("UNKNOWN_TYPE", "metric1", null, Map.of());
+        EvalResult result = executorWith(Map.of())
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isFalse();
+        assertThat(result.nodeTrace()).hasSize(1);
+        NodeTrace trace = result.nodeTrace().get(0);
+        assertThat(trace.errorCode()).isEqualTo("NO_EVALUATOR");
+        assertThat(trace.result()).isFalse();
+    }
+
+    @Test
+    void execute_propagatesRuleVersionId_toAllTraces() {
+        // ruleVersionId 必须透传到顶层 trace 及所有子 trace
+        AstNode ast = new AndNode(List.of(trueNode(), trueNode()), null, null);
+        EvalResult result = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.nodeTrace()).hasSize(1);
+        NodeTrace andTrace = result.nodeTrace().get(0);
+        assertThat(andTrace.ruleVersionId()).isEqualTo(1L);
+        // 子节点也必须携带 ruleVersionId
+        assertThat(andTrace.children()).allSatisfy(
+                child -> assertThat(child.ruleVersionId()).isEqualTo(1L));
     }
 }

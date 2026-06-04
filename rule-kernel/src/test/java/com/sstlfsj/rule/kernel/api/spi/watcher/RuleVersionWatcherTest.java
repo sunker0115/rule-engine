@@ -20,7 +20,7 @@ class RuleVersionWatcherTest {
             public void watch(Consumer<RuleVersionSnapshot> onUpdate) {
                 // 立即推送一个快照，模拟更新通知。
                 RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
-                        1L, "SCENE1", "t1", null, null, null);
+                        1L, "SCENE1", "t1", null, null, null, null);
                 onUpdate.accept(snapshot);
             }
 

@@ -1,5 +1,7 @@
 # V1 评估层实现计划（Plan B）
 
+> **Status: 已完成**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让 rule-eval-svc 真正能跑通完整评估链路：索引启动加载 + 热更新 + Pre-Gate（ROLLOUT）+ EvalContext 装配 + evaluation_session 写入 + EvalServiceImpl 全实现（PULL / PUSH / dry-run），单测全通过。

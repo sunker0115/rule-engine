@@ -1,5 +1,7 @@
 # V1 端到端完善计划（Plan C）
 
+> **Status: 已完成**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 填补 Plan B 遗留的四个 v1 限制，使整条链路真正端到端可用：InterpretedExecutor 收集 NodeTrace、TraceWriterDbImpl 完成 flushBatch 写库、PUSH 模式引入 BlockingQueue 背压、集成测试（Testcontainers MySQL）覆盖 PUSH/PULL/dry-run 全链路。

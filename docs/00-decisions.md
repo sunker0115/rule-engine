@@ -115,7 +115,7 @@
 
 **你的决定**：A
 
-**v1 已知缺陷（待 v1.5 修）**：当前 hash 种子为 `(subjectId, ruleVersionId)`，A/B 实验场景下无法保证互斥。演进方向：`rollout` 新增可选字段 `experimentId`，同实验规则共享 hash 种子。详见 [`08-evolution.md §2.16`](./08-evolution.md)。
+**v1.5 已修**：`RolloutPreGate` 支持 `gateParams.experimentId` 可选字段。存在时以 `hash(subjectId:experimentId)` 作种子，同实验内多规则版本共享分桶（A/B 互斥）；不存在时行为与 v1 完全一致（向后兼容，无 DDL 变更）。
 
 ---
 
@@ -139,7 +139,7 @@
 - **v1 未实装 handler 的兜底契约**：调用 `dryRun` 但 handler 未补齐时，由 Dispatcher 短路返回 `ActionResult { status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED }`——不抛异常、不阻塞试算面板渲染；
 - v1.5 全量补齐后该 `errorCode` 不再产生（完整 `ActionResult.errorCode` 枚举见 [`01-concepts.md`](./01-concepts.md) §3.7）。
 
-**你的决定**：
+**v1 实装状态（已完成）**：`DryRunTraceWriter` SPI（`rule-kernel`）+ `DryRunTraceWriterDbImpl`（`rule-observability`，异步批写 `dry_run_node_trace` 表）+ `EvalServiceImpl` 按 `isDryRun` 路由到独立 SPI；stub `ActionHandler`（`BlockTransactionHandler` / `SendAlertHandler`）+ `ActionDispatchService` 同步派发并落库 `action_execution`（干跑不派发）。详见 [`docs/superpowers/plans/2026-06-03-eval-chain-completion.md`](./superpowers/plans/2026-06-03-eval-chain-completion.md)。v1.5 已实装：`BlockTransactionHandler.dryRun()` + `SendAlertHandler.dryRun()` 均 override 返回 `ActionResult.success()`；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。
 
 ---
 
@@ -608,9 +608,9 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
    - `node_trace`（每次评估 50-1000 行）**异步批写**（本决策）；
    - `action_execution`（每次 Action 派发 1 行）由 D20 §2 Dispatcher 异步写，与本决策同款但**独立队列**。
 
-4. **Pre-Gate trace 走同一 TraceWriter**：
+4. **Pre-Gate trace 走同一 TraceWriter；dry-run trace 走独立 SPI**：
    - §3.14 Pre-Gate 失败节点（`nodeType=PRE_GATE_BLOCKED`）与 ConditionNode trace 走同一 `TraceWriter`，不另起通道；
-   - dry-run 模式（D7）trace 同样走 `TraceWriter` 异步通道，但**写入目标表是独立的 `dry_run_session` 系列表**（与 prod `evaluation_session` / `node_trace` 隔离，D7 明定）——`TraceWriter` 内部按 `EvalContext.dryRun` 标记路由到不同表，**不**靠同表字段区分；
+   - dry-run 模式（D7）trace 走独立 `DryRunTraceWriter` SPI（与 `TraceWriter` 并列），写入 `dry_run_node_trace` 表，与 prod `node_trace` 完全隔离；`EvalServiceImpl` 在 `doEvaluate()` 末尾按 `isDryRun` 标记路由到对应 Writer，两路互不干扰；
    - 具体 `node_trace` 表的 schema 差异（如 Pre-Gate 不持有 `conditionType` / `actualValue`）由 [`05-storage.md`](./05-storage.md) §node_trace 表展开。
 
 5. **运维参数留 07-operability**（决策层只声明参数 + 决定因素，**不列具体数字**，与 D20 §2 同款规范）：
@@ -1045,18 +1045,16 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 |------|------|------|
 | ☐ A. 坚持 ArchUnit 1.3.x + Java 25 字节码 | 不修改版本 | ArchUnit 1.3 内置 ASM 9.6，Java 25 字节码（major 69）超出其解析上限，测试启动即崩溃 |
 | ☐ B. 升级 ArchUnit 1.4.0 + maven.compiler.release=21 | 小版本升级 + 降编译目标 | 解决解析问题；rule-kernel 编译为 Java 21 字节码，与其余模块（Java 25）不一致 |
-| ☐ C. 升级 ArchUnit 1.5+ | 较大版本升级 | ASM 9.8 支持 Java 25 字节码；但 1.5 与 Spring Boot 4 / Java 25 的实际兼容性尚未验证 |
+| ✅ C. 升级 ArchUnit 1.4.2 | 补丁升级 | 1.4.2 内置 ASM 9.8，原生支持 Java 25 字节码；无需 maven.compiler.release override，1.5 尚未发布 |
 
-**决定**：✅ B（临时方案）— 升级 ArchUnit 1.3.0 → 1.4.0，rule-kernel 加 `maven.compiler.release=21`
+**决定**：✅ C — 升级 ArchUnit 1.4.0 → 1.4.2，移除 rule-kernel 的 `maven.compiler.release=21` override
 
-**v1 落地范围**：
-- `rule-kernel/pom.xml` 新增 `<maven.compiler.release>21</maven.compiler.release>`，仅影响 rule-kernel
-- rule-kernel 所有主代码仅使用 Java 21 稳定特性（sealed interface、switch 模式匹配均在 Java 21 正式发布）
-- 其余 7 个模块维持 Java 25 编译目标
+**落地范围**：
+- `pom.xml` `archunit.version` 从 1.4.0 改为 1.4.2
+- `rule-kernel/pom.xml` 删除 `<maven.compiler.release>21</maven.compiler.release>` 及相关注释
+- 全模块统一使用 Java 25 编译目标，ArchUnit 日志确认 `Detected Java version 25.0.3`，150 项测试全部通过
 
-**已知妥协**：rule-kernel 字节码版本与其他模块不一致；日后升级到 ArchUnit 1.5+（ASM 9.8 支持 Java 25）后应删除 `maven.compiler.release` override。
-
-**派生约束**：需在升级 ArchUnit 至 1.5+ 后验证兼容性，届时删除 rule-kernel 的 `maven.compiler.release=21`。
+**变更原因**：实测 ArchUnit 1.4.2（而非预期的 1.5+）已内置 ASM 9.8，支持 Java 25 字节码；B 方案的模块字节码不一致问题因此得到完全消除。
 
 ---
 

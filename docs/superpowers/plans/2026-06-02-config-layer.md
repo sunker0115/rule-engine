@@ -1,5 +1,7 @@
 # V1 配置层实现计划（Plan A）
 
+> **Status: 已完成**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让 rule-config-svc 真正能跑通：Flyway 建表 + MyBatis-Plus Mapper + 发布流程（DRAFT→PUBLISHED）+ 快照生成 + `RulePublishedEvent` / `SceneChangedEvent` 发布，单测全通过。

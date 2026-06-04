@@ -163,6 +163,8 @@ POST /api/v1/rule/dry-run
 
 ### 4.1 创建规则草稿
 
+> **已实装（v2）**：`POST /api/v1/rules`，返回 201 + `DraftCreatedResult`；重复 code 前置校验，Scene 不存在返回 400。
+
 ```
 POST /api/v1/rules
 ```
@@ -170,7 +172,7 @@ POST /api/v1/rules
 **Request：**
 ```json
 {
-  "tenantId": "demo-tenant",
+  "tenantId": "1",
   "sceneCode": "risk.transfer",
   "code": "rule-transfer-review",
   "name": "转账人工审核触发",
@@ -180,6 +182,8 @@ POST /api/v1/rules
   "triggerEventTypes": ["transfer.initiated"]
 }
 ```
+
+> `tenantId` 为数字字符串（对应 `tenant.id` 主键），必填；`sceneCode` / `code` / `name` 必填；其余 JSON 字段可选（缺省存空 AST / 空数组）。
 
 **Response 201：**
 ```json
@@ -197,7 +201,7 @@ POST /api/v1/rules/{ruleDefinitionId}/publish
 ### 4.3 禁用规则
 
 ```
-PATCH /api/v1/rules/{ruleDefinitionId}/disable
+POST /api/v1/rules/{ruleDefinitionId}/disable
 ```
 
 效果：`rule_definition.status = DISABLED`，Matcher 倒排索引热摘除（≤15s 全实例收敛，D17）。

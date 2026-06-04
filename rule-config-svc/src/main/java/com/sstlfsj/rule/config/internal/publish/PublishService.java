@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.publish;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
@@ -148,7 +149,8 @@ public class PublishService {
                 String.valueOf(tenantId),
                 ast,
                 List.of(),   // preGates v1 暂时不反序列化
-                List.of()    // decisionBindings v1 暂时不反序列化
+                List.of(),   // decisionBindings v1 暂时不反序列化
+                List.of()    // triggerEventTypes v1 暂时不反序列化，通配
         );
 
         // 11. 发布 Modulith 事件（事务提交后由 Spring 事件机制触发，eval-svc 监听热更索引）
@@ -156,6 +158,94 @@ public class PublishService {
                 String.valueOf(tenantId), scene.getCode(), newRv.getId()));
 
         return snapshot;
+    }
+
+    /**
+     * 创建规则草稿：INSERT rule_definition + rule_version（status=DRAFT）+ audit_log。
+     *
+     * @param tenantId              租户 id
+     * @param sceneCode             场景编码
+     * @param code                  规则编码
+     * @param name                  规则名称
+     * @param conditionAstJson      条件 AST JSON，为空时默认 "{}"
+     * @param decisionBindingsJson  决策绑定 JSON，为空时默认 "[]"
+     * @param preGatesJson          前置门控 JSON，为空时默认 "[]"
+     * @param triggerEventTypesJson 触发事件类型 JSON，为空时默认 "[]"
+     * @param actorId               操作人
+     * @return 新建草稿的 id 和版本信息
+     */
+    @Transactional
+    public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
+            String code, String name,
+            String conditionAstJson, String decisionBindingsJson,
+            String preGatesJson, String triggerEventTypesJson,
+            String actorId) {
+        // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
+        SceneDef scene = sceneMapper.selectOne(
+                new LambdaQueryWrapper<SceneDef>()
+                        .eq(SceneDef::getTenantId, tenantId)
+                        .eq(SceneDef::getCode, sceneCode)
+        );
+        if (scene == null) {
+            throw new IllegalArgumentException("Scene 不存在: code=" + sceneCode);
+        }
+
+        // 2. 校验 code 在同 tenant+scene 下唯一，提前给出友好错误
+        long codeExists = ruleDefinitionMapper.selectCount(
+                new LambdaQueryWrapper<RuleDefinition>()
+                        .eq(RuleDefinition::getTenantId, tenantId)
+                        .eq(RuleDefinition::getSceneId, scene.getId())
+                        .eq(RuleDefinition::getCode, code)
+        );
+        if (codeExists > 0) {
+            throw new IllegalArgumentException("规则编码已存在: code=" + code);
+        }
+
+        // 3. INSERT rule_definition（status=DRAFT）
+        RuleDefinition rd = new RuleDefinition();
+        rd.setTenantId(tenantId);
+        rd.setSceneId(scene.getId());
+        rd.setCode(code);
+        rd.setName(name);
+        rd.setStatus("DRAFT");
+        rd.setKind("AST_BOOLEAN");
+        rd.setCreatedBy(actorId);
+        rd.setCreatedAt(LocalDateTime.now());
+        ruleDefinitionMapper.insert(rd);
+
+        // 4. INSERT rule_version（version=1，status=DRAFT）
+        RuleVersion rv = new RuleVersion();
+        rv.setRuleDefinitionId(rd.getId());
+        rv.setVersion(1L);
+        rv.setConditionAst(isBlank(conditionAstJson) ? "{}" : conditionAstJson);
+        rv.setDecisionBindings(isBlank(decisionBindingsJson) ? "[]" : decisionBindingsJson);
+        rv.setPreGates(isBlank(preGatesJson) ? "[]" : preGatesJson);
+        rv.setRollout("{}");
+        rv.setKind("AST_BOOLEAN");
+        rv.setTriggerEventTypes(isBlank(triggerEventTypesJson) ? "[]" : triggerEventTypesJson);
+        rv.setMetricDependencies("[]");
+        rv.setStatus("DRAFT");
+        rv.setCreatedAt(LocalDateTime.now());
+        ruleVersionMapper.insert(rv);
+
+        // 4. INSERT audit_log（同事务写入，D14 约定）
+        AuditLog log = new AuditLog();
+        log.setTenantId(tenantId);
+        log.setActor(actorId);
+        log.setActorType("USER");
+        log.setAction("CREATE");
+        log.setTargetType("rule_definition");
+        log.setTargetId(rd.getId().toString());
+        log.setAfterSnapshot("{\"ruleDefinitionId\":" + rd.getId() + ",\"ruleVersionId\":" + rv.getId() + "}");
+        log.setOperatedAt(LocalDateTime.now());
+        auditLogMapper.insert(log);
+
+        return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, "DRAFT");
+    }
+
+    /** 判断字符串是否为 null 或空白。 */
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     private String toJson(Object obj) {

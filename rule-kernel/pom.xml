@@ -11,14 +11,6 @@
     </parent>
     <artifactId>rule-kernel</artifactId>
 
-    <!-- rule-kernel 是零 Spring 纯 Java 库。
-         ArchUnit 1.4.0 内置 ASM 9.7，最高支持到 Java 21（class major 65）。
-         通过覆盖 maven.compiler.release 将字节码目标降到 21，ArchUnit 才能解析。
-         rule-kernel 主源码未使用任何 Java 22+ 专属特性，降级安全。 -->
-    <properties>
-        <maven.compiler.release>21</maven.compiler.release>
-    </properties>
-
     <dependencies>
         <!-- 唯一的非 JDK 依赖：murmur3 hash，用于 ROLLOUT Pre-Gate -->
         <dependency>
