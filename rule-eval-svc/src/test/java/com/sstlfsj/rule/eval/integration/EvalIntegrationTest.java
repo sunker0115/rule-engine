@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 使用真实 MySQL 容器 + Flyway 建表 + 真实 Spring 上下文。
  */
 @SpringBootTest
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 class EvalIntegrationTest {
 
