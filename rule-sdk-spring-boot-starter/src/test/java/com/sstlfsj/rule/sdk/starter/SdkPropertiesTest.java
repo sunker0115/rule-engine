@@ -33,4 +33,17 @@ class SdkPropertiesTest {
         assertThat(props.getScenes()).containsExactly("fraud", "payment");
         assertThat(props.getPollInterval()).isEqualTo(Duration.ofMinutes(1));
     }
+
+    @Test
+    void ruleFiles_defaultEmpty() {
+        SdkProperties props = new SdkProperties();
+        assertThat(props.getRuleFiles()).isEmpty();
+    }
+
+    @Test
+    void ruleFiles_setter_roundtrip() {
+        SdkProperties props = new SdkProperties();
+        props.setRuleFiles(List.of("classpath:rules/a.json", "classpath:rules/b.json"));
+        assertThat(props.getRuleFiles()).containsExactly("classpath:rules/a.json", "classpath:rules/b.json");
+    }
 }
