@@ -27,6 +27,7 @@
         <module>rule-api</module>
         <module>rule-app</module>
         <module>rule-sdk</module>
+        <module>rule-sdk-spring-boot-starter</module>
     </modules>
 
     <properties>
@@ -218,6 +219,11 @@
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-sdk</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-sdk-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
