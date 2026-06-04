@@ -176,4 +176,14 @@ class TracingInterpretedExecutorTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("ScorecardRootNode");
     }
+
+    @Test
+    void execute_scoreIsNull_forBooleanRules() {
+        // AST_BOOLEAN executor 不计算 score，EvalResult.score() 必须为 null
+        AstNode ast = trueNode();
+        EvalResult result = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.score()).isNull();
+    }
 }

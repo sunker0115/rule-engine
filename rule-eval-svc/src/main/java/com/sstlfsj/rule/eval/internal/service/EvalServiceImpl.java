@@ -160,7 +160,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                 List.copyOf(hitDecisions),
                 List.copyOf(allTraces),
                 errorCode,
-                List.of()
+                List.of(),
+                null
         );
 
         // ⑦ 更新 session 终态 + 提交 traces 到隔离写库

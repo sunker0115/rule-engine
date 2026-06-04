@@ -220,4 +220,19 @@ class EvalServiceImplTest {
 
         verifyNoInteractions(actionDispatchService);
     }
+
+    @Test
+    void evaluate_scoreIsNull_forBooleanRules() {
+        // AST_BOOLEAN 路径不计算 score，聚合后 EvalResult.score() 必须为 null
+        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
+        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+        when(contextAssembler.assemble(any(), any()))
+                .thenReturn(new EvalContext("1", event(), new Subject("u1", SubjectType.USER, Map.of()), Map.of()));
+        when(executor.execute(any(), any())).thenReturn(EvalResult.hit());
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+
+        EvalResult result = impl.evaluate(event());
+
+        assertNull(result.score());
+    }
 }

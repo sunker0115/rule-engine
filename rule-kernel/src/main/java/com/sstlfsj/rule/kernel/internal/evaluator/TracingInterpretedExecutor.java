@@ -43,7 +43,7 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
         List<NodeTrace> traces = rawTraces.stream()
                 .map(t -> withRuleVersionId(t, rvId))
                 .toList();
-        return new EvalResult(satisfied, null, List.of(), traces, null, List.of());
+        return new EvalResult(satisfied, null, List.of(), traces, null, List.of(), null);
     }
 
     /** 递归将 ruleVersionId 注入 trace 树（顶层和所有子节点）。 */
