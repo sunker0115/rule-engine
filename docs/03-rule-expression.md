@@ -16,8 +16,8 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 AST 节点结构 | ✅ |
-| §三 操作符清单 | ✅ |
+| §二 AST 节点结构 | ✅（含 XorNode §2.5） |
+| §三 操作符清单 | ✅（含 DATE_BEFORE/DATE_AFTER §3.4） |
 | §四 短路求值规则 | ✅ |
 | §五 节点级 trace | ✅ |
 | §六 v1 不支持的表达式 | ✅ |
@@ -27,7 +27,7 @@
 
 ## 二、AST 节点结构
 
-AST 由四种节点类型组成，每种节点字段如下。
+AST 由五种节点类型组成，每种节点字段如下。
 
 ### 2.1 AndNode（与节点）
 
@@ -71,7 +71,28 @@ AST 由四种节点类型组成，每种节点字段如下。
 | `params` | `object` | 是 | 传给 ConditionEvaluator 的参数对象，结构由各 conditionType 定义 |
 | `weight` | `number` | 否 | SCORECARD kind 专用（D12），v1 AST_BOOLEAN 忽略此字段 |
 
-**嵌套约束**：ConditionNode 是叶子节点，不能有 `children`；AndNode / OrNode / NotNode 是中间节点，不能作为最终叶子（children 不能为空）。
+**嵌套约束**：ConditionNode 是叶子节点，不能有 `children`；AndNode / OrNode / NotNode / XorNode 是中间节点，不能作为最终叶子（children 不能为空）。
+
+### 2.5 XorNode（异或节点）
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `"XorNode"` | 是 | 固定值 |
+| `displayLabel` | `string` | 否 | UI 显示名 |
+| `children` | `Node[]` | 是 | 子节点列表，至少 2 个；建议 2–4 个，超大列表可读性差 |
+| `weight` | `number` | 否 | SCORECARD kind 专用（D12），v1 AST_BOOLEAN 忽略此字段 |
+
+**求值语义**：恰好 **1 个**子节点 satisfied=true 时整体 true；0 个或 ≥ 2 个 true 时整体 false。不做短路——所有子节点均需求值才能确定"恰好 1 个"，但内部有优化：已满足 2 个 true 时提前退出（结果已确定为 false）。
+
+**典型用途**：互斥条件——多个分支中有且仅有一个成立，如"只走其中一条风控路径"或"恰好命中一类黑名单"。
+
+**与 OrNode 的区别**：
+
+| | `OrNode` | `XorNode` |
+|--|--|--|
+| 1 个 true | ✅ true | ✅ true |
+| 2 个 true | ✅ true | ❌ false |
+| 0 个 true | ❌ false | ❌ false |
 
 ---
 
@@ -109,7 +130,46 @@ AST 由四种节点类型组成，每种节点字段如下。
 | `ENDS_WITH` | STRING | 后缀匹配 | 同上 |
 | `MATCHES` | STRING | 正则匹配（Java `Pattern.matches`）| value 为 null → satisfied=false |
 
-### 3.4 类型转换规则（D20 §3 闭合校验前置）
+### 3.4 日期操作符
+
+> 适用于 `dataType=DATE` 或 `dataType=DATETIME` 的 Metric；参数格式 ISO-8601（`"2026-06-01"` / `"2026-06-01T00:00:00+08:00"`）或特殊占位符 `"$now"`（评估时刻）/ `"$today"`（评估日期，无时间部分）。
+
+| operator | 适用数据类型 | 语义 | null 处理 |
+|----------|------------|------|-----------|
+| `DATE_BEFORE` | DATE / DATETIME | `value < threshold`（严格早于） | value 为 null → satisfied=false |
+| `DATE_AFTER` | DATE / DATETIME | `value > threshold`（严格晚于） | value 为 null → satisfied=false |
+
+**示例**：账户创建时间早于 2024-01-01（老账户识别）：
+
+```json
+{
+  "type": "ConditionNode",
+  "conditionType": "metric.threshold",
+  "metricCode": "account.created_at",
+  "params": {
+    "operator": "DATE_BEFORE",
+    "threshold": "2024-01-01"
+  }
+}
+```
+
+**示例**：用户最后登录时间晚于 $now（异常时间戳检测）：
+
+```json
+{
+  "type": "ConditionNode",
+  "conditionType": "metric.threshold",
+  "metricCode": "user.last_login_at",
+  "params": {
+    "operator": "DATE_AFTER",
+    "threshold": "$now"
+  }
+}
+```
+
+**与 `time.occurred_at` 的区别**：`time.occurred_at` 检查事件本身的业务时间（`EvalContext.event.occurredAt`）；`DATE_BEFORE` / `DATE_AFTER` 检查任意 DATE/DATETIME 类型 Metric 的值——可以是账户创建时间、上次登录时间、到期时间等任何时间类指标。
+
+### 3.5 类型转换规则（D20 §3 闭合校验前置）
 
 发布时引擎静态校验 metric 数据类型与操作符是否匹配（如 STRING metric 不能用 GT/LT）。v1 **不做运行时类型转换**——metric 返回 DOUBLE 但配置了 LONG 类型 metric 时，引擎在 EvalContext 内以 DOUBLE 处理，ConditionEvaluator 收到的就是原始类型。类型不匹配在发布期拒绝，不在运行期推断。
 
@@ -124,6 +184,7 @@ AST 由四种节点类型组成，每种节点字段如下。
 | `AndNode` | 子节点求值结果为 `false` | 停止求值剩余子节点；剩余节点 trace 中 `result=null`（"短路跳过"） |
 | `OrNode` | 子节点求值结果为 `true` | 停止求值剩余子节点；剩余节点 trace 中 `result=null` |
 | `NotNode` | 无短路 | 始终求值 child |
+| `XorNode` | 已有 ≥ 2 个子节点 satisfied=true | 提前退出（结果已确定为 false）；剩余节点 trace 中 `result=null` |
 
 子节点按列表顺序（`sortOrder`）依次求值，无并发求值。
 
@@ -160,7 +221,7 @@ AST 由四种节点类型组成，每种节点字段如下。
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `node_path` | `string` | AST 路径，如 `"0"` = 根，`"0.1"` = 根的第 2 子节点（0-indexed） |
-| `node_type` | `string` | `AndNode` / `OrNode` / `NotNode` / `ConditionNode` / `PRE_GATE_BLOCKED` |
+| `node_type` | `string` | `AndNode` / `OrNode` / `NotNode` / `XorNode` / `ConditionNode` / `PRE_GATE_BLOCKED` |
 | `condition_type` | `string` | 仅 ConditionNode，conditionType 注册码；其余节点为 null |
 | `metric_code` | `string` | 仅 metric 类 ConditionNode；其余为 null |
 | `params` | JSON | 节点参数快照（发布时冻结） |
