@@ -9,6 +9,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 
@@ -35,6 +36,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
             case OrNode or            -> evaluateOr(or, ctx);
             case NotNode not          -> !evaluate(not.child(), ctx);
             case ConditionNode c      -> evaluateCondition(c, ctx);
+            case XorNode xor          -> evaluateXor(xor, ctx);
             // ScorecardRootNode 由 ScorecardExecutor 处理，不应进入此执行器
             case ScorecardRootNode ignored ->
                     throw new IllegalStateException("ScorecardRootNode 不能由 InterpretedExecutor 处理");
@@ -53,6 +55,15 @@ public class InterpretedExecutor implements RuleVersionExecutor {
             if (evaluate(child, ctx)) return true; // 短路：任一子节点为 true 即返回
         }
         return false;
+    }
+
+    private boolean evaluateXor(XorNode xor, EvalContext ctx) {
+        int satisfiedCount = 0;
+        for (AstNode child : xor.children()) {
+            if (evaluate(child, ctx)) satisfiedCount++;
+            if (satisfiedCount > 1) break; // 已超过1个，提前退出（优化）
+        }
+        return satisfiedCount == 1;
     }
 
     private boolean evaluateCondition(ConditionNode node, EvalContext ctx) {

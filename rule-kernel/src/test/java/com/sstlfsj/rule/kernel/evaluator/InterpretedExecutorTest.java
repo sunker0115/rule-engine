@@ -12,6 +12,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import org.junit.jupiter.api.Test;
@@ -147,6 +148,41 @@ class InterpretedExecutorTest {
         EvalResult result = executor.execute(snapshot(ast), minimalContext());
 
         assertThat(result.ruleHit()).isTrue();
+    }
+
+    @Test
+    void xorNode_exactlyOneTrue_returns_ruleHit() {
+        // XOR(true, false, false) = true
+        AstNode ast = new XorNode(List.of(trueNode(), falseNode(), falseNode()), null);
+        InterpretedExecutor executor = executorWith(Map.of(
+                ALWAYS_TRUE, alwaysTrue,
+                ALWAYS_FALSE, alwaysFalse));
+
+        EvalResult result = executor.execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isTrue();
+    }
+
+    @Test
+    void xorNode_allTrue_returns_miss() {
+        // XOR(true, true) = false
+        AstNode ast = new XorNode(List.of(trueNode(), trueNode()), null);
+        InterpretedExecutor executor = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue));
+
+        EvalResult result = executor.execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isFalse();
+    }
+
+    @Test
+    void xorNode_allFalse_returns_miss() {
+        // XOR(false, false) = false
+        AstNode ast = new XorNode(List.of(falseNode(), falseNode()), null);
+        InterpretedExecutor executor = executorWith(Map.of(ALWAYS_FALSE, alwaysFalse));
+
+        EvalResult result = executor.execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isFalse();
     }
 
     @Test

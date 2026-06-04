@@ -75,6 +75,21 @@ class AstJsonCodecTest {
     }
 
     @Test
+    void deserializeXorNode_withChildren() throws Exception {
+        String json = """
+                {"type":"XorNode","displayLabel":"互斥条件","children":[
+                  {"type":"ConditionNode","conditionType":"EQ","metricCode":"channel","params":{}},
+                  {"type":"ConditionNode","conditionType":"GT","metricCode":"score","params":{}}
+                ]}
+                """;
+        AstNode node = codec.deserializeAst(json);
+        assertInstanceOf(XorNode.class, node);
+        XorNode xor = (XorNode) node;
+        assertEquals("互斥条件", xor.displayLabel());
+        assertEquals(2, xor.children().size());
+    }
+
+    @Test
     void deserializeScorecardRootNode() throws Exception {
         String json = """
                 {"type":"ScorecardRootNode","threshold":0.6,"conditions":[

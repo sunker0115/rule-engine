@@ -261,6 +261,7 @@
   - 无 DDL 变更（AST 存 JSON，加节点类型是 JSON key 变更）；
   - 发布期输入闭合校验（D20 §3）对 XorNode 透明——只关心 ConditionNode 的变量引用，不感知父节点类型。
 - **参考来源**：trae `rule/strategy/RuleXorStrategy.java`，详见 [`docs/superpowers/specs/2026-06-04-trae-reference-design.md`](./specs/2026-06-04-trae-reference-design.md) §三 R1。
+- **已实装（d12-scorecard-evaluator Task 7）**：`XorNode` sealed AST 节点 + `AstJsonCodec` 映射 + `InterpretedExecutor` / `TracingInterpretedExecutor` 全量遍历分支 + 5 个单测覆盖（恰好一个/全部满足/全部不满足/空/两个满足）。
 - **迁移成本**：低（sealed class + evaluator + 前端编辑器，无 DDL，无 schema 迁移）。
 
 ### 2.20 规则草稿创建 API（来源 10-api-contract.md §4.1）

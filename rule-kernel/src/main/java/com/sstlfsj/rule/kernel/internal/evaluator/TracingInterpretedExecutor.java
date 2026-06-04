@@ -10,6 +10,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 
@@ -69,6 +70,7 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
             case OrNode or            -> traceOr(or, ctx, sink);
             case NotNode not          -> traceNot(not, ctx, sink);
             case ConditionNode cond   -> traceCondition(cond, ctx, sink);
+            case XorNode xor          -> traceXor(xor, ctx, sink);
             // ScorecardRootNode 由 ScorecardExecutor 处理，不应进入此执行器
             case ScorecardRootNode ignored ->
                     throw new IllegalStateException("ScorecardRootNode 不能由 TracingInterpretedExecutor 处理");
@@ -121,6 +123,22 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
         boolean childResult = evalAndTrace(not.child(), ctx, childTraces);
         boolean result = !childResult;
         sink.add(new NodeTrace("NotNode", null, null, result, null, null, null, childTraces, null));
+        return result;
+    }
+
+    /**
+     * XOR 节点：全量遍历所有子节点（不短路），有且仅有一个 true 时结果为 true。
+     * 所有子节点均求值并记录 trace，结果汇总到 XorNode trace 的 children 中。
+     */
+    private boolean traceXor(XorNode xor, EvalContext ctx, List<NodeTrace> sink) {
+        List<NodeTrace> childTraces = new ArrayList<>();
+        int satisfiedCount = 0;
+        for (AstNode child : xor.children()) {
+            // XOR 不短路，所有子节点都求值并记录 trace
+            if (evalAndTrace(child, ctx, childTraces)) satisfiedCount++;
+        }
+        boolean result = satisfiedCount == 1;
+        sink.add(new NodeTrace("XorNode", null, null, result, null, null, null, childTraces, null));
         return result;
     }
 

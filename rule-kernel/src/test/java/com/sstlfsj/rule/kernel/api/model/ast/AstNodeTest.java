@@ -50,6 +50,7 @@ class AstNodeTest {
             case NotNode n -> "not";
             case ConditionNode c -> "condition";
             case ScorecardRootNode s -> "scorecard";
+            case XorNode x -> "xor";
         };
         assertEquals("condition", result);
     }

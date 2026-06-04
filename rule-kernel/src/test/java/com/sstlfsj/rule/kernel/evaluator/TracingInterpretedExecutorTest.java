@@ -11,6 +11,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import org.junit.jupiter.api.Test;
@@ -175,6 +176,38 @@ class TracingInterpretedExecutorTest {
                 () -> executorWith(Map.of()).execute(snapshot(ast), minimalContext()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("ScorecardRootNode");
+    }
+
+    @Test
+    void xorNode_exactlyOneTrue_producesTraceWithAllChildren() {
+        // XOR 不短路，全量遍历；XOR(TRUE, FALSE, FALSE) = true，children 应有 3 条 trace
+        AstNode ast = new XorNode(List.of(trueNode(), falseNode(), falseNode()), null);
+        EvalResult result = executorWith(Map.of(
+                        ALWAYS_TRUE, alwaysTrue,
+                        ALWAYS_FALSE, alwaysFalse))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.nodeTrace()).hasSize(1);
+        NodeTrace xorTrace = result.nodeTrace().get(0);
+        assertThat(xorTrace.nodeType()).isEqualTo("XorNode");
+        assertThat(xorTrace.result()).isTrue();
+        // 全量遍历，3 个子节点均有 trace
+        assertThat(xorTrace.children()).hasSize(3);
+    }
+
+    @Test
+    void xorNode_twoTrue_producesTrace_miss() {
+        // XOR(TRUE, TRUE) = false，trace result=false，children 有 2 条
+        AstNode ast = new XorNode(List.of(trueNode(), trueNode()), null);
+        EvalResult result = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isFalse();
+        NodeTrace xorTrace = result.nodeTrace().get(0);
+        assertThat(xorTrace.nodeType()).isEqualTo("XorNode");
+        assertThat(xorTrace.result()).isFalse();
+        assertThat(xorTrace.children()).hasSize(2);
     }
 
     @Test

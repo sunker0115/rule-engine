@@ -71,7 +71,8 @@ public class AstJsonCodec {
             @JsonSubTypes.Type(value = OrNode.class,            name = "OrNode"),
             @JsonSubTypes.Type(value = NotNode.class,           name = "NotNode"),
             @JsonSubTypes.Type(value = ConditionNode.class,     name = "ConditionNode"),
-            @JsonSubTypes.Type(value = ScorecardRootNode.class, name = "ScorecardRootNode")
+            @JsonSubTypes.Type(value = ScorecardRootNode.class, name = "ScorecardRootNode"),
+            @JsonSubTypes.Type(value = XorNode.class,           name = "XorNode")
     })
     interface AstNodeMixin {}
 }
