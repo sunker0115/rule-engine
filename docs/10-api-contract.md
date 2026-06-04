@@ -38,7 +38,7 @@
 | Scene 管理 | `/api/v1/scenes` | 创建 / 更新 / 禁用 Scene |
 | 指标管理 | `/api/v1/metrics` | 注册 / 更新 / 禁用 Metric |
 | 元数据接口 | `/api/v1/scenes/{sceneCode}/metadata`，`/api/v1/scenes/{sceneCode}/provided-metrics` | 前端编辑器拉 ConditionType / ActionType 枚举；D30 allowProvided 发现 |
-| 审计与查询 | `/api/v1/evaluation-sessions` | 查 session / trace / action 执行 |
+| 审计与查询 | `/api/v1/evaluation-sessions`，`/api/v1/rules/{id}/sessions` | 查 session / trace / action 执行；按规则查历史触发记录 |
 
 ---
 
@@ -279,6 +279,55 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 ```
 
 **Response 200：** 分页列表，含 `actor / actorType / action / targetType / targetId / beforeSnapshot / afterSnapshot / operatedAt`。
+
+### 6.4 按规则查历史 evaluation_session
+
+> 排障场景：运营在规则详情页快速看到"这条规则最近触发了哪些 session，结果如何"。
+
+```
+GET /api/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&limit=20&offset=0
+```
+
+**Path 参数：**
+
+| 参数 | 说明 |
+|------|------|
+| `ruleDefinitionId` | 规则定义 ID（`rule_definition.id`） |
+
+**Query 参数：**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `tenantId` | 是 | 租户 ID |
+| `status` | 否 | 筛选终态：`HIT / MISS / BLOCKED / ERROR`；不传则返回全部终态 |
+| `limit` | 否 | 每页条数，默认 20，最大 100 |
+| `offset` | 否 | 偏移量，默认 0 |
+
+**Response 200：**
+```json
+{
+  "total": 135,
+  "items": [
+    {
+      "sessionId": 10001,
+      "eventId": "evt-001",
+      "subjectId": "user-001",
+      "status": "HIT",
+      "finalDecision": "REVIEW",
+      "evalDurationMs": 45,
+      "startedAt": "2026-06-04T10:00:00.123+08:00",
+      "ruleVersionId": 42
+    }
+  ]
+}
+```
+
+**实现说明（供实现参考，不属于 API 契约）：**
+- 查询路由：`node_trace.rule_version_id` IN（ruleDefinitionId 对应的所有 `rule_version.id`）→ 取 `evaluation_session_id` → JOIN `evaluation_session`；
+- 排序：`evaluation_session.started_at DESC`；
+- 响应 `ruleVersionId` 来自关联的 `node_trace.rule_version_id`（该 session 内该规则实际命中的版本）；
+- `tenantId` 为必填，查询层校验，不支持跨租户查询；
+- 索引说明见 [`05-storage.md`](./05-storage.md) 运营查询索引表。
 
 ---
 

@@ -322,6 +322,7 @@ CREATE TABLE evaluation_session (
   started_at       TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
   finished_at      TIMESTAMP(3)  COMMENT 'status 从 PENDING 更新为终态的时间',
   eval_duration_ms INT          COMMENT '整 session 耗时（ms）',
+  context_snapshot JSON         COMMENT 'EvalContext metrics 取数快照，{metricCode: value}；构建失败时为 null（排障 / dry-run 重放用）',
   UNIQUE KEY uk_tenant_event (tenant_id, event_id),
   KEY idx_scene_subject (scene_code, subject_id),
   KEY idx_started_at (started_at)
@@ -399,6 +400,7 @@ CREATE TABLE dry_run_session (
   trigger          ENUM('MANUAL','API') NOT NULL DEFAULT 'API' COMMENT 'dry-run 触发来源',
   requested_by     VARCHAR(64)  COMMENT 'dry-run 发起人（来自请求头 X-Actor-Id，D14）',
   target_rule_version_id BIGINT COMMENT '指定预览的 RuleVersion id；null 时使用 current_version，可提前预览未发布版本',
+  context_snapshot JSON         COMMENT 'dry-run 试算时 EvalContext metrics 取数快照（排障 / 重放对比用）',
   KEY idx_tenant_started (tenant_id, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 评估主记录（与 prod 隔离，D7）';
 ```
@@ -443,6 +445,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | 表 | 索引 | 查询模式 |
 |---|---|---|
 | `evaluation_session` | `idx_scene_subject (scene_code, subject_id)` | 按用户查历史评估记录 |
+| `evaluation_session` | （无专用索引）按规则查历史 session 走 `node_trace.rule_version_id` IN 该规则所有版本 id → 取 `evaluation_session_id` → JOIN evaluation_session；不在 evaluation_session 加规则外键索引以避免写热点，JOIN 量小可接受（见 10-api-contract §6.4） | |
 | `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
 | `action_execution` | UK `uk_idempotency (tenant_id, event_id, decision_code, action_id)`<br>`idx_status_retryable (status, retryable)`<br>`idx_session_id (evaluation_session_id)` | Action 派发幂等检查（D27 DB 层最终防重）<br>重试队列扫描（查 status=FAILED AND retryable=1）<br>按 session 查 action 执行记录 |
 | `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |

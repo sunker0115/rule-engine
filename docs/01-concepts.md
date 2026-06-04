@@ -710,6 +710,7 @@ interface Scheduler {
 | `started_at` | 评估开始时间 |
 | `finished_at` | 评估结束时间 |
 | `eval_duration_ms` | 整 session 耗时（ms） |
+| `context_snapshot` | nullable JSON；EvalContext 构建完成后对 `metrics` 取数结果的快照（`{metricCode: value}`），用于 dry-run 重放时还原历史 metric 值，避免重放时取到当前新值；EvalContext 构建失败（`status=ERROR, errorCode=METRIC_FETCH_FAIL`）时为 null |
 
 **`status` 聚合语义**（session 结束时由引擎按规则集合结果填充）：
 
@@ -728,6 +729,7 @@ interface Scheduler {
 - **生产专用**：dry-run 场景写独立的 `dry_run_session` 表（§3.16），不污染生产幂等键；
 - **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键关联，可从 session 横向拉出完整评估链路；
 - **与 `rule_version` 的关联**：`action_execution` 记 `decision_code`（D27 幂等键变更），可与 `rule_version.decision_bindings` 关联追溯对应 Decision 快照；`node_trace` 记 `rule_version_id` 提供按版本对账路径（§3.12 派生）；
+- **`context_snapshot` 写入时机**：EvalContext 构建成功后、进入 AST 评估前，由评估线程同步写入 `evaluation_session` 行（与 session INSERT 同事务，开销为一次 JSON 序列化）；构建失败时置 null，不阻塞 session 落库；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §evaluation_session 表。
 
 ### 3.16 DryRunSession（试算会话，非一等公民）
@@ -752,6 +754,7 @@ interface Scheduler {
 | `trigger` | `MANUAL` / `API`；dry-run 触发来源（MANUAL=运营从管理台手动发起，API=调用方通过接口触发） |
 | `requested_by` | 发起 dry-run 的操作人 ID（来源 `X-Actor-Id` header，D14） |
 | `target_rule_version_id` | nullable；调用方指定 dry-run 的目标 RuleVersion；未指定时使用 `current_version`（可提前预览未发布版本效果） |
+| `context_snapshot` | 同 §3.15；dry-run 场景下为本次试算时真实取到的 metric 快照，方便运营对比"重放时 metric 值"与"当前 metric 值"的差异 |
 
 **关键边界**：
 
