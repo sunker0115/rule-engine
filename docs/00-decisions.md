@@ -1226,6 +1226,29 @@ RuleEngineClient.builder()
 
 ---
 
+## D39. Spring Boot Starter 补完 — 文件模式 + Bean 自动扫描 + Listener 注入 ⭐⭐⭐
+
+**背景**：`rule-sdk-spring-boot-starter` v1 只支持 HTTP 轮询模式（`serverUrl` + `tenantId`），三块能力缺失：
+1. 文件模式（`rule-files` 配置列表）；
+2. `@ConditionType` Bean 自动扫描，省去手动 `addEvaluator()`；
+3. `EvalResultListener` / `EvalSessionListener` Bean 自动注入。
+
+**各项设计**：
+
+**文件模式**：`SdkProperties` 新增 `ruleFiles: List<String>`，`AutoConfiguration` 遍历列表调 `builder.ruleFile()`。与 `serverUrl` 互斥校验已在 `RuleEngineClient.Builder.build()` 保障，starter 层不重复校验。
+
+**`@ConditionType` Bean 自动扫描**：`AutoConfiguration` 注入 `ApplicationContext`，调 `ctx.getBeansWithAnnotation(ConditionType.class)`，遍历结果：若 Bean 实现 `ConditionEvaluator`，以注解 `value()` 为 key 调 `builder.addEvaluator()`；否则跳过（不报错）。这是 D37 `addEvaluator()` 的批量版，底层路径完全一致。
+
+**Listener Bean 注入**：`AutoConfiguration` 注入 `Optional<EvalResultListener>` 和 `Optional<EvalSessionListener>`，存在则调 `builder.evalResultListener()` / `builder.evalSessionListener()`。
+
+**不改的**：`RuleEngineClient` 内部逻辑、`RuleSource` SPI、`InterpretedExecutor`、`EvalEngine`。
+
+**落地范围**：
+- `rule-sdk-spring-boot-starter`：`SdkProperties.java`（已加 `ruleFiles`）、`RuleEngineClientAutoConfiguration.java`；
+- `10-api-contract.md §8.2`：补 `rule-files`、`@ConditionType` Bean、Listener Bean 的 Spring 用法说明。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1264,5 +1287,6 @@ RuleEngineClient.builder()
 | D32 | ArchUnit 版本与 rule-kernel 编译目标 | B（临时） | ArchUnit 1.4.0 + rule-kernel maven.compiler.release=21；升级至 ArchUnit 1.5+ 后需删除 override |
 | D33 | Modulith verify() 不适用于多 JAR 共享库 | A | rule-kernel 是跨模块共享库（SPI+模型），Modulith 在多 JAR 结构下将其视为 Modulith 模块导致 exposed 检查误报；骨架阶段跳过 verify()，架构边界由 ArchUnit（KernelArchTest）保证；等 v2 业务实现时视 Modulith 版本再评估是否启用 verify() |
 | D34 | 嵌入式 SDK 本地模式（代码定义规则，零网络） | A | `RuleEngineClient.Builder.localSnapshot()` 直接写入本地索引，不启动 SnapshotPoller；`RuleVersionSnapshot` 补 Builder 辅助类；适用单测/演示/离线部署 |
+| D39 | Spring Boot Starter 补完 | A | 文件模式（`rule-files`）+ `@ConditionType` Bean 自动扫描 + `EvalResultListener`/`EvalSessionListener` Bean 注入；三项均委托现有 Builder API，starter 零额外逻辑 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

@@ -412,21 +412,62 @@ try (RuleEngineClient client = RuleEngineClient.builder()
 }
 ```
 
-Spring Boot 项目通过 `application.yml` 自动装配：
+Spring Boot 项目通过 `application.yml` 自动装配，支持三种配置模式：
+
+**HTTP 轮询模式**（生产）：
 
 ```yaml
 rule:
   sdk:
     server-url: http://rule-engine:8080
     tenant-id: "1001"
-    fetch-mode: DECLARED
-    scenes: fraud, payment
+    fetch-mode: DECLARED      # DECLARED（订阅指定场景）或 ALL（全量）
+    scenes: fraud, payment    # fetch-mode=DECLARED 时有效
     poll-interval: 30s
 ```
+
+**JSON 文件模式**（离线/测试）：
+
+```yaml
+rule:
+  sdk:
+    rule-files:
+      - classpath:rules/fraud.json
+      - classpath:rules/payment.json
+```
+
+**混用**（文件兜底 + HTTP 热更新）：`server-url` 与 `rule-files` 同时配置时两路来源均装载，规则写入同一索引。
 
 ```java
 @Autowired RuleEngineClient client;
 EvalResult result = client.evaluate(event);
+```
+
+**`@ConditionType` Bean 自动扫描**：实现 `ConditionEvaluator` 接口并标注 `@ConditionType` 的 Spring Bean，AutoConfiguration 启动时自动收集注册，无需手动 `addEvaluator()`：
+
+```java
+@Component
+@ConditionType("BLACKLIST_HIT")
+public class BlacklistEvaluator implements ConditionEvaluator {
+    @Override
+    public boolean evaluate(ConditionNode node, EvalContext ctx) {
+        List<?> list = (List<?>) node.params().get("list");
+        var mv = ctx.metrics().get(node.metricCode());
+        return mv != null && list.contains(mv.value());
+    }
+}
+```
+
+**Listener Bean 注入**：容器中存在 `EvalResultListener` 或 `EvalSessionListener` Bean 时自动注入：
+
+```java
+@Component
+public class AuditListener implements EvalResultListener {
+    @Override
+    public void onResult(RuleEvent event, EvalResult result) {
+        // 写审计日志、打点等
+    }
+}
 ```
 
 ---
