@@ -25,7 +25,8 @@ class SnapshotAssemblerTest {
                 """,
                 "[]",
                 "[{\"decisionCode\":\"REJECT\",\"priority\":10}]",
-                "[\"RISK_EVENT\"]"
+                "[\"RISK_EVENT\"]",
+                "AST_BOOLEAN"
         );
 
         RuleVersionSnapshot snapshot = assembler.assemble(row);
@@ -38,6 +39,35 @@ class SnapshotAssemblerTest {
         assertEquals("REJECT", snapshot.decisionBindings().get(0).decisionCode());
         assertTrue(snapshot.preGates().isEmpty());
         assertEquals(List.of("RISK_EVENT"), snapshot.triggerEventTypes());
+        assertEquals("AST_BOOLEAN", snapshot.kind());
+    }
+
+    @Test
+    void assemble_kindScorecard_propagatedToSnapshot() throws Exception {
+        RuleVersionRow row = new RuleVersionRow(
+                10L, "scene1", 1L,
+                "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
+                "[]", "[]", "[]",
+                "SCORECARD"
+        );
+
+        RuleVersionSnapshot snapshot = assembler.assemble(row);
+
+        assertEquals("SCORECARD", snapshot.kind());
+    }
+
+    @Test
+    void assemble_kindNull_defaultsToAstBoolean() throws Exception {
+        RuleVersionRow row = new RuleVersionRow(
+                11L, "scene1", 1L,
+                "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
+                "[]", "[]", "[]",
+                null
+        );
+
+        RuleVersionSnapshot snapshot = assembler.assemble(row);
+
+        assertEquals("AST_BOOLEAN", snapshot.kind());
     }
 
     @Test
@@ -47,7 +77,8 @@ class SnapshotAssemblerTest {
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
                 "[{\"gateType\":\"ROLLOUT\",\"params\":{\"percentage\":10}}]",
                 "[]",
-                "[\"E1\"]"
+                "[\"E1\"]",
+                "AST_BOOLEAN"
         );
 
         RuleVersionSnapshot snapshot = assembler.assemble(row);
@@ -61,12 +92,12 @@ class SnapshotAssemblerTest {
         RuleVersionRow bad = new RuleVersionRow(
                 99L, "scene_bad", 1L,
                 "NOT_JSON",
-                "[]", "[]", "[]"
+                "[]", "[]", "[]", "AST_BOOLEAN"
         );
         RuleVersionRow good = new RuleVersionRow(
                 100L, "scene_good", 2L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
-                "[]", "[]", "[]"
+                "[]", "[]", "[]", "AST_BOOLEAN"
         );
 
         List<RuleVersionSnapshot> results = assembler.assembleAll(List.of(bad, good));
@@ -87,7 +118,7 @@ class SnapshotAssemblerTest {
         RuleVersionRow row = new RuleVersionRow(
                 1L, "scene1", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
-                "[]", "[]", "[]"
+                "[]", "[]", "[]", "AST_BOOLEAN"
         );
 
         RuleVersionSnapshot snapshot = assembler.assemble(row);
@@ -102,7 +133,7 @@ class SnapshotAssemblerTest {
         RuleVersionRow row = new RuleVersionRow(
                 2L, "scene1", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
-                "[]", "[]", "[\"login\",\"payment\"]"
+                "[]", "[]", "[\"login\",\"payment\"]", "AST_BOOLEAN"
         );
 
         RuleVersionSnapshot snapshot = assembler.assemble(row);

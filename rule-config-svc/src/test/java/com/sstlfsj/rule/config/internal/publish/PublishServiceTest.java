@@ -91,6 +91,8 @@ class PublishServiceTest {
         assertThat(snapshot.sceneCode()).isEqualTo("PAYMENT");
         // v1 发布时 triggerEventTypes 为空列表（通配），精确路由在 eval-svc 侧处理
         assertThat(snapshot.triggerEventTypes()).isEmpty();
+        // kind 从 rule_definition 流转到 snapshot
+        assertThat(snapshot.kind()).isEqualTo("AST_BOOLEAN");
         // 验证 rule_version 被插入，version=1，status=ACTIVE
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());

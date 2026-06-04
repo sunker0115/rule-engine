@@ -27,7 +27,7 @@ class SceneRuleIndexTest {
 
     @Test
     void update_thenMatch_returnsStoredSnapshots() {
-        RuleVersionSnapshot snapshot = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null);
+        RuleVersionSnapshot snapshot = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null, null);
         index.update("t1", "scene1", "ORDER_PLACED", List.of(snapshot));
 
         List<RuleVersionSnapshot> result = index.match("t1", "scene1", "ORDER_PLACED");
@@ -37,7 +37,7 @@ class SceneRuleIndexTest {
 
     @Test
     void match_differentKey_returnsEmpty() {
-        RuleVersionSnapshot snapshot = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null);
+        RuleVersionSnapshot snapshot = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null, null);
         index.update("t1", "scene1", "ORDER_PLACED", List.of(snapshot));
 
         assertTrue(index.match("t1", "scene1", "OTHER_EVENT").isEmpty());
@@ -46,8 +46,8 @@ class SceneRuleIndexTest {
 
     @Test
     void remove_deletesAllEntriesForTenantAndScene() {
-        RuleVersionSnapshot s1 = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null);
-        RuleVersionSnapshot s2 = new RuleVersionSnapshot(2L, "scene1", "t1", null, null, null, null);
+        RuleVersionSnapshot s1 = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null, null);
+        RuleVersionSnapshot s2 = new RuleVersionSnapshot(2L, "scene1", "t1", null, null, null, null, null);
         index.update("t1", "scene1", "ORDER_PLACED", List.of(s1));
         index.update("t1", "scene1", "ORDER_SHIPPED", List.of(s2));
 
@@ -59,8 +59,8 @@ class SceneRuleIndexTest {
 
     @Test
     void remove_doesNotAffectOtherScenes() {
-        RuleVersionSnapshot s1 = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null);
-        RuleVersionSnapshot s2 = new RuleVersionSnapshot(2L, "scene2", "t1", null, null, null, null);
+        RuleVersionSnapshot s1 = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null, null);
+        RuleVersionSnapshot s2 = new RuleVersionSnapshot(2L, "scene2", "t1", null, null, null, null, null);
         index.update("t1", "scene1", "E1", List.of(s1));
         index.update("t1", "scene2", "E1", List.of(s2));
 
@@ -72,7 +72,7 @@ class SceneRuleIndexTest {
 
     @Test
     void update_returnsImmutableList() {
-        RuleVersionSnapshot snapshot = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null);
+        RuleVersionSnapshot snapshot = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null, null);
         index.update("t1", "scene1", "E1", List.of(snapshot));
 
         List<RuleVersionSnapshot> result = index.match("t1", "scene1", "E1");
@@ -82,7 +82,7 @@ class SceneRuleIndexTest {
     /** 只有通配 "*" 条目时，match 任意 eventType 均返回通配桶内容。 */
     @Test
     void match_wildcardOnly_returnedForAnyEventType() {
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(10L, "scene1", "t1", null, null, null, null);
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(10L, "scene1", "t1", null, null, null, null, null);
         index.update("t1", "scene1", "*", List.of(snap));
 
         List<RuleVersionSnapshot> result = index.match("t1", "scene1", "ORDER_PLACED");
@@ -93,8 +93,8 @@ class SceneRuleIndexTest {
     /** 精确 key 和通配 key 同时存在时，match 返回两者去重合并。 */
     @Test
     void match_exactAndWildcard_returnsMerged() {
-        RuleVersionSnapshot snapExact    = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null);
-        RuleVersionSnapshot snapWildcard = new RuleVersionSnapshot(2L, "scene1", "t1", null, null, null, null);
+        RuleVersionSnapshot snapExact    = new RuleVersionSnapshot(1L, "scene1", "t1", null, null, null, null, null);
+        RuleVersionSnapshot snapWildcard = new RuleVersionSnapshot(2L, "scene1", "t1", null, null, null, null, null);
         index.update("t1", "scene1", "ORDER_PLACED", List.of(snapExact));
         index.update("t1", "scene1", "*", List.of(snapWildcard));
 
@@ -107,7 +107,7 @@ class SceneRuleIndexTest {
     /** 精确 key 和通配 key 中有相同快照时，合并结果不出现重复。 */
     @Test
     void match_exactAndWildcard_deduplicatesBySameVersionId() {
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(5L, "scene1", "t1", null, null, null, null);
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(5L, "scene1", "t1", null, null, null, null, null);
         index.update("t1", "scene1", "ORDER_PLACED", List.of(snap));
         index.update("t1", "scene1", "*", List.of(snap));
 

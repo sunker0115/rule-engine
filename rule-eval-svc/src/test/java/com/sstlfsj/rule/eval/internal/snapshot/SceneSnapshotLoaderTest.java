@@ -51,10 +51,10 @@ class SceneSnapshotLoaderTest {
         RuleVersionRow row = new RuleVersionRow(
                 42L, "fraud_check", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"score\",\"params\":{}}",
-                "[]", "[{\"decisionCode\":\"REJECT\",\"priority\":10}]", "[]"
+                "[]", "[{\"decisionCode\":\"REJECT\",\"priority\":10}]", "[]", "AST_BOOLEAN"
         );
         RuleVersionSnapshot snap = new RuleVersionSnapshot(42L, "fraud_check", "1", null, List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), List.of());
+                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), List.of(), null);
 
         when(mapper.loadActiveByScene(1L, "fraud_check")).thenReturn(List.of(row));
         when(assembler.assembleAll(List.of(row))).thenReturn(List.of(snap));
@@ -70,7 +70,7 @@ class SceneSnapshotLoaderTest {
     @Test
     void loadByScene_withTriggerEventTypes_groupedByExactEventType() {
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
-                10L, "fraud_check", "1", null, List.of(), List.of(), List.of("login", "payment"));
+                10L, "fraud_check", "1", null, List.of(), List.of(), List.of("login", "payment"), null);
 
         when(mapper.loadActiveByScene(1L, "fraud_check")).thenReturn(List.of());
         when(assembler.assembleAll(anyList())).thenReturn(List.of(snap));
@@ -86,9 +86,9 @@ class SceneSnapshotLoaderTest {
     @Test
     void loadByScene_mixedSnapshots_correctBuckets() {
         RuleVersionSnapshot snapWild = new RuleVersionSnapshot(
-                1L, "scene", "1", null, List.of(), List.of(), List.of());
+                1L, "scene", "1", null, List.of(), List.of(), List.of(), null);
         RuleVersionSnapshot snapExact = new RuleVersionSnapshot(
-                2L, "scene", "1", null, List.of(), List.of(), List.of("login"));
+                2L, "scene", "1", null, List.of(), List.of(), List.of("login"), null);
 
         when(mapper.loadActiveByScene(1L, "scene")).thenReturn(List.of());
         when(assembler.assembleAll(anyList())).thenReturn(List.of(snapWild, snapExact));
@@ -102,8 +102,8 @@ class SceneSnapshotLoaderTest {
     /** loadByScene 多条空 triggerEventTypes 快照全部归入同一 "*" 桶。 */
     @Test
     void loadByScene_multipleWildcardSnapshots_allInWildcardBucket() {
-        RuleVersionSnapshot snap1 = new RuleVersionSnapshot(1L, "scene", "1", null, List.of(), List.of(), null);
-        RuleVersionSnapshot snap2 = new RuleVersionSnapshot(2L, "scene", "1", null, List.of(), List.of(), null);
+        RuleVersionSnapshot snap1 = new RuleVersionSnapshot(1L, "scene", "1", null, List.of(), List.of(), null, null);
+        RuleVersionSnapshot snap2 = new RuleVersionSnapshot(2L, "scene", "1", null, List.of(), List.of(), null, null);
 
         when(mapper.loadActiveByScene(1L, "scene")).thenReturn(List.of());
         when(assembler.assembleAll(anyList())).thenReturn(List.of(snap1, snap2));
@@ -133,9 +133,9 @@ class SceneSnapshotLoaderTest {
         RuleVersionRow row = new RuleVersionRow(
                 7L, "s1", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
-                "[]", "[]", "[]"
+                "[]", "[]", "[]", "AST_BOOLEAN"
         );
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(7L, "s1", "1", null, List.of(), List.of(), null);
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(7L, "s1", "1", null, List.of(), List.of(), null, null);
 
         when(mapper.loadById(7L)).thenReturn(row);
         when(assembler.assembleAll(List.of(row))).thenReturn(List.of(snap));
@@ -160,8 +160,8 @@ class SceneSnapshotLoaderTest {
     /** loadAll 空 triggerEventTypes 时按 tenantId:sceneCode 分外层，"*" 分内层。 */
     @Test
     void loadAll_groupsByTenantAndScene_wildcard() {
-        RuleVersionSnapshot snapA = new RuleVersionSnapshot(1L, "sceneA", "t1", null, List.of(), List.of(), null);
-        RuleVersionSnapshot snapB = new RuleVersionSnapshot(2L, "sceneB", "t1", null, List.of(), List.of(), null);
+        RuleVersionSnapshot snapA = new RuleVersionSnapshot(1L, "sceneA", "t1", null, List.of(), List.of(), null, null);
+        RuleVersionSnapshot snapB = new RuleVersionSnapshot(2L, "sceneB", "t1", null, List.of(), List.of(), null, null);
 
         when(mapper.loadAllActive()).thenReturn(List.of());
         when(assembler.assembleAll(anyList())).thenReturn(List.of(snapA, snapB));
@@ -179,7 +179,7 @@ class SceneSnapshotLoaderTest {
     @Test
     void loadAll_groupsByTenantAndScene_exactEventType() {
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
-                3L, "sceneA", "t1", null, List.of(), List.of(), List.of("login"));
+                3L, "sceneA", "t1", null, List.of(), List.of(), List.of("login"), null);
 
         when(mapper.loadAllActive()).thenReturn(List.of());
         when(assembler.assembleAll(anyList())).thenReturn(List.of(snap));

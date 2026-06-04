@@ -20,7 +20,8 @@ public interface RuleVersionReadMapper {
               rv.condition_ast   AS conditionAstJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
-              rv.trigger_event_types AS triggerEventTypesJson
+              rv.trigger_event_types AS triggerEventTypesJson,
+              rd.kind            AS kind
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -37,7 +38,8 @@ public interface RuleVersionReadMapper {
               rv.condition_ast   AS conditionAstJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
-              rv.trigger_event_types AS triggerEventTypesJson
+              rv.trigger_event_types AS triggerEventTypesJson,
+              rd.kind            AS kind
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -57,7 +59,8 @@ public interface RuleVersionReadMapper {
               rv.condition_ast   AS conditionAstJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
-              rv.trigger_event_types AS triggerEventTypesJson
+              rv.trigger_event_types AS triggerEventTypesJson,
+              rd.kind            AS kind
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id

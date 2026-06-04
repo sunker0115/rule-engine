@@ -41,7 +41,8 @@ public class SnapshotAssembler {
                 conditionAst,
                 preGates,
                 decisionBindings,
-                triggerEventTypes
+                triggerEventTypes,
+                row.kind() != null ? row.kind() : "AST_BOOLEAN"
         );
     }
 

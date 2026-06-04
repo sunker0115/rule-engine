@@ -50,7 +50,7 @@ class SceneIndexEventListenerTest {
     void onSceneChanged_enabled_updatesIndexForEachEventType() {
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(42L, "fraud_check", "1",
-                null, List.of(), List.of(), null);
+                null, List.of(), List.of(), null, null);
         when(loader.loadByScene("1", "fraud_check"))
                 .thenReturn(Map.of("*", List.of(snap)));
 

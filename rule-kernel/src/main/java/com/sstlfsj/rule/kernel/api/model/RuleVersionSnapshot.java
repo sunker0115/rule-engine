@@ -14,12 +14,15 @@ public record RuleVersionSnapshot(
         List<PreGateConfig> preGates,
         List<DecisionBinding> decisionBindings,
         /** 该版本监听的事件类型列表；空列表表示通配（匹配任意 eventType）。 */
-        List<String> triggerEventTypes
+        List<String> triggerEventTypes,
+        /** 规则类型，默认 AST_BOOLEAN；SCORECARD 时由 ScorecardExecutor 求值。 */
+        String kind
 ) {
     public RuleVersionSnapshot {
         preGates = preGates == null ? List.of() : List.copyOf(preGates);
         decisionBindings = decisionBindings == null ? List.of() : List.copyOf(decisionBindings);
         triggerEventTypes = triggerEventTypes == null ? List.of() : List.copyOf(triggerEventTypes);
+        kind = kind == null ? "AST_BOOLEAN" : kind;
     }
 
     /** Pre-Gate 配置快照。 */

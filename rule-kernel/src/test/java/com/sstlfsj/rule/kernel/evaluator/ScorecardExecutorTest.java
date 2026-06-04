@@ -32,7 +32,7 @@ class ScorecardExecutorTest {
     }
 
     private RuleVersionSnapshot snapshot(ScorecardRootNode root) {
-        return new RuleVersionSnapshot(1L, "scene1", "t1", root, null, null, null);
+        return new RuleVersionSnapshot(1L, "scene1", "t1", root, null, null, null, null);
     }
 
     @Test

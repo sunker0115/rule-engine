@@ -11,5 +11,6 @@ public record RuleVersionRow(
         String conditionAstJson,
         String preGatesJson,
         String decisionBindingsJson,
-        String triggerEventTypesJson
+        String triggerEventTypesJson,
+        String kind
 ) {}
