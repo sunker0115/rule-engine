@@ -8,7 +8,7 @@ import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.Test;
 
-// 策略分支（if FIRST_HIT / else HIGHEST_PRIORITY|ALL_HITS）测试见 EvalEngineStrategyTest
+// 策略分支（if FIRST_HIT / else HIGHEST_PRIORITY | ALL_HITS）测试见 EvalEngineStrategyTest
 
 import java.time.Instant;
 import java.util.List;
