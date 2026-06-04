@@ -98,4 +98,24 @@ class RuleVersionSnapshotTest {
         assertEquals("REVIEW", binding.decisionCode());
         assertEquals(50, binding.priority());
     }
+
+    @Test
+    void builder_basicFields_roundtrip() {
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(99L)
+                .tenantId("t1")
+                .sceneCode("s1")
+                .conditionAst(leaf())
+                .addTriggerEventType("PAY")
+                .addDecisionBinding("BLOCK", 100)
+                .build();
+
+        assertEquals(99L, snap.ruleVersionId());
+        assertEquals("t1", snap.tenantId());
+        assertEquals("s1", snap.sceneCode());
+        assertEquals("AST_BOOLEAN", snap.kind());
+        assertEquals(List.of("PAY"), snap.triggerEventTypes());
+        assertEquals(1, snap.decisionBindings().size());
+        assertEquals("BLOCK", snap.decisionBindings().get(0).decisionCode());
+    }
 }

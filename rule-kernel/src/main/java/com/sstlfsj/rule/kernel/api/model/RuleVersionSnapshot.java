@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.api.model;
 
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -34,4 +35,46 @@ public record RuleVersionSnapshot(
 
     /** Decision 绑定配置快照。 */
     public record DecisionBinding(String decisionCode, int priority) {}
+
+    /** @return 链式构建器，用于本地模式代码定义规则快照 */
+    public static Builder builder() { return new Builder(); }
+
+    /** 链式构建器，简化本地模式手工组装 RuleVersionSnapshot。 */
+    public static final class Builder {
+        private Long ruleVersionId;
+        private String sceneCode;
+        private String tenantId;
+        private AstNode conditionAst;
+        private String kind = "AST_BOOLEAN";
+        private final List<PreGateConfig> preGates = new ArrayList<>();
+        private final List<DecisionBinding> decisionBindings = new ArrayList<>();
+        private final List<String> triggerEventTypes = new ArrayList<>();
+
+        /** 规则版本 ID（本地模式可传任意 Long）。 */
+        public Builder ruleVersionId(Long v)  { this.ruleVersionId = v; return this; }
+        /** 场景编码。 */
+        public Builder sceneCode(String v)    { this.sceneCode = v; return this; }
+        /** 租户 ID。 */
+        public Builder tenantId(String v)     { this.tenantId = v; return this; }
+        /** 条件 AST 根节点。 */
+        public Builder conditionAst(AstNode v){ this.conditionAst = v; return this; }
+        /** 规则类型，默认 AST_BOOLEAN。 */
+        public Builder kind(String v)         { this.kind = v; return this; }
+        /** 追加一个监听的事件类型。 */
+        public Builder addTriggerEventType(String v) { triggerEventTypes.add(v); return this; }
+        /** 追加一个 Decision 绑定。 */
+        public Builder addDecisionBinding(String decisionCode, int priority) {
+            decisionBindings.add(new DecisionBinding(decisionCode, priority)); return this;
+        }
+        /** 追加一个 Pre-Gate 配置。 */
+        public Builder addPreGate(String gateType, Map<String, Object> params) {
+            preGates.add(new PreGateConfig(gateType, params)); return this;
+        }
+
+        /** 构建 RuleVersionSnapshot。 */
+        public RuleVersionSnapshot build() {
+            return new RuleVersionSnapshot(ruleVersionId, sceneCode, tenantId, conditionAst,
+                    preGates, decisionBindings, triggerEventTypes, kind);
+        }
+    }
 }
