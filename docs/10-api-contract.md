@@ -456,9 +456,9 @@ try (RuleEngineClient client = RuleEngineClient.builder()
     "decisionBindings": [{"decisionCode": "BLOCK", "priority": 100}],
     "preGates": [],
     "conditionAst": {
-      "type": "AND",
+      "type": "AndNode",
       "children": [
-        { "type": "CONDITION", "conditionType": "GT", "metricCode": "amount",
+        { "type": "ConditionNode", "conditionType": "GT", "metricCode": "amount",
           "params": {"threshold": 1000}, "weight": 0.0 }
       ]
     }
