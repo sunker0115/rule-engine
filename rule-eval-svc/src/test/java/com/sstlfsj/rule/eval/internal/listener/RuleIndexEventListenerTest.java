@@ -28,7 +28,7 @@ class RuleIndexEventListenerTest {
     @Test
     void onRulePublished_reloadsSnapshotsForScene() {
         RulePublishedEvent event = new RulePublishedEvent("1", "fraud_check", 42L);
-        ConditionNode condNode = new ConditionNode("GT", "score", null, Map.of());
+        ConditionNode condNode = new ConditionNode("GT", "score", null, Map.of(), 0.0);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 42L, "fraud_check", "1", condNode, List.of(),
                 List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), null);
@@ -52,7 +52,7 @@ class RuleIndexEventListenerTest {
 
     @Test
     void onSceneEnabled_reloadsSnapshots() {
-        ConditionNode condNode = new ConditionNode("EQ", "status", null, Map.of());
+        ConditionNode condNode = new ConditionNode("EQ", "status", null, Map.of(), 0.0);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 10L, "fraud_check", "1", condNode, List.of(), List.of(), null);
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);

@@ -9,6 +9,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 
@@ -64,10 +65,13 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
      */
     private boolean evalAndTrace(AstNode node, EvalContext ctx, List<NodeTrace> sink) {
         return switch (node) {
-            case AndNode and        -> traceAnd(and, ctx, sink);
-            case OrNode or          -> traceOr(or, ctx, sink);
-            case NotNode not        -> traceNot(not, ctx, sink);
-            case ConditionNode cond -> traceCondition(cond, ctx, sink);
+            case AndNode and          -> traceAnd(and, ctx, sink);
+            case OrNode or            -> traceOr(or, ctx, sink);
+            case NotNode not          -> traceNot(not, ctx, sink);
+            case ConditionNode cond   -> traceCondition(cond, ctx, sink);
+            // ScorecardRootNode 由 ScorecardExecutor 处理，不应进入此执行器
+            case ScorecardRootNode ignored ->
+                    throw new IllegalStateException("ScorecardRootNode 不能由 TracingInterpretedExecutor 处理");
         };
     }
 

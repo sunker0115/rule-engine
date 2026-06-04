@@ -67,10 +67,11 @@ public class AstJsonCodec {
     /** AstNode sealed 接口的 Jackson 多态 mixin，通过 "type" 字段区分子类型。 */
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
     @JsonSubTypes({
-            @JsonSubTypes.Type(value = AndNode.class,       name = "AndNode"),
-            @JsonSubTypes.Type(value = OrNode.class,        name = "OrNode"),
-            @JsonSubTypes.Type(value = NotNode.class,       name = "NotNode"),
-            @JsonSubTypes.Type(value = ConditionNode.class, name = "ConditionNode")
+            @JsonSubTypes.Type(value = AndNode.class,           name = "AndNode"),
+            @JsonSubTypes.Type(value = OrNode.class,            name = "OrNode"),
+            @JsonSubTypes.Type(value = NotNode.class,           name = "NotNode"),
+            @JsonSubTypes.Type(value = ConditionNode.class,     name = "ConditionNode"),
+            @JsonSubTypes.Type(value = ScorecardRootNode.class, name = "ScorecardRootNode")
     })
     interface AstNodeMixin {}
 }

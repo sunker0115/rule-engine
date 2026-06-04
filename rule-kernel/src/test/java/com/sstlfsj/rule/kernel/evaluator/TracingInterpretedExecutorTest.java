@@ -10,6 +10,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import org.junit.jupiter.api.Test;
@@ -44,11 +45,11 @@ class TracingInterpretedExecutorTest {
     }
 
     private ConditionNode trueNode() {
-        return new ConditionNode(ALWAYS_TRUE, "metric1", null, Map.of());
+        return new ConditionNode(ALWAYS_TRUE, "metric1", null, Map.of(), 0.0);
     }
 
     private ConditionNode falseNode() {
-        return new ConditionNode(ALWAYS_FALSE, "metric2", null, Map.of());
+        return new ConditionNode(ALWAYS_FALSE, "metric2", null, Map.of(), 0.0);
     }
 
     @Test
@@ -140,7 +141,7 @@ class TracingInterpretedExecutorTest {
     @Test
     void conditionNode_noEvaluator_traceHasErrorCode() {
         // 无对应 evaluator 时 result=false，errorCode=NO_EVALUATOR
-        AstNode ast = new ConditionNode("UNKNOWN_TYPE", "metric1", null, Map.of());
+        AstNode ast = new ConditionNode("UNKNOWN_TYPE", "metric1", null, Map.of(), 0.0);
         EvalResult result = executorWith(Map.of())
                 .execute(snapshot(ast), minimalContext());
 
@@ -164,5 +165,15 @@ class TracingInterpretedExecutorTest {
         // 子节点也必须携带 ruleVersionId
         assertThat(andTrace.children()).allSatisfy(
                 child -> assertThat(child.ruleVersionId()).isEqualTo(1L));
+    }
+
+    @Test
+    void scorecardRootNode_throwsIllegalState() {
+        // TracingInterpretedExecutor 只处理 AST_BOOLEAN 规则，遇到 ScorecardRootNode 应抛出异常
+        AstNode ast = new ScorecardRootNode(List.of(), 0.6);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executorWith(Map.of()).execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ScorecardRootNode");
     }
 }

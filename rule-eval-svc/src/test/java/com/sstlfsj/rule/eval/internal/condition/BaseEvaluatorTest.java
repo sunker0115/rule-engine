@@ -25,6 +25,6 @@ class BaseEvaluatorTest {
     }
 
     ConditionNode node(String metricCode, String condType, Object threshold) {
-        return new ConditionNode(condType, metricCode, null, Map.of("threshold", threshold));
+        return new ConditionNode(condType, metricCode, null, Map.of("threshold", threshold), 0.0);
     }
 }

@@ -82,7 +82,7 @@ class PublishServiceTest {
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
-        ConditionNode fakeAst = new ConditionNode("c.type", "m.code", null, Map.of());
+        ConditionNode fakeAst = new ConditionNode("c.type", "m.code", null, Map.of(), 0.0);
         when(astSerializer.fromJson(anyString())).thenReturn(fakeAst);
 
         RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "operator1");

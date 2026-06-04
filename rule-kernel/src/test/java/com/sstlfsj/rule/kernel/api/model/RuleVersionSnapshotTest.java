@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class RuleVersionSnapshotTest {
 
     private static ConditionNode leaf() {
-        return new ConditionNode("AMOUNT_GT", "balance", null, Map.of("threshold", 100));
+        return new ConditionNode("AMOUNT_GT", "balance", null, Map.of("threshold", 100), 0.0);
     }
 
     @Test

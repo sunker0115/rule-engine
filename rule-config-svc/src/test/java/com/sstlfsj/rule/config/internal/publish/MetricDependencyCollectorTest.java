@@ -13,21 +13,21 @@ class MetricDependencyCollectorTest {
 
     @Test
     void singleConditionNode_withMetricCode_collected() {
-        AstNode ast = new ConditionNode("metric.threshold", "user.age", null, Map.of());
+        AstNode ast = new ConditionNode("metric.threshold", "user.age", null, Map.of(), 0.0);
         assertThat(MetricDependencyCollector.collect(ast)).containsExactly("user.age");
     }
 
     @Test
     void conditionNode_withoutMetricCode_notCollected() {
-        AstNode ast = new ConditionNode("event.payload.compare", null, null, Map.of());
+        AstNode ast = new ConditionNode("event.payload.compare", null, null, Map.of(), 0.0);
         assertThat(MetricDependencyCollector.collect(ast)).isEmpty();
     }
 
     @Test
     void andNode_collectsAllMetricCodesFromChildren() {
         AstNode ast = new AndNode(List.of(
-                new ConditionNode("metric.threshold", "user.age", null, Map.of()),
-                new ConditionNode("metric.threshold", "order.amount", null, Map.of())
+                new ConditionNode("metric.threshold", "user.age", null, Map.of(), 0.0),
+                new ConditionNode("metric.threshold", "order.amount", null, Map.of(), 0.0)
         ), null, null);
         assertThat(MetricDependencyCollector.collect(ast)).containsExactly("user.age", "order.amount");
     }
@@ -35,8 +35,8 @@ class MetricDependencyCollectorTest {
     @Test
     void orNode_collectsAllMetricCodes() {
         AstNode ast = new OrNode(List.of(
-                new ConditionNode("metric.threshold", "user.level", null, Map.of()),
-                new ConditionNode("event.payload.compare", null, null, Map.of())
+                new ConditionNode("metric.threshold", "user.level", null, Map.of(), 0.0),
+                new ConditionNode("event.payload.compare", null, null, Map.of(), 0.0)
         ), null, null);
         assertThat(MetricDependencyCollector.collect(ast)).containsExactly("user.level");
     }
@@ -44,7 +44,7 @@ class MetricDependencyCollectorTest {
     @Test
     void notNode_collectsMetricCodeFromChild() {
         AstNode ast = new NotNode(
-                new ConditionNode("metric.threshold", "account.balance", null, Map.of())
+                new ConditionNode("metric.threshold", "account.balance", null, Map.of(), 0.0)
         );
         assertThat(MetricDependencyCollector.collect(ast)).containsExactly("account.balance");
     }
@@ -53,8 +53,8 @@ class MetricDependencyCollectorTest {
     void nestedAst_deduplicatesSameMetricCode() {
         // 两个叶子引用同一个 metricCode，结果去重
         AstNode ast = new AndNode(List.of(
-                new ConditionNode("c.type", "user.age", null, Map.of("op", "GT")),
-                new ConditionNode("c.type", "user.age", null, Map.of("op", "LT"))
+                new ConditionNode("c.type", "user.age", null, Map.of("op", "GT"), 0.0),
+                new ConditionNode("c.type", "user.age", null, Map.of("op", "LT"), 0.0)
         ), null, null);
         assertThat(MetricDependencyCollector.collect(ast)).containsExactly("user.age");
     }
@@ -63,13 +63,31 @@ class MetricDependencyCollectorTest {
     void deeplyNested_andOrNot_collectsAll() {
         // AND(NOT(user.age), OR(order.amount, account.balance))
         AstNode ast = new AndNode(List.of(
-                new NotNode(new ConditionNode("c", "user.age", null, Map.of())),
+                new NotNode(new ConditionNode("c", "user.age", null, Map.of(), 0.0)),
                 new OrNode(List.of(
-                        new ConditionNode("c", "order.amount", null, Map.of()),
-                        new ConditionNode("c", "account.balance", null, Map.of())
+                        new ConditionNode("c", "order.amount", null, Map.of(), 0.0),
+                        new ConditionNode("c", "account.balance", null, Map.of(), 0.0)
                 ), null, null)
         ), null, null);
         assertThat(MetricDependencyCollector.collect(ast))
                 .containsExactlyInAnyOrder("user.age", "order.amount", "account.balance");
+    }
+
+    @Test
+    void scorecardRootNode_collectsMetricCodesFromConditions() {
+        AstNode ast = new ScorecardRootNode(List.of(
+                new ConditionNode("GT", "score", null, Map.of("threshold", 60), 0.4),
+                new ConditionNode("EQ", "channel", null, Map.of("threshold", "APP"), 0.6)
+        ), 0.6);
+        assertThat(MetricDependencyCollector.collect(ast))
+                .containsExactly("score", "channel");
+    }
+
+    @Test
+    void scorecardRootNode_conditionWithoutMetricCode_notCollected() {
+        AstNode ast = new ScorecardRootNode(List.of(
+                new ConditionNode("EVENT", null, null, Map.of(), 1.0)
+        ), 0.5);
+        assertThat(MetricDependencyCollector.collect(ast)).isEmpty();
     }
 }

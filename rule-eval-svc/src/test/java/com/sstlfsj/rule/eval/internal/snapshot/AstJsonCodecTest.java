@@ -73,4 +73,21 @@ class AstJsonCodecTest {
         List<String> codes = codec.deserializeStringList("[\"EVENT_A\",\"EVENT_B\"]");
         assertEquals(List.of("EVENT_A", "EVENT_B"), codes);
     }
+
+    @Test
+    void deserializeScorecardRootNode() throws Exception {
+        String json = """
+                {"type":"ScorecardRootNode","threshold":0.6,"conditions":[
+                  {"type":"ConditionNode","conditionType":"GT","metricCode":"score","params":{"threshold":60},"weight":0.4},
+                  {"type":"ConditionNode","conditionType":"EQ","metricCode":"channel","params":{"threshold":"APP"},"weight":0.6}
+                ]}
+                """;
+        AstNode node = codec.deserializeAst(json);
+        assertInstanceOf(ScorecardRootNode.class, node);
+        ScorecardRootNode root = (ScorecardRootNode) node;
+        assertEquals(0.6, root.threshold(), 1e-9);
+        assertEquals(2, root.conditions().size());
+        assertEquals(0.4, root.conditions().get(0).weight(), 1e-9);
+        assertEquals("score", root.conditions().get(0).metricCode());
+    }
 }

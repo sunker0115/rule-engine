@@ -24,13 +24,13 @@ class ConditionEvaluatorTest {
 
     @Test
     void evaluate_returnsTrue_whenImplementationReturnsTrue() {
-        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of());
+        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of(), 0.0);
         assertTrue(ALWAYS_TRUE.evaluate(node, buildCtx()));
     }
 
     @Test
     void evaluate_returnsFalse_whenImplementationReturnsFalse() {
-        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of());
+        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of(), 0.0);
         assertFalse(ALWAYS_FALSE.evaluate(node, buildCtx()));
     }
 
@@ -38,7 +38,7 @@ class ConditionEvaluatorTest {
     void evaluate_isFunctionalInterface() {
         // Lambda 赋值验证接口恰好只有一个抽象方法（函数式接口契约）。
         ConditionEvaluator evaluator = (node, ctx) -> node.conditionType().startsWith("AMOUNT");
-        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of());
+        ConditionNode node = new ConditionNode("AMOUNT_GT", null, null, Map.of(), 0.0);
         assertTrue(evaluator.evaluate(node, buildCtx()));
     }
 }

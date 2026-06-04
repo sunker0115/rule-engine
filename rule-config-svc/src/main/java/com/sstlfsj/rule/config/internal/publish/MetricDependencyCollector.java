@@ -24,6 +24,10 @@ class MetricDependencyCollector {
             case ConditionNode cond -> {
                 if (cond.metricCode() != null) acc.add(cond.metricCode());
             }
+            // ScorecardRootNode：直接遍历叶子条件，收集其 metricCode
+            case ScorecardRootNode sc -> sc.conditions().forEach(c -> {
+                if (c.metricCode() != null) acc.add(c.metricCode());
+            });
         }
     }
 }

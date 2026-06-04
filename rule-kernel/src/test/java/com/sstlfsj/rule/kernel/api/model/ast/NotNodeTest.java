@@ -10,14 +10,14 @@ class NotNodeTest {
 
     @Test
     void child_isRetained() {
-        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of());
+        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of(), 0.0);
         NotNode node = new NotNode(leaf);
         assertSame(leaf, node.child());
     }
 
     @Test
     void recordEquality_byValue() {
-        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of());
+        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of(), 0.0);
         NotNode a = new NotNode(leaf);
         NotNode b = new NotNode(leaf);
         assertEquals(a, b);
@@ -25,7 +25,7 @@ class NotNodeTest {
 
     @Test
     void nestedNotNode_wrapsAnotherAstNode() {
-        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of());
+        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of(), 0.0);
         NotNode inner = new NotNode(leaf);
         NotNode outer = new NotNode(inner);
         assertInstanceOf(NotNode.class, outer.child());

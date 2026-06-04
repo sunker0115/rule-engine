@@ -15,7 +15,7 @@ class AstSerializerTest {
     @Test
     void conditionNode_roundTrip() {
         ConditionNode node = new ConditionNode("metric.threshold", "user.age",
-                "年龄大于18", Map.of("operator", "GT", "threshold", 18));
+                "年龄大于18", Map.of("operator", "GT", "threshold", 18), 0.0);
 
         String json = serializer.toJson(node);
         AstNode restored = serializer.fromJson(json);
@@ -30,8 +30,8 @@ class AstSerializerTest {
     @Test
     void andNode_withChildren_roundTrip() {
         AstNode ast = new AndNode(List.of(
-                new ConditionNode("metric.threshold", "user.age", null, Map.of("operator", "GT", "threshold", 18)),
-                new ConditionNode("event.payload.compare", null, null, Map.of("field", "amount", "operator", "LTE", "value", 50000))
+                new ConditionNode("metric.threshold", "user.age", null, Map.of("operator", "GT", "threshold", 18), 0.0),
+                new ConditionNode("event.payload.compare", null, null, Map.of("field", "amount", "operator", "LTE", "value", 50000), 0.0)
         ), "年龄 AND 金额", null);
 
         String json = serializer.toJson(ast);
@@ -46,7 +46,7 @@ class AstSerializerTest {
     @Test
     void notNode_roundTrip() {
         AstNode ast = new NotNode(
-                new ConditionNode("metric.threshold", "order.count", null, Map.of("operator", "GT", "threshold", 10))
+                new ConditionNode("metric.threshold", "order.count", null, Map.of("operator", "GT", "threshold", 10), 0.0)
         );
 
         String json = serializer.toJson(ast);
@@ -59,10 +59,10 @@ class AstSerializerTest {
     void nested_andOrNot_roundTrip() {
         // AND(NOT(cond1), OR(cond2, cond3))
         AstNode ast = new AndNode(List.of(
-                new NotNode(new ConditionNode("c.type", "m.code", null, Map.of("k", "v"))),
+                new NotNode(new ConditionNode("c.type", "m.code", null, Map.of("k", "v"), 0.0)),
                 new OrNode(List.of(
-                        new ConditionNode("c.a", null, null, Map.of()),
-                        new ConditionNode("c.b", null, null, Map.of())
+                        new ConditionNode("c.a", null, null, Map.of(), 0.0),
+                        new ConditionNode("c.b", null, null, Map.of(), 0.0)
                 ), null, null)
         ), null, null);
 
