@@ -74,12 +74,11 @@ public class EvalEngine {
 
         EvalContext ctx = contextAssembler.assemble(event, passed);
 
-        if (strategy == SceneExecutionStrategy.FIRST_HIT) {
-            return evaluateFirstHit(event, passed, ctx);
-        } else {
-            // HIGHEST_PRIORITY / ALL_HITS：全量评估，两者语义相同（均收集所有命中决策）
-            return evaluateAllCandidates(passed, ctx);
-        }
+        return switch (strategy) {
+            case FIRST_HIT -> evaluateFirstHit(event, passed, ctx);
+            // HIGHEST_PRIORITY / ALL_HITS：语义相同，均全量评估收集所有命中决策
+            case HIGHEST_PRIORITY, ALL_HITS -> evaluateAllCandidates(passed, ctx);
+        };
     }
 
     /** FIRST_HIT：按快照最高 decisionBinding priority 倒序，第一条命中即返回。 */
