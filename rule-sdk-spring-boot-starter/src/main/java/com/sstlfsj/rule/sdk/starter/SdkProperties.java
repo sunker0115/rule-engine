@@ -20,6 +20,8 @@ public class SdkProperties {
     private List<String> scenes = List.of();
     /** 轮询间隔，默认 30 秒。 */
     private Duration pollInterval = Duration.ofSeconds(30);
+    /** JSON 规则文件路径列表（文件模式），如 classpath:rules/fraud.json。与 serverUrl 互斥。 */
+    private List<String> ruleFiles = List.of();
 
     public String getServerUrl()            { return serverUrl; }
     public void setServerUrl(String v)      { this.serverUrl = v; }
@@ -31,4 +33,6 @@ public class SdkProperties {
     public void setScenes(List<String> v)   { this.scenes = v; }
     public Duration getPollInterval()       { return pollInterval; }
     public void setPollInterval(Duration v) { this.pollInterval = v; }
+    public List<String> getRuleFiles()      { return ruleFiles; }
+    public void setRuleFiles(List<String> v){ this.ruleFiles = v; }
 }
