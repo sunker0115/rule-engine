@@ -900,6 +900,238 @@ git commit -m "feat(config): SCORECARD 发布校验 + §2.1 文档更新（D12 �
 
 ---
 
+## Task 7：XorNode 实现（§2.21 AST_BOOLEAN 扩展）
+
+> **定位**：XOR 是 `AST_BOOLEAN` kind 内部的新逻辑节点，不引入新 `Rule.kind`，不需要新 executor。
+> Task 1 已扩展 `AstNode` sealed 和 `AstJsonCodec`，本 Task 复用相同路径追加 `XorNode`。
+
+**Files:**
+- Create: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/api/model/ast/XorNode.java`
+- Modify: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/api/model/ast/AstNode.java`
+- Modify: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/snapshot/AstJsonCodec.java`
+- Modify: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/InterpretedExecutor.java`
+- Modify: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/TracingInterpretedExecutor.java`
+- Create: `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/evaluator/XorNodeTest.java`
+
+### Step 1: 写失败测试（验证 XorNode 不存在）
+
+```bash
+$MVN -pl rule-kernel -am test -Dtest=XorNodeTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+Expected: FAIL（类不存在）
+
+### Step 2: 新建 `XorNode`
+
+```java
+package com.sstlfsj.rule.kernel.api.model.ast;
+
+import java.util.List;
+
+/**
+ * XOR 逻辑节点：子节点中有且仅有一个求值为 true 时，整个节点才为 true。
+ * 属于 AST_BOOLEAN kind 的内置逻辑节点，不短路，全量遍历所有子节点。
+ */
+public record XorNode(
+        List<AstNode> children,
+        /** 给运营 UI 看的分组标题，评估时忽略。 */
+        String displayLabel
+) implements AstNode {
+    public XorNode {
+        children = children == null ? List.of() : List.copyOf(children);
+    }
+}
+```
+
+### Step 3: 在 `AstNode` permits 列表加 `XorNode`
+
+找到：
+```java
+sealed interface AstNode permits AndNode, OrNode, NotNode, ConditionNode, ScorecardRootNode {
+```
+改为：
+```java
+sealed interface AstNode permits AndNode, OrNode, NotNode, ConditionNode, ScorecardRootNode, XorNode {
+```
+
+### Step 4: 在 `AstJsonCodec` 加 `XorNode` 类型映射
+
+找到 `@JsonSubTypes`，追加一行：
+
+```java
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = AndNode.class,           name = "AndNode"),
+        @JsonSubTypes.Type(value = OrNode.class,            name = "OrNode"),
+        @JsonSubTypes.Type(value = NotNode.class,           name = "NotNode"),
+        @JsonSubTypes.Type(value = ConditionNode.class,     name = "ConditionNode"),
+        @JsonSubTypes.Type(value = ScorecardRootNode.class, name = "ScorecardRootNode"),
+        @JsonSubTypes.Type(value = XorNode.class,           name = "XorNode")   // 新增
+})
+```
+
+### Step 5: 在 `InterpretedExecutor` 补 XOR 分支
+
+找到 `switch (node)` 或 `instanceof` 链，在 `OrNode` 分支后追加 `XorNode` 分支：
+
+```java
+case XorNode xor -> {
+    // 全量遍历，不短路，统计满足节点数
+    int satisfiedCount = 0;
+    for (AstNode child : xor.children()) {
+        if (evaluate(child, ctx)) satisfiedCount++;
+        // 已超过 1 个可提前退出（优化）
+        if (satisfiedCount > 1) break;
+    }
+    yield satisfiedCount == 1;
+}
+```
+
+### Step 6: 在 `TracingInterpretedExecutor` 补 XOR 分支
+
+与 `InterpretedExecutor` 同款，额外记录每个子节点的 trace：
+
+```java
+case XorNode xor -> {
+    List<NodeTrace> childTraces = new ArrayList<>();
+    int satisfiedCount = 0;
+    for (AstNode child : xor.children()) {
+        boolean childResult = evaluateWithTrace(child, ctx, childTraces);
+        if (childResult) satisfiedCount++;
+    }
+    boolean result = satisfiedCount == 1;
+    traces.add(new NodeTrace("XorNode", null, null, null,
+            result, null, null, childTraces, snapshot.ruleVersionId()));
+    yield result;
+}
+```
+
+> 注意：XOR 不短路，所有子节点都要求值并记录 trace，帮助运营看到"哪个子条件满足了"。
+
+### Step 7: 写单测 `XorNodeTest`
+
+```java
+package com.sstlfsj.rule.kernel.evaluator;
+
+import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
+import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
+import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/** XorNode 单测：验证"有且仅有一个满足"语义及全量遍历（不短路）。 */
+class XorNodeTest {
+
+    private static final String T = "ALWAYS_TRUE";
+    private static final String F = "ALWAYS_FALSE";
+
+    private final ConditionEvaluator alwaysTrue  = (node, ctx) -> true;
+    private final ConditionEvaluator alwaysFalse = (node, ctx) -> false;
+    private final Map<String, ConditionEvaluator> evaluators = Map.of(T, alwaysTrue, F, alwaysFalse);
+
+    private EvalContext ctx() {
+        RuleEvent event = new RuleEvent("t1", "scene1", "EVT", "u1",
+                "e1", Instant.now(), Map.of(), null);
+        return new EvalContext("t1", event, null, Map.of());
+    }
+
+    private RuleVersionSnapshot snapshot(XorNode xor) {
+        return new RuleVersionSnapshot(1L, "scene1", "t1", xor,
+                null, null, null, "AST_BOOLEAN");
+    }
+
+    private ConditionNode t(String metric) {
+        return new ConditionNode(T, metric, null, Map.of(), 0.0);
+    }
+
+    private ConditionNode f(String metric) {
+        return new ConditionNode(F, metric, null, Map.of(), 0.0);
+    }
+
+    @Test
+    void 恰好一个满足_命中() {
+        XorNode xor = new XorNode(List.of(t("m1"), f("m2"), f("m3")), null);
+        EvalResult result = new InterpretedExecutor(evaluators).execute(snapshot(xor), ctx());
+        assertThat(result.ruleHit()).isTrue();
+    }
+
+    @Test
+    void 全部满足_不命中() {
+        XorNode xor = new XorNode(List.of(t("m1"), t("m2")), null);
+        EvalResult result = new InterpretedExecutor(evaluators).execute(snapshot(xor), ctx());
+        assertThat(result.ruleHit()).isFalse();
+    }
+
+    @Test
+    void 全部不满足_不命中() {
+        XorNode xor = new XorNode(List.of(f("m1"), f("m2")), null);
+        EvalResult result = new InterpretedExecutor(evaluators).execute(snapshot(xor), ctx());
+        assertThat(result.ruleHit()).isFalse();
+    }
+
+    @Test
+    void 空子节点_不命中() {
+        XorNode xor = new XorNode(List.of(), null);
+        EvalResult result = new InterpretedExecutor(evaluators).execute(snapshot(xor), ctx());
+        assertThat(result.ruleHit()).isFalse();
+    }
+
+    @Test
+    void 两个满足_不命中() {
+        XorNode xor = new XorNode(List.of(t("m1"), t("m2"), f("m3")), null);
+        EvalResult result = new InterpretedExecutor(evaluators).execute(snapshot(xor), ctx());
+        assertThat(result.ruleHit()).isFalse();
+    }
+}
+```
+
+### Step 8: 运行 rule-kernel 全量测试
+
+```bash
+$MVN -pl rule-kernel -am test
+```
+
+Expected: BUILD SUCCESS，5 个 XorNodeTest 全部通过，已有测试无回归。
+
+### Step 9: 运行 rule-eval-svc 测试（验证 AstJsonCodec 序列化）
+
+```bash
+$MVN -pl rule-eval-svc -am test
+```
+
+Expected: BUILD SUCCESS
+
+### Step 10: 更新 `08-evolution.md §2.21`
+
+在 §2.21 末尾追加已实装标注：
+
+```
+- **已实装（d12-scorecard-evaluator Task 7）**：`XorNode` sealed AST 节点 + `AstJsonCodec` 映射 + `InterpretedExecutor` / `TracingInterpretedExecutor` 全量遍历分支 + 5 个单测覆盖（恰好一个/全部满足/全部不满足/空/两个满足）。
+```
+
+### Step 11: commit
+
+```bash
+git add rule-kernel/src/main/java/com/sstlfsj/rule/kernel/api/model/ast/XorNode.java
+git add rule-kernel/src/main/java/com/sstlfsj/rule/kernel/api/model/ast/AstNode.java
+git add rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/snapshot/AstJsonCodec.java
+git add rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/InterpretedExecutor.java
+git add rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/TracingInterpretedExecutor.java
+git add rule-kernel/src/test/java/com/sstlfsj/rule/kernel/evaluator/XorNodeTest.java
+git commit -m "feat(kernel): XorNode AST 节点实装（§2.21，AST_BOOLEAN 内置 XOR 逻辑）"
+```
+
+---
+
 ## 验证命令汇总
 
 ```bash
@@ -915,6 +1147,9 @@ $MVN -pl rule-eval-svc -am test
 
 # Task 6：config-svc
 $MVN -pl rule-config-svc -am test
+
+# Task 7：kernel（XorNode）
+$MVN -pl rule-kernel -am test -Dtest=XorNodeTest
 
 # 全量
 $MVN -pl rule-kernel,rule-eval-svc,rule-config-svc,rule-api -am test
