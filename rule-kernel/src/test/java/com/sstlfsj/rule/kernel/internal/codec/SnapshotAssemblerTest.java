@@ -16,7 +16,8 @@ class SnapshotAssemblerTest {
     private RuleVersionRow row(Long id, String scene, Long tenantId,
                                String astJson, String preGates,
                                String decisions, String eventTypes, String kind) {
-        return new RuleVersionRow(id, scene, tenantId, astJson, preGates, decisions, eventTypes, kind);
+        return new RuleVersionRow(id, scene, tenantId, astJson, preGates, decisions, eventTypes,
+                kind, "HIGHEST_PRIORITY");
     }
 
     @Test

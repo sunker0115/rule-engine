@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.internal.index;
 
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.SceneExecutionStrategy;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
 
@@ -52,5 +53,26 @@ class SceneRuleIndexTest {
         idx.update("t1", "payment", "ORDER", List.of(snap(1L, "t1", "payment")));
         idx.remove("t1", "payment");
         assertThat(idx.match("t1", "payment", "ORDER")).isEmpty();
+    }
+
+    @Test
+    void getStrategy_defaultIsHighestPriority() {
+        SceneRuleIndex idx = new SceneRuleIndex();
+        assertThat(idx.getStrategy("t1", "payment")).isEqualTo(SceneExecutionStrategy.HIGHEST_PRIORITY);
+    }
+
+    @Test
+    void setStrategy_returnsConfiguredStrategy() {
+        SceneRuleIndex idx = new SceneRuleIndex();
+        idx.setStrategy("t1", "fraud", SceneExecutionStrategy.FIRST_HIT);
+        assertThat(idx.getStrategy("t1", "fraud")).isEqualTo(SceneExecutionStrategy.FIRST_HIT);
+    }
+
+    @Test
+    void remove_clearsStrategy() {
+        SceneRuleIndex idx = new SceneRuleIndex();
+        idx.setStrategy("t1", "fraud", SceneExecutionStrategy.ALL_HITS);
+        idx.remove("t1", "fraud");
+        assertThat(idx.getStrategy("t1", "fraud")).isEqualTo(SceneExecutionStrategy.HIGHEST_PRIORITY);
     }
 }

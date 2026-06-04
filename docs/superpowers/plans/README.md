@@ -29,3 +29,4 @@
 | 23 | [d40-rule-def-annotation](2026-06-04-d40-rule-def-annotation.md) | D40：@RuleDef 注解模式——InlineRuleSpec + AnnotationRuleSource + Starter 自动装配 | ✅ |
 | 24 | [d41-execution-strategy](2026-06-04-d41-execution-strategy.md) | D41：executionStrategy 扩展——ALL_HITS / FIRST_HIT 短路策略 | 🔲 |
 | 25 | [d42-decision-tree-table](2026-06-04-d42-decision-tree-table.md) | D42：DECISION_TREE / DECISION_TABLE evaluator | 🔲 |
+| 26 | [execution-context-snapshot-and-rule-session-query](2026-06-04-execution-context-snapshot-and-rule-session-query.md) | context_snapshot 字段补全 + 按规则查历史 Session 端点 | ⏳ |

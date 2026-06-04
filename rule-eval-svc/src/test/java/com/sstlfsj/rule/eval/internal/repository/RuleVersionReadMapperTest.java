@@ -38,6 +38,13 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadAllActive_sqlContainsDecisionStrategy() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadAllActive");
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.decision_strategy"), "loadAllActive SQL 应包含 decision_strategy 字段");
+    }
+
+    @Test
     void loadActiveByScene_hasCorrectParameters() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod(
                 "loadActiveByScene", Long.class, String.class);
@@ -57,6 +64,14 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadActiveByScene_sqlContainsDecisionStrategy() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "loadActiveByScene", Long.class, String.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.decision_strategy"), "loadActiveByScene SQL 应包含 decision_strategy 字段");
+    }
+
+    @Test
     void loadById_returnsRuleVersionRow() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
         assertEquals(RuleVersionRow.class, method.getReturnType());
@@ -70,5 +85,12 @@ class RuleVersionReadMapperTest {
         Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
         String sql = method.getAnnotation(Select.class).value()[0];
         assertTrue(sql.contains("rd.kind"), "loadById SQL 应包含 rd.kind 字段");
+    }
+
+    @Test
+    void loadById_sqlContainsDecisionStrategy() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.decision_strategy"), "loadById SQL 应包含 decision_strategy 字段");
     }
 }

@@ -24,7 +24,7 @@ class IndexStartupLoaderTest {
     /** loadAll 返回空 Map 时，不调用 index.update。 */
     @Test
     void onApplicationReady_emptySnapshot_noIndexUpdate() {
-        when(loader.loadAll()).thenReturn(Map.of());
+        when(loader.loadAllWithStrategy(index)).thenReturn(Map.of());
 
         startupLoader.onApplicationReady();
 
@@ -39,7 +39,7 @@ class IndexStartupLoaderTest {
         Map<String, Map<String, List<RuleVersionSnapshot>>> all = Map.of(
                 "t1:fraud_check", Map.of("*", List.of(snap))
         );
-        when(loader.loadAll()).thenReturn(all);
+        when(loader.loadAllWithStrategy(index)).thenReturn(all);
 
         startupLoader.onApplicationReady();
 
@@ -55,7 +55,7 @@ class IndexStartupLoaderTest {
                 "t1:sceneA", Map.of("*", List.of(snapA)),
                 "t1:sceneB", Map.of("*", List.of(snapB))
         );
-        when(loader.loadAll()).thenReturn(all);
+        when(loader.loadAllWithStrategy(index)).thenReturn(all);
 
         startupLoader.onApplicationReady();
 

@@ -36,7 +36,7 @@ public class SceneIndexEventListener {
             return;
         }
         Map<String, List<RuleVersionSnapshot>> byEventType =
-                loader.loadByScene(event.tenantId(), event.sceneCode());
+                loader.loadBySceneWithStrategy(event.tenantId(), event.sceneCode(), index);
         for (Map.Entry<String, List<RuleVersionSnapshot>> entry : byEventType.entrySet()) {
             index.update(event.tenantId(), event.sceneCode(),
                          entry.getKey(), entry.getValue());

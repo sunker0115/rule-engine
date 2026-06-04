@@ -28,7 +28,7 @@ public class IndexStartupLoader {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        Map<String, Map<String, List<RuleVersionSnapshot>>> all = loader.loadAll();
+        Map<String, Map<String, List<RuleVersionSnapshot>>> all = loader.loadAllWithStrategy(index);
         for (Map.Entry<String, Map<String, List<RuleVersionSnapshot>>> outerEntry : all.entrySet()) {
             // 外层 key 格式为 tenantId:sceneCode
             String[] parts = outerEntry.getKey().split(":", 2);

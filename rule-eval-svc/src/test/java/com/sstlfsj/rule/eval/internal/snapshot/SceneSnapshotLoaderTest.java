@@ -2,9 +2,11 @@ package com.sstlfsj.rule.eval.internal.snapshot;
 
 import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.SceneExecutionStrategy;
 import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import com.sstlfsj.rule.kernel.internal.codec.RuleVersionRow;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -54,7 +56,8 @@ class SceneSnapshotLoaderTest {
         RuleVersionRow row = new RuleVersionRow(
                 42L, "fraud_check", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"score\",\"params\":{}}",
-                "[]", "[{\"decisionCode\":\"REJECT\",\"priority\":10}]", "[]", "AST_BOOLEAN"
+                "[]", "[{\"decisionCode\":\"REJECT\",\"priority\":10}]", "[]",
+                "AST_BOOLEAN", "HIGHEST_PRIORITY"
         );
         RuleVersionSnapshot snap = new RuleVersionSnapshot(42L, "fraud_check", "1", null, List.of(),
                 List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), List.of(), null);
@@ -136,7 +139,7 @@ class SceneSnapshotLoaderTest {
         RuleVersionRow row = new RuleVersionRow(
                 7L, "s1", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
-                "[]", "[]", "[]", "AST_BOOLEAN"
+                "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY"
         );
         RuleVersionSnapshot snap = new RuleVersionSnapshot(7L, "s1", "1", null, List.of(), List.of(), null, null);
 
@@ -191,5 +194,53 @@ class SceneSnapshotLoaderTest {
 
         assertFalse(result.get("t1:sceneA").containsKey("*"));
         assertEquals(List.of(snap), result.get("t1:sceneA").get("login"));
+    }
+
+    /** loadAllWithStrategy 将 row 中的 decisionStrategy 写入 index。 */
+    @Test
+    void loadAllWithStrategy_writesStrategyToIndex() {
+        RuleVersionRow row = new RuleVersionRow(
+                1L, "fraud", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "FIRST_HIT");
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+                1L, "fraud", "1", null, List.of(), List.of(), List.of(), null);
+
+        when(mapper.loadAllActive()).thenReturn(List.of(row));
+        when(assembler.assembleAll(List.of(row))).thenReturn(List.of(snap));
+
+        SceneRuleIndex index = new SceneRuleIndex();
+        loader.loadAllWithStrategy(index);
+
+        assertEquals(SceneExecutionStrategy.FIRST_HIT, index.getStrategy("1", "fraud"));
+    }
+
+    /** loadBySceneWithStrategy 将 row 中的 decisionStrategy 写入 index。 */
+    @Test
+    void loadBySceneWithStrategy_writesStrategyToIndex() {
+        RuleVersionRow row = new RuleVersionRow(
+                2L, "payment", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "ALL_HITS");
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+                2L, "payment", "1", null, List.of(), List.of(), List.of(), null);
+
+        when(mapper.loadActiveByScene(1L, "payment")).thenReturn(List.of(row));
+        when(assembler.assembleAll(List.of(row))).thenReturn(List.of(snap));
+
+        SceneRuleIndex index = new SceneRuleIndex();
+        loader.loadBySceneWithStrategy("1", "payment", index);
+
+        assertEquals(SceneExecutionStrategy.ALL_HITS, index.getStrategy("1", "payment"));
+    }
+
+    /** decisionStrategy 为未知值时回退为 HIGHEST_PRIORITY。 */
+    @Test
+    void loadAllWithStrategy_unknownStrategy_fallsBackToDefault() {
+        RuleVersionRow row = new RuleVersionRow(
+                3L, "scene", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "UNKNOWN_STRATEGY");
+        when(mapper.loadAllActive()).thenReturn(List.of(row));
+        when(assembler.assembleAll(anyList())).thenReturn(List.of());
+
+        SceneRuleIndex index = new SceneRuleIndex();
+        loader.loadAllWithStrategy(index);
+
+        assertEquals(SceneExecutionStrategy.HIGHEST_PRIORITY, index.getStrategy("1", "scene"));
     }
 }

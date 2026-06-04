@@ -32,11 +32,13 @@ class RuleIndexEventListenerTest {
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 42L, "fraud_check", "1", condNode, List.of(),
                 List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), null, null);
-        when(loader.loadByScene("1", "fraud_check")).thenReturn(
+        when(loader.loadBySceneWithStrategy("1", "fraud_check", index)).thenReturn(
                 Map.of("RISK_EVENT", List.of(snap)));
 
         ruleListener.onRulePublished(event);
 
+        // 策略由 loadBySceneWithStrategy 写入 index，此处只验证快照写入
+        verify(loader).loadBySceneWithStrategy("1", "fraud_check", index);
         verify(index).update("1", "fraud_check", "RISK_EVENT", List.of(snap));
     }
 
@@ -56,11 +58,11 @@ class RuleIndexEventListenerTest {
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 10L, "fraud_check", "1", condNode, List.of(), List.of(), null, null);
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
-        when(loader.loadByScene("1", "fraud_check")).thenReturn(Map.of("*", List.of(snap)));
+        when(loader.loadBySceneWithStrategy("1", "fraud_check", index)).thenReturn(Map.of("*", List.of(snap)));
 
         sceneListener.onSceneChanged(event);
 
-        verify(loader).loadByScene("1", "fraud_check");
+        verify(loader).loadBySceneWithStrategy("1", "fraud_check", index);
         verify(index).update("1", "fraud_check", "*", List.of(snap));
     }
 }

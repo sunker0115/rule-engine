@@ -46,18 +46,24 @@ public class EvalEngine {
     public EvalResult evaluate(RuleEvent event) {
         List<RuleVersionSnapshot> candidates =
                 index.match(event.tenantId(), event.sceneCode(), event.eventType());
-        return evaluate(event, candidates);
+        SceneExecutionStrategy strategy = index.getStrategy(event.tenantId(), event.sceneCode());
+        return evaluate(event, candidates, strategy);
     }
 
     /**
      * 对指定候选快照列表求值，跳过索引查找步骤。
-     * 供 dry-run 路径：直接传入从 DB 加载的单条快照。
+     * 供 dry-run 路径：直接传入从 DB 加载的单条快照，使用 HIGHEST_PRIORITY 策略。
      *
      * @param event      触发事件
      * @param candidates 候选快照列表
      * @return 纯计算结果，无副作用
      */
     public EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates) {
+        return evaluate(event, candidates, SceneExecutionStrategy.HIGHEST_PRIORITY);
+    }
+
+    private EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates,
+                                SceneExecutionStrategy strategy) {
         if (candidates.isEmpty()) return EvalResult.miss();
 
         List<RuleVersionSnapshot> passed = new ArrayList<>();
@@ -68,6 +74,42 @@ public class EvalEngine {
 
         EvalContext ctx = contextAssembler.assemble(event, passed);
 
+        if (strategy == SceneExecutionStrategy.FIRST_HIT) {
+            return evaluateFirstHit(event, passed, ctx);
+        }
+        // HIGHEST_PRIORITY / ALL_HITS：全量评估，两者语义相同（均收集所有命中决策）
+        return evaluateAllCandidates(passed, ctx);
+    }
+
+    /** FIRST_HIT：按快照最高 decisionBinding priority 倒序，第一条命中即返回。 */
+    private EvalResult evaluateFirstHit(RuleEvent event,
+                                        List<RuleVersionSnapshot> passed, EvalContext ctx) {
+        List<RuleVersionSnapshot> sorted = passed.stream()
+                .sorted(Comparator.comparingInt(
+                        (RuleVersionSnapshot s) -> s.decisionBindings().stream()
+                                .mapToInt(RuleVersionSnapshot.DecisionBinding::priority)
+                                .max().orElse(0))
+                        .reversed())
+                .toList();
+
+        for (RuleVersionSnapshot snap : sorted) {
+            try {
+                EvalResult r = selectExecutor(snap).execute(snap, ctx);
+                if (r.ruleHit()) {
+                    Decision winner = r.hitDecisions().stream()
+                            .max(Comparator.comparingInt(Decision::priority))
+                            .orElse(r.finalDecision());
+                    return new EvalResult(true, winner, List.of(winner),
+                            r.nodeTrace(), r.errorCode(), List.of(), r.score());
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return EvalResult.miss();
+    }
+
+    /** HIGHEST_PRIORITY / ALL_HITS：全量评估，收集所有命中决策。 */
+    private EvalResult evaluateAllCandidates(List<RuleVersionSnapshot> passed, EvalContext ctx) {
         List<Decision> hitDecisions = new ArrayList<>();
         List<NodeTrace> allTraces   = new ArrayList<>();
         String errorCode = null;
