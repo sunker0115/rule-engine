@@ -37,7 +37,7 @@
 | kind | 判定主体承载 | 输出字段 | 状态 |
 |------|------------|---------|------|
 | `AST_BOOLEAN` | sealed `RuleNode` AST 树（已在 v1 落地） | `EvalResult.satisfied` | v1 唯一实现 |
-| `SCORECARD` | JSON 列承载条件列表 + 各自 `weight` + 阈值带 | `EvalResult.score` | 待实现 |
+| `SCORECARD` | JSON 列承载条件列表 + 各自 `weight` + 阈值带 | `EvalResult.score` | 已实装（D12） |
 | `DECISION_TREE` | JSON 列承载嵌套 if/then/else 树 | `EvalResult.category` | 待实现 |
 | `DECISION_TABLE` | JSON 列承载输入列 + 输出列 + 行集合矩阵 | `EvalResult.decision` | 待实现 |
 | `EXPRESSION_SCRIPT` | 文本列承载 CEL / Aviator 脚本 | 按脚本返回值多态填 | 待实现 |

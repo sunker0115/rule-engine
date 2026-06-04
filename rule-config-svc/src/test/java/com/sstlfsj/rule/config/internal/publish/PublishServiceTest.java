@@ -8,6 +8,7 @@ import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +16,7 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -141,6 +143,37 @@ class PublishServiceTest {
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("没有找到草稿版本");
+    }
+
+    @Test
+    void publish_scorecard_非ScorecardRootNode根节点_抛异常() {
+        // kind=SCORECARD，但 conditionAst 反序列化结果是 ConditionNode（非 ScorecardRootNode）
+        draftRule.setKind("SCORECARD");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        ConditionNode wrongRoot = new ConditionNode("c.type", "m.code", null, Map.of(), 1.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(wrongRoot);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ScorecardRootNode");
+    }
+
+    @Test
+    void publish_scorecard_weight为零_抛异常() {
+        // kind=SCORECARD，ScorecardRootNode 包含 weight=0 的 ConditionNode
+        draftRule.setKind("SCORECARD");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        ConditionNode zeroWeightLeaf = new ConditionNode("c.type", "m.code", null, Map.of(), 0.0);
+        ScorecardRootNode scorecardRoot = new ScorecardRootNode(List.of(zeroWeightLeaf), 60.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(scorecardRoot);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("weight 必须 > 0");
     }
 
     @Test

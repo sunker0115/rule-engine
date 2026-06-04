@@ -9,6 +9,8 @@ import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +92,19 @@ public class PublishService {
 
         // 4. 反序列化 AST，收集 metricDependencies
         AstNode ast = astSerializer.fromJson(draftVersion.getConditionAst());
+        // SCORECARD kind 校验：根节点必须是 ScorecardRootNode，叶子 weight 必须 > 0
+        if ("SCORECARD".equals(rule.getKind())) {
+            if (!(ast instanceof ScorecardRootNode scorecardRoot)) {
+                throw new IllegalArgumentException(
+                        "kind=SCORECARD 的规则 conditionAst 根节点必须是 ScorecardRootNode");
+            }
+            for (ConditionNode leaf : scorecardRoot.conditions()) {
+                if (leaf.weight() <= 0) {
+                    throw new IllegalArgumentException(
+                            "SCORECARD 条件节点 weight 必须 > 0，conditionType=" + leaf.conditionType());
+                }
+            }
+        }
         List<String> metricDeps = MetricDependencyCollector.collect(ast);
 
         // 5. 计算新版本号（max(version)+1）
