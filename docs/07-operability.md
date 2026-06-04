@@ -109,6 +109,10 @@ pass = bucket < rollout.percentage
 
 ## 六、Prometheus 指标清单
 
+> 本节指标均属**业务层可观测性**（规则命中 / 延迟 / Action 结果 / trace 队列），由 `rule-observability` 的 `RuleMetrics` 通过 Micrometer 注册，Actuator `/actuator/prometheus` 端点暴露供 Prometheus scrape。
+>
+> 基础设施层可观测性（HTTP 请求分布式 trace、JVM 指标 OTLP 推送、日志聚合到 Loki）为独立演进方向，详见 [`08-evolution.md §2.22`](./08-evolution.md)。
+
 所有指标前缀 `rule_engine_`，label 统一含 `tenant_id` / `scene_code`。
 
 | 指标名 | 类型 | labels | 说明 |
