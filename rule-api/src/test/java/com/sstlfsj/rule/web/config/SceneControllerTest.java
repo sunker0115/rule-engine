@@ -94,4 +94,35 @@ class SceneControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
+
+    @Test
+    void patchScene_returns200() throws Exception {
+        doNothing().when(sceneService).updateScene(any(), any(), any(), any(), any(), any(), any());
+
+        mockMvc.perform(patch("/api/v1/scenes/payment")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {
+                              "tenantId":"t1",
+                              "payloadSchema":[{"name":"amount","type":"NUMBER","required":true}]
+                            }
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(sceneService).updateScene(
+                eq("t1"), eq("payment"), isNull(), isNull(),
+                argThat(s -> s != null && s.contains("amount")),
+                isNull(), eq("user1"));
+    }
+
+    @Test
+    void patchScene_missingTenantId_returns400() throws Exception {
+        mockMvc.perform(patch("/api/v1/scenes/payment")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("{\"name\":\"新名称\"}"))
+                .andExpect(status().isBadRequest());
+    }
 }

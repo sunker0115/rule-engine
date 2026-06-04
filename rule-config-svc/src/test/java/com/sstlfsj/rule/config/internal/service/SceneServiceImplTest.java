@@ -122,4 +122,60 @@ class SceneServiceImplTest {
         assertThat(event.sceneCode()).isEqualTo("PAYMENT");
         assertThat(event.active()).isFalse();
     }
+
+    @Test
+    void updateScene_payloadSchema变更_快照旧版本并自增版本号() {
+        SceneDef existing = new SceneDef();
+        existing.setId(10L);
+        existing.setTenantId(1L);
+        existing.setCode("PAYMENT");
+        existing.setPayloadSchema("[{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true}]");
+        existing.setPayloadSchemaVersion(1);
+        existing.setEventTypes("[]");
+        when(sceneMapper.selectOne(any())).thenReturn(existing);
+        when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+        when(schemaHistoryMapper.insert((ScenePayloadSchemaHistory) any())).thenReturn(1);
+
+        String newSchema = "[{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true},"
+                + "{\"name\":\"currency\",\"type\":\"STRING\",\"required\":true}]";
+        sceneService.updateScene("1", "PAYMENT", null, null, newSchema, null, "actor1");
+
+        // 旧版本应写入历史
+        ArgumentCaptor<ScenePayloadSchemaHistory> histCaptor =
+                ArgumentCaptor.forClass(ScenePayloadSchemaHistory.class);
+        verify(schemaHistoryMapper).insert(histCaptor.capture());
+        assertThat(histCaptor.getValue().getVersion()).isEqualTo(1);
+        assertThat(histCaptor.getValue().getSchemaJson()).contains("amount");
+
+        // scene 版本号自增为 2
+        ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
+        verify(sceneMapper).updateById(sceneCaptor.capture());
+        assertThat(sceneCaptor.getValue().getPayloadSchemaVersion()).isEqualTo(2);
+        assertThat(sceneCaptor.getValue().getPayloadSchema()).contains("currency");
+    }
+
+    @Test
+    void updateScene_payloadSchema未变更_不写历史不变版本号() {
+        SceneDef existing = new SceneDef();
+        existing.setId(10L);
+        existing.setTenantId(1L);
+        existing.setCode("PAYMENT");
+        existing.setPayloadSchema("[{\"name\":\"amount\",\"type\":\"NUMBER\"}]");
+        existing.setPayloadSchemaVersion(2);
+        existing.setEventTypes("[\"payment.initiated\"]");
+        when(sceneMapper.selectOne(any())).thenReturn(existing);
+        when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        // 传入与现有相同的 payloadSchema
+        sceneService.updateScene("1", "PAYMENT", "新名称", null,
+                "[{\"name\":\"amount\",\"type\":\"NUMBER\"}]", null, "actor1");
+
+        verify(schemaHistoryMapper, never()).insert((ScenePayloadSchemaHistory) any());
+        ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
+        verify(sceneMapper).updateById(sceneCaptor.capture());
+        assertThat(sceneCaptor.getValue().getPayloadSchemaVersion()).isEqualTo(2);
+        assertThat(sceneCaptor.getValue().getName()).isEqualTo("新名称");
+    }
 }

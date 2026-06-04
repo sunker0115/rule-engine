@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.config.dto.CreateSceneRequest;
+import com.sstlfsj.rule.web.config.dto.UpdateSceneRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,6 +48,33 @@ public class SceneController {
             return ApiResponse.ok(Map.of("id", id));
         } catch (JsonProcessingException e) {
             // Object → JSON 序列化不应失败，属于内部错误
+            throw new IllegalStateException("JSON 序列化失败", e);
+        }
+    }
+
+    /**
+     * PATCH /api/v1/scenes/{sceneCode} — 更新场景元数据（payloadSchema / eventTypes 等）。
+     * payloadSchema 发生变化时自动快照历史版本并自增版本号。
+     */
+    @PatchMapping("/{sceneCode}")
+    public ApiResponse<Void> updateScene(
+            @PathVariable String sceneCode,
+            @Valid @RequestBody UpdateSceneRequest req,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        try {
+            String eventTypesJson = req.eventTypes() != null
+                    ? objectMapper.writeValueAsString(req.eventTypes()) : null;
+            String payloadSchemaJson = req.payloadSchema() != null
+                    ? objectMapper.writeValueAsString(req.payloadSchema()) : null;
+            String defaultParamsJson = req.defaultParams() != null
+                    ? objectMapper.writeValueAsString(req.defaultParams()) : null;
+            sceneService.updateScene(
+                    req.tenantId(), sceneCode,
+                    req.name(), eventTypesJson,
+                    payloadSchemaJson, defaultParamsJson,
+                    actorId);
+            return ApiResponse.ok(null);
+        } catch (JsonProcessingException e) {
             throw new IllegalStateException("JSON 序列化失败", e);
         }
     }
