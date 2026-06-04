@@ -62,4 +62,26 @@ class EvalContextTest {
         assertSame(ev, ctx.getEvent());
         assertSame(sub, ctx.getSubject());
     }
+
+    @Test
+    void subject_recordStyleAccessor_returnsSameAsGetSubject() {
+        Subject sub = subject();
+        EvalContext ctx = new EvalContext("t1", event(), sub, Map.of());
+        assertSame(sub, ctx.subject());
+        assertSame(ctx.getSubject(), ctx.subject());
+    }
+
+    @Test
+    void metrics_returnsFullMetricMap() {
+        MetricValue mv = new MetricValue(99, "NUMBER", "FETCHED");
+        EvalContext ctx = new EvalContext("t1", event(), subject(), Map.of("score", mv));
+        assertEquals(1, ctx.metrics().size());
+        assertSame(mv, ctx.metrics().get("score"));
+    }
+
+    @Test
+    void metrics_isImmutable() {
+        EvalContext ctx = new EvalContext("t1", event(), subject(), Map.of("a", new MetricValue(1, "NUMBER", "FETCHED")));
+        assertThrows(UnsupportedOperationException.class, () -> ctx.metrics().put("b", new MetricValue(2, "NUMBER", "FETCHED")));
+    }
 }

@@ -8,8 +8,11 @@ import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
+import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
@@ -38,23 +41,52 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
-    void ruleVersionExecutor_nullEvaluators_returnsTracingInterpretedExecutor() {
-        // conditionEvaluators 为 null（无注册实现时 Spring 传入 null）
-        RuleVersionExecutor executor = config.ruleVersionExecutor(null);
+    void ruleVersionExecutor_returnsTracingInterpretedExecutor() {
+        RuleVersionExecutor executor = config.ruleVersionExecutor();
         assertNotNull(executor);
         assertInstanceOf(TracingInterpretedExecutor.class, executor);
     }
 
     @Test
-    void ruleVersionExecutor_emptyEvaluators_returnsTracingInterpretedExecutor() {
-        RuleVersionExecutor executor = config.ruleVersionExecutor(java.util.Map.of());
+    void ruleVersionExecutor_hasPrimaryAnnotation() throws Exception {
+        var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor");
+        assertNotNull(method.getAnnotation(Primary.class),
+                "ruleVersionExecutor 必须标注 @Primary，否则与 ScorecardExecutor 并存时 Spring 无法消歧义");
+    }
+
+    @Test
+    void scorecardExecutor_returnsScorecardExecutor() {
+        ScorecardExecutor executor = config.scorecardExecutor();
         assertNotNull(executor);
-        assertInstanceOf(TracingInterpretedExecutor.class, executor);
+        assertInstanceOf(ScorecardExecutor.class, executor);
+    }
+
+    @Test
+    void sceneRuleIndex_returnsNewInstance() {
+        SceneRuleIndex index = config.sceneRuleIndex();
+        assertNotNull(index);
+    }
+
+    @Test
+    void evalContextAssembler_nullLists_returnsInstance() {
+        EvalContextAssembler assembler = config.evalContextAssembler(null, null);
+        assertNotNull(assembler);
+    }
+
+    @Test
+    void evalContextAssembler_emptyLists_returnsInstance() {
+        EvalContextAssembler assembler = config.evalContextAssembler(List.of(), List.of());
+        assertNotNull(assembler);
+    }
+
+    @Test
+    void snapshotAssembler_returnsInstance() {
+        SnapshotAssembler assembler = config.snapshotAssembler();
+        assertNotNull(assembler);
     }
 
     @Test
     void actionDispatchService_nullHandlers_returnsInstance() {
-        // actionHandlers 为 null（容器无任何 ActionHandler Bean 时 Spring 传入 null）
         ActionDispatchService svc = config.actionDispatchService(
                 null,
                 mock(SceneActionBindingReadMapper.class),
@@ -64,7 +96,6 @@ class EvalAutoConfigurationTest {
 
     @Test
     void actionDispatchService_withAnnotatedHandler_buildsHandlerMap() {
-        // 注册了一个带 @ActionType("BLOCK_TX") 的 handler，构建后应能正确索引
         ActionHandler handler = new BlockTxStub();
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(handler),
@@ -75,36 +106,12 @@ class EvalAutoConfigurationTest {
 
     @Test
     void actionDispatchService_handlerWithoutAnnotation_isIgnored() {
-        // 没有 @ActionType 注解的 handler 不应注册到 map，也不应抛异常
         ActionHandler noAnnotation = ctx -> ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(noAnnotation),
                 mock(SceneActionBindingReadMapper.class),
                 mock(ActionExecutionMapper.class));
         assertNotNull(svc);
-    }
-
-    @Test
-    void ruleVersionExecutor_hasPrimaryAnnotation() throws Exception {
-        // @Primary 确保两个 RuleVersionExecutor Bean 共存时默认注入 TracingInterpretedExecutor
-        var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor", java.util.Map.class);
-        assertNotNull(method.getAnnotation(Primary.class),
-                "ruleVersionExecutor 必须标注 @Primary，否则与 ScorecardExecutor 并存时 Spring 无法消歧义");
-    }
-
-    @Test
-    void scorecardExecutor_nullEvaluators_returnsScorecardExecutor() {
-        // conditionEvaluators 为 null（无注册实现时 Spring 传入 null）
-        ScorecardExecutor executor = config.scorecardExecutor(null);
-        assertNotNull(executor);
-        assertInstanceOf(ScorecardExecutor.class, executor);
-    }
-
-    @Test
-    void scorecardExecutor_emptyEvaluators_returnsScorecardExecutor() {
-        ScorecardExecutor executor = config.scorecardExecutor(java.util.Map.of());
-        assertNotNull(executor);
-        assertInstanceOf(ScorecardExecutor.class, executor);
     }
 
     /** 测试用 stub，带 @ActionType 注解。 */

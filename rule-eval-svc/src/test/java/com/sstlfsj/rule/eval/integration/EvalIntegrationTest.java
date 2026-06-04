@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
-import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;

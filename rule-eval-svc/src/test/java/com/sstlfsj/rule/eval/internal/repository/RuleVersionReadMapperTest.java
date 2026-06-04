@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.repository;
 
-import com.sstlfsj.rule.eval.internal.snapshot.RuleVersionRow;
+import com.sstlfsj.rule.kernel.internal.codec.RuleVersionRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 import org.junit.jupiter.api.Test;

@@ -2,6 +2,9 @@ package com.sstlfsj.rule.eval.internal.snapshot;
 
 import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
+import com.sstlfsj.rule.kernel.internal.codec.RuleVersionRow;
+import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

@@ -21,6 +21,11 @@ public final class EvalContext {
     public RuleEvent getEvent()  { return event; }
     public Subject getSubject()  { return subject; }
 
+    /** record 风格 accessor，与 getSubject() 等价。 */
+    public Subject subject()     { return subject; }
+    /** 返回全量 metrics 快照（不可变视图）。 */
+    public Map<String, MetricValue> metrics() { return metrics; }
+
     /** 返回已预拉的指标值，不存在时返回 null。 */
     public MetricValue getMetric(String metricCode) {
         return metrics.get(metricCode);

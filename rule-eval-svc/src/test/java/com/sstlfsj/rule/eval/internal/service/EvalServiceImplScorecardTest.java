@@ -1,8 +1,8 @@
 package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.context.EvalContextAssembler;
-import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;

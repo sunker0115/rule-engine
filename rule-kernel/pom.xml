@@ -18,6 +18,13 @@
             <artifactId>guava</artifactId>
         </dependency>
 
+        <!-- AstJsonCodec 需要 Jackson；rule-sdk 使用时通过直接依赖引入，rule-eval-svc 已由 Spring Boot 传递 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- 测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
