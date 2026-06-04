@@ -125,4 +125,36 @@ class SceneControllerTest {
                         .content("{\"name\":\"新名称\"}"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void getScene_returns200_withDetail() throws Exception {
+        com.sstlfsj.rule.config.api.dto.SceneDetailDto dto =
+                new com.sstlfsj.rule.config.api.dto.SceneDetailDto(
+                        5L, "t1", "payment", "支付场景",
+                        null, "PUSH", "USER",
+                        java.util.List.of("payment.initiated"),
+                        java.util.List.of(),
+                        java.util.Map.of("timezone", "Asia/Shanghai"),
+                        1, "ACTIVE");
+        when(sceneService.getScene("t1", "payment")).thenReturn(dto);
+
+        mockMvc.perform(get("/api/v1/scenes/payment")
+                        .param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.sceneCode").value("payment"))
+                .andExpect(jsonPath("$.data.payloadSchemaVersion").value(1))
+                .andExpect(jsonPath("$.data.eventTypes[0]").value("payment.initiated"));
+    }
+
+    @Test
+    void getScene_notFound_returns400() throws Exception {
+        when(sceneService.getScene("t1", "notexist"))
+                .thenThrow(new IllegalArgumentException("Scene 不存在: notexist"));
+
+        mockMvc.perform(get("/api/v1/scenes/notexist")
+                        .param("tenantId", "t1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
 }

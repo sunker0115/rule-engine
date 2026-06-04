@@ -178,4 +178,39 @@ class SceneServiceImplTest {
         assertThat(sceneCaptor.getValue().getPayloadSchemaVersion()).isEqualTo(2);
         assertThat(sceneCaptor.getValue().getName()).isEqualTo("新名称");
     }
+
+    @Test
+    void getScene_返回完整SceneDetailDto() {
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setTenantId(1L);
+        scene.setCode("PAYMENT");
+        scene.setName("支付场景");
+        scene.setDominantMode("PUSH");
+        scene.setSubjectType("USER");
+        scene.setEventTypes("[\"payment.initiated\"]");
+        scene.setPayloadSchema("[{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true}]");
+        scene.setDefaultParams("{\"timezone\":\"Asia/Shanghai\"}");
+        scene.setPayloadSchemaVersion(2);
+        scene.setStatus("ACTIVE");
+        when(sceneMapper.selectOne(any())).thenReturn(scene);
+
+        com.sstlfsj.rule.config.api.dto.SceneDetailDto dto =
+                sceneService.getScene("1", "PAYMENT");
+
+        assertThat(dto.sceneCode()).isEqualTo("PAYMENT");
+        assertThat(dto.payloadSchemaVersion()).isEqualTo(2);
+        assertThat(dto.eventTypes()).containsExactly("payment.initiated");
+        assertThat(dto.payloadSchema()).hasSize(1);
+        assertThat(dto.payloadSchema().get(0).name()).isEqualTo("amount");
+        assertThat(dto.defaultParams()).containsEntry("timezone", "Asia/Shanghai");
+    }
+
+    @Test
+    void getScene_sceneNotFound_抛IllegalArgument() {
+        when(sceneMapper.selectOne(any())).thenReturn(null);
+        assertThatThrownBy(() -> sceneService.getScene("1", "NOT_EXIST"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Scene 不存在");
+    }
 }

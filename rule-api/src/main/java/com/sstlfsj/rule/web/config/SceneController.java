@@ -2,6 +2,7 @@ package com.sstlfsj.rule.web.config;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.config.dto.CreateSceneRequest;
@@ -50,6 +51,20 @@ public class SceneController {
             // Object → JSON 序列化不应失败，属于内部错误
             throw new IllegalStateException("JSON 序列化失败", e);
         }
+    }
+
+    /**
+     * GET /api/v1/scenes/{sceneCode}?tenantId=xxx — 查询 Scene 详情（含 payloadSchema）。
+     *
+     * @param sceneCode 场景编码（路径参数）
+     * @param tenantId  租户 ID（查询参数）
+     * @return Scene 详情（含 payloadSchema / eventTypes / defaultParams）
+     */
+    @GetMapping("/{sceneCode}")
+    public ApiResponse<SceneDetailDto> getScene(
+            @PathVariable String sceneCode,
+            @RequestParam String tenantId) {
+        return ApiResponse.ok(sceneService.getScene(tenantId, sceneCode));
     }
 
     /**
