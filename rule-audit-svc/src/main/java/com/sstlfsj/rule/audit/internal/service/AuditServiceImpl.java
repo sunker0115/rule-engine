@@ -6,6 +6,7 @@ import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.audit.internal.domain.AuditLogRow;
 import com.sstlfsj.rule.audit.internal.domain.EvalSessionRow;
 import com.sstlfsj.rule.audit.internal.domain.NodeTraceRow;
+import com.sstlfsj.rule.audit.internal.domain.RuleSessionRow;
 import com.sstlfsj.rule.audit.internal.repository.AuditLogReadMapper;
 import com.sstlfsj.rule.audit.internal.repository.EvalSessionReadMapper;
 import com.sstlfsj.rule.audit.internal.repository.NodeTraceReadMapper;
@@ -131,6 +132,27 @@ class AuditServiceImpl implements AuditService {
             }
         }
         return roots.stream().map(r -> byPath.get(r).build()).toList();
+    }
+
+    @Override
+    public PageResult<RuleSessionEntry> querySessionsByRuleDefinition(
+            Long ruleDefinitionId, String status, int limit, int offset) {
+        List<RuleSessionRow> rows = evalSessionMapper.selectByRuleDefinitionId(
+                ruleDefinitionId, status, limit, offset);
+        long total = evalSessionMapper.countByRuleDefinitionId(ruleDefinitionId, status);
+        List<RuleSessionEntry> items = rows.stream()
+                .map(r -> new RuleSessionEntry(
+                        String.valueOf(r.getId()),
+                        r.getEventId(),
+                        r.getSubjectId(),
+                        r.getStatus(),
+                        r.getFinalDecision(),
+                        r.getEvalDurationMs(),
+                        r.getStartedAt() != null ? r.getStartedAt().toInstant(ZoneOffset.UTC) : null,
+                        r.getRuleVersionId()))
+                .toList();
+        int page = limit > 0 ? offset / limit : 0;
+        return new PageResult<>(items, total, page, limit);
     }
 
     /** 返回点分路径的父路径；根节点（不含 "."）返回 null。 */

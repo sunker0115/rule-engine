@@ -31,6 +31,8 @@ public class EvaluationSession {
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
     private Integer evalDurationMs;
+    /** EvalContext metrics 取数快照（JSON 文本），构建失败时为 null。 */
+    private String contextSnapshot;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -68,4 +70,6 @@ public class EvaluationSession {
     public void setFinishedAt(LocalDateTime finishedAt) { this.finishedAt = finishedAt; }
     public Integer getEvalDurationMs() { return evalDurationMs; }
     public void setEvalDurationMs(Integer evalDurationMs) { this.evalDurationMs = evalDurationMs; }
+    public String getContextSnapshot() { return contextSnapshot; }
+    public void setContextSnapshot(String contextSnapshot) { this.contextSnapshot = contextSnapshot; }
 }

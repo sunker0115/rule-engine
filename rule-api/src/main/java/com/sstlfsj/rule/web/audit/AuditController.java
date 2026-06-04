@@ -60,4 +60,23 @@ public class AuditController {
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(auditService.queryAuditLogs(tenantId, resourceType, resourceId, page, size));
     }
+
+    /**
+     * GET /api/v1/rules/{ruleDefinitionId}/sessions — 按规则定义 ID 查询历史评估会话。
+     *
+     * @param ruleDefinitionId 规则定义 ID
+     * @param status           可选状态过滤（HIT / MISS / ERROR / BLOCKED）
+     * @param limit            每页条数，默认 20
+     * @param offset           偏移量，默认 0
+     * @return 分页历史评估会话列表
+     */
+    @GetMapping("/rules/{ruleDefinitionId}/sessions")
+    public ApiResponse<AuditService.PageResult<AuditService.RuleSessionEntry>> querySessionsByRule(
+            @PathVariable Long ruleDefinitionId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        return ApiResponse.ok(auditService.querySessionsByRuleDefinition(
+                ruleDefinitionId, status, limit, offset));
+    }
 }

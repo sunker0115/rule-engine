@@ -5,6 +5,7 @@ import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.audit.internal.domain.AuditLogRow;
 import com.sstlfsj.rule.audit.internal.domain.EvalSessionRow;
 import com.sstlfsj.rule.audit.internal.domain.NodeTraceRow;
+import com.sstlfsj.rule.audit.internal.domain.RuleSessionRow;
 import com.sstlfsj.rule.audit.internal.repository.AuditLogReadMapper;
 import com.sstlfsj.rule.audit.internal.repository.EvalSessionReadMapper;
 import com.sstlfsj.rule.audit.internal.repository.NodeTraceReadMapper;
@@ -189,5 +190,68 @@ class AuditServiceImplTest {
         when(nodeTraceMapper.selectList(any())).thenReturn(List.of());
 
         assertThat(service.queryTraceTree("100", 999L)).isEmpty();
+    }
+
+    @Test
+    void querySessionsByRuleDefinition_withStatus_返回过滤结果() {
+        RuleSessionRow row = new RuleSessionRow();
+        row.setId(5L);
+        row.setEventId("evt-abc");
+        row.setSubjectId("u1");
+        row.setStatus("HIT");
+        row.setFinalDecision("REJECT");
+        row.setEvalDurationMs(30);
+        row.setStartedAt(LocalDateTime.of(2026, 6, 5, 10, 0));
+        row.setRuleVersionId(99L);
+
+        when(evalSessionMapper.selectByRuleDefinitionId(42L, "HIT", 20, 0))
+                .thenReturn(List.of(row));
+        when(evalSessionMapper.countByRuleDefinitionId(42L, "HIT")).thenReturn(1L);
+
+        AuditService.PageResult<AuditService.RuleSessionEntry> result =
+                service.querySessionsByRuleDefinition(42L, "HIT", 20, 0);
+
+        assertThat(result.total()).isEqualTo(1L);
+        assertThat(result.items()).hasSize(1);
+        AuditService.RuleSessionEntry entry = result.items().get(0);
+        assertThat(entry.sessionId()).isEqualTo("5");
+        assertThat(entry.eventId()).isEqualTo("evt-abc");
+        assertThat(entry.subjectId()).isEqualTo("u1");
+        assertThat(entry.status()).isEqualTo("HIT");
+        assertThat(entry.finalDecision()).isEqualTo("REJECT");
+        assertThat(entry.evalDurationMs()).isEqualTo(30);
+        assertThat(entry.ruleVersionId()).isEqualTo(99L);
+        assertThat(entry.startedAt()).isEqualTo(
+                java.time.Instant.parse("2026-06-05T10:00:00Z"));
+    }
+
+    @Test
+    void querySessionsByRuleDefinition_noStatus_返回全部() {
+        when(evalSessionMapper.selectByRuleDefinitionId(10L, null, 5, 0))
+                .thenReturn(List.of());
+        when(evalSessionMapper.countByRuleDefinitionId(10L, null)).thenReturn(0L);
+
+        AuditService.PageResult<AuditService.RuleSessionEntry> result =
+                service.querySessionsByRuleDefinition(10L, null, 5, 0);
+
+        assertThat(result.total()).isEqualTo(0L);
+        assertThat(result.items()).isEmpty();
+        assertThat(result.page()).isEqualTo(0);
+        assertThat(result.size()).isEqualTo(5);
+    }
+
+    @Test
+    void querySessionsByRuleDefinition_分页计算正确() {
+        when(evalSessionMapper.selectByRuleDefinitionId(1L, null, 10, 20))
+                .thenReturn(List.of());
+        when(evalSessionMapper.countByRuleDefinitionId(1L, null)).thenReturn(25L);
+
+        AuditService.PageResult<AuditService.RuleSessionEntry> result =
+                service.querySessionsByRuleDefinition(1L, null, 10, 20);
+
+        // offset=20, limit=10 → page=2
+        assertThat(result.page()).isEqualTo(2);
+        assertThat(result.size()).isEqualTo(10);
+        assertThat(result.total()).isEqualTo(25L);
     }
 }

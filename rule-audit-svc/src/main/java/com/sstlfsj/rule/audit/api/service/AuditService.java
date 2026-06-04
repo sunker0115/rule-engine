@@ -104,4 +104,28 @@ public interface AuditService {
      * @return 根节点列表（正常 AST 只有一个根，Pre-Gate 阻断时可能为空）
      */
     List<TraceTreeNode> queryTraceTree(String tenantId, Long sessionId);
+
+    /** 按规则定义查询历史评估会话的条目，含关联的规则版本号。 */
+    record RuleSessionEntry(
+            String sessionId,
+            String eventId,
+            String subjectId,
+            String status,
+            String finalDecision,
+            Integer evalDurationMs,
+            java.time.Instant startedAt,
+            Long ruleVersionId
+    ) {}
+
+    /**
+     * 按规则定义 ID 查询历史评估会话，支持 status 过滤和 limit/offset 分页。
+     *
+     * @param ruleDefinitionId 规则定义 ID
+     * @param status           可选状态过滤（HIT / MISS / ERROR / BLOCKED），null 表示不过滤
+     * @param limit            每页条数
+     * @param offset           偏移量（从 0 开始）
+     * @return 分页结果
+     */
+    PageResult<RuleSessionEntry> querySessionsByRuleDefinition(
+            Long ruleDefinitionId, String status, int limit, int offset);
 }

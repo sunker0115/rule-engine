@@ -28,6 +28,8 @@ public class DryRunSession {
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
     private Integer evalDurationMs;
+    /** dry-run 试算时 EvalContext metrics 取数快照（JSON 文本），排障 / 重放对比用。 */
+    private String contextSnapshot;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -61,4 +63,6 @@ public class DryRunSession {
     public void setFinishedAt(LocalDateTime finishedAt) { this.finishedAt = finishedAt; }
     public Integer getEvalDurationMs() { return evalDurationMs; }
     public void setEvalDurationMs(Integer evalDurationMs) { this.evalDurationMs = evalDurationMs; }
+    public String getContextSnapshot() { return contextSnapshot; }
+    public void setContextSnapshot(String contextSnapshot) { this.contextSnapshot = contextSnapshot; }
 }

@@ -2,30 +2,41 @@ package com.sstlfsj.rule.eval.internal.session;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.Decision;
+import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /** 封装 evaluation_session 和 dry_run_session 的同步写入逻辑（D11/D21）。 */
 @Component
 public class EvalSessionWriter {
 
+    private static final Logger log = LoggerFactory.getLogger(EvalSessionWriter.class);
+
     private final EvaluationSessionMapper sessionMapper;
     private final DryRunSessionMapper dryRunMapper;
+    private final ObjectMapper objectMapper;
 
     public EvalSessionWriter(EvaluationSessionMapper sessionMapper,
-                             DryRunSessionMapper dryRunMapper) {
+                             DryRunSessionMapper dryRunMapper,
+                             ObjectMapper objectMapper) {
         this.sessionMapper = sessionMapper;
         this.dryRunMapper = dryRunMapper;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -81,12 +92,13 @@ public class EvalSessionWriter {
     }
 
     /**
-     * UPDATE evaluation_session：将 PENDING 更新为终态（HIT / MISS / ERROR）。
+     * UPDATE evaluation_session：将 PENDING 更新为终态（HIT / MISS / ERROR），同步写入 context_snapshot。
      *
      * @param sessionId 待更新的会话 id
      * @param result    评估结果
+     * @param ctx       本次评估上下文，用于序列化 metrics 快照；为 null 时 context_snapshot 写 null
      */
-    public void updateFinal(Long sessionId, EvalResult result) {
+    public void updateFinal(Long sessionId, EvalResult result, EvalContext ctx) {
         String status;
         if (result.errorCode() != null) {
             status = "ERROR";
@@ -109,7 +121,8 @@ public class EvalSessionWriter {
                         .set(EvaluationSession::getHitDecisions, hitDecisionsJson)
                         .set(EvaluationSession::getErrorCode, result.errorCode())
                         .set(EvaluationSession::getHitRuleCount, result.hitDecisions().size())
-                        .set(EvaluationSession::getFinishedAt, LocalDateTime.now()));
+                        .set(EvaluationSession::getFinishedAt, LocalDateTime.now())
+                        .set(EvaluationSession::getContextSnapshot, serializeSnapshot(ctx)));
     }
 
     /**
@@ -136,12 +149,13 @@ public class EvalSessionWriter {
     }
 
     /**
-     * UPDATE dry_run_session 为终态（HIT / MISS / ERROR）。
+     * UPDATE dry_run_session 为终态（HIT / MISS / ERROR），同步写入 context_snapshot。
      *
      * @param sessionId 待更新的 dry-run 会话 id
      * @param result    评估结果
+     * @param ctx       本次 dry-run 评估上下文；为 null 时 context_snapshot 写 null
      */
-    public void updateDryRunFinal(Long sessionId, EvalResult result) {
+    public void updateDryRunFinal(Long sessionId, EvalResult result, EvalContext ctx) {
         String status = result.ruleHit() ? "HIT" : "MISS";
         if (result.errorCode() != null) status = "ERROR";
 
@@ -152,7 +166,23 @@ public class EvalSessionWriter {
                         .set(DryRunSession::getErrorCode, result.errorCode())
                         .set(DryRunSession::getFinalDecision,
                                 result.finalDecision() != null ? result.finalDecision().code() : null)
-                        .set(DryRunSession::getFinishedAt, LocalDateTime.now()));
+                        .set(DryRunSession::getFinishedAt, LocalDateTime.now())
+                        .set(DryRunSession::getContextSnapshot, serializeSnapshot(ctx)));
+    }
+
+    /** 将 EvalContext metrics 序列化为 {@code {metricCode: rawValue}} JSON；ctx 为 null 或序列化失败时返回 null。 */
+    private String serializeSnapshot(EvalContext ctx) {
+        if (ctx == null) return null;
+        Map<String, Object> raw = ctx.metrics().entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().value() != null ? e.getValue().value() : "null"));
+        try {
+            return objectMapper.writeValueAsString(raw);
+        } catch (JsonProcessingException e) {
+            log.warn("context_snapshot 序列化失败，写 null", e);
+            return null;
+        }
     }
 
     private EvaluationSession buildSession(RuleEvent event, String source) {

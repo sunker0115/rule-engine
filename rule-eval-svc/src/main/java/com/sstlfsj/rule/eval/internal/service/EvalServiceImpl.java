@@ -8,6 +8,7 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.springframework.beans.factory.DisposableBean;
@@ -27,6 +28,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     private final TraceWriter traceWriter;
     private final DryRunTraceWriter dryRunTraceWriter;
     private final ActionDispatchService actionDispatchService;
+    private final EvalContextAssembler contextAssembler;
     private final EvalActionDispatcher dispatcher;
 
     EvalServiceImpl(EvalEngine evalEngine,
@@ -35,7 +37,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                     EvalSessionWriter sessionWriter,
                     TraceWriter traceWriter,
                     DryRunTraceWriter dryRunTraceWriter,
-                    ActionDispatchService actionDispatchService) {
+                    ActionDispatchService actionDispatchService,
+                    EvalContextAssembler contextAssembler) {
         this.evalEngine = evalEngine;
         this.index = index;
         this.snapshotLoader = snapshotLoader;
@@ -43,6 +46,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         this.traceWriter = traceWriter;
         this.dryRunTraceWriter = dryRunTraceWriter;
         this.actionDispatchService = actionDispatchService;
+        this.contextAssembler = contextAssembler;
         // 构造器末尾创建 dispatcher，不调用 start
         this.dispatcher = new EvalActionDispatcher(10000, this::evaluate);
     }
@@ -77,9 +81,10 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         if (isDryRun && specificVersionId != null) {
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);
             if (snap == null) return EvalResult.miss();
+            EvalContext ctx = contextAssembler.assemble(event, List.of(snap));
             EvalResult result = evalEngine.evaluate(event, List.of(snap));
             Long sessionId = sessionWriter.insertDryRunPending(event, specificVersionId);
-            sessionWriter.updateDryRunFinal(sessionId, result);
+            sessionWriter.updateDryRunFinal(sessionId, result, ctx);
             dryRunTraceWriter.write(event.tenantId(), sessionId.toString(), result.nodeTrace());
             return result;
         }
@@ -90,9 +95,10 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         if (candidates.isEmpty()) return EvalResult.miss();
 
         Long sessionId = sessionWriter.insertPending(event, candidates.size(), "PULL");
+        EvalContext ctx = contextAssembler.assemble(event, candidates);
         EvalResult result = evalEngine.evaluate(event);
 
-        sessionWriter.updateFinal(sessionId, result);
+        sessionWriter.updateFinal(sessionId, result, ctx);
         traceWriter.write(event.tenantId(), sessionId.toString(), result.nodeTrace());
 
         if (result.ruleHit()) {

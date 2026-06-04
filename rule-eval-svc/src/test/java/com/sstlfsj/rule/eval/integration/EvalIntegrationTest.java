@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval.integration;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -52,7 +54,12 @@ class EvalIntegrationTest {
             "com.sstlfsj.rule.config.internal.repository",
             "com.sstlfsj.rule.observability.internal.repository"
     })
-    static class TestApp {}
+    static class TestApp {
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
+    }
 
     /** MySQL 8.0 容器，整个测试类共享（@Container + static = 容器生命周期绑定到类）。 */
     @Container

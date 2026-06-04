@@ -101,4 +101,44 @@ class AuditControllerTest {
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data").isEmpty());
     }
+
+    @Test
+    void querySessionsByRule_returns200_withDefaultParams() throws Exception {
+        AuditService.PageResult<AuditService.RuleSessionEntry> empty =
+                new AuditService.PageResult<>(List.of(), 0L, 0, 20);
+        when(auditService.querySessionsByRuleDefinition(42L, null, 20, 0)).thenReturn(empty);
+
+        mockMvc.perform(get("/api/v1/rules/42/sessions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(auditService).querySessionsByRuleDefinition(42L, null, 20, 0);
+    }
+
+    @Test
+    void querySessionsByRule_withStatusFilter_passesStatusToService() throws Exception {
+        AuditService.PageResult<AuditService.RuleSessionEntry> empty =
+                new AuditService.PageResult<>(List.of(), 0L, 0, 20);
+        when(auditService.querySessionsByRuleDefinition(7L, "HIT", 20, 0)).thenReturn(empty);
+
+        mockMvc.perform(get("/api/v1/rules/7/sessions").param("status", "HIT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(auditService).querySessionsByRuleDefinition(7L, "HIT", 20, 0);
+    }
+
+    @Test
+    void querySessionsByRule_withLimitOffset_passesCorrectly() throws Exception {
+        AuditService.PageResult<AuditService.RuleSessionEntry> empty =
+                new AuditService.PageResult<>(List.of(), 0L, 2, 10);
+        when(auditService.querySessionsByRuleDefinition(1L, null, 10, 20)).thenReturn(empty);
+
+        mockMvc.perform(get("/api/v1/rules/1/sessions")
+                        .param("limit", "10")
+                        .param("offset", "20"))
+                .andExpect(status().isOk());
+
+        verify(auditService).querySessionsByRuleDefinition(1L, null, 10, 20);
+    }
 }

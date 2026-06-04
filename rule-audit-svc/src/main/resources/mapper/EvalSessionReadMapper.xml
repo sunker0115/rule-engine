@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sstlfsj.rule.audit.internal.repository.EvalSessionReadMapper">
+
+    <!-- 按规则定义 ID 查询历史评估会话，JOIN node_trace + rule_version -->
+    <select id="selectByRuleDefinitionId"
+            resultType="com.sstlfsj.rule.audit.internal.domain.RuleSessionRow">
+        SELECT es.id,
+               es.event_id,
+               es.subject_id,
+               es.status,
+               es.final_decision,
+               es.eval_duration_ms,
+               es.started_at,
+               MAX(nt.rule_version_id) AS rule_version_id
+        FROM evaluation_session es
+        INNER JOIN node_trace nt ON nt.evaluation_session_id = es.id
+        INNER JOIN rule_version rv ON rv.id = nt.rule_version_id
+        WHERE rv.rule_definition_id = #{ruleDefinitionId}
+        <if test="status != null">
+            AND es.status = #{status}
+        </if>
+        GROUP BY es.id, es.event_id, es.subject_id, es.status, es.final_decision,
+                 es.eval_duration_ms, es.started_at
+        ORDER BY es.started_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计按规则定义 ID 过滤的历史评估会话总数 -->
+    <select id="countByRuleDefinitionId" resultType="long">
+        SELECT COUNT(DISTINCT es.id)
+        FROM evaluation_session es
+        INNER JOIN node_trace nt ON nt.evaluation_session_id = es.id
+        INNER JOIN rule_version rv ON rv.id = nt.rule_version_id
+        WHERE rv.rule_definition_id = #{ruleDefinitionId}
+        <if test="status != null">
+            AND es.status = #{status}
+        </if>
+    </select>
+
+</mapper>

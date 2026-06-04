@@ -7,6 +7,7 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,13 +37,14 @@ class EvalServiceImplScorecardTest {
     @Mock TraceWriter traceWriter;
     @Mock DryRunTraceWriter dryRunTraceWriter;
     @Mock ActionDispatchService actionDispatchService;
+    @Mock EvalContextAssembler contextAssembler;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
         impl = new EvalServiceImpl(evalEngine, index, snapshotLoader,
-                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService);
+                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService, contextAssembler);
     }
 
     private RuleEvent event() {

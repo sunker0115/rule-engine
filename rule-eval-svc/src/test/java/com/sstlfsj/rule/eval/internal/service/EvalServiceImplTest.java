@@ -8,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,13 +34,14 @@ class EvalServiceImplTest {
     @Mock TraceWriter traceWriter;
     @Mock DryRunTraceWriter dryRunTraceWriter;
     @Mock ActionDispatchService actionDispatchService;
+    @Mock EvalContextAssembler contextAssembler;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
         impl = new EvalServiceImpl(evalEngine, index, snapshotLoader,
-                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService);
+                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService, contextAssembler);
     }
 
     private RuleEvent event() {
@@ -59,6 +61,20 @@ class EvalServiceImplTest {
     private EvalResult hitResult(String code, int priority, Long ruleVersionId) {
         Decision d = new Decision(code, "", priority, ruleVersionId);
         return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+    }
+
+    @Test
+    void evaluate_withCandidates_contextAssemblerCalled() {
+        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
+        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+        when(evalEngine.evaluate(any())).thenReturn(EvalResult.miss());
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        when(contextAssembler.assemble(any(), anyList())).thenReturn(
+                new com.sstlfsj.rule.kernel.api.model.EvalContext("1", event(), null, Map.of()));
+
+        impl.evaluate(event());
+
+        verify(contextAssembler).assemble(any(), anyList());
     }
 
     @Test
@@ -84,7 +100,7 @@ class EvalServiceImplTest {
         assertTrue(result.ruleHit());
         assertFalse(result.hitDecisions().isEmpty());
         assertEquals("REJECT", result.hitDecisions().get(0).code());
-        verify(sessionWriter).updateFinal(anyLong(), any());
+        verify(sessionWriter).updateFinal(anyLong(), any(), any());
         verify(traceWriter).write(anyString(), anyString(), anyList());
     }
 
@@ -130,6 +146,19 @@ class EvalServiceImplTest {
         } finally {
             impl.destroy();
         }
+    }
+
+    @Test
+    void dryRun_contextAssemblerCalled() {
+        RuleVersionSnapshot snap = snapshot(42L, "PASS");
+        when(snapshotLoader.loadById(42L)).thenReturn(snap);
+        when(evalEngine.evaluate(any(), anyList())).thenReturn(EvalResult.miss());
+        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
+
+        impl.dryRun(event(), 42L);
+
+        verify(contextAssembler).assemble(any(), anyList());
+        verify(sessionWriter).updateDryRunFinal(anyLong(), any(), any());
     }
 
     @Test
