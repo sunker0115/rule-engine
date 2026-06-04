@@ -125,7 +125,7 @@ POST /api/v1/rule/dry-run
 
 **Request：** 同 3.1，额外可传 `ruleVersionId`（指定版本回放，null = 使用当前版本）。
 
-**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段；v1 阶段 handler 均未实装 `dryRun()`，`actionResults` 中所有 Action 显示 `SKIPPED`（不实际派发）；v1.5 后 handler 实装 `dryRun()` 时返回真实预览 ActionResult：
+**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段；v1.5（D7）已全量实装 `dryRun()`，`actionResults` 返回真实预览 ActionResult（不实际派发）：
 ```json
 {
   "eventId": "evt-dry-001",
@@ -155,7 +155,7 @@ POST /api/v1/rule/dry-run
 }
 ```
 
-若 handler 未实装 dryRun() 接口，对应 Action 显示 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`（D7）。见 07-operability §四。
+v1.5（D7）已全量实装 `dryRun()`，`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。见 07-operability §四。
 
 ---
 
@@ -362,7 +362,7 @@ GET /api/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&li
 | `PREDECESSOR_FAILED` | false | failFast 前置 Action 失败（D18） |
 | `QUEUE_OVERFLOW` | true | Action Dispatcher 队列满，Action 已丢弃入重试队列（D20） |
 | `HANDLER_EXCEPTION` | false | ActionHandler.execute() 抛出未捕获异常（D18） |
-| `DRY_RUN_NOT_IMPLEMENTED` | false | handler 未实装 dryRun()，dry-run 时 Dispatcher 短路返回 SKIPPED（D7） |
+| `DRY_RUN_NOT_IMPLEMENTED` | false | ~~v1 占位~~；v1.5 已全量实装（D7），不再产生 |
 | `NOT_SUPPORTED` | false | compensate() 不支持 |
 
 ### 发布期 errorCode（audit_log.after_snapshot.errorCode）

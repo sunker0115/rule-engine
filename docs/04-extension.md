@@ -121,8 +121,7 @@ public interface ActionHandler {
 
     /**
      * dry-run 预览。不发起任何外部副作用（HTTP/MQ/DB 写入），返回预测 ActionResult。
-     * v1 阶段未实装时由 Dispatcher 短路返回 SKIPPED + DRY_RUN_NOT_IMPLEMENTED（D7）。
-     * v1.5 全量补齐后该 errorCode 不再产生。
+     * v1.5 已全量实装（D7），DRY_RUN_NOT_IMPLEMENTED errorCode 不再产生。
      * @return ActionResult
      */
     default ActionResult dryRun(ActionContext ctx) {

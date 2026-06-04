@@ -49,15 +49,3 @@
 | B17 | **payloadSchema 字段引用校验**（AST ConditionNode 引用 payload 字段） | 08-evo §2.12 | 留 v3；需约定 ConditionNode.params 字段引用编码规范 |
 | B18 | **Scene schema 自动放量 / 回退**（按 SLO 推进） | 08-evo §2.7 | 灰度 v1 已完成；自动化放量是 v2 范畴 |
 
----
-
-## 文档遗留的措辞清理（非功能）
-
-以下是文档中仍沿用旧写法、但功能已实装——**只需改措辞，不涉及代码**：
-
-| 位置 | 当前描述 | 应改为 |
-|------|---------|--------|
-| `04-extension.md:124-125` | "v1 阶段未实装时由 Dispatcher 短路返回 SKIPPED + DRY_RUN_NOT_IMPLEMENTED；v1.5 全量补齐后不再产生" | 删掉 v1 那句，只留"v1.5 已全量实装（D7），不再产生" |
-| `10-api-contract.md:128` | "v1 阶段 handler 均未实装 `dryRun()`，`actionResults` 中所有 Action 显示 `SKIPPED`" | 改为"v1.5（D7）已全量实装，`actionResults` 返回真实预览 ActionResult" |
-| `10-api-contract.md:158` | "若 handler 未实装 dryRun() 接口，对应 Action 显示 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`" | 删除或改为"v1.5 已全量实装，不再产生此 errorCode" |
-| `10-api-contract.md:365` | DRY_RUN_NOT_IMPLEMENTED 表格行 | 标注"v1.5 已全量实装（D7），不再产生" |
