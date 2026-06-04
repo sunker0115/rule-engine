@@ -133,4 +133,61 @@ class AuditServiceImplTest {
 
         assertThat(result).isEmpty();
     }
+
+    @Test
+    void queryTraceTree_单层根节点() {
+        NodeTraceRow root = new NodeTraceRow();
+        root.setEvaluationSessionId(1L);
+        root.setTenantId(100L);
+        root.setNodePath("0");
+        root.setNodeType("AndNode");
+        root.setResult(true);
+
+        when(nodeTraceMapper.selectList(any())).thenReturn(List.of(root));
+
+        List<AuditService.TraceTreeNode> tree = service.queryTraceTree("100", 1L);
+
+        assertThat(tree).hasSize(1);
+        assertThat(tree.get(0).nodeType()).isEqualTo("AndNode");
+        assertThat(tree.get(0).children()).isEmpty();
+    }
+
+    @Test
+    void queryTraceTree_父子关系正确重建() {
+        NodeTraceRow rootRow = new NodeTraceRow();
+        rootRow.setEvaluationSessionId(1L);
+        rootRow.setTenantId(100L);
+        rootRow.setNodePath("0");
+        rootRow.setNodeType("AndNode");
+        rootRow.setResult(true);
+
+        NodeTraceRow childRow = new NodeTraceRow();
+        childRow.setEvaluationSessionId(1L);
+        childRow.setTenantId(100L);
+        childRow.setNodePath("0.0");
+        childRow.setNodeType("ConditionNode");
+        childRow.setConditionType("GT");
+        childRow.setMetricCode("user.age");
+        childRow.setResult(true);
+        childRow.setActualValue("25");
+
+        when(nodeTraceMapper.selectList(any())).thenReturn(List.of(rootRow, childRow));
+
+        List<AuditService.TraceTreeNode> tree = service.queryTraceTree("100", 1L);
+
+        assertThat(tree).hasSize(1);
+        AuditService.TraceTreeNode root = tree.get(0);
+        assertThat(root.children()).hasSize(1);
+        AuditService.TraceTreeNode child = root.children().get(0);
+        assertThat(child.nodeType()).isEqualTo("ConditionNode");
+        assertThat(child.metricCode()).isEqualTo("user.age");
+        assertThat(child.actualValue()).isEqualTo("25");
+    }
+
+    @Test
+    void queryTraceTree_空rows返回空列表() {
+        when(nodeTraceMapper.selectList(any())).thenReturn(List.of());
+
+        assertThat(service.queryTraceTree("100", 999L)).isEmpty();
+    }
 }

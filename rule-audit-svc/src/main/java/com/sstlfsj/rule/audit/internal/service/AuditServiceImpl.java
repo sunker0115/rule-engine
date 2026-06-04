@@ -104,4 +104,54 @@ class AuditServiceImpl implements AuditService {
                 ))
                 .toList();
     }
+
+    @Override
+    public List<TraceTreeNode> queryTraceTree(String tenantId, Long sessionId) {
+        List<TraceNodeEntry> flat = queryTrace(tenantId, sessionId);
+        if (flat.isEmpty()) return List.of();
+
+        // 按 node_path 深度（段数）升序，确保父节点先于子节点处理
+        List<TraceNodeEntry> sorted = flat.stream()
+                .sorted(java.util.Comparator.comparingInt(
+                        e -> e.nodePath().split("\\.", -1).length))
+                .toList();
+
+        java.util.Map<String, TraceTreeNodeBuilder> byPath = new java.util.LinkedHashMap<>();
+        List<String> roots = new java.util.ArrayList<>();
+
+        for (TraceNodeEntry e : sorted) {
+            TraceTreeNodeBuilder builder = new TraceTreeNodeBuilder(e);
+            byPath.put(e.nodePath(), builder);
+            String parent = parentPath(e.nodePath());
+            if (parent == null) {
+                roots.add(e.nodePath());
+            } else {
+                TraceTreeNodeBuilder parentBuilder = byPath.get(parent);
+                if (parentBuilder != null) parentBuilder.children.add(builder);
+            }
+        }
+        return roots.stream().map(r -> byPath.get(r).build()).toList();
+    }
+
+    /** 返回点分路径的父路径；根节点（不含 "."）返回 null。 */
+    private static String parentPath(String path) {
+        int dot = path.lastIndexOf('.');
+        return dot < 0 ? null : path.substring(0, dot);
+    }
+
+    /** 可变节点构建器，用于深度优先树重建。 */
+    private static final class TraceTreeNodeBuilder {
+        final TraceNodeEntry entry;
+        final List<TraceTreeNodeBuilder> children = new java.util.ArrayList<>();
+
+        TraceTreeNodeBuilder(TraceNodeEntry e) { this.entry = e; }
+
+        TraceTreeNode build() {
+            return new TraceTreeNode(
+                    entry.nodeType(), entry.conditionType(), entry.metricCode(),
+                    entry.actualValue(), entry.result(), entry.errorCode(), entry.valueSource(),
+                    children.stream().map(TraceTreeNodeBuilder::build).toList()
+            );
+        }
+    }
 }

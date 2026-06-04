@@ -39,6 +39,14 @@ public class AuditController {
         return ApiResponse.ok(auditService.queryTrace(tenantId, sessionId));
     }
 
+    /** GET /api/v1/evaluation-sessions/{sessionId}/trace/tree — 嵌套树格式（§6.2 完整契约） */
+    @GetMapping("/evaluation-sessions/{sessionId}/trace/tree")
+    public ApiResponse<List<AuditService.TraceTreeNode>> getTraceTree(
+            @PathVariable Long sessionId,
+            @RequestParam String tenantId) {
+        return ApiResponse.ok(auditService.queryTraceTree(tenantId, sessionId));
+    }
+
     /** GET /api/v1/audit-logs — 分页查询操作审计日志
      * @param tenantId 租户 @param resourceType 可选资源类型 @param resourceId 可选资源 ID
      * @param page 页码 @param size 每页大小

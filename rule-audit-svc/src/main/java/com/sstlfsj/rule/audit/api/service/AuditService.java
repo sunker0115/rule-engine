@@ -81,4 +81,27 @@ public interface AuditService {
      * @return 节点 trace 列表（无分页，单次 session 通常 < 200 行）
      */
     List<TraceNodeEntry> queryTrace(String tenantId, Long sessionId);
+
+    /** 嵌套树节点，与 §3.3 dry-run nodeTrace 格式一致。 */
+    record TraceTreeNode(
+            String nodeType,
+            String conditionType,
+            String metricCode,
+            String actualValue,
+            Boolean result,
+            String errorCode,
+            String valueSource,
+            List<TraceTreeNode> children
+    ) {}
+
+    /**
+     * 查询指定评估会话的节点 trace 树（嵌套，与 §3.3 dry-run nodeTrace 格式一致）。
+     *
+     * <p>内部按 node_path（点分数字字符串）重建 AST 树结构：最短路径为根，子路径挂到父路径节点。</p>
+     *
+     * @param tenantId  租户标识
+     * @param sessionId 评估会话 ID
+     * @return 根节点列表（正常 AST 只有一个根，Pre-Gate 阻断时可能为空）
+     */
+    List<TraceTreeNode> queryTraceTree(String tenantId, Long sessionId);
 }
