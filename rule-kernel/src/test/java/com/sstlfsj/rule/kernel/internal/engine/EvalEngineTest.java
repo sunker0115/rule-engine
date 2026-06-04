@@ -36,11 +36,11 @@ class EvalEngineTest {
         return (snap, ctx) -> new EvalResult(true,
                 new Decision("BLOCK", "", 10, snap.ruleVersionId()),
                 List.of(new Decision("BLOCK", "", 10, snap.ruleVersionId())),
-                List.of(), null, List.of(), null);
+                List.of(), null, List.of(), null, null, null);
     }
 
     private static RuleVersionExecutor missExecutor() {
-        return (snap, ctx) -> new EvalResult(false, null, List.of(), List.of(), null, List.of(), null);
+        return (snap, ctx) -> new EvalResult(false, null, List.of(), List.of(), null, List.of(), null, null, null);
     }
 
     private static PreGate blockingGate(String type) {
@@ -115,6 +115,20 @@ class EvalEngineTest {
     }
 
     @Test
+    void evaluate_matchWithHit_categoryAndDecisionAreNull() {
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.update("t1", "scene", "*", List.of(snapshot(1L, "t1", "scene")));
+
+        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
+        EvalEngine engine = new EvalEngine(index, asm, Map.of(),
+                Map.of("AST_BOOLEAN", hitExecutor()));
+
+        EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"));
+        assertNull(result.category());
+        assertNull(result.decision());
+    }
+
+    @Test
     void evaluate_multipleSnapshots_highestPriorityWins() {
         SceneRuleIndex index = new SceneRuleIndex();
         RuleVersionSnapshot low  = new RuleVersionSnapshot(1L, "scene", "t1",
@@ -134,7 +148,7 @@ class EvalEngineTest {
                         snap.decisionBindings().get(0).priority(), snap.ruleVersionId()),
                 List.of(new Decision(snap.decisionBindings().get(0).decisionCode(), "",
                         snap.decisionBindings().get(0).priority(), snap.ruleVersionId())),
-                List.of(), null, List.of(), null);
+                List.of(), null, List.of(), null, null, null);
         EvalEngine engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", exec));
 
         EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"));

@@ -115,4 +115,51 @@ class MetricDependencyCollectorTest {
         assertThat(MetricDependencyCollector.collect(ast))
                 .containsExactlyInAnyOrder("user.age", "order.amount", "account.balance");
     }
+
+    @Test
+    void ifNode_collectsMetricCodesFromConditionAndBranches() {
+        // IF(user.age > 18) THEN order.amount ELSE account.balance
+        AstNode ast = new IfNode(
+                new ConditionNode("GT", "user.age", null, Map.of(), 0.0),
+                new ConditionNode("GT", "order.amount", null, Map.of(), 0.0),
+                new ConditionNode("LT", "account.balance", null, Map.of(), 0.0)
+        );
+        assertThat(MetricDependencyCollector.collect(ast))
+                .containsExactlyInAnyOrder("user.age", "order.amount", "account.balance");
+    }
+
+    @Test
+    void ifNode_withoutElseBranch_collectsConditionAndThen() {
+        AstNode ast = new IfNode(
+                new ConditionNode("GT", "user.age", null, Map.of(), 0.0),
+                new DecisionLeafNode("PASS", "green"),
+                null
+        );
+        assertThat(MetricDependencyCollector.collect(ast)).containsExactly("user.age");
+    }
+
+    @Test
+    void decisionLeafNode_noMetricDependency() {
+        AstNode ast = new DecisionLeafNode("BLOCK", "high_risk");
+        assertThat(MetricDependencyCollector.collect(ast)).isEmpty();
+    }
+
+    @Test
+    void decisionTableNode_collectsColumnMetricCodes() {
+        AstNode ast = new DecisionTableNode(
+                List.of(
+                        new DecisionTableNode.Column("user.age", "GT"),
+                        new DecisionTableNode.Column("order.amount", "LTE")
+                ),
+                List.of(new DecisionTableNode.Row(List.of(18, 1000), "BLOCK"))
+        );
+        assertThat(MetricDependencyCollector.collect(ast))
+                .containsExactly("user.age", "order.amount");
+    }
+
+    @Test
+    void decisionTableNode_emptyColumns_noMetricDependency() {
+        AstNode ast = new DecisionTableNode(List.of(), List.of());
+        assertThat(MetricDependencyCollector.collect(ast)).isEmpty();
+    }
 }

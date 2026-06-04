@@ -13,6 +13,8 @@ import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
@@ -51,6 +53,26 @@ public class EvalAutoConfiguration {
     @Bean
     public ScorecardExecutor scorecardExecutor() {
         return new ScorecardExecutor(KernelEvaluators.defaults());
+    }
+
+    /**
+     * 注册 DecisionTreeExecutor，供 kind=DECISION_TREE 的规则版本评估使用。
+     *
+     * @return DecisionTreeExecutor 实例
+     */
+    @Bean
+    public DecisionTreeExecutor decisionTreeExecutor() {
+        return new DecisionTreeExecutor(KernelEvaluators.defaults());
+    }
+
+    /**
+     * 注册 DecisionTableExecutor，供 kind=DECISION_TABLE 的规则版本评估使用。
+     *
+     * @return DecisionTableExecutor 实例
+     */
+    @Bean
+    public DecisionTableExecutor decisionTableExecutor() {
+        return new DecisionTableExecutor(KernelEvaluators.defaults());
     }
 
     /**
@@ -93,11 +115,13 @@ public class EvalAutoConfiguration {
      * 纯 Java 评估编排器：Matcher → Pre-Gate → EvalContext → Executor。
      * 无 DB 写入、无 Action 派发；key 映射 kind 字段到对应 executor。
      *
-     * @param sceneRuleIndex       倒排索引
-     * @param evalContextAssembler 上下文装配
-     * @param preGates             可选 PreGate SPI 实现列表
-     * @param ruleVersionExecutor  AST_BOOLEAN executor
-     * @param scorecardExecutor    SCORECARD executor
+     * @param sceneRuleIndex        倒排索引
+     * @param evalContextAssembler  上下文装配
+     * @param preGates              可选 PreGate SPI 实现列表
+     * @param ruleVersionExecutor   AST_BOOLEAN executor
+     * @param scorecardExecutor     SCORECARD executor
+     * @param decisionTreeExecutor  DECISION_TREE executor
+     * @param decisionTableExecutor DECISION_TABLE executor
      * @return EvalEngine 实例
      */
     @Bean
@@ -106,13 +130,18 @@ public class EvalAutoConfiguration {
             EvalContextAssembler evalContextAssembler,
             @Autowired(required = false) List<PreGate> preGates,
             RuleVersionExecutor ruleVersionExecutor,
-            ScorecardExecutor scorecardExecutor) {
+            ScorecardExecutor scorecardExecutor,
+            DecisionTreeExecutor decisionTreeExecutor,
+            DecisionTableExecutor decisionTableExecutor) {
         Map<String, PreGate> gateMap = new HashMap<>();
         if (preGates != null) {
             preGates.forEach(g -> gateMap.put(g.gateType(), g));
         }
         return new EvalEngine(sceneRuleIndex, evalContextAssembler, gateMap,
-                Map.of("AST_BOOLEAN", ruleVersionExecutor, "SCORECARD", scorecardExecutor));
+                Map.of("AST_BOOLEAN",     ruleVersionExecutor,
+                       "SCORECARD",       scorecardExecutor,
+                       "DECISION_TREE",   decisionTreeExecutor,
+                       "DECISION_TABLE",  decisionTableExecutor));
     }
 
     /**

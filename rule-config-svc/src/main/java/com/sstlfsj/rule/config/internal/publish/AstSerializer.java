@@ -49,10 +49,13 @@ public class AstSerializer {
     /** Jackson mixin：为 AstNode sealed interface 声明多态类型映射。 */
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
     @JsonSubTypes({
-        @JsonSubTypes.Type(value = AndNode.class,       name = "AndNode"),
-        @JsonSubTypes.Type(value = OrNode.class,        name = "OrNode"),
-        @JsonSubTypes.Type(value = NotNode.class,       name = "NotNode"),
-        @JsonSubTypes.Type(value = ConditionNode.class, name = "ConditionNode")
+        @JsonSubTypes.Type(value = AndNode.class,           name = "AndNode"),
+        @JsonSubTypes.Type(value = OrNode.class,            name = "OrNode"),
+        @JsonSubTypes.Type(value = NotNode.class,           name = "NotNode"),
+        @JsonSubTypes.Type(value = ConditionNode.class,     name = "ConditionNode"),
+        @JsonSubTypes.Type(value = IfNode.class,            name = "IfNode"),
+        @JsonSubTypes.Type(value = DecisionLeafNode.class,  name = "DecisionLeafNode"),
+        @JsonSubTypes.Type(value = DecisionTableNode.class, name = "DecisionTableNode")
     })
     interface AstNodeMixin {}
 }

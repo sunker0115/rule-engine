@@ -91,4 +91,15 @@ class ScorecardExecutorTest {
                 .execute(snapshot(root), ctx());
         assertThat(result.nodeTrace()).hasSize(2);
     }
+
+    @Test
+    void category_and_decision_areNull_forScorecard() {
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 50.0)
+        ), 50.0);
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.category()).isNull();
+        assertThat(result.decision()).isNull();
+    }
 }

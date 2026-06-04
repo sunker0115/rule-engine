@@ -7,6 +7,9 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
+import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
@@ -44,7 +47,7 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
         List<NodeTrace> traces = rawTraces.stream()
                 .map(t -> withRuleVersionId(t, rvId))
                 .toList();
-        return new EvalResult(satisfied, null, List.of(), traces, null, List.of(), null);
+        return new EvalResult(satisfied, null, List.of(), traces, null, List.of(), null, null, null);
     }
 
     /** 递归将 ruleVersionId 注入 trace 树（顶层和所有子节点）。 */
@@ -71,9 +74,15 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
             case NotNode not          -> traceNot(not, ctx, sink);
             case ConditionNode cond   -> traceCondition(cond, ctx, sink);
             case XorNode xor          -> traceXor(xor, ctx, sink);
-            // ScorecardRootNode 由 ScorecardExecutor 处理，不应进入此执行器
+            // 以下节点由专属 Executor 处理，不应进入此执行器
             case ScorecardRootNode ignored ->
                     throw new IllegalStateException("ScorecardRootNode 不能由 TracingInterpretedExecutor 处理");
+            case IfNode ignored ->
+                    throw new IllegalStateException("IfNode 不能由 TracingInterpretedExecutor 处理，请使用 DecisionTreeExecutor");
+            case DecisionLeafNode ignored ->
+                    throw new IllegalStateException("DecisionLeafNode 不能由 TracingInterpretedExecutor 处理，请使用 DecisionTreeExecutor");
+            case DecisionTableNode ignored ->
+                    throw new IllegalStateException("DecisionTableNode 不能由 TracingInterpretedExecutor 处理，请使用 DecisionTableExecutor");
         };
     }
 

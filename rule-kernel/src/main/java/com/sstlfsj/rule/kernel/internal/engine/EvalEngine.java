@@ -100,7 +100,7 @@ public class EvalEngine {
                             .max(Comparator.comparingInt(Decision::priority))
                             .orElse(r.finalDecision());
                     return new EvalResult(true, winner, List.of(winner),
-                            r.nodeTrace(), r.errorCode(), List.of(), r.score());
+                            r.nodeTrace(), r.errorCode(), List.of(), r.score(), null, null);
                 }
             } catch (Exception ignored) {
             }
@@ -147,7 +147,9 @@ public class EvalEngine {
                 List.copyOf(allTraces),
                 errorCode,
                 List.of(),
-                aggregatedScore
+                aggregatedScore,
+                null,
+                null
         );
     }
 

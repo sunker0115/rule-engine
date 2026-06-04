@@ -11,6 +11,8 @@ import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
@@ -63,6 +65,20 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
+    void decisionTreeExecutor_returnsInstance() {
+        DecisionTreeExecutor executor = config.decisionTreeExecutor();
+        assertNotNull(executor);
+        assertInstanceOf(DecisionTreeExecutor.class, executor);
+    }
+
+    @Test
+    void decisionTableExecutor_returnsInstance() {
+        DecisionTableExecutor executor = config.decisionTableExecutor();
+        assertNotNull(executor);
+        assertInstanceOf(DecisionTableExecutor.class, executor);
+    }
+
+    @Test
     void sceneRuleIndex_returnsNewInstance() {
         SceneRuleIndex index = config.sceneRuleIndex();
         assertNotNull(index);
@@ -93,7 +109,9 @@ class EvalAutoConfigurationTest {
                 config.evalContextAssembler(null, null),
                 null,
                 config.ruleVersionExecutor(),
-                config.scorecardExecutor());
+                config.scorecardExecutor(),
+                config.decisionTreeExecutor(),
+                config.decisionTableExecutor());
         assertNotNull(engine);
     }
 
@@ -104,7 +122,9 @@ class EvalAutoConfigurationTest {
                 config.evalContextAssembler(null, null),
                 List.of(),
                 config.ruleVersionExecutor(),
-                config.scorecardExecutor());
+                config.scorecardExecutor(),
+                config.decisionTreeExecutor(),
+                config.decisionTableExecutor());
         assertNotNull(engine);
     }
 

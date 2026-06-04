@@ -38,7 +38,7 @@ class EvalEngineStrategyTest {
                     .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
                     .orElseThrow();
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null);
+            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
         };
     }
 
@@ -83,7 +83,7 @@ class EvalEngineStrategyTest {
             evalCount.incrementAndGet();
             RuleVersionSnapshot.DecisionBinding b = snap.decisionBindings().get(0);
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null);
+            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
         };
 
         SceneRuleIndex index = new SceneRuleIndex();
@@ -107,7 +107,7 @@ class EvalEngineStrategyTest {
     @Test
     void firstHit_noMatch_returnsMiss() {
         RuleVersionExecutor missExec = (snap, ctx) ->
-                new EvalResult(false, null, List.of(), List.of(), null, List.of(), null);
+                new EvalResult(false, null, List.of(), List.of(), null, List.of(), null, null, null);
 
         SceneRuleIndex index = new SceneRuleIndex();
         index.setStrategy("t1", "fraud", SceneExecutionStrategy.FIRST_HIT);

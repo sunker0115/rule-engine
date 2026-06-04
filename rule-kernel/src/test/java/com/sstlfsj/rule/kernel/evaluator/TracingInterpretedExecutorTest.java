@@ -8,8 +8,12 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+// D42: import 与 InterpretedExecutor 对称，覆盖异常路径的测试用例已存在于下方。
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
+import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
@@ -218,5 +222,42 @@ class TracingInterpretedExecutorTest {
                 .execute(snapshot(ast), minimalContext());
 
         assertThat(result.score()).isNull();
+    }
+
+    @Test
+    void execute_category_and_decision_areNull_forBooleanRules() {
+        AstNode ast = trueNode();
+        EvalResult result = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.category()).isNull();
+        assertThat(result.decision()).isNull();
+    }
+
+    @Test
+    void ifNode_throwsIllegalState() {
+        AstNode ast = new IfNode(trueNode(), new DecisionLeafNode("BLOCK", null), null);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executorWith(Map.of(ALWAYS_TRUE, alwaysTrue)).execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("IfNode");
+    }
+
+    @Test
+    void decisionLeafNode_throwsIllegalState() {
+        AstNode ast = new DecisionLeafNode("BLOCK", "HIGH_RISK");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executorWith(Map.of()).execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DecisionLeafNode");
+    }
+
+    @Test
+    void decisionTableNode_throwsIllegalState() {
+        AstNode ast = new DecisionTableNode(List.of(), List.of());
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executorWith(Map.of()).execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DecisionTableNode");
     }
 }

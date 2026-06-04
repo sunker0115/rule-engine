@@ -41,9 +41,29 @@ class AstNodeTest {
     }
 
     @Test
+    void ifNode_isInstanceOfAstNode() {
+        ConditionNode cond = new ConditionNode("GT", "amount", null, Map.of(), 0.0);
+        DecisionLeafNode leaf = new DecisionLeafNode("BLOCK", "HIGH_RISK");
+        IfNode node = new IfNode(cond, leaf, null);
+        assertInstanceOf(AstNode.class, node);
+    }
+
+    @Test
+    void decisionLeafNode_isInstanceOfAstNode() {
+        DecisionLeafNode node = new DecisionLeafNode("PASS", "LOW_RISK");
+        assertInstanceOf(AstNode.class, node);
+    }
+
+    @Test
+    void decisionTableNode_isInstanceOfAstNode() {
+        DecisionTableNode node = new DecisionTableNode(List.of(), List.of());
+        assertInstanceOf(AstNode.class, node);
+    }
+
+    @Test
     void switchPatternMatching_coversAllPermits() {
         AstNode node = new ConditionNode("T", "m", null, Map.of(), 0.0);
-        // 确认 sealed interface 的 switch 能完整覆盖所有子类型（含 ScorecardRootNode）
+        // 确认 sealed interface 的 switch 能完整覆盖所有子类型
         String result = switch (node) {
             case AndNode a -> "and";
             case OrNode o -> "or";
@@ -51,6 +71,9 @@ class AstNodeTest {
             case ConditionNode c -> "condition";
             case ScorecardRootNode s -> "scorecard";
             case XorNode x -> "xor";
+            case IfNode i -> "if";
+            case DecisionLeafNode d -> "leaf";
+            case DecisionTableNode t -> "table";
         };
         assertEquals("condition", result);
     }

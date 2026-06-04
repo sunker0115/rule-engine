@@ -72,4 +72,62 @@ class AstJsonCodecTest {
     void createMapper_returnsNewInstance() {
         assertNotSame(codec.createMapper(), codec.createMapper());
     }
+
+    @Test
+    void deserializeIfNode() throws Exception {
+        String json = """
+                {"type":"IfNode",
+                 "condition":{"type":"ConditionNode","conditionType":"GT","metricCode":"amount","params":{}},
+                 "thenBranch":{"type":"DecisionLeafNode","decisionCode":"BLOCK","category":"HIGH_RISK"},
+                 "elseBranch":{"type":"DecisionLeafNode","decisionCode":"PASS","category":"LOW_RISK"}}
+                """;
+        AstNode node = codec.deserializeAst(json);
+        assertInstanceOf(IfNode.class, node);
+        IfNode ifNode = (IfNode) node;
+        assertInstanceOf(ConditionNode.class, ifNode.condition());
+        assertInstanceOf(DecisionLeafNode.class, ifNode.thenBranch());
+        assertInstanceOf(DecisionLeafNode.class, ifNode.elseBranch());
+        assertEquals("BLOCK", ((DecisionLeafNode) ifNode.thenBranch()).decisionCode());
+    }
+
+    @Test
+    void deserializeIfNode_nullElseBranch() throws Exception {
+        String json = """
+                {"type":"IfNode",
+                 "condition":{"type":"ConditionNode","conditionType":"EQ","metricCode":"x","params":{}},
+                 "thenBranch":{"type":"DecisionLeafNode","decisionCode":"REVIEW","category":null},
+                 "elseBranch":null}
+                """;
+        AstNode node = codec.deserializeAst(json);
+        assertInstanceOf(IfNode.class, node);
+        assertNull(((IfNode) node).elseBranch());
+    }
+
+    @Test
+    void deserializeDecisionLeafNode() throws Exception {
+        String json = """
+                {"type":"DecisionLeafNode","decisionCode":"REJECT","category":"FRAUD"}
+                """;
+        AstNode node = codec.deserializeAst(json);
+        assertInstanceOf(DecisionLeafNode.class, node);
+        DecisionLeafNode leaf = (DecisionLeafNode) node;
+        assertEquals("REJECT", leaf.decisionCode());
+        assertEquals("FRAUD", leaf.category());
+    }
+
+    @Test
+    void deserializeDecisionTableNode() throws Exception {
+        String json = """
+                {"type":"DecisionTableNode",
+                 "columns":[{"metricCode":"amount","operator":"GT"}],
+                 "rows":[{"conditions":[1000],"decisionCode":"BLOCK"}]}
+                """;
+        AstNode node = codec.deserializeAst(json);
+        assertInstanceOf(DecisionTableNode.class, node);
+        DecisionTableNode table = (DecisionTableNode) node;
+        assertEquals(1, table.columns().size());
+        assertEquals("amount", table.columns().get(0).metricCode());
+        assertEquals(1, table.rows().size());
+        assertEquals("BLOCK", table.rows().get(0).decisionCode());
+    }
 }

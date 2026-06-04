@@ -32,7 +32,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         if (!(snapshot.conditionAst() instanceof ScorecardRootNode root)) {
             return new EvalResult(false, null, List.of(), List.of(),
-                    "SCORECARD_AST_TYPE_MISMATCH", List.of(), null);
+                    "SCORECARD_AST_TYPE_MISMATCH", List.of(), null, null, null);
         }
 
         List<NodeTrace> traces = new ArrayList<>();
@@ -58,6 +58,6 @@ public class ScorecardExecutor implements RuleVersionExecutor {
         }
 
         boolean hit = score >= root.threshold();
-        return new EvalResult(hit, null, List.of(), traces, null, List.of(), score);
+        return new EvalResult(hit, null, List.of(), traces, null, List.of(), score, null, null);
     }
 }

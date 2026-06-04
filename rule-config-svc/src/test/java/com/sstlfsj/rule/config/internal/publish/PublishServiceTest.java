@@ -317,4 +317,52 @@ class PublishServiceTest {
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
                 () -> publishService.publish(1L, 10L, "actor"));
     }
+
+    @Test
+    void publish_未知kind_抛IllegalArgument() {
+        draftRule.setKind("UNKNOWN_KIND");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(astSerializer.fromJson(any()))
+                .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("不支持的规则 kind");
+    }
+
+    @Test
+    void publish_decisionTreeKind_正常通过() {
+        draftRule.setKind("DECISION_TREE");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(astSerializer.fromJson(any()))
+                .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> publishService.publish(1L, 10L, "actor"));
+    }
+
+    @Test
+    void publish_decisionTableKind_正常通过() {
+        draftRule.setKind("DECISION_TABLE");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(astSerializer.fromJson(any()))
+                .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> publishService.publish(1L, 10L, "actor"));
+    }
 }

@@ -58,7 +58,7 @@ class EvalServiceImplTest {
 
     private EvalResult hitResult(String code, int priority, Long ruleVersionId) {
         Decision d = new Decision(code, "", priority, ruleVersionId);
-        return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null);
+        return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
     }
 
     @Test
@@ -110,7 +110,7 @@ class EvalServiceImplTest {
         Decision highPriority = new Decision("REJECT", "", 20, 2L);
         EvalResult engineResult = new EvalResult(true, highPriority,
                 List.of(new Decision("LOW_RISK", "", 5, 1L), highPriority),
-                List.of(), null, List.of(), null);
+                List.of(), null, List.of(), null, null, null);
         when(evalEngine.evaluate(any())).thenReturn(engineResult);
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
@@ -213,7 +213,7 @@ class EvalServiceImplTest {
         RuleVersionSnapshot snap = snapshot(1L, "REJECT");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
         Decision d = new Decision("REJECT", "", 10, 1L);
-        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0);
+        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
         when(evalEngine.evaluate(any())).thenReturn(engineResult);
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 

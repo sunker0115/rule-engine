@@ -60,7 +60,7 @@ class EvalServiceImplScorecardTest {
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
 
         Decision d = new Decision("HIGH_RISK", "", 10, 1L);
-        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0);
+        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
         when(evalEngine.evaluate(any())).thenReturn(engineResult);
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 

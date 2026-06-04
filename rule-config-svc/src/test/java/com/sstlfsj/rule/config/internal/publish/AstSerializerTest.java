@@ -56,6 +56,56 @@ class AstSerializerTest {
     }
 
     @Test
+    void ifNode_roundTrip() {
+        AstNode ast = new IfNode(
+                new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0),
+                new DecisionLeafNode("BLOCK", "HIGH_RISK"),
+                new DecisionLeafNode("PASS", "LOW_RISK")
+        );
+
+        String json = serializer.toJson(ast);
+        AstNode restored = serializer.fromJson(json);
+
+        assertThat(restored).isInstanceOf(IfNode.class);
+        IfNode r = (IfNode) restored;
+        assertThat(r.condition()).isInstanceOf(ConditionNode.class);
+        assertThat(((DecisionLeafNode) r.thenBranch()).decisionCode()).isEqualTo("BLOCK");
+        assertThat(((DecisionLeafNode) r.elseBranch()).decisionCode()).isEqualTo("PASS");
+    }
+
+    @Test
+    void decisionLeafNode_roundTrip() {
+        AstNode ast = new DecisionLeafNode("REJECT", "FRAUD");
+
+        String json = serializer.toJson(ast);
+        AstNode restored = serializer.fromJson(json);
+
+        assertThat(restored).isInstanceOf(DecisionLeafNode.class);
+        DecisionLeafNode r = (DecisionLeafNode) restored;
+        assertThat(r.decisionCode()).isEqualTo("REJECT");
+        assertThat(r.category()).isEqualTo("FRAUD");
+    }
+
+    @Test
+    void decisionTableNode_roundTrip() {
+        AstNode ast = new DecisionTableNode(
+                List.of(new DecisionTableNode.Column("amount", "GT")),
+                List.of(new DecisionTableNode.Row(List.of(1000), "BLOCK"),
+                        new DecisionTableNode.Row(java.util.Arrays.asList((Object) null), "PASS"))
+        );
+
+        String json = serializer.toJson(ast);
+        AstNode restored = serializer.fromJson(json);
+
+        assertThat(restored).isInstanceOf(DecisionTableNode.class);
+        DecisionTableNode r = (DecisionTableNode) restored;
+        assertThat(r.columns()).hasSize(1);
+        assertThat(r.rows()).hasSize(2);
+        assertThat(r.rows().get(0).decisionCode()).isEqualTo("BLOCK");
+        assertThat(r.rows().get(1).conditions().get(0)).isNull();
+    }
+
+    @Test
     void nested_andOrNot_roundTrip() {
         // AND(NOT(cond1), OR(cond2, cond3))
         AstNode ast = new AndNode(List.of(

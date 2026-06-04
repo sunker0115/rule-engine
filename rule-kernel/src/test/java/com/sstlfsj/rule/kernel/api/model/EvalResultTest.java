@@ -33,7 +33,7 @@ class EvalResultTest {
 
     @Test
     void nullLists_defaultToEmpty() {
-        EvalResult r = new EvalResult(true, null, null, null, null, null, null);
+        EvalResult r = new EvalResult(true, null, null, null, null, null, null, null, null);
         assertNotNull(r.hitDecisions());
         assertNotNull(r.nodeTrace());
         assertNotNull(r.actionResults());
@@ -43,7 +43,7 @@ class EvalResultTest {
     void hitDecisions_areImmutable() {
         Decision d = new Decision("BLOCK", "拦截", 100, 1L);
         List<Decision> mutable = new ArrayList<>(List.of(d));
-        EvalResult r = new EvalResult(true, d, mutable, List.of(), null, List.of(), null);
+        EvalResult r = new EvalResult(true, d, mutable, List.of(), null, List.of(), null, null, null);
         mutable.add(d);
         assertEquals(1, r.hitDecisions().size(), "构造后修改原始列表不应影响 EvalResult");
     }
@@ -59,12 +59,32 @@ class EvalResultTest {
 
     @Test
     void score_nullByDefault_and_canBeSet() {
-        // hit() / miss() 工厂方法 score 应为 null（AST_BOOLEAN kind）
         assertNull(EvalResult.hit().score());
         assertNull(EvalResult.miss().score());
 
-        // 可以显式传入 score 值（SCORECARD kind 场景）
-        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, List.of(), 42.5);
+        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, List.of(), 42.5, null, null);
         assertEquals(42.5, r.score());
+    }
+
+    @Test
+    void category_and_decision_nullByDefault() {
+        assertNull(EvalResult.hit().category());
+        assertNull(EvalResult.hit().decision());
+        assertNull(EvalResult.miss().category());
+        assertNull(EvalResult.miss().decision());
+    }
+
+    @Test
+    void category_canBeSet_forDecisionTree() {
+        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, List.of(), null, "HIGH_RISK", null);
+        assertEquals("HIGH_RISK", r.category());
+        assertNull(r.decision());
+    }
+
+    @Test
+    void decision_canBeSet_forDecisionTable() {
+        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, List.of(), null, null, "BLOCK");
+        assertNull(r.category());
+        assertEquals("BLOCK", r.decision());
     }
 }
