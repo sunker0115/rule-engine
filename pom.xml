@@ -26,6 +26,7 @@
         <module>rule-observability</module>
         <module>rule-api</module>
         <module>rule-app</module>
+        <module>rule-sdk</module>
     </modules>
 
     <properties>
@@ -212,6 +213,11 @@
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-sdk</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
