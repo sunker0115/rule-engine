@@ -389,7 +389,7 @@ GET /api/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&li
 | **HTTP 轮询** | `serverUrl()` + `tenantId()` | 生产，规则由服务端管理，定时热更新 |
 | **JSON 文件** | `ruleFile("classpath:rules.json")` | 离线、测试、规则随代码打包 |
 | **代码 DSL** | `localSnapshot()` + `Condition` DSL | 单测、演示、CI 验证规则逻辑 |
-| **注解扫描** | `scanEvaluators()`（D35 后续） | 声明式，`@RuleDef` 标注规则类 |
+| **注解模式** | `ruleSource(new AnnotationRuleSource(...))` | 规则与业务代码同类，IDE 静态检查全链路打通 |
 
 多种来源可混用（如文件兜底 + HTTP 热更新），各来源独立写入同一索引。
 
@@ -630,6 +630,43 @@ RuleEvent event = new RuleEvent(
 ```
 
 `providedMetrics` 的 key 须与规则中 `ConditionNode.metricCode` 完全一致，引擎直接从此 Map 取值与 `params` 中的阈值比较。
+
+---
+
+### 8.9 注解模式（`@RuleDef`）
+
+规则定义与业务代码同处一个 Java 类，适合单测 / CI 验证 / 离线部署，IDE 静态检查全链路打通：
+
+```java
+@RuleDef(
+    id        = 1L,
+    tenantId  = "t1",
+    sceneCode = "fraud",
+    trigger   = "TRANSACTION",
+    decisions = @DecisionBinding(code = "BLOCK", priority = 100)
+)
+public class AmountFraudRule implements InlineRuleSpec {
+    @Override
+    public Condition condition() {
+        return Condition.gt("amount", 1000)
+                        .and(Condition.in("country", "CN", "HK"));
+    }
+}
+```
+
+**非 Spring 场景**：手动传入列表：
+
+```java
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .ruleSource(new AnnotationRuleSource(List.of(new AmountFraudRule())))
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+**Spring Boot 场景**：`@Component` + Starter 自动装配，`@Autowired RuleEngineClient` 直接使用，无需任何额外配置。
+
+**`@RuleDef.id` 必须稳定**：调用方负责为每个规则类指定唯一且不变的 `id`，用于 `AnnotationRuleSource` 幂等写入索引（重复 `loadInto()` 不产生重复规则）。
 
 ---
 

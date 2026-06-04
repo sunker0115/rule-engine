@@ -1249,6 +1249,112 @@ RuleEngineClient.builder()
 
 ---
 
+## D40. SDK 注解模式 — `@RuleDef` + `AnnotationRuleSource` ⭐⭐⭐
+
+**背景**：D35 定义了 `RuleSource` SPI 四种模式，注解扫描模式（`AnnotationRuleSource`）当时标注"D38 之后实现"。现有三种模式（HTTP 轮询 / 文件 / DSL）都需要调用方手动构造 `RuleVersionSnapshot` 或写 JSON，注解模式的价值在于：**规则定义与业务代码同处一个 Java 类**，IDE 静态检查、重构、单测全链路打通；Spring 容器中零配置自动装载。
+
+**核心设计**：
+
+```
+InlineRuleSpec（接口，rule-sdk）
+  ├── condition(): Condition   ← 规则条件，由实现类返回
+  └── 从 @RuleDef 注解读：tenantId / sceneCode / trigger / decisions
+```
+
+```java
+@RuleDef(
+    tenantId  = "t1",
+    sceneCode = "fraud",
+    trigger   = "TRANSACTION",
+    decisions = {@Decision(code = "BLOCK", priority = 100)}
+)
+public class AmountFraudRule implements InlineRuleSpec {
+    @Override
+    public Condition condition() {
+        return Condition.gt("amount", 1000)
+                        .and(Condition.in("country", "CN", "HK"));
+    }
+}
+```
+
+**`AnnotationRuleSource`**：
+- 接收 `List<InlineRuleSpec>` 构造（非 Spring 场景）
+- `loadInto(index)` 遍历每个 spec：读 `@RuleDef` 元数据 + 调 `condition().toAst()` → 构建 `RuleVersionSnapshot` → 写入索引
+- `ruleVersionId` 由 `@RuleDef.id()` 显式指定（必填，确保幂等稳定）；`tenantId` 可在 `@RuleDef` 指定，也可在 `RuleEngineClient.Builder.tenantId()` 统一设置（注解值优先）
+
+**Spring 自动装配（D39 starter 内联）**：
+- AutoConfiguration 收集容器内所有 `InlineRuleSpec` Bean → 构造 `AnnotationRuleSource` → `builder.ruleSource()`
+- 与文件模式、HTTP 轮询模式完全正交，可同时使用
+
+**不做的**：
+- `@RuleDef` 不支持多 trigger（v1 一条规则一个 trigger 事件类型，与现有模型一致）
+- 不做 classpath 包路径扫描（非 Spring 场景依赖调用方显式传入 spec 列表）
+- `ruleVersionId` 不自动生成（调用方负责 id 稳定性，避免每次启动 id 不同导致索引不一致）
+
+**落地范围**：
+- `rule-kernel`：新增 `@RuleDef`、`@Decision` 注解（放 `api/annotation` 包）
+- `rule-sdk`：新增 `InlineRuleSpec` 接口、`AnnotationRuleSource` 类
+- `rule-sdk-spring-boot-starter`：D39 AutoConfiguration 内增加 `InlineRuleSpec` Bean 收集逻辑
+- `10-api-contract.md §8.1`：更新模式总览表，补 §8.x 注解模式用法
+
+---
+
+## D41. `Scene.executionStrategy` 扩展 — ALL_HITS / FIRST_HIT ⭐⭐
+
+**背景**：v1 仅实现 `HIGHEST_PRIORITY`（D29）：多规则命中时取最高优先级 Decision。08-evolution §2.1 已记录 v2 补全 `ALL_HITS` / `FIRST_HIT`，现在具备实现条件。
+
+**三种策略语义**：
+
+| strategy | 行为 | 典型场景 |
+|---|---|---|
+| `HIGHEST_PRIORITY`（现有） | 命中规则中取优先级最高的 Decision | 互斥决策（拦截 > 审核 > 放行） |
+| `ALL_HITS` | 返回所有命中规则的 Decision 列表，不去重 | 营销叠加（多券并发 / 多优惠并存） |
+| `FIRST_HIT` | 按规则 `priority` 倒序，第一条命中即停止后续评估 | 短路优化（高优规则命中后不必再跑低优规则） |
+
+**`EvalResult` 已有 `hitDecisions()` 列表**，`ALL_HITS` / `FIRST_HIT` 直接利用，不改 API 签名。`finalDecision()` 语义：
+- `ALL_HITS`：优先级最高的命中 Decision（与 `HIGHEST_PRIORITY` 等价，保持 finalDecision 有意义）
+- `FIRST_HIT`：唯一命中的 Decision
+
+**`Scene.executionStrategy` 字段**：v1 已有列，类型为 VARCHAR，`HIGHEST_PRIORITY` 为默认值；新增 `ALL_HITS` / `FIRST_HIT` 枚举值，Flyway 不需要 DDL 改动（字符串列直接写新值）。
+
+**EvalEngine 改动**：当前 `evaluate()` 遍历所有规则收集命中结果后统一合成；`FIRST_HIT` 策略下评估到第一条命中即短路返回，其余规则跳过（`HIGHEST_PRIORITY` / `ALL_HITS` 仍全量评估）。
+
+**不做的**：`MAJORITY` / `CUSTOM_SPI` 策略留 v2（D26 已说明）。
+
+**落地范围**：
+- `rule-kernel`：`SceneExecutionStrategy` 枚举加 `ALL_HITS` / `FIRST_HIT`；`EvalEngine.evaluate()` 按策略分支
+- `rule-config-svc`：`SceneMapper` / `SceneService` 校验新枚举值
+- `rule-eval-svc`：`SceneRuleIndex` / `EvalContextAssembler` 透传 strategy 字段
+- 测试：`EvalEngine` 三种策略各自独立测试
+
+---
+
+## D42. `DECISION_TREE` / `DECISION_TABLE` evaluator ⭐⭐
+
+**背景**：D12 预留 `Rule.kind` 多态，v1 实现 `AST_BOOLEAN` + `SCORECARD`（D12 evaluator 已落地）。`DECISION_TREE` 与 `DECISION_TABLE` 是下一优先级形态，适合运营 / 风控"多条件分支"场景。
+
+**DECISION_TREE**：
+- `conditionAst` 存储嵌套 if/then/else 树（重用 `AstNode` 的 sealed 体系，新增 `IfNode(condition, thenNode, elseNode)`）
+- evaluator 递归求值：condition 命中走 thenNode，否则走 elseNode；叶子节点为 `DecisionLeafNode(decisionCode)`
+- 输出写入 `EvalResult.category`（字段已在 08-evolution §2.1 预留）
+
+**DECISION_TABLE**：
+- `conditionAst` 存储 JSON 列：`{columns: [{metricCode, operator}], rows: [{conditions: [value], decisionCode}]}`
+- evaluator 行优先匹配：第一条所有列条件满足的行胜出，输出 `EvalResult.decision`
+- 默认 FIRST_HIT 行语义；行顺序即优先级
+
+**与现有评估链路的关系**：`RuleVersionExecutor` SPI 已有，新增 `DecisionTreeExecutor` / `DecisionTableExecutor` 实现，注册进 `ExecutorRegistry`（`kind` → executor 映射），`EvalEngine` 零改动。
+
+**不做的**：v1 不做 EXPRESSION_SCRIPT（CEL / Aviator 沙箱安全 + 性能代价，留 v1.5）。
+
+**落地范围**：
+- `rule-kernel`：`IfNode` / `DecisionLeafNode` AST 节点；`DecisionTreeExecutor` / `DecisionTableExecutor`；`EvalResult` 补 `category` / `decision` 字段
+- `rule-kernel`：`AstJsonCodec` 注册新节点类型
+- `rule-config-svc`：发布校验 kind=DECISION_TREE/TABLE 时的 AST schema 检查
+- `10-api-contract.md`：补 DECISION_TREE / DECISION_TABLE 的请求 / 响应 schema
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1288,5 +1394,8 @@ RuleEngineClient.builder()
 | D33 | Modulith verify() 不适用于多 JAR 共享库 | A | rule-kernel 是跨模块共享库（SPI+模型），Modulith 在多 JAR 结构下将其视为 Modulith 模块导致 exposed 检查误报；骨架阶段跳过 verify()，架构边界由 ArchUnit（KernelArchTest）保证；等 v2 业务实现时视 Modulith 版本再评估是否启用 verify() |
 | D34 | 嵌入式 SDK 本地模式（代码定义规则，零网络） | A | `RuleEngineClient.Builder.localSnapshot()` 直接写入本地索引，不启动 SnapshotPoller；`RuleVersionSnapshot` 补 Builder 辅助类；适用单测/演示/离线部署 |
 | D39 | Spring Boot Starter 补完 | A | 文件模式（`rule-files`）+ `@ConditionType` Bean 自动扫描 + `EvalResultListener`/`EvalSessionListener` Bean 注入；三项均委托现有 Builder API，starter 零额外逻辑 |
+| D40 | SDK 注解模式（`@RuleDef`） | A | `InlineRuleSpec` 接口 + `@RuleDef/@Decision` 注解 + `AnnotationRuleSource`；Spring Starter 自动收集 Bean；`ruleVersionId` 调用方显式指定保证幂等 |
+| D41 | `executionStrategy` 扩展 | A | 新增 `ALL_HITS`（全部命中）/ `FIRST_HIT`（短路）；`EvalResult.hitDecisions()` 直接复用；Flyway 无 DDL 改动 |
+| D42 | `DECISION_TREE` / `DECISION_TABLE` evaluator | A | 新增 `IfNode`/`DecisionLeafNode` AST 节点；独立 Executor SPI 实现；`EvalResult` 补 `category`/`decision` 字段；`EXPRESSION_SCRIPT` 留 v1.5 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。
