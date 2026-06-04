@@ -76,9 +76,10 @@ public class EvalEngine {
 
         if (strategy == SceneExecutionStrategy.FIRST_HIT) {
             return evaluateFirstHit(event, passed, ctx);
+        } else {
+            // HIGHEST_PRIORITY / ALL_HITS：全量评估，两者语义相同（均收集所有命中决策）
+            return evaluateAllCandidates(passed, ctx);
         }
-        // HIGHEST_PRIORITY / ALL_HITS：全量评估，两者语义相同（均收集所有命中决策）
-        return evaluateAllCandidates(passed, ctx);
     }
 
     /** FIRST_HIT：按快照最高 decisionBinding priority 倒序，第一条命中即返回。 */
