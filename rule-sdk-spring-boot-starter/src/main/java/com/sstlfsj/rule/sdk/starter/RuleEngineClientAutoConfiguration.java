@@ -4,13 +4,17 @@ import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.sdk.EvalResultListener;
 import com.sstlfsj.rule.sdk.EvalSessionListener;
+import com.sstlfsj.rule.sdk.InlineRuleSpec;
 import com.sstlfsj.rule.sdk.RuleEngineClient;
+import com.sstlfsj.rule.sdk.source.AnnotationRuleSource;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -64,6 +68,13 @@ public class RuleEngineClientAutoConfiguration {
                 builder.addEvaluator(ann.value(), evaluator);
             }
         });
+
+        // @RuleDef / InlineRuleSpec Bean 自动装载
+        List<InlineRuleSpec> inlineSpecs = new ArrayList<>(
+                ctx.getBeansOfType(InlineRuleSpec.class).values());
+        if (!inlineSpecs.isEmpty()) {
+            builder.ruleSource(new AnnotationRuleSource(inlineSpecs));
+        }
 
         // Listener Bean 注入
         evalResultListener.ifPresent(builder::evalResultListener);

@@ -1,8 +1,12 @@
 package com.sstlfsj.rule.sdk.starter;
 
 import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
+import com.sstlfsj.rule.kernel.api.annotation.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.annotation.RuleDef;
+import com.sstlfsj.rule.sdk.Condition;
 import com.sstlfsj.rule.sdk.EvalResultListener;
 import com.sstlfsj.rule.sdk.FetchMode;
+import com.sstlfsj.rule.sdk.InlineRuleSpec;
 import com.sstlfsj.rule.sdk.RuleEngineClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -75,6 +79,22 @@ class RuleEngineClientAutoConfigurationTest {
                 .run(ctx -> {
                     SdkProperties props = ctx.getBean(SdkProperties.class);
                     assertThat(props.getRuleFiles()).containsExactly("rules/test-rule.json");
+                });
+    }
+
+    @RuleDef(id = 10L, tenantId = "t1", sceneCode = "test",
+             trigger = "TEST_EVENT",
+             decisions = @DecisionBinding(code = "PASS", priority = 10))
+    static class TestInlineRule implements InlineRuleSpec {
+        @Override public Condition condition() { return Condition.always(); }
+    }
+
+    @Test
+    void inlineRuleSpec_bean_autoLoaded() {
+        runner.withBean(TestInlineRule.class)
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(RuleEngineClient.class);
+                    ctx.getBean(RuleEngineClient.class).close();
                 });
     }
 
