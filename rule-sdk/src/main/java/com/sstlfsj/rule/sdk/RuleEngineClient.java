@@ -10,6 +10,10 @@ import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.sdk.source.DslRuleSource;
+import com.sstlfsj.rule.sdk.source.FileRuleSource;
+import com.sstlfsj.rule.sdk.source.PollingRuleSource;
+import com.sstlfsj.rule.sdk.source.RuleSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -20,19 +24,18 @@ import java.util.Map;
 /**
  * 嵌入式规则评估门面。
  * 持有本地 SceneRuleIndex 和 EvalEngine，evaluate() 路径零网络跳转。
- * 使用 KernelEvaluators.defaults() 确保所有内置算子均可用。
+ * 支持四种规则来源：HTTP 轮询、JSON 文件、代码 DSL、多源混用。
  */
 public class RuleEngineClient implements AutoCloseable {
 
     private final EvalEngine evalEngine;
-    private final SnapshotPoller poller;
+    private final List<PollingRuleSource> pollingSources;
     private final EvalResultListener evalResultListener;
     private final EvalSessionListener evalSessionListener;
 
     private RuleEngineClient(Builder b) {
         SceneRuleIndex index = new SceneRuleIndex();
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        // 使用全量内置算子，业务方可通过 Builder.executor() 替换为自定义执行器
         RuleVersionExecutor executor = b.executor != null
                 ? b.executor
                 : new InterpretedExecutor(KernelEvaluators.defaults());
@@ -40,24 +43,23 @@ public class RuleEngineClient implements AutoCloseable {
                 b.preGates != null ? b.preGates : Map.of(),
                 Map.of("AST_BOOLEAN", executor));
 
-        // 本地模式：直接写入索引，不启动 SnapshotPoller
+        // 汇总所有 RuleSource：显式 ruleSource() + localSnapshot() 转 DslRuleSource + serverUrl 转 PollingRuleSource
+        List<RuleSource> allSources = new ArrayList<>(b.ruleSources);
         if (!b.localSnapshots.isEmpty()) {
-            for (RuleVersionSnapshot snap : b.localSnapshots) {
-                List<String> eventTypes = snap.triggerEventTypes().isEmpty()
-                        ? List.of("*") : snap.triggerEventTypes();
-                for (String et : eventTypes) {
-                    List<RuleVersionSnapshot> existing = new ArrayList<>(
-                            index.match(snap.tenantId(), snap.sceneCode(), et));
-                    if (!existing.contains(snap)) existing.add(snap);
-                    index.update(snap.tenantId(), snap.sceneCode(), et, existing);
-                }
-            }
-            this.poller = null;
-        } else {
-            this.poller = new SnapshotPoller(b.serverUrl, b.tenantId, b.fetchMode,
-                    b.scenes, b.pollInterval, index);
-            this.poller.start();
+            allSources.add(new DslRuleSource(b.localSnapshots));
         }
+        if (b.serverUrl != null && !b.serverUrl.isBlank()) {
+            allSources.add(new PollingRuleSource(b.serverUrl, b.tenantId,
+                    b.fetchMode, b.scenes, b.pollInterval));
+        }
+
+        // 统一 loadInto，收集需要 stop() 的 PollingRuleSource
+        List<PollingRuleSource> polling = new ArrayList<>();
+        for (RuleSource source : allSources) {
+            source.loadInto(index);
+            if (source instanceof PollingRuleSource p) polling.add(p);
+        }
+        this.pollingSources = List.copyOf(polling);
 
         this.evalResultListener = b.evalResultListener;
         this.evalSessionListener = b.evalSessionListener;
@@ -73,7 +75,7 @@ public class RuleEngineClient implements AutoCloseable {
 
     @Override
     public void close() {
-        if (poller != null) poller.stop();
+        pollingSources.forEach(PollingRuleSource::stop);
     }
 
     /** @return 新建 Builder */
@@ -93,6 +95,7 @@ public class RuleEngineClient implements AutoCloseable {
         private RuleVersionExecutor executor;
         private Map<String, PreGate> preGates;
         private final List<RuleVersionSnapshot> localSnapshots = new ArrayList<>();
+        private final List<RuleSource> ruleSources = new ArrayList<>();
 
         /** @param v rule-api 服务地址（HTTP 模式必填，本地模式不填） */
         public Builder serverUrl(String v)      { this.serverUrl = v; return this; }
@@ -113,26 +116,40 @@ public class RuleEngineClient implements AutoCloseable {
         /** @param v 自定义 Pre-Gate 映射（可选） */
         public Builder preGates(Map<String, PreGate> v) { this.preGates = v; return this; }
         /**
-         * 添加本地规则快照（本地模式专用），不可与 serverUrl 混用。
+         * 添加本地规则快照（代码 DSL 模式），不可与 serverUrl 混用。
          *
          * @param v 规则版本快照
          */
         public Builder localSnapshot(RuleVersionSnapshot v) { localSnapshots.add(v); return this; }
+        /**
+         * 添加规则来源（支持 FileRuleSource / DslRuleSource 等），可与其他来源混用。
+         *
+         * @param v RuleSource 实现
+         */
+        public Builder ruleSource(RuleSource v) { ruleSources.add(v); return this; }
+        /**
+         * 从 classpath 加载 JSON 规则文件（文件模式快捷入口）。
+         *
+         * @param classpathPath classpath 相对路径，如 "rules/fraud.json"
+         */
+        public Builder ruleFile(String classpathPath) {
+            ruleSources.add(FileRuleSource.classpath(classpathPath)); return this;
+        }
 
         /**
          * 构建 RuleEngineClient。
-         * HTTP 模式需配置 serverUrl + tenantId；本地模式需至少一个 localSnapshot，两者互斥。
+         * HTTP 模式需配置 serverUrl + tenantId；本地/文件模式需至少一个规则来源；两者互斥。
          *
          * @return RuleEngineClient 实例
          * @throws IllegalArgumentException 配置不合法时
          */
         public RuleEngineClient build() {
             boolean hasServer = serverUrl != null && !serverUrl.isBlank();
-            boolean hasLocal  = !localSnapshots.isEmpty();
+            boolean hasLocal  = !localSnapshots.isEmpty() || !ruleSources.isEmpty();
             if (hasServer && hasLocal)
-                throw new IllegalArgumentException("serverUrl 和 localSnapshot 不可同时配置");
+                throw new IllegalArgumentException("serverUrl 和本地规则来源（localSnapshot/ruleSource/ruleFile）不可同时配置");
             if (!hasServer && !hasLocal)
-                throw new IllegalArgumentException("必须配置 serverUrl（HTTP 模式）或至少一个 localSnapshot（本地模式）");
+                throw new IllegalArgumentException("必须配置 serverUrl（HTTP 模式）或至少一个本地规则来源");
             if (hasServer && (tenantId == null || tenantId.isBlank()))
                 throw new IllegalArgumentException("HTTP 模式下 tenantId 必填");
             return new RuleEngineClient(this);

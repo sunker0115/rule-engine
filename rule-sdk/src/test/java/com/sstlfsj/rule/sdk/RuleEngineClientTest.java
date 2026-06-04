@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.sdk.source.DslRuleSource;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -29,12 +30,11 @@ class RuleEngineClientTest {
     }
 
     @Test
-    void build_missingServerUrl_throwsIllegalArgument() {
+    void build_noSourceConfigured_throwsIllegalArgument() {
         assertThatThrownBy(() -> RuleEngineClient.builder()
                 .tenantId("t1")
                 .build())
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("serverUrl");
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -141,6 +141,48 @@ class RuleEngineClientTest {
                 .localSnapshot(RuleVersionSnapshot.builder()
                         .ruleVersionId(1L).tenantId("t1").sceneCode("s")
                         .conditionAst(alwaysTrue()).build())
+                .build())
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void ruleFile_loadsFromClasspath_evaluatesHit() {
+        // rules/test-rule.json：tenantId=t1, sceneCode=test, event=TEST_EVENT, alwaysTrue
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .ruleFile("rules/test-rule.json")
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "test", "TEST_EVENT",
+                    "sub1", UUID.randomUUID().toString(),
+                    Instant.now(), Map.of(), Map.of());
+            assertThat(client.evaluate(event).ruleHit()).isTrue();
+        }
+    }
+
+    @Test
+    void ruleSource_dslRuleSource_evaluatesHit() {
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(10L).tenantId("t1").sceneCode("scene")
+                .conditionAst(alwaysTrue())
+                .addTriggerEventType("EV")
+                .addDecisionBinding("PASS", 10)
+                .build();
+
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .ruleSource(new DslRuleSource(List.of(snap)))
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "scene", "EV",
+                    "sub1", UUID.randomUUID().toString(),
+                    Instant.now(), Map.of(), Map.of());
+            assertThat(client.evaluate(event).ruleHit()).isTrue();
+        }
+    }
+
+    @Test
+    void build_serverUrlAndRuleFile_throwsIllegalArgument() {
+        assertThatThrownBy(() -> RuleEngineClient.builder()
+                .serverUrl("http://localhost:8080")
+                .tenantId("t1")
+                .ruleFile("rules/test-rule.json")
                 .build())
                 .isInstanceOf(IllegalArgumentException.class);
     }
