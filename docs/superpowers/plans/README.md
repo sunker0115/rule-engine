@@ -25,7 +25,7 @@
 | 19 | [d36-condition-dsl](2026-06-04-d36-condition-dsl.md) | D36：Condition DSL——链式构造规则条件，隐藏 AST 构造细节 | ✅ |
 | 20 | [d37-add-evaluator](2026-06-04-d37-add-evaluator.md) | D37：Client 级 addEvaluator()，自定义算子叠加内置 | ✅ |
 | 21 | [d38-annotation-cleanup](2026-06-04-d38-annotation-cleanup.md) | D38：注解精简——删除无消费方字段 | ✅ |
-| 22 | [d39-starter-completion](2026-06-04-d39-starter-completion.md) | D39：Spring Boot Starter 补完——文件模式 + Bean 自动扫描 + Listener 注入 | 🔲 |
-| 23 | [d40-rule-def-annotation](2026-06-04-d40-rule-def-annotation.md) | D40：@RuleDef 注解模式——InlineRuleSpec + AnnotationRuleSource + Starter 自动装配 | 🔲 |
+| 22 | [d39-starter-completion](2026-06-04-d39-starter-completion.md) | D39：Spring Boot Starter 补完——文件模式 + Bean 自动扫描 + Listener 注入 | ✅ |
+| 23 | [d40-rule-def-annotation](2026-06-04-d40-rule-def-annotation.md) | D40：@RuleDef 注解模式——InlineRuleSpec + AnnotationRuleSource + Starter 自动装配 | ✅ |
 | 24 | [d41-execution-strategy](2026-06-04-d41-execution-strategy.md) | D41：executionStrategy 扩展——ALL_HITS / FIRST_HIT 短路策略 | 🔲 |
 | 25 | [d42-decision-tree-table](2026-06-04-d42-decision-tree-table.md) | D42：DECISION_TREE / DECISION_TABLE evaluator | 🔲 |
