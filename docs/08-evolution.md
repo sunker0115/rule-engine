@@ -248,6 +248,21 @@
 - **迁移成本**：中（需要补 Mapper 查询 + Service 实现 + Controller 端点 + 分页协议，但无 DDL 变更；`node_trace` 量大时需结合 §2.5 存储分层一起评估）。
 - **已实装（v2）**：`rule-audit-svc` 内建 `EvalSessionRow` / `NodeTraceRow` / `AuditLogRow` 只读 entity + 对应三个 `@Mapper` 接口（Modulith 隔离，不引用其他模块 internal）；`AuditServiceImpl` 用 MyBatis-Plus 分页查询实现 `queryAuditLogs` / `queryEvalSessions` / `queryTrace`（v1 返回扁平列表，树重建留 §2.21）；`AuditController` 补全 `GET /api/v1/evaluation-sessions/{sessionId}/trace` 端点；`AuditService` 新增 `TraceNodeEntry` + `queryTrace` 方法签名。
 
+### 2.21 XOR 逻辑节点（来源 trae 参考分析 R1）
+
+- **v1 现状**：AST sealed `RuleNode` 支持 `AndNode / OrNode / NotNode / ConditionNode` 四种节点，不含 XOR（"有且仅有一个子条件满足"）。
+- **触发条件**：运营配置出现"非此即彼"类场景——如"下列渠道恰好只来自一个"、"以下优惠类型恰好命中一种"，目前需用 `(A AND NOT B) OR (B AND NOT A)` 的组合规避，可读性差。
+- **演进方向**：
+  - `RuleNode` sealed class 增加 `XorNode { children: List<RuleNode>, displayLabel?: String }`；
+  - `InterpretedExecutor` 补充 XOR 分支：遍历全部子节点（不短路），计数满足节点数，`count == 1` 则 `satisfied=true`；
+  - `ConditionNode.weight` 对 XorNode 无意义（XOR 语义与权重不兼容），评估器忽略子节点 weight；
+  - trace 层：XorNode 记录 `satisfied` + 各子节点 `satisfied` 结果，帮助运营理解"哪个子条件满足了"；
+  - 前端 UI：条件分组卡片新增 XOR 选项（显示文案"有且仅有一个满足"）；
+  - 无 DDL 变更（AST 存 JSON，加节点类型是 JSON key 变更）；
+  - 发布期输入闭合校验（D20 §3）对 XorNode 透明——只关心 ConditionNode 的变量引用，不感知父节点类型。
+- **参考来源**：trae `rule/strategy/RuleXorStrategy.java`，详见 [`docs/superpowers/specs/2026-06-04-trae-reference-design.md`](./specs/2026-06-04-trae-reference-design.md) §三 R1。
+- **迁移成本**：低（sealed class + evaluator + 前端编辑器，无 DDL，无 schema 迁移）。
+
 ### 2.20 规则草稿创建 API（来源 10-api-contract.md §4.1）
 
 - **v1 现状**：`POST /api/v1/rules` 在 `10-api-contract.md §4.1` 已定义契约，但 v1 仅留占位实现（返回 501 NOT_IMPLEMENTED）。
