@@ -21,7 +21,7 @@
 | 15 | [d20-embedded-sdk](2026-06-03-d20-embedded-sdk.md) | D20：Embedded SDK（EvalEngine 下沉 + rule-sdk + Spring Boot Starter） | ✅ |
 | 16 | [d5c-cep](2026-06-03-d5c-cep.md) | D5-C：CEP 复杂事件处理（Flink + 频率/序列/聚合三种模式） | 🔲 |
 | 17 | [d34-local-sdk](2026-06-04-d34-local-sdk.md) | D34：嵌入式 SDK 本地模式（代码定义规则，零网络） | ✅ |
-| 18 | [d35-rule-source](2026-06-04-d35-rule-source.md) | D35：RuleSource SPI + DslRuleSource + FileRuleSource + PollingRuleSource | 🔲 |
-| 19 | [d36-condition-dsl](2026-06-04-d36-condition-dsl.md) | D36：Condition DSL——链式构造规则条件，隐藏 AST 构造细节 | 🔲 |
-| 20 | [d37-add-evaluator](2026-06-04-d37-add-evaluator.md) | D37：Client 级 addEvaluator()，自定义算子叠加内置 | 🔲 |
-| 21 | [d38-annotation-cleanup](2026-06-04-d38-annotation-cleanup.md) | D38：注解精简——删除无消费方字段 | 🔲 |
+| 18 | [d35-rule-source](2026-06-04-d35-rule-source.md) | D35：RuleSource SPI + DslRuleSource + FileRuleSource + PollingRuleSource | ✅ |
+| 19 | [d36-condition-dsl](2026-06-04-d36-condition-dsl.md) | D36：Condition DSL——链式构造规则条件，隐藏 AST 构造细节 | ✅ |
+| 20 | [d37-add-evaluator](2026-06-04-d37-add-evaluator.md) | D37：Client 级 addEvaluator()，自定义算子叠加内置 | ✅ |
+| 21 | [d38-annotation-cleanup](2026-06-04-d38-annotation-cleanup.md) | D38：注解精简——删除无消费方字段 | ✅ |
