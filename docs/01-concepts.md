@@ -214,7 +214,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `ruleId` | 规则 ID |
 | `tenantId / scene` | 归属 |
 | `name / description` | 给运营看 |
-| `kind` | 规则形态枚举：`AST_BOOLEAN`（v1 唯一实现）/ `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT`。v1 发布校验拒绝非 `AST_BOOLEAN` 的 kind（详见下方 **kind 多态边界**） |
+| `kind` | 规则形态枚举：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE`（已实装）/ `EXPRESSION_SCRIPT`（未实装，留 v1.5）。发布校验按 kind 校验 AST schema（详见下方 **kind 多态边界**） |
 | `triggerEventTypes` | 数组：哪些 eventType 触发本规则（如 `["trade.completed"]`） |
 | `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 kind 用各自的 JSON 内部结构，与 ast 互斥） |
 | `preGates` | 准入闸门列表（频次 / 互斥 / 黑白名单 / 灰度命中） |
@@ -267,7 +267,7 @@ DecisionRef {
 - **Rule 不直接含 Condition**：Condition 是 AST 的叶子节点（`ConditionNode`），不能脱离 AST 存在。
 - **Rule 内表达任意复杂逻辑**全靠 AST：`AndNode` / `OrNode` / `NotNode` 任意嵌套，没有"层数"限制。
 - **AST 节点上的 `displayLabel`** 是给运营 UI 看的分组标题，后端评估时忽略它，只看逻辑结构。
-- **v1 仅实现 `kind = AST_BOOLEAN`**：发布校验拒绝其他 kind，前端 UI 也只暴露"AST 编辑器"一种类型（D12 占位字段保留扩展位，演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态）。
+- **已实装 `kind`**：`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）；`EXPRESSION_SCRIPT` 未实装（留 v1.5）。发布校验按 kind 校验 AST schema；演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态。
 - **评估失败单节点降级，整树继续短路求值**（D15）：单个 `ConditionNode` 失败 → 该节点 satisfied=false，其他节点正常评估；整树评估完毕后若有失败节点，`EvalResult.errorCode` 非空。规则间隔离：单条 Rule 失败不影响同 (scene + eventType) 下其他 Rule。PUSH 默认安静失败不派发 Action；PULL 返回 `{satisfied, errorCode}`，调用方按 fail-secure / fail-open 决策。对账四态：`HIT / MISS / BLOCKED / ERROR`（D22）。
 - **运行时锁定快照版本**（D17 派生）：evaluation_session 开始时拍当前候选规则版本快照，整 session 用同一快照——即使中途发生 publish 切版本，本次评估不受影响。索引热更：单服务模式由 Modulith `RulePublishedEvent` 触发（毫秒级）；嵌入式 SDK 模式由 `DbPollingRuleWatcher`（默认 15s 轮询）触发（15s 最终一致）。
 - **发布是单条规则原子事务**（D19）：状态机迁移 + 新 version 行写入 + audit_log 在同一 DB 事务；事务失败 → 状态落 `PUBLISH_FAILED`（不是自动回 DRAFT），同时追加一条 `audit_log.action = PUBLISH_FAILED` 记录失败原因；运营从 UI 看到 `PUBLISH_FAILED` 后显式点"重新编辑"才会迁回 DRAFT，避免静默丢失发布上下文。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。"回滚到旧版本" = 用旧版本快照建新草稿走标准发布流程产出新版本号，不可变快照永不覆盖。
@@ -379,7 +379,7 @@ if (!r.satisfied()) {
 | `HANDLER_EXCEPTION` | D18 | `ActionHandler.execute` 抛未捕获异常，引擎归一为 `status=FAILED, retryable=false` |
 | `TIMEOUT` | D18 | `ActionHandler.execute` 超过 handler 自身声明的超时阈值（同步等待 / 调外部 HTTP / MQ ack 等），引擎归一为 `status=FAILED, retryable=true`。超时阈值由 handler 在 `@ActionType` 注解 / 注册元数据声明（详见 04-extension），未声明回落引擎默认 |
 | `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED`，不入重试队列 |
-| `DRY_RUN_NOT_IMPLEMENTED` | D7 v1 | dry-run 调用时该 handler 未实装 `dryRun(ActionContext ctx)` 方法，由 Dispatcher 短路返回 `status=SKIPPED`，仅 v1 阶段出现，v1.5 全量补齐后不再产生 |
+| `DRY_RUN_NOT_IMPLEMENTED` | D7 | ~~v1 阶段占位~~；v1.5 已全量实装（`BlockTransactionHandler` + `SendAlertHandler` 均 override `dryRun()`），此 errorCode 不再产生 |
 | `QUEUE_OVERFLOW` | D20 | 异步 Dispatcher 内部队列满拒绝该 ActionInstance；引擎归一为 `status=FAILED, retryable=true`，监控告警 |
 | `EXTERNAL_SERVICE_ERROR` | D18 | Handler 调用外部系统返回 5xx / 连接失败；`retryable=true` |
 | `BUSINESS_REJECTED` | D18 | 外部系统明确拒绝（如工单系统返回 400）；`retryable=false` |
@@ -398,7 +398,7 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。
 - **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。DDL 另有 `PENDING`（已入队待执行）和 `RETRYING`（重试进行中）两个过程态——对账、监控、失败率统计只看最终三态，过程态由引擎内部维护。
 - **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
-- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **接口已预留 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。**v1 范围（D7）**：评估层 dry-run 一等公民（走完整评估链路 + 节点 trace），ActionHandler 层的 `dryRun` 实装在 **v1.5** 由各 handler 补齐；v1 阶段未补齐的 handler 在 dry-run 时由 Dispatcher 短路返回占位预览（`status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`）。dry-run 完整行为契约见 §五 Q10。
+- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **提供 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。评估层 dry-run 是一等公民（走完整评估链路 + 节点 trace）；`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7），返回 `ActionResult.success()` 预览结果。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
 - **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(ActionContext ctx)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
 
@@ -1077,7 +1077,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | **Pre-Gate 互斥规则** | **读**互斥锁状态用于判定，**不占用**新锁 |
 | **EvalContext 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
 | **AST 评估 + 节点 trace** | 真实评估、真实节点 trace；trace 写入 `dry_run_session` 表，不进 `evaluation_session` |
-| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。**v1 范围**：接口已预留，全部 handler 实装在 **v1.5** 补齐（D7）；v1 阶段未补齐的 handler 由 Dispatcher 短路返回 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED` |
+| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7）。 |
 | **`action_execution` 写入** | 不落生产表，预览结果随 dry-run 响应返回 |
 | **审计 `audit_log`** | 不写入（dry-run 不是发布操作） |
 

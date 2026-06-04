@@ -36,15 +36,15 @@
 
 | kind | 判定主体承载 | 输出字段 | 状态 |
 |------|------------|---------|------|
-| `AST_BOOLEAN` | sealed `RuleNode` AST 树（已在 v1 落地） | `EvalResult.satisfied` | v1 唯一实现 |
+| `AST_BOOLEAN` | sealed `RuleNode` AST 树（已在 v1 落地） | `EvalResult.satisfied` | 已实装（v1） |
 | `SCORECARD` | JSON 列承载条件列表 + 各自 `weight` + 阈值带 | `EvalResult.score` | 已实装（D12） |
-| `DECISION_TREE` | JSON 列承载嵌套 if/then/else 树 | `EvalResult.category` | 待实现 |
-| `DECISION_TABLE` | JSON 列承载输入列 + 输出列 + 行集合矩阵 | `EvalResult.decision` | 待实现 |
-| `EXPRESSION_SCRIPT` | 文本列承载 CEL / Aviator 脚本 | 按脚本返回值多态填 | 待实现 |
+| `DECISION_TREE` | JSON 列承载嵌套 if/then/else 树 | `EvalResult.category` | 已实装（D42） |
+| `DECISION_TABLE` | JSON 列承载输入列 + 输出列 + 行集合矩阵 | `EvalResult.decision` | 已实装（D42） |
+| `EXPRESSION_SCRIPT` | 文本列承载 CEL / Aviator 脚本 | 按脚本返回值多态填 | 未实装（留 v1.5） |
 
-**`EvalResult` 是稳定多态**：v1 PULL 模式调用方拿到的对象 shape 是 `{satisfied, score?, category?, decision?, trace}`，v1.5 引入 SCORECARD 时多填一个 `score` 字段，PULL API 签名不变；节点 trace 跨 kind 统一，运营自助排障的能力 100% 复用。
+**`EvalResult` 是稳定多态**：PULL 模式调用方拿到的对象 shape 是 `{satisfied, score?, category?, decision?, trace}`——SCORECARD 多填 `score`（D12），DECISION_TREE 填 `category`（D42），DECISION_TABLE 填 `decision`（D42），PULL API 签名始终不变；节点 trace 跨 kind 统一，运营自助排障的能力 100% 复用。
 
-**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；v2 在此基础上扩展 `ALL_HITS` / `FIRST_HIT`。Action 编排（决策流）由 D4 工作流引擎扩展点承载，两者都是 Rule 层级之外。
+**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；`ALL_HITS` / `FIRST_HIT` 已实装（D41）。Action 编排（决策流）由 D4 工作流引擎扩展点承载，两者都是 Rule 层级之外。
 
 **为什么不另起表**：评分卡 / 决策树仍需要 Rule 的全部公共属性（触发 / 准入 / 灰度 / Action / 版本快照），独立表会复制 80% 的列且数据散布、跨形态报表困难；用 `kind` 字段 + 多态 JSON 列在同一张表里，公共能力天然共享。
 
@@ -215,16 +215,10 @@
   - `rule_version.rollout` JSON 列内部新增 `experimentId` 可选键，无需 ALTER TABLE，向后兼容。
 - **迁移成本**：低（只改 hash 计算逻辑 + `rollout` JSON 解析，无 DDL 变更）。
 
-### 2.17 ActionHandler dryRun 全量实装（来源 D7 v1.5 待补）
+### 2.17 ActionHandler dryRun 全量实装（D7 v1.5，已实装）
 
-- **v1 现状**：`ActionHandler` 接口已预留 `dryRun(ActionContext ctx)` 入口；v1 handler 均未实装，Dispatcher 短路返回 `ActionResult{status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED}`，试算面板显示 Action 全部跳过。
-- **触发条件**：运营需要在 dry-run 时预览"会发什么短信 / 给什么优惠券"等 Action 输出，而不只是 AST 节点 trace。
-- **演进方向（v1.5）**：
-  - 各 `ActionHandler` 实现类补齐 `dryRun()` 方法，返回真实预览 `ActionResult`；
-  - `DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生（全量实装后）；
-  - dry-run 响应体 `actionResults` 从 `[{status:SKIPPED}]` 升级为含真实预览输出；
-  - 不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
-- **迁移成本**：低（各 handler 独立补实现，不改协议）。
+- **已实装（v1.5，D7）**：`BlockTransactionHandler.dryRun()` 和 `SendAlertHandler.dryRun()` 均已 override，返回 `ActionResult.success()` 预览结果；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。
+- **背景**：运营需要在 dry-run 时预览"会发什么短信 / 给什么优惠券"等 Action 输出，而不只是 AST 节点 trace。dry-run 响应体 `actionResults` 含真实预览输出；不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
 
 ### 2.18 规则列表查询 API（来源 10-api-contract.md §4.4）
 
@@ -248,7 +242,7 @@
   - `node_trace` 数据量大时配合 §2.5 冷热分级同步推进，避免全表扫描；
   - 查询路径与写路径完全隔离（只读 Mapper），不影响评估性能。
 - **迁移成本**：中（需要补 Mapper 查询 + Service 实现 + Controller 端点 + 分页协议，但无 DDL 变更；`node_trace` 量大时需结合 §2.5 存储分层一起评估）。
-- **已实装（v2）**：`rule-audit-svc` 内建 `EvalSessionRow` / `NodeTraceRow` / `AuditLogRow` 只读 entity + 对应三个 `@Mapper` 接口（Modulith 隔离，不引用其他模块 internal）；`AuditServiceImpl` 用 MyBatis-Plus 分页查询实现 `queryAuditLogs` / `queryEvalSessions` / `queryTrace`（v1 返回扁平列表，树重建留 §2.21）；`AuditController` 补全 `GET /api/v1/evaluation-sessions/{sessionId}/trace` 端点；`AuditService` 新增 `TraceNodeEntry` + `queryTrace` 方法签名。
+- **已实装（v2）**：`rule-audit-svc` 内建 `EvalSessionRow` / `NodeTraceRow` / `AuditLogRow` 只读 entity + 对应三个 `@Mapper` 接口（Modulith 隔离，不引用其他模块 internal）；`AuditServiceImpl` 用 MyBatis-Plus 分页查询实现 `queryAuditLogs` / `queryEvalSessions` / `queryTrace`；`AuditController` 补全 `GET /api/v1/evaluation-sessions/{sessionId}/trace` 扁平端点 + `/trace/tree` 树重建端点（按 `node_path` 点分路径重建嵌套 AST 树，`TraceTreeNode` record，详见 `10-api-contract.md §6.2`）。
 
 ### 2.21 XOR 逻辑节点（来源 trae 参考分析 R1）
 

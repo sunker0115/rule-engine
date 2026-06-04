@@ -249,6 +249,8 @@
 - 不实现 `executionStrategy` —— 决策集策略留到 08-evolution 路线图，v1 默认 `HIGHEST_PRIORITY`（D29 落定，覆盖本条原写的 `ALL_HITS`）；
 - 不实现脚本沙箱 —— 表达式 evaluator 留到 v1.5。
 
+**后续实装补记**：`SCORECARD` evaluator 已实装（D12 决策时）；`DECISION_TREE` / `DECISION_TABLE` evaluator 已实装（D42）；`ALL_HITS` / `FIRST_HIT` executionStrategy 已实装（D41）；`EXPRESSION_SCRIPT` 仍未实装。
+
 **你的决定**：A（按上述 3 个占位落地）
 
 ---
@@ -1087,6 +1089,8 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `rule-sdk`：`RuleEngineClient.Builder` 新增 `localSnapshot()` 方法，`build()` 判断是否启动 poller；
 - 测试：`RuleEngineClientTest` 补本地模式覆盖（无 HTTP、直接评估）。
 
+**已实装**（D33）：`RuleVersionSnapshot.Builder` + `RuleEngineClient.Builder.localSnapshot()` + 本地模式跳过 SnapshotPoller 逻辑 + 测试覆盖。
+
 ---
 
 ## D35. SDK `RuleSource` 抽象 + 四种规则来源模式 ⭐⭐⭐
@@ -1147,6 +1151,8 @@ RuleEngineClient.builder()
 
 **不改的**：`EvalEngine`、`SceneRuleIndex`、服务端任何模块。
 
+**已实装**（D35）：`RuleSource` SPI + `PollingRuleSource` / `FileRuleSource` / `DslRuleSource` / `AnnotationRuleSource` 四种实现；`RuleEngineClient` 统一接受多 `RuleSource`，混用场景覆盖。
+
 ---
 
 ## D36. `Condition` DSL — 隐藏 AST 构造细节 ⭐⭐
@@ -1179,6 +1185,8 @@ Condition.never()
 
 **不改的**：`ConditionNode` / `AndNode` 等 record 定义不变，`Condition` 是叠加的便利层。
 
+**已实装**（D36）：`Condition` 工厂类 + 全套内置算子（gt/lt/gte/lte/eq/neq/in/notIn/between/notBetween/contains/notContains/startsWith/endsWith/matches/dateBefore/dateAfter）+ 逻辑组合（and/or/not）+ `always()`/`never()`。
+
 ---
 
 ## D37. Evaluator 注册策略 — Client 级 `addEvaluator()`，不随 `RuleSource` 携带 ⭐⭐
@@ -1205,6 +1213,8 @@ RuleEngineClient.builder()
 
 **未来注解扫描**：`RuleEngineClient.scanEvaluators("com.example")` 扫描 `@ConditionType` Bean 注册，是 `addEvaluator()` 的批量版，底层逻辑相同。
 
+**已实装**（D37）：`RuleEngineClient.Builder.addEvaluator()` + 注册到 `KernelEvaluators` 自定义 map + 传递给 `EvalEngine`。
+
 ---
 
 ## D38. 注解精简 — 对齐架构现状 ⭐⭐
@@ -1223,6 +1233,8 @@ RuleEngineClient.builder()
 **`@ConditionType.requiresMetric` 删除原因**：字段含义模糊（是说"必须有 metricCode"还是"需要从 MetricSource 取数"？），且无任何运行时代码消费它。前端表单校验应由 `paramsSchema` 驱动，不需要额外字段。
 
 **迁移影响**：`@ConditionType` 字段删减是 breaking change，但目前无任何生产代码使用该字段（仅测试），影响面极小。
+
+**已实装**（D38）：`@ConditionType` 删除 `requiresMetric` 字段；`@MetricSourceType` 删除 `defaultTimeoutMs` / `defaultCacheTtlSeconds` 字段；`@RuleDef` 注解 + `InlineRuleSpec` 接口随 D40 一并落地。
 
 ---
 
@@ -1246,6 +1258,8 @@ RuleEngineClient.builder()
 **落地范围**：
 - `rule-sdk-spring-boot-starter`：`SdkProperties.java`（已加 `ruleFiles`）、`RuleEngineClientAutoConfiguration.java`；
 - `10-api-contract.md §8.2`：补 `rule-files`、`@ConditionType` Bean、Listener Bean 的 Spring 用法说明。
+
+**已实装**（D39）：`SdkProperties.ruleFiles` 字段 + `@ConditionType` Bean 自动扫描 + `EvalResultListener`/`EvalSessionListener` 自动注入。
 
 ---
 
@@ -1297,6 +1311,8 @@ public class AmountFraudRule implements InlineRuleSpec {
 - `rule-sdk-spring-boot-starter`：D39 AutoConfiguration 内增加 `InlineRuleSpec` Bean 收集逻辑
 - `10-api-contract.md §8.1`：更新模式总览表，补 §8.x 注解模式用法
 
+**已实装**（D40）：`@RuleDef` + `@Decision` 注解 + `InlineRuleSpec` 接口 + `AnnotationRuleSource`（扫描类路径下带 `@RuleDef` 的 `InlineRuleSpec` 实现）+ Starter 自动收集注入。
+
 ---
 
 ## D41. `Scene.executionStrategy` 扩展 — ALL_HITS / FIRST_HIT ⭐⭐
@@ -1327,6 +1343,8 @@ public class AmountFraudRule implements InlineRuleSpec {
 - `rule-eval-svc`：`SceneRuleIndex` / `EvalContextAssembler` 透传 strategy 字段
 - 测试：`EvalEngine` 三种策略各自独立测试
 
+**已实装**（D41）：`SceneExecutionStrategy` 枚举含三值 + `EvalEngine` 按策略短路/全量分支 + 三策略独立测试。
+
 ---
 
 ## D42. `DECISION_TREE` / `DECISION_TABLE` evaluator ⭐⭐
@@ -1352,6 +1370,8 @@ public class AmountFraudRule implements InlineRuleSpec {
 - `rule-kernel`：`AstJsonCodec` 注册新节点类型
 - `rule-config-svc`：发布校验 kind=DECISION_TREE/TABLE 时的 AST schema 检查
 - `10-api-contract.md`：补 DECISION_TREE / DECISION_TABLE 的请求 / 响应 schema
+
+**已实装**（D42）：`IfNode` / `DecisionLeafNode` / `DecisionTableNode` AST 节点 + `AstJsonCodec` 映射 + `DecisionTreeExecutor` / `DecisionTableExecutor` + 注册进 `EvalAutoConfiguration` + 发布校验覆盖 DECISION_TREE/TABLE kind。
 
 ---
 
