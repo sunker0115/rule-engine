@@ -6,6 +6,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.sdk.source.DslRuleSource;
+import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -174,6 +175,57 @@ class RuleEngineClientTest {
                     "sub1", UUID.randomUUID().toString(),
                     Instant.now(), Map.of(), Map.of());
             assertThat(client.evaluate(event).ruleHit()).isTrue();
+        }
+    }
+
+    @Test
+    void addEvaluator_customOperator_evaluatedCorrectly() {
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(99L).tenantId("t1").sceneCode("device")
+                .conditionAst(Condition.of("BLACKLIST_HIT", "device_id",
+                        Map.of("list", List.of("dev-001", "dev-002"))).toAst())
+                .addTriggerEventType("LOGIN")
+                .addDecisionBinding("BLOCK", 100)
+                .build();
+
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .localSnapshot(snap)
+                .addEvaluator("BLACKLIST_HIT", (node, ctx) -> {
+                    @SuppressWarnings("unchecked")
+                    List<Object> list = (List<Object>) node.params().get("list");
+                    var mv = ctx.metrics().get(node.metricCode());
+                    return mv != null && list.contains(mv.value());
+                })
+                .build()) {
+            RuleEvent hit = new RuleEvent("t1", "device", "LOGIN",
+                    "sub1", UUID.randomUUID().toString(),
+                    Instant.now(), Map.of(), Map.of("device_id", "dev-001"));
+            assertThat(client.evaluate(hit).ruleHit()).isTrue();
+
+            RuleEvent miss = new RuleEvent("t1", "device", "LOGIN",
+                    "sub1", UUID.randomUUID().toString(),
+                    Instant.now(), Map.of(), Map.of("device_id", "dev-999"));
+            assertThat(client.evaluate(miss).ruleHit()).isFalse();
+        }
+    }
+
+    @Test
+    void addEvaluator_customOverridesBuiltin() {
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(98L).tenantId("t1").sceneCode("override")
+                .conditionAst(Condition.gt("amount", 1000).toAst())
+                .addTriggerEventType("ORDER")
+                .addDecisionBinding("PASS", 10)
+                .build();
+
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .localSnapshot(snap)
+                .addEvaluator("GT", (node, ctx) -> true)  // 永远返回 true
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "override", "ORDER",
+                    "sub1", UUID.randomUUID().toString(),
+                    Instant.now(), Map.of(), Map.of("amount", 1));  // amount=1 < 1000
+            assertThat(client.evaluate(event).ruleHit()).isTrue();  // 自定义覆盖，应命中
         }
     }
 

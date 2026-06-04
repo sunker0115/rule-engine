@@ -1058,6 +1058,174 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D33. 嵌入式 SDK 本地模式（代码定义规则，零网络）⭐⭐
+
+**为什么重要**：D20 落地的 `RuleEngineClient` 强制要求 `serverUrl`，`SnapshotPoller` 靠 HTTP 拉规则。在以下场景中这是多余的负担：
+- 单测 / CI：只想验证规则逻辑，不想起服务端；
+- 演示 / 原型：规则写死在代码里，不需要动态下发；
+- 完全离线部署：无法访问 rule-engine 服务，规则随业务代码打包。
+
+**两种方案**：
+
+| 方案 | 描述 | 权衡 |
+|------|------|------|
+| A. Builder 支持 `localSnapshot()`，不传 `serverUrl` 时跳过 SnapshotPoller | 直接往 SceneRuleIndex 里塞快照，evaluate() 路径不变 | 侵入 Builder，但用法自然；`RuleVersionSnapshot` 需要补 Builder 辅助方法 |
+| B. 暴露 `SceneRuleIndex.update()` 让调用方手动管理 | 最小改动 | API 太低层，调用方要理解内部索引结构 |
+
+**决定**：A — Builder 新增 `localSnapshot(RuleVersionSnapshot)` 方法，叠加调用；`build()` 时若未配 `serverUrl` 则不启动 `SnapshotPoller`，直接将所有本地快照写入 `SceneRuleIndex`。
+
+**`RuleVersionSnapshot` 构造**：record 目前只有全参构造器，补一个内部 `Builder` 辅助类（不改 record 签名），用于本地模式的链式构造。
+
+**不改的**：
+- `evaluate()` 路径完全不变，本地 / 远程透明；
+- `SnapshotPoller` 不变；
+- `rule-eval-svc` 的服务端路径不变；
+- HTTP 模式仍要求 `serverUrl` 必填。
+
+**落地范围**（D33 实现计划）：
+- `rule-kernel`：`RuleVersionSnapshot` 补 `Builder` 内部类；
+- `rule-sdk`：`RuleEngineClient.Builder` 新增 `localSnapshot()` 方法，`build()` 判断是否启动 poller；
+- 测试：`RuleEngineClientTest` 补本地模式覆盖（无 HTTP、直接评估）。
+
+---
+
+## D35. SDK `RuleSource` 抽象 + 四种规则来源模式 ⭐⭐⭐
+
+**为什么重要**：D34 只解决了"代码直接传 snapshot"，但实际需要支持的场景更多——HTTP 轮询（生产）、JSON 文件（离线/测试）、代码 DSL（单测/演示）、注解扫描（声明式）。四种模式的差异只在"索引怎么填充"，底层 `EvalEngine` 完全一致。需要一个统一抽象避免 `RuleEngineClient` 膨胀成四套分支逻辑。
+
+**核心抽象**：
+
+```java
+/** 规则来源 SPI：将规则装载到评估索引。 */
+public interface RuleSource {
+    void loadInto(SceneRuleIndex index);
+}
+```
+
+**四种实现**：
+
+| 模式 | 实现类 | 典型场景 |
+|---|---|---|
+| HTTP 轮询 | `PollingRuleSource`（含原 `SnapshotPoller` 逻辑） | 生产，规则由服务端管理 |
+| JSON 文件 | `FileRuleSource.classpath("rules.json")` | 离线、测试、规则随代码打包 |
+| 代码 DSL | `DslRuleSource`（由 `LocalBuilder` 构造） | 单测、演示 |
+| 注解扫描 | `AnnotationRuleSource`（未来，D38 之后实现） | 声明式，`@RuleDef` 标注规则类 |
+
+**`RuleEngineClient` 统一入口**：接受一个或多个 `RuleSource`，可混用：
+
+```java
+// 生产：HTTP 轮询
+RuleEngineClient.builder()
+    .tenantId("t1")
+    .serverUrl("http://rule-engine:8080")
+    .build();
+
+// 文件离线
+RuleEngineClient.builder()
+    .tenantId("t1")
+    .ruleFile("classpath:rules/fraud.json")
+    .build();
+
+// 本地 DSL
+RuleEngineClient.local("t1")
+    .rule().scene("fraud").on("TRANSACTION")
+           .when(Condition.gt("amount", 1000))
+           .decide("BLOCK", 100)
+    .build();
+
+// 混用（文件兜底 + HTTP 热更新）
+RuleEngineClient.builder()
+    .tenantId("t1")
+    .ruleSource(FileRuleSource.classpath("rules/baseline.json"))
+    .ruleSource(new PollingRuleSource(serverUrl, tenantId, ...))
+    .build();
+```
+
+**`RuleSource` 不携带 evaluator**：规则数据与算子行为职责分离，evaluator 在 Client 级通过 `addEvaluator()` 注册（见 D37）。
+
+**文件格式**：JSON，与服务端 `GET /api/v1/sdk/snapshots` 响应体 `data` 数组格式完全一致，可直接从服务端导出存为文件离线使用。不做 YAML（需额外依赖 `jackson-dataformat-yaml`），如有需求后续扩展。
+
+**不改的**：`EvalEngine`、`SceneRuleIndex`、服务端任何模块。
+
+---
+
+## D36. `Condition` DSL — 隐藏 AST 构造细节 ⭐⭐
+
+**为什么重要**：`ConditionNode`（5 参构造）+ `AndNode`（3 参构造）对调用方完全暴露 AST 内部结构，手写门槛高，且参数顺序难记（尤其 `weight`、`displayLabel` 几乎每次都是 null/0）。代码 DSL 模式和注解模式都需要一个友好的条件表达层。
+
+**设计**：`Condition` 是 `rule-sdk` 中的工厂 + Builder 类，最终生成 `AstNode`：
+
+```java
+// 叶子条件（内置算子）
+Condition.gt("amount", 1000)           // amount > 1000
+Condition.in("country", "CN", "HK")   // country IN [CN, HK]
+Condition.between("age", 18, 65)
+Condition.matches("email", ".*@corp\\.com")
+
+// 逻辑组合
+Condition.gt("amount", 1000).and(Condition.in("country", "CN", "HK"))
+Condition.gt("amount", 1000).or(Condition.eq("vip", true))
+Condition.gt("amount", 1000).not()
+
+// 自定义算子（需配合 addEvaluator 注册）
+Condition.of("BLACKLIST_HIT", "device_id", Map.of("list", blocklist))
+
+// 恒真 / 恒假
+Condition.always()
+Condition.never()
+```
+
+**实现**：`Condition` 是 `rule-sdk` 的 wrapper，`toAst()` 方法生成对应 `AstNode`，`ConditionNode` 的 `displayLabel` 固定 null、`weight` 固定 0.0（纯 DSL 场景不需要这两个字段）。
+
+**不改的**：`ConditionNode` / `AndNode` 等 record 定义不变，`Condition` 是叠加的便利层。
+
+---
+
+## D37. Evaluator 注册策略 — Client 级 `addEvaluator()`，不随 `RuleSource` 携带 ⭐⭐
+
+**为什么重要**：自定义条件算子（如 `BLACKLIST_HIT`）是行为（代码），`RuleSource` 是数据（规则定义）。若把 evaluator 混入 `RuleSource`，会导致一个 `RuleSource` 实例携带可执行代码，破坏数据/行为分离，也使热重载复杂化（数据可以随时重新加载，行为不行）。
+
+**决定**：evaluator 在 `RuleEngineClient` 级注册，所有 `RuleSource` 共享同一套 evaluator map：
+
+```java
+RuleEngineClient.builder()
+    .serverUrl("...")
+    .tenantId("t1")
+    .addEvaluator("BLACKLIST_HIT", (node, ctx) -> {
+        List<?> list = (List<?>) node.params().get("list");
+        Object val = ctx.metrics().get(node.metricCode());
+        return val != null && list.contains(val.value());
+    })
+    .build();
+```
+
+**实现**：`Builder` 新增 `extraEvaluators: Map<String, ConditionEvaluator>`，构建 `InterpretedExecutor` 时用 `KernelEvaluators.defaults()` 作底，`putAll(extraEvaluators)` 叠加（用户自定义可覆盖同名内置算子）。
+
+**Spring 服务端已有路径**：`@ConditionType` Bean 扫描 + `KernelEvaluators.defaults()`，两套路径互不影响。
+
+**未来注解扫描**：`RuleEngineClient.scanEvaluators("com.example")` 扫描 `@ConditionType` Bean 注册，是 `addEvaluator()` 的批量版，底层逻辑相同。
+
+---
+
+## D38. 注解精简 — 对齐架构现状 ⭐⭐
+
+**背景**：三个注解（`@ActionType` / `@ConditionType` / `@MetricSourceType`）在 rule-kernel 骨架阶段建立，当时框架是 Spring Bean 扫描模式。D20 之后架构迭代，`KernelEvaluators.defaults()` 手工 Map 取代了注解扫描，部分注解的运行时语义已经悬空。
+
+**各注解现状与决定**：
+
+| 注解 | 当前实际使用 | 决定 |
+|---|---|---|
+| `@ActionType` | `EvalAutoConfiguration` 运行时读 `.value()` 映射 handler | **保留，现状合理** |
+| `@ConditionType` | 仅测试中使用，无任何运行时扫描逻辑 | **精简**：去掉 `requiresMetric` 字段（无消费方）；定位调整为"前端 schema 元数据 + SDK `scanEvaluators()` 的注册标记"，不再暗示 Spring Bean 扫描 |
+| `@MetricSourceType` | 仅测试中使用，无任何运行时扫描逻辑 | **精简**：去掉 `defaultTimeoutMs` / `defaultCacheTtlSeconds`（运维参数属于 07-operability，不该放注解里）；只保留 `value()` + `paramsSchema()`；或按需整体删除 |
+| `@RuleDef`（新增） | 未来 SDK 注解模式使用 | **预留接口** `InlineRuleSpec`，注解本身等 D35 注解模式实装时再建 |
+
+**`@ConditionType.requiresMetric` 删除原因**：字段含义模糊（是说"必须有 metricCode"还是"需要从 MetricSource 取数"？），且无任何运行时代码消费它。前端表单校验应由 `paramsSchema` 驱动，不需要额外字段。
+
+**迁移影响**：`@ConditionType` 字段删减是 breaking change，但目前无任何生产代码使用该字段（仅测试），影响面极小。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1095,5 +1263,6 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D31 | 前端技术栈 | A    | React 18 + react-querybuilder + Ant Design 5 + Vite + Zustand；前端工程放 `frontend/` 目录，与 `src/` 平级 |
 | D32 | ArchUnit 版本与 rule-kernel 编译目标 | B（临时） | ArchUnit 1.4.0 + rule-kernel maven.compiler.release=21；升级至 ArchUnit 1.5+ 后需删除 override |
 | D33 | Modulith verify() 不适用于多 JAR 共享库 | A | rule-kernel 是跨模块共享库（SPI+模型），Modulith 在多 JAR 结构下将其视为 Modulith 模块导致 exposed 检查误报；骨架阶段跳过 verify()，架构边界由 ArchUnit（KernelArchTest）保证；等 v2 业务实现时视 Modulith 版本再评估是否启用 verify() |
+| D34 | 嵌入式 SDK 本地模式（代码定义规则，零网络） | A | `RuleEngineClient.Builder.localSnapshot()` 直接写入本地索引，不启动 SnapshotPoller；`RuleVersionSnapshot` 补 Builder 辅助类；适用单测/演示/离线部署 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

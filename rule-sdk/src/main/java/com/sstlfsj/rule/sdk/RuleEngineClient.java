@@ -3,6 +3,7 @@ package com.sstlfsj.rule.sdk;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
@@ -18,6 +19,7 @@ import com.sstlfsj.rule.sdk.source.RuleSource;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,9 +38,12 @@ public class RuleEngineClient implements AutoCloseable {
     private RuleEngineClient(Builder b) {
         SceneRuleIndex index = new SceneRuleIndex();
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
+        // 以内置算子为底，用户自定义叠加（同名自定义覆盖内置）
+        Map<String, ConditionEvaluator> evaluators = new HashMap<>(KernelEvaluators.defaults());
+        evaluators.putAll(b.extraEvaluators);
         RuleVersionExecutor executor = b.executor != null
                 ? b.executor
-                : new InterpretedExecutor(KernelEvaluators.defaults());
+                : new InterpretedExecutor(evaluators);
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
                 Map.of("AST_BOOLEAN", executor));
@@ -96,6 +101,7 @@ public class RuleEngineClient implements AutoCloseable {
         private Map<String, PreGate> preGates;
         private final List<RuleVersionSnapshot> localSnapshots = new ArrayList<>();
         private final List<RuleSource> ruleSources = new ArrayList<>();
+        private final Map<String, ConditionEvaluator> extraEvaluators = new HashMap<>();
 
         /** @param v rule-api 服务地址（HTTP 模式必填，本地模式不填） */
         public Builder serverUrl(String v)      { this.serverUrl = v; return this; }
@@ -127,6 +133,15 @@ public class RuleEngineClient implements AutoCloseable {
          * @param v RuleSource 实现
          */
         public Builder ruleSource(RuleSource v) { ruleSources.add(v); return this; }
+        /**
+         * 注册自定义条件算子，叠加在内置算子之上（同名自定义覆盖内置）。
+         *
+         * @param conditionType 算子类型标识，与 ConditionNode.conditionType 对应
+         * @param evaluator     算子实现
+         */
+        public Builder addEvaluator(String conditionType, ConditionEvaluator evaluator) {
+            extraEvaluators.put(conditionType, evaluator); return this;
+        }
         /**
          * 从 classpath 加载 JSON 规则文件（文件模式快捷入口）。
          *
