@@ -2,9 +2,9 @@ spring:
   application:
     name: rule-engine
   datasource:
-    url: jdbc:mysql://localhost:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123456
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   modulith:
     events:
