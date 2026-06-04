@@ -30,6 +30,7 @@ public class EvalAutoConfiguration {
      * @return TracingInterpretedExecutor 实例
      */
     @Bean
+    @org.springframework.context.annotation.Primary
     public RuleVersionExecutor ruleVersionExecutor(
             @Autowired(required = false)
             Map<String, com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator> conditionEvaluators) {

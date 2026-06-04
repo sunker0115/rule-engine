@@ -13,6 +13,7 @@ import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Primary;
 
 import java.util.List;
 
@@ -81,6 +82,14 @@ class EvalAutoConfigurationTest {
                 mock(SceneActionBindingReadMapper.class),
                 mock(ActionExecutionMapper.class));
         assertNotNull(svc);
+    }
+
+    @Test
+    void ruleVersionExecutor_hasPrimaryAnnotation() throws Exception {
+        // @Primary 确保两个 RuleVersionExecutor Bean 共存时默认注入 TracingInterpretedExecutor
+        var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor", java.util.Map.class);
+        assertNotNull(method.getAnnotation(Primary.class),
+                "ruleVersionExecutor 必须标注 @Primary，否则与 ScorecardExecutor 并存时 Spring 无法消歧义");
     }
 
     @Test
