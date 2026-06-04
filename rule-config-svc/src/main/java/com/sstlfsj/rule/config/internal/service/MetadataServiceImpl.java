@@ -44,4 +44,13 @@ class MetadataServiceImpl implements MetadataService {
         // conditionType / actionType 来自注册的 SPI Bean，v1 返回空列表
         return new MetadataResponse(List.of(), List.of(), metricMetas);
     }
+
+    @Override
+    public ProvidedMetricsResponse getProvidedMetrics(String tenantId, String sceneCode) {
+        MetadataResponse all = getSceneMetadata(tenantId, sceneCode);
+        List<MetricMeta> provided = all.availableMetrics().stream()
+                .filter(MetricMeta::allowProvided)
+                .toList();
+        return new ProvidedMetricsResponse(provided);
+    }
 }

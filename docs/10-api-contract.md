@@ -228,6 +228,8 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 5.2 D30 providedMetrics 发现接口
 
+> **已实装（v2 第二阶段）**
+
 ```
 GET /api/v1/scenes/{sceneCode}/provided-metrics?tenantId=demo-tenant
 ```
