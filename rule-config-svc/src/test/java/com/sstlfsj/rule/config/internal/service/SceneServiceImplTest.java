@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
@@ -31,8 +32,9 @@ class SceneServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // objectMapper 是 Spring 注入 bean，测试中直接传入默认实例
         sceneService = new SceneServiceImpl(sceneMapper, auditLogMapper,
-                schemaHistoryMapper, eventPublisher);
+                schemaHistoryMapper, eventPublisher, new ObjectMapper());
     }
 
     @Test
@@ -53,7 +55,12 @@ class SceneServiceImplTest {
 
     @Test
     void createScene_withPayloadSchema_持久化所有D13字段() {
-        when(sceneMapper.insert((SceneDef) any())).thenReturn(1);
+        // doAnswer 回填 id，模拟 MyBatis-Plus insert 后对实体赋值的行为
+        doAnswer(invocation -> {
+            SceneDef arg = invocation.getArgument(0);
+            arg.setId(100L);
+            return 1;
+        }).when(sceneMapper).insert((SceneDef) any());
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         when(schemaHistoryMapper.insert((ScenePayloadSchemaHistory) any())).thenReturn(1);
 
@@ -71,11 +78,12 @@ class SceneServiceImplTest {
         assertThat(saved.getDefaultParams()).contains("Asia/Shanghai");
         assertThat(saved.getPayloadSchemaVersion()).isEqualTo(1);
 
-        // 有 payloadSchema 时应写入初始历史快照
+        // 有 payloadSchema 时应写入初始历史快照，且 sceneId 与插入后回填的 id 一致
         ArgumentCaptor<ScenePayloadSchemaHistory> histCaptor =
                 ArgumentCaptor.forClass(ScenePayloadSchemaHistory.class);
         verify(schemaHistoryMapper).insert(histCaptor.capture());
         assertThat(histCaptor.getValue().getVersion()).isEqualTo(1);
+        assertThat(histCaptor.getValue().getSceneId()).isEqualTo(100L);
     }
 
     @Test

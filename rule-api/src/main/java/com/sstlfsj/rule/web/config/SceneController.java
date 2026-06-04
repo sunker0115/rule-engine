@@ -16,10 +16,12 @@ import java.util.Map;
 public class SceneController {
 
     private final SceneService sceneService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    /** Spring Boot 自动配置的 ObjectMapper bean，通过构造器注入。 */
+    private final ObjectMapper objectMapper;
 
-    public SceneController(SceneService sceneService) {
+    public SceneController(SceneService sceneService, ObjectMapper objectMapper) {
         this.sceneService = sceneService;
+        this.objectMapper = objectMapper;
     }
 
     /**

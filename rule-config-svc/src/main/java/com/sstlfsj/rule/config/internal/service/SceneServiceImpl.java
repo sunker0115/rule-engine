@@ -31,8 +31,8 @@ class SceneServiceImpl implements SceneService {
     private final AuditLogMapper auditLogMapper;
     private final ScenePayloadSchemaHistoryMapper schemaHistoryMapper;
     private final ApplicationEventPublisher eventPublisher;
-    // objectMapper 不加 final，避免 Lombok @RequiredArgsConstructor 将其纳入构造器参数
-    private ObjectMapper objectMapper = new ObjectMapper();
+    /** Spring Boot 自动配置的 ObjectMapper bean，由 @RequiredArgsConstructor 注入。 */
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional

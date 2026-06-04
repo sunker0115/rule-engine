@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.web.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,8 +26,9 @@ class SceneControllerTest {
         sceneService = mock(SceneService.class);
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
+        // ObjectMapper 注入点同生产：测试用默认实例，行为与 Spring Boot 自动配置 bean 一致
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new SceneController(sceneService))
+                .standaloneSetup(new SceneController(sceneService, new ObjectMapper()))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
