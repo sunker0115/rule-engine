@@ -90,4 +90,29 @@ class MetricDependencyCollectorTest {
         ), 0.5);
         assertThat(MetricDependencyCollector.collect(ast)).isEmpty();
     }
+
+    @Test
+    void xorNode_collectsMetricCodesFromBothChildren() {
+        // XorNode 两侧子节点的 metricCode 均应被收集
+        AstNode ast = new XorNode(List.of(
+                new ConditionNode("metric.threshold", "user.age", null, Map.of(), 0.0),
+                new ConditionNode("metric.threshold", "order.amount", null, Map.of(), 0.0)
+        ), null);
+        assertThat(MetricDependencyCollector.collect(ast))
+                .containsExactly("user.age", "order.amount");
+    }
+
+    @Test
+    void xorNode_nestedInAnd_collectsAll() {
+        // AND(XOR(user.age, order.amount), account.balance)
+        AstNode ast = new AndNode(List.of(
+                new XorNode(List.of(
+                        new ConditionNode("c", "user.age", null, Map.of(), 0.0),
+                        new ConditionNode("c", "order.amount", null, Map.of(), 0.0)
+                ), null),
+                new ConditionNode("c", "account.balance", null, Map.of(), 0.0)
+        ), null, null);
+        assertThat(MetricDependencyCollector.collect(ast))
+                .containsExactlyInAnyOrder("user.age", "order.amount", "account.balance");
+    }
 }

@@ -26,6 +26,8 @@ public class SceneDef {
     private String payloadSchema;
     /** JSON 对象字符串，存储 Scene 默认参数。 */
     private String defaultParams;
+    /** payloadSchema 当前版本号，初始为 1，每次更新自增（D13 演进）。 */
+    private Integer payloadSchemaVersion;
     private String status;
     private String createdBy;
     private java.time.LocalDateTime createdAt;

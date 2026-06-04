@@ -28,6 +28,8 @@ class MetricDependencyCollector {
             case ScorecardRootNode sc -> sc.conditions().forEach(c -> {
                 if (c.metricCode() != null) acc.add(c.metricCode());
             });
+            // XorNode：遍历全部子节点（全量，不短路）
+            case XorNode xor -> xor.children().forEach(c -> walk(c, acc));
         }
     }
 }
