@@ -1,0 +1,18 @@
+# 本地开发 profile：不启动 grafana/otel-lgtm 时使用。
+#
+# 作用：屏蔽 OTLP exporter 连不上 localhost:4318 时产生的 "Failed to export ..." 噪音日志
+#       （metrics / traces / logs 三路的导出失败都从 io.opentelemetry.exporter 包打日志，一行全盖）。
+#
+# 不影响什么：
+#   - 不禁用 tracing 本身——主配置的 management.tracing.sampling 仍生效，
+#     traceId / spanId 照常注入 MDC，控制台日志里仍带 traceId，排查不受影响。
+#   - 业务功能、接口、评估链路全部正常。
+#   - exporter 后台仍会徒劳重试（localhost 立即 connection refused，本地开销可忽略），只是不再打日志。
+#
+# 用法：启动加 --spring.profiles.active=local；IDEA 在 Run Configuration 的 Active profiles 填 local。
+#
+# 注：未用 enabled:false 关导出——Spring Boot 4.0.x 已知该类开关在部分版本不可靠，
+#     压日志级别才是稳定消噪音的办法。需要真正看 trace/日志/指标时，起 otel-lgtm 容器即可。
+logging:
+  level:
+    io.opentelemetry.exporter: "OFF"
