@@ -75,7 +75,6 @@ class PublishServiceTest {
         draftVersion.setConditionAst("{\"type\":\"ConditionNode\"}");
         draftVersion.setDecisionBindings("[]");
         draftVersion.setPreGates("[]");
-        draftVersion.setRollout("{}");
         draftVersion.setStatus("DRAFT");
     }
 

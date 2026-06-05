@@ -170,8 +170,6 @@ public class PublishService {
                 ? draftVersion.getDecisionBindings() : "[]");
         newRv.setPreGates(draftVersion.getPreGates() != null
                 ? draftVersion.getPreGates() : "[]");
-        newRv.setRollout(draftVersion.getRollout() != null
-                ? draftVersion.getRollout() : "{}");
         newRv.setKind(rule.getKind() != null ? rule.getKind() : "AST_BOOLEAN");
         newRv.setTriggerEventTypes(scene.getEventTypes());
         newRv.setMetricDependencies(toJson(metricDeps));
@@ -296,7 +294,6 @@ public class PublishService {
         rv.setConditionAst(isBlank(conditionAstJson) ? "{}" : conditionAstJson);
         rv.setDecisionBindings(isBlank(decisionBindingsJson) ? "[]" : decisionBindingsJson);
         rv.setPreGates(isBlank(preGatesJson) ? "[]" : preGatesJson);
-        rv.setRollout("{}");
         rv.setKind(effectiveKind);
         rv.setTriggerEventTypes(isBlank(triggerEventTypesJson) ? "[]" : triggerEventTypesJson);
         rv.setMetricDependencies("[]");

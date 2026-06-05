@@ -151,13 +151,12 @@ class EvalIntegrationTest {
         // 空 AndNode：children=[] 时 AND 求值结果为 true（空集合 AND 短路不发生），规则命中
         jdbc.execute("""
                 INSERT IGNORE INTO rule_version (id, rule_definition_id, version,
-                    condition_ast, decision_bindings, pre_gates, rollout,
+                    condition_ast, decision_bindings, pre_gates,
                     kind, trigger_event_types, metric_dependencies, status)
                 VALUES (1, 1, 1,
                     '{"type":"AndNode","children":[],"displayLabel":null,"weight":null}',
                     '[{"decisionCode":"REJECT","priority":100}]',
                     '[]',
-                    '{"strategy":"ALL"}',
                     'AST_BOOLEAN',
                     '["login"]',
                     '[]',
