@@ -262,20 +262,13 @@
 
 ### 2.22 基础设施层可观测性（OTLP + LGTM）
 
-- **v1 现状**：`rule-app` 依赖 `spring-boot-starter-actuator`，暴露 `/actuator/prometheus` 端点，由外部 Prometheus 主动 scrape 拉取 JVM + 业务 metrics；无分布式 trace（无 Zipkin / Jaeger），无结构化日志聚合。`rule-observability` 模块承载的是**业务层** trace（规则节点评估路径异步批写 MySQL `node_trace` 表，D21），与基础设施层可观测性正交，不受本节影响。
-- **触发条件**：
-  - 多实例部署时 HTTP 请求链路跨实例无法追踪（"这次 `/evaluate` 慢在哪个 span"无从定位）；
-  - 结构化日志分散在各实例，排障需 SSH 进机器翻日志；
-  - 希望统一 metrics / traces / logs 三信号到同一 Grafana 看板，避免维护多套 scrape 配置。
-- **演进方向（v1.5）**：
-  - **依赖**：`rule-app/pom.xml` 加 `spring-boot-starter-opentelemetry`（不加在 `rule-observability`——业务 trace 层职责不变，opentelemetry 是基础设施自动装配，位置在启动入口模块）；
-  - **metrics 推送**：`application.yml` 替换 `management.metrics.export.prometheus.enabled=true` 为 `management.otlp.metrics.export.url=http://otel-collector:4318/v1/metrics`，metrics 主动推送，无需外部 scrape；
-  - **分布式 trace**：`spring-boot-starter-opentelemetry` 自动为每次 HTTP 请求生成 traceId / spanId，写入 Tempo；与现有 node_trace（业务树重建，`/trace/tree` 端点）互补，分别回答"请求在哪慢"和"规则树哪个节点命中"；
-  - **日志聚合**：`logback-spring.xml` 加 OTLP appender，日志推 Loki，traceId 字段自动注入，日志 ↔ 链路可互相跳转；
-  - **本地开发**：`docker-compose.yml` 加 `grafana/otel-lgtm`（单镜像集成 Grafana + Loki + Tempo + Prometheus-compatible Mimir），无需部署四个独立容器；
-  - **`rule-observability` 不改动**：`TraceWriterDbImpl`（节点 trace 批写 MySQL）、`RuleMetrics`（Micrometer 业务指标）均保持不变；业务层 `07-operability.md §六` 指标清单不受影响，两层指标并行存在。
-- **迁移成本**：低（`rule-app` pom 加一个依赖 + `application.yml` 替换两行配置 + `logback-spring.xml` 加 appender + `docker-compose.yml` 加一个 service）。
-- **参考来源**：Spring Boot 4.0 OTLP 集成分析，`spring-boot-starter-opentelemetry` + `grafana/otel-lgtm` 方案。
+- **已实现**（D22，`rule-app` v1）。完整使用说明见 [`07-operability.md §十一`](./07-operability.md#十一基础设施可观测性opentelemetry--lgtm)。
+- **实现要点**：
+  - `rule-app/pom.xml` 加 `spring-boot-starter-opentelemetry` + `opentelemetry-logback-appender-1.0`；
+  - `application.yml` 通过 `management.opentelemetry.{metrics,tracing,logging}.export.otlp.endpoint` 配置三信号推送，并排除 `OtlpMetricsExportAutoConfiguration`（避免 protobuf 版本冲突）；
+  - `logback-spring.xml` 加 `OpenTelemetryAppender`，日志推 Loki，traceId 自动注入；
+  - 本地 `docker-compose.yml` 加 `grafana/otel-lgtm:0.11.5`（Grafana + Loki + Tempo + Mimir 单镜像）；
+  - `rule-observability`（业务 trace 层，`TraceWriterDbImpl` / `RuleMetrics`）不改动，两层可观测性并行。
 
 ### 2.20 规则草稿创建 API（来源 10-api-contract.md §4.1）
 

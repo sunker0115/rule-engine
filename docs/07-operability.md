@@ -201,3 +201,237 @@ pass = bucket < rollout.percentage
 - 新增运维参数必须同步登记 §九 默认值表。
 - 新增告警必须在 §六 列指标 + §七 列阈值。
 - 可用性策略变更（如 v2 异步化路径开通）回写 §八 + 同步指向 08-evolution。
+
+---
+
+## 十一、基础设施可观测性（OpenTelemetry + LGTM）
+
+> 本节记录 rule-engine 基础设施层三信号（metrics / traces / logs）的接入方式。
+> 与 §六"业务 Prometheus 指标"正交：§六 由 `rule-observability` 的 `RuleMetrics` 通过 Micrometer 注册、Actuator 暴露；本节由 `spring-boot-starter-opentelemetry` 自动装配，通过 OTLP HTTP 主动推送。
+
+### 11.1 架构分层
+
+```
+rule-app 进程
+  ├── 业务层可观测（§六）
+  │     RuleMetrics（Micrometer） → /actuator/prometheus → 外部 Prometheus scrape
+  │
+  └── 基础设施层可观测（本节）
+        spring-boot-starter-opentelemetry（自动装配）
+          ├── metrics  → OTLP HTTP → otel-collector / otel-lgtm → Mimir/Prometheus
+          ├── traces   → OTLP HTTP → otel-collector / otel-lgtm → Tempo
+          └── logs     → OTLP HTTP（logback-spring.xml OTLP appender）→ Loki
+```
+
+**分工边界**：
+- `node_trace`（评估树路径，`TraceWriterDbImpl` 异步批写 MySQL）是**业务 trace**，用于排障规则树哪个节点命中，走 `/trace/tree` API 查询。
+- OTel trace 是**基础设施 trace**，用于排障 HTTP 请求在哪一层慢、跨服务链路，走 Tempo / Grafana 查询。两者互补，不替代。
+
+### 11.2 依赖清单
+
+`rule-app/pom.xml` 需包含：
+
+```xml
+<!-- 基础设施可观测性：metrics + traces OTLP 推送，版本由 Spring Boot BOM 管理 -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-opentelemetry</artifactId>
+</dependency>
+
+<!-- 日志 OTLP appender（需与 logback-spring.xml 配合） -->
+<dependency>
+    <groupId>io.opentelemetry.instrumentation</groupId>
+    <artifactId>opentelemetry-logback-appender-1.0</artifactId>
+</dependency>
+```
+
+> `spring-boot-starter-opentelemetry` 引入 `micrometer-tracing-bridge-otel` + OTel SDK，会与
+> Micrometer 自带的 `OtlpMetricsExportAutoConfiguration` 产生 protobuf 版本冲突（4.26.1 vs
+> 4.32.0），必须排除：
+>
+> ```yaml
+> spring:
+>   autoconfigure:
+>     exclude: org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsExportAutoConfiguration
+> ```
+>
+> metrics 推送改由 `management.opentelemetry.metrics.export.otlp.*` 配置接管，与 OTel SDK 共用同一 protobuf 版本。
+
+### 11.3 application.yml 配置
+
+```yaml
+spring:
+  autoconfigure:
+    # 排除 Micrometer OTLP registry，避免 protobuf 版本冲突 NPE
+    exclude: org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsExportAutoConfiguration
+
+management:
+  opentelemetry:
+    metrics:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+    logging:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:http://localhost:4318/v1/logs}
+  tracing:
+    sampling:
+      probability: 1.0   # 开发环境全采；生产建议 0.1
+```
+
+三个 endpoint 均通过环境变量注入，本地开发默认指向 `localhost:4318`（`docker-compose.yml` 中 `otel-lgtm` 的 OTLP HTTP 端口）。
+
+### 11.4 logback-spring.xml（日志 OTLP 推送）
+
+```xml
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- 控制台输出，带 traceId/spanId（由 OTel SDK 自动注入到 MDC） -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} traceId=%X{traceId} spanId=%X{spanId} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- OTLP 日志推送到 Loki（通过 OTLP HTTP，endpoint 由 OTel SDK 统一配置） -->
+    <appender name="OTLP" class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
+        <captureExperimentalAttributes>true</captureExperimentalAttributes>
+        <captureKeyValuePairAttributes>true</captureKeyValuePairAttributes>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="OTLP"/>
+    </root>
+</configuration>
+```
+
+`OpenTelemetryAppender` 不需要独立配置 endpoint，直接复用 OTel SDK 全局实例（由 `spring-boot-starter-opentelemetry` 初始化），endpoint 统一读 `management.opentelemetry.logging.export.otlp.endpoint`。
+
+### 11.5 本地开发环境（docker-compose）
+
+使用 `grafana/otel-lgtm` 单镜像，集成 Grafana + Loki + Tempo + Mimir，无需部署四个独立容器：
+
+```yaml
+otel-lgtm:
+  image: grafana/otel-lgtm:0.11.5
+  ports:
+    - "3000:3000"   # Grafana UI
+    - "4317:4317"   # gRPC OTLP
+    - "4318:4318"   # HTTP OTLP
+  environment:
+    GF_AUTH_ANONYMOUS_ENABLED: "true"
+    GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+  healthcheck:
+    test: ["CMD", "curl", "-f", "-s", "http://localhost:3000/api/health"]
+    interval: 5s
+    timeout: 3s
+    retries: 20
+    start_period: 30s
+```
+
+`rule-app` 容器依赖 `service_healthy` 而非 `service_started`，确保 OTLP 端口就绪后再启动应用。
+
+本地 Grafana 地址：`http://localhost:3000`（匿名 Admin，无需登录）
+
+| 数据源 | 用途 | 在 Grafana 里查询 |
+|--------|------|-------------------|
+| Mimir（Prometheus 兼容） | JVM + HTTP 基础指标 | Explore → Prometheus |
+| Tempo | 分布式 trace（span 树） | Explore → Tempo，或从日志/指标 TraceID 跳转 |
+| Loki | 结构化日志 | Explore → Loki，`{service_name="rule-engine"}` |
+
+### 11.6 三信号验证
+
+启动后依次验证：
+
+**1. metrics 是否推送成功**
+
+```bash
+# Actuator 业务指标（Micrometer → Prometheus scrape）
+curl http://localhost:8080/actuator/prometheus | grep rule_engine
+
+# OTel metrics 推送到 Mimir，在 Grafana Explore → Prometheus 查询：
+# jvm_memory_used_bytes{service_name="rule-engine"}
+```
+
+**2. trace 是否写入 Tempo**
+
+触发任意 HTTP 请求，然后在 Grafana Explore → Tempo 中搜索 `service.name = rule-engine`；
+或在 Loki 日志里找 `traceId=xxx` 后点击 "Tempo" 跳转链路。
+
+```bash
+curl -X POST http://localhost:8080/api/v1/rule/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"tenantId":"1","sceneCode":"smoke.scene","eventType":"order.placed",
+       "subjectId":"u1","eventId":"evt-1","occurredAt":"2026-06-05T00:00:00Z",
+       "payload":{},"providedMetrics":{"order.amount":200}}'
+```
+
+**3. 日志是否推送 Loki**
+
+```
+Grafana Explore → Loki
+Label filter: service_name = rule-engine
+```
+
+能看到带 `traceId` 字段的结构化日志即为成功。
+
+### 11.7 生产部署差异
+
+本地用 `grafana/otel-lgtm` 单机集成镜像；生产建议拆分独立组件：
+
+| 本地（otel-lgtm） | 生产建议 |
+|-------------------|----------|
+| Mimir（内嵌） | Mimir 集群 或 VictoriaMetrics |
+| Tempo（内嵌） | Tempo 集群 |
+| Loki（内嵌） | Loki 集群 |
+| 无独立 Collector | OpenTelemetry Collector（处理 batching / retry / transform） |
+
+生产环境推荐在 rule-app 和后端存储之间加 **OTel Collector**，好处：
+- 应用侧推送失败不阻塞业务（Collector 有缓冲）
+- 可在 Collector 做指标/日志/trace 的过滤、采样、enrichment
+- 后端存储地址变更只改 Collector 配置，不需要重启 rule-app
+
+`rule-app` 侧 endpoint 改指 Collector：
+
+```yaml
+management:
+  opentelemetry:
+    metrics:
+      export:
+        otlp:
+          endpoint: http://otel-collector:4318/v1/metrics
+    tracing:
+      export:
+        otlp:
+          endpoint: http://otel-collector:4318/v1/traces
+    logging:
+      export:
+        otlp:
+          endpoint: http://otel-collector:4318/v1/logs
+```
+
+生产 tracing 采样率建议调低（全采在高 QPS 下 Tempo 压力大）：
+
+```yaml
+management:
+  tracing:
+    sampling:
+      probability: 0.05   # 5% 采样，约合 1000 QPS → 50 trace/s
+```
+
+### 11.8 常见问题
+
+| 现象 | 原因 | 排查 |
+|------|------|------|
+| 启动报 `NullPointerException` 在 `OtlpMeterRegistry` | protobuf 版本冲突（4.26.1 vs 4.32.0） | 确认 `spring.autoconfigure.exclude` 已加 `OtlpMetricsExportAutoConfiguration` |
+| Loki 收不到日志 | `logback-spring.xml` 未配置 `OpenTelemetryAppender`，或 OTel SDK 尚未初始化时 Appender 已加载 | 确认 `logback-spring.xml` 存在（不是 `logback.xml`），Spring Boot 的 `logback-spring.xml` 在 Spring Context 初始化后才生效，可保证 OTel SDK 先就绪 |
+| Tempo 无 trace | endpoint 指向的容器未就绪（otel-lgtm 启动需约 30s） | 检查 `docker compose ps` 中 otel-lgtm 是否 healthy；`rule-app` 的 `depends_on` 需设 `condition: service_healthy` |
+| Grafana 查不到 metrics | Mimir 接收延迟 ≈ 15s | 请求后等 15–30s 再查；或看 Collector 日志确认 export 成功 |
+| traceId 在日志里是 `0000000000000000` | 当前请求不在 OTel span 内（如定时任务、应用启动阶段） | 正常现象，HTTP 请求均会有真实 traceId |
