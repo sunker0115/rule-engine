@@ -125,4 +125,33 @@ class AstSerializerTest {
         assertThat(root.children().get(0)).isInstanceOf(NotNode.class);
         assertThat(root.children().get(1)).isInstanceOf(OrNode.class);
     }
+
+    @Test
+    void scorecardRootNode_roundTrip() {
+        AstNode ast = new ScorecardRootNode(
+                List.of(new ConditionNode("GT", "score", null, Map.of("threshold", 60), 0.4)),
+                0.6);
+
+        String json = serializer.toJson(ast);
+        AstNode restored = serializer.fromJson(json);
+
+        assertThat(restored).isInstanceOf(ScorecardRootNode.class);
+        ScorecardRootNode r = (ScorecardRootNode) restored;
+        assertThat(r.conditions()).hasSize(1);
+        assertThat(r.threshold()).isEqualTo(0.6);
+    }
+
+    @Test
+    void xorNode_roundTrip() {
+        AstNode ast = new XorNode(
+                List.of(new ConditionNode("EQ", "flag", null, Map.of("value", "A"), 0.0),
+                        new ConditionNode("EQ", "flag", null, Map.of("value", "B"), 0.0)),
+                "互斥条件");
+
+        String json = serializer.toJson(ast);
+        AstNode restored = serializer.fromJson(json);
+
+        assertThat(restored).isInstanceOf(XorNode.class);
+        assertThat(((XorNode) restored).children()).hasSize(2);
+    }
 }
