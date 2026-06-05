@@ -1375,6 +1375,20 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 ---
 
+## D43. 灰度配置收口 pre_gates ROLLOUT，废弃 `rollout` 列 ⭐⭐
+
+**背景**：D6 初版把灰度设计为 `rule_version.rollout` 独立列，富模型 `{type: PERCENTAGE/USER_TAG/HYBRID, percentage, tagConditions}`（按百分比 + 按用户标签命中）。但实现从未消费该列——灰度实际由 `pre_gates` 列 `gateType=ROLLOUT` 项的 params 承载，且只实装了 percentage 分桶；`rollout` 列 NOT NULL 但只写 `'{}'` 不读，USER_TAG/HYBRID/tagConditions 从未落地。文档 7 处仍按一等字段描述 rollout，与实现长期漂移（上文 §D19 v1 落地范围 step 2 的"含 rollout 冻结"为彼时记录，不追溯改）。
+
+**决策**：以实现为准收口。
+- 灰度统一由 `pre_gates` 的 ROLLOUT pre-gate 承载，params = `percentage` / `bucketStart` / `bucketEnd` / `experimentId`；
+- 删除只写不读的 `rule_version.rollout` 列（Flyway `V1_4__drop_rollout.sql`）；
+- `experimentId` 共享分桶种子 + 桶区间实现 A/B 一致分桶与互斥（详见 08-evolution §2.16）；发布期校验 ROLLOUT params（percentage∈[0,100]、桶区间成对且 `0<=start<end<=100`、experimentId 非空白）；
+- **按用户标签命中（USER_TAG / HYBRID / tagConditions）留演进**：将来作为独立 pre-gate 类型落地，不复活 `rollout` 列。
+
+**已实装**（D43）：`RolloutPreGate` 桶区间 + experimentId 种子；`PublishService.validatePreGateParams` 发布期校验；`V1_4__drop_rollout.sql` 删列 + 全部代码/文档引用对齐（01-concepts §3.4、02-runtime、05-storage、07-operability、08-evolution、README）。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1417,5 +1431,6 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D40 | SDK 注解模式（`@RuleDef`） | A | `InlineRuleSpec` 接口 + `@RuleDef/@Decision` 注解 + `AnnotationRuleSource`；Spring Starter 自动收集 Bean；`ruleVersionId` 调用方显式指定保证幂等 |
 | D41 | `executionStrategy` 扩展 | A | 新增 `ALL_HITS`（全部命中）/ `FIRST_HIT`（短路）；`EvalResult.hitDecisions()` 直接复用；Flyway 无 DDL 改动 |
 | D42 | `DECISION_TREE` / `DECISION_TABLE` evaluator | A | 新增 `IfNode`/`DecisionLeafNode` AST 节点；独立 Executor SPI 实现；`EvalResult` 补 `category`/`decision` 字段；`EXPRESSION_SCRIPT` 留 v1.5 |
+| D43 | 灰度收口 pre_gates ROLLOUT，废弃 `rollout` 列 | A | 灰度由 ROLLOUT pre-gate 承载（percentage/bucketStart/bucketEnd/experimentId）；`V1_4` 删 `rollout` 列；桶区间+experimentId 实现一致分桶/互斥 + 发布期校验；USER_TAG/HYBRID 标签命中留演进 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

@@ -30,7 +30,7 @@
 
 **设计原则**：D12 引入 `Rule.kind` 是为评分卡 / 决策树 / 决策表 / 脚本类规则演进**预留 schema 占位**，不是 v1 要实现的功能。
 
-**各 kind 共享 Rule 的公共属性**：trigger / preGates / decisionBindings / version / rollout / Scene 治理都不变，多态只在"判定主体"内部——（注：actions 已迁移到 Decision，不再是 Rule 的直接字段，D27）
+**各 kind 共享 Rule 的公共属性**：trigger / preGates（含 ROLLOUT 灰度）/ decisionBindings / version / Scene 治理都不变，多态只在"判定主体"内部——（注：actions 已迁移到 Decision，不再是 Rule 的直接字段，D27）
 
 > 下表"判定主体字段"列只指示**形态**与**承载方式**，具体字段命名留待 v2 设计时定稿，避免占名误导后续设计。
 
@@ -207,13 +207,19 @@
 
 - **v1 现状**：灰度 hash 种子为 `hash(subjectId, ruleVersionId) % 100`，两条规则各自独立计算桶号——A/B 实验场景下同一用户可能同时命中两条规则，也可能都不命中，无法保证互斥。
 - **触发条件**：业务方需要同一用户在同一实验组内仅命中互斥规则之一（典型：价格实验、权益实验）。
-- **演进方向（v1.5）**：
-  - `rollout` 新增可选字段 `experimentId: String`；
-  - 同一实验的规则共享同一 hash 种子：`hash(subjectId, experimentId ?? ruleVersionId) % 100`；
-  - `experimentId` 为空时行为与 v1 完全一致（向后兼容）；
-  - 不引入"实验"一等公民——`experimentId` 只是字符串标识，实验管理仍由上游 ABTest 平台负责；
-  - `rule_version.rollout` JSON 列内部新增 `experimentId` 可选键，无需 ALTER TABLE，向后兼容。
-- **迁移成本**：低（只改 hash 计算逻辑 + `rollout` JSON 解析，无 DDL 变更）。
+- **设计要点**：
+  - **共享种子**：同一实验的规则共享同一 hash 种子 `hash(subjectId, experimentId ?? ruleVersionId) % 100`——同一 subject 在同实验的多条规则上算出**同一个 bucket**。`experimentId` 为空时退回 `ruleVersionId` 独立分桶，行为与 v1 完全一致（向后兼容）。
+  - **两种命中模式**（共享种子是前提，命中判定决定语义）：
+    - **一致分桶**：多条规则用**相同**区间（如都 `[0,50)`，即 `percentage=50`）→ 同一批人在所有规则上同时命中/同时不命中（人群稳定共选）。
+    - **互斥**：多条规则用**不相交**区间（A `[0,50)`、B `[50,100)`）→ 每个 subject 恰好命中其一，实现真正的 A/B 互斥。
+  - 不引入"实验"一等公民——`experimentId` 只是字符串标识，实验管理仍由上游 ABTest 平台负责；运营自行保证互斥规则的区间不相交（v1.5 仅做单规则校验，不查兄弟规则）。
+  - 无 DDL 变更：`experimentId` / `percentage` / `bucketStart` / `bucketEnd` 均复用 ROLLOUT pre-gate 的 `params` 承载，`PreGateConfig.params` 为 `Map<String,Object>`，任意 key 透明穿透。
+- **已实装**：
+  - `RolloutPreGate.evaluate`（`rule-eval-svc`）：种子按 `gateParams.experimentId` 是否存在选择（`hash(subjectId:experimentId)` 或 `hash(subjectId:ruleVersionId)`），`& 0x7fffffff` 屏蔽符号位避免 `Integer.MIN_VALUE` 边界。命中判定：配 `bucketStart`/`bucketEnd` 时按 `bucketStart <= bucket < bucketEnd`（区间模式，优先）；否则按 `bucket < percentage`（百分比模式，等价于区间 `[0, percentage)`）；两者皆无则 fail-open。
+  - 配置位置在 `rule_version.pre_gates` 列 ROLLOUT 项的 `params`，`pre_gates` JSON → `deserializePreGates` → 快照 `PreGateConfig.params` → `EvalEngine.applyPreGates` 透传至 `RolloutPreGate`，全程零 DDL。
+  - 发布期校验（`PublishService.validatePreGateParams`，仅单规则）：`percentage∈[0,100]`、桶区间 `0<=bucketStart<bucketEnd<=100` 且成对出现、`experimentId` 非空白；越界抛 `IllegalArgumentException`（映射 `INVALID_ARGUMENT`）。
+  - `RolloutPreGateTest` 覆盖区间互斥（同实验不相交区间 → 每 subject `a^b`）/ 一致分桶 / 百分比向后兼容；`PublishServiceTest` + `RolloutParamsTest` 覆盖发布期校验。
+- **迁移成本**：低（已完成，仅 `RolloutPreGate` hash/命中逻辑 + 发布期校验，无 DDL）。
 
 ### 2.17 ActionHandler dryRun 全量实装（D7 v1.5，已实装）
 

@@ -58,7 +58,7 @@ Decision           actionType               │
   │                │   1:N │ current_version 指向                │
   │                │       ▼                                     │
   └──────────────► │  RuleVersion (不可变发布快照, D6/D19)       │
-                   │  持有: AST + preGates + rollout              │
+                   │  持有: AST + preGates（含 ROLLOUT 灰度）    │
                    │       + decision_bindings                    │
                    └────────────────────────────────────────────┘
                             │
@@ -221,18 +221,17 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `actions` | **已迁移到 Decision**（D27）：Rule 不再直接持 actions；命中后要执行的动作由 Rule 绑定的 Decision.actions 决定 |
 | `status` | 状态机：`DRAFT` → `PUBLISHING`（瞬时）→ `PUBLISHED` / `PUBLISH_FAILED`；`PUBLISHED ↔ DISABLED` 独立分支；`PUBLISH_FAILED → DRAFT` 需 UI 显式确认（D19） |
 | `current_version` | 指向当前生效 `rule_version` 行的**主键 id**（`BIGINT`，即 `rule_version.id`，而非业务版本序号 `rule_version.version`）。`PUBLISHED` / `DISABLED` 状态下有值；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本。`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
-| `rollout` | 灰度配置（命中算法 + 比例 + 标签） |
 | `published_by / published_at` | 发布审计字段（D14，仅 PUBLISHED 状态有值；通用 `created_by` / `updated_by` 见 §三 顶部横切说明） |
 
-**`rollout` 字段结构**（D6 灰度配置）：
+**灰度（ROLLOUT pre-gate）**（D6；实装见 [`08-evolution.md §2.16`](./08-evolution.md)）：灰度不是独立字段，而是 `preGates` 列表里 `gateType=ROLLOUT` 的一项，params 承载灰度配置（无独立 `rollout` 列，D43）：
 
-| 字段 | 类型 | 说明 |
+| params 字段 | 类型 | 说明 |
 |------|------|------|
-| `type` | Enum | `PERCENTAGE`（按百分比放量）/ `USER_TAG`（按用户标签命中）/ `HYBRID`（百分比 + 标签同时满足） |
-| `percentage` | Int (0-100) | `PERCENTAGE` / `HYBRID` 类型下生效；`type=USER_TAG` 时为 null |
-| `tagConditions` | List | `USER_TAG` / `HYBRID` 类型下生效；标签命中条件列表（具体节点 schema 与 `ConditionNode` 同源，由 [`03-rule-expression.md`](./03-rule-expression.md) 定义） |
+| `percentage` | Int (0-100) | 百分比放量，命中条件 `bucket < percentage`，等价于桶区间 `[0, percentage)` |
+| `bucketStart` / `bucketEnd` | Int (0-100) | 桶区间（成对），命中条件 `bucketStart <= bucket < bucketEnd`；用于 A/B 互斥 |
+| `experimentId` | String? | 实验标识；同 `experimentId` 的规则共享分桶种子（一致分桶 / 互斥）；缺省种子退回 `ruleVersionId` |
 
-桶号算法固定为 `hash(subjectId, ruleVersionId) % 100`（D6 派生），**不在 `rollout` 内开放自定义 hash 种子或灰度计算降级策略**——稳定哈希是 D6 灰度桶稳定性的承诺；版本切换触发桶漂移是 D6 固有语义，不在 Rollout 配置层兜底。**空对象（`{}`）或 null 表示无灰度限制，全量放行。**
+桶号 `bucket = hash(subjectId, experimentId ?? ruleVersionId) % 100`（D6 派生）。`percentage` 与桶区间二选一（桶区间优先），都不配时该门全量放行。**按用户标签命中（`USER_TAG` / `HYBRID` / `tagConditions`）v1 未实装，留演进**（将来作为独立 pre-gate 类型落地，不复活 `rollout` 列）。稳定哈希是 D6 灰度桶稳定性的承诺，版本切换触发桶漂移是固有语义，不在配置层兜底。
 
 **EvalResult 输出契约（多态，v1 仅填 `satisfied`）**：
 
@@ -558,8 +557,8 @@ interface Scheduler {
 - **仅 PUSH / HYBRID Scene 可绑定 Job**：PULL Scene 是同步业务调用语义，定时触发没意义；发布拒绝 + UI 屏蔽。
 - **幂等 = Redis trySet + DB uk 双兜底**：`eventId = hash(jobRunId + subjectId)` 落 `evaluation_session` 的 eventId 列，`evaluation_session(tenant_id, event_id)` 维持 DB unique key 作为"下半层"兜底（Redis trySet 是上半层快速路径，DB uk 是持久化最终校验，D11 / D21 均依赖此双层结构）；重跑同一 jobRun 不会重复评估。具体 DDL 详见 [`05-storage.md`](./05-storage.md)。
 - **rateLimit 是注入端控制**：调度器按 `rateLimit` 缓冲注入，下游 Matcher / Action 不需要再做令牌桶。
-- **Job 与规则灰度独立**：Job 负责"对谁发事件"，规则的 `rollout` 灰度仍按命中算法决定"对哪些主体最终命中"——Job 不要做灰度抽样，二级灰度逻辑只会让排障复杂。
-- **灰度桶计算时机**（D6 + D11 派生）：所有 RuleEvent（含 Job 合成）的灰度桶在**引擎 Pre-Gate 阶段**按 `hash(subjectId, ruleVersionId)` 算（D6）；Job 端只负责合成 RuleEvent 注入，**不**在调度器端预算桶 / 预筛主体——预算桶会让 Job 与具体 RuleVersion 形成隐式耦合，违反"Job 不要做灰度抽样"约束。
+- **Job 与规则灰度独立**：Job 负责"对谁发事件"，规则的 ROLLOUT 灰度仍按命中算法决定"对哪些主体最终命中"——Job 不要做灰度抽样，二级灰度逻辑只会让排障复杂。
+- **灰度桶计算时机**（D6 + D11 派生）：所有 RuleEvent（含 Job 合成）的灰度桶在**引擎 Pre-Gate 阶段**按 `hash(subjectId, experimentId ?? ruleVersionId)` 算（D6）；Job 端只负责合成 RuleEvent 注入，**不**在调度器端预算桶 / 预筛主体——预算桶会让 Job 与具体 RuleVersion 形成隐式耦合，违反"Job 不要做灰度抽样"约束。
 
 ### 3.11 AuditLog（操作审计，不是一等公民）
 
@@ -613,9 +612,8 @@ interface Scheduler {
 | `rule_definition_id` | 归属规则（FK → `rule_definition.id`）；按 Scene 查所有候选版本通过 JOIN rule_definition 实现，不冗余 scene_id |
 | `trigger_event_types` | 冻结：发布瞬间的 eventType 数组 |
 | `condition_ast` | 冻结：完整 AST JSON（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
-| `pre_gates` | 冻结：preGates 列表（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
+| `pre_gates` | 冻结：preGates 列表（含 ROLLOUT 灰度配置；无独立 `rollout` 列，D43）（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
 | `decision_bindings` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `compensateActionType` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
-| `rollout` | 冻结：灰度配置（含 type / percentage / tagConditions） |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |
 | `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。发布期由 AST 静态分析得出；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
 | `compiled_predicate_ref?` | 可选字符串，编译产物引用键（D20 §5）。v1 留空；v1.5 启用，由 `CompiledExecutor` + `ExecutorRegistry` 按版本 id 检索编译产物 |
@@ -626,7 +624,7 @@ interface Scheduler {
 - **不可变**（D6）：行写入后永不 UPDATE，永不 DELETE。修改规则 = 在 `rule_definition` 改草稿 → 走标准发布产生新一行 `rule_version`。
 - **回滚不是覆盖**（D19）：回滚到 `version=N-2` = 把 N-2 的快照内容拷回 `rule_definition` 草稿，走标准发布产出 `version=N+1`（内容等于 N-2），审计链完整可追溯，N-1 / N-2 行均原样保留。
 - **运行时锁定**（D17 派生）：`evaluation_session` 开始时按 `(scene, eventType)` **倒排索引**拿当前候选 `rule_version` 列表（`current_version` 在索引预热时已解析）并拍快照，整 session 用同一组版本——即使中途切版本，本次评估不受影响。
-- **灰度桶稳定性**（D6 派生）：`hash(subjectId, ruleVersionId)` 计算桶号，每个不可变版本对应稳定的桶分布；版本切换会触发桶漂移，这是 D6 的固有语义。`subjectId` 由 Scene.subjectType 决定语义（v1 仅 USER 实装），与 §3.10 Job / §3.4 rollout 子表口径一致。
+- **灰度桶稳定性**（D6 派生）：`hash(subjectId, experimentId ?? ruleVersionId)` 计算桶号，每个不可变版本对应稳定的桶分布；版本切换会触发桶漂移，这是 D6 的固有语义。`subjectId` 由 Scene.subjectType 决定语义（v1 仅 USER 实装），与 §3.10 Job / §3.4 ROLLOUT 灰度口径一致。
 - **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键，且 `node_trace` 记 `rule_version_id` 便于按版本对账 trace；`action_execution` 记 `decision_code`，可与 `rule_version.decision_bindings` 关联溯源。
 
 ### 3.13 Subject（业务主体，运行时填充体）
@@ -663,7 +661,7 @@ interface Scheduler {
 
 | 类型 | 用途 | 状态影响 |
 |------|------|---------|
-| **灰度命中** | 按 `Rule.rollout` 配置计算桶号是否落入命中区（D6） | 纯只读判定，无副作用 |
+| **灰度命中**（ROLLOUT） | 按 `preGates` 中 ROLLOUT 项 params 计算桶号是否落入命中区（D6） | 纯只读判定，无副作用 |
 | **频次上限** | 按 `(tenantId, ruleId, subjectId, 时间窗口)` 检查命中次数是否超阈值 | 真实评估期会写新计数；dry-run 仅读不写（§五 Q10） |
 | **白名单**（WHITELIST） | 按 `(ruleId, subjectId)` 查白名单表，subject 不在白名单则拦截 | 纯只读判定 |
 | **黑名单**（BLACKLIST） | 按 `(ruleId, subjectId)` 查黑名单表，subject 在黑名单则拦截 | 纯只读判定 |

@@ -179,7 +179,7 @@ POST /api/v1/rules
   "kind": "AST_BOOLEAN",
   "conditionAst": { "type": "AndNode", "children": [] },
   "decisionBindings": [{ "decisionCode": "REVIEW" }],
-  "preGates": [{ "type": "ROLLOUT", "params": { "percentage": 100 } }],
+  "preGates": [{ "gateType": "ROLLOUT", "params": { "percentage": 100 } }],
   "triggerEventTypes": ["transfer.initiated"]
 }
 ```
@@ -195,8 +195,31 @@ POST /api/v1/rules
 | `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` |
 | `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST |
 | `decisionBindings` | Array | 否 | 命中决策绑定列表，缺省空数组 |
-| `preGates`      | Array  | 否   | 前置门列表，缺省空数组 |
+| `preGates`      | Array  | 否   | 前置门列表，缺省空数组；每项 `{ gateType, params }`。ROLLOUT 灰度门的 params 见下 |
 | `triggerEventTypes` | Array | 否 | 触发事件类型白名单，缺省空数组 |
+
+**ROLLOUT 灰度门 params 字段：**
+
+| 字段          | 类型   | 必填 | 说明 |
+|---------------|--------|------|------|
+| `percentage`  | Integer | 二选一 | 百分比放量，`[0,100]`，命中条件 `bucket < percentage`，等价于区间 `[0, percentage)` |
+| `bucketStart` | Integer | 二选一 | 桶区间下界（含），`[0,100]`，与 `bucketEnd` 成对出现；命中条件 `bucketStart <= bucket < bucketEnd` |
+| `bucketEnd`   | Integer | 二选一 | 桶区间上界（不含），`(bucketStart,100]` |
+| `experimentId`| String | 否   | 实验标识；同 `experimentId` 的多条规则共享分桶种子 `hash(subjectId:experimentId)`。缺省时种子退回 `hash(subjectId:ruleVersionId)`（各规则独立分桶） |
+
+- `bucket = (murmur3_32(seed) & 0x7fffffff) % 100`，取值 `[0,99]`。
+- `percentage` 与桶区间二选一（同时给时桶区间优先）；两者皆无时该门 fail-open（全量放行）。
+- **一致分桶**：同 `experimentId` 的规则用相同区间 → 同一批 subject 在多条规则上稳定同选。
+- **A/B 互斥**：同 `experimentId` 的规则用不相交区间（如 A `[0,50)`、B `[50,100)`）→ 每个 subject 恰好命中其一。
+- **发布期校验**（单规则）：`percentage∈[0,100]`；桶区间 `0<=bucketStart<bucketEnd<=100` 且必须成对；`experimentId` 非空白。违反返回 400 `INVALID_ARGUMENT`。跨规则区间不重叠由运营自行保证。
+
+互斥配置示例（两条规则同属 `exp-price-001`，平分流量）：
+```json
+// 规则 A
+"preGates": [{ "gateType": "ROLLOUT", "params": { "experimentId": "exp-price-001", "bucketStart": 0, "bucketEnd": 50 } }]
+// 规则 B
+"preGates": [{ "gateType": "ROLLOUT", "params": { "experimentId": "exp-price-001", "bucketStart": 50, "bucketEnd": 100 } }]
+```
 
 **Response 201：**
 ```json

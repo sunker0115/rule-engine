@@ -136,7 +136,7 @@ RuleEvent
 **核心动作**：
 - 按 `(tenantId, sceneCode, eventType)` 三元组查内存倒排索引（`ConcurrentHashMap`）；
 - 倒排索引 value = `List<RuleVersion>`（仅含 `PUBLISHED` 状态规则的当前版本快照，`DISABLED` 规则已从索引中剔除）；
-- 每个 `RuleVersion` 快照包含：完整预解析的 AST 节点树（`condition_ast`）+ `decision_bindings`（含 Decision.actions）+ `pre_gates` + `rollout` + `metric_dependencies` + `triggerEventTypes`；
+- 每个 `RuleVersion` 快照包含：完整预解析的 AST 节点树（`condition_ast`）+ `decision_bindings`（含 Decision.actions）+ `pre_gates`（含 ROLLOUT 灰度）+ `metric_dependencies` + `triggerEventTypes`；
 - 倒排索引分桶规则：`RuleVersion.triggerEventTypes` 为空时归入通配桶（key = `"*"`），非空时按实际值逐一建桶；查询时取精确桶与通配桶的并集（精确匹配优先，去重）；
 - 索引在规则发布/禁用时增量热更（D17）：单服务模式由 Modulith `RulePublishedEvent` 触发（近实时）；嵌入式 SDK 模式由 `DbPollingRuleWatcher` 轮询触发（15s 最终一致）；Scene 变更同理（D24，单服务 `SceneChangedEvent` / SDK 模式 `DbPollingSceneWatcher` 30s）。
 

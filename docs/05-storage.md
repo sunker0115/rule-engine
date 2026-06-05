@@ -156,8 +156,7 @@ CREATE TABLE rule_version (
   version               BIGINT       NOT NULL COMMENT '单调递增，per rule_definition（Long 型，匹配概念层 RuleVersion.version）',
   condition_ast         JSON         NOT NULL COMMENT '完整 AST 节点树，不可变',
   decision_bindings     JSON         NOT NULL COMMENT 'D27/D28：含 actions 快照的 Decision 绑定',
-  pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表（含 ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX 各类型配置）',
-  rollout               JSON         NOT NULL COMMENT 'D6 灰度配置快照（type / percentage / tagConditions）；空对象表示无灰度限制，全量放行',
+  pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表（含 ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX 各类型配置）；灰度由 ROLLOUT 项承载，params 含 percentage / bucketStart / bucketEnd / experimentId（详见 10-api-contract）',
   kind                  ENUM('AST_BOOLEAN','SCORECARD','DECISION_TREE','DECISION_TABLE','EXPRESSION_SCRIPT') NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT 'D12：规则形态冻结；v1 仅 AST_BOOLEAN 实装，其他占位',
   trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
   metric_dependencies   JSON         NOT NULL COMMENT 'AST 引用的 metricCode 列表（发布期静态收集）',
@@ -170,6 +169,8 @@ CREATE TABLE rule_version (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则版本快照（不可变，D19）';
 ```
+
+> **已废弃列 `rollout`**：D6 初版曾设独立 `rollout JSON` 列存灰度快照，但 ROLLOUT 改由 `pre_gates` 承载后该列只写不读，已于迁移 `V1_4__drop_rollout.sql` 删除。灰度配置（percentage / 桶区间 / experimentId）统一在 `pre_gates` 的 ROLLOUT 项。
 
 **decision_definition**（D26/D27）
 

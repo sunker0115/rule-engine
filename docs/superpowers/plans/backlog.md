@@ -10,7 +10,6 @@
 | # | 功能 | 来源 | 预计改动范围 | 备注 |
 |---|------|------|------------|------|
 | B1 | **EXPRESSION_SCRIPT evaluator**（CEL / Aviator 脚本沙箱） | D42 / 08-evo §2.1 / trae R2 | `rule-kernel`：新增 `ScriptExecutor`；commons-pool2 对象池管理 `ScriptEngine` 实例（非线程安全，每次 borrow/return）；沙箱安全边界；发布期 schema 校验 | 已有 SPI 预留，缺评估器 + 沙箱；CEL 开源直接用；**对象池（trae R2）必须同步落地**，否则 ScriptEngine 初始化开销是秒级灾难 |
-| B2 | **灰度 A/B 实验互斥**（`experimentId` 字段） | D6 / 08-evo §2.16 | `rule-kernel`：hash 逻辑 1 行；`rule_version.rollout` JSON 无需 DDL | 已详细设计，改动极小，但运营有实际诉求 |
 | B3 | **OTLP 可观测性**（OpenTelemetry + Grafana LGTM） | 08-evo §2.22 | `rule-app/pom.xml` 加依赖；`application.yml` 2 行；`logback-spring.xml` appender；`docker-compose.yml` 1 service | 纯配置改动，零业务代码 |
 | B4 | **XOR 逻辑节点**（已实装，仅前端 UI 未接） | 08-evo §2.21 | 后端已完成；前端编辑器新增 XOR 选项 | 后端零改动；仅前端一个 UI 变体 |
 | B5 | **预编译执行器**（`CompiledExecutor`） | D20 §5 / 08-evo §2.13 / trae R5 | `rule-kernel`：`CompiledExecutor` + Janino/LambdaMetafactory；`ExecutorRegistry` 灰度切换；`rule_version.compiled_predicate_ref` 启用；可同期落地 alpha 节点共享（`ConditionEvaluationKey` 缓存去重，参考 trae R5） | TPS 可从 5–10 μs/规则降至 0.3–1 μs；已有 SPI + 字段预留 |

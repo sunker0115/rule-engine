@@ -87,12 +87,17 @@ dry-run 走完整评估链路（Matcher / Pre-Gate / EvalContext / AST），但�
 ### 灰度算法（ROLLOUT Gate）
 
 ```
-bucket = (murmur3_32(subjectId + ":" + ruleVersionId) & 0x7FFFFFFF) % 100
-pass = bucket < rollout.percentage
+seed   = subjectId + ":" + (experimentId ?? ruleVersionId)
+bucket = (murmur3_32(seed) & 0x7FFFFFFF) % 100
+pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，优先）
+       | bucket < percentage                 # 百分比模式，等价 [0, percentage)
 ```
 
-- `ruleVersionId` 加入 hash：同一 subject 在不同版本间 bucket 独立（防止切版本导致 bucket 漂移）
-- murmur3_32 保证分布均匀；hash seed 固定（见 §九 `engine.rule.rollout.hash-seed`），上线后不要改，否则桶分布漂移
+灰度配置在 `pre_gates` 列 `gateType=ROLLOUT` 项的 params（无独立 `rollout` 列，D43）。params 字段见 [`10-api-contract.md`](./10-api-contract.md) ROLLOUT params 表。
+
+- **种子**：默认 `subjectId:ruleVersionId`，同一 subject 在不同版本间 bucket 独立（防止切版本导致漂移）；配 `experimentId` 时种子改为 `subjectId:experimentId`，同实验多规则共享分桶（一致分桶 / 互斥）。
+- **命中**：配桶区间 `bucketStart`/`bucketEnd` 时按区间判定（优先）；否则按 `percentage`（等价区间 `[0,percentage)`）。
+- murmur3_32 保证分布均匀；hash seed 固定（见 §九 `engine.rule.rollout.hash-seed`），上线后不要改，否则桶分布漂移。
 
 ### 灰度验证流程
 
