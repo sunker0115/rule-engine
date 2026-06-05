@@ -14,6 +14,8 @@ import java.util.List;
 /** JSON 文件模式：从 classpath 加载规则快照，适合离线 / 测试场景。 */
 public class FileRuleSource implements RuleSource {
 
+    private static final ObjectMapper MAPPER = new AstJsonCodec().createMapper();
+
     private final InputStream input;
 
     private FileRuleSource(InputStream input) {
@@ -33,11 +35,9 @@ public class FileRuleSource implements RuleSource {
 
     @Override
     public void loadInto(SceneRuleIndex index) {
-        // 使用 AstJsonCodec 保证 AstNode 多态反序列化正确（与 SnapshotPoller 一致）
-        ObjectMapper mapper = new AstJsonCodec().createMapper();
         List<RuleVersionSnapshot> snapshots;
         try {
-            snapshots = mapper.readValue(input, new TypeReference<>() {});
+            snapshots = MAPPER.readValue(input, new TypeReference<>() {});
         } catch (IOException e) {
             throw new UncheckedIOException("规则文件解析失败", e);
         }

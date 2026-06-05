@@ -29,4 +29,16 @@ class FileRuleSourceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("classpath 资源不存在");
     }
+
+    @Test
+    void multipleInstances_shareStaticMapper_eachLoadsCorrectly() {
+        // 验证静态 MAPPER 字段跨多个 FileRuleSource 实例仍能正确反序列化（不存在状态污染）
+        SceneRuleIndex index1 = new SceneRuleIndex();
+        SceneRuleIndex index2 = new SceneRuleIndex();
+        FileRuleSource.classpath("rules/test-rule.json").loadInto(index1);
+        FileRuleSource.classpath("rules/test-rule.json").loadInto(index2);
+
+        assertThat(index1.match("t1", "test", "TEST_EVENT")).hasSize(1);
+        assertThat(index2.match("t1", "test", "TEST_EVENT")).hasSize(1);
+    }
 }

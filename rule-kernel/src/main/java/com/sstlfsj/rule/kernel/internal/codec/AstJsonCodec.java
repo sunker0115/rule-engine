@@ -17,15 +17,17 @@ import java.util.List;
  */
 public class AstJsonCodec {
 
+    private final ObjectMapper mapper = new ObjectMapper()
+            .addMixIn(AstNode.class, AstNodeMixin.class)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+
     /**
-     * 返回已配置多态 Mixin 的 ObjectMapper 新实例（ObjectMapper 线程安全，可复用）。
+     * 返回已配置多态 Mixin 的 ObjectMapper（ObjectMapper 线程安全，实例复用）。
      *
      * @return 配置好的 ObjectMapper
      */
     public ObjectMapper createMapper() {
-        return new ObjectMapper()
-                .addMixIn(AstNode.class, AstNodeMixin.class)
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        return mapper;
     }
 
     /**
@@ -35,7 +37,7 @@ public class AstJsonCodec {
      * @return 反序列化后的 AstNode
      */
     public AstNode deserializeAst(String json) throws JsonProcessingException {
-        return createMapper().readValue(json, AstNode.class);
+        return mapper.readValue(json, AstNode.class);
     }
 
     /**
@@ -45,7 +47,7 @@ public class AstJsonCodec {
      * @return PreGateConfig 列表
      */
     public List<RuleVersionSnapshot.PreGateConfig> deserializePreGates(String json) throws JsonProcessingException {
-        return createMapper().readValue(json, new TypeReference<>() {});
+        return mapper.readValue(json, new TypeReference<>() {});
     }
 
     /**
@@ -55,7 +57,7 @@ public class AstJsonCodec {
      * @return DecisionBinding 列表
      */
     public List<RuleVersionSnapshot.DecisionBinding> deserializeDecisionBindings(String json) throws JsonProcessingException {
-        return createMapper().readValue(json, new TypeReference<>() {});
+        return mapper.readValue(json, new TypeReference<>() {});
     }
 
     /**
@@ -65,7 +67,7 @@ public class AstJsonCodec {
      * @return 字符串列表
      */
     public List<String> deserializeStringList(String json) throws JsonProcessingException {
-        return createMapper().readValue(json, new TypeReference<>() {});
+        return mapper.readValue(json, new TypeReference<>() {});
     }
 
     /** AstNode sealed 接口的 Jackson 多态 mixin，通过 "type" 字段区分子类型。 */

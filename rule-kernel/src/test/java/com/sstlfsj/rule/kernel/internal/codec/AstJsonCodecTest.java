@@ -69,8 +69,8 @@ class AstJsonCodecTest {
     }
 
     @Test
-    void createMapper_returnsNewInstance() {
-        assertNotSame(codec.createMapper(), codec.createMapper());
+    void createMapper_returnsCachedInstance() {
+        assertSame(codec.createMapper(), codec.createMapper());
     }
 
     @Test
