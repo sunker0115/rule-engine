@@ -104,14 +104,16 @@ AST 由五种节点类型组成，每种节点字段如下。
 
 | operator | 适用数据类型 | 语义 | null 处理 |
 |----------|------------|------|-----------|
-| `EQ` | LONG / DOUBLE / STRING / BOOLEAN | 相等 | 参数为 null → satisfied=false |
-| `NEQ` | LONG / DOUBLE / STRING / BOOLEAN | 不相等 | 同上 |
+| `EQ` | LONG / DOUBLE / STRING / BOOLEAN / **DATE / DATETIME** | 相等 | 参数为 null → satisfied=false |
+| `NEQ` | LONG / DOUBLE / STRING / BOOLEAN / **DATE / DATETIME** | 不相等 | 同上 |
 | `GT` | LONG / DOUBLE | 严格大于 | 参数为 null → ERROR |
 | `GTE` | LONG / DOUBLE | 大于等于 | 同上 |
 | `LT` | LONG / DOUBLE | 严格小于 | 同上 |
 | `LTE` | LONG / DOUBLE | 小于等于 | 同上 |
-| `BETWEEN` | LONG / DOUBLE | `min <= value <= max`（双端闭区间） | 参数为 null → ERROR |
-| `NOT_BETWEEN` | LONG / DOUBLE | `value < min 或 value > max`（BETWEEN 取反） | 参数为 null → ERROR |
+| `BETWEEN` | LONG / DOUBLE / **DATE / DATETIME** | `min <= value <= max`（双端闭区间） | 参数为 null → ERROR |
+| `NOT_BETWEEN` | LONG / DOUBLE / **DATE / DATETIME** | `value < min 或 value > max`（BETWEEN 取反） | 参数为 null → ERROR |
+
+> **B20 新增**：`EQ` / `NEQ` / `BETWEEN` / `NOT_BETWEEN` 已在 B20 扩展支持 `DATE` / `DATETIME` dataType；发布期矩阵（`AstDataTypeResolver`）对应更新，GT/GTE/LT/LTE 仍仅限数值型。
 
 ### 3.2 集合操作符
 
@@ -132,14 +134,28 @@ AST 由五种节点类型组成，每种节点字段如下。
 
 ### 3.4 日期操作符
 
-> 适用于 `dataType=DATE` 或 `dataType=DATETIME` 的 Metric；参数格式 ISO-8601（`"2026-06-01"` / `"2026-06-01T00:00:00+08:00"`）或特殊占位符 `"$now"`（评估时刻）/ `"$today"`（评估日期，无时间部分）。
+> **B20 已实装**。适用于 `dataType=DATE` 或 `dataType=DATETIME` 的 Metric；发布期矩阵（`AstDataTypeResolver`）要求 `DATE_BEFORE` / `DATE_AFTER` 必须配合 DATE 或 DATETIME dataType，其他 dataType 发布时拒绝。
+
+**参数格式与占位符**：
+- 字面量：ISO-8601 日期 `"2026-06-01"`（DATE 语境）或带时区的时刻 `"2026-06-01T00:00:00+08:00"`（DATETIME 语境）
+- `"$now"`：解析为 `EvalContext.now`（注入的统一时钟 `Instant`）
+- `"$today"`：解析为 `EvalContext.now` 投影到时区后的 `LocalDate`；**仅在 DATE 语境有效**，DATETIME / `time.occurred_at` 语境中使用 `"$today"` 会产生 `CONDITION_EVAL_ERROR`
+- 无法识别的 `$x` 占位符或解析失败 → null → `satisfied=false`（不抛异常）
+
+**两阶段管线**（resolve-segment + strategy）：
+1. **解析段（resolve-segment）**：在 evaluator 侧将原始字符串参数经 `PlaceholderResolver` + `TimeZoneResolver` 转换为强类型值（`LocalDate` / `Instant`）
+2. **策略段（strategy）**：`DateComparisonStrategy`（DATE）/ `DateTimeComparisonStrategy`（DATETIME）做纯比较，无 I/O、无副作用
+
+**时区解析优先级**（`TimeZoneResolver`）：字面时区偏移 > `params.timezone` > UTC；Scene 级默认时区（优先级 3）当前**暂缓**（B20 调用方始终传 `sceneDefaultTimezone=null`），槽位已保留。
 
 | operator | 适用数据类型 | 语义 | null 处理 |
 |----------|------------|------|-----------|
 | `DATE_BEFORE` | DATE / DATETIME | `value < threshold`（严格早于） | value 为 null → satisfied=false |
 | `DATE_AFTER` | DATE / DATETIME | `value > threshold`（严格晚于） | value 为 null → satisfied=false |
 
-**示例**：账户创建时间早于 2024-01-01（老账户识别）：
+> `dataType=null` 的历史条件走 DATE_BEFORE/AFTER 时，引擎默认 DATETIME + UTC（兼容旧语义，不报错）。
+
+**示例**：账户创建时间早于 2024-01-01（老账户识别，DATE 类型）：
 
 ```json
 {
@@ -153,7 +169,7 @@ AST 由五种节点类型组成，每种节点字段如下。
 }
 ```
 
-**示例**：用户最后登录时间晚于 $now（异常时间戳检测）：
+**示例**：用户最后登录时间晚于 $now（异常时间戳检测，DATETIME 类型）：
 
 ```json
 {
@@ -266,6 +282,8 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 
 ### 7.1 time.window — 当前时刻在指定时间窗口内
 
+> **B20 已实装**。已在 `KernelEvaluators.defaults()` 注册，属于内置路径闭合集合（D20 §3），发布期校验走内部路径，不经过 operator×dataType 矩阵检查。`conditionType=time.window` 的 ConditionNode 无需 `metricCode`（留 null）。
+
 **语义**：对 `EvalContext.now` 做时间窗口判断，常用于"规则只在营业时间 / 高峰时段生效"。
 
 **参数表**：
@@ -316,6 +334,8 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 ---
 
 ### 7.2 time.occurred_at — 事件业务时间落在指定范围
+
+> **B20 已实装**。已在 `KernelEvaluators.defaults()` 注册，属于内置路径闭合集合（D20 §3），无需 `metricCode`（留 null）。**`$today` 在本 conditionType 的参数中无效**——`time.occurred_at` 操作的是时刻（DATETIME），`$today` 仅代表日历日期（LocalDate），混用时引擎返回 `CONDITION_EVAL_ERROR`。
 
 **语义**：对 `EvalContext.event.occurredAt`（业务事件时间，可早于 `now`）做比较，常用于"延迟事件 / 补录数据"场景，或"活动有效期"判断。
 
@@ -369,6 +389,8 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 **语义**：时间窗口逻辑封装在 Metric 的 SQL / HTTP 查询里，条件层只看聚合结果值，不感知"时间"。这是三种写法中**最常用**的模式。
 
 **适用场景**：近 N 天交易次数、近 N 小时登录失败次数、30 天内累计金额等。
+
+> **B20 / B21 边界**：B20 已向 `EvalContext` 注入统一时钟 `now`，但将 `EvalContext.now` 作为 `:now` 绑定变量注入 SQL_AGGREGATE 的 Metric SQL（替代 SQL 中的 `NOW()`）属于 **B21 的工作范围**，B20 不做。v1 阶段 SQL 中的时间窗口仍由 SQL 自身的 `NOW()` / `INTERVAL` 负责。
 
 **Metric 侧**（SQL_AGGREGATE）：
 

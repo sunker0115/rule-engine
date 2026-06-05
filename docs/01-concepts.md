@@ -412,7 +412,7 @@ EvalContext {
     event:    RuleEvent              // 原始事件
     subject:  Subject                // 业务主体（用户 / 账户 / 设备）的属性快照
     metrics:  Map<metricCode, Value> // 本次评估涉及的指标快照
-    now:      Instant                // 评估开始时间（统一时钟）
+    now:      Instant                // 评估开始时间（统一时钟）— 已实装（B20）：由 EvalServiceImpl.doEvaluate / EvalEngine.evaluate 入口注入一次（单个 Instant.now()），整棵 AST 共用同一个 now，保证跨规则时钟一致性；不存在默认 Instant.now() 重载（禁止）
     traceId:  String                 // 链路 ID
     dryRun:   Boolean                // 引擎内部路由标志（D7/D21）：true 时 TraceWriter 写 dry_run_session 系列表而非 prod 表
 }
@@ -464,7 +464,7 @@ EvalContext {
 | `tenantId` | 归属租户；`*` 表示平台级共享指标 |
 | `sourceType` | 取数方式，见下方 sourceType 对比表 |
 | `params` | 取数参数（结构依 sourceType 而异，见下方对比表） |
-| `dataType` | `LONG` / `DOUBLE` / `STRING` / `BOOLEAN` / `LIST` |
+| `dataType` | `LONG` / `DOUBLE` / `STRING` / `BOOLEAN` / `LIST` / `DATE` / `DATETIME` — `DATE` 对应日历日期（`LocalDate`，无时区）；`DATETIME` 对应时刻（`Instant`/带时区偏移，时区相关）；已在 B20 作为一等 dataType 实装，发布期矩阵和运行期策略均支持（详见 `03-rule-expression.md` §3.4） |
 | `cachePolicyDefault` | 默认缓存策略（TTL / 不缓存 / 评估范围内缓存）；实时性敏感场景配 `ttl=0` 强制每次取数 |
 | `allowProvided` | 是否允许调用方通过 `providedMetrics` 覆盖本指标取数结果（D30）。按 `sourceType` 给推荐默认值：`ATTRIBUTE` / `EXTERNAL_HTTP` 建议创建时显式设为 `true`（业务方通常手里就有这个值）；`SQL_AGGREGATE` / `STREAM` 保持 `false`（平台权威计算，不应被覆盖）。DDL 列级 `DEFAULT 0` 是保守兜底，应用层 API 按 `sourceType` 写入正确值，不依赖列默认。例外情况手动覆盖；`false` 时引擎忽略 `providedMetrics` 中对应 key 并 WARN |
 
@@ -708,7 +708,7 @@ interface Scheduler {
 | `started_at` | 评估开始时间 |
 | `finished_at` | 评估结束时间 |
 | `eval_duration_ms` | 整 session 耗时（ms） |
-| `context_snapshot` | nullable JSON；EvalContext 构建完成后对 `metrics` 取数结果的快照（`{metricCode: value}`），用于 dry-run 重放时还原历史 metric 值，避免重放时取到当前新值；EvalContext 构建失败（`status=ERROR, errorCode=METRIC_FETCH_FAIL`）时为 null |
+| `context_snapshot` | nullable JSON；EvalContext 构建完成后的快照，已在 B20 升级为嵌套结构 `{"metrics": {metricCode: value, ...}, "evalNow": "<ISO-8601 instant>"}`，其中 `metrics` 为各指标取数结果，`evalNow` 为本次评估注入的 `EvalContext.now`（统一时钟）；用于 dry-run 重放时还原历史 metric 值及时间点，避免重放时取到当前新值；EvalContext 构建失败（`status=ERROR, errorCode=METRIC_FETCH_FAIL`）时为 null |
 
 **`status` 聚合语义**（session 结束时由引擎按规则集合结果填充）：
 

@@ -1389,6 +1389,35 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 ---
 
+## D44. B20 时间框架：EvalContext.now 注入 + DATE/DATETIME 一等 dataType + 时间条件内置 ⭐⭐
+
+**背景**：v1 规则引擎缺乏对时间的原生感知——DATE_BEFORE/AFTER 已有文档但实现未完整落地，EvalContext 无统一时钟注入，dataType 枚举不含时间类型，时间类 conditionType（time.window / time.occurred_at）未注册，发布期矩阵不覆盖 DATE/DATETIME 组合。需一次性补齐。
+
+**决策**：
+
+1. **EvalContext.now 单次注入（统一时钟）**：`now: Instant` 在 `EvalServiceImpl.doEvaluate` / `EvalEngine.evaluate` 入口调用一次 `Instant.now()`，整棵 AST 共用同一个 `now`，保证跨规则时钟一致性。不存在默认 `Instant.now()` 重载（禁止），调用方必须传入 `now`；
+
+2. **时区解析优先级（TimeZoneResolver）**：字面时区偏移（ISO-8601 带 `+HH:mm`）> `params.timezone` > UTC。Scene 级默认时区（优先级 3 对应 `sceneDefaultTimezone` 参数）当前**暂缓**——B20 调用方始终传 `null`，槽位已保留，由后续批次激活；
+
+3. **DATE / DATETIME 作为一等 dataType**：
+   - `DATE` 对应 `LocalDate`（日历日期，无时区）；`DATETIME` 对应 `Instant`/带时区偏移（时区相关）
+   - 纯策略实现：`DateComparisonStrategy`（DATE）/ `DateTimeComparisonStrategy`（DATETIME），无 I/O、无副作用
+   - 两阶段管线：**解析段**在 evaluator 侧将原始参数经 `PlaceholderResolver` + `TimeZoneResolver` 转为强类型；**策略段**做纯比较
+   - 发布期矩阵（`AstDataTypeResolver`）更新：EQ/NEQ 允许集合 += DATE/DATETIME；BETWEEN/NOT_BETWEEN 允许集合 += DATE/DATETIME；DATE_BEFORE/DATE_AFTER 新增行（allowed={DATE,DATETIME}，拒绝其他 dataType）；GT/GTE/LT/LTE 仍仅限数值型
+   - `metric_definition.data_type` ENUM 扩展为含 `DATE` / `DATETIME`（Flyway `V1_5__add_date_datetime_to_metric_datatype.sql`）；
+
+4. **PlaceholderResolver（占位符解析）**：`"$now"` → `EvalContext.now`（`Instant`）；`"$today"` → `EvalContext.now` 投影到时区后的 `LocalDate`，仅在 DATE 语境有效；`time.occurred_at` 语境中使用 `"$today"` → `CONDITION_EVAL_ERROR`；无法识别的 `$x` 或解析失败 → null（不抛异常）；不支持相对时长表达式（`$now-P7D` 等，留 B21）；
+
+5. **context_snapshot 嵌套结构**：`evaluation_session.context_snapshot` 由 v1 原平铺格式 `{metricCode: value}` 升级为嵌套格式 `{"metrics": {metricCode: value, ...}, "evalNow": "<ISO-8601 instant>"}`，其中 `evalNow` 记录本次评估注入的统一时钟值，用于 dry-run 重放时还原历史时间点；
+
+6. **内置时间类 conditionType 注册**：`time.window`（基于 `EvalContext.now` 的时间窗口判断）和 `time.occurred_at`（基于 `event.occurredAt` 的时刻比较）在 `KernelEvaluators.defaults()` 注册，属于内置路径闭合集合（D20 §3），不经过 operator×dataType 矩阵检查，无需 `metricCode`。
+
+**不做的（v1 范围外）**：相对时长算术（`$now-P7D`）；近 N 天滚动聚合 SQL 注入 `EvalContext.now` 作为 `:now` 绑定变量（B21 负责）；Scene 级默认时区激活；DB `NOW()` 注入替代。
+
+**已实装**（D44 / B20）：`EvalContext.now` 单次注入 + `context_snapshot` 嵌套格式；`TimeZoneResolver`；`PlaceholderResolver`（$now/$today）；`DateComparisonStrategy` / `DateTimeComparisonStrategy`；EQ/NEQ/BETWEEN/NOT_BETWEEN 解析段分支（DATE/DATETIME）；DATE_BEFORE/DATE_AFTER 重做（删 `toInstant` 静态方法，接入两阶段管线）；`time.window` / `time.occurred_at` evaluator 注册；发布期矩阵 `AstDataTypeResolver` 更新；`V1_5__add_date_datetime_to_metric_datatype.sql`。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1432,5 +1461,6 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D41 | `executionStrategy` 扩展 | A | 新增 `ALL_HITS`（全部命中）/ `FIRST_HIT`（短路）；`EvalResult.hitDecisions()` 直接复用；Flyway 无 DDL 改动 |
 | D42 | `DECISION_TREE` / `DECISION_TABLE` evaluator | A | 新增 `IfNode`/`DecisionLeafNode` AST 节点；独立 Executor SPI 实现；`EvalResult` 补 `category`/`decision` 字段；`EXPRESSION_SCRIPT` 留 v1.5 |
 | D43 | 灰度收口 pre_gates ROLLOUT，废弃 `rollout` 列 | A | 灰度由 ROLLOUT pre-gate 承载（percentage/bucketStart/bucketEnd/experimentId）；`V1_4` 删 `rollout` 列；桶区间+experimentId 实现一致分桶/互斥 + 发布期校验；USER_TAG/HYBRID 标签命中留演进 |
+| D44 | B20 时间框架：EvalContext.now 注入 + DATE/DATETIME 一等 dataType + 时间条件内置 | A | now 单次注入+单时钟约束；TimeZoneResolver（字面偏移>params.timezone>UTC，Scene级暂缓）；DATE/DATETIME 纯策略+两阶段管线；PlaceholderResolver($now/$today，不含相对时长)；context_snapshot 嵌套格式；time.window/time.occurred_at 注册；V1_5 扩展 ENUM |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

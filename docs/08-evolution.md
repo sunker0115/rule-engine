@@ -276,6 +276,22 @@
   - 本地 `docker-compose.yml` 加 `grafana/otel-lgtm:0.11.5`（Grafana + Loki + Tempo + Mimir 单镜像）；
   - `rule-observability`（业务 trace 层，`TraceWriterDbImpl` / `RuleMetrics`）不改动，两层可观测性并行。
 
+### 2.23 B20 时间框架：DATE/DATETIME 一等 dataType + 统一时钟注入（来源 D44，已实装）
+
+- **v1 现状（B20 前）**：`EvalContext` 有 `now: Instant` 槽位但未从入口统一注入；`dataType` 枚举不含时间类型；`DATE_BEFORE` / `DATE_AFTER` 文档有描述但实现未完整落地；`time.window` / `time.occurred_at` conditionType 未注册。
+- **触发条件**：业务方需要时间窗口判断（营业时间生效）、日期型指标比较（账户创建时间、到期时间）及事件有效期判断。
+- **设计要点（D44）**：
+  - `EvalContext.now` 在 `EvalServiceImpl.doEvaluate` / `EvalEngine.evaluate` 入口调用一次 `Instant.now()`，整棵 AST 共用同一时钟（禁止默认 `Instant.now()` 重载）；
+  - `DATE` / `DATETIME` 作为一等 `dataType`：`DateComparisonStrategy` / `DateTimeComparisonStrategy` 纯策略；两阶段管线（PlaceholderResolver + TimeZoneResolver → 策略）；
+  - 发布期矩阵（`AstDataTypeResolver`）扩展：EQ/NEQ/BETWEEN/NOT_BETWEEN 允许集合 += DATE/DATETIME；DATE_BEFORE/DATE_AFTER 新增行；
+  - `time.window` / `time.occurred_at` 在 `KernelEvaluators.defaults()` 注册，内置路径闭合集合，无 `metricCode`；
+  - `context_snapshot` 升级为嵌套格式 `{"metrics": {...}, "evalNow": "<ISO>"}`；
+  - `V1_5__add_date_datetime_to_metric_datatype.sql` 扩展 `metric_definition.data_type` ENUM；
+  - Scene 级默认时区（`sceneDefaultTimezone`）槽位保留，B20 阶段暂缓（调用方传 null），由后续批次激活。
+- **不做（B21+ 范畴）**：相对时长算术（`$now-P7D`）；`EvalContext.now` 注入 SQL_AGGREGATE 的 `:now` 绑定变量；Scene 级默认时区激活。
+- **已实装（B20 / D44）**：见 D44 已实装清单。构建于 B19（AstDataTypeResolver 矩阵）之上。
+- **迁移成本**：已完成（B20 批次 13 个 Task）。
+
 ### 2.20 规则草稿创建 API（来源 10-api-contract.md §4.1）
 
 - **v1 现状**：`POST /api/v1/rules` 在 `10-api-contract.md §4.1` 已定义契约，但 v1 仅留占位实现（返回 501 NOT_IMPLEMENTED）。
