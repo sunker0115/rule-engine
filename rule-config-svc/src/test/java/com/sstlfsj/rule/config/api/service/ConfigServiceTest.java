@@ -32,7 +32,7 @@ class ConfigServiceTest {
                 String code, String name,
                 String conditionAstJson, String decisionBindingsJson,
                 String preGatesJson, String triggerEventTypesJson,
-                String actorId) {
+                String kind, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
     };
@@ -59,6 +59,6 @@ class ConfigServiceTest {
     void createDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.createDraft("t1", "SCENE_A", "RULE_001", "规则名",
-                        null, null, null, null, "actor"));
+                        null, null, null, null, null, "actor"));
     }
 }

@@ -200,7 +200,7 @@ class PublishServiceTest {
 
         DraftCreatedResult result = publishService.createDraft(
                 1L, "risk.transfer", "rule.test", "测试规则",
-                "{\"type\":\"AndNode\"}", "[]", "[]", "[]", "actor1");
+                "{\"type\":\"AndNode\"}", "[]", "[]", "[]", "SCORECARD", "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(10L);
         assertThat(result.ruleVersionId()).isEqualTo(20L);
@@ -211,11 +211,13 @@ class PublishServiceTest {
         verify(ruleDefinitionMapper).insert(rdCaptor.capture());
         assertThat(rdCaptor.getValue().getStatus()).isEqualTo("DRAFT");
         assertThat(rdCaptor.getValue().getCode()).isEqualTo("rule.test");
+        assertThat(rdCaptor.getValue().getKind()).isEqualTo("SCORECARD");
 
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());
         assertThat(rvCaptor.getValue().getVersion()).isEqualTo(1L);
         assertThat(rvCaptor.getValue().getStatus()).isEqualTo("DRAFT");
+        assertThat(rvCaptor.getValue().getKind()).isEqualTo("SCORECARD");
     }
 
     @Test
@@ -224,7 +226,7 @@ class PublishServiceTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 publishService.createDraft(1L, "nonexistent", "rule.test", "测试",
-                        "{}", "[]", "[]", "[]", "actor1"));
+                        "{}", "[]", "[]", "[]", null, "actor1"));
     }
 
     @Test
@@ -239,9 +241,47 @@ class PublishServiceTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 publishService.createDraft(1L, "risk.transfer", "rule.test", "测试",
-                        "{}", "[]", "[]", "[]", "actor1"));
+                        "{}", "[]", "[]", "[]", null, "actor1"));
 
         verify(ruleDefinitionMapper, never()).insert(any(RuleDefinition.class));
+    }
+
+    @Test
+    void createDraft_invalidKind_throwsIllegalArgument() {
+        SceneDef draftScene = new SceneDef();
+        draftScene.setId(5L);
+        draftScene.setTenantId(1L);
+        draftScene.setCode("risk.transfer");
+        when(sceneMapper.selectOne(any())).thenReturn(draftScene);
+
+        assertThatThrownBy(() -> publishService.createDraft(
+                1L, "risk.transfer", "rule.test", "测试规则",
+                "{}", "[]", "[]", "[]", "EXPRESSION_SCRIPT", "actor1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("不支持的规则 kind");
+    }
+
+    @Test
+    void createDraft_nullKind_defaultsToAstBoolean() {
+        SceneDef draftScene = new SceneDef();
+        draftScene.setId(5L);
+        draftScene.setTenantId(1L);
+        draftScene.setCode("risk.transfer");
+        when(sceneMapper.selectOne(any())).thenReturn(draftScene);
+        when(ruleDefinitionMapper.selectCount(any())).thenReturn(0L);
+
+        doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
+                .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
+        doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
+                .when(ruleVersionMapper).insert(any(RuleVersion.class));
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        publishService.createDraft(1L, "risk.transfer", "rule.test", "测试规则",
+                "{}", "[]", "[]", "[]", null, "actor1");
+
+        ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
+        verify(ruleDefinitionMapper).insert(rdCaptor.capture());
+        assertThat(rdCaptor.getValue().getKind()).isEqualTo("AST_BOOLEAN");
     }
 
     @Test

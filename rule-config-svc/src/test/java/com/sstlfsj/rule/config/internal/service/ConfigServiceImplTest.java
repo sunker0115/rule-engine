@@ -128,13 +128,13 @@ class ConfigServiceImplTest {
     void createDraft_delegatesToPublishService() {
         DraftCreatedResult expected = new DraftCreatedResult(1L, 2L, 1L, "DRAFT");
         when(publishService.createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                "{}", "[]", "[]", "[]", "actor1")).thenReturn(expected);
+                "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1")).thenReturn(expected);
 
         DraftCreatedResult result = configService.createDraft("1", "risk.transfer",
-                "rule.a", "规则A", "{}", "[]", "[]", "[]", "actor1");
+                "rule.a", "规则A", "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(1L);
         verify(publishService).createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                "{}", "[]", "[]", "[]", "actor1");
+                "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1");
     }
 }

@@ -40,6 +40,7 @@ public class RuleController {
                 nodeToString(req.decisionBindings(), "[]"),
                 nodeToString(req.preGates(), "[]"),
                 nodeToString(req.triggerEventTypes(), "[]"),
+                req.kind(),
                 actorId));
     }
 

@@ -67,7 +67,7 @@ class RuleControllerTest {
     @Test
     void createDraft_returns201_withValidBody() throws Exception {
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
-        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(post("/api/v1/rules")
@@ -79,6 +79,7 @@ class RuleControllerTest {
                               "sceneCode": "risk.transfer",
                               "code": "rule.a",
                               "name": "规则A",
+                              "kind": "SCORECARD",
                               "conditionAst": {"type":"AndNode","children":[]},
                               "decisionBindings": [],
                               "preGates": [],
@@ -92,14 +93,14 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.status").value("DRAFT"));
 
         verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
-                any(), any(), any(), any(), eq("user1"));
+                any(), any(), any(), any(), eq("SCORECARD"), eq("user1"));
     }
 
     @Test
     void createDraft_nullJsonFields_useDefaults() throws Exception {
         // conditionAst / decisionBindings 等 JsonNode 字段为 null 时，nodeToString 应返回默认值
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
-        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(post("/api/v1/rules")
@@ -111,9 +112,9 @@ class RuleControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.ruleDefinitionId").value(10));
 
-        // 验证 null JsonNode 字段传入了默认值字符串而非 null
+        // 验证 null JsonNode 字段传入了默认值字符串而非 null；kind 未传则为 null
         verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
-                eq("{}"), eq("[]"), eq("[]"), eq("[]"), eq("user1"));
+                eq("{}"), eq("[]"), eq("[]"), eq("[]"), eq(null), eq("user1"));
     }
 
     @Test

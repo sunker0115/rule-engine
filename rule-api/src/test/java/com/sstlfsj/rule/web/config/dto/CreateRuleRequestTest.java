@@ -22,36 +22,43 @@ class CreateRuleRequestTest {
 
     @Test
     void valid_request_passesValidation() {
-        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "欺诈规则", null, null, null, null);
+        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "欺诈规则", null, null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).isEmpty();
     }
 
     @Test
     void blank_tenantId_failsValidation() {
-        var req = new CreateRuleRequest("", "SCENE_A", "RULE_001", "欺诈规则", null, null, null, null);
+        var req = new CreateRuleRequest("", "SCENE_A", "RULE_001", "欺诈规则", null, null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("tenantId"));
     }
 
     @Test
     void blank_sceneCode_failsValidation() {
-        var req = new CreateRuleRequest("t1", "  ", "RULE_001", "欺诈规则", null, null, null, null);
+        var req = new CreateRuleRequest("t1", "  ", "RULE_001", "欺诈规则", null, null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("sceneCode"));
     }
 
     @Test
     void blank_code_failsValidation() {
-        var req = new CreateRuleRequest("t1", "SCENE_A", "  ", "欺诈规则", null, null, null, null);
+        var req = new CreateRuleRequest("t1", "SCENE_A", "  ", "欺诈规则", null, null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("code"));
     }
 
     @Test
     void blank_name_failsValidation() {
-        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "", null, null, null, null);
+        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "", null, null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("name"));
+    }
+
+    @Test
+    void kind_isOptional_allowsNull() {
+        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "规则", null, null, null, null, null);
+        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
+        assertThat(violations).isEmpty();
     }
 }

@@ -98,11 +98,11 @@ class ConfigServiceImpl implements ConfigService {
             String code, String name,
             String conditionAstJson, String decisionBindingsJson,
             String preGatesJson, String triggerEventTypesJson,
-            String actorId) {
+            String kind, String actorId) {
         return publishService.createDraft(Long.valueOf(tenantId), sceneCode,
                 code, name,
                 conditionAstJson, decisionBindingsJson,
                 preGatesJson, triggerEventTypesJson,
-                actorId);
+                kind, actorId);
     }
 }

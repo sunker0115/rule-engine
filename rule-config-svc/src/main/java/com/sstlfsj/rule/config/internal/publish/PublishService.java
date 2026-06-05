@@ -199,6 +199,7 @@ public class PublishService {
      * @param decisionBindingsJson  决策绑定 JSON，为空时默认 "[]"
      * @param preGatesJson          前置门控 JSON，为空时默认 "[]"
      * @param triggerEventTypesJson 触发事件类型 JSON，为空时默认 "[]"
+     * @param kind                  规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
      * @param actorId               操作人
      * @return 新建草稿的 id 和版本信息
      */
@@ -207,7 +208,7 @@ public class PublishService {
             String code, String name,
             String conditionAstJson, String decisionBindingsJson,
             String preGatesJson, String triggerEventTypesJson,
-            String actorId) {
+            String kind, String actorId) {
         // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
         SceneDef scene = sceneMapper.selectOne(
                 new LambdaQueryWrapper<SceneDef>()
@@ -229,19 +230,27 @@ public class PublishService {
             throw new IllegalArgumentException("规则编码已存在: code=" + code);
         }
 
-        // 3. INSERT rule_definition（status=DRAFT）
+        // 3. kind 合法性校验，null 时缺省 AST_BOOLEAN
+        String effectiveKind = (kind == null || kind.isBlank()) ? "AST_BOOLEAN" : kind;
+        java.util.Set<String> validKinds = java.util.Set.of(
+                "AST_BOOLEAN", "SCORECARD", "DECISION_TREE", "DECISION_TABLE");
+        if (!validKinds.contains(effectiveKind)) {
+            throw new IllegalArgumentException("不支持的规则 kind: " + effectiveKind);
+        }
+
+        // 4. INSERT rule_definition（status=DRAFT）
         RuleDefinition rd = new RuleDefinition();
         rd.setTenantId(tenantId);
         rd.setSceneId(scene.getId());
         rd.setCode(code);
         rd.setName(name);
         rd.setStatus("DRAFT");
-        rd.setKind("AST_BOOLEAN");
+        rd.setKind(effectiveKind);
         rd.setCreatedBy(actorId);
         rd.setCreatedAt(LocalDateTime.now());
         ruleDefinitionMapper.insert(rd);
 
-        // 4. INSERT rule_version（version=1，status=DRAFT）
+        // 5. INSERT rule_version（version=1，status=DRAFT）
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(rd.getId());
         rv.setVersion(1L);
@@ -249,14 +258,14 @@ public class PublishService {
         rv.setDecisionBindings(isBlank(decisionBindingsJson) ? "[]" : decisionBindingsJson);
         rv.setPreGates(isBlank(preGatesJson) ? "[]" : preGatesJson);
         rv.setRollout("{}");
-        rv.setKind("AST_BOOLEAN");
+        rv.setKind(effectiveKind);
         rv.setTriggerEventTypes(isBlank(triggerEventTypesJson) ? "[]" : triggerEventTypesJson);
         rv.setMetricDependencies("[]");
         rv.setStatus("DRAFT");
         rv.setCreatedAt(LocalDateTime.now());
         ruleVersionMapper.insert(rv);
 
-        // 4. INSERT audit_log（同事务写入，D14 约定）
+        // 6. INSERT audit_log（同事务写入，D14 约定）
         AuditLog log = new AuditLog();
         log.setTenantId(tenantId);
         log.setActor(actorId);

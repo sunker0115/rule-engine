@@ -9,6 +9,7 @@ public record CreateRuleRequest(
         @NotBlank String sceneCode,
         @NotBlank String code,
         @NotBlank String name,
+        String kind,
         JsonNode conditionAst,
         JsonNode decisionBindings,
         JsonNode preGates,
