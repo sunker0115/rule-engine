@@ -8,6 +8,9 @@ import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
+import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -379,8 +382,12 @@ class PublishServiceTest {
         when(sceneMapper.selectById(5L)).thenReturn(scene);
         when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        // 合法 IfNode：condition + thenBranch 均不为 null
         when(astSerializer.fromJson(any()))
-                .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+                .thenReturn(new IfNode(
+                        new ConditionNode("GT", "amount", null, Map.of(), 0.0),
+                        new DecisionLeafNode("BLOCK", "HIGH_RISK"),
+                        new DecisionLeafNode("PASS", "LOW_RISK")));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -396,13 +403,80 @@ class PublishServiceTest {
         when(sceneMapper.selectById(5L)).thenReturn(scene);
         when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        // 合法 DecisionTableNode：1 列 1 行，行列数一致
         when(astSerializer.fromJson(any()))
-                .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+                .thenReturn(new DecisionTableNode(
+                        List.of(new DecisionTableNode.Column("amount", "GT")),
+                        List.of(new DecisionTableNode.Row(List.of(1000), "BLOCK"))));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
                 () -> publishService.publish(1L, 10L, "actor"));
+    }
+
+    @Test
+    void publish_decisionTree_非IfNode根节点_抛异常() {
+        draftRule.setKind("DECISION_TREE");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        // 根节点是 ConditionNode，不是 IfNode
+        when(astSerializer.fromJson(anyString()))
+                .thenReturn(new ConditionNode("GT", "amount", null, Map.of(), 0.0));
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("IfNode");
+    }
+
+    @Test
+    void publish_decisionTree_thenBranchNull_抛异常() {
+        draftRule.setKind("DECISION_TREE");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        // thenBranch = null
+        IfNode badTree = new IfNode(
+                new ConditionNode("GT", "amount", null, Map.of(), 0.0),
+                null, null);
+        when(astSerializer.fromJson(anyString())).thenReturn(badTree);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("thenBranch");
+    }
+
+    @Test
+    void publish_decisionTable_非DecisionTableNode根节点_抛异常() {
+        draftRule.setKind("DECISION_TABLE");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(astSerializer.fromJson(anyString()))
+                .thenReturn(new ConditionNode("GT", "amount", null, Map.of(), 0.0));
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DecisionTableNode");
+    }
+
+    @Test
+    void publish_decisionTable_行列数不一致_抛异常() {
+        draftRule.setKind("DECISION_TABLE");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        // 2 列但行只有 1 个条件值
+        DecisionTableNode table = new DecisionTableNode(
+                List.of(new DecisionTableNode.Column("amount", "GT"),
+                        new DecisionTableNode.Column("count", "LT")),
+                List.of(new DecisionTableNode.Row(List.of(1000), "BLOCK")));
+        when(astSerializer.fromJson(anyString())).thenReturn(table);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("列数");
     }
 }

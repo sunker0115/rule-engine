@@ -10,6 +10,8 @@ import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
+import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -114,6 +116,39 @@ public class PublishService {
                 if (leaf.weight() <= 0) {
                     throw new IllegalArgumentException(
                             "SCORECARD 条件节点 weight 必须 > 0，conditionType=" + leaf.conditionType());
+                }
+            }
+        }
+        // DECISION_TREE 校验：根节点必须是 IfNode，thenBranch 不得为 null
+        if ("DECISION_TREE".equals(kind)) {
+            if (!(ast instanceof IfNode ifRoot)) {
+                throw new IllegalArgumentException(
+                        "kind=DECISION_TREE 的规则 conditionAst 根节点必须是 IfNode");
+            }
+            if (ifRoot.thenBranch() == null) {
+                throw new IllegalArgumentException(
+                        "kind=DECISION_TREE 的 IfNode thenBranch 不得为 null");
+            }
+        }
+        // DECISION_TABLE 校验：根节点必须是 DecisionTableNode，columns/rows 非空，行列数一致
+        if ("DECISION_TABLE".equals(kind)) {
+            if (!(ast instanceof DecisionTableNode tableRoot)) {
+                throw new IllegalArgumentException(
+                        "kind=DECISION_TABLE 的规则 conditionAst 根节点必须是 DecisionTableNode");
+            }
+            if (tableRoot.columns() == null || tableRoot.columns().isEmpty()) {
+                throw new IllegalArgumentException("DECISION_TABLE columns 不得为空");
+            }
+            if (tableRoot.rows() == null || tableRoot.rows().isEmpty()) {
+                throw new IllegalArgumentException("DECISION_TABLE rows 不得为空");
+            }
+            int colCount = tableRoot.columns().size();
+            for (int i = 0; i < tableRoot.rows().size(); i++) {
+                DecisionTableNode.Row row = tableRoot.rows().get(i);
+                if (row.conditions().size() != colCount) {
+                    throw new IllegalArgumentException(
+                            "DECISION_TABLE 第 " + i + " 行 conditions 数量（" + row.conditions().size()
+                            + "）与列数（" + colCount + "）不一致");
                 }
             }
         }
