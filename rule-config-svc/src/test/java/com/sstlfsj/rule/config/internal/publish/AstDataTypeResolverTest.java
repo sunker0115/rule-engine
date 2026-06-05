@@ -189,8 +189,8 @@ class AstDataTypeResolverTest {
     }
 
     @Test
-    void resolve_dataTypeList_skipsCompatibilityCheck() {
-        // LIST dataType 命中守卫，跳过矩阵校验，dataType 冻结为 LIST
+    void resolve_containsWithList_passesViaAllowed() {
+        // CONTAINS + LIST -> ALLOWED.get("CONTAINS")={LIST}，LIST∈ -> 经矩阵校验通过，dataType 冻结为 LIST
         ConditionNode cond = new ConditionNode("CONTAINS", "tags", null,
                 Map.of("value", "vip"), 0.0);
         Map<String, String> typeMap = Map.of("tags", "LIST");
@@ -215,14 +215,16 @@ class AstDataTypeResolverTest {
     }
 
     @Test
-    void resolve_containsWithList_ok() {
-        // CONTAINS + LIST -> LIST 命中守卫，跳过校验，dataType 冻结为 LIST
-        ConditionNode cond = new ConditionNode("CONTAINS", "tags", null,
-                Map.of("value", "vip"), 0.0);
+    void resolve_gtWithList_throwsIllegalArgument() {
+        // GT 允许 LONG/DOUBLE；LIST metric 挂 GT -> 发布期拒绝（修复：LIST 不再绕过矩阵校验）
+        ConditionNode cond = new ConditionNode("GT", "tags", null,
+                Map.of("threshold", 1), 0.0);
         Map<String, String> typeMap = Map.of("tags", "LIST");
 
-        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
-        assertThat(((ConditionNode) result).dataType()).isEqualTo("LIST");
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GT")
+                .hasMessageContaining("LIST");
     }
 
     @Test
