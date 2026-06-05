@@ -97,7 +97,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 
 - **种子**：默认 `subjectId:ruleVersionId`，同一 subject 在不同版本间 bucket 独立（防止切版本导致漂移）；配 `experimentId` 时种子改为 `subjectId:experimentId`，同实验多规则共享分桶（一致分桶 / 互斥）。
 - **命中**：配桶区间 `bucketStart`/`bucketEnd` 时按区间判定（优先）；否则按 `percentage`（等价区间 `[0,percentage)`）。
-- murmur3_32 保证分布均匀；hash seed 固定（见 §九 `engine.rule.rollout.hash-seed`），上线后不要改，否则桶分布漂移。
+- murmur3_32 保证分布均匀；hash seed 固定为 0（`Hashing.murmur3_32_fixed()`，不可配置）——稳定哈希是 D6 灰度桶稳定性的硬保证，不开放配置以杜绝误改导致全量桶漂移。
 
 ### 灰度验证流程
 
@@ -192,7 +192,6 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `engine.rule.retention.evaluation-session-days` | 30 | evaluation_session 保留天数（D9） |
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |
 | `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session 保留天数 |
-| `engine.rule.rollout.hash-seed` | 0 | murmur3 hash seed（固定后不要改，否则桶分布漂移） |
 | `engine.rule.action.retry-queue-capacity` | 10000 | Action 重试队列容量（内存，进程重启丢失） |
 | `engine.rule.action.retry-initial-interval-ms` | 1000 | 指数退避初始间隔 |
 | `engine.rule.action.retry-max-interval-ms` | 60000 | 指数退避最大间隔 |
