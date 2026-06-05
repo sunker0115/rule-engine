@@ -6,9 +6,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.util.List;
 
 /** JSON 文件模式：从 classpath 加载规则快照，适合离线 / 测试场景。 */
@@ -36,11 +34,7 @@ public class FileRuleSource implements RuleSource {
     @Override
     public void loadInto(SceneRuleIndex index) {
         List<RuleVersionSnapshot> snapshots;
-        try {
-            snapshots = MAPPER.readValue(input, new TypeReference<>() {});
-        } catch (IOException e) {
-            throw new UncheckedIOException("规则文件解析失败", e);
-        }
+        snapshots = MAPPER.readValue(input, new TypeReference<>() {});
         new DslRuleSource(snapshots).loadInto(index);
     }
 }
