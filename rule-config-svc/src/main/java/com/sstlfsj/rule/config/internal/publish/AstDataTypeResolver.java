@@ -78,7 +78,8 @@ class AstDataTypeResolver {
     private static ConditionNode resolveCondition(ConditionNode cond,
                                                    Map<String, String> dataTypeMap) {
         String dataType = dataTypeMap.get(cond.metricCode());
-        // 校验仅在 dataType 已知（非 null）时执行；ALLOWED 缺席的算子（DATE_*、自定义）直接放行
+        // 校验仅在 dataType 已知（非 null）时执行；ALLOWED 缺席的算子（time.*、自定义）直接放行
+        // DATE_BEFORE/DATE_AFTER 已纳入 ALLOWED（B20），不再绕过校验
         if (dataType != null) {
             Set<String> allowed = ALLOWED.get(cond.conditionType());
             if (allowed != null && !allowed.contains(dataType)) {
