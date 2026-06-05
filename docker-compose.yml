@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mysql:
     image: mysql:8.4
@@ -8,10 +6,30 @@ services:
       MYSQL_DATABASE: rule_engine
     ports:
       - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
       interval: 5s
+      timeout: 3s
       retries: 10
+      start_period: 20s
+
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.11.5
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # gRPC OTLP
+      - "4318:4318"   # HTTP OTLP
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-s", "http://localhost:3000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
 
   rule-app:
     build:
@@ -26,20 +44,11 @@ services:
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-lgtm:4318/v1/metrics
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-lgtm:4318/v1/traces
       OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-lgtm:4318/v1/logs
-      OTEL_SERVICE_NAME: rule-engine
-      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
     depends_on:
       mysql:
         condition: service_healthy
       otel-lgtm:
-        condition: service_started
+        condition: service_healthy
 
-  otel-lgtm:
-    image: grafana/otel-lgtm:0.11.5
-    ports:
-      - "3000:3000"   # Grafana UI
-      - "4317:4317"   # gRPC OTLP
-      - "4318:4318"   # HTTP OTLP
-    environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+volumes:
+  mysql-data:
