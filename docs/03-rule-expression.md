@@ -292,7 +292,7 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 |------|------|------|------|
 | `start` | `"HH:mm"` | 是 | 窗口开始时间（含） |
 | `end` | `"HH:mm"` | 是 | 窗口结束时间（含）；`end < start` 表示跨午夜窗口（如 `22:00–06:00`） |
-| `timezone` | IANA 时区名 | 否 | 缺省回落 `Scene.defaultParams.timezone`，仍未配则 `UTC` |
+| `timezone` | IANA 时区名 | 否 | 缺省回落 `Scene.defaultParams.timezone`，仍未配则 `UTC`（Scene 级回落 B20 暂缓，详见 §3.4） |
 | `daysOfWeek` | `String[]` | 否 | `["MON","TUE","WED","THU","FRI","SAT","SUN"]` 子集；缺省 = 全周 |
 | `datesExclude` | `"MM-DD"[]` | 否 | 排除日期列表（节假日豁免），如 `["01-01","10-01"]` |
 

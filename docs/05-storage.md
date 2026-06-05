@@ -323,7 +323,7 @@ CREATE TABLE evaluation_session (
   started_at       TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
   finished_at      TIMESTAMP(3)  COMMENT 'status 从 PENDING 更新为终态的时间',
   eval_duration_ms INT          COMMENT '整 session 耗时（ms）',
-  context_snapshot JSON         COMMENT 'EvalContext metrics 取数快照，{metricCode: value}；构建失败时为 null（排障 / dry-run 重放用）',
+  context_snapshot JSON         COMMENT 'EvalContext 取数快照；嵌套格式 {"metrics":{metricCode:value,...},"evalNow":"<ISO-8601 instant>"}（B20）；构建失败时为 null（排障 / dry-run 重放用）',
   UNIQUE KEY uk_tenant_event (tenant_id, event_id),
   KEY idx_scene_subject (scene_code, subject_id),
   KEY idx_started_at (started_at)
@@ -401,7 +401,7 @@ CREATE TABLE dry_run_session (
   trigger          ENUM('MANUAL','API') NOT NULL DEFAULT 'API' COMMENT 'dry-run 触发来源',
   requested_by     VARCHAR(64)  COMMENT 'dry-run 发起人（来自请求头 X-Actor-Id，D14）',
   target_rule_version_id BIGINT COMMENT '指定预览的 RuleVersion id；null 时使用 current_version，可提前预览未发布版本',
-  context_snapshot JSON         COMMENT 'dry-run 试算时 EvalContext metrics 取数快照（排障 / 重放对比用）',
+  context_snapshot JSON         COMMENT 'dry-run 试算时 EvalContext 取数快照；嵌套格式 {"metrics":{metricCode:value,...},"evalNow":"<ISO-8601 instant>"}（B20）；构建失败时为 null（排障 / 重放对比用）',
   KEY idx_tenant_started (tenant_id, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 评估主记录（与 prod 隔离，D7）';
 ```
