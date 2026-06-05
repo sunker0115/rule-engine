@@ -23,7 +23,7 @@ class DecisionTreeExecutorTest {
     private EvalContext ctx() {
         RuleEvent event = new RuleEvent("t1", "scene", "EVT", "u1",
                 "e1", Instant.now(), Map.of(), Map.of());
-        return new EvalContext("t1", event, null, Map.of());
+        return new EvalContext("t1", event, null, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
     private RuleVersionSnapshot snapshot(AstNode ast, String... decisionCodes) {

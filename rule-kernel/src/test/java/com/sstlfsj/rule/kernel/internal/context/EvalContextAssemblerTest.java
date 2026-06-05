@@ -12,6 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class EvalContextAssemblerTest {
 
+    private static final Instant NOW = Instant.parse("2026-06-01T00:00:00Z");
+
     private RuleEvent event(Map<String, Object> providedMetrics) {
         return new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
                 Instant.now(), Map.of(), providedMetrics);
@@ -20,7 +22,7 @@ class EvalContextAssemblerTest {
     @Test
     void noSubjectLoader_buildsMinimalSubject() {
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of("score", 100)), List.of());
+        EvalContext ctx = assembler.assemble(event(Map.of("score", 100)), List.of(), NOW);
 
         assertThat(ctx.subject().subjectId()).isEqualTo("sub1");
         assertThat(ctx.subject().subjectType()).isEqualTo(SubjectType.USER);
@@ -29,7 +31,7 @@ class EvalContextAssemblerTest {
     @Test
     void providedMetrics_populatedInContext() {
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of("score", 42, "tag", "vip")), List.of());
+        EvalContext ctx = assembler.assemble(event(Map.of("score", 42, "tag", "vip")), List.of(), NOW);
 
         assertThat(ctx.metrics()).containsKey("score");
         assertThat(ctx.metrics().get("score").value()).isEqualTo(42);
@@ -48,7 +50,7 @@ class EvalContextAssemblerTest {
         };
 
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(loader), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of()), List.of());
+        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
 
         assertThat(ctx.subject().attributes()).containsEntry("level", "gold");
     }
@@ -65,7 +67,7 @@ class EvalContextAssemblerTest {
         };
 
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(failingLoader), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of()), List.of());
+        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
 
         assertThat(ctx.subject().subjectId()).isEqualTo("sub1");
         assertThat(ctx.subject().attributes()).isEmpty();
@@ -74,8 +76,17 @@ class EvalContextAssemblerTest {
     @Test
     void emptyProvidedMetrics_contextMetricsEmpty() {
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of()), List.of());
+        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
 
         assertThat(ctx.metrics()).isEmpty();
+    }
+
+    @Test
+    void now_isPropagatedToContext() {
+        EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
+        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
+
+        assertThat(ctx.now()).isEqualTo(NOW);
+        assertThat(ctx.getNow()).isEqualTo(NOW);
     }
 }

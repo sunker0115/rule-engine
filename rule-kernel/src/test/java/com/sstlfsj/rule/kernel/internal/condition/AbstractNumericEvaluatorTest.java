@@ -25,7 +25,7 @@ class AbstractNumericEvaluatorTest {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
                 Instant.now(), Map.of(), Map.of());
         return new EvalContext("t1", event, new Subject("sub1", SubjectType.USER, Map.of()),
-                Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")));
+                Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
     @Test
@@ -36,7 +36,7 @@ class AbstractNumericEvaluatorTest {
         EvalContext empty = new EvalContext("t1",
                 new RuleEvent("e1", "t1", "s1", "sub1", "EVT", Instant.now(), Map.of(), Map.of()),
                 new Subject("sub1", SubjectType.USER, Map.of()),
-                Map.of());
+                Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(ev.evaluate(node, empty)).isFalse();
     }
 

@@ -129,6 +129,28 @@ class EvalEngineTest {
     }
 
     @Test
+    void evaluate_withExternalNow_propagatesToContext() {
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.update("t1", "scene", "*", List.of(snapshot(1L, "t1", "scene")));
+
+        Instant fixedNow = Instant.parse("2026-06-01T00:00:00Z");
+        // executor 验证 ctx.now() 等于注入的 fixedNow
+        RuleVersionExecutor checkingExec = (snap, ctx) -> {
+            assertEquals(fixedNow, ctx.now());
+            return new EvalResult(true,
+                    new Decision("BLOCK", "", 10, snap.ruleVersionId()),
+                    List.of(new Decision("BLOCK", "", 10, snap.ruleVersionId())),
+                    List.of(), null, List.of(), null, null, null);
+        };
+        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
+        EvalEngine engine = new EvalEngine(index, asm, Map.of(),
+                Map.of("AST_BOOLEAN", checkingExec));
+
+        EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"), fixedNow);
+        assertTrue(result.ruleHit());
+    }
+
+    @Test
     void evaluate_multipleSnapshots_highestPriorityWins() {
         SceneRuleIndex index = new SceneRuleIndex();
         RuleVersionSnapshot low  = new RuleVersionSnapshot(1L, "scene", "t1",

@@ -23,7 +23,7 @@ class BetweenEvaluatorTest {
                 Instant.now(), Map.of(), Map.of());
         Subject subject = new Subject("sub1", SubjectType.USER, Map.of());
         EvalContext ctx = new EvalContext("t1", event, subject,
-                Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")));
+                Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")), Instant.parse("2026-06-01T00:00:00Z"));
         return ctx;
     }
 
@@ -61,7 +61,7 @@ class BetweenEvaluatorTest {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
                 Instant.now(), Map.of(), Map.of());
         Subject subject = new Subject("sub1", SubjectType.USER, Map.of());
-        EvalContext emptyCtx = new EvalContext("t1", event, subject, Map.of());
+        EvalContext emptyCtx = new EvalContext("t1", event, subject, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(evaluator.evaluate(node("score", 10, 100), emptyCtx)).isFalse();
     }
 

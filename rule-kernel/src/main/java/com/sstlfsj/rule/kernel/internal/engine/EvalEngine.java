@@ -6,6 +6,7 @@ import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 
+import java.time.Instant;
 import java.util.*;
 
 /**
@@ -22,10 +23,10 @@ public class EvalEngine {
     private final Map<String, RuleVersionExecutor> executors;
 
     /**
-     * @param index           倒排索引，供 matcher 阶段查询候选快照
+     * @param index            倒排索引，供 matcher 阶段查询候选快照
      * @param contextAssembler 装配 EvalContext（主体、指标）
-     * @param preGates        Pre-Gate 映射，key = gateType
-     * @param executors       executor 映射，key = kind（如 "AST_BOOLEAN"）
+     * @param preGates         Pre-Gate 映射，key = gateType
+     * @param executors        executor 映射，key = kind（如 "AST_BOOLEAN"）
      */
     public EvalEngine(SceneRuleIndex index,
                       EvalContextAssembler contextAssembler,
@@ -37,33 +38,31 @@ public class EvalEngine {
         this.executors = Map.copyOf(executors);
     }
 
-    /**
-     * 对单个事件求值，从索引查询候选快照后执行完整评估链路。
-     *
-     * @param event 触发事件
-     * @return 纯计算结果，无副作用
-     */
+    /** 标准入口：在此注入一次评估时刻 now，整棵 AST 共用。 */
     public EvalResult evaluate(RuleEvent event) {
+        return evaluate(event, Instant.now());
+    }
+
+    /** 标准入口（外部注入 now，供 EvalServiceImpl 与快照共用同一时刻）。 */
+    public EvalResult evaluate(RuleEvent event, Instant now) {
         List<RuleVersionSnapshot> candidates =
                 index.match(event.tenantId(), event.sceneCode(), event.eventType());
         SceneExecutionStrategy strategy = index.getStrategy(event.tenantId(), event.sceneCode());
-        return evaluate(event, candidates, strategy);
+        return evaluate(event, candidates, strategy, now);
     }
 
-    /**
-     * 对指定候选快照列表求值，跳过索引查找步骤。
-     * 供 dry-run 路径：直接传入从 DB 加载的单条快照，使用 HIGHEST_PRIORITY 策略。
-     *
-     * @param event      触发事件
-     * @param candidates 候选快照列表
-     * @return 纯计算结果，无副作用
-     */
+    /** dry-run 入口：直接传候选快照，使用 HIGHEST_PRIORITY 策略，注入一次 now。 */
     public EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates) {
-        return evaluate(event, candidates, SceneExecutionStrategy.HIGHEST_PRIORITY);
+        return evaluate(event, candidates, Instant.now());
+    }
+
+    /** dry-run 入口（外部注入 now）。 */
+    public EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates, Instant now) {
+        return evaluate(event, candidates, SceneExecutionStrategy.HIGHEST_PRIORITY, now);
     }
 
     private EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates,
-                                SceneExecutionStrategy strategy) {
+                                SceneExecutionStrategy strategy, Instant now) {
         if (candidates.isEmpty()) return EvalResult.miss();
 
         List<RuleVersionSnapshot> passed = new ArrayList<>();
@@ -72,7 +71,7 @@ public class EvalEngine {
         }
         if (passed.isEmpty()) return EvalResult.miss();
 
-        EvalContext ctx = contextAssembler.assemble(event, passed);
+        EvalContext ctx = contextAssembler.assemble(event, passed, now);
 
         return switch (strategy) {
             case FIRST_HIT -> evaluateFirstHit(event, passed, ctx);

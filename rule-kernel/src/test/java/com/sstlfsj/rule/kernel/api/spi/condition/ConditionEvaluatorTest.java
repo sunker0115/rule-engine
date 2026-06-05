@@ -19,7 +19,7 @@ class ConditionEvaluatorTest {
     private static EvalContext buildCtx() {
         RuleEvent event = new RuleEvent("t1", "SCENE1", "PAYMENT",
                 "u1", "e1", Instant.now(), Map.of(), Map.of());
-        return new EvalContext("t1", event, null, Map.<String, MetricValue>of());
+        return new EvalContext("t1", event, null, Map.<String, MetricValue>of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
     @Test

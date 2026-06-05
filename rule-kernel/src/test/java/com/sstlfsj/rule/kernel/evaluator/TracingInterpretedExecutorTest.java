@@ -42,7 +42,7 @@ class TracingInterpretedExecutorTest {
     private EvalContext minimalContext() {
         RuleEvent event = new RuleEvent("t1", "scene1", "ORDER_PLACED", "u1",
                 "evt-1", Instant.now(), Map.of(), null);
-        return new EvalContext("t1", event, null, Map.of());
+        return new EvalContext("t1", event, null, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
     private RuleVersionSnapshot snapshot(AstNode ast) {

@@ -22,7 +22,7 @@ class DateBeforeEvaluatorTest {
                 Instant.now(), Map.of(), Map.of());
         Subject subject = new Subject("sub1", SubjectType.USER, Map.of());
         return new EvalContext("t1", event, subject,
-                Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")));
+                Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
     private ConditionNode node(String metric, Object threshold) {
@@ -61,7 +61,7 @@ class DateBeforeEvaluatorTest {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
                 Instant.now(), Map.of(), Map.of());
         Subject subject = new Subject("sub1", SubjectType.USER, Map.of());
-        EvalContext emptyCtx = new EvalContext("t1", event, subject, Map.of());
+        EvalContext emptyCtx = new EvalContext("t1", event, subject, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(evaluator.evaluate(node("d", "2023-01-01"), emptyCtx)).isFalse();
     }
 

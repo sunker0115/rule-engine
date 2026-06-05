@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
 
+import java.time.Instant;
 import java.util.*;
 
 /**
@@ -38,10 +39,12 @@ public class EvalContextAssembler {
      *
      * @param event      触发事件
      * @param candidates 候选 RuleVersionSnapshot（用于未来扩展，v1 不用）
+     * @param now        本次评估统一时刻，由调用方（EvalEngine）注入
      * @return 不可变 EvalContext
      */
     public EvalContext assemble(RuleEvent event,
-                                List<RuleVersionSnapshot> candidates) {
+                                List<RuleVersionSnapshot> candidates,
+                                Instant now) {
         Subject subject = loadSubject(event);
 
         // providedMetrics 转为 MetricValue Map（valueSource=PROVIDED）
@@ -51,7 +54,7 @@ public class EvalContextAssembler {
                     new MetricValue(entry.getValue(), "UNKNOWN", "PROVIDED"));
         }
 
-        return new EvalContext(event.tenantId(), event, subject, metrics);
+        return new EvalContext(event.tenantId(), event, subject, metrics, now);
     }
 
     private Subject loadSubject(RuleEvent event) {
