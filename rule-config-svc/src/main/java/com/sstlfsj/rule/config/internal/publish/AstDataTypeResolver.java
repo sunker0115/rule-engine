@@ -66,8 +66,9 @@ class AstDataTypeResolver {
                     resolve(ifn.condition(), dataTypeMap),
                     resolve(ifn.thenBranch(), dataTypeMap),
                     ifn.elseBranch() != null ? resolve(ifn.elseBranch(), dataTypeMap) : null);
-            // DecisionLeafNode/DecisionTableNode 原样返回（B19 不处理）
+            // 决策树终端叶子：无比较、无 metric，永久原样返回（非待办）
             case DecisionLeafNode leaf -> leaf;
+            // 决策表：列级 dataType 冻结 + 发布校验留后续（backlog B22），求值期合成节点走 Default 策略
             case DecisionTableNode dt  -> dt;
         };
     }

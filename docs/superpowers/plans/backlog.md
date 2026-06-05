@@ -41,6 +41,7 @@
 | B14 | **`evaluation_session` 异步化路径** | profile 显示 session insert 进热路径 P99；依赖 B11 | 08-evo §2.15 | 幂等基础设施切换（持久化 KV）；对账数据源切换；父子表时序重设计 |
 | B16 | **合规演进**（字段级加密 + 审计 hash chain + 数据右遗忘） | 高合规场景 | 08-evo §2.8 | 涉及所有持久化对象 |
 | B18 | **Scene schema 自动放量 / 回退**（按 SLO 推进） | 自动化放量需求（v2 范畴） | 08-evo §2.7 | 灰度 v1 已完成；自动化放量是 v2 范畴 |
+| B22 | **决策表列 dataType 冻结 + 发布校验**（B19 已知边界延续） | 决策表重度使用 / 出现声明≠运行时类型问题 | B19 设计 §2 边界 | 现状：`DecisionTableNode.Column` 不冻结 dataType，求值期合成节点走 Default 策略（数值仍走 BigDecimal，不丢精度）；缺的是列级发布期算子×dataType 校验 + 声明类型驱动路由。改动：Column 加 dataType（发布期从 metricCode 冻结）+ AstDataTypeResolver 处理 Column + DecisionTableExecutor 传该 dataType 进合成 ConditionNode。不紧急 |
 
 ---
 

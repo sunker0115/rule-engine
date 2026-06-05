@@ -139,6 +139,16 @@ class AstDataTypeResolverTest {
         assertThat(result).isSameAs(dt);
     }
 
+    @Test
+    void resolve_decisionLeafNode_returnedAsIs() {
+        // 决策树终端叶子：无比较、无 metric，原样返回（永久边界，非待办）
+        DecisionLeafNode leaf = new DecisionLeafNode("BLOCK", "HIGH");
+
+        AstNode result = AstDataTypeResolver.resolve(leaf, Map.of());
+
+        assertThat(result).isSameAs(leaf);
+    }
+
     // ── 兼容性校验 ────────────────────────────────────────────────────────────
 
     @Test
