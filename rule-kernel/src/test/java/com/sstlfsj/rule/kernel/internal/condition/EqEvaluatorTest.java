@@ -56,4 +56,30 @@ class EqEvaluatorTest {
                 new Subject("sub1", SubjectType.USER, Map.of()), Map.of());
         assertThat(evaluator.evaluate(node("score", 100), emptyCtx)).isFalse();
     }
+
+    @Test
+    void eq_stringDataType_zeroPrefix_notEqualTo100() {
+        // STRING dataType：字符串 "0100" 不等于 "100"
+        ConditionNode n = new ConditionNode("EQ", "code", null,
+                Map.of("threshold", "100"), 0.0, "STRING");
+        assertThat(evaluator.evaluate(n, ctx("code", "0100"))).isFalse();
+    }
+
+    @Test
+    void eq_longDataType_bigInteger_notEqualWhenDifferent() {
+        // LONG dataType：大整数精确比较，不走 double
+        long a = 9007199254740993L;
+        long b = 9007199254740994L;
+        ConditionNode n = new ConditionNode("EQ", "id", null,
+                Map.of("threshold", b), 0.0, "LONG");
+        assertThat(evaluator.evaluate(n, ctx("id", a))).isFalse();
+    }
+
+    @Test
+    void eq_booleanDataType_trueEqualsStringTrue() {
+        // BOOLEAN dataType：true 等于字符串 "true"
+        ConditionNode n = new ConditionNode("EQ", "flag", null,
+                Map.of("threshold", "true"), 0.0, "BOOLEAN");
+        assertThat(evaluator.evaluate(n, ctx("flag", true))).isTrue();
+    }
 }

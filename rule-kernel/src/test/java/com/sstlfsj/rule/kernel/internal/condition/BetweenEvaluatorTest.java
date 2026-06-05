@@ -63,4 +63,12 @@ class BetweenEvaluatorTest {
         EvalContext emptyCtx = new EvalContext("t1", event, subject, Map.of());
         assertThat(evaluator.evaluate(node("score", 10, 100), emptyCtx)).isFalse();
     }
+
+    @Test
+    void withDataTypeLong_bigDecimalPrecision_atBoundary_returnsTrue() {
+        // dataType=LONG 走 Numeric 策略，50000.00 == 50000（scale 不同，BigDecimal.compareTo 视为相等）
+        ConditionNode node = new ConditionNode("BETWEEN", "amount", null,
+                Map.of("min", new java.math.BigDecimal("50000.00"), "max", 60000), 0.0, "LONG");
+        assertThat(evaluator.evaluate(node, ctx("amount", 50000))).isTrue();
+    }
 }

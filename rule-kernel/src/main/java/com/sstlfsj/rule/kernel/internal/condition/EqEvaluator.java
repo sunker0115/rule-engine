@@ -4,10 +4,11 @@ import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
+import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
 
 /**
- * EQ（等于）条件算子：支持数值和字符串比较。
- * 数值时走 Double.compare；非数值时走 String.equals。
+ * EQ（等于）条件算子：按 node.dataType() 选策略后调用 strategy.equals()。
+ * dataType=null（DSL）时走 DefaultComparisonStrategy，按 actual 运行时类型推断。
  */
 public class EqEvaluator implements ConditionEvaluator {
 
@@ -17,12 +18,6 @@ public class EqEvaluator implements ConditionEvaluator {
         if (mv == null) return false;
         Object threshold = node.params().get("threshold");
         if (threshold == null) return false;
-
-        Number actualNum    = AbstractNumericEvaluator.toNumber(mv.value());
-        Number thresholdNum = AbstractNumericEvaluator.toNumber(threshold);
-        if (actualNum != null && thresholdNum != null) {
-            return Double.compare(actualNum.doubleValue(), thresholdNum.doubleValue()) == 0;
-        }
-        return String.valueOf(mv.value()).equals(String.valueOf(threshold));
+        return ComparisonStrategyFactory.forType(node.dataType()).equals(mv.value(), threshold);
     }
 }

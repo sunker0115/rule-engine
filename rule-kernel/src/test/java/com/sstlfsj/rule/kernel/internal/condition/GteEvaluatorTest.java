@@ -42,4 +42,12 @@ class GteEvaluatorTest {
     void actualLess_returnsFalse() {
         assertThat(evaluator.evaluate(node("score", 80), ctx("score", 50))).isFalse();
     }
+
+    @Test
+    void gte_withDataTypeLong_equalValues_returnsTrue() {
+        // dataType=LONG 走 Numeric 策略，equal 时 GTE 应返回 true
+        ConditionNode node = new ConditionNode("GTE", "amount", null,
+                Map.of("threshold", 9007199254740993L), 0.0, "LONG");
+        assertThat(evaluator.evaluate(node, ctx("amount", 9007199254740993L))).isTrue();
+    }
 }

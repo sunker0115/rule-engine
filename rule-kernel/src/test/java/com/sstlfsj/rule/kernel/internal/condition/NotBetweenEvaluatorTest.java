@@ -47,4 +47,12 @@ class NotBetweenEvaluatorTest {
     void valueAtBoundary_returnsFalse() {
         assertThat(evaluator.evaluate(node("score", 10, 100), ctx("score", 10))).isFalse();
     }
+
+    @Test
+    void withDataTypeLong_aboveMax_returnsTrue() {
+        // dataType=LONG 走 Numeric 策略，actual > max => NOT_BETWEEN 返回 true
+        ConditionNode node = new ConditionNode("NOT_BETWEEN", "amount", null,
+                Map.of("min", 10, "max", 100), 0.0, "LONG");
+        assertThat(evaluator.evaluate(node, ctx("amount", 200))).isTrue();
+    }
 }

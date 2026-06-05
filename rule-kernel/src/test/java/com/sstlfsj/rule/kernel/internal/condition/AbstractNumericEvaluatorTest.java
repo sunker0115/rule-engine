@@ -1,45 +1,75 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.model.Subject;
+import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 通过 GtEvaluator（accept(cmp>0)）覆盖 AbstractNumericEvaluator 的公共路径。
+ */
 class AbstractNumericEvaluatorTest {
 
-    @Test
-    void toNumber_integer_returnsNumber() {
-        assertThat(AbstractNumericEvaluator.toNumber(42)).isEqualTo(42);
+    private final GtEvaluator ev = new GtEvaluator();
+
+    private EvalContext ctx(String metric, Object value) {
+        RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
+                Instant.now(), Map.of(), Map.of());
+        return new EvalContext("t1", event, new Subject("sub1", SubjectType.USER, Map.of()),
+                Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")));
     }
 
     @Test
-    void toNumber_double_returnsNumber() {
-        assertThat(AbstractNumericEvaluator.toNumber(3.14)).isEqualTo(3.14);
+    void metricMissing_returnsFalse() {
+        // ctx 里没有 "score"，getMetric 返回 null -> false
+        ConditionNode node = new ConditionNode("GT", "score", null,
+                Map.of("threshold", 50), 0.0, null);
+        EvalContext empty = new EvalContext("t1",
+                new RuleEvent("e1", "t1", "s1", "sub1", "EVT", Instant.now(), Map.of(), Map.of()),
+                new Subject("sub1", SubjectType.USER, Map.of()),
+                Map.of());
+        assertThat(ev.evaluate(node, empty)).isFalse();
     }
 
     @Test
-    void toNumber_longString_parsesAsLong() {
-        Number n = AbstractNumericEvaluator.toNumber("100");
-        assertThat(n.longValue()).isEqualTo(100L);
+    void thresholdMissing_returnsFalse() {
+        // params 里没有 "threshold" -> false
+        ConditionNode node = new ConditionNode("GT", "score", null,
+                Map.of(), 0.0, null);
+        assertThat(ev.evaluate(node, ctx("score", 100))).isFalse();
     }
 
     @Test
-    void toNumber_doubleString_parsesAsDouble() {
-        Number n = AbstractNumericEvaluator.toNumber("1.5");
-        assertThat(n.doubleValue()).isEqualTo(1.5);
+    void sentinelMaxValue_returnsFalse() {
+        // Double.NaN 无法转 BigDecimal -> compare 返回 Integer.MAX_VALUE -> false
+        ConditionNode node = new ConditionNode("GT", "score", null,
+                Map.of("threshold", 50), 0.0, "LONG");
+        assertThat(ev.evaluate(node, ctx("score", Double.NaN))).isFalse();
     }
 
     @Test
-    void toNumber_nonNumericString_returnsNull() {
-        assertThat(AbstractNumericEvaluator.toNumber("abc")).isNull();
+    void dataTypeNull_defaultStrategy_numberPath() {
+        // dataType=null 走 Default，Number actual 走数值路径，100 > 50 => true
+        ConditionNode node = new ConditionNode("GT", "score", null,
+                Map.of("threshold", 50), 0.0, null);
+        assertThat(ev.evaluate(node, ctx("score", 100))).isTrue();
     }
 
     @Test
-    void toNumber_null_returnsNull() {
-        assertThat(AbstractNumericEvaluator.toNumber(null)).isNull();
-    }
-
-    @Test
-    void toNumber_booleanObject_returnsNull() {
-        assertThat(AbstractNumericEvaluator.toNumber(true)).isNull();
+    void dataTypeLong_numericStrategy_bigDecimalPrecision() {
+        // dataType=LONG 走 Numeric 策略（BigDecimal），大整数精度不丢失
+        long bigVal = 9007199254740994L;
+        long bigThreshold = 9007199254740993L;
+        ConditionNode node = new ConditionNode("GT", "id", null,
+                Map.of("threshold", bigThreshold), 0.0, "LONG");
+        assertThat(ev.evaluate(node, ctx("id", bigVal))).isTrue();
     }
 }

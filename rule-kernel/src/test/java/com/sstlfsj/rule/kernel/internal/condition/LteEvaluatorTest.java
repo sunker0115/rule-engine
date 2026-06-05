@@ -42,4 +42,12 @@ class LteEvaluatorTest {
     void actualGreater_returnsFalse() {
         assertThat(evaluator.evaluate(node("score", 80), ctx("score", 100))).isFalse();
     }
+
+    @Test
+    void lte_withDataTypeLong_equalValues_returnsTrue() {
+        // dataType=LONG 走 Numeric 策略，actual == threshold => LTE 返回 true
+        ConditionNode node = new ConditionNode("LTE", "amount", null,
+                Map.of("threshold", 9007199254740993L), 0.0, "LONG");
+        assertThat(evaluator.evaluate(node, ctx("amount", 9007199254740993L))).isTrue();
+    }
 }

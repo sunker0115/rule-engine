@@ -47,4 +47,21 @@ class NeqEvaluatorTest {
     void stringEqual_returnsFalse() {
         assertThat(evaluator.evaluate(node("status", "ACTIVE"), ctx("status", "ACTIVE"))).isFalse();
     }
+
+    @Test
+    void neq_stringDataType_zeroPrefix_returnsTrue() {
+        // STRING dataType："0100" 不等于 "100" => NEQ 返回 true
+        ConditionNode n = new ConditionNode("NEQ", "code", null,
+                Map.of("threshold", "100"), 0.0, "STRING");
+        assertThat(evaluator.evaluate(n, ctx("code", "0100"))).isTrue();
+    }
+
+    @Test
+    void neq_longDataType_sameValue_returnsFalse() {
+        // LONG dataType：相同大整数 => NEQ 返回 false
+        long v = 9007199254740993L;
+        ConditionNode n = new ConditionNode("NEQ", "id", null,
+                Map.of("threshold", v), 0.0, "LONG");
+        assertThat(evaluator.evaluate(n, ctx("id", v))).isFalse();
+    }
 }

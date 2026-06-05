@@ -4,42 +4,35 @@ import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
+import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategy;
+import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
 
 /**
- * 数值比较算子基类。
- * 子类实现 {@link #compare(int)} 方法，参数为 actual.compareTo(threshold) 的符号值。
- * 指标值或阈值缺失时返回 false（不抛异常，由 errorCode 机制上报）。
+ * 数值比较算子基类（GT/GTE/LT/LTE 继承）。
+ * 委托 {@link ComparisonStrategyFactory} 按 node.dataType() 选策略，
+ * 子类实现 {@link #accept(int)} 方法解读 compare 符号结果。
+ * 指标值或阈值缺失/无法比较时返回 false（不抛异常）。
  */
 abstract class AbstractNumericEvaluator implements ConditionEvaluator {
 
     /**
-     * 根据 actual.compareTo(threshold) 的结果决定条件是否成立。
+     * 根据 actual.compare(threshold) 的结果决定条件是否成立。
      *
-     * @param cmp Double.compare(actual, threshold) 的结果：负数/零/正数
+     * @param cmp 策略 compare 返回值：负数/零/正数
      * @return 条件是否满足
      */
-    protected abstract boolean compare(int cmp);
+    protected abstract boolean accept(int cmp);
 
     @Override
     public boolean evaluate(ConditionNode node, EvalContext ctx) {
         MetricValue mv = ctx.getMetric(node.metricCode());
         if (mv == null) return false;
-        Number actual    = toNumber(mv.value());
-        Number threshold = toNumber(node.params().get("threshold"));
-        if (actual == null || threshold == null) return false;
-        return compare(Double.compare(actual.doubleValue(), threshold.doubleValue()));
-    }
-
-    /** 将 Object 转为 Number，支持 Number 子类和数字字符串，其余返回 null。 */
-    static Number toNumber(Object o) {
-        if (o instanceof Number n) return n;
-        if (o instanceof String s) {
-            try { return Long.parseLong(s); }
-            catch (NumberFormatException e1) {
-                try { return Double.parseDouble(s); }
-                catch (NumberFormatException e2) { return null; }
-            }
-        }
-        return null;
+        Object threshold = node.params().get("threshold");
+        if (threshold == null) return false;
+        ComparisonStrategy strategy = ComparisonStrategyFactory.forType(node.dataType());
+        int cmp = strategy.compare(mv.value(), threshold);
+        // compare 返回 Integer.MAX_VALUE 表示转换失败（null/NaN/Infinity），视为 false
+        if (cmp == Integer.MAX_VALUE) return false;
+        return accept(cmp);
     }
 }

@@ -42,4 +42,12 @@ class LtEvaluatorTest {
     void actualGreater_returnsFalse() {
         assertThat(evaluator.evaluate(node("score", 80), ctx("score", 100))).isFalse();
     }
+
+    @Test
+    void lt_withDataTypeLong_lessThan_returnsTrue() {
+        // dataType=LONG 走 Numeric 策略，actual < threshold => true
+        ConditionNode node = new ConditionNode("LT", "amount", null,
+                Map.of("threshold", 9007199254740994L), 0.0, "LONG");
+        assertThat(evaluator.evaluate(node, ctx("amount", 9007199254740993L))).isTrue();
+    }
 }

@@ -42,4 +42,26 @@ class GtEvaluatorTest {
     void actualLess_returnsFalse() {
         assertThat(evaluator.evaluate(node("score", 80), ctx("score", 50))).isFalse();
     }
+
+    @Test
+    void gt_withDataTypeLong_usesBigDecimalPrecision() {
+        // dataType=LONG 时走 Numeric 策略（BigDecimal），大整数精度不丢失
+        GtEvaluator ev = new GtEvaluator();
+        long bigVal = 9007199254740994L;
+        long bigThreshold = 9007199254740993L;
+        ConditionNode node = new ConditionNode("GT", "id", null,
+                Map.of("threshold", bigThreshold), 0.0, "LONG");
+        EvalContext ctx = ctx("id", bigVal);
+        assertThat(ev.evaluate(node, ctx)).isTrue();
+    }
+
+    @Test
+    void gt_withDataTypeNull_fallsBackToDefault() {
+        // dataType=null 走 Default，Number 实际值按数值路径，100 > 50 => true
+        GtEvaluator ev = new GtEvaluator();
+        ConditionNode node = new ConditionNode("GT", "score", null,
+                Map.of("threshold", 50), 0.0, null);
+        EvalContext ctx = ctx("score", 100);
+        assertThat(ev.evaluate(node, ctx)).isTrue();
+    }
 }
