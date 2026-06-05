@@ -176,6 +176,7 @@ POST /api/v1/rules
   "sceneCode": "risk.transfer",
   "code": "rule-transfer-review",
   "name": "转账人工审核触发",
+  "kind": "AST_BOOLEAN",
   "conditionAst": { "type": "AndNode", "children": [] },
   "decisionBindings": [{ "decisionCode": "REVIEW" }],
   "preGates": [{ "type": "ROLLOUT", "params": { "percentage": 100 } }],
@@ -183,7 +184,19 @@ POST /api/v1/rules
 }
 ```
 
-> `tenantId` 为数字字符串（对应 `tenant.id` 主键），必填；`sceneCode` / `code` / `name` 必填；其余 JSON 字段可选（缺省存空 AST / 空数组）。
+**请求体字段说明：**
+
+| 字段            | 类型   | 必填 | 说明 |
+|-----------------|--------|------|------|
+| `tenantId`      | String | 是   | 数字字符串，对应 `tenant.id` 主键 |
+| `sceneCode`     | String | 是   | 规则所属场景编码 |
+| `code`          | String | 是   | 规则业务编码，同 tenantId + sceneCode 下唯一 |
+| `name`          | String | 是   | 规则显示名称 |
+| `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` |
+| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST |
+| `decisionBindings` | Array | 否 | 命中决策绑定列表，缺省空数组 |
+| `preGates`      | Array  | 否   | 前置门列表，缺省空数组 |
+| `triggerEventTypes` | Array | 否 | 触发事件类型白名单，缺省空数组 |
 
 **Response 201：**
 ```json
