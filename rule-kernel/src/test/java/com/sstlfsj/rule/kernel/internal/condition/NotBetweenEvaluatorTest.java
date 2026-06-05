@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class NotBetweenEvaluatorTest {
 
@@ -54,5 +55,15 @@ class NotBetweenEvaluatorTest {
         ConditionNode node = new ConditionNode("NOT_BETWEEN", "amount", null,
                 Map.of("min", 10, "max", 100), 0.0, "LONG");
         assertThat(evaluator.evaluate(node, ctx("amount", 200))).isTrue();
+    }
+
+    @Test
+    void dataTypeNull_booleanActual_doesNotThrow_returnsFalse() {
+        // dataType=null + 指标值为 Boolean -> DefaultStrategy 路由到 BooleanStrategy.compare，
+        // 后者抛 UnsupportedOperationException，evaluate 必须捕获并返回 false，不得穿透
+        ConditionNode node = new ConditionNode("NOT_BETWEEN", "flag", null,
+                Map.of("min", 0, "max", 1), 0.0, null);
+        assertThatCode(() -> assertThat(evaluator.evaluate(node, ctx("flag", true))).isFalse())
+                .doesNotThrowAnyException();
     }
 }

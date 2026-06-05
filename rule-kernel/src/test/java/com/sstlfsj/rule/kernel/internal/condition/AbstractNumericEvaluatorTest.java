@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * 通过 GtEvaluator（accept(cmp>0)）覆盖 AbstractNumericEvaluator 的公共路径。
@@ -71,5 +72,15 @@ class AbstractNumericEvaluatorTest {
         ConditionNode node = new ConditionNode("GT", "id", null,
                 Map.of("threshold", bigThreshold), 0.0, "LONG");
         assertThat(ev.evaluate(node, ctx("id", bigVal))).isTrue();
+    }
+
+    @Test
+    void dataTypeNull_booleanActual_doesNotThrow_returnsFalse() {
+        // dataType=null + 指标值为 Boolean -> DefaultStrategy 路由到 BooleanStrategy.compare，
+        // 后者抛 UnsupportedOperationException，evaluate 必须捕获并返回 false，不得穿透
+        ConditionNode node = new ConditionNode("GT", "flag", null,
+                Map.of("threshold", 50), 0.0, null);
+        assertThatCode(() -> assertThat(ev.evaluate(node, ctx("flag", true))).isFalse())
+                .doesNotThrowAnyException();
     }
 }

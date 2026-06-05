@@ -30,7 +30,13 @@ abstract class AbstractNumericEvaluator implements ConditionEvaluator {
         Object threshold = node.params().get("threshold");
         if (threshold == null) return false;
         ComparisonStrategy strategy = ComparisonStrategyFactory.forType(node.dataType());
-        int cmp = strategy.compare(mv.value(), threshold);
+        int cmp;
+        try {
+            cmp = strategy.compare(mv.value(), threshold);
+        } catch (UnsupportedOperationException e) {
+            // 无序类型（如 BOOLEAN）不支持排序比较，视为不满足
+            return false;
+        }
         // compare 返回 Integer.MAX_VALUE 表示转换失败（null/NaN/Infinity），视为 false
         if (cmp == Integer.MAX_VALUE) return false;
         return accept(cmp);

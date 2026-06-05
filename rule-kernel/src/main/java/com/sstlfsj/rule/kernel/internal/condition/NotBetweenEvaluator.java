@@ -21,8 +21,14 @@ public class NotBetweenEvaluator implements ConditionEvaluator {
         Object max = node.params().get("max");
         if (min == null || max == null) return false;
         var strategy = ComparisonStrategyFactory.forType(node.dataType());
-        int cmpMin = strategy.compare(mv.value(), min);
-        int cmpMax = strategy.compare(mv.value(), max);
+        int cmpMin, cmpMax;
+        try {
+            cmpMin = strategy.compare(mv.value(), min);
+            cmpMax = strategy.compare(mv.value(), max);
+        } catch (UnsupportedOperationException e) {
+            // 无序类型（如 BOOLEAN）不支持排序比较，视为不满足
+            return false;
+        }
         if (cmpMin == Integer.MAX_VALUE || cmpMax == Integer.MAX_VALUE) return false;
         // actual < min 或 actual > max
         return cmpMin < 0 || cmpMax > 0;
