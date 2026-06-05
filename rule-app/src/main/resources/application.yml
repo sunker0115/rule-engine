@@ -1,6 +1,10 @@
 spring:
   application:
     name: rule-engine
+  autoconfigure:
+    # OTel SDK 已通过 management.opentelemetry.* 推送 OTLP 指标；排除 Micrometer 的 OTLP registry
+    # 避免其 protobuf 4.26.1 与 OTel SDK 4.32.0 版本冲突导致 NPE
+    exclude: org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsExportAutoConfiguration
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
     username: ${SPRING_DATASOURCE_USERNAME:root}
