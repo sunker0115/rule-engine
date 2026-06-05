@@ -35,7 +35,7 @@ services:
         condition: service_started
 
   otel-lgtm:
-    image: grafana/otel-lgtm:0.8.0
+    image: grafana/otel-lgtm:0.11.5
     ports:
       - "3000:3000"   # Grafana UI
       - "4317:4317"   # gRPC OTLP
