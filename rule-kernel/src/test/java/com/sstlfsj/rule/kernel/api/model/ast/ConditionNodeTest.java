@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ConditionNodeTest {
@@ -55,5 +56,17 @@ class ConditionNodeTest {
         // weight 改为 Double 后，AST_BOOLEAN kind 场景可传 null，反序列化时缺失字段不报错
         ConditionNode node = new ConditionNode("GT", "score", null, Map.of(), null);
         assertNull(node.weight());
+    }
+
+    @Test
+    void sixArgConstructor_dataTypePreserved() {
+        ConditionNode node = new ConditionNode("EQ", "amount", null, Map.of(), 0.0, "LONG");
+        assertThat(node.dataType()).isEqualTo("LONG");
+    }
+
+    @Test
+    void fiveArgConstructor_dataTypeIsNull() {
+        ConditionNode node = new ConditionNode("EQ", "amount", null, Map.of(), 0.0);
+        assertThat(node.dataType()).isNull();
     }
 }
