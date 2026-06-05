@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 规则发布核心流程。
@@ -38,6 +40,7 @@ public class PublishService {
     private final ApplicationEventPublisher eventPublisher;
     private final AstSerializer astSerializer;
     private final ObjectMapper objectMapper;
+    private final MetricDefinitionMapper metricDefinitionMapper;
 
     public PublishService(RuleDefinitionMapper ruleDefinitionMapper,
                           SceneMapper sceneMapper,
@@ -46,7 +49,8 @@ public class PublishService {
                           AuditLogMapper auditLogMapper,
                           ApplicationEventPublisher eventPublisher,
                           AstSerializer astSerializer,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          MetricDefinitionMapper metricDefinitionMapper) {
         this.ruleDefinitionMapper = ruleDefinitionMapper;
         this.sceneMapper = sceneMapper;
         this.ruleVersionMapper = ruleVersionMapper;
@@ -55,6 +59,7 @@ public class PublishService {
         this.eventPublisher = eventPublisher;
         this.astSerializer = astSerializer;
         this.objectMapper = objectMapper;
+        this.metricDefinitionMapper = metricDefinitionMapper;
     }
 
     /**
@@ -158,6 +163,20 @@ public class PublishService {
         }
         List<String> metricDeps = MetricDependencyCollector.collect(ast);
 
+        // 4.5. 查 metric dataType，冻结进 AST（B19）
+        AstNode resolvedAst = ast;
+        if (!metricDeps.isEmpty()) {
+            List<MetricDefinition> metricDefs = metricDefinitionMapper.selectList(
+                    new LambdaQueryWrapper<MetricDefinition>()
+                            .eq(MetricDefinition::getTenantId, tenantId)
+                            .in(MetricDefinition::getMetricCode, metricDeps));
+            Map<String, String> dataTypeMap = metricDefs.stream()
+                    .collect(Collectors.toMap(
+                            MetricDefinition::getMetricCode,
+                            MetricDefinition::getDataType));
+            resolvedAst = AstDataTypeResolver.resolve(ast, dataTypeMap);
+        }
+
         // 5. 计算新版本号（max(version)+1）
         long newVersion = ruleVersionMapper.maxVersion(ruleDefinitionId) + 1;
 
@@ -165,7 +184,7 @@ public class PublishService {
         RuleVersion newRv = new RuleVersion();
         newRv.setRuleDefinitionId(ruleDefinitionId);
         newRv.setVersion(newVersion);
-        newRv.setConditionAst(draftVersion.getConditionAst());
+        newRv.setConditionAst(astSerializer.toJson(resolvedAst));
         newRv.setDecisionBindings(draftVersion.getDecisionBindings() != null
                 ? draftVersion.getDecisionBindings() : "[]");
         newRv.setPreGates(draftVersion.getPreGates() != null
@@ -211,7 +230,7 @@ public class PublishService {
                 newRv.getId(),
                 scene.getCode(),
                 String.valueOf(tenantId),
-                ast,
+                resolvedAst,
                 List.of(),   // preGates v1 暂时不反序列化
                 List.of(),   // decisionBindings v1 暂时不反序列化
                 List.of(),   // triggerEventTypes v1 暂时不反序列化，通配

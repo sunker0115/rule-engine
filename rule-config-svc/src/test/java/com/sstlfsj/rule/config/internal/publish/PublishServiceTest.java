@@ -44,6 +44,7 @@ class PublishServiceTest {
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock AstSerializer astSerializer;
     @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
+    @Mock MetricDefinitionMapper metricDefinitionMapper;
 
     @InjectMocks PublishService publishService;
 
@@ -577,8 +578,65 @@ class PublishServiceTest {
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         when(astSerializer.fromJson(anyString()))
                 .thenReturn(new ConditionNode("c.type", "m.code", null, Map.of(), 0.0));
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
         draftVersion.setTriggerEventTypes("[]");
         draftVersion.setPreGates("[{\"gateType\":\"ROLLOUT\",\"params\":{\"experimentId\":\"exp-1\",\"bucketStart\":0,\"bucketEnd\":50}}]");
         assertThat(publishService.publish(1L, 10L, "actor")).isNotNull();
+    }
+
+    @Test
+    void publish_freezesDataTypeInConditionAst() {
+        // 发布后 condition_ast 里的 ConditionNode 应含 dataType
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        // AST: GT 算子，metricCode="amount"
+        ConditionNode fakeAst = new ConditionNode("GT", "amount", null,
+                Map.of("threshold", 100), 0.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(fakeAst);
+
+        // metric_definition 返回 amount -> LONG
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("amount");
+        md.setDataType("LONG");
+        when(metricDefinitionMapper.selectList(any()))
+                .thenReturn(java.util.List.of(md));
+
+        publishService.publish(1L, 10L, "op");
+
+        // 验证 conditionAst 写入的是 resolvedAst（含 dataType），而非 draft 原始 JSON
+        ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(rvCaptor.capture());
+        // astSerializer.toJson 被调用一次（写 resolvedAst）
+        verify(astSerializer).toJson(argThat(node ->
+                node instanceof ConditionNode c && "LONG".equals(c.dataType())));
+    }
+
+    @Test
+    void publish_incompatibleOperatorDataType_throwsIllegalArgument() {
+        // GT 算子但 metric dataType=BOOLEAN -> 发布期报错
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+
+        ConditionNode badAst = new ConditionNode("GT", "flag", null,
+                Map.of("threshold", "true"), 0.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(badAst);
+
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("flag");
+        md.setDataType("BOOLEAN");
+        when(metricDefinitionMapper.selectList(any()))
+                .thenReturn(java.util.List.of(md));
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GT")
+                .hasMessageContaining("BOOLEAN");
     }
 }
