@@ -190,12 +190,62 @@ class AstDataTypeResolverTest {
 
     @Test
     void resolve_dataTypeList_skipsCompatibilityCheck() {
-        // LIST dataType 跳过校验（CONTAINS/NOT_CONTAINS 自洽，B19 不做矩阵校验）
+        // LIST dataType 命中守卫，跳过矩阵校验，dataType 冻结为 LIST
         ConditionNode cond = new ConditionNode("CONTAINS", "tags", null,
                 Map.of("value", "vip"), 0.0);
         Map<String, String> typeMap = Map.of("tags", "LIST");
 
         AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
         assertThat(((ConditionNode) result).dataType()).isEqualTo("LIST");
+    }
+
+    // ── CONTAINS / 字符串算子兼容矩阵（补全 spec §5）────────────────────────────
+
+    @Test
+    void resolve_containsWithString_throwsIllegalArgument() {
+        // CONTAINS 仅允许 LIST；STRING metric 挂 CONTAINS 算子 -> 发布期拒绝
+        ConditionNode cond = new ConditionNode("CONTAINS", "name", null,
+                Map.of("value", "foo"), 0.0);
+        Map<String, String> typeMap = Map.of("name", "STRING");
+
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("CONTAINS")
+                .hasMessageContaining("STRING");
+    }
+
+    @Test
+    void resolve_containsWithList_ok() {
+        // CONTAINS + LIST -> LIST 命中守卫，跳过校验，dataType 冻结为 LIST
+        ConditionNode cond = new ConditionNode("CONTAINS", "tags", null,
+                Map.of("value", "vip"), 0.0);
+        Map<String, String> typeMap = Map.of("tags", "LIST");
+
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("LIST");
+    }
+
+    @Test
+    void resolve_startsWithWithLong_throwsIllegalArgument() {
+        // STARTS_WITH 仅允许 STRING；LONG metric 挂 STARTS_WITH -> 发布期拒绝
+        ConditionNode cond = new ConditionNode("STARTS_WITH", "amount", null,
+                Map.of("value", "10"), 0.0);
+        Map<String, String> typeMap = Map.of("amount", "LONG");
+
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("STARTS_WITH")
+                .hasMessageContaining("LONG");
+    }
+
+    @Test
+    void resolve_startsWithWithString_ok() {
+        // STARTS_WITH + STRING -> 通过，dataType 冻结为 STRING
+        ConditionNode cond = new ConditionNode("STARTS_WITH", "code", null,
+                Map.of("value", "CN"), 0.0);
+        Map<String, String> typeMap = Map.of("code", "STRING");
+
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("STRING");
     }
 }
