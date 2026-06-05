@@ -41,6 +41,8 @@
         <mysql-connector-j.version>9.0.0</mysql-connector-j.version>
         <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <!-- OTel instrumentation（logback-appender 等），与 opentelemetry.version=1.55.0 配套 -->
+        <opentelemetry-instrumentation.version>2.16.0-alpha</opentelemetry-instrumentation.version>
     </properties>
 
     <build>
@@ -178,6 +180,13 @@
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
                 <scope>test</scope>
+            </dependency>
+
+            <!-- OTel Logback appender（spring-boot-starter-opentelemetry 未传递此依赖，需显式声明） -->
+            <dependency>
+                <groupId>io.opentelemetry.instrumentation</groupId>
+                <artifactId>opentelemetry-logback-appender-1.0</artifactId>
+                <version>${opentelemetry-instrumentation.version}</version>
             </dependency>
 
             <!-- 内部模块版本管理 -->
