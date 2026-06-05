@@ -84,7 +84,9 @@ class AstDataTypeResolver {
                         + "（metric=" + cond.metricCode() + "）");
             }
         }
-        // 重建 ConditionNode，冻结 dataType（查不到的 metric -> dataType=null，原样不变）
+        // 重建 ConditionNode，冻结 dataType（查不到的 metric -> dataType=null，原样不变）。
+        // 不变量：草稿 AST 的 ConditionNode.dataType 一律为 null（DSL 构造路径），
+        // 本次赋值是唯一的写入点，不存在覆盖既有值的情况。
         return new ConditionNode(cond.conditionType(), cond.metricCode(),
                 cond.displayLabel(), cond.params(), cond.weight(), dataType);
     }

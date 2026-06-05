@@ -92,6 +92,7 @@ class PublishServiceTest {
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         ConditionNode fakeAst = new ConditionNode("c.type", "m.code", null, Map.of(), 0.0);
         when(astSerializer.fromJson(anyString())).thenReturn(fakeAst);
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
 
         RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "operator1");
 
@@ -331,6 +332,7 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(astSerializer.fromJson(any()))
                 .thenReturn(new ConditionNode("EQ", "metric1", null, Map.of(), 0.0));
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -351,6 +353,7 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(astSerializer.fromJson(any()))
                 .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -372,6 +375,7 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(astSerializer.fromJson(any()))
                 .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -407,6 +411,7 @@ class PublishServiceTest {
                         new ConditionNode("GT", "amount", null, Map.of(), 0.0),
                         new DecisionLeafNode("BLOCK", "HIGH_RISK"),
                         new DecisionLeafNode("PASS", "LOW_RISK")));
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -427,6 +432,7 @@ class PublishServiceTest {
                 .thenReturn(new DecisionTableNode(
                         List.of(new DecisionTableNode.Column("amount", "GT")),
                         List.of(new DecisionTableNode.Row(List.of(1000), "BLOCK"))));
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
