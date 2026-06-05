@@ -24,12 +24,11 @@ management:
     export:
       prometheus:
         enabled: true
-  otlp:
+  opentelemetry:
     metrics:
       export:
-        url: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
-        step: 30s
-  opentelemetry:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
     tracing:
       export:
         otlp:
