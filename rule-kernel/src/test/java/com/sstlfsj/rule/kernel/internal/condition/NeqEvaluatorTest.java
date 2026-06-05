@@ -64,4 +64,28 @@ class NeqEvaluatorTest {
                 Map.of("threshold", v), 0.0, "LONG");
         assertThat(evaluator.evaluate(n, ctx("id", v))).isFalse();
     }
+
+    @Test
+    void neq_dateType_differentDate_returnsTrue() {
+        ConditionNode node = new ConditionNode("NEQ", "d", "",
+                Map.of("threshold", "2026-06-01"), 0.0, "DATE");
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1",
+                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of());
+        EvalContext ctx = new EvalContext("t1", ev, null,
+                Map.of("d", new MetricValue("2026-01-01", "DATE", "PROVIDED")),
+                Instant.parse("2026-06-01T00:00:00Z"));
+        assertThat(new NeqEvaluator().evaluate(node, ctx)).isTrue();
+    }
+
+    @Test
+    void neq_dateType_sameDate_returnsFalse() {
+        ConditionNode node = new ConditionNode("NEQ", "d", "",
+                Map.of("threshold", "2026-06-01"), 0.0, "DATE");
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1",
+                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of());
+        EvalContext ctx = new EvalContext("t1", ev, null,
+                Map.of("d", new MetricValue("2026-06-01", "DATE", "PROVIDED")),
+                Instant.parse("2026-06-01T00:00:00Z"));
+        assertThat(new NeqEvaluator().evaluate(node, ctx)).isFalse();
+    }
 }

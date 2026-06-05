@@ -82,4 +82,27 @@ class EqEvaluatorTest {
                 Map.of("threshold", "true"), 0.0, "BOOLEAN");
         assertThat(evaluator.evaluate(n, ctx("flag", true))).isTrue();
     }
+
+    @Test
+    void eq_dateType_sameDate_returnsTrue() {
+        ConditionNode node = new ConditionNode("EQ", "d", "",
+                Map.of("threshold", "2026-06-01"), 0.0, "DATE");
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1",
+                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of());
+        EvalContext ctx = new EvalContext("t1", ev, null,
+                Map.of("d", new MetricValue("2026-06-01", "DATE", "PROVIDED")),
+                Instant.parse("2026-06-01T00:00:00Z"));
+        assertThat(new EqEvaluator().evaluate(node, ctx)).isTrue();
+    }
+
+    @Test
+    void eq_datetimeType_now_matchesCtxNow() {
+        Instant now = Instant.parse("2026-06-01T10:00:00Z");
+        ConditionNode node = new ConditionNode("EQ", "d", "",
+                Map.of("threshold", "$now"), 0.0, "DATETIME");
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of());
+        EvalContext ctx = new EvalContext("t1", ev, null,
+                Map.of("d", new MetricValue(now, "DATETIME", "PROVIDED")), now);
+        assertThat(new EqEvaluator().evaluate(node, ctx)).isTrue();
+    }
 }
