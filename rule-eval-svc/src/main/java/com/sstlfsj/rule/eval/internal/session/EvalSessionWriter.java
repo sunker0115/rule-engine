@@ -18,6 +18,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -177,10 +178,10 @@ public class EvalSessionWriter {
     private String serializeSnapshot(EvalContext ctx) {
         if (ctx == null) return null;
         Map<String, Object> metrics = ctx.metrics().entrySet().stream()
-                .collect(java.util.stream.Collectors.toMap(
+                .collect(Collectors.toMap(
                         Map.Entry::getKey,
                         e -> e.getValue().value() != null ? e.getValue().value() : "null"));
-        Map<String, Object> snapshot = new java.util.HashMap<>();
+        Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("metrics", metrics);
         snapshot.put("evalNow", ctx.now() != null ? ctx.now().toString() : null);
         try {

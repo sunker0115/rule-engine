@@ -27,8 +27,8 @@ class EvaluationSessionTest {
     @Test
     void contextSnapshot_setAndGet() {
         EvaluationSession s = new EvaluationSession();
-        s.setContextSnapshot("{\"user.age\":25}");
-        assertEquals("{\"user.age\":25}", s.getContextSnapshot());
+        s.setContextSnapshot("{\"metrics\":{\"user.age\":25},\"evalNow\":\"2024-01-01T00:00:00Z\"}");
+        assertEquals("{\"metrics\":{\"user.age\":25},\"evalNow\":\"2024-01-01T00:00:00Z\"}", s.getContextSnapshot());
     }
 
     @Test
@@ -60,8 +60,8 @@ class EvaluationSessionTest {
     @Test
     void dryRunSession_contextSnapshot_setAndGet() {
         DryRunSession d = new DryRunSession();
-        d.setContextSnapshot("{\"user.age\":30,\"order.amount\":5000}");
-        assertEquals("{\"user.age\":30,\"order.amount\":5000}", d.getContextSnapshot());
+        d.setContextSnapshot("{\"metrics\":{\"user.age\":30,\"order.amount\":5000},\"evalNow\":\"2024-01-01T00:00:00Z\"}");
+        assertEquals("{\"metrics\":{\"user.age\":30,\"order.amount\":5000},\"evalNow\":\"2024-01-01T00:00:00Z\"}", d.getContextSnapshot());
     }
 
     @Test
