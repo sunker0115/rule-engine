@@ -34,6 +34,9 @@ management:
       export:
         otlp:
           endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+    logging:
+      export:
+        enabled: false
   tracing:
     sampling:
       probability: 1.0
@@ -66,6 +69,3 @@ engine:
       eval-error-rate-threshold: 0.05
       trace-queue-full-threshold: 0.8
 
-logging:
-  level:
-    com.sstlfsj.rule: DEBUG
