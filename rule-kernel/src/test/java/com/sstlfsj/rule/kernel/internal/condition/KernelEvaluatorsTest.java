@@ -18,7 +18,7 @@ class KernelEvaluatorsTest {
                 "CONTAINS", "NOT_CONTAINS",
                 "STARTS_WITH", "ENDS_WITH", "MATCHES",
                 "DATE_BEFORE", "DATE_AFTER",
-                "time.window"
+                "time.window", "time.occurred_at"
         );
     }
 
