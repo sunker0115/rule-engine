@@ -12,7 +12,7 @@ import java.time.ZoneId;
 
 /**
  * NEQ（不等于）条件算子：按 node.dataType() 选策略后取 equals 的非。
- * DATE/DATETIME 先走解析段；解析失败时"不等"成立返回 true。
+ * DATE/DATETIME 先走解析段；解析失败时不命中返回 false（与 BETWEEN/NOT_BETWEEN 一致，脏数据不触发规则）。
  * 其余 dataType 直通原始值。dataType=null（DSL）走 DefaultComparisonStrategy。
  */
 public class NeqEvaluator implements ConditionEvaluator {
@@ -29,8 +29,8 @@ public class NeqEvaluator implements ConditionEvaluator {
             ZoneId zone = TimeZoneResolver.resolve((String) node.params().get("timezone"), null);
             actual    = PlaceholderResolver.resolveTyped(dt, actual, ctx, zone);
             threshold = PlaceholderResolver.resolveTyped(dt, threshold, ctx, zone);
-            // 解析失败时"不等"成立
-            if (actual == null || threshold == null) return true;
+            // 解析失败时不命中（保守，与 BETWEEN/NOT_BETWEEN 一致，脏数据不触发规则）
+            if (actual == null || threshold == null) return false;
         }
         return !ComparisonStrategyFactory.forType(dt).equals(actual, threshold);
     }
