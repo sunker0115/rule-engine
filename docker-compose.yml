@@ -23,6 +23,22 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-lgtm:4318/v1/metrics
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-lgtm:4318/v1/traces
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-lgtm:4318/v1/logs
+      OTEL_SERVICE_NAME: rule-engine
     depends_on:
       mysql:
         condition: service_healthy
+      otel-lgtm:
+        condition: service_started
+
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.8.0
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # gRPC OTLP
+      - "4318:4318"   # HTTP OTLP
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
