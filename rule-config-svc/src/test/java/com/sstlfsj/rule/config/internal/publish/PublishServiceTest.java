@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.publish;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
@@ -41,6 +42,7 @@ class PublishServiceTest {
     @Mock AuditLogMapper auditLogMapper;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock AstSerializer astSerializer;
+    @Spy ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks PublishService publishService;
 

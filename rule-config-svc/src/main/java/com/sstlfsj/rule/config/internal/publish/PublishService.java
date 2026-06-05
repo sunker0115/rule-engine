@@ -37,7 +37,7 @@ public class PublishService {
     private final AuditLogMapper auditLogMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final AstSerializer astSerializer;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     public PublishService(RuleDefinitionMapper ruleDefinitionMapper,
                           SceneMapper sceneMapper,
@@ -45,7 +45,8 @@ public class PublishService {
                           DecisionDefinitionMapper decisionDefinitionMapper,
                           AuditLogMapper auditLogMapper,
                           ApplicationEventPublisher eventPublisher,
-                          AstSerializer astSerializer) {
+                          AstSerializer astSerializer,
+                          ObjectMapper objectMapper) {
         this.ruleDefinitionMapper = ruleDefinitionMapper;
         this.sceneMapper = sceneMapper;
         this.ruleVersionMapper = ruleVersionMapper;
@@ -53,6 +54,7 @@ public class PublishService {
         this.auditLogMapper = auditLogMapper;
         this.eventPublisher = eventPublisher;
         this.astSerializer = astSerializer;
+        this.objectMapper = objectMapper;
     }
 
     /**
