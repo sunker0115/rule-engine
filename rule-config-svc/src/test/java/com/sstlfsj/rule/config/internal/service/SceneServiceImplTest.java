@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
@@ -33,7 +34,7 @@ class SceneServiceImplTest {
     @BeforeEach
     void setUp() {
         sceneService = new SceneServiceImpl(sceneMapper, auditLogMapper,
-                schemaHistoryMapper, eventPublisher, new ObjectMapper());
+                schemaHistoryMapper, eventPublisher, JsonMapper.builder().build());
     }
 
     @Test
@@ -216,7 +217,7 @@ class SceneServiceImplTest {
     @Test
     void constructor_withObjectMapper_springCanInstantiate() {
         SceneServiceImpl svc = new SceneServiceImpl(sceneMapper, auditLogMapper,
-                schemaHistoryMapper, eventPublisher, new ObjectMapper());
+                schemaHistoryMapper, eventPublisher, JsonMapper.builder().build());
         assertThat(svc).isNotNull();
     }
 }

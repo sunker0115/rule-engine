@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.publish;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 import org.junit.jupiter.api.Test;
 
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class AstSerializerTest {
 
-    private final AstSerializer serializer = new AstSerializer(new ObjectMapper());
+    private final AstSerializer serializer = new AstSerializer(JsonMapper.builder().build());
 
     @Test
     void conditionNode_roundTrip() {

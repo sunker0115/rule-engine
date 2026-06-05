@@ -1,14 +1,14 @@
 package com.sstlfsj.rule.web.config;
 
-import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -28,12 +28,11 @@ class RuleControllerTest {
     @BeforeEach
     void setUp() {
         configService = mock(ConfigService.class);
-        ObjectMapper mapper = new ObjectMapper()
-                .disable(MapperFeature.REQUIRE_HANDLERS_FOR_JAVA8_TIMES);
+        JsonMapper mapper = JsonMapper.builder().build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new RuleController(configService, mapper))
                 .setControllerAdvice(new GlobalExceptionHandler())
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper))
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .build();
     }
 

@@ -2,8 +2,8 @@ package com.sstlfsj.rule.eval.internal.session;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
@@ -179,7 +179,7 @@ public class EvalSessionWriter {
                         e -> e.getValue().value() != null ? e.getValue().value() : "null"));
         try {
             return objectMapper.writeValueAsString(raw);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("context_snapshot 序列化失败，写 null", e);
             return null;
         }

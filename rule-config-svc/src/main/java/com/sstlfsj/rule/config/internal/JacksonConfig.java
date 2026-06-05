@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +13,6 @@ class JacksonConfig {
     @Bean
     @ConditionalOnMissingBean(ObjectMapper.class)
     ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        return JsonMapper.builder().build();
     }
 }

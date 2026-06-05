@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.config.internal.publish;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.springframework.stereotype.Component;
 

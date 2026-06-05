@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.web.config;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
@@ -47,7 +47,7 @@ public class SceneController {
                     eventTypesJson, payloadSchemaJson, defaultParamsJson,
                     actorId);
             return ApiResponse.ok(Map.of("id", id));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             // Object → JSON 序列化不应失败，属于内部错误
             throw new IllegalStateException("JSON 序列化失败", e);
         }
@@ -89,7 +89,7 @@ public class SceneController {
                     payloadSchemaJson, defaultParamsJson,
                     actorId);
             return ApiResponse.ok(null);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("JSON 序列化失败", e);
         }
     }

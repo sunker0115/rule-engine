@@ -2,7 +2,7 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
@@ -114,7 +114,7 @@ public class PublishService {
                         "kind=SCORECARD 的规则 conditionAst 根节点必须是 ScorecardRootNode");
             }
             for (ConditionNode leaf : scorecardRoot.conditions()) {
-                if (leaf.weight() <= 0) {
+                if (leaf.weight() == null || leaf.weight() <= 0) {
                     throw new IllegalArgumentException(
                             "SCORECARD 条件节点 weight 必须 > 0，conditionType=" + leaf.conditionType());
                 }
@@ -325,11 +325,11 @@ public class PublishService {
         try {
             if (triggerEventTypesJson == null || triggerEventTypesJson.isBlank()) return;
             java.util.List<String> ruleTypes = objectMapper.readValue(triggerEventTypesJson,
-                    new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                    new tools.jackson.core.type.TypeReference<>() {});
             if (ruleTypes.isEmpty()) return;
 
             java.util.List<String> sceneTypes = objectMapper.readValue(sceneEventTypesJson,
-                    new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                    new tools.jackson.core.type.TypeReference<>() {});
             if (sceneTypes.isEmpty()) return;   // Scene 未设置白名单，容错通过
 
             java.util.Set<String> allowed = new java.util.HashSet<>(sceneTypes);

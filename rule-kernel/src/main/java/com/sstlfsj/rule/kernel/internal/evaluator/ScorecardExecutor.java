@@ -47,7 +47,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                 errorCode = "NO_EVALUATOR";
             } else {
                 met = evaluator.evaluate(node, ctx);
-                if (met) {
+                if (met && node.weight() != null) {
                     score += node.weight();
                 }
             }

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.internal.codec;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 import org.junit.jupiter.api.Test;
@@ -77,7 +78,7 @@ class AstJsonCodecTest {
     @Test
     void constructorWithMapper_usesThatMapper() throws Exception {
         // 验证带参构造器：传入的 mapper 被实际使用（通过 createMapper() 取回是同一实例）
-        ObjectMapper custom = new ObjectMapper();
+        ObjectMapper custom = JsonMapper.builder().build();
         AstJsonCodec codec = new AstJsonCodec(custom);
         assertSame(custom, codec.createMapper());
     }

@@ -9,7 +9,7 @@ public record ConditionNode(
         String displayLabel,
         Map<String, Object> params,
         /** 评分卡权重；AST_BOOLEAN kind 时忽略，SCORECARD kind 时由 ScorecardExecutor 累加。 */
-        double weight
+        Double weight
 ) implements AstNode {
     public ConditionNode {
         params = Map.copyOf(params);

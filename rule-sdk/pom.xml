@@ -21,7 +21,7 @@
         </dependency>
         <!-- Jackson：反序列化 HTTP 响应的 List<RuleVersionSnapshot>；传递 rule-kernel 的 optional jackson-databind -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>

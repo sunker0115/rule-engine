@@ -93,6 +93,17 @@ class ScorecardExecutorTest {
     }
 
     @Test
+    void nullWeight_conditionMet_doesNotAccumulateAndNoNpe() {
+        // weight=null 时即使条件命中也不累加分数，且不抛 NPE（AST_BOOLEAN 场景兼容）
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), null)
+        ), 0.0);
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.score()).isEqualTo(0.0);
+    }
+
+    @Test
     void category_and_decision_areNull_forScorecard() {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 50.0)

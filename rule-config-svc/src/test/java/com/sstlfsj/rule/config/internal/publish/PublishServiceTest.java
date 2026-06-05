@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.publish;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
@@ -42,7 +43,7 @@ class PublishServiceTest {
     @Mock AuditLogMapper auditLogMapper;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock AstSerializer astSerializer;
-    @Spy ObjectMapper objectMapper = new ObjectMapper();
+    @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
 
     @InjectMocks PublishService publishService;
 
@@ -174,6 +175,22 @@ class PublishServiceTest {
         when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
         ConditionNode zeroWeightLeaf = new ConditionNode("c.type", "m.code", null, Map.of(), 0.0);
         ScorecardRootNode scorecardRoot = new ScorecardRootNode(List.of(zeroWeightLeaf), 60.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(scorecardRoot);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("weight 必须 > 0");
+    }
+
+    @Test
+    void publish_scorecard_weight为null_抛异常() {
+        // weight=null 视为未设置，同样不允许发布（SCORECARD 必须填 weight>0）
+        draftRule.setKind("SCORECARD");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        ConditionNode nullWeightLeaf = new ConditionNode("c.type", "m.code", null, Map.of(), null);
+        ScorecardRootNode scorecardRoot = new ScorecardRootNode(List.of(nullWeightLeaf), 60.0);
         when(astSerializer.fromJson(anyString())).thenReturn(scorecardRoot);
 
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))

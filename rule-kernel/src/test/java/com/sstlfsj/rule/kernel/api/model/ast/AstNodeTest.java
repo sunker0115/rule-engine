@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.api.model.ast;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -65,7 +66,7 @@ class AstNodeTest {
     void jacksonAnnotation_serializesTypeField() throws Exception {
         // 验证 @JsonTypeInfo/@JsonSubTypes 直接标注在 AstNode 上后，
         // 无需 mixin 的普通 ObjectMapper 也能正确输出 "type" 字段
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = JsonMapper.builder().build();
         ConditionNode node = new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0);
         String json = mapper.writeValueAsString(node);
         assertTrue(json.contains("\"type\":\"ConditionNode\""), "缺少 type 字段: " + json);
@@ -74,7 +75,7 @@ class AstNodeTest {
     @Test
     void jacksonAnnotation_roundTrip_withPlainMapper() throws Exception {
         // 验证普通 ObjectMapper（全局 mapper 场景，如 Spring MVC）能正确往返序列化
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = JsonMapper.builder().build();
         AstNode original = new AndNode(
                 List.of(new ConditionNode("EQ", "status", null, Map.of("value", "ACTIVE"), 0.0)),
                 null, null);

@@ -1,9 +1,10 @@
 package com.sstlfsj.rule.kernel.internal.codec;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
@@ -20,7 +21,7 @@ public class AstJsonCodec {
 
     /** 非 Spring 场景使用：创建仅禁用未知字段报错的默认 ObjectMapper。 */
     public AstJsonCodec() {
-        this(new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES));
+        this(JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build());
     }
 
     /**
@@ -47,7 +48,7 @@ public class AstJsonCodec {
      * @param json AST JSON 字符串
      * @return 反序列化后的 AstNode
      */
-    public AstNode deserializeAst(String json) throws JsonProcessingException {
+    public AstNode deserializeAst(String json) throws JacksonException {
         return mapper.readValue(json, AstNode.class);
     }
 
@@ -57,7 +58,7 @@ public class AstJsonCodec {
      * @param json Pre-Gate 配置 JSON 数组字符串
      * @return PreGateConfig 列表
      */
-    public List<RuleVersionSnapshot.PreGateConfig> deserializePreGates(String json) throws JsonProcessingException {
+    public List<RuleVersionSnapshot.PreGateConfig> deserializePreGates(String json) throws JacksonException {
         return mapper.readValue(json, new TypeReference<>() {});
     }
 
@@ -67,7 +68,7 @@ public class AstJsonCodec {
      * @param json 决策绑定 JSON 数组字符串
      * @return DecisionBinding 列表
      */
-    public List<RuleVersionSnapshot.DecisionBinding> deserializeDecisionBindings(String json) throws JsonProcessingException {
+    public List<RuleVersionSnapshot.DecisionBinding> deserializeDecisionBindings(String json) throws JacksonException {
         return mapper.readValue(json, new TypeReference<>() {});
     }
 
@@ -77,7 +78,7 @@ public class AstJsonCodec {
      * @param json JSON 数组字符串
      * @return 字符串列表
      */
-    public List<String> deserializeStringList(String json) throws JsonProcessingException {
+    public List<String> deserializeStringList(String json) throws JacksonException {
         return mapper.readValue(json, new TypeReference<>() {});
     }
 

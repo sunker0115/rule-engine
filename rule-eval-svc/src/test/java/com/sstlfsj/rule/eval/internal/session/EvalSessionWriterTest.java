@@ -21,7 +21,8 @@ import java.util.Map;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.dao.DuplicateKeyException;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.mockito.Spy;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,7 +34,7 @@ class EvalSessionWriterTest {
 
     @Mock EvaluationSessionMapper sessionMapper;
     @Mock DryRunSessionMapper dryRunMapper;
-    @Spy ObjectMapper objectMapper = new ObjectMapper();
+    @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks EvalSessionWriter writer;
 
     private RuleEvent event() {

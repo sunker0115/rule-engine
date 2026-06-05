@@ -49,4 +49,11 @@ class ConditionNodeTest {
         ConditionNode node = new ConditionNode("GT", "score", null, Map.of("threshold", 60), 0.4);
         assertEquals(0.4, node.weight(), 1e-9);
     }
+
+    @Test
+    void weight_allowsNull_forAstBooleanKind() {
+        // weight 改为 Double 后，AST_BOOLEAN kind 场景可传 null，反序列化时缺失字段不报错
+        ConditionNode node = new ConditionNode("GT", "score", null, Map.of(), null);
+        assertNull(node.weight());
+    }
 }

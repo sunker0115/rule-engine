@@ -42,6 +42,11 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
+        <!-- Jackson：AstSerializer / PublishService 序列化 AST JSON，版本由 Spring Boot BOM 管理 -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
         <!-- AOT: 编译期生成 AutoConfiguration condition metadata -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

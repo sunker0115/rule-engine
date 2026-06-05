@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
@@ -99,7 +100,7 @@ class EvalAutoConfigurationTest {
 
     @Test
     void snapshotAssembler_returnsInstance() {
-        SnapshotAssembler assembler = config.snapshotAssembler(new ObjectMapper());
+        SnapshotAssembler assembler = config.snapshotAssembler(JsonMapper.builder().build());
         assertNotNull(assembler);
     }
 
