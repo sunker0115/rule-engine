@@ -1,28 +1,25 @@
 package com.sstlfsj.rule.kernel.internal.codec;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
-import com.sstlfsj.rule.kernel.api.model.ast.*;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
 import java.util.List;
 
 /**
- * AST JSON 编解码器：配置 Jackson 多态反序列化，支持所有 AstNode 子类型。
+ * AST JSON 编解码器：AstNode 多态配置已直接标注在接口上，此处仅封装常用反序列化方法。
  * 纯 Java，无 Spring 依赖；rule-sdk SnapshotPoller 和 rule-eval-svc SnapshotAssembler 均使用。
  */
 public class AstJsonCodec {
 
     private final ObjectMapper mapper = new ObjectMapper()
-            .addMixIn(AstNode.class, AstNodeMixin.class)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     /**
-     * 返回已配置多态 Mixin 的 ObjectMapper（ObjectMapper 线程安全，实例复用）。
+     * 返回配置好的 ObjectMapper（忽略未知字段；AstNode 多态由接口注解处理，无需 mixin）。
      *
      * @return 配置好的 ObjectMapper
      */
@@ -70,18 +67,4 @@ public class AstJsonCodec {
         return mapper.readValue(json, new TypeReference<>() {});
     }
 
-    /** AstNode sealed 接口的 Jackson 多态 mixin，通过 "type" 字段区分子类型。 */
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
-    @JsonSubTypes({
-            @JsonSubTypes.Type(value = AndNode.class,           name = "AndNode"),
-            @JsonSubTypes.Type(value = OrNode.class,            name = "OrNode"),
-            @JsonSubTypes.Type(value = NotNode.class,           name = "NotNode"),
-            @JsonSubTypes.Type(value = ConditionNode.class,     name = "ConditionNode"),
-            @JsonSubTypes.Type(value = ScorecardRootNode.class, name = "ScorecardRootNode"),
-            @JsonSubTypes.Type(value = XorNode.class,           name = "XorNode"),
-            @JsonSubTypes.Type(value = IfNode.class,            name = "IfNode"),
-            @JsonSubTypes.Type(value = DecisionLeafNode.class,  name = "DecisionLeafNode"),
-            @JsonSubTypes.Type(value = DecisionTableNode.class, name = "DecisionTableNode")
-    })
-    interface AstNodeMixin {}
 }

@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.api.model.ast;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -58,6 +59,30 @@ class AstNodeTest {
     void decisionTableNode_isInstanceOfAstNode() {
         DecisionTableNode node = new DecisionTableNode(List.of(), List.of());
         assertInstanceOf(AstNode.class, node);
+    }
+
+    @Test
+    void jacksonAnnotation_serializesTypeField() throws Exception {
+        // 验证 @JsonTypeInfo/@JsonSubTypes 直接标注在 AstNode 上后，
+        // 无需 mixin 的普通 ObjectMapper 也能正确输出 "type" 字段
+        ObjectMapper mapper = new ObjectMapper();
+        ConditionNode node = new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0);
+        String json = mapper.writeValueAsString(node);
+        assertTrue(json.contains("\"type\":\"ConditionNode\""), "缺少 type 字段: " + json);
+    }
+
+    @Test
+    void jacksonAnnotation_roundTrip_withPlainMapper() throws Exception {
+        // 验证普通 ObjectMapper（全局 mapper 场景，如 Spring MVC）能正确往返序列化
+        ObjectMapper mapper = new ObjectMapper();
+        AstNode original = new AndNode(
+                List.of(new ConditionNode("EQ", "status", null, Map.of("value", "ACTIVE"), 0.0)),
+                null, null);
+        String json = mapper.writeValueAsString(original);
+        AstNode restored = mapper.readValue(json, AstNode.class);
+        assertInstanceOf(AndNode.class, restored);
+        assertEquals(1, ((AndNode) restored).children().size());
+        assertInstanceOf(ConditionNode.class, ((AndNode) restored).children().get(0));
     }
 
     @Test

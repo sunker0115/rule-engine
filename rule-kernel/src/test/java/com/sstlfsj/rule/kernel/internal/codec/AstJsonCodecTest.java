@@ -74,6 +74,14 @@ class AstJsonCodecTest {
     }
 
     @Test
+    void serializeAst_includesTypeField() throws Exception {
+        // 多态配置迁移到 AstNode 接口注解后，codec mapper 序列化也必须带 "type" 字段
+        ConditionNode node = new ConditionNode("GT", "score", null, Map.of("threshold", 80), 0.0);
+        String json = codec.createMapper().writeValueAsString(node);
+        assertTrue(json.contains("\"type\":\"ConditionNode\""), "缺少 type 字段: " + json);
+    }
+
+    @Test
     void deserializeIfNode() throws Exception {
         String json = """
                 {"type":"IfNode",
