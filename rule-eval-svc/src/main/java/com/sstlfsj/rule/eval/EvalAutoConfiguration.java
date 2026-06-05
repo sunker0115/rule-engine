@@ -9,6 +9,8 @@ import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
@@ -76,13 +78,14 @@ public class EvalAutoConfiguration {
     }
 
     /**
-     * 纯 Java SnapshotAssembler，将 RuleVersionRow 组装为 RuleVersionSnapshot。
+     * SnapshotAssembler：注入 Spring 全局 ObjectMapper，与 HTTP 层序列化行为一致。
      *
+     * @param objectMapper Spring Boot 自动配置的全局 ObjectMapper
      * @return SnapshotAssembler 实例
      */
     @Bean
-    public SnapshotAssembler snapshotAssembler() {
-        return new SnapshotAssembler();
+    public SnapshotAssembler snapshotAssembler(ObjectMapper objectMapper) {
+        return new SnapshotAssembler(new AstJsonCodec(objectMapper));
     }
 
     /**

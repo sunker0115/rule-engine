@@ -2,18 +2,20 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
-import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import org.springframework.stereotype.Component;
 
 /**
  * 负责 AstNode 与 JSON 字符串互转，用于 rule_version.condition_ast 存储。
- * 委托 rule-kernel 的 {@link AstJsonCodec} 构建 ObjectMapper，保持两侧类型注册一致。
- * ObjectMapper 线程安全，构造后缓存复用。
+ * 注入 Spring 全局 ObjectMapper，与 HTTP 层序列化行为一致；AstNode 多态由接口注解保证。
  */
 @Component
 public class AstSerializer {
 
-    private final ObjectMapper mapper = new AstJsonCodec().createMapper();
+    private final ObjectMapper mapper;
+
+    public AstSerializer(ObjectMapper mapper) {
+        this.mapper = mapper;
+    }
 
     /**
      * 将 AstNode 序列化为 JSON 字符串，含 type 字段便于反序列化。

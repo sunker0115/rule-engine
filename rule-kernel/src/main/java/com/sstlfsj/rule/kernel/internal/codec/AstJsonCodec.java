@@ -12,16 +12,30 @@ import java.util.List;
 /**
  * AST JSON 编解码器：AstNode 多态配置已直接标注在接口上，此处仅封装常用反序列化方法。
  * 纯 Java，无 Spring 依赖；rule-sdk SnapshotPoller 和 rule-eval-svc SnapshotAssembler 均使用。
+ * Spring 场景可通过 {@link #AstJsonCodec(ObjectMapper)} 注入全局 Bean，非 Spring 场景用无参构造。
  */
 public class AstJsonCodec {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private final ObjectMapper mapper;
+
+    /** 非 Spring 场景使用：创建仅禁用未知字段报错的默认 ObjectMapper。 */
+    public AstJsonCodec() {
+        this(new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES));
+    }
 
     /**
-     * 返回配置好的 ObjectMapper（忽略未知字段；AstNode 多态由接口注解处理，无需 mixin）。
+     * Spring 场景使用：注入已配置好的全局 ObjectMapper（如 Spring Boot 自动配置的 Bean）。
      *
-     * @return 配置好的 ObjectMapper
+     * @param mapper 外部传入的 ObjectMapper
+     */
+    public AstJsonCodec(ObjectMapper mapper) {
+        this.mapper = mapper;
+    }
+
+    /**
+     * 返回当前持有的 ObjectMapper 实例。
+     *
+     * @return ObjectMapper
      */
     public ObjectMapper createMapper() {
         return mapper;
