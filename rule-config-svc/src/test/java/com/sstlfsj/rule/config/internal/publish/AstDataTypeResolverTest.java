@@ -260,4 +260,51 @@ class AstDataTypeResolverTest {
         AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
         assertThat(((ConditionNode) result).dataType()).isEqualTo("STRING");
     }
+
+    // ── B20 时间行 ────────────────────────────────────────────────────────────
+
+    @Test
+    void resolve_eqWithDate_ok() {
+        ConditionNode cond = new ConditionNode("EQ", "joinDate", null,
+                Map.of("threshold", "2026-06-01"), 0.0);
+        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("joinDate", "DATE"));
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("DATE");
+    }
+
+    @Test
+    void resolve_betweenWithDatetime_ok() {
+        ConditionNode cond = new ConditionNode("BETWEEN", "ts", null,
+                Map.of("min", "2026-01-01T00:00:00Z", "max", "2026-06-01T00:00:00Z"), 0.0);
+        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("ts", "DATETIME"));
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("DATETIME");
+    }
+
+    @Test
+    void resolve_dateBeforeWithDate_ok() {
+        ConditionNode cond = new ConditionNode("DATE_BEFORE", "joinDate", null,
+                Map.of("threshold", "2026-06-01"), 0.0);
+        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("joinDate", "DATE"));
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("DATE");
+    }
+
+    @Test
+    void resolve_dateBeforeWithLong_throwsIllegalArgument() {
+        // DATE_BEFORE 现在只允许 DATE/DATETIME，LONG 被拒
+        ConditionNode cond = new ConditionNode("DATE_BEFORE", "amount", null,
+                Map.of("threshold", 100), 0.0);
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, Map.of("amount", "LONG")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DATE_BEFORE")
+                .hasMessageContaining("LONG");
+    }
+
+    @Test
+    void resolve_dateAfterWithString_throwsIllegalArgument() {
+        ConditionNode cond = new ConditionNode("DATE_AFTER", "name", null,
+                Map.of("threshold", "x"), 0.0);
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, Map.of("name", "STRING")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DATE_AFTER")
+                .hasMessageContaining("STRING");
+    }
 }

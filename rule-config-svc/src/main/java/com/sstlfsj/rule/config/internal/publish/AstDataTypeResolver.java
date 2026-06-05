@@ -15,20 +15,20 @@ import java.util.Set;
 class AstDataTypeResolver {
 
     // 算子允许的 dataType 集合（权威来源：spec §5 / 03-rule-expression §3.1-3.4）。
-    // 不在此 map 中的 conditionType（DATE_BEFORE/DATE_AFTER 留 B20、time.* 时间窗口、自定义算子）
-    // 有意不做校验——ALLOWED 缺席即放行。
+    // DATE_BEFORE/DATE_AFTER 已纳入矩阵（B20 §7），仅允许 DATE/DATETIME；
+    // 剩余 time.* 内置路径与自定义算子仍 ALLOWED 缺席即放行。
     private static final Map<String, Set<String>> ALLOWED;
 
     static {
         Map<String, Set<String>> m = new HashMap<>();
-        m.put("EQ",           Set.of("LONG", "DOUBLE", "STRING", "BOOLEAN"));
-        m.put("NEQ",          Set.of("LONG", "DOUBLE", "STRING", "BOOLEAN"));
+        m.put("EQ",           Set.of("LONG", "DOUBLE", "STRING", "BOOLEAN", "DATE", "DATETIME"));
+        m.put("NEQ",          Set.of("LONG", "DOUBLE", "STRING", "BOOLEAN", "DATE", "DATETIME"));
         m.put("GT",           Set.of("LONG", "DOUBLE"));
         m.put("GTE",          Set.of("LONG", "DOUBLE"));
         m.put("LT",           Set.of("LONG", "DOUBLE"));
         m.put("LTE",          Set.of("LONG", "DOUBLE"));
-        m.put("BETWEEN",      Set.of("LONG", "DOUBLE"));
-        m.put("NOT_BETWEEN",  Set.of("LONG", "DOUBLE"));
+        m.put("BETWEEN",      Set.of("LONG", "DOUBLE", "DATE", "DATETIME"));
+        m.put("NOT_BETWEEN",  Set.of("LONG", "DOUBLE", "DATE", "DATETIME"));
         m.put("IN",           Set.of("LONG", "STRING"));
         m.put("NOT_IN",       Set.of("LONG", "STRING"));
         m.put("CONTAINS",     Set.of("LIST"));
@@ -36,6 +36,8 @@ class AstDataTypeResolver {
         m.put("STARTS_WITH",  Set.of("STRING"));
         m.put("ENDS_WITH",    Set.of("STRING"));
         m.put("MATCHES",      Set.of("STRING"));
+        m.put("DATE_BEFORE",  Set.of("DATE", "DATETIME"));
+        m.put("DATE_AFTER",   Set.of("DATE", "DATETIME"));
         ALLOWED = Map.copyOf(m);
     }
 
