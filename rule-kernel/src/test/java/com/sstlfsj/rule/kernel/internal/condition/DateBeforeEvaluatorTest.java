@@ -66,21 +66,14 @@ class DateBeforeEvaluatorTest {
     }
 
     @Test
-    void toInstant_localDateString_parsedCorrectly() {
-        Instant result = DateBeforeEvaluator.toInstant("2023-06-15");
-        assertThat(result).isNotNull();
-        assertThat(result.toString()).startsWith("2023-06-15");
-    }
-
-    @Test
-    void toInstant_instantString_parsedCorrectly() {
-        Instant result = DateBeforeEvaluator.toInstant("2023-06-15T10:00:00Z");
-        assertThat(result).isEqualTo(Instant.parse("2023-06-15T10:00:00Z"));
-    }
-
-    @Test
-    void toInstant_instantObject_returnedAsIs() {
-        Instant now = Instant.now();
-        assertThat(DateBeforeEvaluator.toInstant(now)).isEqualTo(now);
+    void dateBefore_dateType_today_comparesAsLocalDate() {
+        // metric=2026-06-01，threshold=$today，now 投影到 UTC 是 2026-06-02 → before=true
+        Instant now = Instant.parse("2026-06-02T00:00:00Z");
+        ConditionNode node = new ConditionNode("DATE_BEFORE", "d", "",
+                Map.of("threshold", "$today"), 0.0, "DATE");
+        RuleEvent event = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of());
+        EvalContext ctx = new EvalContext("t1", event, null,
+                Map.of("d", new MetricValue("2026-06-01", "DATE", "PROVIDED")), now);
+        assertThat(evaluator.evaluate(node, ctx)).isTrue();
     }
 }
