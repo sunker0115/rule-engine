@@ -47,4 +47,24 @@ class NotInEvaluatorTest {
                 new Subject("sub1", SubjectType.USER, Map.of()), Map.of());
         assertThat(evaluator.evaluate(node("status", "ACTIVE"), emptyCtx)).isTrue();
     }
+
+    @Test
+    void notIn_stringDataType_zeroPrefix_notMatchPlain100_returnsTrue() {
+        // STRING dataType："0100" 不在列表 ["100"] 中 -> true
+        NotInEvaluator ev = new NotInEvaluator();
+        ConditionNode n = new ConditionNode("NOT_IN", "code", null,
+                Map.of("values", java.util.List.of("100")), 0.0, "STRING");
+        EvalContext c = ctx("code", "0100");
+        assertThat(ev.evaluate(n, c)).isTrue();
+    }
+
+    @Test
+    void notIn_stringDataType_exactMatch_returnsFalse() {
+        // STRING dataType："100" 在列表 ["100"] 中 -> false
+        NotInEvaluator ev = new NotInEvaluator();
+        ConditionNode n = new ConditionNode("NOT_IN", "code", null,
+                Map.of("values", java.util.List.of("100")), 0.0, "STRING");
+        EvalContext c = ctx("code", "100");
+        assertThat(ev.evaluate(n, c)).isFalse();
+    }
 }

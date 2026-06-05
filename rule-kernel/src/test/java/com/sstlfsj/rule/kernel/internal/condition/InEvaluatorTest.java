@@ -47,4 +47,24 @@ class InEvaluatorTest {
                 new Subject("sub1", SubjectType.USER, Map.of()), Map.of());
         assertThat(evaluator.evaluate(node("status", "ACTIVE"), emptyCtx)).isFalse();
     }
+
+    @Test
+    void in_stringDataType_zeroPrefix_notMatchPlain100() {
+        // STRING dataType：列表 ["100"]，actual="0100" 不命中
+        InEvaluator ev = new InEvaluator();
+        ConditionNode n = new ConditionNode("IN", "code", null,
+                Map.of("values", java.util.List.of("100")), 0.0, "STRING");
+        EvalContext c = ctx("code", "0100");
+        assertThat(ev.evaluate(n, c)).isFalse();
+    }
+
+    @Test
+    void in_longDataType_numericMatch() {
+        // LONG dataType：列表 [100, 200]，actual=100L 命中
+        InEvaluator ev = new InEvaluator();
+        ConditionNode n = new ConditionNode("IN", "score", null,
+                Map.of("values", java.util.List.of(100, 200)), 0.0, "LONG");
+        EvalContext c = ctx("score", 100L);
+        assertThat(ev.evaluate(n, c)).isTrue();
+    }
 }

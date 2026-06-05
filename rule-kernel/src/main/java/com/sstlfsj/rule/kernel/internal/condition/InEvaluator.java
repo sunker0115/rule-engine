@@ -4,11 +4,13 @@ import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
+import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategy;
+import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
 
 import java.util.Collection;
 
 /**
- * IN 条件算子：actual 的字符串值包含在 params.values 列表中。
+ * IN 条件算子：actual 在 params.values 列表中（按 node.dataType() 选策略做 equals 判定）。
  * params 格式：{"values": ["v1","v2",...]}
  */
 public class InEvaluator implements ConditionEvaluator {
@@ -19,7 +21,7 @@ public class InEvaluator implements ConditionEvaluator {
         if (mv == null) return false;
         Object valuesObj = node.params().get("values");
         if (!(valuesObj instanceof Collection<?> values)) return false;
-        String actual = String.valueOf(mv.value());
-        return values.stream().anyMatch(v -> actual.equals(String.valueOf(v)));
+        ComparisonStrategy strategy = ComparisonStrategyFactory.forType(node.dataType());
+        return values.stream().anyMatch(v -> strategy.equals(mv.value(), v));
     }
 }
