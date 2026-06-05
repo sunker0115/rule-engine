@@ -14,7 +14,6 @@ public record ConditionNode(
         Map<String, Object> params,
         /** 评分卡权重；AST_BOOLEAN kind 时忽略，SCORECARD kind 时由 ScorecardExecutor 累加。 */
         Double weight,
-        /** 发布期冻结的 metric 数据类型（LONG/DOUBLE/STRING/BOOLEAN/LIST）；DSL 路径为 null。 */
         String dataType
 ) implements AstNode {
     public ConditionNode {
