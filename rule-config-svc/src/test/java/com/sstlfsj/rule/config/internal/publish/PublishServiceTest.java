@@ -530,4 +530,56 @@ class PublishServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("rows");
     }
+
+    @Test
+    void publish_rolloutPercentageOutOfRange_throws() {
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        draftVersion.setTriggerEventTypes("[]");
+        draftVersion.setPreGates("[{\"gateType\":\"ROLLOUT\",\"params\":{\"percentage\":101}}]");
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("percentage");
+    }
+
+    @Test
+    void publish_rolloutInvalidRange_throws() {
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        draftVersion.setTriggerEventTypes("[]");
+        draftVersion.setPreGates("[{\"gateType\":\"ROLLOUT\",\"params\":{\"bucketStart\":60,\"bucketEnd\":50}}]");
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("bucket");
+    }
+
+    @Test
+    void publish_rolloutBlankExperimentId_throws() {
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        draftVersion.setTriggerEventTypes("[]");
+        draftVersion.setPreGates("[{\"gateType\":\"ROLLOUT\",\"params\":{\"percentage\":50,\"experimentId\":\"  \"}}]");
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("experimentId");
+    }
+
+    @Test
+    void publish_rolloutValidRange_publishes() {
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+        when(astSerializer.fromJson(anyString()))
+                .thenReturn(new ConditionNode("c.type", "m.code", null, Map.of(), 0.0));
+        draftVersion.setTriggerEventTypes("[]");
+        draftVersion.setPreGates("[{\"gateType\":\"ROLLOUT\",\"params\":{\"experimentId\":\"exp-1\",\"bucketStart\":0,\"bucketEnd\":50}}]");
+        assertThat(publishService.publish(1L, 10L, "actor")).isNotNull();
+    }
 }

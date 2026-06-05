@@ -97,6 +97,9 @@ public class PublishService {
         // 3.5. 校验 triggerEventTypes ⊆ Scene.eventTypes（D13）
         validateTriggerEventTypes(draftVersion.getTriggerEventTypes(), scene.getEventTypes());
 
+        // 3.6. 校验 pre_gates 中 ROLLOUT 项参数合法性
+        validatePreGateParams(draftVersion.getPreGates());
+
         // 4. 反序列化 AST，收集 metricDependencies
         AstNode ast = astSerializer.fromJson(draftVersion.getConditionAst());
         // kind 合法性校验：null/blank 视为 AST_BOOLEAN（兼容历史存量数据）
@@ -314,6 +317,52 @@ public class PublishService {
         auditLogMapper.insert(log);
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, "DRAFT");
+    }
+
+    /**
+     * 校验 pre_gates 中 ROLLOUT 项的 params 合法性（仅单规则校验，不查兄弟规则）。
+     * percentage∈[0,100]；若给桶区间则 0<=bucketStart<bucketEnd<=100；experimentId 非空白。
+     * pre_gates JSON 格式异常时容错跳过（不阻断发布），仅参数语义越界抛 IllegalArgumentException。
+     */
+    private void validatePreGateParams(String preGatesJson) {
+        if (preGatesJson == null || preGatesJson.isBlank()) return;
+        java.util.List<java.util.Map<String, Object>> gates;
+        try {
+            gates = objectMapper.readValue(preGatesJson, new tools.jackson.core.type.TypeReference<>() {});
+        } catch (Exception e) {
+            return;   // 格式异常容错跳过
+        }
+        for (java.util.Map<String, Object> gate : gates) {
+            if (!"ROLLOUT".equals(String.valueOf(gate.get("gateType")))) continue;
+            Object p = gate.get("params");
+            if (!(p instanceof java.util.Map<?, ?> raw)) continue;
+            @SuppressWarnings("unchecked")
+            RolloutParams params = RolloutParams.from((java.util.Map<String, Object>) raw);
+
+            if (params.percentage() != null
+                    && (params.percentage() < 0 || params.percentage() > 100)) {
+                throw new IllegalArgumentException(
+                        "ROLLOUT percentage 必须在 [0,100]，实际值: " + params.percentage());
+            }
+            boolean hasStart = params.bucketStart() != null;
+            boolean hasEnd = params.bucketEnd() != null;
+            if (hasStart != hasEnd) {
+                throw new IllegalArgumentException(
+                        "ROLLOUT bucketStart/bucketEnd 必须成对出现");
+            }
+            if (hasStart) {
+                int s = params.bucketStart(), en = params.bucketEnd();
+                if (s < 0 || en > 100 || s >= en) {
+                    throw new IllegalArgumentException(
+                            "ROLLOUT 桶区间非法，要求 0<=bucketStart<bucketEnd<=100，实际: ["
+                                    + s + "," + en + ")");
+                }
+            }
+            if (params.experimentId() != null && params.experimentId().isBlank()) {
+                throw new IllegalArgumentException(
+                        "ROLLOUT experimentId 不得为空白字符串");
+            }
+        }
     }
 
     /**
