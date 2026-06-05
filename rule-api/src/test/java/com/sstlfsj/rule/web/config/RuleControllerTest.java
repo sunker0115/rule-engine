@@ -28,11 +28,10 @@ class RuleControllerTest {
     @BeforeEach
     void setUp() {
         configService = mock(ConfigService.class);
-        // 显式注册带 JsonNode 支持的 Jackson 转换器；禁用 Java8 time handler 要求以兼容 LocalDateTime 序列化
         ObjectMapper mapper = new ObjectMapper()
                 .disable(MapperFeature.REQUIRE_HANDLERS_FOR_JAVA8_TIMES);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new RuleController(configService))
+                .standaloneSetup(new RuleController(configService, mapper))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper))
                 .build();

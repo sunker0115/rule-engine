@@ -6,6 +6,8 @@ import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,5 +62,18 @@ class CreateRuleRequestTest {
         var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "规则", null, null, null, null, null);
         Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
         assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void conditionAst_acceptsMapObject() {
+        // conditionAst 改为 Object 类型后，传入 Map 和 List 应能正常构造
+        Map<String, Object> ast = Map.of("type", "comparison", "field", "amount", "operator", "GT", "value", 10000);
+        List<Object> bindings = List.of(Map.of("decision", "BLOCK", "priority", 1));
+        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "大额拦截", "EXPRESSION",
+                ast, bindings, List.of(), List.of("payment.initiated"));
+        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
+        assertThat(violations).isEmpty();
+        assertThat(req.conditionAst()).isInstanceOf(Map.class);
+        assertThat(req.decisionBindings()).isInstanceOf(List.class);
     }
 }

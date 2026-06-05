@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.web.config;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
@@ -17,9 +17,11 @@ import org.springframework.web.bind.annotation.*;
 public class RuleController {
 
     private final ConfigService configService;
+    private final ObjectMapper objectMapper;
 
-    public RuleController(ConfigService configService) {
+    public RuleController(ConfigService configService, ObjectMapper objectMapper) {
         this.configService = configService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -97,9 +99,13 @@ public class RuleController {
         return ApiResponse.ok(configService.listRules(tenantId, sceneCode, status, page, size));
     }
 
-    /** 将 {@link JsonNode} 序列化为 JSON 字符串，节点为空时返回 defaultVal。 */
-    private static String nodeToString(JsonNode node, String defaultVal) {
-        if (node == null || node.isNull()) return defaultVal;
-        return node.toString();
+    /** 将 Object 序列化为 JSON 字符串，值为 null 时返回 defaultVal。 */
+    private String nodeToString(Object value, String defaultVal) {
+        if (value == null) return defaultVal;
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            throw new IllegalStateException("JSON 序列化失败", e);
+        }
     }
 }
