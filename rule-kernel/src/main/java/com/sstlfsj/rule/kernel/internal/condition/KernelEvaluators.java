@@ -37,6 +37,7 @@ public final class KernelEvaluators {
         m.put("MATCHES",      new MatchesEvaluator());
         m.put("DATE_BEFORE",  new DateBeforeEvaluator());
         m.put("DATE_AFTER",   new DateAfterEvaluator());
+        m.put("time.window",  new TimeWindowEvaluator());
         return Map.copyOf(m);
     }
 }

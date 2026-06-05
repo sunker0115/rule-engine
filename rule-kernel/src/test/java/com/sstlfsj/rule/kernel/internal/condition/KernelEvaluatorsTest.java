@@ -17,7 +17,8 @@ class KernelEvaluatorsTest {
                 "IN", "NOT_IN", "BETWEEN", "NOT_BETWEEN",
                 "CONTAINS", "NOT_CONTAINS",
                 "STARTS_WITH", "ENDS_WITH", "MATCHES",
-                "DATE_BEFORE", "DATE_AFTER"
+                "DATE_BEFORE", "DATE_AFTER",
+                "time.window"
         );
     }
 
