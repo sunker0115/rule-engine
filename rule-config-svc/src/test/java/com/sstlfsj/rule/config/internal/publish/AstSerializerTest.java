@@ -156,4 +156,28 @@ class AstSerializerTest {
         assertThat(restored).isInstanceOf(XorNode.class);
         assertThat(((XorNode) restored).children()).hasSize(2);
     }
+
+    @Test
+    void conditionNode_withDataType_roundTrip() {
+        // dataType 字段进出 JSON 完整保留
+        ConditionNode node = new ConditionNode("GT", "amount", null,
+                Map.of("threshold", 100), 0.0, "LONG");
+
+        String json = serializer.toJson(node);
+        AstNode restored = serializer.fromJson(json);
+
+        assertThat(restored).isInstanceOf(ConditionNode.class);
+        assertThat(((ConditionNode) restored).dataType()).isEqualTo("LONG");
+    }
+
+    @Test
+    void conditionNode_missingDataTypeField_deserializesToNull() {
+        // 缺 dataType 字段的 JSON（如旧格式）反序列化时 dataType 为 null，不抛异常
+        String json = "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\","
+                + "\"metricCode\":\"amount\",\"params\":{\"threshold\":100},\"weight\":0.0}";
+        AstNode restored = serializer.fromJson(json);
+
+        assertThat(restored).isInstanceOf(ConditionNode.class);
+        assertThat(((ConditionNode) restored).dataType()).isNull();
+    }
 }
