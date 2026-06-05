@@ -12,7 +12,9 @@ public interface ComparisonStrategy {
      *
      * @param actual  指标实际值
      * @param operand 条件操作数
-     * @return 负数表示 actual < operand，0 表示相等，正数表示 actual > operand
+     * @return 负数表示 actual < operand，0 表示相等，正数表示 actual > operand；
+     *         实现类无法完成比较（值为 null/NaN/Infinity 无法转换）时返回 {@code Integer.MAX_VALUE}
+     *         作为哨兵，调用方应将其视为 false（条件不成立）
      */
     int compare(Object actual, Object operand);
 

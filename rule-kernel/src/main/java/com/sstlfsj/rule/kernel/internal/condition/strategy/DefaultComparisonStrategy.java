@@ -1,8 +1,8 @@
 package com.sstlfsj.rule.kernel.internal.condition.strategy;
 
 /**
- * 默认比较策略：dataType 未声明（null）时，按 actual 运行时 Java 类型推断。
- * 推断顺序：BigDecimal -> Number -> Boolean -> String（顺序敏感，不可调换）。
+ * 默认比较策略：dataType 未声明（null）时，按 actual 运行时类型分派：
+ * Number（含 BigDecimal）→数值策略、Boolean→布尔策略、其余→字符串策略。
  * 适用于 DSL 构造的节点（dataType=null）及 LIST/UNKNOWN dataType。
  */
 class DefaultComparisonStrategy implements ComparisonStrategy {
@@ -13,7 +13,7 @@ class DefaultComparisonStrategy implements ComparisonStrategy {
 
     @Override
     public int compare(Object actual, Object operand) {
-        if (actual instanceof java.math.BigDecimal || actual instanceof Number) {
+        if (actual instanceof Number) {
             return NUMERIC.compare(actual, operand);
         }
         if (actual instanceof Boolean) {
@@ -24,7 +24,7 @@ class DefaultComparisonStrategy implements ComparisonStrategy {
 
     @Override
     public boolean equals(Object actual, Object operand) {
-        if (actual instanceof java.math.BigDecimal || actual instanceof Number) {
+        if (actual instanceof Number) {
             return NUMERIC.equals(actual, operand);
         }
         if (actual instanceof Boolean) {

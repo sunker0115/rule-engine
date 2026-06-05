@@ -3,6 +3,7 @@ package com.sstlfsj.rule.kernel.internal.condition.strategy;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DefaultComparisonStrategyTest {
 
@@ -41,5 +42,11 @@ class DefaultComparisonStrategyTest {
     @Test
     void compare_stringActual_usesStringPath() {
         assertThat(strategy.compare("abc", "abd")).isLessThan(0);
+    }
+
+    @Test
+    void compare_booleanActual_throwsUnsupportedOperation() {
+        assertThatThrownBy(() -> strategy.compare(true, false))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 }

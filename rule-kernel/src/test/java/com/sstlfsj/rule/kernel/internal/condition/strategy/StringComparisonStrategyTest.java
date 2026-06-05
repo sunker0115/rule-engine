@@ -37,4 +37,11 @@ class StringComparisonStrategyTest {
         // 字符串路径下 "100" vs "99"：字典序 "1" < "9"，所以 "100" < "99"
         assertThat(strategy.compare("100", "99")).isLessThan(0);
     }
+
+    @Test
+    void nullActual_treatedAsLiteralNullString() {
+        // Javadoc 契约：null 经 String.valueOf 变为字面量 "null"，调用方应在调用前过滤
+        assertThat(strategy.equals(null, "null")).isTrue();
+        assertThat(strategy.equals(null, "ACTIVE")).isFalse();
+    }
 }
