@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
@@ -31,9 +32,8 @@ class SceneServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        // objectMapper 内部 new ObjectMapper()，不再需要外部传入
         sceneService = new SceneServiceImpl(sceneMapper, auditLogMapper,
-                schemaHistoryMapper, eventPublisher);
+                schemaHistoryMapper, eventPublisher, new ObjectMapper());
     }
 
     @Test
@@ -214,10 +214,9 @@ class SceneServiceImplTest {
     }
 
     @Test
-    void constructor_fourArgs_noObjectMapperParam_springCanInstantiate() {
-        // objectMapper 改为 static final 后构造函数只有 4 个参数，Spring 无需注入 ObjectMapper bean
+    void constructor_withObjectMapper_springCanInstantiate() {
         SceneServiceImpl svc = new SceneServiceImpl(sceneMapper, auditLogMapper,
-                schemaHistoryMapper, eventPublisher);
+                schemaHistoryMapper, eventPublisher, new ObjectMapper());
         assertThat(svc).isNotNull();
     }
 }

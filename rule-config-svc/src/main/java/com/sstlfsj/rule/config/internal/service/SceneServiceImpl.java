@@ -31,7 +31,7 @@ class SceneServiceImpl implements SceneService {
     private final AuditLogMapper auditLogMapper;
     private final ScenePayloadSchemaHistoryMapper schemaHistoryMapper;
     private final ApplicationEventPublisher eventPublisher;
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
