@@ -31,8 +31,7 @@ class SceneServiceImpl implements SceneService {
     private final AuditLogMapper auditLogMapper;
     private final ScenePayloadSchemaHistoryMapper schemaHistoryMapper;
     private final ApplicationEventPublisher eventPublisher;
-    /** 内部使用，不依赖 Spring 上下文注入（与 PublishService 保持一致）。 */
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     @Transactional

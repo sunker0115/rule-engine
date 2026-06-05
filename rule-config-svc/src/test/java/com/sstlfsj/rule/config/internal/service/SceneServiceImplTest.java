@@ -212,4 +212,12 @@ class SceneServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Scene 不存在");
     }
+
+    @Test
+    void constructor_fourArgs_noObjectMapperParam_springCanInstantiate() {
+        // objectMapper 改为 static final 后构造函数只有 4 个参数，Spring 无需注入 ObjectMapper bean
+        SceneServiceImpl svc = new SceneServiceImpl(sceneMapper, auditLogMapper,
+                schemaHistoryMapper, eventPublisher);
+        assertThat(svc).isNotNull();
+    }
 }
