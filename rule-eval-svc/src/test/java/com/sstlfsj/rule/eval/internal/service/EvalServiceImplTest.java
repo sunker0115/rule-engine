@@ -67,14 +67,14 @@ class EvalServiceImplTest {
     void evaluate_withCandidates_contextAssemblerCalled() {
         RuleVersionSnapshot snap = snapshot(1L, "REJECT");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any())).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(EvalResult.miss());
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
-        when(contextAssembler.assemble(any(), anyList())).thenReturn(
-                new com.sstlfsj.rule.kernel.api.model.EvalContext("1", event(), null, Map.of()));
+        when(contextAssembler.assemble(any(), anyList(), any())).thenReturn(
+                new com.sstlfsj.rule.kernel.api.model.EvalContext("1", event(), null, Map.of(), Instant.parse("2024-01-01T00:00:00Z")));
 
         impl.evaluate(event());
 
-        verify(contextAssembler).assemble(any(), anyList());
+        verify(contextAssembler).assemble(any(), anyList(), any());
     }
 
     @Test
@@ -92,7 +92,7 @@ class EvalServiceImplTest {
     void evaluate_ruleHit_returnsHitWithDecision() {
         RuleVersionSnapshot snap = snapshot(1L, "REJECT");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any())).thenReturn(hitResult("REJECT", 10, 1L));
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(hitResult("REJECT", 10, 1L));
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         EvalResult result = impl.evaluate(event());
@@ -108,7 +108,7 @@ class EvalServiceImplTest {
     void evaluate_ruleMiss_returnsMiss() {
         RuleVersionSnapshot snap = snapshot(1L, "REJECT");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any())).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(EvalResult.miss());
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         EvalResult result = impl.evaluate(event());
@@ -127,7 +127,7 @@ class EvalServiceImplTest {
         EvalResult engineResult = new EvalResult(true, highPriority,
                 List.of(new Decision("LOW_RISK", "", 5, 1L), highPriority),
                 List.of(), null, List.of(), null, null, null);
-        when(evalEngine.evaluate(any())).thenReturn(engineResult);
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(engineResult);
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         EvalResult result = impl.evaluate(event());
@@ -152,12 +152,12 @@ class EvalServiceImplTest {
     void dryRun_contextAssemblerCalled() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluate(any(), anyList())).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluate(any(RuleEvent.class), anyList(), any(Instant.class))).thenReturn(EvalResult.miss());
         when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         impl.dryRun(event(), 42L);
 
-        verify(contextAssembler).assemble(any(), anyList());
+        verify(contextAssembler).assemble(any(), anyList(), any());
         verify(sessionWriter).updateDryRunFinal(anyLong(), any(), any());
     }
 
@@ -165,7 +165,7 @@ class EvalServiceImplTest {
     void dryRun_writesToDryRunSessionNotProd() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluate(any(), anyList())).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluate(any(RuleEvent.class), anyList(), any(Instant.class))).thenReturn(EvalResult.miss());
         when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         EvalResult result = impl.dryRun(event(), 42L);
@@ -179,7 +179,7 @@ class EvalServiceImplTest {
     void evaluate_ruleHit_callsProdTraceWriter_notDryRunWriter() {
         RuleVersionSnapshot snap = snapshot(1L, "REJECT");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any())).thenReturn(hitResult("REJECT", 10, 1L));
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(hitResult("REJECT", 10, 1L));
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         impl.evaluate(event());
@@ -192,7 +192,7 @@ class EvalServiceImplTest {
     void dryRun_writesDryRunTraceWriter_notProdWriter() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluate(any(), anyList())).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluate(any(RuleEvent.class), anyList(), any(Instant.class))).thenReturn(EvalResult.miss());
         when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         impl.dryRun(event(), 42L);
@@ -205,7 +205,7 @@ class EvalServiceImplTest {
     void evaluate_ruleHit_dispatchesAction() {
         RuleVersionSnapshot snap = snapshot(1L, "REJECT");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any())).thenReturn(hitResult("REJECT", 10, 1L));
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(hitResult("REJECT", 10, 1L));
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         impl.evaluate(event());
@@ -217,7 +217,7 @@ class EvalServiceImplTest {
     void evaluate_ruleMiss_doesNotDispatchAction() {
         RuleVersionSnapshot snap = snapshot(1L, "REJECT");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any())).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(EvalResult.miss());
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         impl.evaluate(event());
@@ -229,7 +229,7 @@ class EvalServiceImplTest {
     void dryRun_doesNotDispatchAction() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluate(any(), anyList())).thenReturn(hitResult("PASS", 10, 42L));
+        when(evalEngine.evaluate(any(RuleEvent.class), anyList(), any(Instant.class))).thenReturn(hitResult("PASS", 10, 42L));
         when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         impl.dryRun(event(), 42L);
@@ -243,7 +243,7 @@ class EvalServiceImplTest {
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
         Decision d = new Decision("REJECT", "", 10, 1L);
         EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
-        when(evalEngine.evaluate(any())).thenReturn(engineResult);
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(engineResult);
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         EvalResult result = impl.evaluate(event());
@@ -255,7 +255,7 @@ class EvalServiceImplTest {
     void evaluate_scoreIsNull_forBooleanRules() {
         RuleVersionSnapshot snap = snapshot(1L, "REJECT");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any())).thenReturn(hitResult("REJECT", 10, 1L));
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(hitResult("REJECT", 10, 1L));
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         EvalResult result = impl.evaluate(event());

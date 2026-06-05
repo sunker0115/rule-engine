@@ -63,7 +63,7 @@ class EvalServiceImplScorecardTest {
 
         Decision d = new Decision("HIGH_RISK", "", 10, 1L);
         EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
-        when(evalEngine.evaluate(any())).thenReturn(engineResult);
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(engineResult);
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         EvalResult result = impl.evaluate(event());
@@ -80,7 +80,7 @@ class EvalServiceImplScorecardTest {
                 List.of(new RuleVersionSnapshot.DecisionBinding("HIGH_RISK", 10)),
                 null, "SCORECARD");
         when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any())).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(EvalResult.miss());
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
 
         EvalResult result = impl.evaluate(event());

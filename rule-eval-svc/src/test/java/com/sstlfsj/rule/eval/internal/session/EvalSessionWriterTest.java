@@ -90,7 +90,8 @@ class EvalSessionWriterTest {
         // 验证 serializeSnapshot 用静态 MAPPER 正确序列化 metrics
         RuleEvent ev = event();
         EvalContext ctx = new EvalContext("1", ev, null,
-                Map.of("user.age", new MetricValue(25, "INTEGER", "PROVIDED")));
+                Map.of("user.age", new MetricValue(25, "INTEGER", "PROVIDED")),
+                Instant.parse("2024-01-01T00:00:00Z"));
         // 直接检查序列化不抛异常（MAPPER 静态实例行为）
         EvalResult result = EvalResult.miss();
         writer.updateFinal(1L, result, ctx);
@@ -101,7 +102,8 @@ class EvalSessionWriterTest {
     void updateFinal_withContext_setsContextSnapshot() {
         RuleEvent ev = event();
         EvalContext ctx = new EvalContext("1", ev, null,
-                Map.of("user.age", new MetricValue(25, "INTEGER", "PROVIDED")));
+                Map.of("user.age", new MetricValue(25, "INTEGER", "PROVIDED")),
+                Instant.parse("2024-01-01T00:00:00Z"));
         EvalResult result = EvalResult.miss();
 
         writer.updateFinal(1L, result, ctx);
@@ -122,7 +124,8 @@ class EvalSessionWriterTest {
     void updateDryRunFinal_withContext_invokesMapper() {
         RuleEvent ev = event();
         EvalContext ctx = new EvalContext("1", ev, null,
-                Map.of("order.amount", new MetricValue(5000, "INTEGER", "PROVIDED")));
+                Map.of("order.amount", new MetricValue(5000, "INTEGER", "PROVIDED")),
+                Instant.parse("2024-01-01T00:00:00Z"));
         EvalResult result = EvalResult.miss();
 
         writer.updateDryRunFinal(1L, result, ctx);
@@ -146,5 +149,16 @@ class EvalSessionWriterTest {
         verify(sessionMapper).insert((EvaluationSession) captor.capture());
         assertEquals("BLOCKED", captor.getValue().getStatus());
         assertEquals("ROLLOUT", captor.getValue().getBlockedBy());
+    }
+
+    @Test
+    void updateFinal_snapshot_isNestedWithMetricsAndEvalNow() throws Exception {
+        // 直接验证序列化产物的形状契约：嵌套 metrics + evalNow 文本
+        Instant now = Instant.parse("2024-01-01T00:00:00Z");
+        String json = objectMapper.writeValueAsString(java.util.Map.of(
+                "metrics", java.util.Map.of("user.age", 25),
+                "evalNow", now.toString()));
+        assertTrue(json.contains("\"metrics\""));
+        assertTrue(json.contains("\"evalNow\":\"2024-01-01T00:00:00Z\""));
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 
 /** EvalService 实现：委托 EvalEngine 做纯计算，负责 session 写入和 Action 派发副作用。 */
@@ -78,25 +79,25 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     }
 
     private EvalResult doEvaluate(RuleEvent event, boolean isDryRun, Long specificVersionId) {
+        Instant evalNow = Instant.now();
         if (isDryRun && specificVersionId != null) {
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);
             if (snap == null) return EvalResult.miss();
-            EvalContext ctx = contextAssembler.assemble(event, List.of(snap));
-            EvalResult result = evalEngine.evaluate(event, List.of(snap));
+            EvalContext ctx = contextAssembler.assemble(event, List.of(snap), evalNow);
+            EvalResult result = evalEngine.evaluate(event, List.of(snap), evalNow);
             Long sessionId = sessionWriter.insertDryRunPending(event, specificVersionId);
             sessionWriter.updateDryRunFinal(sessionId, result, ctx);
             dryRunTraceWriter.write(event.tenantId(), sessionId.toString(), result.nodeTrace());
             return result;
         }
 
-        // 标准评估路径
         List<RuleVersionSnapshot> candidates = index.match(
                 event.tenantId(), event.sceneCode(), event.eventType());
         if (candidates.isEmpty()) return EvalResult.miss();
 
         Long sessionId = sessionWriter.insertPending(event, candidates.size(), "PULL");
-        EvalContext ctx = contextAssembler.assemble(event, candidates);
-        EvalResult result = evalEngine.evaluate(event);
+        EvalContext ctx = contextAssembler.assemble(event, candidates, evalNow);
+        EvalResult result = evalEngine.evaluate(event, evalNow);
 
         sessionWriter.updateFinal(sessionId, result, ctx);
         traceWriter.write(event.tenantId(), sessionId.toString(), result.nodeTrace());

@@ -170,15 +170,21 @@ public class EvalSessionWriter {
                         .set(DryRunSession::getContextSnapshot, serializeSnapshot(ctx)));
     }
 
-    /** 将 EvalContext metrics 序列化为 {@code {metricCode: rawValue}} JSON；ctx 为 null 或序列化失败时返回 null。 */
+    /**
+     * 将 EvalContext 序列化为 {@code {"metrics": {metricCode: rawValue}, "evalNow": "<ISO>"}} JSON；
+     * ctx 为 null 或序列化失败时返回 null。
+     */
     private String serializeSnapshot(EvalContext ctx) {
         if (ctx == null) return null;
-        Map<String, Object> raw = ctx.metrics().entrySet().stream()
+        Map<String, Object> metrics = ctx.metrics().entrySet().stream()
                 .collect(java.util.stream.Collectors.toMap(
                         Map.Entry::getKey,
                         e -> e.getValue().value() != null ? e.getValue().value() : "null"));
+        Map<String, Object> snapshot = new java.util.HashMap<>();
+        snapshot.put("metrics", metrics);
+        snapshot.put("evalNow", ctx.now() != null ? ctx.now().toString() : null);
         try {
-            return objectMapper.writeValueAsString(raw);
+            return objectMapper.writeValueAsString(snapshot);
         } catch (JacksonException e) {
             log.warn("context_snapshot 序列化失败，写 null", e);
             return null;
