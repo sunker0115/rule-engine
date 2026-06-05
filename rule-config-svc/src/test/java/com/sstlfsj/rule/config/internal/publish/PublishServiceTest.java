@@ -479,4 +479,36 @@ class PublishServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("列数");
     }
+
+    @Test
+    void publish_decisionTable_columns为空_抛异常() {
+        draftRule.setKind("DECISION_TABLE");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        DecisionTableNode emptyColumns = new DecisionTableNode(
+                List.of(),
+                List.of(new DecisionTableNode.Row(List.of(), "BLOCK")));
+        when(astSerializer.fromJson(anyString())).thenReturn(emptyColumns);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("columns");
+    }
+
+    @Test
+    void publish_decisionTable_rows为空_抛异常() {
+        draftRule.setKind("DECISION_TABLE");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        DecisionTableNode emptyRows = new DecisionTableNode(
+                List.of(new DecisionTableNode.Column("amount", "GT")),
+                List.of());
+        when(astSerializer.fromJson(anyString())).thenReturn(emptyRows);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("rows");
+    }
 }

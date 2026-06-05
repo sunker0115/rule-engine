@@ -97,14 +97,13 @@ public class PublishService {
 
         // 4. 反序列化 AST，收集 metricDependencies
         AstNode ast = astSerializer.fromJson(draftVersion.getConditionAst());
-        // kind 合法性校验
-        String kind = rule.getKind();
-        if (kind != null && !kind.isBlank()) {
-            java.util.Set<String> validKinds = java.util.Set.of(
-                    "AST_BOOLEAN", "SCORECARD", "DECISION_TREE", "DECISION_TABLE");
-            if (!validKinds.contains(kind)) {
-                throw new IllegalArgumentException("不支持的规则 kind: " + kind);
-            }
+        // kind 合法性校验：null/blank 视为 AST_BOOLEAN（兼容历史存量数据）
+        String rawKind = rule.getKind();
+        String kind = (rawKind == null || rawKind.isBlank()) ? "AST_BOOLEAN" : rawKind;
+        java.util.Set<String> validKinds = java.util.Set.of(
+                "AST_BOOLEAN", "SCORECARD", "DECISION_TREE", "DECISION_TABLE");
+        if (!validKinds.contains(kind)) {
+            throw new IllegalArgumentException("不支持的规则 kind: " + kind);
         }
         // SCORECARD kind 校验：根节点必须是 ScorecardRootNode，叶子 weight 必须 > 0
         if ("SCORECARD".equals(kind)) {
@@ -213,7 +212,7 @@ public class PublishService {
                 List.of(),   // preGates v1 暂时不反序列化
                 List.of(),   // decisionBindings v1 暂时不反序列化
                 List.of(),   // triggerEventTypes v1 暂时不反序列化，通配
-                newRv.getKind() != null ? newRv.getKind() : "AST_BOOLEAN"
+                kind
         );
 
         // 11. 发布 Modulith 事件（事务提交后由 Spring 事件机制触发，eval-svc 监听热更索引）
