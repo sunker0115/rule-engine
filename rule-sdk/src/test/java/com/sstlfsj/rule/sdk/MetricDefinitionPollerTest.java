@@ -13,20 +13,20 @@ class MetricDefinitionPollerTest {
         String url = MetricDefinitionPoller.buildUrl(
                 "http://h:8080", "t1", FetchMode.DECLARED, List.of("payment", "fraud"));
         assertThat(url).isEqualTo(
-                "http://h:8080/api/v1/sdk/metric-definitions?tenantId=t1&scenes=payment,fraud");
+                "http://h:8080/sdk/v1/metric-definitions?tenantId=t1&scenes=payment,fraud");
     }
 
     @Test
     void buildUrl_allMode_ignoresScenes() {
         String url = MetricDefinitionPoller.buildUrl(
                 "http://h:8080", "t1", FetchMode.ALL, List.of("payment"));
-        assertThat(url).isEqualTo("http://h:8080/api/v1/sdk/metric-definitions?tenantId=t1");
+        assertThat(url).isEqualTo("http://h:8080/sdk/v1/metric-definitions?tenantId=t1");
     }
 
     @Test
     void buildUrl_declaredEmptyScenes_noScenesParam() {
         String url = MetricDefinitionPoller.buildUrl(
                 "http://h:8080", "t1", FetchMode.DECLARED, List.of());
-        assertThat(url).isEqualTo("http://h:8080/api/v1/sdk/metric-definitions?tenantId=t1");
+        assertThat(url).isEqualTo("http://h:8080/sdk/v1/metric-definitions?tenantId=t1");
     }
 }

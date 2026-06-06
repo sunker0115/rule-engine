@@ -10,7 +10,7 @@ import java.util.List;
 
 /** SDK metric 定义下发端点：供 MetricDefinitionPoller 拉取定义元数据（不含凭证）。 */
 @RestController
-@RequestMapping("/api/v1/sdk")
+@RequestMapping("/sdk/v1")
 public class SdkMetricDefinitionController {
 
     private final MetadataService metadataService;

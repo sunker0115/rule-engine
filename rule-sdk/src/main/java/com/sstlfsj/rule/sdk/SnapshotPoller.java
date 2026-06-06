@@ -102,7 +102,7 @@ public class SnapshotPoller {
 
     private String buildUrl() {
         StringBuilder url = new StringBuilder(serverUrl)
-                .append("/api/v1/sdk/snapshots?tenantId=")
+                .append("/sdk/v1/snapshots?tenantId=")
                 .append(tenantId);
         if (fetchMode == FetchMode.DECLARED && !scenes.isEmpty()) {
             url.append("&scenes=").append(String.join(",", scenes));

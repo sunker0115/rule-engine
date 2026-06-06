@@ -997,7 +997,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `01-concepts.md` §3.8 EvalContext 构建逻辑需说明 `providedMetrics` 优先级
 - `10-api-contract.md` 需补充两处：
   - 评估接口请求体新增 `providedMetrics` 字段
-  - 新增 `GET /api/v1/scenes/{sceneCode}/provided-metrics` 发现接口，返回本 Scene 内 `allowProvided=true` 的 metric 列表（含 `metricCode / dataType / description`），供业务方接入时查询，响应可缓存（见 10-api-contract §5.2）
+  - 新增 `GET /admin/v1/scenes/{sceneCode}/provided-metrics` 发现接口，返回本 Scene 内 `allowProvided=true` 的 metric 列表（含 `metricCode / dataType / description`），供业务方接入时查询，响应可缓存（见 10-api-contract §5.2）
 
 ---
 
@@ -1147,7 +1147,7 @@ RuleEngineClient.builder()
 
 **`RuleSource` 不携带 evaluator**：规则数据与算子行为职责分离，evaluator 在 Client 级通过 `addEvaluator()` 注册（见 D37）。
 
-**文件格式**：JSON，与服务端 `GET /api/v1/sdk/snapshots` 响应体 `data` 数组格式完全一致，可直接从服务端导出存为文件离线使用。不做 YAML（需额外依赖 `jackson-dataformat-yaml`），如有需求后续扩展。
+**文件格式**：JSON，与服务端 `GET /sdk/v1/snapshots` 响应体 `data` 数组格式完全一致，可直接从服务端导出存为文件离线使用。不做 YAML（需额外依赖 `jackson-dataformat-yaml`），如有需求后续扩展。
 
 **不改的**：`EvalEngine`、`SceneRuleIndex`、服务端任何模块。
 
@@ -1460,7 +1460,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 2. **metric 定义独立下发，不进 `rule_version` 快照**：SDK 本地 `MetricDefinitionRegistry`（`tenantId:metricCode → MetricDescriptor`，HTTP 热更整体替换）+ `SnapshotMetricDefinitionResolver`（B21 resolver SPI 的嵌入式实现，读 registry）。
 
-3. **定义来源对称于 `RuleSource`**：`MetricDefinitionSource` SPI —— `DslMetricDefinitionSource` / `FileMetricDefinitionSource`（本地追加 put）/ `PollingMetricDefinitionSource`（HTTP 全量 replace）。HTTP 模式独立 `MetricDefinitionPoller` 复用 `pollInterval` 热更，端点 `GET /api/v1/sdk/metric-definitions`（仅下发元数据，不含凭证）。
+3. **定义来源对称于 `RuleSource`**：`MetricDefinitionSource` SPI —— `DslMetricDefinitionSource` / `FileMetricDefinitionSource`（本地追加 put）/ `PollingMetricDefinitionSource`（HTTP 全量 replace）。HTTP 模式独立 `MetricDefinitionPoller` 复用 `pollInterval` 热更，端点 `GET /sdk/v1/metric-definitions`（仅下发元数据，不含凭证）。
 
 4. **handler 由宿主注入，SDK 不内置 SQL/HTTP handler**：SDK 跑宿主进程，凭证/连接池属宿主职责。`RuleEngineClient.Builder` 加注入入口：`metricSourceHandler` / `metricDefinitionResolver` / `metricCache` / `fetchExecutor` / `metricDefinitionSource` / `localMetric`。
 

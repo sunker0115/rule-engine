@@ -12,7 +12,7 @@ import java.util.Map;
 
 /** SDK 快照端点：供 SnapshotPoller 启动加载和增量热更新。 */
 @RestController
-@RequestMapping("/api/v1/sdk")
+@RequestMapping("/sdk/v1")
 public class SdkSnapshotController {
 
     private final SceneSnapshotLoader snapshotLoader;

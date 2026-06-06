@@ -806,7 +806,7 @@ interface Scheduler {
 - **补偿不自动触发**（D18）：引擎只记录 FAILED 状态，**不自动调用** `compensate()`——补偿是业务语义，由业务侧按需发起；
 - **补偿幂等**：由各 `ActionHandler.compensate()` 实现自行保证（DB uk / Redis trySet / 外部幂等键），引擎不重复保证；
 - **补偿结果记录**：执行结果写入 `action_execution` 的补偿流水字段（`compensated` / `compensated_at` / `compensated_by`），详见 [`05-storage.md`](./05-storage.md) §action_execution 表；
-- **运营 UI 与对账配置**：补偿操作台与运维流程为 v2 规划功能，v1 由运营通过 `GET /api/v1/evaluation-sessions` + `action_execution` 查询接口人工核查待补偿清单（`compensated=false, status=SUCCESS`）。
+- **运营 UI 与对账配置**：补偿操作台与运维流程为 v2 规划功能，v1 由运营通过 `GET /admin/v1/evaluation-sessions` + `action_execution` 查询接口人工核查待补偿清单（`compensated=false, status=SUCCESS`）。
 
 ### 3.19 Decision（决策定义，一等公民）
 

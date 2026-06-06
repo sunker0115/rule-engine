@@ -29,17 +29,17 @@
 
 ## 二、接口分组总览
 
-所有接口均挂载在 `/api/v1/` 前缀下（v1 稳定版）。errorCode 与 HTTP 状态码对应关系见 §七。
+接口按**受众**分三类前缀挂载（均为 v1 稳定版）：`/admin/v1/`（管理后台,人操作）、`/api/v1/`（业务调用方/前端触发评估）、`/sdk/v1/`（嵌入式 SDK 下发,机器拉取）。errorCode 与 HTTP 状态码对应关系见 §七。
 
-| 分组 | 路径前缀 | 主要场景 |
-|------|---------|---------|
-| 评估接口 | `/api/v1/rule/` | 业务方触发评估（PUSH/PULL/dry-run） |
-| 规则管理 | `/api/v1/rules` | 创建 / 发布 / 禁用 / 查询规则；批量导出 / 导入 Bundle 文件（B7） |
-| Scene 管理 | `/api/v1/scenes` | 创建 / 更新 / 禁用 Scene |
-| 指标管理 | `/api/v1/metrics` | 注册 / 更新 / 禁用 Metric |
-| 元数据接口 | `/api/v1/scenes/{sceneCode}/metadata`，`/api/v1/scenes/{sceneCode}/provided-metrics` | 前端编辑器拉 ConditionType / ActionType 枚举；D30 allowProvided 发现 |
-| 审计与查询 | `/api/v1/evaluation-sessions`，`/api/v1/rules/{id}/sessions` | 查 session / trace / action 执行；按规则查历史触发记录 |
-| SDK 下发接口 | `/api/v1/sdk/snapshots`，`/api/v1/sdk/metric-definitions` | 嵌入式 SDK 拉规则快照 / metric 定义元数据（HTTP 模式，见 §8.7） |
+| 类别 | 分组 | 路径前缀 | 主要场景 |
+|------|------|---------|---------|
+| api | 评估接口 | `/api/v1/rule/` | 业务方触发评估（PUSH/PULL/dry-run） |
+| admin | 规则管理 | `/admin/v1/rules` | 创建 / 发布 / 禁用 / 查询规则；批量导出 / 导入 Bundle 文件（B7） |
+| admin | Scene 管理 | `/admin/v1/scenes` | 创建 / 更新 / 禁用 Scene |
+| admin | 指标管理 | `/admin/v1/metrics` | 注册 / 更新 / 禁用 Metric |
+| admin | 元数据接口 | `/admin/v1/scenes/{sceneCode}/metadata`，`/admin/v1/scenes/{sceneCode}/provided-metrics` | 前端编辑器拉 ConditionType / ActionType 枚举；D30 allowProvided 发现 |
+| admin | 审计与查询 | `/admin/v1/evaluation-sessions`，`/admin/v1/rules/{id}/sessions` | 查 session / trace / action 执行；按规则查历史触发记录 |
+| sdk | SDK 下发接口 | `/sdk/v1/snapshots`，`/sdk/v1/metric-definitions` | 嵌入式 SDK 拉规则快照 / metric 定义元数据（HTTP 模式，见 §8.7） |
 
 ---
 
@@ -97,7 +97,7 @@ POST /api/v1/rule/evaluate
     "fromRuleVersionId": 42
   },
   "hitDecisions": [{"code": "REVIEW", "name": "人工审核", "priority": 2, "fromRuleVersionId": 42}],
-  "nodeTrace": null,
+  "nodeTrace": [],
   "errorCode": null,
   "actionResults": []
 }
@@ -107,7 +107,7 @@ POST /api/v1/rule/evaluate
 
 **超时建议**：调用方设 HTTP timeout ≥ 500ms（v1 P99 目标 < 500ms；风控高频场景 < 100ms 目标见 [`07-operability.md`](./07-operability.md) §七）。
 
-**查 trace**：PULL 评估不在响应体直接返回 sessionId；调用方若需查 node_trace，通过 `GET /api/v1/evaluation-sessions?tenantId=&eventId={eventId}` 取对应 session，再调 §6.2 `GET /api/v1/evaluation-sessions/{sessionId}/trace`。
+**查 trace**：PULL 评估不在响应体直接返回 sessionId；调用方若需查 node_trace，通过 `GET /admin/v1/evaluation-sessions?tenantId=&eventId={eventId}` 取对应 session，再调 §6.2 `GET /admin/v1/evaluation-sessions/{sessionId}/trace`。
 
 **失败语义（D15）**：`errorCode` 非 null 表示评估期有节点出错；调用方按 fail-secure（拒绝）或 fail-open（放行）自行决策，引擎不代为决定。
 
@@ -126,7 +126,7 @@ POST /api/v1/rule/dry-run
 
 **Request：** 同 3.1，额外可传 `ruleVersionId`（指定版本回放，null = 使用当前版本）。
 
-**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段；v1.5（D7）已全量实装 `dryRun()`，`actionResults` 返回真实预览 ActionResult（不实际派发）：
+**Response 200：** 同 3.2，但 `nodeTrace` 字段填充真实节点路径（evaluate 时为空数组）；v1.5（D7）已全量实装 `dryRun()`，`actionResults` 返回真实预览 ActionResult（不实际派发）：
 ```json
 {
   "eventId": "evt-dry-001",
@@ -140,19 +140,21 @@ POST /api/v1/rule/dry-run
       "errorCode": "DRY_RUN_NOT_IMPLEMENTED"
     }
   ],
-  "nodeTrace": {
-    "type": "AndNode",
-    "result": true,
-    "children": [
-      {
-        "type": "ConditionNode",
-        "metricCode": "user.account.age.days",
-        "result": true,
-        "actualValue": 45,
-        "valueSource": "FETCHED"
-      }
-    ]
-  }
+  "nodeTrace": [
+    {
+      "type": "AndNode",
+      "result": true,
+      "children": [
+        {
+          "type": "ConditionNode",
+          "metricCode": "user.account.age.days",
+          "result": true,
+          "actualValue": 45,
+          "valueSource": "FETCHED"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -164,10 +166,10 @@ v1.5（D7）已全量实装 `dryRun()`，`DRY_RUN_NOT_IMPLEMENTED` errorCode 不
 
 ### 4.1 创建规则草稿
 
-> **已实装（v2）**：`POST /api/v1/rules`，返回 201 + `DraftCreatedResult`；重复 code 前置校验，Scene 不存在返回 400。
+> **已实装（v2）**：`POST /admin/v1/rules`，返回 201 + `DraftCreatedResult`；重复 code 前置校验，Scene 不存在返回 400。
 
 ```
-POST /api/v1/rules
+POST /admin/v1/rules
 ```
 
 **Request：**
@@ -230,7 +232,7 @@ POST /api/v1/rules
 ### 4.2 发布规则
 
 ```
-POST /api/v1/rules/{ruleDefinitionId}/publish
+POST /admin/v1/rules/{ruleDefinitionId}/publish
 ```
 
 **响应**：发布成功 200，返回新 `ruleVersion`；发布校验失败 422 + errorCode（`UNRESOLVED_VARIABLE` / `METRIC_NOT_BOUND` 等，见 §七）。
@@ -238,7 +240,7 @@ POST /api/v1/rules/{ruleDefinitionId}/publish
 ### 4.3 禁用规则
 
 ```
-POST /api/v1/rules/{ruleDefinitionId}/disable
+POST /admin/v1/rules/{ruleDefinitionId}/disable
 ```
 
 效果：`rule_definition.status = DISABLED`，Matcher 倒排索引热摘除（≤15s 全实例收敛，D17）。
@@ -246,7 +248,7 @@ POST /api/v1/rules/{ruleDefinitionId}/disable
 ### 4.4 查询规则列表
 
 ```
-GET /api/v1/rules?tenantId=demo-tenant&sceneCode=risk.transfer&status=PUBLISHED
+GET /admin/v1/rules?tenantId=demo-tenant&sceneCode=risk.transfer&status=PUBLISHED
 ```
 
 **Response 200：** 分页列表，含 `ruleDefinitionId / code / name / status / currentVersion / publishedAt`。
@@ -254,7 +256,7 @@ GET /api/v1/rules?tenantId=demo-tenant&sceneCode=risk.transfer&status=PUBLISHED
 ### 4.5 注册 Metric（B6）
 
 ```
-POST /api/v1/metrics?tenantId={tenantId}&metricCode={metricCode}
+POST /admin/v1/metrics?tenantId={tenantId}&metricCode={metricCode}
 ```
 
 **Headers：**
@@ -287,7 +289,7 @@ POST /api/v1/metrics?tenantId={tenantId}&metricCode={metricCode}
 ### 4.6 更新 / 升版 Metric（B6）
 
 ```
-PUT /api/v1/metrics/{metricCode}?tenantId={tenantId}&breakingChange=false
+PUT /admin/v1/metrics/{metricCode}?tenantId={tenantId}&breakingChange=false
 ```
 
 **Headers：** 同 §4.5（`X-Actor-Id` 必填）。
@@ -308,7 +310,7 @@ PUT /api/v1/metrics/{metricCode}?tenantId={tenantId}&breakingChange=false
 ### 4.7 影响面查询（B6）
 
 ```
-GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId={tenantId}
+GET /admin/v1/metrics/{metricCode}/versions/{version}/impact?tenantId={tenantId}
 ```
 
 **Response 200：**
@@ -339,7 +341,7 @@ GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId={tenantId}
 ### 4.8 批量导出规则 Bundle（B7）
 
 ```
-GET /api/v1/rules/export?tenantId={tenantId}&ruleIds={id,id}&sceneId={sceneId}
+GET /admin/v1/rules/export?tenantId={tenantId}&ruleIds={id,id}&sceneId={sceneId}
 ```
 
 按条件批量导出规则的当前 ACTIVE 版本为自包含 JSON Bundle，**以文件下载形式返回**（`Content-Type: application/json` + `Content-Disposition: attachment; filename="rule-bundle-{tenantId}-{ts}.json"`），供跨环境 / 跨租户迁移、Incident 复现。选取优先级：`ruleIds` 非空 → 按 id 列表；否则 `sceneId` 非空 → 该场景全部；否则 → 该租户全部。对每条仅导当前 ACTIVE 版本，无 ACTIVE 版本者跳过；最终无可导出规则时返回 `INVALID_ARGUMENT`（JSON 错误体）。导出入参用 `sceneId`；Bundle 内 `rules[].sceneCode` 用 code，跨环境按 code 关联。
@@ -372,7 +374,7 @@ GET /api/v1/rules/export?tenantId={tenantId}&ruleIds={id,id}&sceneId={sceneId}
 ### 4.9 批量导入规则 Bundle（B7）
 
 ```
-POST /api/v1/rules/import?tenantId={tenantId}
+POST /admin/v1/rules/import?tenantId={tenantId}
 ```
 
 header `X-Actor-Id`；**`multipart/form-data` 上传 Bundle JSON 文件（字段名 `file`）**。幂等批量导入到目标租户：Scene / metric / decision 缺失则建、已存在跳过；规则逐条落为 DRAFT 版本（同 code 已存在则追加草稿版本，不覆盖已发布版本）。`SQL_AGGREGATE` 类缺失 metric 不自动创建，列入 `metricsRequiringReview`。文件解析失败返回 `INVALID_ARGUMENT`。
@@ -408,7 +410,7 @@ header `X-Actor-Id`；**`multipart/form-data` 上传 Bundle JSON 文件（字段
 ### 5.1 拉 Scene 元数据（前端编辑器）
 
 ```
-GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
+GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 ```
 
 **Response：** 见 `04-extension.md §五` 元数据契约（`conditionTypes` / `actionTypes` / `availableMetrics` 三段）。
@@ -418,7 +420,7 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 > **已实装（v2 第二阶段）**
 
 ```
-GET /api/v1/scenes/{sceneCode}/provided-metrics?tenantId=demo-tenant
+GET /admin/v1/scenes/{sceneCode}/provided-metrics?tenantId=demo-tenant
 ```
 
 **Response 200：**
@@ -443,7 +445,7 @@ GET /api/v1/scenes/{sceneCode}/provided-metrics?tenantId=demo-tenant
 ### 6.1 查询 evaluation_session
 
 ```
-GET /api/v1/evaluation-sessions?tenantId=demo-tenant&sceneCode=risk.transfer&subjectId=user-001&from=2026-05-01T00:00:00Z&to=2026-06-01T00:00:00Z
+GET /admin/v1/evaluation-sessions?tenantId=demo-tenant&sceneCode=risk.transfer&subjectId=user-001&from=2026-05-01T00:00:00Z&to=2026-06-01T00:00:00Z
 ```
 
 **Response 200：** 分页列表，含 `sessionId / eventId / status / finalDecision / startedAt / evalDurationMs`。
@@ -451,18 +453,18 @@ GET /api/v1/evaluation-sessions?tenantId=demo-tenant&sceneCode=risk.transfer&sub
 ### 6.2 查询 node_trace
 
 ```
-GET /api/v1/evaluation-sessions/{sessionId}/trace?tenantId=demo-tenant
+GET /admin/v1/evaluation-sessions/{sessionId}/trace?tenantId=demo-tenant
 ```
 
 **Response 200：** 扁平 trace 列表，按 `node_path` 字典序排列。向后兼容保留。
 
-**嵌套树端点（推荐）**：`GET /api/v1/evaluation-sessions/{sessionId}/trace/tree?tenantId=`  
-返回格式与 §3.3 dry-run `nodeTrace` 相同（嵌套结构），已实装（v2 第二阶段）。数据来源是 `node_trace` 表的扁平行，由 API 层按 `node_path` 重建树后返回。
+**嵌套树端点（推荐）**：`GET /admin/v1/evaluation-sessions/{sessionId}/trace/tree?tenantId=`  
+返回格式与 §3.3 dry-run `nodeTrace` 相同（数组,每元素为一棵嵌套树），已实装（v2 第二阶段）。数据来源是 `node_trace` 表的扁平行，由 API 层按 `node_path` 重建树后返回。
 
 ### 6.3 查询 audit_log
 
 ```
-GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=1&from=2026-05-01T00:00:00Z
+GET /admin/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=1&from=2026-05-01T00:00:00Z
 ```
 
 **Response 200：** 分页列表，含 `actor / actorType / action / targetType / targetId / beforeSnapshot / afterSnapshot / operatedAt`。
@@ -472,7 +474,7 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 > 排障场景：运营在规则详情页快速看到"这条规则最近触发了哪些 session，结果如何"。
 
 ```
-GET /api/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&limit=20&offset=0
+GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&limit=20&offset=0
 ```
 
 **Path 参数：**
@@ -592,7 +594,7 @@ GET /api/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&li
 
 ### 8.2 HTTP 轮询模式
 
-`SnapshotPoller` 后台定时拉取 `/api/v1/sdk/snapshots`：
+`SnapshotPoller` 后台定时拉取 `/sdk/v1/snapshots`：
 
 ```java
 // 非 Spring 项目
@@ -669,7 +671,7 @@ public class AuditListener implements EvalResultListener {
 
 ### 8.3 JSON 文件模式
 
-规则以 JSON 文件随代码打包，适合离线 / 测试环境，文件格式与服务端 `GET /api/v1/sdk/snapshots` 响应 `data` 数组一致，可直接从服务端导出后存为文件：
+规则以 JSON 文件随代码打包，适合离线 / 测试环境，文件格式与服务端 `GET /sdk/v1/snapshots` 响应 `data` 数组一致，可直接从服务端导出后存为文件：
 
 ```java
 try (RuleEngineClient client = RuleEngineClient.builder()
@@ -799,7 +801,7 @@ Spring 项目中，`@ConditionType` 标注的 Bean 由 `AutoConfiguration` 自�
 `SnapshotPoller`（HTTP 轮询模式）内部调用的服务端接口：
 
 ```
-GET /api/v1/sdk/snapshots
+GET /sdk/v1/snapshots
   ?tenantId=1001
   &scenes=fraud,payment   # 可选；不传则返回该租户所有 ACTIVE 快照
   &since=1717200000000    # 可选；预留增量拉取（v1 忽略，全量返回）
@@ -810,7 +812,7 @@ GET /api/v1/sdk/snapshots
 `MetricDefinitionPoller`（HTTP 取数模式，D46 / B23）内部调用的 metric 定义下发接口——仅注入 handler 启用 fetch 时拉取：
 
 ```
-GET /api/v1/sdk/metric-definitions
+GET /sdk/v1/metric-definitions
   ?tenantId=1001
   &scenes=fraud,payment   # 可选；不传（ALL 模式）返回该租户全部 ACTIVE 定义；
                           # 传入（DECLARED 模式）只返回这些 scenes 下 ACTIVE rule_version 的 metricDependencies 并集内的定义
@@ -878,7 +880,7 @@ try (RuleEngineClient client = RuleEngineClient.builder()
 
 ## 九、版本兼容策略
 
-- API 路径前缀 `/api/v1/` —— 重大不兼容变更时升 `/api/v2/`
+- API 路径前缀按受众分 `/admin/v1/`、`/api/v1/`、`/sdk/v1/` —— 重大不兼容变更时各自升 v2
 - Response 新增字段：向后兼容（调用方忽略未知字段）
 - Response 删除字段 / 改类型：v1 → v2 迁移期，旧字段保留 ≥ 3 个月
 - `errorCode` 枚举新增值：向后兼容（调用方按"未知错误"处理）

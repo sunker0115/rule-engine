@@ -282,7 +282,7 @@ public @interface MetricSourceType {
 前端进入编辑器时调用：
 
 ```
-GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
+GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 ```
 
 （该接口定义见 `10-api-contract.md` §五，本节只说元数据结构）

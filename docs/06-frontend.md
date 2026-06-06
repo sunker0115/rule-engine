@@ -53,7 +53,7 @@
 
 编辑器不硬编码 ConditionType / ActionType 表单，而是：
 
-1. 进入编辑器时调用 `GET /api/v1/scenes/{sceneCode}/metadata`，拿到：
+1. 进入编辑器时调用 `GET /admin/v1/scenes/{sceneCode}/metadata`，拿到：
    - `conditionTypes[]`（含 paramsSchema）
    - `actionTypes[]`（含 paramsSchema）
    - `availableMetrics[]`
@@ -111,7 +111,7 @@
 
 ## 六、审计日志查看 UI
 
-在 Rule 详情页右侧抽屉（通过 `GET /api/v1/audit-logs` 查询）：
+在 Rule 详情页右侧抽屉（通过 `GET /admin/v1/audit-logs` 查询）：
 - 按时间倒序列出 `audit_log` 条目（PUBLISH / DISABLE / UPDATE 等，枚举值同 05-storage DDL `audit_log.action`）
 - 每条目展开 → diff 视图（before_snapshot vs after_snapshot，JSON diff 高亮）
 - 点击"操作人"→ 可按 actor 过滤；同时显示 actorType（USER / SYSTEM / JOB）
