@@ -1466,7 +1466,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 5. **配置错误 fail-fast**：配置了取数项（定义来源 / resolver / cache / executor）但未注入 handler → `build()` 抛 `IllegalArgumentException`，不静默 no-op。
 
-6. **服务端下发 scope v1 简化**：`MetadataService.listMetricDefinitions` 忽略 scenes 白名单，返回租户全部 ACTIVE 定义；`scenes` 已在 wire 契约（`?tenantId=&scenes=`），未来按场景 `metricDependencies` 并集收紧无需改 SDK（不需 `scene_metric_binding` 表）。
+6. **服务端下发 scope 按 scenes 收紧**：`MetadataService.listMetricDefinitions` —— `scenes` 为空（`FetchMode.ALL`）返回租户全部 ACTIVE 定义；`scenes` 非空（`FetchMode.DECLARED`）只返回「这些 scenes 下 ACTIVE rule_version 的 `metricDependencies` 并集」内的定义（口径对齐快照下发 `rv.status=ACTIVE`，保证 SDK 拿到的规则引用的 metric 定义无遗漏；不需 `scene_metric_binding` 表）。SDK 侧 `?tenantId=&scenes=` wire 契约不变，零改动。
 
 7. **starter 自动注入**：`RuleEngineClientAutoConfiguration` 用 `ObjectProvider` 收集 handler/resolver/cache/定义来源 Bean 注入 Builder；无 Bean → fetch 不启用。
 

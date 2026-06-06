@@ -654,10 +654,11 @@ GET /api/v1/sdk/snapshots
 ```
 GET /api/v1/sdk/metric-definitions
   ?tenantId=1001
-  &scenes=fraud,payment   # 可选；v1 服务端忽略 scenes 白名单，返回该租户全部 ACTIVE 定义
+  &scenes=fraud,payment   # 可选；不传（ALL 模式）返回该租户全部 ACTIVE 定义；
+                          # 传入（DECLARED 模式）只返回这些 scenes 下 ACTIVE rule_version 的 metricDependencies 并集内的定义
 ```
 
-响应格式为 `ApiResponse<List<MetricDescriptor>>`（见 §一），仅下发定义元数据（`sourceType`/`dataType`/`allowProvided`/`cacheTtlSeconds`/`params`），**不含凭证**——取数 handler 与凭证由宿主提供。
+响应格式为 `ApiResponse<List<MetricDescriptor>>`（见 §一），仅下发定义元数据（`sourceType`/`dataType`/`allowProvided`/`cacheTtlSeconds`/`params`），**不含凭证**——取数 handler 与凭证由宿主提供。`scenes` 过滤口径与快照下发一致（`rv.status=ACTIVE`），保证 SDK 评估这些 scenes 时引用的 metric 定义都已下发。
 
 ---
 

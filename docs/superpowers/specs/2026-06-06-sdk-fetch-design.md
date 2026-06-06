@@ -144,7 +144,7 @@ interface MetricDefinitionSource { void loadInto(MetricDefinitionRegistry regist
 > 下列问题已在实现期拍定，结论见各条 `→`（决策日志 `docs/00-decisions.md` D46 + 计划 `plans/2026-06-06-b23-sdk-fetch.md`）。保留原问题以记录权衡过程。
 
 - **Q1** 定义下发 scope：按 `scenes`（DECLARED）还是全量租户定义？倾向复用 `FetchMode`。
-  → **结论**：复用 `FetchMode`，`scenes` 进 wire 契约（`?tenantId=&scenes=`）；v1 服务端 `listMetricDefinitions` 忽略 scenes 白名单、返回租户全部 ACTIVE 定义，未来按场景 `metricDependencies` 并集收紧无需改 SDK（D46 §6）。
+  → **结论**：复用 `FetchMode`，`scenes` 进 wire 契约（`?tenantId=&scenes=`）；服务端 `listMetricDefinitions` —— `ALL`（scenes 空）返回租户全部 ACTIVE 定义，`DECLARED`（scenes 非空）按「scenes 下 ACTIVE rule_version 的 `metricDependencies` 并集」过滤（口径对齐快照下发 `rv.status=ACTIVE`，不需 `scene_metric_binding` 表）。已实装（D46 §6）。
 - **Q2** 定义热更：复用 `pollInterval` 单独轮询，还是与规则快照合并为一个下发包？
   → **结论**：独立 `MetricDefinitionPoller`，复用 `pollInterval` 单独轮询，不与快照合并（保持来源对称、通道解耦，D46 §3）。
 - **Q3** 文件/DSL 模式的定义来源格式（JSON schema / DSL builder）。
