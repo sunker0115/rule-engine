@@ -5,6 +5,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
+import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
@@ -32,6 +33,13 @@ import static org.mockito.Mockito.mock;
 class EvalAutoConfigurationTest {
 
     private final EvalAutoConfiguration config = new EvalAutoConfiguration();
+
+    /** 取数资源配置桩（默认超时 800ms），供 evalContextAssembler 装配。 */
+    private static FetchResourceProperties fetchProps() {
+        FetchResourceProperties p = new FetchResourceProperties();
+        p.setTimeoutMs(800);
+        return p;
+    }
 
     @Test
     void hasAutoConfigurationAnnotation() {
@@ -88,14 +96,14 @@ class EvalAutoConfigurationTest {
 
     @Test
     void evalContextAssembler_nullLists_returnsInstance() {
-        EvalContextAssembler assembler = config.evalContextAssembler(null, null, null, null, Runnable::run, 800L);
+        EvalContextAssembler assembler = config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps());
         assertNotNull(assembler);
     }
 
     @Test
     void evalContextAssembler_emptyLists_returnsInstance() {
         EvalContextAssembler assembler = config.evalContextAssembler(
-                List.of(), List.of(), null, null, Runnable::run, 800L);
+                List.of(), List.of(), null, null, Runnable::run, fetchProps());
         assertNotNull(assembler);
     }
 
@@ -109,7 +117,7 @@ class EvalAutoConfigurationTest {
     void evalEngine_nullPreGates_returnsInstance() {
         EvalEngine engine = config.evalEngine(
                 config.sceneRuleIndex(),
-                config.evalContextAssembler(null, null, null, null, Runnable::run, 800L),
+                config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps()),
                 null,
                 config.ruleVersionExecutor(),
                 config.scorecardExecutor(),
@@ -122,7 +130,7 @@ class EvalAutoConfigurationTest {
     void evalEngine_emptyPreGates_returnsInstance() {
         EvalEngine engine = config.evalEngine(
                 config.sceneRuleIndex(),
-                config.evalContextAssembler(null, null, null, null, Runnable::run, 800L),
+                config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps()),
                 List.of(),
                 config.ruleVersionExecutor(),
                 config.scorecardExecutor(),

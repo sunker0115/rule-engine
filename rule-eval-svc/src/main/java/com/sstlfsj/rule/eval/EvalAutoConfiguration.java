@@ -23,9 +23,9 @@ import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -132,7 +132,7 @@ public class EvalAutoConfiguration {
      * @param definitionResolver metric 定义解析器（可选）
      * @param metricCache        取数缓存（可选）
      * @param fetchExecutor      取数线程池
-     * @param fetchTimeoutMs     全局取数超时毫秒
+     * @param fetchProps         取数资源配置（全局取数超时单一来源 engine.rule.fetch.*）
      * @return EvalContextAssembler 实例
      */
     @Bean
@@ -142,7 +142,7 @@ public class EvalAutoConfiguration {
             @Autowired(required = false) MetricDefinitionResolver definitionResolver,
             @Autowired(required = false) MetricCache metricCache,
             @Qualifier("metricFetchExecutor") Executor fetchExecutor,
-            @Value("${rule.fetch.timeout-ms:800}") long fetchTimeoutMs) {
+            FetchResourceProperties fetchProps) {
         Map<String, MetricSourceHandler> bySource = new HashMap<>();
         if (metricHandlers != null) {
             for (MetricSourceHandler h : metricHandlers) {
@@ -152,7 +152,7 @@ public class EvalAutoConfiguration {
         }
         return new EvalContextAssembler(
                 subjectLoaders == null ? List.of() : subjectLoaders,
-                bySource, definitionResolver, metricCache, fetchExecutor, fetchTimeoutMs);
+                bySource, definitionResolver, metricCache, fetchExecutor, fetchProps.getTimeoutMs());
     }
 
     /**

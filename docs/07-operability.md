@@ -174,7 +174,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 
 ## 九、运维参数默认值表
 
-所有参数均可通过 Spring 配置（`application.yml` 或配置中心）覆盖，命名空间 `engine.rule.*`。
+所有**服务端运维参数**均可通过 Spring 配置（`application.yml` 或配置中心）覆盖，命名空间 `engine.rule.*`（取数资源在 `engine.rule.fetch.*`）。嵌入式 SDK 的配置是独立的**对外契约**，用 `rule.sdk.*`，按受众区分、不并入本命名空间（B26 决定）。
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -188,7 +188,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `engine.rule.context.build-timeout-ms` | 500 | EvalContext 构建超时（含 Subject 加载 + metric 批拉，超时整 session 失败，D25） |
 | `engine.rule.subject.load-timeout-ms` | 200 | SubjectLoader 单次加载超时（D25，超出则 EvalContext 失败） |
 | `engine.rule.metric.default-cache-ttl-seconds` | 60 | metric 取数结果缓存 TTL（per-metric 可覆盖） |
-| `rule.fetch.timeout-ms` | 800 | **全局 metric 并发取数超时**（B21 已实装，`FetchResourceProperties`）；超时未完成的 metric 置 `METRIC_FETCH_FAIL` 降级。注：当前在 `rule.fetch.*` 命名空间，与本表 `engine.rule.*` 约定不一致，前缀统一待定（backlog B26） |
+| `engine.rule.fetch.timeout-ms` | 800 | **全局 metric 并发取数超时**（`FetchResourceProperties`，单一来源）；超时未完成的 metric 置 `METRIC_FETCH_FAIL` 降级。`engine.rule.fetch.datasources` / `.endpoints` 为命名只读数据源 / HTTP 端点（凭证从环境变量注入，不落配置表） |
 | `engine.rule.action.default-timeout-ms` | 3000 | ActionHandler 默认超时（per-handler 可覆盖） |
 | `engine.rule.retention.evaluation-session-days` | 30 | evaluation_session 保留天数（D9） |
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |

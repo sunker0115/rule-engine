@@ -9,7 +9,7 @@ import java.util.List;
  * 取数资源配置：命名 DataSource / HTTP 端点 / 全局超时。
  * 凭证从环境变量/secrets 注入（如 password: ${RISK_RO_PASSWORD}），不落配置表。
  */
-@ConfigurationProperties(prefix = "rule.fetch")
+@ConfigurationProperties(prefix = "engine.rule.fetch")
 public class FetchResourceProperties {
 
     /** 全局取数超时毫秒（默认 800）。 */
