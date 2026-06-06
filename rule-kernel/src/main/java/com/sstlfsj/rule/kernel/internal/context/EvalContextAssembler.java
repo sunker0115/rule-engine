@@ -103,12 +103,16 @@ public class EvalContextAssembler {
             return new EvalContext(event.tenantId(), event, subject, metrics, now);
         }
 
-        Set<String> required = collectMetricCodes(candidates);
+        // 按绑定版本解析：同 code 多版本取最高版本（过渡期确定性策略）
+        Map<String, Integer> chosenVersions = collectChosenVersions(candidates);
         Map<String, MetricDescriptor> descriptors = new HashMap<>();
         Set<String> needFetch = new LinkedHashSet<>();
 
-        for (String code : required) {
-            MetricDescriptor def = definitionResolver.resolve(event.tenantId(), code);
+        for (Map.Entry<String, Integer> entry : chosenVersions.entrySet()) {
+            String code = entry.getKey();
+            int version = entry.getValue();
+            // 版本化缓存键：code:version 避免跨版本串味
+            MetricDescriptor def = definitionResolver.resolve(event.tenantId(), code, version);
             if (def != null) descriptors.put(code, def);
 
             boolean hasProvided = event.providedMetrics().containsKey(code);
@@ -127,8 +131,9 @@ public class EvalContextAssembler {
                 continue;
             }
             if (cache != null && def.cacheTtlSeconds() > 0) {
+                // 缓存键的 metricCode 段含 version，避免跨版本缓存污染
                 MetricValue cached = cache.get(
-                        cacheKey(event.tenantId(), code, event.subjectId(), def.params()));
+                        cacheKey(event.tenantId(), code + ":" + version, event.subjectId(), def.params()));
                 if (cached != null) { metrics.put(code, cached); continue; }
             }
             needFetch.add(code);
@@ -136,7 +141,7 @@ public class EvalContextAssembler {
 
         // 候选未引用但调用方仍推送的 provided 指标：补入（不影响 allowProvided 语义）
         for (Map.Entry<String, Object> e : event.providedMetrics().entrySet()) {
-            if (!required.contains(e.getKey())) {
+            if (!chosenVersions.containsKey(e.getKey())) {
                 metrics.putIfAbsent(e.getKey(), new MetricValue(e.getValue(), "UNKNOWN", "PROVIDED"));
             }
         }
@@ -147,15 +152,17 @@ public class EvalContextAssembler {
         return new EvalContext(event.tenantId(), event, subject, metrics, now);
     }
 
-    private static Set<String> collectMetricCodes(List<RuleVersionSnapshot> candidates) {
-        Set<String> codes = new LinkedHashSet<>();
+    /**
+     * 候选并集中每个 metricCode 选定一个解析版本：同 code 多版本时取最高（过渡期确定性策略）。
+     */
+    private static Map<String, Integer> collectChosenVersions(List<RuleVersionSnapshot> candidates) {
+        Map<String, Integer> chosen = new LinkedHashMap<>();
         for (RuleVersionSnapshot snap : candidates) {
-            // Task 5 改为按绑定版本解析；此处暂只取 metricCode 作临时桥接
-            snap.metricDependencies().stream()
-                    .map(MetricDependency::metricCode)
-                    .forEach(codes::add);
+            for (MetricDependency dep : snap.metricDependencies()) {
+                chosen.merge(dep.metricCode(), dep.metricVersion(), Math::max);
+            }
         }
-        return codes;
+        return chosen;
     }
 
     private void fetchConcurrently(RuleEvent event, Instant now, Set<String> codes,
@@ -196,8 +203,9 @@ public class EvalContextAssembler {
             if (cache != null && !v.isError()) {
                 MetricDescriptor def = descriptors.get(code);
                 if (def.cacheTtlSeconds() > 0) {
-                    cache.put(cacheKey(event.tenantId(), code, event.subjectId(), def.params()),
-                            v, def.cacheTtlSeconds());
+                    // 缓存键的 metricCode 段含 version，与取时保持一致
+                    cache.put(cacheKey(event.tenantId(), code + ":" + def.metricVersion(),
+                            event.subjectId(), def.params()), v, def.cacheTtlSeconds());
                 }
             }
         }

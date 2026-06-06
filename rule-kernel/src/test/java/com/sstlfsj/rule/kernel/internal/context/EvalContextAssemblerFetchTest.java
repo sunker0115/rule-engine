@@ -37,7 +37,7 @@ class EvalContextAssemblerFetchTest {
     @Test
     void fetch_routesBySourceType_andStoresFetched() {
         MetricSourceHandler handler = q -> new MetricValue(999L, "LONG", "FETCHED");
-        MetricDefinitionResolver resolver = (t, c) -> sqlDef(c, false, 0);
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
 
@@ -53,7 +53,7 @@ class EvalContextAssemblerFetchTest {
     void providedPriority_skipsFetch_whenAllowProvidedTrue() {
         AtomicInteger calls = new AtomicInteger();
         MetricSourceHandler handler = q -> { calls.incrementAndGet(); return new MetricValue(1L, "LONG", "FETCHED"); };
-        MetricDefinitionResolver resolver = (t, c) -> sqlDef(c, true, 0);
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, true, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
 
@@ -67,7 +67,7 @@ class EvalContextAssemblerFetchTest {
     @Test
     void providedIgnored_whenAllowProvidedFalse_thenFetched() {
         MetricSourceHandler handler = q -> new MetricValue(42L, "LONG", "FETCHED");
-        MetricDefinitionResolver resolver = (t, c) -> sqlDef(c, false, 0);
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
 
@@ -80,7 +80,7 @@ class EvalContextAssemblerFetchTest {
     @Test
     void handlerThrows_degradesToError() {
         MetricSourceHandler handler = q -> { throw new RuntimeException("db down"); };
-        MetricDefinitionResolver resolver = (t, c) -> sqlDef(c, false, 0);
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
 
@@ -93,7 +93,7 @@ class EvalContextAssemblerFetchTest {
 
     @Test
     void missingHandlerForSourceType_degradesToError() {
-        MetricDefinitionResolver resolver = (t, c) -> sqlDef(c, false, 0);
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of(), resolver, null, Runnable::run, 1000L);
 
@@ -106,7 +106,7 @@ class EvalContextAssemblerFetchTest {
     void cacheHit_skipsFetch() {
         AtomicInteger calls = new AtomicInteger();
         MetricSourceHandler handler = q -> { calls.incrementAndGet(); return new MetricValue(1L, "LONG", "FETCHED"); };
-        MetricDefinitionResolver resolver = (t, c) -> sqlDef(c, false, 60);
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 60);
         MetricValue cached = new MetricValue(500L, "LONG", "FETCHED");
         MetricCache cache = new MetricCache() {
             public MetricValue get(String key) { return cached; }
@@ -125,7 +125,7 @@ class EvalContextAssemblerFetchTest {
     void queryCarriesNow() {
         Instant[] seen = new Instant[1];
         MetricSourceHandler handler = q -> { seen[0] = q.now(); return new MetricValue(1L, "LONG", "FETCHED"); };
-        MetricDefinitionResolver resolver = (t, c) -> sqlDef(c, false, 0);
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
 

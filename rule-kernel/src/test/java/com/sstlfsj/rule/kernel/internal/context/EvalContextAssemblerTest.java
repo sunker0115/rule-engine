@@ -92,9 +92,8 @@ class EvalContextAssemblerTest {
     }
 
     @Test
-    void metricDependency_bridging_extractsCodeFromObject() {
-        // 临时桥接（Task 5 前）：collectMetricCodes 只取 MetricDependency::metricCode，
-        // 验证 provided 指标能通过 metricDependencies 声明后被纳入 context
+    void metricDependency_extractsCodeFromObject() {
+        // 无 resolver 时退化为历史行为：provided 指标直接进 context（不走版本解析）
         ConditionNode ast = new ConditionNode("GT", "balance", null, Map.of("threshold", 0), 0.0);
         RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
                 .ruleVersionId(1L).sceneCode("s1").tenantId("t1").conditionAst(ast)
