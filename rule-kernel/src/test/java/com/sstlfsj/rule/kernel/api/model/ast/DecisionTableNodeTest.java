@@ -38,4 +38,13 @@ class DecisionTableNodeTest {
         assertTrue(node.columns().isEmpty());
         assertTrue(node.rows().isEmpty());
     }
+
+    @Test
+    void column_dataType_frozenSetAndDraftDefaultsNull() {
+        // B22：3 参冻结构造带 dataType；2 参草稿便利构造 dataType 默认 null
+        var frozen = new DecisionTableNode.Column("amount", "GT", "LONG");
+        var draft = new DecisionTableNode.Column("amount", "GT");
+        assertEquals("LONG", frozen.dataType());
+        assertNull(draft.dataType());
+    }
 }

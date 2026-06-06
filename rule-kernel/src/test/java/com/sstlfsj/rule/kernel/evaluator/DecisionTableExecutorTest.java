@@ -54,6 +54,23 @@ class DecisionTableExecutorTest {
     }
 
     @Test
+    void columnDataType_isPassedToSynthesizedConditionNode() {
+        // B22：列冻结的 dataType 应传入求值期合成的 ConditionNode
+        var col = new DecisionTableNode.Column("amount", "GT", "LONG");
+        var row = new DecisionTableNode.Row(List.of(1000), "BLOCK");
+        DecisionTableNode ast = table(List.of(col), List.of(row));
+
+        String[] seen = new String[1];
+        ConditionEvaluator capturing = (n, c) -> { seen[0] = n.dataType(); return true; };
+
+        EvalResult result = new DecisionTableExecutor(Map.of("GT", capturing))
+                .execute(snapshot(ast, "BLOCK"), ctx());
+
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(seen[0]).isEqualTo("LONG");
+    }
+
+    @Test
     void firstRowFails_secondRowMatches() {
         var col = new DecisionTableNode.Column("amount", "GT");
         var row1 = new DecisionTableNode.Row(List.of(1000), "BLOCK");

@@ -8,9 +8,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 发布期 AST 遍历器：给每个 ConditionNode 冻结 dataType，并校验算子×dataType 兼容性。
- * 遍历方式仿 MetricDependencyCollector，但需重建不可变 record 树（ConditionNode 新增 dataType）。
- * DecisionTableNode 原样返回——B19 不冻结决策表列的 dataType（已知边界，留后续）。
+ * 发布期 AST 遍历器：给每个 ConditionNode 与决策表列冻结 dataType，并校验算子×dataType 兼容性。
+ * 遍历方式仿 MetricDependencyCollector，但需重建不可变 record 树（ConditionNode / Column 新增 dataType）。
+ * 决策表列 dataType 冻结 + 发布校验已落地（B22）。
  */
 class AstDataTypeResolver {
 
@@ -70,9 +70,32 @@ class AstDataTypeResolver {
                     ifn.elseBranch() != null ? resolve(ifn.elseBranch(), dataTypeMap) : null);
             // 决策树终端叶子：无比较、无 metric，永久原样返回（非待办）
             case DecisionLeafNode leaf -> leaf;
-            // 决策表：列级 dataType 冻结 + 发布校验留后续（backlog B22），求值期合成节点走 Default 策略
-            case DecisionTableNode dt  -> dt;
+            // 决策表：逐列从 metricCode 冻结 dataType + 校验算子兼容性（B22）
+            case DecisionTableNode dt  -> resolveDecisionTable(dt, dataTypeMap);
         };
+    }
+
+    private static DecisionTableNode resolveDecisionTable(DecisionTableNode dt,
+                                                          Map<String, String> dataTypeMap) {
+        List<DecisionTableNode.Column> columns = dt.columns().stream()
+                .map(c -> resolveColumn(c, dataTypeMap)).toList();
+        // rows 仅为条件值 + decisionCode，无 metric/dataType，原样保留
+        return new DecisionTableNode(columns, dt.rows());
+    }
+
+    private static DecisionTableNode.Column resolveColumn(DecisionTableNode.Column col,
+                                                          Map<String, String> dataTypeMap) {
+        String dataType = dataTypeMap.get(col.metricCode());
+        // 校验同 resolveCondition：dataType 已知且算子在 ALLOWED 内才校验；缺席算子放行
+        if (dataType != null) {
+            Set<String> allowed = ALLOWED.get(col.operator());
+            if (allowed != null && !allowed.contains(dataType)) {
+                throw new IllegalArgumentException(
+                        "算子 " + col.operator() + " 不支持 dataType=" + dataType
+                        + "（决策表列 metric=" + col.metricCode() + "）");
+            }
+        }
+        return new DecisionTableNode.Column(col.metricCode(), col.operator(), dataType);
     }
 
     private static ConditionNode resolveCondition(ConditionNode cond,

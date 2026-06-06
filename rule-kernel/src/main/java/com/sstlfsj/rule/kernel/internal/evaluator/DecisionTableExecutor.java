@@ -61,7 +61,9 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
             DecisionTableNode.Column col = columns.get(i);
             // 将列的 condValue 包装为 ConditionNode params，复用现有 ConditionEvaluator 约定
             Map<String, Object> params = buildParams(col.operator(), condValue);
-            ConditionNode node = new ConditionNode(col.operator(), col.metricCode(), null, params, 0.0);
+            // 传入冻结的列 dataType（B22）：令 ComparisonStrategyFactory 按声明类型路由而非运行时猜测；
+            // 草稿/未冻结时 dataType=null，退化为 Default 策略（与历史行为一致）
+            ConditionNode node = new ConditionNode(col.operator(), col.metricCode(), null, params, 0.0, col.dataType());
             ConditionOutcome o = ConditionEvaluation.evaluate(node, ctx, evaluators);
             if (o.isError()) return new RowResult(false, o.errorCode());
             if (!o.satisfied()) return new RowResult(false, null); // 本行不匹配

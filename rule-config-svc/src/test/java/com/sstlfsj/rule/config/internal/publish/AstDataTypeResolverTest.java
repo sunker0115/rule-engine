@@ -126,8 +126,8 @@ class AstDataTypeResolverTest {
     }
 
     @Test
-    void resolve_decisionTableNode_returnedAsIs() {
-        // B19 不冻结决策表列的 dataType，DecisionTableNode 原样返回
+    void resolve_decisionTableNode_freezesColumnDataType() {
+        // B22：决策表列从 metricCode 冻结 dataType，返回重建的新树
         DecisionTableNode dt = new DecisionTableNode(
                 List.of(new DecisionTableNode.Column("amount", "GT")),
                 List.of(new DecisionTableNode.Row(List.of(1000), "BLOCK"))
@@ -136,7 +136,25 @@ class AstDataTypeResolverTest {
 
         AstNode result = AstDataTypeResolver.resolve(dt, typeMap);
 
-        assertThat(result).isSameAs(dt);
+        assertThat(result).isInstanceOf(DecisionTableNode.class);
+        DecisionTableNode resolved = (DecisionTableNode) result;
+        assertThat(resolved.columns().get(0).dataType()).isEqualTo("LONG");
+        // rows 原样保留
+        assertThat(resolved.rows().get(0).decisionCode()).isEqualTo("BLOCK");
+    }
+
+    @Test
+    void resolve_decisionTableColumn_invalidOperatorDataType_throws() {
+        // B22：GT 不允许 STRING dataType → 发布期报错（与 ConditionNode 校验同矩阵）
+        DecisionTableNode dt = new DecisionTableNode(
+                List.of(new DecisionTableNode.Column("country", "GT")),
+                List.of(new DecisionTableNode.Row(List.of("CN"), "BLOCK"))
+        );
+        Map<String, String> typeMap = Map.of("country", "STRING");
+
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(dt, typeMap))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GT");
     }
 
     @Test
