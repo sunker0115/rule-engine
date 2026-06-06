@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.config.internal.service;
+package com.sstlfsj.rule.config.integration;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sstlfsj.rule.config.api.service.MetadataService;
