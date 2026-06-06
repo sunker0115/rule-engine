@@ -38,9 +38,9 @@ v1 阶段 10 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个
 | `rule-eval-svc` | 评估入口（PUSH/PULL/dry-run）、metric 预拉、session 落库、调度任务 | Spring 模块，内嵌于主服务 |
 | `rule-audit-svc` | 审计查询、dry-run 结果存储、日志聚合 | Spring 模块，内嵌于主服务 |
 | `rule-observability` | TraceWriter DB 实现、Prometheus 指标名常量、告警默认配置 | Spring 模块，内嵌于主服务 |
-| `rule-api` | 所有 HTTP controller、鉴权、限流、API 版本前缀（含 `/api/v1/sdk/snapshots` 端点） | Spring 模块，内嵌于主服务 |
+| `rule-api` | 所有 HTTP controller、鉴权、限流、API 版本前缀（含 `/api/v1/sdk/snapshots`、`/api/v1/sdk/metric-definitions` 端点） | Spring 模块，内嵌于主服务 |
 | `rule-app` | Spring Boot 启动类，组装所有模块，无业务逻辑 | 可执行 jar（主服务） |
-| `rule-sdk` | 嵌入式 SDK：`RuleEngineClient` 门面 + `SnapshotPoller` HTTP 轮询 + 本地模式（代码定义规则，零网络） | 库（jar），业务方引入，零 Spring |
+| `rule-sdk` | 嵌入式 SDK：`RuleEngineClient` 门面 + `SnapshotPoller` HTTP 轮询 + 本地模式（代码定义规则，零网络）+ FETCHED 取数（宿主注入 handler，定义独立下发，D46） | 库（jar），业务方引入，零 Spring |
 | `rule-sdk-spring-boot-starter` | Spring Boot 自动装配胶水层：读 `rule.sdk.*` 配置，注册 `RuleEngineClient` Bean | 库（jar），Spring Boot 业务方引入 |
 
 **`rule-kernel` / `rule-sdk` Native Image 说明**：两者均零 Spring 零 DB，完全兼容 GraalVM Native Image。主服务（`rule-app`）因 MyBatis-Plus 动态代理机制，v1 不支持 Native Image 编译（详见架构设计文档约束 5）。
@@ -99,6 +99,7 @@ com.sstlfsj.rule
 ├── web                             # rule-api 模块
 │   ├── eval                        # EvalController（PUSH/PULL/dry-run 端点）
 │   ├── config                      # RuleController / SceneController / MetadataController
+│   ├── sdk                         # SdkSnapshotController / SdkMetricDefinitionController（/api/v1/sdk/*）
 │   ├── audit                       # AuditController
 │   └── filter                     # 鉴权 / 限流 / 版本路由 Filter
 │
@@ -142,6 +143,7 @@ com.sstlfsj.rule
 | `MetricDefinitionResolver` | `kernel.api.spi.metric` | D45 / B21 | ✅（数据源无关：服务端读库 / 嵌入式 SDK 读下发缓存） |
 | `MetricCache` | `kernel.api.spi.metric` | D45 / B21 | ✅（v1 Caffeine，内核不依赖） |
 | `MetricResourceCatalog` | `config.api.spi`（**跨模块例外**，非 kernel） | D45 / B21 | 由 rule-eval-svc 实现，config 发布期校验可选注入 |
+| `MetricDefinitionSource` | `sdk.source`（**跨模块例外**，rule-sdk 非 kernel） | D46 / B23 | ✅（宿主自定义 metric 定义来源；内置 DSL/File/Polling 三实现） |
 
 **SPI 实现归属**：
 

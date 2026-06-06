@@ -2,7 +2,7 @@
 
 > 来源：B21 取数层落地后的 SDK 适用性讨论（2026-06-06）。暂定编号 B23。
 > 前置：B21（取数层 + `MetricDefinitionResolver`/`MetricCache`/`MetricSourceHandler` SPI + `EvalContextAssembler` 富构造）。
-> **状态：设计冻结，实现待排期——不在 B21 内。** 本文档的目的是：在 B21 定契约时就把 SDK 取数形态固化，避免将来在已定型的 SPI/快照上打补丁。
+> **状态：已实现（2026-06-06，B23 / 决策 D46）。** 实现计划见 `plans/2026-06-06-b23-sdk-fetch.md`；决策与落地清单见 `docs/00-decisions.md` D46。
 
 ## 目标
 
@@ -139,10 +139,17 @@ interface MetricDefinitionSource { void loadInto(MetricDefinitionRegistry regist
 
 ---
 
-## 开放问题（B2 实现期）
+## 开放问题（B23 实现期已落定）
+
+> 下列问题已在实现期拍定，结论见各条 `→`（决策日志 `docs/00-decisions.md` D46 + 计划 `plans/2026-06-06-b23-sdk-fetch.md`）。保留原问题以记录权衡过程。
 
 - **Q1** 定义下发 scope：按 `scenes`（DECLARED）还是全量租户定义？倾向复用 `FetchMode`。
+  → **结论**：复用 `FetchMode`，`scenes` 进 wire 契约（`?tenantId=&scenes=`）；v1 服务端 `listMetricDefinitions` 忽略 scenes 白名单、返回租户全部 ACTIVE 定义，未来按场景 `metricDependencies` 并集收紧无需改 SDK（D46 §6）。
 - **Q2** 定义热更：复用 `pollInterval` 单独轮询，还是与规则快照合并为一个下发包？
+  → **结论**：独立 `MetricDefinitionPoller`，复用 `pollInterval` 单独轮询，不与快照合并（保持来源对称、通道解耦，D46 §3）。
 - **Q3** 文件/DSL 模式的定义来源格式（JSON schema / DSL builder）。
+  → **结论**：文件 = classpath JSON（`List<MetricDescriptor>`，`FileMetricDefinitionSource`）；DSL = `Builder.localMetric(tenantId, descriptor)` / `DslMetricDefinitionSource`。
 - **Q4** `MetricDescriptor` 作为下发契约，需要稳定的 JSON schema（目前是 kernel 内部 record，B2 时评估是否提升为 api.model 并固定字段顺序/兼容策略）。
+  → **结论**：`MetricDescriptor` 已在 `kernel.api.model`、JSON 可序列化，直接复用为下发契约，未另立独立 schema。
 - **Q5** 评分卡/决策树/表 executor 在 SDK 默认未注册——SDK 取数 + 这些 kind 需宿主同时注入 executor（既有现状，B2 文档提示）。
+  → **结论**：维持现状不变——SDK 默认仅注册 `AST_BOOLEAN`；用 SCORECARD/DECISION_TREE/DECISION_TABLE + 取数需宿主同时注入对应 executor。

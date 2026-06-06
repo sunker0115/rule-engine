@@ -39,6 +39,7 @@
 | 指标管理 | `/api/v1/metrics` | 注册 / 更新 / 禁用 Metric |
 | 元数据接口 | `/api/v1/scenes/{sceneCode}/metadata`，`/api/v1/scenes/{sceneCode}/provided-metrics` | 前端编辑器拉 ConditionType / ActionType 枚举；D30 allowProvided 发现 |
 | 审计与查询 | `/api/v1/evaluation-sessions`，`/api/v1/rules/{id}/sessions` | 查 session / trace / action 执行；按规则查历史触发记录 |
+| SDK 下发接口 | `/api/v1/sdk/snapshots`，`/api/v1/sdk/metric-definitions` | 嵌入式 SDK 拉规则快照 / metric 定义元数据（HTTP 模式，见 §8.7） |
 
 ---
 
@@ -635,7 +636,7 @@ Spring 项目中，`@ConditionType` 标注的 Bean 由 `AutoConfiguration` 自�
 
 ---
 
-### 8.7 快照拉取端点
+### 8.7 SDK 下发端点
 
 `SnapshotPoller`（HTTP 轮询模式）内部调用的服务端接口：
 
@@ -647,6 +648,16 @@ GET /api/v1/sdk/snapshots
 ```
 
 响应格式与 `ApiResponse<List<RuleVersionSnapshot>>` 一致（见 §一），`data` 数组即为 JSON 文件模式的合法输入。
+
+`MetricDefinitionPoller`（HTTP 取数模式，D46 / B23）内部调用的 metric 定义下发接口——仅注入 handler 启用 fetch 时拉取：
+
+```
+GET /api/v1/sdk/metric-definitions
+  ?tenantId=1001
+  &scenes=fraud,payment   # 可选；v1 服务端忽略 scenes 白名单，返回该租户全部 ACTIVE 定义
+```
+
+响应格式为 `ApiResponse<List<MetricDescriptor>>`（见 §一），仅下发定义元数据（`sourceType`/`dataType`/`allowProvided`/`cacheTtlSeconds`/`params`），**不含凭证**——取数 handler 与凭证由宿主提供。
 
 ---
 

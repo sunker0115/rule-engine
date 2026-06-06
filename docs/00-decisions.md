@@ -1450,6 +1450,32 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 ---
 
+## D46. B23 嵌入式 SDK FETCHED 取数：定义独立下发 + 宿主注入 handler + 默认行为不变 ⭐⭐
+
+**背景**：B21（D45）把取数管线建在数据源无关的 `MetricDefinitionResolver` / `MetricSourceHandler` / `MetricCache` SPI 上，但嵌入式 `RuleEngineClient` 仍用旧 2 参 `EvalContextAssembler` → 仅 providedMetrics 生效、不取数。设计见 `specs/2026-06-06-sdk-fetch-design.md`（设计冻结 2026-06-06，本条落地）。
+
+**决策**：
+
+1. **复用 B21 富构造编排，零重写**：注入 handler 时 SDK 用 6 参富构造装配 `EvalContextAssembler`（服务端与 SDK 同一入口）；未注入则退化旧 2 参 providedMetrics-only——**默认行为不变**。不改 B21 任何签名、不改 rule-kernel（SDK 侧自行按 `@MetricSourceType` 归类 handler）。SDK 侧富构造传 `fetchTimeoutMs=0L`，**不设全局取数超时**（区别于服务端 D45 的全局超时）——各 handler 超时由宿主自行控制（SDK 不内置 handler，连接/超时属宿主职责，对齐 D-C）。
+
+2. **metric 定义独立下发，不进 `rule_version` 快照**：SDK 本地 `MetricDefinitionRegistry`（`tenantId:metricCode → MetricDescriptor`，HTTP 热更整体替换）+ `SnapshotMetricDefinitionResolver`（B21 resolver SPI 的嵌入式实现，读 registry）。
+
+3. **定义来源对称于 `RuleSource`**：`MetricDefinitionSource` SPI —— `DslMetricDefinitionSource` / `FileMetricDefinitionSource`（本地追加 put）/ `PollingMetricDefinitionSource`（HTTP 全量 replace）。HTTP 模式独立 `MetricDefinitionPoller` 复用 `pollInterval` 热更，端点 `GET /api/v1/sdk/metric-definitions`（仅下发元数据，不含凭证）。
+
+4. **handler 由宿主注入，SDK 不内置 SQL/HTTP handler**：SDK 跑宿主进程，凭证/连接池属宿主职责。`RuleEngineClient.Builder` 加注入入口：`metricSourceHandler` / `metricDefinitionResolver` / `metricCache` / `fetchExecutor` / `metricDefinitionSource` / `localMetric`。
+
+5. **配置错误 fail-fast**：配置了取数项（定义来源 / resolver / cache / executor）但未注入 handler → `build()` 抛 `IllegalArgumentException`，不静默 no-op。
+
+6. **服务端下发 scope v1 简化**：`MetadataService.listMetricDefinitions` 忽略 scenes 白名单，返回租户全部 ACTIVE 定义；`scenes` 已在 wire 契约（`?tenantId=&scenes=`），未来按场景 `metricDependencies` 并集收紧无需改 SDK（不需 `scene_metric_binding` 表）。
+
+7. **starter 自动注入**：`RuleEngineClientAutoConfiguration` 用 `ObjectProvider` 收集 handler/resolver/cache/定义来源 Bean 注入 Builder；无 Bean → fetch 不启用。
+
+**不做的**：SDK 内置 SQL_AGGREGATE / EXTERNAL_HTTP handler（永远宿主提供）；定义冻进 `rule_version` 快照；HTTP 模式「本地算不了回源服务端评估」（破坏零网络/本地决策定位）；宿主 handler 的连接池/凭证管理。
+
+**已实装**（D46 / B23）：`MetricDefinitionRegistry` + `SnapshotMetricDefinitionResolver`；`MetricDefinitionSource` SPI + `Dsl`/`File`/`Polling` 三实现 + `MetricDefinitionPoller`；`RuleEngineClient.Builder` 取数注入入口 + 富构造装配 + `close()` 停 poller + 无 handler fail-fast；服务端 `MetadataService.listMetricDefinitions` + `SdkMetricDefinitionController`；starter `ObjectProvider` 自动注入。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
