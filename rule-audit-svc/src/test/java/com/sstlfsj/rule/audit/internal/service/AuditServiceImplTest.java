@@ -49,7 +49,7 @@ class AuditServiceImplTest {
         Page<EvalSessionRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of(row));
         mp.setTotal(1L);
-        when(evalSessionMapper.selectPage(any(), any())).thenReturn(mp);
+        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
                 service.queryEvalSessions("100", null, 0, 20);
@@ -67,7 +67,7 @@ class AuditServiceImplTest {
         Page<EvalSessionRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of());
         mp.setTotal(0L);
-        when(evalSessionMapper.selectPage(any(), any())).thenReturn(mp);
+        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
                 service.queryEvalSessions("100", "evt-xyz", 0, 20);
@@ -92,7 +92,7 @@ class AuditServiceImplTest {
         Page<AuditLogRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of(row));
         mp.setTotal(1L);
-        when(auditLogMapper.selectPage(any(), any())).thenReturn(mp);
+        when(auditLogMapper.selectAuditLogPage(any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.AuditLogEntry> result =
                 service.queryAuditLogs("100", "rule_definition", null, 0, 20);
@@ -116,7 +116,7 @@ class AuditServiceImplTest {
         row.setNodeType("AND");
         row.setResult(true);
 
-        when(nodeTraceMapper.selectList(any())).thenReturn(List.of(row));
+        when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(row));
 
         List<AuditService.TraceNodeEntry> result = service.queryTrace("100", 1L);
 
@@ -128,7 +128,7 @@ class AuditServiceImplTest {
 
     @Test
     void queryTrace_noRows_返回空列表() {
-        when(nodeTraceMapper.selectList(any())).thenReturn(List.of());
+        when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of());
 
         List<AuditService.TraceNodeEntry> result = service.queryTrace("100", 999L);
 
@@ -144,7 +144,7 @@ class AuditServiceImplTest {
         root.setNodeType("AndNode");
         root.setResult(true);
 
-        when(nodeTraceMapper.selectList(any())).thenReturn(List.of(root));
+        when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(root));
 
         List<AuditService.TraceTreeNode> tree = service.queryTraceTree("100", 1L);
 
@@ -172,7 +172,7 @@ class AuditServiceImplTest {
         childRow.setResult(true);
         childRow.setActualValue("25");
 
-        when(nodeTraceMapper.selectList(any())).thenReturn(List.of(rootRow, childRow));
+        when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(rootRow, childRow));
 
         List<AuditService.TraceTreeNode> tree = service.queryTraceTree("100", 1L);
 
@@ -187,7 +187,7 @@ class AuditServiceImplTest {
 
     @Test
     void queryTraceTree_空rows返回空列表() {
-        when(nodeTraceMapper.selectList(any())).thenReturn(List.of());
+        when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of());
 
         assertThat(service.queryTraceTree("100", 999L)).isEmpty();
     }

@@ -105,7 +105,7 @@ class SceneServiceImplTest {
         scene.setTenantId(1L);
         scene.setCode("PAYMENT");
         scene.setStatus("ACTIVE");
-        when(sceneMapper.selectOne(any())).thenReturn(scene);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
@@ -132,7 +132,7 @@ class SceneServiceImplTest {
         existing.setPayloadSchema("[{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true}]");
         existing.setPayloadSchemaVersion(1);
         existing.setEventTypes("[]");
-        when(sceneMapper.selectOne(any())).thenReturn(existing);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(existing);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         when(schemaHistoryMapper.insert((ScenePayloadSchemaHistory) any())).thenReturn(1);
@@ -164,7 +164,7 @@ class SceneServiceImplTest {
         existing.setPayloadSchema("[{\"name\":\"amount\",\"type\":\"NUMBER\"}]");
         existing.setPayloadSchemaVersion(2);
         existing.setEventTypes("[\"payment.initiated\"]");
-        when(sceneMapper.selectOne(any())).thenReturn(existing);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(existing);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
@@ -193,7 +193,7 @@ class SceneServiceImplTest {
         scene.setDefaultParams("{\"timezone\":\"Asia/Shanghai\"}");
         scene.setPayloadSchemaVersion(2);
         scene.setStatus("ACTIVE");
-        when(sceneMapper.selectOne(any())).thenReturn(scene);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         com.sstlfsj.rule.config.api.dto.SceneDetailDto dto =
                 sceneService.getScene("1", "PAYMENT");
@@ -208,7 +208,7 @@ class SceneServiceImplTest {
 
     @Test
     void getScene_sceneNotFound_抛IllegalArgument() {
-        when(sceneMapper.selectOne(any())).thenReturn(null);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(null);
         assertThatThrownBy(() -> sceneService.getScene("1", "NOT_EXIST"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Scene 不存在");

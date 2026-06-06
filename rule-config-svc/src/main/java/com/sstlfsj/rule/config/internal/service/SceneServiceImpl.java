@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.config.internal.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
@@ -114,10 +113,7 @@ class SceneServiceImpl implements SceneService {
     }
 
     private SceneDef findScene(Long tenantId, String sceneCode) {
-        SceneDef scene = sceneMapper.selectOne(
-                new LambdaQueryWrapper<SceneDef>()
-                        .eq(SceneDef::getTenantId, tenantId)
-                        .eq(SceneDef::getCode, sceneCode));
+        SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
         if (scene == null) {
             throw new IllegalArgumentException("Scene 不存在: " + sceneCode);
         }

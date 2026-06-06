@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.eval.internal.session;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import lombok.RequiredArgsConstructor;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
@@ -24,6 +23,7 @@ import java.util.stream.Collectors;
 
 /** 封装 evaluation_session 和 dry_run_session 的同步写入逻辑（D11/D21）。 */
 @Component
+@RequiredArgsConstructor
 public class EvalSessionWriter {
 
     private static final Logger log = LoggerFactory.getLogger(EvalSessionWriter.class);
@@ -31,14 +31,6 @@ public class EvalSessionWriter {
     private final EvaluationSessionMapper sessionMapper;
     private final DryRunSessionMapper dryRunMapper;
     private final ObjectMapper objectMapper;
-
-    public EvalSessionWriter(EvaluationSessionMapper sessionMapper,
-                             DryRunSessionMapper dryRunMapper,
-                             ObjectMapper objectMapper) {
-        this.sessionMapper = sessionMapper;
-        this.dryRunMapper = dryRunMapper;
-        this.objectMapper = objectMapper;
-    }
 
     /**
      * INSERT evaluation_session（status=PENDING）。
@@ -60,10 +52,8 @@ public class EvalSessionWriter {
             return session.getId();
         } catch (DuplicateKeyException e) {
             // 幂等：相同 eventId 已处理过，查回已有 id
-            EvaluationSession existing = sessionMapper.selectOne(
-                    new LambdaQueryWrapper<EvaluationSession>()
-                            .eq(EvaluationSession::getTenantId, Long.valueOf(event.tenantId()))
-                            .eq(EvaluationSession::getEventId, event.eventId()));
+            EvaluationSession existing = sessionMapper.findByTenantAndEvent(
+                    Long.valueOf(event.tenantId()), event.eventId());
             if (existing == null) {
                 throw new IllegalStateException("幂等查询失败：eventId=" + event.eventId() + " 记录不存在");
             }
@@ -114,16 +104,9 @@ public class EvalSessionWriter {
                     .map(Decision::code)
                     .collect(Collectors.joining("\",\"", "[\"", "\"]"));
 
-        sessionMapper.update(new EvaluationSession(),
-                new LambdaUpdateWrapper<EvaluationSession>()
-                        .eq(EvaluationSession::getId, sessionId)
-                        .set(EvaluationSession::getStatus, status)
-                        .set(EvaluationSession::getFinalDecision, finalDecision)
-                        .set(EvaluationSession::getHitDecisions, hitDecisionsJson)
-                        .set(EvaluationSession::getErrorCode, result.errorCode())
-                        .set(EvaluationSession::getHitRuleCount, result.hitDecisions().size())
-                        .set(EvaluationSession::getFinishedAt, LocalDateTime.now())
-                        .set(EvaluationSession::getContextSnapshot, serializeSnapshot(ctx)));
+        sessionMapper.markFinal(sessionId, status, finalDecision, hitDecisionsJson,
+                result.errorCode(), result.hitDecisions().size(), LocalDateTime.now(),
+                serializeSnapshot(ctx));
     }
 
     /**
@@ -160,15 +143,9 @@ public class EvalSessionWriter {
         String status = result.ruleHit() ? "HIT" : "MISS";
         if (result.errorCode() != null) status = "ERROR";
 
-        dryRunMapper.update(new DryRunSession(),
-                new LambdaUpdateWrapper<DryRunSession>()
-                        .eq(DryRunSession::getId, sessionId)
-                        .set(DryRunSession::getStatus, status)
-                        .set(DryRunSession::getErrorCode, result.errorCode())
-                        .set(DryRunSession::getFinalDecision,
-                                result.finalDecision() != null ? result.finalDecision().code() : null)
-                        .set(DryRunSession::getFinishedAt, LocalDateTime.now())
-                        .set(DryRunSession::getContextSnapshot, serializeSnapshot(ctx)));
+        dryRunMapper.markFinal(sessionId, status, result.errorCode(),
+                result.finalDecision() != null ? result.finalDecision().code() : null,
+                LocalDateTime.now(), serializeSnapshot(ctx));
     }
 
     /**

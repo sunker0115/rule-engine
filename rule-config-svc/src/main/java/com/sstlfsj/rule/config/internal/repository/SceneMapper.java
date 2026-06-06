@@ -24,4 +24,12 @@ public interface SceneMapper extends BaseMapper<SceneDef> {
         if (ids == null || ids.isEmpty()) return List.of();
         return selectList(new LambdaQueryWrapper<SceneDef>().in(SceneDef::getId, ids));
     }
+
+    /** 按 (tenantId) + code 集合批量查 Scene；空集合返回空列表。 */
+    default List<SceneDef> findByCodes(Long tenantId, Collection<String> codes) {
+        if (codes == null || codes.isEmpty()) return List.of();
+        return selectList(new LambdaQueryWrapper<SceneDef>()
+                .eq(SceneDef::getTenantId, tenantId)
+                .in(SceneDef::getCode, codes));
+    }
 }

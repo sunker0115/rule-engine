@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -121,7 +120,7 @@ class MetricWriteServiceImplTest {
     @Test
     void update_nonBreaking_updatesActiveRowInPlace() {
         MetricDefinition active = activeRow(2);
-        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
+        when(metricDefinitionMapper.findActiveByCode(any(), any())).thenReturn(active);
 
         int version = sut.update(TENANT, CODE, cmd(), false, ACTOR);
 
@@ -137,7 +136,7 @@ class MetricWriteServiceImplTest {
     @Test
     void update_breaking_supersedesOldRowAndInsertsNewVersion() {
         MetricDefinition active = activeRow(2);
-        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
+        when(metricDefinitionMapper.findActiveByCode(any(), any())).thenReturn(active);
 
         doAnswer(inv -> {
             MetricDefinition m = inv.getArgument(0);
@@ -171,7 +170,7 @@ class MetricWriteServiceImplTest {
         MetricDefinition active = activeRow(1);
         active.setSourceType("ATTRIBUTE");
         active.setDataType("LONG");
-        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
+        when(metricDefinitionMapper.findActiveByCode(any(), any())).thenReturn(active);
         doAnswer(inv -> {
             MetricDefinition m = inv.getArgument(0);
             m.setId(300L);
@@ -198,7 +197,7 @@ class MetricWriteServiceImplTest {
         MetricDefinition active = activeRow(1);
         active.setSourceType("ATTRIBUTE");
         active.setDataType("LONG");
-        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
+        when(metricDefinitionMapper.findActiveByCode(any(), any())).thenReturn(active);
         doAnswer(inv -> {
             MetricDefinition m = inv.getArgument(0);
             m.setId(301L);
@@ -225,7 +224,7 @@ class MetricWriteServiceImplTest {
         MetricDefinition active = activeRow(1);
         active.setSourceType("ATTRIBUTE");
         active.setDataType("LONG");
-        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
+        when(metricDefinitionMapper.findActiveByCode(any(), any())).thenReturn(active);
 
         // cmd 只改 name，sourceType/dataType 不变
         MetricWriteCommand sameTypeCmd = new MetricWriteCommand("新名称", "ATTRIBUTE", "LONG", Map.of(), 120, false);
@@ -242,7 +241,7 @@ class MetricWriteServiceImplTest {
 
     @Test
     void update_noActiveRow_throwsIllegalArgumentException() {
-        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(metricDefinitionMapper.findActiveByCode(any(), any())).thenReturn(null);
 
         assertThatThrownBy(() -> sut.update(TENANT, CODE, cmd(), false, ACTOR))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -271,12 +270,12 @@ class MetricWriteServiceImplTest {
         RuleVersion rv3 = ruleVersion(1003L, 102L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1},{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
         RuleVersion rv4 = ruleVersion(1004L, 102L, "[]");
 
-        when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(ruleDefinitionMapper.findByTenant(any()))
                 .thenReturn(List.of(rd1, rd2));
-        when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(ruleVersionMapper.findActiveByRuleDefIds(any()))
                 .thenReturn(List.of(rv1, rv2, rv3, rv4));
         // scene 批量查询
-        when(sceneMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(sceneMapper.findByIds(any()))
                 .thenReturn(List.of(sc1, sc2));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
@@ -305,11 +304,11 @@ class MetricWriteServiceImplTest {
         RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
         RuleVersion rv = ruleVersion(1001L, 101L, "[{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
 
-        when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(ruleDefinitionMapper.findByTenant(any()))
                 .thenReturn(List.of(rd));
-        when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(ruleVersionMapper.findActiveByRuleDefIds(any()))
                 .thenReturn(List.of(rv));
-        when(sceneMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(sceneMapper.findByIds(any()))
                 .thenReturn(List.of(scene(10L, "risk.transfer")));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
@@ -319,7 +318,7 @@ class MetricWriteServiceImplTest {
 
     @Test
     void findReferencingRules_noActiveRules_returnsEmpty() {
-        when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(ruleDefinitionMapper.findByTenant(any()))
                 .thenReturn(List.of());
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
@@ -335,11 +334,11 @@ class MetricWriteServiceImplTest {
         // metric_dependencies 为非法 JSON，应静默忽略，不抛异常
         RuleVersion rv = ruleVersion(1001L, 101L, "not-valid-json");
 
-        when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(ruleDefinitionMapper.findByTenant(any()))
                 .thenReturn(List.of(rd));
-        when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(ruleVersionMapper.findActiveByRuleDefIds(any()))
                 .thenReturn(List.of(rv));
-        when(sceneMapper.selectList(any(LambdaQueryWrapper.class)))
+        when(sceneMapper.findByIds(any()))
                 .thenReturn(List.of(scene(10L, "risk.transfer")));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);

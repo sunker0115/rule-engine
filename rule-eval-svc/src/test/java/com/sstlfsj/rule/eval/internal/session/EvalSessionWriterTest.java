@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.dao.DuplicateKeyException;
 
 import tools.jackson.databind.ObjectMapper;
@@ -70,7 +69,7 @@ class EvalSessionWriterTest {
         EvaluationSession existing = new EvaluationSession();
         existing.setId(99L);
         when(sessionMapper.insert((EvaluationSession) any())).thenThrow(new DuplicateKeyException("dup"));
-        when(sessionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existing);
+        when(sessionMapper.findByTenantAndEvent(any(), any())).thenReturn(existing);
 
         Long id = writer.insertPending(event(), 1, "PULL");
 
@@ -95,7 +94,7 @@ class EvalSessionWriterTest {
         // 直接检查序列化不抛异常（MAPPER 静态实例行为）
         EvalResult result = EvalResult.miss();
         writer.updateFinal(1L, result, ctx);
-        verify(sessionMapper).update(any(), any());
+        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -108,7 +107,7 @@ class EvalSessionWriterTest {
 
         writer.updateFinal(1L, result, ctx);
 
-        verify(sessionMapper).update(any(), any());
+        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -117,7 +116,7 @@ class EvalSessionWriterTest {
 
         writer.updateFinal(1L, result, null);
 
-        verify(sessionMapper).update(any(), any());
+        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -130,13 +129,13 @@ class EvalSessionWriterTest {
 
         writer.updateDryRunFinal(1L, result, ctx);
 
-        verify(dryRunMapper).update(any(), any());
+        verify(dryRunMapper).markFinal(any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void updateDryRunFinal_nullContext_invokesMapper() {
         writer.updateDryRunFinal(1L, EvalResult.miss(), null);
-        verify(dryRunMapper).update(any(), any());
+        verify(dryRunMapper).markFinal(any(), any(), any(), any(), any(), any());
     }
 
     @Test

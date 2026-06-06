@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.config.internal.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
@@ -68,11 +67,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     @Override
     public int update(Long tenantId, String metricCode, MetricWriteCommand cmd,
                       boolean breakingChange, String actorId) {
-        MetricDefinition active = metricDefinitionMapper.selectOne(
-                new LambdaQueryWrapper<MetricDefinition>()
-                        .eq(MetricDefinition::getTenantId, tenantId)
-                        .eq(MetricDefinition::getMetricCode, metricCode)
-                        .eq(MetricDefinition::getStatus, "ACTIVE"));
+        MetricDefinition active = metricDefinitionMapper.findActiveByCode(tenantId, metricCode);
         if (active == null) {
             throw new IllegalArgumentException("metric 不存在或无 ACTIVE 版本: " + metricCode);
         }
@@ -123,12 +118,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     @Transactional(readOnly = true)
     public List<RuleRef> findReferencingRules(Long tenantId, String metricCode, int metricVersion) {
         // 第一步：查该 tenant 下所有 rule_definition，取 id/code/name/sceneId/status
-        List<RuleDefinition> defs = ruleDefinitionMapper.selectList(
-                new LambdaQueryWrapper<RuleDefinition>()
-                        .eq(RuleDefinition::getTenantId, tenantId)
-                        .select(RuleDefinition::getId, RuleDefinition::getCode,
-                                RuleDefinition::getName, RuleDefinition::getSceneId,
-                                RuleDefinition::getStatus));
+        List<RuleDefinition> defs = ruleDefinitionMapper.findByTenant(tenantId);
         if (defs.isEmpty()) {
             return List.of();
         }
@@ -141,22 +131,14 @@ public class MetricWriteServiceImpl implements MetricWriteService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, String> sceneCodeMap = sceneIds.isEmpty() ? Map.of() :
-                sceneMapper.selectList(
-                        new LambdaQueryWrapper<SceneDef>()
-                                .in(SceneDef::getId, sceneIds)
-                                .select(SceneDef::getId, SceneDef::getCode))
+                sceneMapper.findByIds(sceneIds)
                         .stream()
                         .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
 
         // 第三步：查这批 rule_definition_id 下所有 ACTIVE rule_version，只取影响面判断所需列
         // 口径对齐 eval 侧 RuleVersionReadMapper：以 rv.status=ACTIVE 为"参与评估"判定，
         // 不按 rule_definition.status 过滤（eval 的 loadAllActive/loadActiveByScene 均如此）。
-        List<RuleVersion> activeVersions = ruleVersionMapper.selectList(
-                new LambdaQueryWrapper<RuleVersion>()
-                        .in(RuleVersion::getRuleDefinitionId, defMap.keySet())
-                        .eq(RuleVersion::getStatus, "ACTIVE")
-                        .select(RuleVersion::getId, RuleVersion::getRuleDefinitionId,
-                                RuleVersion::getMetricDependencies));
+        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defMap.keySet());
 
         // 第四步：反序列化 metric_dependencies，筛出含目标 (metricCode, metricVersion) 的行
         List<RuleRef> result = new ArrayList<>();

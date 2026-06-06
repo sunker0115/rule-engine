@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.config.internal.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
@@ -41,19 +40,13 @@ class MetadataServiceImpl implements MetadataService {
 
     @Override
     public MetadataResponse getSceneMetadata(String tenantId, String sceneCode) {
-        SceneDef scene = sceneMapper.selectOne(
-                new LambdaQueryWrapper<SceneDef>()
-                        .eq(SceneDef::getTenantId, Long.valueOf(tenantId))
-                        .eq(SceneDef::getCode, sceneCode));
+        SceneDef scene = sceneMapper.findByCode(Long.valueOf(tenantId), sceneCode);
         if (scene == null) {
             throw new IllegalArgumentException("Scene 不存在: " + sceneCode);
         }
 
         // v1 简化：查该租户下全部 ACTIVE metric，不过 scene_metric_binding 白名单
-        List<MetricDefinition> metrics = metricDefinitionMapper.selectList(
-                new LambdaQueryWrapper<MetricDefinition>()
-                        .eq(MetricDefinition::getTenantId, Long.valueOf(tenantId))
-                        .eq(MetricDefinition::getStatus, "ACTIVE"));
+        List<MetricDefinition> metrics = metricDefinitionMapper.findActiveByTenant(Long.valueOf(tenantId));
 
         List<MetricMeta> metricMetas = metrics.stream()
                 .map(m -> new MetricMeta(m.getMetricCode(), m.getName(),
@@ -80,10 +73,7 @@ class MetadataServiceImpl implements MetadataService {
 
         // scenes 为空（FetchMode.ALL）：返回该租户全部 ACTIVE 定义（新规则只能绑 ACTIVE）
         if (scenes == null || scenes.isEmpty()) {
-            return metricDefinitionMapper.selectList(
-                            new LambdaQueryWrapper<MetricDefinition>()
-                                    .eq(MetricDefinition::getTenantId, tid)
-                                    .eq(MetricDefinition::getStatus, "ACTIVE"))
+            return metricDefinitionMapper.findActiveByTenant(tid)
                     .stream().map(this::toDescriptor).toList();
         }
 
@@ -94,11 +84,8 @@ class MetadataServiceImpl implements MetadataService {
 
         List<MetricDescriptor> result = new ArrayList<>();
         for (MetricDependency dep : deps) {
-            MetricDefinition row = metricDefinitionMapper.selectOne(
-                    new LambdaQueryWrapper<MetricDefinition>()
-                            .eq(MetricDefinition::getTenantId, tid)
-                            .eq(MetricDefinition::getMetricCode, dep.metricCode())
-                            .eq(MetricDefinition::getVersion, dep.metricVersion()));
+            MetricDefinition row = metricDefinitionMapper.findByCodeAndVersion(
+                    tid, dep.metricCode(), dep.metricVersion());
             if (row != null) {
                 result.add(toDescriptor(row));
             } else {
@@ -115,25 +102,16 @@ class MetadataServiceImpl implements MetadataService {
      * 与 collectRequiredMetricCodes 不同：保留 version，以便 DECLARED 分支按版本精确查询。
      */
     private Set<MetricDependency> collectRequiredDeps(Long tenantId, List<String> scenes) {
-        List<Long> sceneIds = sceneMapper.selectList(
-                        new LambdaQueryWrapper<SceneDef>()
-                                .eq(SceneDef::getTenantId, tenantId)
-                                .in(SceneDef::getCode, scenes))
+        List<Long> sceneIds = sceneMapper.findByCodes(tenantId, scenes)
                 .stream().map(SceneDef::getId).toList();
         if (sceneIds.isEmpty()) return Set.of();
 
-        List<Long> defIds = ruleDefinitionMapper.selectList(
-                        new LambdaQueryWrapper<RuleDefinition>()
-                                .eq(RuleDefinition::getTenantId, tenantId)
-                                .in(RuleDefinition::getSceneId, sceneIds))
+        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneIds(tenantId, sceneIds)
                 .stream().map(RuleDefinition::getId).toList();
         if (defIds.isEmpty()) return Set.of();
 
         Set<MetricDependency> deps = new HashSet<>();
-        for (RuleVersion rv : ruleVersionMapper.selectList(
-                new LambdaQueryWrapper<RuleVersion>()
-                        .in(RuleVersion::getRuleDefinitionId, defIds)
-                        .eq(RuleVersion::getStatus, "ACTIVE"))) {
+        for (RuleVersion rv : ruleVersionMapper.findActiveByRuleDefIds(defIds)) {
             deps.addAll(parseDepList(rv.getMetricDependencies()));
         }
         return deps;

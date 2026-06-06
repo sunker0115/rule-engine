@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.config.internal.publish;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.*;
@@ -33,12 +32,12 @@ import java.util.stream.Collectors;
  * </p>
  */
 @Service
+@RequiredArgsConstructor
 public class PublishService {
 
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
     private final RuleVersionMapper ruleVersionMapper;
-    private final DecisionDefinitionMapper decisionDefinitionMapper;
     private final AuditLogMapper auditLogMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final AstSerializer astSerializer;
@@ -48,26 +47,6 @@ public class PublishService {
     /** 已注册取数资源名目录（由 eval-svc 提供）；纯 config 部署时为 null，资源名校验跳过。 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.sstlfsj.rule.config.api.spi.MetricResourceCatalog metricResourceCatalog;
-
-    public PublishService(RuleDefinitionMapper ruleDefinitionMapper,
-                          SceneMapper sceneMapper,
-                          RuleVersionMapper ruleVersionMapper,
-                          DecisionDefinitionMapper decisionDefinitionMapper,
-                          AuditLogMapper auditLogMapper,
-                          ApplicationEventPublisher eventPublisher,
-                          AstSerializer astSerializer,
-                          ObjectMapper objectMapper,
-                          MetricDefinitionMapper metricDefinitionMapper) {
-        this.ruleDefinitionMapper = ruleDefinitionMapper;
-        this.sceneMapper = sceneMapper;
-        this.ruleVersionMapper = ruleVersionMapper;
-        this.decisionDefinitionMapper = decisionDefinitionMapper;
-        this.auditLogMapper = auditLogMapper;
-        this.eventPublisher = eventPublisher;
-        this.astSerializer = astSerializer;
-        this.objectMapper = objectMapper;
-        this.metricDefinitionMapper = metricDefinitionMapper;
-    }
 
     /**
      * 发布规则：从最新草稿 rule_version 生成正式版本快照。
@@ -95,13 +74,7 @@ public class PublishService {
         }
 
         // 3. 查最新草稿 rule_version 行（status=DRAFT），作为 AST 来源
-        RuleVersion draftVersion = ruleVersionMapper.selectOne(
-                new LambdaQueryWrapper<RuleVersion>()
-                        .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId)
-                        .eq(RuleVersion::getStatus, "DRAFT")
-                        .orderByDesc(RuleVersion::getVersion)
-                        .last("LIMIT 1")
-        );
+        RuleVersion draftVersion = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
         if (draftVersion == null) {
             throw new IllegalStateException("没有找到草稿版本，请先保存规则草稿");
         }
@@ -174,11 +147,7 @@ public class PublishService {
         AstNode resolvedAst = ast;
         List<MetricDependency> metricDeps = new ArrayList<>();
         if (!metricCodes.isEmpty()) {
-            List<MetricDefinition> metricDefs = metricDefinitionMapper.selectList(
-                    new LambdaQueryWrapper<MetricDefinition>()
-                            .eq(MetricDefinition::getTenantId, tenantId)
-                            .in(MetricDefinition::getMetricCode, metricCodes)
-                            .eq(MetricDefinition::getStatus, "ACTIVE"));
+            List<MetricDefinition> metricDefs = metricDefinitionMapper.findActiveByCodes(tenantId, metricCodes);
             // 按 metricCode 建索引，同 code 多行 ACTIVE = 数据异常，兜底拒绝
             Map<String, MetricDefinition> activeByCode = new HashMap<>();
             for (MetricDefinition m : metricDefs) {
@@ -233,11 +202,7 @@ public class PublishService {
 
         // 7. 旧 ACTIVE rule_version 改为 SUPERSEDED（如有前一个正式版本）
         if (rule.getCurrentVersion() != null) {
-            ruleVersionMapper.update(null,
-                    new LambdaUpdateWrapper<RuleVersion>()
-                            .eq(RuleVersion::getId, rule.getCurrentVersion())
-                            .eq(RuleVersion::getStatus, "ACTIVE")
-                            .set(RuleVersion::getStatus, "SUPERSEDED"));
+            ruleVersionMapper.markSuperseded(rule.getCurrentVersion());
         }
 
         // 8. UPDATE rule_definition：状态改为 PUBLISHED，记录 currentVersion
@@ -301,23 +266,14 @@ public class PublishService {
             String preGatesJson, String triggerEventTypesJson,
             String kind, String actorId) {
         // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
-        SceneDef scene = sceneMapper.selectOne(
-                new LambdaQueryWrapper<SceneDef>()
-                        .eq(SceneDef::getTenantId, tenantId)
-                        .eq(SceneDef::getCode, sceneCode)
-        );
+        SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
         if (scene == null) {
             throw new IllegalArgumentException("Scene 不存在: code=" + sceneCode);
         }
 
         // 2. 校验 code 在同 tenant+scene 下唯一，提前给出友好错误
-        long codeExists = ruleDefinitionMapper.selectCount(
-                new LambdaQueryWrapper<RuleDefinition>()
-                        .eq(RuleDefinition::getTenantId, tenantId)
-                        .eq(RuleDefinition::getSceneId, scene.getId())
-                        .eq(RuleDefinition::getCode, code)
-        );
-        if (codeExists > 0) {
+        boolean codeExists = ruleDefinitionMapper.findBySceneAndCode(tenantId, scene.getId(), code) != null;
+        if (codeExists) {
             throw new IllegalArgumentException("规则编码已存在: code=" + code);
         }
 

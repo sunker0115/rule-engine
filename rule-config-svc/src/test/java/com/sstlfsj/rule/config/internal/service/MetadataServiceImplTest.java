@@ -36,7 +36,7 @@ class MetadataServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("PAYMENT");
-        when(sceneMapper.selectOne(any())).thenReturn(scene);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         MetricDefinition metric = new MetricDefinition();
         metric.setMetricCode("user.age");
@@ -44,7 +44,7 @@ class MetadataServiceImplTest {
         metric.setDataType("LONG");
         metric.setSourceType("ATTRIBUTE");
         metric.setAllowProvided(false);
-        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(metric));
+        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(metric));
 
         MetadataService.MetadataResponse response = metadataService.getSceneMetadata("1", "PAYMENT");
 
@@ -61,7 +61,7 @@ class MetadataServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("PAYMENT");
-        when(sceneMapper.selectOne(any())).thenReturn(scene);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         MetricDefinition provided = new MetricDefinition();
         provided.setMetricCode("user.kyc.level");
@@ -77,7 +77,7 @@ class MetadataServiceImplTest {
         notProvided.setSourceType("SQL_AGGREGATE");
         notProvided.setAllowProvided(false);
 
-        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(provided, notProvided));
+        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(provided, notProvided));
 
         MetadataService.ProvidedMetricsResponse response =
                 metadataService.getProvidedMetrics("1", "PAYMENT");
@@ -93,7 +93,7 @@ class MetadataServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("PAYMENT");
-        when(sceneMapper.selectOne(any())).thenReturn(scene);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         MetricDefinition notProvided = new MetricDefinition();
         notProvided.setMetricCode("account.balance");
@@ -102,7 +102,7 @@ class MetadataServiceImplTest {
         notProvided.setSourceType("SQL_AGGREGATE");
         notProvided.setAllowProvided(false);
 
-        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(notProvided));
+        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(notProvided));
 
         MetadataService.ProvidedMetricsResponse response =
                 metadataService.getProvidedMetrics("1", "PAYMENT");
@@ -120,7 +120,7 @@ class MetadataServiceImplTest {
         row.setAllowProvided(false);
         row.setCacheTtlSeconds(60);
         row.setParams("{\"window\":\"30d\"}");
-        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(row));
+        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(row));
 
         MetadataServiceImpl service = new MetadataServiceImpl(
                 sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
@@ -147,7 +147,7 @@ class MetadataServiceImplTest {
         row.setAllowProvided(true);
         row.setCacheTtlSeconds(null);
         row.setParams(null);
-        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(row));
+        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(row));
 
         MetadataServiceImpl service = new MetadataServiceImpl(
                 sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
@@ -165,17 +165,17 @@ class MetadataServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("fraud");
-        when(sceneMapper.selectList(any())).thenReturn(List.of(scene));
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene));
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
         def.setSceneId(5L);
-        when(ruleDefinitionMapper.selectList(any())).thenReturn(List.of(def));
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus("ACTIVE");
         rv.setMetricDependencies("[{\"metricCode\":\"risk.score\",\"metricVersion\":1}]");
-        when(ruleVersionMapper.selectList(any())).thenReturn(List.of(rv));
+        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         // DECLARED 分支按精确 (code,version) 查 selectOne，返回 risk.score 定义
         MetricDefinition riskScore = new MetricDefinition();
@@ -185,7 +185,7 @@ class MetadataServiceImplTest {
         riskScore.setDataType("LONG");
         riskScore.setAllowProvided(false);
         riskScore.setStatus("ACTIVE");
-        when(metricDefinitionMapper.selectOne(any())).thenReturn(riskScore);
+        when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(riskScore);
 
         MetadataServiceImpl service = new MetadataServiceImpl(
                 sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
@@ -203,17 +203,17 @@ class MetadataServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("fraud");
-        when(sceneMapper.selectList(any())).thenReturn(List.of(scene));
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene));
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
         def.setSceneId(5L);
-        when(ruleDefinitionMapper.selectList(any())).thenReturn(List.of(def));
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus("ACTIVE");
         rv.setMetricDependencies("[]");   // 规则不引用任何 metric
-        when(ruleVersionMapper.selectList(any())).thenReturn(List.of(rv));
+        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         MetadataServiceImpl service = new MetadataServiceImpl(
                 sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
@@ -225,7 +225,7 @@ class MetadataServiceImplTest {
 
     @Test
     void listMetricDefinitions_unknownScene_returnsEmpty() {
-        when(sceneMapper.selectList(any())).thenReturn(List.of());   // scene code 不存在
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of());   // scene code 不存在
 
         MetadataServiceImpl service = new MetadataServiceImpl(
                 sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
@@ -256,23 +256,23 @@ class MetadataServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("fraud");
-        when(sceneMapper.selectList(any())).thenReturn(List.of(scene));
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene));
 
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
         def.setSceneId(5L);
-        when(ruleDefinitionMapper.selectList(any())).thenReturn(List.of(def));
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus("ACTIVE");
         // 对象数组格式：绑 risk.score v1
         rv.setMetricDependencies("[{\"metricCode\":\"risk.score\",\"metricVersion\":1}]");
-        when(ruleVersionMapper.selectList(any())).thenReturn(List.of(rv));
+        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         // DECLARED 分支按精确 (code,version) 查，不限 status（含 SUPERSEDED）
-        when(metricDefinitionMapper.selectOne(any())).thenReturn(riskV1);
+        when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(riskV1);
 
         MetadataServiceImpl service = new MetadataServiceImpl(
                 sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
@@ -297,22 +297,22 @@ class MetadataServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("fraud");
-        when(sceneMapper.selectList(any())).thenReturn(List.of(scene));
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene));
 
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
         def.setSceneId(5L);
-        when(ruleDefinitionMapper.selectList(any())).thenReturn(List.of(def));
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus("ACTIVE");
         rv.setMetricDependencies("[{\"metricCode\":\"ghost.metric\",\"metricVersion\":2}]");
-        when(ruleVersionMapper.selectList(any())).thenReturn(List.of(rv));
+        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         // 定义已被物理删除：selectOne 返回 null
-        when(metricDefinitionMapper.selectOne(any())).thenReturn(null);
+        when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(null);
 
         MetadataServiceImpl service = new MetadataServiceImpl(
                 sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
