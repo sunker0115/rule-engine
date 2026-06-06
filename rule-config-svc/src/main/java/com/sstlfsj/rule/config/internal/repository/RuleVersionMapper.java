@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.repository;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import org.apache.ibatis.annotations.Mapper;
@@ -17,4 +18,13 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
      */
     @Select("SELECT COALESCE(MAX(version), 0) FROM rule_version WHERE rule_definition_id = #{ruleDefinitionId}")
     Long maxVersion(Long ruleDefinitionId);
+
+    /** 查规则当前 ACTIVE 版本（最高版本号的 ACTIVE 行），不存在返回 null。 */
+    default RuleVersion findActiveVersion(Long ruleDefinitionId) {
+        return selectOne(new LambdaQueryWrapper<RuleVersion>()
+                .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId)
+                .eq(RuleVersion::getStatus, "ACTIVE")
+                .orderByDesc(RuleVersion::getVersion)
+                .last("LIMIT 1"));
+    }
 }

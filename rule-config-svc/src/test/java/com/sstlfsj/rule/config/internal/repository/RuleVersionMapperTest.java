@@ -11,7 +11,7 @@ import java.lang.reflect.ParameterizedType;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** 验证 RuleVersionMapper 接口结构及 maxVersion 自定义方法。 */
+/** 验证 RuleVersionMapper 接口结构及自定义方法签名。 */
 class RuleVersionMapperTest {
 
     @Test
@@ -33,5 +33,12 @@ class RuleVersionMapperTest {
         Select select = m.getAnnotation(Select.class);
         assertNotNull(select);
         assertTrue(select.value()[0].contains("MAX(version)"));
+    }
+
+    @Test
+    void findActiveVersion_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod("findActiveVersion", Long.class);
+        assertTrue(m.isDefault(), "findActiveVersion 应为 default 方法");
+        assertEquals(RuleVersion.class, m.getReturnType());
     }
 }
