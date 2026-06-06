@@ -18,8 +18,8 @@ public record RuleVersionSnapshot(
         List<String> triggerEventTypes,
         /** 规则类型，默认 AST_BOOLEAN；SCORECARD 时由 ScorecardExecutor 求值。 */
         String kind,
-        /** AST 引用的 metricCode 列表（发布期冻结），供取数管线确定取数范围。 */
-        List<String> metricDependencies
+        /** AST 引用的 (metricCode, metricVersion) 依赖，发布期冻结。 */
+        List<MetricDependency> metricDependencies
 ) {
     public RuleVersionSnapshot {
         preGates = preGates == null ? List.of() : List.copyOf(preGates);
@@ -71,7 +71,7 @@ public record RuleVersionSnapshot(
         private final List<PreGateConfig> preGates = new ArrayList<>();
         private final List<DecisionBinding> decisionBindings = new ArrayList<>();
         private final List<String> triggerEventTypes = new ArrayList<>();
-        private final List<String> metricDependencies = new ArrayList<>();
+        private final List<MetricDependency> metricDependencies = new ArrayList<>();
 
         /** 规则版本 ID（本地模式可传任意 Long）。 */
         public Builder ruleVersionId(Long v)  { this.ruleVersionId = v; return this; }
@@ -93,9 +93,9 @@ public record RuleVersionSnapshot(
         public Builder addPreGate(String gateType, Map<String, Object> params) {
             preGates.add(new PreGateConfig(gateType, params)); return this;
         }
-        /** 追加一个 metric 依赖。 */
-        public Builder addMetricDependency(String metricCode) {
-            metricDependencies.add(metricCode); return this;
+        /** 追加一个 metric 版本化依赖。 */
+        public Builder addMetricDependency(String metricCode, int metricVersion) {
+            metricDependencies.add(new MetricDependency(metricCode, metricVersion)); return this;
         }
 
         /** 构建 RuleVersionSnapshot。 */

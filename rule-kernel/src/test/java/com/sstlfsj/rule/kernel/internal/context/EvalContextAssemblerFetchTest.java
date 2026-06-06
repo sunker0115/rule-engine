@@ -27,7 +27,7 @@ class EvalContextAssemblerFetchTest {
         AstNode ast = new ConditionNode("GT", metricCode, null, Map.of("threshold", 100), null, "LONG");
         return RuleVersionSnapshot.builder()
                 .ruleVersionId(1L).sceneCode("PAY").tenantId("1").conditionAst(ast)
-                .addMetricDependency(metricCode).build();
+                .addMetricDependency(metricCode, 1).build();
     }
 
     private MetricDescriptor sqlDef(String code, boolean allowProvided, int ttl) {

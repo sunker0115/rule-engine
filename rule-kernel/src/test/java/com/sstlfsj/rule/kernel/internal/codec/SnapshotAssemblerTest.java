@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.codec;
 
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
@@ -64,9 +65,10 @@ class SnapshotAssemblerTest {
     void assemble_populatesMetricDependencies() throws Exception {
         RuleVersionRow r = new RuleVersionRow(1L, "PAY", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"score\",\"params\":{\"threshold\":1}}",
-                "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\",\"score\"]");
+                "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
+                "[{\"metricCode\":\"m1\",\"metricVersion\":1}]");
         RuleVersionSnapshot snap = assembler.assemble(r);
-        assertEquals(List.of("balance", "score"), snap.metricDependencies());
+        assertEquals(List.of(new MetricDependency("m1", 1)), snap.metricDependencies());
     }
 
     @Test

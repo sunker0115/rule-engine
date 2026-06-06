@@ -18,7 +18,7 @@ class MetricErrorTraceTest {
         ConditionNode node = new ConditionNode("GT", "balance", null, Map.of("threshold", 100), null, "LONG");
         RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
                 .ruleVersionId(1L).sceneCode("PAY").tenantId("1").conditionAst(node)
-                .addMetricDependency("balance").build();
+                .addMetricDependency("balance", 1).build();
         EvalContext ctx = new EvalContext("1",
                 new RuleEvent("1", "PAY", "transfer", "u1", "e1", Instant.now(), Map.of(), Map.of()),
                 new Subject("u1", SubjectType.USER, Map.of()),

@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.internal.codec;
 
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,21 @@ class AstJsonCodecTest {
     void deserializeStringList() throws Exception {
         List<String> list = codec.deserializeStringList("[\"ORDER\",\"PAYMENT\"]");
         assertEquals(List.of("ORDER", "PAYMENT"), list);
+    }
+
+    @Test
+    void deserializeMetricDependencies_parsesCodeAndVersion() throws Exception {
+        String json = "[{\"metricCode\":\"balance\",\"metricVersion\":2},{\"metricCode\":\"score\",\"metricVersion\":1}]";
+        List<MetricDependency> deps = codec.deserializeMetricDependencies(json);
+        assertEquals(2, deps.size());
+        assertEquals(new MetricDependency("balance", 2), deps.get(0));
+        assertEquals(new MetricDependency("score", 1), deps.get(1));
+    }
+
+    @Test
+    void deserializeMetricDependencies_emptyArray_returnsEmpty() throws Exception {
+        List<MetricDependency> deps = codec.deserializeMetricDependencies("[]");
+        assertTrue(deps.isEmpty());
     }
 
     @Test

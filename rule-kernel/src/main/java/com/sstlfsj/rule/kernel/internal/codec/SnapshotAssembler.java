@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.internal.codec;
 
 import tools.jackson.core.JacksonException;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
@@ -37,7 +38,7 @@ public class SnapshotAssembler {
                 codec.deserializeDecisionBindings(row.decisionBindingsJson());
         List<String> triggerEventTypes = codec.deserializeStringList(
                 row.triggerEventTypesJson() == null ? "[]" : row.triggerEventTypesJson());
-        List<String> metricDependencies = codec.deserializeStringList(
+        List<MetricDependency> metricDependencies = codec.deserializeMetricDependencies(
                 row.metricDependenciesJson() == null ? "[]" : row.metricDependenciesJson());
 
         return new RuleVersionSnapshot(

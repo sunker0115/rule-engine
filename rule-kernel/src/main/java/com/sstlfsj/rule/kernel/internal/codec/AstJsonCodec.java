@@ -5,6 +5,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
@@ -79,6 +80,16 @@ public class AstJsonCodec {
      * @return 字符串列表
      */
     public List<String> deserializeStringList(String json) throws JacksonException {
+        return mapper.readValue(json, new TypeReference<>() {});
+    }
+
+    /**
+     * 将 JSON 字符串反序列化为 MetricDependency 列表（rule_version.metric_dependencies）。
+     *
+     * @param json metric 依赖 JSON 数组字符串，元素形如 {"metricCode":"x","metricVersion":1}
+     * @return MetricDependency 列表
+     */
+    public List<MetricDependency> deserializeMetricDependencies(String json) throws JacksonException {
         return mapper.readValue(json, new TypeReference<>() {});
     }
 

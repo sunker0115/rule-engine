@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.api.model;
 
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -127,7 +128,8 @@ class RuleVersionSnapshotTest {
 
         RuleVersionSnapshot built = RuleVersionSnapshot.builder()
                 .ruleVersionId(1L).sceneCode("s1").tenantId("t1").conditionAst(leaf())
-                .addMetricDependency("balance").addMetricDependency("score").build();
-        assertEquals(List.of("balance", "score"), built.metricDependencies());
+                .addMetricDependency("balance", 1).addMetricDependency("score", 2).build();
+        assertEquals(List.of(new MetricDependency("balance", 1), new MetricDependency("score", 2)),
+                built.metricDependencies());
     }
 }

@@ -39,7 +39,7 @@ class RuleEngineClientFetchTest {
                                 Map.of("threshold", 80), 0.0)), null, null))
                 .addTriggerEventType("TRANSACTION")
                 .addDecisionBinding("BLOCK", 100)
-                .addMetricDependency("risk.score")
+                .addMetricDependency("risk.score", 1)
                 .build();
     }
 

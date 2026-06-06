@@ -1,6 +1,7 @@
 [
   {
     "metricCode": "risk.score",
+    "metricVersion": 1,
     "sourceType": "TEST",
     "dataType": "LONG",
     "allowProvided": false,
