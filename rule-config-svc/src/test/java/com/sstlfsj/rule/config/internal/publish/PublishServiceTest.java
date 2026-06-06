@@ -647,4 +647,25 @@ class PublishServiceTest {
                 .hasMessageContaining("GT")
                 .hasMessageContaining("BOOLEAN");
     }
+
+    @Test
+    void publish_sqlMetricWithDbTimeFunction_throws() {
+        // SQL_AGGREGATE metric 的 SQL 含 NOW() → 发布期安全校验拒绝（B21）
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        ConditionNode ast = new ConditionNode("GT", "balance", null, Map.of("threshold", 1), 0.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(ast);
+
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("balance");
+        md.setDataType("LONG");
+        md.setSourceType("SQL_AGGREGATE");
+        md.setParams("{\"datasource\":\"ro\",\"sql\":\"SELECT 1 WHERE t >= NOW() - INTERVAL 7 DAY\"}");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(md));
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("NOW");
+    }
 }

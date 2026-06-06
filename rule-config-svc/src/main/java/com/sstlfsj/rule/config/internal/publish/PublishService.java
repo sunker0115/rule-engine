@@ -42,6 +42,10 @@ public class PublishService {
     private final ObjectMapper objectMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
 
+    /** 已注册取数资源名目录（由 eval-svc 提供）；纯 config 部署时为 null，资源名校验跳过。 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.sstlfsj.rule.config.api.spi.MetricResourceCatalog metricResourceCatalog;
+
     public PublishService(RuleDefinitionMapper ruleDefinitionMapper,
                           SceneMapper sceneMapper,
                           RuleVersionMapper ruleVersionMapper,
@@ -175,6 +179,13 @@ public class PublishService {
                             MetricDefinition::getMetricCode,
                             MetricDefinition::getDataType));
             resolvedAst = AstDataTypeResolver.resolve(ast, dataTypeMap);
+
+            // 4.6. metric 安全校验（B21）：SQL 时间函数/拼接拒绝 + 资源名注册（catalog 为 null 时跳过资源名校验）
+            java.util.Set<String> dsNames = metricResourceCatalog != null
+                    ? metricResourceCatalog.datasourceNames() : null;
+            java.util.Set<String> epNames = metricResourceCatalog != null
+                    ? metricResourceCatalog.endpointNames() : null;
+            new MetricSafetyValidator(objectMapper).validate(metricDefs, dsNames, epNames);
         }
 
         // 5. 计算新版本号（max(version)+1）
