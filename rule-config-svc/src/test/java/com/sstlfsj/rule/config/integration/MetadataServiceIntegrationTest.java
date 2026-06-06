@@ -92,8 +92,10 @@ class MetadataServiceIntegrationTest {
         RuleDefinition rdPay = ruleDef(payment.getId(), "r-pay");
         ruleDefinitionMapper.insert(rdPay);
 
-        ruleVersionMapper.insert(ruleVersion(rdFraud.getId(), "[\"risk.score\"]"));
-        ruleVersionMapper.insert(ruleVersion(rdPay.getId(), "[\"account.balance\"]"));
+        ruleVersionMapper.insert(ruleVersion(rdFraud.getId(),
+                "[{\"metricCode\":\"risk.score\",\"metricVersion\":1}]"));
+        ruleVersionMapper.insert(ruleVersion(rdPay.getId(),
+                "[{\"metricCode\":\"account.balance\",\"metricVersion\":1}]"));
     }
 
     private SceneDef scene(String code, String eventTypesJson) {

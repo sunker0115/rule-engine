@@ -10,12 +10,14 @@ import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -71,24 +73,41 @@ class MetadataServiceImpl implements MetadataService {
     @Override
     public List<MetricDescriptor> listMetricDefinitions(String tenantId, List<String> scenes) {
         Long tid = Long.valueOf(tenantId);
-        List<MetricDescriptor> all = metricDefinitionMapper.selectList(
-                        new LambdaQueryWrapper<MetricDefinition>()
-                                .eq(MetricDefinition::getTenantId, tid)
-                                .eq(MetricDefinition::getStatus, "ACTIVE"))
-                .stream().map(this::toDescriptor).toList();
 
-        // scenes 为空（FetchMode.ALL）：返回该租户全部 ACTIVE 定义
+        // scenes 为空（FetchMode.ALL）：返回该租户全部 ACTIVE 定义（新规则只能绑 ACTIVE）
         if (scenes == null || scenes.isEmpty()) {
-            return all;
+            return metricDefinitionMapper.selectList(
+                            new LambdaQueryWrapper<MetricDefinition>()
+                                    .eq(MetricDefinition::getTenantId, tid)
+                                    .eq(MetricDefinition::getStatus, "ACTIVE"))
+                    .stream().map(this::toDescriptor).toList();
         }
-        // scenes 非空（FetchMode.DECLARED）：仅返回这些 scenes 下 ACTIVE rule_version 的 metricDependencies 并集内的定义。
-        // 口径与快照下发一致（rv.status=ACTIVE），保证 SDK 拿到的规则引用的 metric 定义都已下发，无遗漏。
-        Set<String> required = collectRequiredMetricCodes(tid, scenes);
-        return all.stream().filter(d -> required.contains(d.metricCode())).toList();
+
+        // scenes 非空（FetchMode.DECLARED）：按被规则引用的精确 (code,version) 并集下发，含 SUPERSEDED。
+        // 存量快照可能绑旧版（SUPERSEDED），若只下发 ACTIVE 版，评估期 resolve(code,oldVersion) 返回 null → 评估失败。
+        Set<MetricDependency> deps = collectRequiredDeps(tid, scenes);
+        if (deps.isEmpty()) return List.of();
+
+        List<MetricDescriptor> result = new ArrayList<>();
+        for (MetricDependency dep : deps) {
+            MetricDefinition row = metricDefinitionMapper.selectOne(
+                    new LambdaQueryWrapper<MetricDefinition>()
+                            .eq(MetricDefinition::getTenantId, tid)
+                            .eq(MetricDefinition::getMetricCode, dep.metricCode())
+                            .eq(MetricDefinition::getVersion, dep.metricVersion()));
+            // 查不到（定义已被物理删除等异常情况）容错跳过
+            if (row != null) {
+                result.add(toDescriptor(row));
+            }
+        }
+        return result;
     }
 
-    /** 取 scenes 下 ACTIVE rule_version 的 metricDependencies 并集（scene code → scene id → ruleDefinition id → ACTIVE 版本依赖）。 */
-    private Set<String> collectRequiredMetricCodes(Long tenantId, List<String> scenes) {
+    /**
+     * 取 scenes 下 ACTIVE rule_version 的 metricDependencies 并集，返回精确 (code,version) 对。
+     * 与 collectRequiredMetricCodes 不同：保留 version，以便 DECLARED 分支按版本精确查询。
+     */
+    private Set<MetricDependency> collectRequiredDeps(Long tenantId, List<String> scenes) {
         List<Long> sceneIds = sceneMapper.selectList(
                         new LambdaQueryWrapper<SceneDef>()
                                 .eq(SceneDef::getTenantId, tenantId)
@@ -103,20 +122,21 @@ class MetadataServiceImpl implements MetadataService {
                 .stream().map(RuleDefinition::getId).toList();
         if (defIds.isEmpty()) return Set.of();
 
-        Set<String> codes = new HashSet<>();
+        Set<MetricDependency> deps = new HashSet<>();
         for (RuleVersion rv : ruleVersionMapper.selectList(
                 new LambdaQueryWrapper<RuleVersion>()
                         .in(RuleVersion::getRuleDefinitionId, defIds)
                         .eq(RuleVersion::getStatus, "ACTIVE"))) {
-            codes.addAll(parseStringList(rv.getMetricDependencies()));
+            deps.addAll(parseDepList(rv.getMetricDependencies()));
         }
-        return codes;
+        return deps;
     }
 
-    private List<String> parseStringList(String json) {
+    /** 解析 metric_dependencies 对象数组，取出 MetricDependency 列表。 */
+    private List<MetricDependency> parseDepList(String json) {
         if (json == null || json.isBlank()) return List.of();
         try {
-            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+            return objectMapper.readValue(json, new TypeReference<List<MetricDependency>>() {});
         } catch (Exception e) {
             return List.of();
         }
@@ -127,7 +147,9 @@ class MetadataServiceImpl implements MetadataService {
         Map<String, Object> params = new HashMap<>(parseParams(m.getParams()));
         params.put("dataType", m.getDataType());
         return new MetricDescriptor(
-                m.getMetricCode(), m.getSourceType(), m.getDataType(),
+                m.getMetricCode(),
+                m.getVersion() == null ? 1 : m.getVersion(),
+                m.getSourceType(), m.getDataType(),
                 Boolean.TRUE.equals(m.getAllowProvided()),
                 m.getCacheTtlSeconds() == null ? 0 : m.getCacheTtlSeconds(),
                 params);
