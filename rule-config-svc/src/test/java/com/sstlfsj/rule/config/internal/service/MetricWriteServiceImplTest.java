@@ -12,10 +12,12 @@ import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
+import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -44,12 +46,14 @@ class MetricWriteServiceImplTest {
         TableInfoHelper.initTableInfo(assistant, MetricDefinition.class);
         TableInfoHelper.initTableInfo(assistant, RuleDefinition.class);
         TableInfoHelper.initTableInfo(assistant, RuleVersion.class);
+        TableInfoHelper.initTableInfo(assistant, SceneDef.class);
     }
 
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock AuditLogMapper auditLogMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
+    @Mock SceneMapper sceneMapper;
     @Spy  ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks MetricWriteServiceImpl sut;
 
@@ -140,6 +144,74 @@ class MetricWriteServiceImplTest {
         verify(auditLogMapper, times(1)).insert(any(AuditLog.class));
     }
 
+    // ── update breakingChange=false 但 sourceType/dataType 变更 → 强制升版 ──────
+
+    @Test
+    void update_nonBreaking_butSourceTypeChanged_forcesNewVersion() {
+        // 当前 ACTIVE：sourceType=ATTRIBUTE
+        MetricDefinition active = activeRow(1);
+        active.setSourceType("ATTRIBUTE");
+        active.setDataType("LONG");
+        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
+        doAnswer(inv -> {
+            MetricDefinition m = inv.getArgument(0);
+            m.setId(300L);
+            return 1;
+        }).when(metricDefinitionMapper).insert(any(MetricDefinition.class));
+
+        // cmd 将 sourceType 改为 EVENT_PAYLOAD，即使 breakingChange=false
+        MetricWriteCommand changedCmd = new MetricWriteCommand("用户年龄", "EVENT_PAYLOAD", "LONG", "{}", 60, false);
+        int version = sut.update(TENANT, CODE, changedCmd, false, ACTOR);
+
+        // 应走升版路径：version=2，旧行 SUPERSEDED
+        assertThat(version).isEqualTo(2);
+        assertThat(active.getStatus()).isEqualTo("SUPERSEDED");
+        ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
+        verify(metricDefinitionMapper, times(1)).insert(captor.capture());
+        assertThat(captor.getValue().getVersion()).isEqualTo(2);
+        assertThat(captor.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(captor.getValue().getSourceType()).isEqualTo("EVENT_PAYLOAD");
+    }
+
+    @Test
+    void update_nonBreaking_butDataTypeChanged_forcesNewVersion() {
+        // 当前 ACTIVE：dataType=LONG
+        MetricDefinition active = activeRow(1);
+        active.setSourceType("ATTRIBUTE");
+        active.setDataType("LONG");
+        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
+        doAnswer(inv -> {
+            MetricDefinition m = inv.getArgument(0);
+            m.setId(301L);
+            return 1;
+        }).when(metricDefinitionMapper).insert(any(MetricDefinition.class));
+
+        // cmd 将 dataType 改为 DOUBLE
+        MetricWriteCommand changedCmd = new MetricWriteCommand("用户年龄", "ATTRIBUTE", "DOUBLE", "{}", 60, false);
+        int version = sut.update(TENANT, CODE, changedCmd, false, ACTOR);
+
+        assertThat(version).isEqualTo(2);
+        assertThat(active.getStatus()).isEqualTo("SUPERSEDED");
+        verify(metricDefinitionMapper, times(1)).insert(any(MetricDefinition.class));
+    }
+
+    @Test
+    void update_nonBreaking_sameSourceTypeAndDataType_updatesInPlace() {
+        // sourceType/dataType 未变，breakingChange=false → 仍原地更新
+        MetricDefinition active = activeRow(1);
+        active.setSourceType("ATTRIBUTE");
+        active.setDataType("LONG");
+        when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
+
+        // cmd 只改 name，sourceType/dataType 不变
+        MetricWriteCommand sameTypeCmd = new MetricWriteCommand("新名称", "ATTRIBUTE", "LONG", "{}", 120, false);
+        int version = sut.update(TENANT, CODE, sameTypeCmd, false, ACTOR);
+
+        assertThat(version).isEqualTo(1);
+        verify(metricDefinitionMapper, times(1)).updateById(active);
+        verify(metricDefinitionMapper, never()).insert((MetricDefinition) any());
+    }
+
     // ── update 无 ACTIVE 行 ───────────────────────────────────────────────────
 
     @Test
@@ -155,52 +227,64 @@ class MetricWriteServiceImplTest {
 
     @Test
     void findReferencingRules_returnsOnlyMatchingRules() {
-        // rule_definition：两条属于 TENANT
-        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控");
-        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控");
+        // rule_definition：两条属于 TENANT，分属不同 scene
+        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
+        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", 11L, "DISABLED");
+
+        // scene：10 → transfer，11 → login
+        SceneDef sc1 = scene(10L, "risk.transfer");
+        SceneDef sc2 = scene(11L, "risk.login");
 
         // rule_version（mock 只返回裁列后仍包含的三个字段：id/ruleDefinitionId/metricDependencies）：
         //   rv1 属于 rd1，含 {account.age,1} → 应被选中
         //   rv2 属于 rd1，含 {account.age,2} → 版本不匹配，排除
-        //   rv3 属于 rd2，含 {account.age,1} → 应被选中
+        //   rv3 属于 rd2（rd.status=DISABLED），含 {account.age,1} → 仍应被选中（口径按 rv.status=ACTIVE）
         //   rv4 属于 rd2，dependencies 为空 → 排除
         RuleVersion rv1 = ruleVersion(1001L, 101L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1}]");
         RuleVersion rv2 = ruleVersion(1002L, 101L, "[{\"metricCode\":\"account.age\",\"metricVersion\":2}]");
         RuleVersion rv3 = ruleVersion(1003L, 102L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1},{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
         RuleVersion rv4 = ruleVersion(1004L, 102L, "[]");
 
-        // mock：先查该 tenant 下所有 ruleDefinition id
         when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.of(rd1, rd2));
-        // mock：再查 ACTIVE rule_version（.select 裁列由 wrapper 控制，mock 行为不变）
         when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.of(rv1, rv2, rv3, rv4));
+        // scene 批量查询
+        when(sceneMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(sc1, sc2));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
 
-        // 只有 rv1、rv3 匹配
+        // 只有 rv1（rd1）、rv3（rd2）匹配
         assertThat(result).hasSize(2);
-        assertThat(result).extracting(RuleRef::ruleVersionId)
-                .containsExactlyInAnyOrder(1001L, 1003L);
         assertThat(result).extracting(RuleRef::ruleDefinitionId)
                 .containsExactlyInAnyOrder(101L, 102L);
-        // 验证 code/name 正确从 ruleDefinition 携带
-        assertThat(result).anySatisfy(ref ->
-                assertThat(ref.ruleCode()).isEqualTo("risk.transfer"));
-        assertThat(result).anySatisfy(ref ->
-                assertThat(ref.ruleName()).isEqualTo("登录风控"));
+        // 验证 code/name/sceneCode/status 正确组装
+        assertThat(result).anySatisfy(ref -> {
+            assertThat(ref.ruleCode()).isEqualTo("risk.transfer");
+            assertThat(ref.sceneCode()).isEqualTo("risk.transfer");
+            assertThat(ref.status()).isEqualTo("ACTIVE");
+        });
+        assertThat(result).anySatisfy(ref -> {
+            assertThat(ref.ruleName()).isEqualTo("登录风控");
+            assertThat(ref.sceneCode()).isEqualTo("risk.login");
+            // rd.status=DISABLED 的规则仍出现（口径对齐 eval，按 rv.status 收集）
+            assertThat(ref.status()).isEqualTo("DISABLED");
+        });
     }
 
     @Test
     void findReferencingRules_differentMetricCode_notIncluded() {
         // 纯反例：规则只引用 {user.level,1}，查 account.age/1 时不应出现
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
         RuleVersion rv = ruleVersion(1001L, 101L, "[{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
 
         when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.of(rd));
         when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.of(rv));
+        when(sceneMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(scene(10L, "risk.transfer")));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
 
@@ -221,7 +305,7 @@ class MetricWriteServiceImplTest {
 
     @Test
     void findReferencingRules_malformedDependenciesJson_treatedAsNoMatch() {
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
         // metric_dependencies 为非法 JSON，应静默忽略，不抛异常
         RuleVersion rv = ruleVersion(1001L, 101L, "not-valid-json");
 
@@ -229,6 +313,8 @@ class MetricWriteServiceImplTest {
                 .thenReturn(List.of(rd));
         when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.of(rv));
+        when(sceneMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(scene(10L, "risk.transfer")));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
 
@@ -250,13 +336,22 @@ class MetricWriteServiceImplTest {
         return m;
     }
 
-    private RuleDefinition ruleDefinition(Long id, String code, String name) {
+    private RuleDefinition ruleDefinition(Long id, String code, String name, Long sceneId, String status) {
         RuleDefinition rd = new RuleDefinition();
         rd.setId(id);
         rd.setTenantId(TENANT);
         rd.setCode(code);
         rd.setName(name);
+        rd.setSceneId(sceneId);
+        rd.setStatus(status);
         return rd;
+    }
+
+    private SceneDef scene(Long id, String code) {
+        SceneDef sc = new SceneDef();
+        sc.setId(id);
+        sc.setCode(code);
+        return sc;
     }
 
     private RuleVersion ruleVersion(Long id, Long ruleDefinitionId, String metricDependencies) {

@@ -8,10 +8,12 @@ import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
+import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,17 +40,20 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     private final AuditLogMapper auditLogMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final RuleDefinitionMapper ruleDefinitionMapper;
+    private final SceneMapper sceneMapper;
     private final ObjectMapper objectMapper;
 
     public MetricWriteServiceImpl(MetricDefinitionMapper metricDefinitionMapper,
                                   AuditLogMapper auditLogMapper,
                                   RuleVersionMapper ruleVersionMapper,
                                   RuleDefinitionMapper ruleDefinitionMapper,
+                                  SceneMapper sceneMapper,
                                   ObjectMapper objectMapper) {
         this.metricDefinitionMapper = metricDefinitionMapper;
         this.auditLogMapper = auditLogMapper;
         this.ruleVersionMapper = ruleVersionMapper;
         this.ruleDefinitionMapper = ruleDefinitionMapper;
+        this.sceneMapper = sceneMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -81,7 +86,13 @@ public class MetricWriteServiceImpl implements MetricWriteService {
             throw new IllegalArgumentException("metric 不存在或无 ACTIVE 版本: " + metricCode);
         }
 
-        if (!breakingChange) {
+        // sourceType/dataType 冻结进 AST 快照并影响取数语义，变更必须升版（D6/B6），
+        // 否则存量规则评估期 resolve 到被静默修改的定义。
+        boolean effectiveBreaking = breakingChange
+                || !java.util.Objects.equals(active.getSourceType(), cmd.sourceType())
+                || !java.util.Objects.equals(active.getDataType(), cmd.dataType());
+
+        if (!effectiveBreaking) {
             // 原地更新，version 不变
             applyCommandFields(active, cmd);
             active.setUpdatedBy(actorId);
@@ -94,7 +105,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
             return active.getVersion();
         }
 
-        // breakingChange=true：旧行 SUPERSEDED + 插入新版本行
+        // effectiveBreaking=true：旧行 SUPERSEDED + 插入新版本行
         int newVersion = active.getVersion() + 1;
         active.setStatus("SUPERSEDED");
         active.setUpdatedBy(actorId);
@@ -120,18 +131,33 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     @Override
     @Transactional(readOnly = true)
     public List<RuleRef> findReferencingRules(Long tenantId, String metricCode, int metricVersion) {
-        // 第一步：查该 tenant 下所有 rule_definition，建 id → (code, name) 索引
+        // 第一步：查该 tenant 下所有 rule_definition，取 id/code/name/sceneId/status
         List<RuleDefinition> defs = ruleDefinitionMapper.selectList(
                 new LambdaQueryWrapper<RuleDefinition>()
                         .eq(RuleDefinition::getTenantId, tenantId)
-                        .select(RuleDefinition::getId, RuleDefinition::getCode, RuleDefinition::getName));
+                        .select(RuleDefinition::getId, RuleDefinition::getCode,
+                                RuleDefinition::getName, RuleDefinition::getSceneId,
+                                RuleDefinition::getStatus));
         if (defs.isEmpty()) {
             return List.of();
         }
         Map<Long, RuleDefinition> defMap = defs.stream()
                 .collect(Collectors.toMap(RuleDefinition::getId, d -> d));
 
-        // 第二步：查这批 rule_definition_id 下所有 ACTIVE rule_version，只取影响面判断所需列
+        // 第二步：批量查 scene，建 sceneId → sceneCode 索引
+        java.util.Set<Long> sceneIds = defs.stream()
+                .map(RuleDefinition::getSceneId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> sceneCodeMap = sceneIds.isEmpty() ? Map.of() :
+                sceneMapper.selectList(
+                        new LambdaQueryWrapper<SceneDef>()
+                                .in(SceneDef::getId, sceneIds)
+                                .select(SceneDef::getId, SceneDef::getCode))
+                        .stream()
+                        .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
+
+        // 第三步：查这批 rule_definition_id 下所有 ACTIVE rule_version，只取影响面判断所需列
         // 口径对齐 eval 侧 RuleVersionReadMapper：以 rv.status=ACTIVE 为"参与评估"判定，
         // 不按 rule_definition.status 过滤（eval 的 loadAllActive/loadActiveByScene 均如此）。
         List<RuleVersion> activeVersions = ruleVersionMapper.selectList(
@@ -141,12 +167,14 @@ public class MetricWriteServiceImpl implements MetricWriteService {
                         .select(RuleVersion::getId, RuleVersion::getRuleDefinitionId,
                                 RuleVersion::getMetricDependencies));
 
-        // 第三步：反序列化 metric_dependencies，筛出含目标 (metricCode, metricVersion) 的行
+        // 第四步：反序列化 metric_dependencies，筛出含目标 (metricCode, metricVersion) 的行
         List<RuleRef> result = new ArrayList<>();
         for (RuleVersion rv : activeVersions) {
             if (containsDependency(rv.getMetricDependencies(), metricCode, metricVersion)) {
                 RuleDefinition def = defMap.get(rv.getRuleDefinitionId());
-                result.add(new RuleRef(def.getId(), def.getCode(), def.getName(), rv.getId()));
+                String sceneCode = sceneCodeMap.getOrDefault(def.getSceneId(), "");
+                result.add(new RuleRef(def.getId(), def.getCode(), def.getName(),
+                        sceneCode, def.getStatus()));
             }
         }
         return result;

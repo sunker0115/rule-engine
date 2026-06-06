@@ -28,6 +28,11 @@ public interface MetricWriteService {
             Integer cacheTtlSeconds,
             boolean allowProvided) {}
 
-    /** 引用某 metric 版本的规则引用项。 */
-    record RuleRef(Long ruleDefinitionId, String ruleCode, String ruleName, Long ruleVersionId) {}
+    /**
+     * 引用某 metric 版本的规则引用项。sceneCode 由 rule_definition.scene_id 关联 scene 表；
+     * status 为 rule_definition.status（口径：按 rv.status=ACTIVE 收集，不按 rd.status 过滤，
+     * 故 rd.status=DISABLED 但 rv.status=ACTIVE 的规则仍会出现）。
+     */
+    record RuleRef(Long ruleDefinitionId, String ruleCode, String ruleName,
+                   String sceneCode, String status) {}
 }

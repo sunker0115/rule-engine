@@ -63,12 +63,17 @@ public class MetricController {
      * @param metricCode metric 编码
      * @param version    metric 版本号
      * @param tenantId   租户 ID
-     * @return 引用该版本的规则列表
+     * @return 影响面响应，含 metricCode/metricVersion/affectedRules/affectedRuleCount
      */
     @GetMapping("/{metricCode}/versions/{version}/impact")
-    public ApiResponse<List<RuleRef>> impact(@PathVariable String metricCode,
-                                             @PathVariable int version,
-                                             @RequestParam Long tenantId) {
-        return ApiResponse.ok(service.findReferencingRules(tenantId, metricCode, version));
+    public ApiResponse<ImpactResponse> impact(@PathVariable String metricCode,
+                                              @PathVariable int version,
+                                              @RequestParam Long tenantId) {
+        List<RuleRef> rules = service.findReferencingRules(tenantId, metricCode, version);
+        return ApiResponse.ok(new ImpactResponse(metricCode, version, rules, rules.size()));
     }
+
+    /** 影响面查询响应：被某 metric 版本影响的规则清单（10-api-contract §4.7）。 */
+    public record ImpactResponse(String metricCode, int metricVersion,
+                                 List<RuleRef> affectedRules, int affectedRuleCount) {}
 }

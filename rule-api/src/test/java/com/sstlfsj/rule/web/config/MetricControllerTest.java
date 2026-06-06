@@ -130,10 +130,11 @@ class MetricControllerTest {
     // ── GET /api/v1/metrics/{metricCode}/versions/{version}/impact ────────────
 
     @Test
-    void impact_returns200_withRuleRefList() throws Exception {
+    void impact_returns200_withImpactResponse() throws Exception {
+        // RuleRef 新字段：ruleDefinitionId, ruleCode, ruleName, sceneCode, status
         List<RuleRef> refs = List.of(
-                new RuleRef(10L, "risk.transfer", "转账风控", 200L),
-                new RuleRef(11L, "risk.login",    "登录风控", 201L)
+                new RuleRef(10L, "risk.transfer", "转账风控", "risk.transfer", "ACTIVE"),
+                new RuleRef(11L, "risk.login",    "登录风控", "risk.login",    "DISABLED")
         );
         when(service.findReferencingRules(1L, "account.age", 1)).thenReturn(refs);
 
@@ -141,23 +142,34 @@ class MetricControllerTest {
                         .param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data.length()").value(2))
-                .andExpect(jsonPath("$.data[0].ruleCode").value("risk.transfer"))
-                .andExpect(jsonPath("$.data[1].ruleName").value("登录风控"));
+                // 外层 ImpactResponse 包装字段
+                .andExpect(jsonPath("$.data.metricCode").value("account.age"))
+                .andExpect(jsonPath("$.data.metricVersion").value(1))
+                .andExpect(jsonPath("$.data.affectedRuleCount").value(2))
+                // affectedRules 数组内容
+                .andExpect(jsonPath("$.data.affectedRules").isArray())
+                .andExpect(jsonPath("$.data.affectedRules.length()").value(2))
+                .andExpect(jsonPath("$.data.affectedRules[0].ruleCode").value("risk.transfer"))
+                .andExpect(jsonPath("$.data.affectedRules[0].sceneCode").value("risk.transfer"))
+                .andExpect(jsonPath("$.data.affectedRules[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.affectedRules[1].ruleName").value("登录风控"))
+                .andExpect(jsonPath("$.data.affectedRules[1].status").value("DISABLED"));
 
         verify(service).findReferencingRules(1L, "account.age", 1);
     }
 
     @Test
-    void impact_emptyResult_returns200WithEmptyArray() throws Exception {
+    void impact_emptyResult_returns200WithEmptyAffectedRules() throws Exception {
         when(service.findReferencingRules(any(), any(), anyInt())).thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/metrics/account.age/versions/1/impact")
                         .param("tenantId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data.length()").value(0));
+                .andExpect(jsonPath("$.data.metricCode").value("account.age"))
+                .andExpect(jsonPath("$.data.metricVersion").value(1))
+                .andExpect(jsonPath("$.data.affectedRuleCount").value(0))
+                .andExpect(jsonPath("$.data.affectedRules").isArray())
+                .andExpect(jsonPath("$.data.affectedRules.length()").value(0));
     }
 
     @Test

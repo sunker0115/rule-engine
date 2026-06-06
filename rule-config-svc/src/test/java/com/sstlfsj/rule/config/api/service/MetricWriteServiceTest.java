@@ -38,18 +38,23 @@ class MetricWriteServiceTest {
 
     @Test
     void ruleRef_recordAccessors() {
-        var ref = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控", 200L);
+        // 新字段：ruleDefinitionId, ruleCode, ruleName, sceneCode, status（去掉 ruleVersionId）
+        var ref = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控",
+                "risk.transfer", "ACTIVE");
 
         assertEquals(10L, ref.ruleDefinitionId());
         assertEquals("risk.transfer", ref.ruleCode());
         assertEquals("转账风控", ref.ruleName());
-        assertEquals(200L, ref.ruleVersionId());
+        assertEquals("risk.transfer", ref.sceneCode());
+        assertEquals("ACTIVE", ref.status());
     }
 
     @Test
     void ruleRef_recordEquality() {
-        var a = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控", 200L);
-        var b = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控", 200L);
+        var a = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控",
+                "risk.transfer", "ACTIVE");
+        var b = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控",
+                "risk.transfer", "ACTIVE");
         assertEquals(a, b);
     }
 }
