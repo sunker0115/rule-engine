@@ -43,6 +43,8 @@
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <!-- OTel instrumentation（logback-appender 等），与 opentelemetry.version=1.55.0 配套 -->
         <opentelemetry-instrumentation.version>2.16.0-alpha</opentelemetry-instrumentation.version>
+        <!-- springdoc 3.x 系列适配 Spring Boot 4（3.0.3 以 spring-boot 4.0.5 为 parent） -->
+        <springdoc.version>3.0.3</springdoc.version>
     </properties>
 
     <build>
@@ -187,6 +189,13 @@
                 <groupId>io.opentelemetry.instrumentation</groupId>
                 <artifactId>opentelemetry-logback-appender-1.0</artifactId>
                 <version>${opentelemetry-instrumentation.version}</version>
+            </dependency>
+
+            <!-- springdoc OpenAPI：内嵌 Swagger UI，仅 rule-api 暴露 REST 文档 -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
             </dependency>
 
             <!-- 内部模块版本管理 -->
