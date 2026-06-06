@@ -20,4 +20,10 @@ public record MetricDescriptor(
     public MetricDescriptor {
         params = params == null ? Map.of() : Map.copyOf(params);
     }
+
+    /** 兼容旧调用点的便利构造：metricVersion 默认 1（B6 引入版本字段前的调用方无需感知版本）。 */
+    public MetricDescriptor(String metricCode, String sourceType, String dataType,
+                            boolean allowProvided, int cacheTtlSeconds, Map<String, Object> params) {
+        this(metricCode, 1, sourceType, dataType, allowProvided, cacheTtlSeconds, params);
+    }
 }
