@@ -192,7 +192,12 @@ class MetricWriteServiceImplTest {
 
         assertThat(version).isEqualTo(2);
         assertThat(active.getStatus()).isEqualTo("SUPERSEDED");
-        verify(metricDefinitionMapper, times(1)).insert(any(MetricDefinition.class));
+        // 补：用 ArgumentCaptor 断言新行 dataType == "DOUBLE"（与 sourceType 用例对称）
+        ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
+        verify(metricDefinitionMapper, times(1)).insert(captor.capture());
+        assertThat(captor.getValue().getVersion()).isEqualTo(2);
+        assertThat(captor.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(captor.getValue().getDataType()).isEqualTo("DOUBLE");
     }
 
     @Test
@@ -210,6 +215,8 @@ class MetricWriteServiceImplTest {
         assertThat(version).isEqualTo(1);
         verify(metricDefinitionMapper, times(1)).updateById(active);
         verify(metricDefinitionMapper, never()).insert((MetricDefinition) any());
+        // 补：与既有原地更新用例对称，确认 audit_log 写入一次
+        verify(auditLogMapper, times(1)).insert(any(AuditLog.class));
     }
 
     // ── update 无 ACTIVE 行 ───────────────────────────────────────────────────

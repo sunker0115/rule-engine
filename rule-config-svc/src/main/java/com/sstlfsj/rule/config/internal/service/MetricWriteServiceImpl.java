@@ -22,6 +22,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -89,8 +91,8 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         // sourceType/dataType 冻结进 AST 快照并影响取数语义，变更必须升版（D6/B6），
         // 否则存量规则评估期 resolve 到被静默修改的定义。
         boolean effectiveBreaking = breakingChange
-                || !java.util.Objects.equals(active.getSourceType(), cmd.sourceType())
-                || !java.util.Objects.equals(active.getDataType(), cmd.dataType());
+                || !Objects.equals(active.getSourceType(), cmd.sourceType())
+                || !Objects.equals(active.getDataType(), cmd.dataType());
 
         if (!effectiveBreaking) {
             // 原地更新，version 不变
@@ -145,9 +147,9 @@ public class MetricWriteServiceImpl implements MetricWriteService {
                 .collect(Collectors.toMap(RuleDefinition::getId, d -> d));
 
         // 第二步：批量查 scene，建 sceneId → sceneCode 索引
-        java.util.Set<Long> sceneIds = defs.stream()
+        Set<Long> sceneIds = defs.stream()
                 .map(RuleDefinition::getSceneId)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, String> sceneCodeMap = sceneIds.isEmpty() ? Map.of() :
                 sceneMapper.selectList(
