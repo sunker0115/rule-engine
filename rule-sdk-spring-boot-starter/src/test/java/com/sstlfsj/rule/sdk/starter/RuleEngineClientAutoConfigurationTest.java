@@ -2,7 +2,11 @@ package com.sstlfsj.rule.sdk.starter;
 
 import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.annotation.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.annotation.RuleDef;
+import com.sstlfsj.rule.kernel.api.model.MetricQuery;
+import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.sdk.Condition;
 import com.sstlfsj.rule.sdk.EvalResultListener;
 import com.sstlfsj.rule.sdk.FetchMode;
@@ -106,6 +110,24 @@ class RuleEngineClientAutoConfigurationTest {
     void conditionType_nonEvaluatorBean_skipped_noError() {
         runner.withPropertyValues("rule.sdk.rule-files=rules/test-rule.json")
                 .withBean(NotAnEvaluator.class)
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(RuleEngineClient.class);
+                    ctx.getBean(RuleEngineClient.class).close();
+                });
+    }
+
+    /** 取数 SPI handler Bean 注入后 client 构建正常，无异常。 */
+    @MetricSourceType("TEST")
+    static class StarterTestHandler implements MetricSourceHandler {
+        @Override public MetricValue fetch(MetricQuery query) {
+            return new MetricValue(1, "LONG", "FETCHED");
+        }
+    }
+
+    @Test
+    void metricSourceHandlerBean_wiredWithoutError() {
+        runner.withPropertyValues("rule.sdk.rule-files=rules/test-rule.json")
+                .withBean(StarterTestHandler.class)
                 .run(ctx -> {
                     assertThat(ctx).hasSingleBean(RuleEngineClient.class);
                     ctx.getBean(RuleEngineClient.class).close();
