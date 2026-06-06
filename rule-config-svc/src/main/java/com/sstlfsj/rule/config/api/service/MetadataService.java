@@ -21,6 +21,16 @@ public interface MetadataService {
      */
     ProvidedMetricsResponse getProvidedMetrics(String tenantId, String sceneCode);
 
+    /**
+     * 返回指定租户的 metric 运行时定义列表，供嵌入式 SDK 下发（仅元数据，不含凭证）。
+     *
+     * @param tenantId 租户 ID
+     * @param scenes   场景编码列表；v1 暂不按场景白名单过滤，传空列表即可
+     * @return MetricDescriptor 列表（含 params/cacheTtl/allowProvided）
+     */
+    java.util.List<com.sstlfsj.rule.kernel.api.model.MetricDescriptor> listMetricDefinitions(
+            String tenantId, java.util.List<String> scenes);
+
     record MetadataResponse(
             java.util.List<ConditionTypeMeta> conditionTypes,
             java.util.List<ActionTypeMeta> actionTypes,

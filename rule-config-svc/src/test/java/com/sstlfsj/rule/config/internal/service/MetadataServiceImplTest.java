@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -101,5 +102,51 @@ class MetadataServiceImplTest {
                 metadataService.getProvidedMetrics("1", "PAYMENT");
 
         assertThat(response.metrics()).isEmpty();
+    }
+
+    @Test
+    void listMetricDefinitions_mapsRowToDescriptor_withParamsAndDataType() {
+        MetricDefinition row = new MetricDefinition();
+        row.setMetricCode("account.balance");
+        row.setName("余额");
+        row.setSourceType("SQL_AGGREGATE");
+        row.setDataType("DECIMAL");
+        row.setAllowProvided(false);
+        row.setCacheTtlSeconds(60);
+        row.setParams("{\"window\":\"30d\"}");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(row));
+
+        MetadataServiceImpl service = new MetadataServiceImpl(
+                sceneMapper, metricDefinitionMapper, new tools.jackson.databind.ObjectMapper());
+
+        List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of());
+
+        assertThat(defs).hasSize(1);
+        MetricDescriptor d = defs.get(0);
+        assertThat(d.metricCode()).isEqualTo("account.balance");
+        assertThat(d.sourceType()).isEqualTo("SQL_AGGREGATE");
+        assertThat(d.allowProvided()).isFalse();
+        assertThat(d.cacheTtlSeconds()).isEqualTo(60);
+        assertThat(d.params()).containsEntry("window", "30d");
+        assertThat(d.params()).containsEntry("dataType", "DECIMAL");
+    }
+
+    @Test
+    void listMetricDefinitions_nullCacheTtl_defaultsToZero() {
+        MetricDefinition row = new MetricDefinition();
+        row.setMetricCode("user.age");
+        row.setSourceType("ATTRIBUTE");
+        row.setDataType("LONG");
+        row.setAllowProvided(true);
+        row.setCacheTtlSeconds(null);
+        row.setParams(null);
+        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(row));
+
+        MetadataServiceImpl service = new MetadataServiceImpl(
+                sceneMapper, metricDefinitionMapper, new tools.jackson.databind.ObjectMapper());
+
+        List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of());
+        assertThat(defs.get(0).cacheTtlSeconds()).isZero();
+        assertThat(defs.get(0).params()).containsEntry("dataType", "LONG");
     }
 }
