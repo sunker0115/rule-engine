@@ -42,6 +42,7 @@
 | B25 | **取数层 v2 增强**（B21 留 v2 子项） | 各子项独立按需触发 | D45 / B21 | `STREAM` sourceType 实装（需流式状态 infra，随 B8 CEP）；HTTP OAuth2 自动刷 token（`HttpEndpointRegistry` 加 `TokenProvider` 抽象）；Scene 级数据源白名单（`MetricResourceCatalog`/发布校验加 Scene 维度）；Redis `MetricCache` 实现（SPI 已抽象，纯实现，触发=多实例共享缓存）；metric `required` 字段分级（`MetricDescriptor`+assembler 降级区分 required→ERROR / optional→继续）。均不动现有契约，SPI/字段扩展即可 |
 | B26 | **装载期编译取数计划**（KieBase 式编译期-运行期分离） | profile 显示评估 **CPU-bound**：近无取数 I/O（全 providedMetrics）+ 大候选集 + 高 TPS | 本会话 JMH 压测（`rule-benchmark`, 2026-06-07） | 把 `collectChosenVersions`（候选并集取 max version）从每次评估提到 `SceneRuleIndex` 装载期（`update()` 是快照入索引唯一入口），运行期只查编译好的取数计划。JMH：版本合并在 50 候选时占 CPU 路径一半以上，但整条 CPU 评估仅 ~4µs（单次取数 I/O 的 0.4% 以下），故仅 CPU-bound 才值得。**FIRST_HIT 排序提前编译已被压测证伪（与 HIGHEST_PRIORITY 同量级），不做** |
 | B27 | **eclipse-collections 热点替换**（窄场景） | 同 B26 的 CPU-bound 场景，且微秒级也要抠 | 本会话 JMH 压测（`rule-benchmark`, 2026-06-07） | **仅**替换两处装箱热点：match 去重 `HashSet<Long>`→`LongHashSet`、版本合并 `LinkedHashMap<String,Integer>`→`ObjectIntHashMap`。JMH 测得 1.5–3x，但绝对值 sub-µs，被 I/O 完全掩盖——**不全局替换**（加依赖 + 原始集合 API 心智负担，P99 看不见收益）。`rule-benchmark` 已留 A/B 基准可复测 |
+| B28 | **Modulith 显式 `allowedDependencies` 边界加固** | 模块边界被无意打穿（如 eval 越过 config.api.event 伸进 internal）/ 模块数继续增长 | 本会话架构审查（2026-06-07） | 给各模块加 `@ApplicationModule(allowedDependencies=...)`，把"eval 仅依赖 config 的 `api.event`/`api.spi`"等现有边界**声明式锁死**，`ModulithStructureTest` 升级为依赖白名单校验。属"加固已有优点"（防腐），非重构；现边界已干净，故触发式 |
 
 ---
 
