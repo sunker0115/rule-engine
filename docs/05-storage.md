@@ -111,7 +111,7 @@ CREATE TABLE metric_definition (
   name                VARCHAR(128) NOT NULL,
   source_type         ENUM('ATTRIBUTE','SQL_AGGREGATE','EXTERNAL_HTTP','STREAM') NOT NULL,
   data_type           ENUM('LONG','DOUBLE','STRING','BOOLEAN','LIST','DATE','DATETIME') NOT NULL COMMENT 'B20 新增 DATE（LocalDate，日历日期）/ DATETIME（Instant/带时区偏移，时区相关）；由 Flyway V1_5__add_date_datetime_to_metric_datatype.sql 扩展',
-  params              JSON         NOT NULL COMMENT 'sourceType 专属参数（sql/url/column 等）',
+  params              JSON         NOT NULL COMMENT 'sourceType 专属参数（B21）：SQL_AGGREGATE={datasource(命名只读源),sql(:now命名参数)}；EXTERNAL_HTTP={endpoint(命名端点),path,jsonPath}；ATTRIBUTE={table,column}',
   cache_ttl_seconds   INT          NOT NULL DEFAULT 60 COMMENT '取数结果缓存 TTL，0=不缓存',
   allow_provided      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'D30：是否允许调用方通过 providedMetrics 覆盖；DEFAULT 0 为 SQL_AGGREGATE/STREAM 兜底，ATTRIBUTE/EXTERNAL_HTTP 应用层写入时需显式设为 1（见 04-extension §4.3）',
   status              ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',

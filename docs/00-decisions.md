@@ -1418,6 +1418,38 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 ---
 
+## D45. B21 FETCHED 取数层：命名句柄 + :now 绑定 + 失败降级 + provided 优先 + Resolver SPI ⭐⭐⭐
+
+**背景**：v1 `EvalContextAssembler` 是空壳——只把 `providedMetrics` 塞进 metrics，注入的 `MetricSourceHandler` 从不被调用，引擎不取任何数。需让引擎真正具备按 metric `sourceType` 拉取指标值的能力，并锁死外部资源访问的安全姿态。
+
+**决策**：
+
+1. **取数管线接线**：`EvalContextAssembler.assemble(event, candidates, now)` 扫过 Pre-Gate 的候选 `metricDependencies` 并集 → provided 优先 → 查缓存 → 按 sourceType 路由 handler 并发 fetch（`CompletableFuture` + 专用 `fetchExecutor` + 全局超时）；延迟 = max 而非 sum（对齐 D25）。
+
+2. **Metric 定义来源 = 数据源无关 SPI `MetricDefinitionResolver`**（非冻进快照）：服务端实现读 `metric_definition` 表（`DbMetricDefinitionResolver` + Caffeine 缓存），嵌入式 SDK 实现读下发缓存。`sourceType` / `datasource` / `cacheTtlSeconds` 是可热调的操作配置，区别于 B19 冻进 AST 的 `dataType`（类型契约）。
+
+3. **`MetricQuery` 加 `now`**：assembler 绑 `EvalContext.now`；SQL 的 `:now` 取此字段（非 DB `NOW()`），保 dry-run 重放。纯算法不收 ctx、请求对象收 `now`（与 B19/B20 同源原则）。
+
+4. **provided 优先（D30 落地）**：`providedMetrics` 有值且 `def.allowProvided=true` → 用（PROVIDED），跳过 fetch；`allowProvided=false` 即使传也忽略（WARN）；无定义且无 provided 则该 metric 缺失（节点不命中），非 ERROR。
+
+5. **失败降级（D15 落地）+ 条件求值门面三态**：单 metric 取数失败/超时/无 handler → `MetricValue.error(METRIC_FETCH_FAIL)`，引用节点不命中、整树继续。统一门面 `ConditionEvaluation` 返回三态（满足/不满足/不可判定），各执行器按语义落 ERROR：布尔路径标 `NodeTrace.errorCode` 整树继续；**评分卡整卡 ERROR 不出分（风控保守）**；决策树/表遇 ERROR 整规则 ERROR + miss（不静默走错分支）。
+
+6. **SQL_AGGREGATE 范式**：命名参数（`:subjectId` / `:tenantId` / `:now` / `:payload.x` / `:params.x`），禁 `${}` 拼接、禁 DB 时间函数，窗口长度写 SQL 文本，结果首行首列按 dataType 强转；数据源走 **infra 注册的命名只读 DataSource**（账密在 secrets 不落表）。
+
+7. **EXTERNAL_HTTP 范式**：infra 注册命名 HTTP 端点（baseURL + 鉴权 + 超时），metric 只引用「端点名 + path + jsonPath」，不写自由 URL、不嵌凭证（灭 SSRF）。
+
+8. **缓存**：key = `tenant:metricCode:subjectId:stableHash(params)`；`ttl=0` 不缓存；v1 进程内 Caffeine（`MetricCache` SPI，内核不依赖 Caffeine）。
+
+9. **发布期校验**：拒绝含 DB 时间函数或 `${}` 拼接的 SQL；metric 引用的 datasource/endpoint 名必须已注册（`MetricResourceCatalog` SPI 由 eval-svc 提供，纯 config 部署时跳过资源名校验）。
+
+**前向兼容（嵌入式 SDK 取数 B2，见 `specs/2026-06-06-sdk-fetch-design.md`）**：① metric 定义是独立可下发配置，不冻进 `rule_version` 快照；② `MetricDefinitionResolver` 数据源无关（服务端读库 / 嵌入式读下发缓存共用）；③ `EvalContextAssembler` 富构造为服务端与 SDK 统一取数入口（旧 2 参构造保留为 providedMetrics-only 退化路径）；④ `MetricDescriptor` 为定义下发的序列化契约。
+
+**不做的（v1 范围外）**：`STREAM` sourceType 实装（无 handler → 自动降级）；OAuth2 自动刷 token；Scene 级数据源白名单；相对 duration 运算；Redis 缓存（v1 Caffeine）。
+
+**已实装**（D45 / B21）：`EvalContextAssembler` 取数管线重写；`MetricValue.errorCode` / `MetricQuery.now` / `RuleVersionSnapshot.metricDependencies`；`MetricDescriptor` + `MetricDefinitionResolver` / `MetricCache` SPI；`ConditionEvaluation` 门面三态 + 5 执行器 ERROR 语义；`DbMetricDefinitionResolver`（Caffeine）+ `CaffeineMetricCache` + `fetchExecutor`；`MetricDataSourceRegistry`（只读）+ `SqlAggregateMetricSourceHandler`；`HttpEndpointRegistry` + `ExternalHttpMetricSourceHandler`；`MetricResourceCatalog` SPI + `MetricSafetyValidator`（发布期）。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |

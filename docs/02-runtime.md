@@ -176,7 +176,7 @@ RuleEvent
 
 **输出**：不可变 `EvalContext` + `evaluation_session` 行（同步写 DB）
 
-**核心动作（5 步）**：
+**核心动作（5 步）**（B21 已实装：`EvalContextAssembler` 接线 provided 优先 → 查缓存 → 按 `sourceType` 并发 fetch → 失败降级 `METRIC_FETCH_FAIL`）：
 
 1. **收集 metricCode**：扫每条候选 RuleVersion 的 `metric_dependencies`，取并集；
 2. **providedMetrics 优先匹配**（D30）：检查评估请求中 `providedMetrics` 字段，对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；

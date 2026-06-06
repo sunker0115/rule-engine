@@ -473,8 +473,8 @@ EvalContext {
 | sourceType | 取数方式 | 适用场景 | `params` 关键字段 | `cacheTtl` 建议 | `allowProvided` 默认 |
 |------------|---------|---------|------------------|----------------|---------------------|
 | `ATTRIBUTE` | 从主体属性表（`subject_attribute` 或业务库指定表/列）读单值 | KYC 等级、会员等级、账户状态等慢变属性 | `table`, `column` | 60–300s | `true` |
-| `SQL_AGGREGATE` | 执行 SQL 聚合查询（支持 `:subjectId` / `:now` 占位符） | 近 N 天交易次数、累计金额、历史行为统计 | `sql` | 3600s（聚合结果更新慢；见 04-extension §4.3） | `false` |
-| `EXTERNAL_HTTP` | 调外部 HTTP 服务，取 JSON 响应中的指定字段 | 设备指纹分、IP 信誉、第三方评分 | `url`（含 `{payload.xxx}` 占位符）, `jsonPath` | 60s 左右 | `true` |
+| `SQL_AGGREGATE` | 执行 SQL 聚合查询（命名参数 `:subjectId` / `:tenantId` / `:now` / `:payload.x` / `:params.x`；禁 DB 时间函数与 `${}` 拼接） | 近 N 天交易次数、累计金额、历史行为统计 | `datasource`（命名只读源）, `sql` | 3600s（聚合结果更新慢；见 04-extension §4.3） | `false` |
+| `EXTERNAL_HTTP` | 调命名 HTTP 端点（infra 注册 baseURL+鉴权，灭 SSRF），取 JSON 响应字段 | 设备指纹分、IP 信誉、第三方评分 | `endpoint`（命名端点）, `path`（含 `{payload.x}` / `{params.x}` 占位符）, `jsonPath` | 60s 左右 | `true` |
 | `STREAM` | 从流处理平台（Flink / Kafka）读预聚合结果（v1 占位，v2 接入） | 实时 CEP 序列特征、滑动窗口计数 | `topic`, `keyExpr` | `0`（流结果已是最新） | `false` |
 
 > `params` 完整字段 schema 及 `EXTERNAL_HTTP` 的 `jsonPath` 语法、`STREAM` 适配协议见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南。

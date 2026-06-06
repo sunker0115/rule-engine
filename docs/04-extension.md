@@ -229,6 +229,8 @@ public class TicketCreateHandler implements ActionHandler {
 
 ## 四、加 MetricSource
 
+> **B21 已实装**：`EvalContextAssembler` 已接线取数管线——按 metric `sourceType` 路由 `MetricSourceHandler`（`@MetricSourceType` 归类）并发 fetch；metric 运行时定义经 **`MetricDefinitionResolver` SPI** 解析（服务端 `DbMetricDefinitionResolver` 读 `metric_definition` 表 + Caffeine 缓存；**数据源无关**，嵌入式 SDK 读下发缓存，见 `specs/2026-06-06-sdk-fetch-design.md`）；取数结果经 **`MetricCache` SPI** 缓存（key = `tenant:metricCode:subjectId:stableHash(params)`，`ttl=0` 不缓存，内核不依赖 Caffeine、由 eval-svc 提供 `CaffeineMetricCache`）。`MetricQuery` 携带 `now`（引擎统一时钟，SQL `:now` 取此值）。SQL_AGGREGATE 走 `MetricDataSourceRegistry` **命名只读源**；EXTERNAL_HTTP 走 `HttpEndpointRegistry` **命名端点**（凭证在 infra 不落 metric）。取数失败统一降级 `METRIC_FETCH_FAIL`（D15 / D45）。发布期 `MetricSafetyValidator` 拒绝 DB 时间函数 / `${}` 拼接 / 未注册资源名。
+
 ### 4.1 SPI 接口
 
 ```java

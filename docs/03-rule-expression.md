@@ -390,7 +390,7 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 
 **适用场景**：近 N 天交易次数、近 N 小时登录失败次数、30 天内累计金额等。
 
-> **B20 / B21 边界**：B20 已向 `EvalContext` 注入统一时钟 `now`，但将 `EvalContext.now` 作为 `:now` 绑定变量注入 SQL_AGGREGATE 的 Metric SQL（替代 SQL 中的 `NOW()`）属于 **B21 的工作范围**，B20 不做。v1 阶段 SQL 中的时间窗口仍由 SQL 自身的 `NOW()` / `INTERVAL` 负责。
+> **B21 已实装**：SQL_AGGREGATE 的 Metric SQL 用 `:now` 绑定变量注入 `EvalContext.now`（引擎统一时钟），**禁止 DB `NOW()` / `SYSDATE()` / `CURRENT_TIMESTAMP`**（发布期安全扫描拒绝含这些函数或 `${}` 拼接的 SQL）。滚动窗口长度写在 SQL 文本（`INTERVAL 7 DAY`），引擎不做 duration 运算。`:now` 保证 dry-run 重放历史事件时窗口范围与原始评估一致。
 
 **Metric 侧**（SQL_AGGREGATE）：
 
@@ -400,7 +400,8 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
   "sourceType": "SQL_AGGREGATE",
   "dataType": "LONG",
   "params": {
-    "sql": "SELECT COUNT(*) FROM transfer_history WHERE user_id = :subjectId AND created_at >= NOW() - INTERVAL 7 DAY"
+    "datasource": "risk_ro",
+    "sql": "SELECT COUNT(*) FROM transfer_history WHERE user_id = :subjectId AND created_at >= :now - INTERVAL 7 DAY"
   },
   "cachePolicyDefault": { "ttl": 0 }
 }
