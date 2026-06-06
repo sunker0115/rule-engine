@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RuleEngineClientFetchTest {
 
@@ -107,5 +108,15 @@ class RuleEngineClientFetchTest {
                     Map.of("risk.score", 10));
             assertThat(client.evaluate(event).ruleHit()).isFalse();
         }
+    }
+
+    @Test
+    void build_metricDefinitionsWithoutHandler_throws() {
+        // 配置了 localMetric 但无 metricSourceHandler → 定义会被静默丢弃，build() 应提前失败
+        assertThatThrownBy(() -> RuleEngineClient.builder()
+                .localSnapshot(riskScoreGt80())
+                .localMetric("t1", new MetricDescriptor("risk.score", "TEST", "LONG", false, 0, Map.of()))
+                .build())
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

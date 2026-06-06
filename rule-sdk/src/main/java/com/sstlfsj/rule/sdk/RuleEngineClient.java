@@ -278,6 +278,15 @@ public class RuleEngineClient implements AutoCloseable {
                 throw new IllegalArgumentException("必须配置 serverUrl（HTTP 模式）或至少一个本地规则来源");
             if (hasServer && (tenantId == null || tenantId.isBlank()))
                 throw new IllegalArgumentException("HTTP 模式下 tenantId 必填");
+            // 有取数配置但无 handler → 定义会被静默丢弃，提前失败优于运行时无声 no-op
+            boolean hasFetchConfig = !metricDefinitionSources.isEmpty()
+                    || !localMetrics.isEmpty()
+                    || metricDefinitionResolver != null
+                    || metricCache != null
+                    || fetchExecutor != null;
+            if (hasFetchConfig && metricHandlers.isEmpty())
+                throw new IllegalArgumentException(
+                        "配置了取数相关项（metric 定义来源 / resolver / cache / executor）但未注入 metricSourceHandler，无法启用 fetch");
             return new RuleEngineClient(this);
         }
     }
