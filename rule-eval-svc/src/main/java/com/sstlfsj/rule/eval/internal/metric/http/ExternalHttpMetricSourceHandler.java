@@ -31,10 +31,11 @@ public class ExternalHttpMetricSourceHandler implements MetricSourceHandler {
     private static final Pattern PH = Pattern.compile("\\{([a-zA-Z_][\\w.]*)\\}");
 
     private final HttpEndpointRegistry registry;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
-    public ExternalHttpMetricSourceHandler(HttpEndpointRegistry registry) {
+    public ExternalHttpMetricSourceHandler(HttpEndpointRegistry registry, ObjectMapper objectMapper) {
         this.registry = registry;
+        this.objectMapper = objectMapper;
     }
 
     @Override

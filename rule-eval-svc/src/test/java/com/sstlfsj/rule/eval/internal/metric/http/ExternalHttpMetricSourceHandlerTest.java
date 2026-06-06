@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.metric.http;
 
+import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
@@ -29,5 +30,12 @@ class ExternalHttpMetricSourceHandlerTest {
     void extractJsonPath_missing_returnsNull() {
         var node = om.readTree("{\"data\":{}}");
         assertThat(ExternalHttpMetricSourceHandler.extractJsonPath(node, "data.balance")).isNull();
+    }
+
+    @Test
+    void constructibleWithInjectedObjectMapper() {
+        ExternalHttpMetricSourceHandler handler = new ExternalHttpMetricSourceHandler(
+                new HttpEndpointRegistry(new FetchResourceProperties()), om);
+        assertThat(handler).isNotNull();
     }
 }
