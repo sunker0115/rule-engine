@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -49,11 +52,21 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void runtimeException_returns500_withErrorCode() throws Exception {
+    void runtimeException_returns500_withErrorCode_andLogsRequestPath() throws Exception {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
         mockMvc.perform(get("/test/runtime").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("INTERNAL_ERROR"));
+
+        // 兜底日志应带请求方法与路径，便于定位
+        assertThat(appender.list)
+                .anyMatch(e -> e.getFormattedMessage().contains("/test/runtime"));
     }
 
     @Test

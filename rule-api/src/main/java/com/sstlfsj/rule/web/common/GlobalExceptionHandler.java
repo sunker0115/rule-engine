@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import jakarta.servlet.http.HttpServletRequest;
 
 /** 全局异常处理器：将常见异常映射为 ApiResponse 错误格式。 */
 @RestControllerAdvice
@@ -47,11 +48,13 @@ public class GlobalExceptionHandler {
         return ApiResponse.error("NOT_FOUND", "接口不存在: " + ex.getResourcePath());
     }
 
-    /** 兜底：未预期异常 → 500。 */
+    /** 兜底：未预期异常 → 500；日志带请求方法/路径/query 便于定位。 */
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ApiResponse<Void> handleGeneral(Exception ex) {
-        log.error("未预期异常", ex);
+    public ApiResponse<Void> handleGeneral(Exception ex, HttpServletRequest request) {
+        String query = request.getQueryString();
+        log.error("未预期异常 [{} {}{}]", request.getMethod(), request.getRequestURI(),
+                query != null ? "?" + query : "", ex);
         return ApiResponse.error("INTERNAL_ERROR", "服务内部错误，请稍后重试");
     }
 }
