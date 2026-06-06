@@ -28,6 +28,7 @@
         <module>rule-app</module>
         <module>rule-sdk</module>
         <module>rule-sdk-spring-boot-starter</module>
+        <module>rule-benchmark</module>
     </modules>
 
     <properties>
