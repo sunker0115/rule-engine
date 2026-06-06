@@ -8,6 +8,7 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
@@ -92,7 +93,12 @@ class PublishServiceTest {
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         ConditionNode fakeAst = new ConditionNode("c.type", "m.code", null, Map.of(), 0.0);
         when(astSerializer.fromJson(anyString())).thenReturn(fakeAst);
-        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
+        // B6：metric ACTIVE 行（version=null 兜底为 1）
+        MetricDefinition mdMCode = new MetricDefinition();
+        mdMCode.setMetricCode("m.code");
+        mdMCode.setDataType("STRING");
+        mdMCode.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of(mdMCode));
 
         RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "operator1");
 
@@ -102,8 +108,9 @@ class PublishServiceTest {
         assertThat(snapshot.triggerEventTypes()).isEmpty();
         // kind 从 rule_definition 流转到 snapshot
         assertThat(snapshot.kind()).isEqualTo("AST_BOOLEAN");
-        // metricDependencies 由 AST 收集并冻结进 snapshot（B21 取数范围来源）
-        assertThat(snapshot.metricDependencies()).containsExactly("m.code");
+        // metricDependencies 由 AST 收集并冻结进 snapshot（B6 版本号由 ACTIVE 行读取，version 字段为 null 时兜底 1）
+        assertThat(snapshot.metricDependencies())
+                .containsExactly(new MetricDependency("m.code", 1));
         // 验证 rule_version 被插入，version=1，status=ACTIVE
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());
@@ -334,7 +341,11 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(astSerializer.fromJson(any()))
                 .thenReturn(new ConditionNode("EQ", "metric1", null, Map.of(), 0.0));
-        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
+        MetricDefinition mdMetric1 = new MetricDefinition();
+        mdMetric1.setMetricCode("metric1");
+        mdMetric1.setDataType("LONG");
+        mdMetric1.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of(mdMetric1));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -355,7 +366,11 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(astSerializer.fromJson(any()))
                 .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
-        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
+        MetricDefinition mdM1a = new MetricDefinition();
+        mdM1a.setMetricCode("m1");
+        mdM1a.setDataType("LONG");
+        mdM1a.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of(mdM1a));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -377,7 +392,11 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(astSerializer.fromJson(any()))
                 .thenReturn(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
-        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
+        MetricDefinition mdM1b = new MetricDefinition();
+        mdM1b.setMetricCode("m1");
+        mdM1b.setDataType("LONG");
+        mdM1b.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of(mdM1b));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -413,7 +432,11 @@ class PublishServiceTest {
                         new ConditionNode("GT", "amount", null, Map.of(), 0.0),
                         new DecisionLeafNode("BLOCK", "HIGH_RISK"),
                         new DecisionLeafNode("PASS", "LOW_RISK")));
-        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
+        MetricDefinition mdAmount1 = new MetricDefinition();
+        mdAmount1.setMetricCode("amount");
+        mdAmount1.setDataType("LONG");
+        mdAmount1.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of(mdAmount1));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -434,7 +457,11 @@ class PublishServiceTest {
                 .thenReturn(new DecisionTableNode(
                         List.of(new DecisionTableNode.Column("amount", "GT")),
                         List.of(new DecisionTableNode.Row(List.of(1000), "BLOCK"))));
-        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
+        MetricDefinition mdAmount2 = new MetricDefinition();
+        mdAmount2.setMetricCode("amount");
+        mdAmount2.setDataType("LONG");
+        mdAmount2.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of(mdAmount2));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
@@ -586,7 +613,11 @@ class PublishServiceTest {
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         when(astSerializer.fromJson(anyString()))
                 .thenReturn(new ConditionNode("c.type", "m.code", null, Map.of(), 0.0));
-        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of());
+        MetricDefinition mdRollout = new MetricDefinition();
+        mdRollout.setMetricCode("m.code");
+        mdRollout.setDataType("STRING");
+        mdRollout.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(java.util.List.of(mdRollout));
         draftVersion.setTriggerEventTypes("[]");
         draftVersion.setPreGates("[{\"gateType\":\"ROLLOUT\",\"params\":{\"experimentId\":\"exp-1\",\"bucketStart\":0,\"bucketEnd\":50}}]");
         assertThat(publishService.publish(1L, 10L, "actor")).isNotNull();
@@ -667,5 +698,55 @@ class PublishServiceTest {
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("NOW");
+    }
+
+    @Test
+    void publish_freezesActiveMetricVersion_inMetricDependencies() {
+        // B6：发布引用 account.age（ACTIVE version=3）的规则，快照 metricDependencies 应含冻结的版本号
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
+
+        // AST 引用 account.age
+        ConditionNode ast = new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(ast);
+
+        // metric_definition 返回 account.age ACTIVE version=3
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("account.age");
+        md.setDataType("LONG");
+        md.setVersion(3);
+        md.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(md));
+
+        RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "op");
+
+        // 快照中 metricDependencies 应冻结版本号 3
+        assertThat(snapshot.metricDependencies())
+                .containsExactly(new MetricDependency("account.age", 3));
+    }
+
+    @Test
+    void publish_referencedMetricHasNoActiveVersion_throwsIllegalArgument() {
+        // B6：被引用的 metric 无 ACTIVE 行 → 发布拒绝
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+
+        // AST 引用 account.age
+        ConditionNode ast = new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(ast);
+
+        // metric_definition 查询返回空（无 ACTIVE 版本）
+        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("account.age")
+                .hasMessageContaining("ACTIVE");
     }
 }

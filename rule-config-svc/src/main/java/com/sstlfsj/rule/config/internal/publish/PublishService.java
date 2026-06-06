@@ -7,6 +7,7 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -18,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -165,19 +168,38 @@ public class PublishService {
                 }
             }
         }
-        List<String> metricDeps = MetricDependencyCollector.collect(ast);
+        List<String> metricCodes = MetricDependencyCollector.collect(ast);
 
-        // 4.5. 查 metric dataType，冻结进 AST（B19）
+        // 4.5. 查 ACTIVE metric，冻结版本号进 metricDeps（B6），同时提取 dataType 冻结进 AST（B19）
         AstNode resolvedAst = ast;
-        if (!metricDeps.isEmpty()) {
+        List<MetricDependency> metricDeps = new ArrayList<>();
+        if (!metricCodes.isEmpty()) {
             List<MetricDefinition> metricDefs = metricDefinitionMapper.selectList(
                     new LambdaQueryWrapper<MetricDefinition>()
                             .eq(MetricDefinition::getTenantId, tenantId)
-                            .in(MetricDefinition::getMetricCode, metricDeps));
-            Map<String, String> dataTypeMap = metricDefs.stream()
-                    .collect(Collectors.toMap(
-                            MetricDefinition::getMetricCode,
-                            MetricDefinition::getDataType));
+                            .in(MetricDefinition::getMetricCode, metricCodes)
+                            .eq(MetricDefinition::getStatus, "ACTIVE"));
+            // 按 metricCode 建索引，同 code 多行 ACTIVE = 数据异常，兜底拒绝
+            Map<String, MetricDefinition> activeByCode = new HashMap<>();
+            for (MetricDefinition m : metricDefs) {
+                MetricDefinition prev = activeByCode.putIfAbsent(m.getMetricCode(), m);
+                if (prev != null) {
+                    throw new IllegalArgumentException(
+                            "metric 存在多个 ACTIVE 版本，数据异常: " + m.getMetricCode());
+                }
+            }
+            // 逐 code 冻结版本号，无 ACTIVE 行则拒绝发布
+            for (String code : metricCodes) {
+                MetricDefinition m = activeByCode.get(code);
+                if (m == null) {
+                    throw new IllegalArgumentException(
+                            "被引用的 metric 无 ACTIVE 版本: " + code);
+                }
+                int ver = m.getVersion() == null ? 1 : m.getVersion();
+                metricDeps.add(new MetricDependency(code, ver));
+            }
+            Map<String, String> dataTypeMap = activeByCode.values().stream()
+                    .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType));
             resolvedAst = AstDataTypeResolver.resolve(ast, dataTypeMap);
 
             // 4.6. metric 安全校验（B21）：SQL 时间函数/拼接拒绝 + 资源名注册（catalog 为 null 时跳过资源名校验）
