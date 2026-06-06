@@ -49,4 +49,12 @@ class MetricDefinitionRegistryTest {
         registry.replaceAll("t1", List.of(desc("new.metric")));
         assertThat(registry.get("t2", "keep.metric")).isNotNull();
     }
+
+    @Test
+    void replaceAll_emptyList_clearsTenant() {
+        MetricDefinitionRegistry registry = new MetricDefinitionRegistry();
+        registry.put("t1", desc("a"));
+        registry.replaceAll("t1", List.of());
+        assertThat(registry.get("t1", "a")).isNull();
+    }
 }

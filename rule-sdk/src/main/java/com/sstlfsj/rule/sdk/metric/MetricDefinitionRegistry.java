@@ -43,7 +43,7 @@ public class MetricDefinitionRegistry {
      * 用给定列表整体替换某租户的定义集合（HTTP 热更语义）：先移除该租户旧条目，再写入新列表。
      *
      * @param tenantId    租户 id
-     * @param descriptors 该租户最新定义列表
+     * @param descriptors 该租户最新定义列表（空列表将清空该租户全部定义）
      */
     public void replaceAll(String tenantId, List<MetricDescriptor> descriptors) {
         String prefix = tenantId + ":";
