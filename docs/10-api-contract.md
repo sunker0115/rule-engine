@@ -254,57 +254,85 @@ GET /api/v1/rules?tenantId=demo-tenant&sceneCode=risk.transfer&status=PUBLISHED
 ### 4.5 注册 Metric（B6）
 
 ```
-POST /api/v1/metrics
+POST /api/v1/metrics?tenantId={tenantId}&metricCode={metricCode}
 ```
 
-**Request：**
+**Headers：**
+
+| Header | 必填 | 说明 |
+|--------|------|------|
+| `X-Actor-Id` | 是 | 操作人标识，写入 audit_log（D14） |
+
+**Request body：**
 ```json
 {
-  "tenantId": "demo-tenant",
-  "metricCode": "user.kyc.level",
   "name": "KYC 等级",
   "sourceType": "ATTRIBUTE",
   "dataType": "LONG",
-  "params": { "table": "user_profile", "column": "kyc_level" },
+  "paramsJson": "{\"table\":\"user_profile\",\"column\":\"kyc_level\"}",
   "cacheTtlSeconds": 60,
   "allowProvided": true
 }
 ```
 
-**Response 201：** `{ "metricId": 1, "metricCode": "user.kyc.level", "version": 1, "status": "ACTIVE" }`
+> `tenantId` / `metricCode` 通过 **query param** 传入；`paramsJson` 是**JSON 字符串**（序列化后的取数参数），非嵌套对象。
+
+**Response 201：**
+```json
+{ "success": true, "data": 1 }
+```
+
+`data` 为新插入行的 id（裸 Long）。
 
 ### 4.6 更新 / 升版 Metric（B6）
 
 ```
-PUT /api/v1/metrics/{metricCode}?tenantId=demo-tenant&breakingChange=true
+PUT /api/v1/metrics/{metricCode}?tenantId={tenantId}&breakingChange=false
 ```
 
-- `breakingChange=false`（默认）：原地更新当前 ACTIVE 版本的 name / params / cacheTtlSeconds / allowProvided，不产生新版本行。
-- `breakingChange=true`：INSERT 新版本行（version 递增），旧行 status 改为 `SUPERSEDED`，返回新版本信息；已发布规则仍绑定旧版本，不受影响。
+**Headers：** 同 §4.5（`X-Actor-Id` 必填）。
 
-**Request：** 同注册，省略 `metricCode`（来自路径）；`sourceType` / `dataType` 变更视为 `breakingChange=true`（强制）。
+- `breakingChange=false`（默认）：原地更新当前 ACTIVE 版本的 name / paramsJson / cacheTtlSeconds / allowProvided，不产生新版本行。
+- `breakingChange=true`：INSERT 新版本行（version 递增），旧行 status 改为 `SUPERSEDED`；已发布规则仍绑定旧版本，不受影响。
+- **`sourceType` / `dataType` 变更视为 `breakingChange=true`（强制）**：即使请求参数传 `breakingChange=false`，只要 sourceType 或 dataType 与当前 ACTIVE 行不同，实现层自动走升版路径（D6/B6 冻结语义）。
 
-**Response 200：** `{ "metricCode": "user.kyc.level", "version": 2, "status": "ACTIVE", "previousVersion": 1 }`
+**Request body：** 同 §4.5 body，省略 `metricCode`（来自路径）。
+
+**Response 200：**
+```json
+{ "success": true, "data": 2 }
+```
+
+`data` 为当前生效行的 version（裸 Integer）。
 
 ### 4.7 影响面查询（B6）
 
 ```
-GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId=demo-tenant
+GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId={tenantId}
 ```
 
 **Response 200：**
 ```json
 {
-  "metricCode": "user.kyc.level",
-  "metricVersion": 1,
-  "affectedRules": [
-    { "ruleDefinitionId": 10, "ruleCode": "block-new-account", "sceneCode": "risk.transfer", "status": "PUBLISHED" }
-  ],
-  "affectedRuleCount": 1
+  "success": true,
+  "data": {
+    "metricCode": "user.kyc.level",
+    "metricVersion": 1,
+    "affectedRules": [
+      {
+        "ruleDefinitionId": 10,
+        "ruleCode": "block-new-account",
+        "ruleName": "封禁新账户",
+        "sceneCode": "risk.transfer",
+        "status": "ACTIVE"
+      }
+    ],
+    "affectedRuleCount": 1
+  }
 }
 ```
 
-含所有在 `rule_version.metric_dependencies` 中绑定了该 `(metricCode, version)` 的已发布规则。
+**口径**：收集所有在 `rule_version.metric_dependencies` 中绑定了该 `(metricCode, version)` 的当前 **ACTIVE rule_version** 对应的规则（按 `rv.status=ACTIVE` 收集，不按 `rule_definition.status` 过滤，口径对齐 eval 侧加载逻辑）。因此 `rule_definition.status=DISABLED` 但其 `rule_version.status=ACTIVE` 的规则仍会出现在结果中，`status` 字段反映 `rule_definition.status` 实际值。
 
 ---
 
