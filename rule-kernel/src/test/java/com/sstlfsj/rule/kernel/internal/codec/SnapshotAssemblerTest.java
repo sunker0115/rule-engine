@@ -47,6 +47,7 @@ class SnapshotAssemblerTest {
 
     @Test
     void assembleAll_skipsInvalidJson() {
+        // 同时覆盖 assembleAll 中 log.warn 的代码路径（System.err.println 已改为 slf4j）
         RuleVersionRow bad  = row(99L, "bad", 1L, "NOT_JSON", "[]", "[]", "[]", "AST_BOOLEAN");
         RuleVersionRow good = row(1L,  "ok",  1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",

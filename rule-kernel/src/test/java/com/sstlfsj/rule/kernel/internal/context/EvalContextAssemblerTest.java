@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.internal.context;
 
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
 import org.junit.jupiter.api.Test;
 
@@ -104,5 +105,27 @@ class EvalContextAssemblerTest {
 
         assertThat(ctx.metrics()).containsKey("balance");
         assertThat(ctx.metrics().get("balance").value()).isEqualTo(500);
+    }
+
+    @Test
+    void allowProvided_false_ignoresProvidedValue_andFallsToError() {
+        // allowProvided=false：provided 传值被忽略（触发 log.warn，原 System.err.println 已改为 slf4j），
+        // 走 fetch 管线；无 handler 时结果为 METRIC_FETCH_FAIL。覆盖 EvalContextAssembler 122-126 行。
+        MetricDescriptor def = new MetricDescriptor("kyc", 1, "SQL", "INT", false, 0, Map.of());
+        MetricDefinitionResolver resolver = (tenantId, code, version) ->
+                "kyc".equals(code) ? def : null;
+
+        ConditionNode ast = new ConditionNode("GT", "kyc", null, Map.of(), 0.0);
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(2L).sceneCode("s1").tenantId("t1").conditionAst(ast)
+                .addMetricDependency("kyc", 1).build();
+
+        EvalContextAssembler assembler = new EvalContextAssembler(
+                List.of(), Map.of(), resolver, null, null, 0L);
+        EvalContext ctx = assembler.assemble(event(Map.of("kyc", 99)), List.of(snap), NOW);
+
+        // provided 值 99 被忽略，fetch 无 handler → METRIC_FETCH_FAIL（isError=true）
+        assertThat(ctx.metrics()).containsKey("kyc");
+        assertThat(ctx.metrics().get("kyc").isError()).isTrue();
     }
 }

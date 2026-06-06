@@ -18,6 +18,12 @@
             <artifactId>guava</artifactId>
         </dependency>
 
+        <!-- 日志门面：版本由 Spring Boot BOM 统一管理，实现由 rule-app 提供 -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
         <!-- AstJsonCodec 需要 Jackson；rule-sdk 使用时通过直接依赖引入，rule-eval-svc 已由 Spring Boot 传递 -->
         <dependency>
             <groupId>tools.jackson.core</groupId>

@@ -7,6 +7,8 @@ import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -19,6 +21,7 @@ import java.util.concurrent.*;
  */
 public class EvalContextAssembler {
 
+    private static final Logger log = LoggerFactory.getLogger(EvalContextAssembler.class);
     private static final String METRIC_FETCH_FAIL = "METRIC_FETCH_FAIL";
 
     private final SubjectLoader subjectLoader;
@@ -123,8 +126,7 @@ public class EvalContextAssembler {
             }
             if (hasProvided) {
                 // allowProvided=false：忽略传值并 WARN（继续走 fetch）
-                System.err.println("[EvalContextAssembler] metric=" + code
-                        + " allowProvided=false，忽略 providedMetrics 传值");
+                log.warn("metric={} allowProvided=false，忽略 providedMetrics 传值", code);
             }
             if (def == null) {
                 metrics.put(code, MetricValue.error(METRIC_FETCH_FAIL));

@@ -4,6 +4,8 @@ import tools.jackson.core.JacksonException;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -12,6 +14,8 @@ import java.util.List;
  * 纯 Java，无 Spring 依赖。
  */
 public class SnapshotAssembler {
+
+    private static final Logger log = LoggerFactory.getLogger(SnapshotAssembler.class);
 
     private final AstJsonCodec codec;
 
@@ -67,8 +71,7 @@ public class SnapshotAssembler {
                         return assemble(row);
                     } catch (JacksonException e) {
                         // JSON 格式异常：跳过该行（理论上不应发生，rule_version 由引擎写入）
-                        System.err.println("[SnapshotAssembler] 跳过解析失败的 ruleVersionId=" +
-                                row.ruleVersionId() + ": " + e.getMessage());
+                        log.warn("跳过解析失败的 ruleVersionId={}: {}", row.ruleVersionId(), e.getMessage());
                         return null;
                     }
                 })
