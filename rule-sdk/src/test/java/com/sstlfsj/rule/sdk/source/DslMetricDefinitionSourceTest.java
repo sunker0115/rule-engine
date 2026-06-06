@@ -14,7 +14,7 @@ class DslMetricDefinitionSourceTest {
     @Test
     void loadInto_registersDescriptorsUnderTenant() {
         MetricDefinitionRegistry registry = new MetricDefinitionRegistry();
-        MetricDescriptor d = new MetricDescriptor("risk.score", "TEST", "LONG", false, 0, Map.of());
+        MetricDescriptor d = new MetricDescriptor("risk.score", 1, "TEST", "LONG", false, 0, Map.of());
         new DslMetricDefinitionSource("t1", List.of(d)).loadInto(registry);
         assertThat(registry.get("t1", "risk.score", 1)).isNotNull();
     }
@@ -22,9 +22,9 @@ class DslMetricDefinitionSourceTest {
     @Test
     void loadInto_isAdditive_doesNotWipeExisting() {
         MetricDefinitionRegistry registry = new MetricDefinitionRegistry();
-        registry.put("t1", new MetricDescriptor("a", "TEST", "LONG", false, 0, Map.of()));
+        registry.put("t1", new MetricDescriptor("a", 1, "TEST", "LONG", false, 0, Map.of()));
         new DslMetricDefinitionSource("t1",
-                List.of(new MetricDescriptor("b", "TEST", "LONG", false, 0, Map.of())))
+                List.of(new MetricDescriptor("b", 1, "TEST", "LONG", false, 0, Map.of())))
                 .loadInto(registry);
         assertThat(registry.get("t1", "a", 1)).isNotNull();
         assertThat(registry.get("t1", "b", 1)).isNotNull();

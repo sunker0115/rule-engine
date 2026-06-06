@@ -14,7 +14,7 @@ class MetricDefinitionSourceTest {
     @Test
     void customImplementation_loadInto_writesViaSpi() {
         MetricDefinitionSource custom = registry ->
-                registry.put("t9", new MetricDescriptor("custom.m", "TEST", "LONG", false, 0, Map.of()));
+                registry.put("t9", new MetricDescriptor("custom.m", 1, "TEST", "LONG", false, 0, Map.of()));
 
         MetricDefinitionRegistry registry = new MetricDefinitionRegistry();
         custom.loadInto(registry);   // 经 SPI 引用调用
