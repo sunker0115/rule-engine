@@ -188,6 +188,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `engine.rule.context.build-timeout-ms` | 500 | EvalContext 构建超时（含 Subject 加载 + metric 批拉，超时整 session 失败，D25） |
 | `engine.rule.subject.load-timeout-ms` | 200 | SubjectLoader 单次加载超时（D25，超出则 EvalContext 失败） |
 | `engine.rule.metric.default-cache-ttl-seconds` | 60 | metric 取数结果缓存 TTL（per-metric 可覆盖） |
+| `rule.fetch.timeout-ms` | 800 | **全局 metric 并发取数超时**（B21 已实装，`FetchResourceProperties`）；超时未完成的 metric 置 `METRIC_FETCH_FAIL` 降级。注：当前在 `rule.fetch.*` 命名空间，与本表 `engine.rule.*` 约定不一致，前缀统一待定（backlog B26） |
 | `engine.rule.action.default-timeout-ms` | 3000 | ActionHandler 默认超时（per-handler 可覆盖） |
 | `engine.rule.retention.evaluation-session-days` | 30 | evaluation_session 保留天数（D9） |
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |

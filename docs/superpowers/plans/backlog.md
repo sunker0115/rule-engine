@@ -16,9 +16,7 @@
 | 3 | B6 | **Metric 版本化** | 08-evo §2.2 | `metric_definition` 加 `version` 列；`rule_version.metric_dependencies` JSON 升级；发布期 + 评估期解析逻辑；运营 UI 影响面展示 | 正确性兜底：Metric 语义变更时防止存量规则静默错误的根本解法；改动面横跨发布期/评估期两端 |
 | 4 | B7 | **规则导出 / 导入** | 08-evo §2.9 | 独立工具链；导出格式 JSON Bundle；导入幂等写入 + 权限校验；无核心引擎变动 | 风险最低（不动引擎），可穿插做；跨环境迁移、Incident 复现的基础工具；**解锁 B15** |
 
-> **B19 类型化比较策略工厂 / B20 时间框架 / B21 FETCHED 取数层 / B22 决策表列 dataType 冻结 / B23 嵌入式 SDK 取数 已落地，2026-06-06 移除。** 遗留小项（未完成 / 归后续，记录在此）：
-> - **B20 时区解析序的 Scene 级默认时区（优先级3）暂缓**：解析序为 字面量 offset > 条件 `params.timezone` > **Scene 默认（暂缓）** > UTC。运行时 `EvalContext`/`RuleVersionSnapshot` 不携带 `Scene.defaultParams.timezone`，需 config→snapshot→`EvalContext` 管线打通后激活；当前 `TimeZoneResolver.resolve(paramsTz, sceneTz)` 形参已预留，调用方一律传 `sceneTz=null`。
-> - **B21 v1 不做（留 v2）**：`STREAM` sourceType 实装（当前无 handler → 自动降级 `METRIC_FETCH_FAIL`）；HTTP OAuth2 自动刷 token；Scene 级数据源白名单；Redis 缓存（v1 进程内 Caffeine）；metric `required` 字段分级。全局取数超时阈值待 `07-operability` 统一管理。
+> **B19 类型化比较策略工厂 / B20 时间框架 / B21 FETCHED 取数层 / B22 决策表列 dataType 冻结 / B23 嵌入式 SDK 取数 已落地，2026-06-06 从各表移除。** 各自的暂缓 / v2 衍生项已归入 §三 触发式表（B24–B26）；全局取数超时已实装并记入 `07-operability`。
 
 ---
 
@@ -42,6 +40,9 @@
 | B14 | **`evaluation_session` 异步化路径** | profile 显示 session insert 进热路径 P99；依赖 B11 | 08-evo §2.15 | 幂等基础设施切换（持久化 KV）；对账数据源切换；父子表时序重设计 |
 | B16 | **合规演进**（字段级加密 + 审计 hash chain + 数据右遗忘） | 高合规场景 | 08-evo §2.8 | 涉及所有持久化对象 |
 | B18 | **Scene schema 自动放量 / 回退**（按 SLO 推进） | 自动化放量需求（v2 范畴） | 08-evo §2.7 | 灰度 v1 已完成；自动化放量是 v2 范畴 |
+| B24 | **Scene 级默认时区激活**（B20 暂缓项） | 出现多时区 Scene 需求 | B20 时区解析序 | 解析序 字面量 offset > `params.timezone` > **Scene 默认** > UTC；`TimeZoneResolver.resolve(paramsTz, sceneTz)` 形参已留、现一律传 null。**阻塞/设计点**：Scene 配置如何到评估期——时区是 Scene 操作配置，不冻进规则快照（对齐 D45），需新建 Scene 索引/缓存（类 `SceneRuleIndex`）评估期查后注入 `EvalContext` |
+| B25 | **取数层 v2 增强**（B21 留 v2 子项） | 各子项独立按需触发 | D45 / B21 | `STREAM` sourceType 实装（需流式状态 infra，随 B8 CEP）；HTTP OAuth2 自动刷 token（`HttpEndpointRegistry` 加 `TokenProvider` 抽象）；Scene 级数据源白名单（`MetricResourceCatalog`/发布校验加 Scene 维度）；Redis `MetricCache` 实现（SPI 已抽象，纯实现，触发=多实例共享缓存）；metric `required` 字段分级（`MetricDescriptor`+assembler 降级区分 required→ERROR / optional→继续）。均不动现有契约，SPI/字段扩展即可 |
+| B26 | **配置命名空间统一**（`engine.rule.*` 收口） | 配置项增多 / 命名混乱 | 07-operability §配置 | 现状：`engine.rule.trace.enabled` 实装合约定；但 `rule.fetch.*`（`FetchResourceProperties`）、`rule.sdk.*`（`SdkProperties`）游离在约定外，07-operability 多数 `engine.rule.*` 项尚未实装（预期 spec）。改动：定约定后迁 `rule.fetch.*`/`rule.sdk.*` 到 `engine.rule.*`（greenfield 无迁移成本）+ 文档对齐。**需先定前缀约定** |
 
 ---
 
