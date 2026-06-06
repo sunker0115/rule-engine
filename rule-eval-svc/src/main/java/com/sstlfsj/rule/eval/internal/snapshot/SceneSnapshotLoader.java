@@ -2,6 +2,10 @@ package com.sstlfsj.rule.eval.internal.snapshot;
 
 import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.SceneExecutionStrategy;
+import com.sstlfsj.rule.kernel.internal.codec.RuleVersionRow;
+import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -37,6 +41,20 @@ public class SceneSnapshotLoader {
     }
 
     /**
+     * 全量加载并同步将场景执行策略写入索引。
+     * 在同一次扫描内顺带写入场景执行策略，避免二次查询 scene 表。
+     *
+     * @param index 目标倒排索引
+     * @return 双层 Map，外层 key = tenantId:sceneCode，内层 key = eventType
+     */
+    public Map<String, Map<String, List<RuleVersionSnapshot>>> loadAllWithStrategy(SceneRuleIndex index) {
+        List<RuleVersionRow> rows = mapper.loadAllActive();
+        applyStrategiesToIndex(rows, index);
+        List<RuleVersionSnapshot> snapshots = assembler.assembleAll(rows);
+        return groupBySceneAndEventType(snapshots);
+    }
+
+    /**
      * 加载指定租户 + 场景的所有 ACTIVE 规则版本，按 eventType 分组。
      * triggerEventTypes 为空时归入 "*" 通配桶；非空时按实际值分桶。
      *
@@ -48,6 +66,42 @@ public class SceneSnapshotLoader {
         List<RuleVersionRow> rows = mapper.loadActiveByScene(Long.parseLong(tenantId), sceneCode);
         List<RuleVersionSnapshot> snapshots = assembler.assembleAll(rows);
         return groupByEventType(snapshots);
+    }
+
+    /**
+     * 加载指定场景快照并同步将执行策略写入索引。
+     * 供 SceneIndexEventListener 热更新时使用。
+     *
+     * @param tenantId  租户 ID 字符串
+     * @param sceneCode 场景编码
+     * @param index     目标倒排索引
+     * @return key = eventType，value = 快照列表
+     */
+    public Map<String, List<RuleVersionSnapshot>> loadBySceneWithStrategy(
+            String tenantId, String sceneCode, SceneRuleIndex index) {
+        List<RuleVersionRow> rows = mapper.loadActiveByScene(Long.parseLong(tenantId), sceneCode);
+        applyStrategiesToIndex(rows, index);
+        List<RuleVersionSnapshot> snapshots = assembler.assembleAll(rows);
+        return groupByEventType(snapshots);
+    }
+
+    /** 从 rows 中提取 (tenantId, sceneCode, decisionStrategy) 并写入 index，每个 scene 只写一次。 */
+    private void applyStrategiesToIndex(List<RuleVersionRow> rows, SceneRuleIndex index) {
+        for (RuleVersionRow row : rows) {
+            String strategyStr = row.decisionStrategy();
+            SceneExecutionStrategy strategy = strategyStr != null
+                    ? parseStrategy(strategyStr)
+                    : SceneExecutionStrategy.HIGHEST_PRIORITY;
+            index.setStrategy(String.valueOf(row.tenantId()), row.sceneCode(), strategy);
+        }
+    }
+
+    private static SceneExecutionStrategy parseStrategy(String value) {
+        try {
+            return SceneExecutionStrategy.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return SceneExecutionStrategy.HIGHEST_PRIORITY;
+        }
     }
 
     /**

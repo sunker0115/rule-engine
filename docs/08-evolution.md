@@ -30,21 +30,21 @@
 
 **设计原则**：D12 引入 `Rule.kind` 是为评分卡 / 决策树 / 决策表 / 脚本类规则演进**预留 schema 占位**，不是 v1 要实现的功能。
 
-**各 kind 共享 Rule 的公共属性**：trigger / preGates / decisionBindings / version / rollout / Scene 治理都不变，多态只在"判定主体"内部——（注：actions 已迁移到 Decision，不再是 Rule 的直接字段，D27）
+**各 kind 共享 Rule 的公共属性**：trigger / preGates（含 ROLLOUT 灰度）/ decisionBindings / version / Scene 治理都不变，多态只在"判定主体"内部——（注：actions 已迁移到 Decision，不再是 Rule 的直接字段，D27）
 
 > 下表"判定主体字段"列只指示**形态**与**承载方式**，具体字段命名留待 v2 设计时定稿，避免占名误导后续设计。
 
 | kind | 判定主体承载 | 输出字段 | 状态 |
 |------|------------|---------|------|
-| `AST_BOOLEAN` | sealed `RuleNode` AST 树（已在 v1 落地） | `EvalResult.satisfied` | v1 唯一实现 |
-| `SCORECARD` | JSON 列承载条件列表 + 各自 `weight` + 阈值带 | `EvalResult.score` | 待实现 |
-| `DECISION_TREE` | JSON 列承载嵌套 if/then/else 树 | `EvalResult.category` | 待实现 |
-| `DECISION_TABLE` | JSON 列承载输入列 + 输出列 + 行集合矩阵 | `EvalResult.decision` | 待实现 |
-| `EXPRESSION_SCRIPT` | 文本列承载 CEL / Aviator 脚本 | 按脚本返回值多态填 | 待实现 |
+| `AST_BOOLEAN` | sealed `RuleNode` AST 树（已在 v1 落地） | `EvalResult.satisfied` | 已实装（v1） |
+| `SCORECARD` | JSON 列承载条件列表 + 各自 `weight` + 阈值带 | `EvalResult.score` | 已实装（D12） |
+| `DECISION_TREE` | JSON 列承载嵌套 if/then/else 树 | `EvalResult.category` | 已实装（D42） |
+| `DECISION_TABLE` | JSON 列承载输入列 + 输出列 + 行集合矩阵 | `EvalResult.decision` | 已实装（D42） |
+| `EXPRESSION_SCRIPT` | 文本列承载 CEL / Aviator 脚本 | 按脚本返回值多态填 | 未实装（留 v1.5） |
 
-**`EvalResult` 是稳定多态**：v1 PULL 模式调用方拿到的对象 shape 是 `{satisfied, score?, category?, decision?, trace}`，v1.5 引入 SCORECARD 时多填一个 `score` 字段，PULL API 签名不变；节点 trace 跨 kind 统一，运营自助排障的能力 100% 复用。
+**`EvalResult` 是稳定多态**：PULL 模式调用方拿到的对象 shape 是 `{satisfied, score?, category?, decision?, trace}`——SCORECARD 多填 `score`（D12），DECISION_TREE 填 `category`（D42），DECISION_TABLE 填 `decision`（D42），PULL API 签名始终不变；节点 trace 跨 kind 统一，运营自助排障的能力 100% 复用。
 
-**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；v2 在此基础上扩展 `ALL_HITS` / `FIRST_HIT`。Action 编排（决策流）由 D4 工作流引擎扩展点承载，两者都是 Rule 层级之外。
+**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；`ALL_HITS` / `FIRST_HIT` 已实装（D41）。Action 编排（决策流）由 D4 工作流引擎扩展点承载，两者都是 Rule 层级之外。
 
 **为什么不另起表**：评分卡 / 决策树仍需要 Rule 的全部公共属性（触发 / 准入 / 灰度 / Action / 版本快照），独立表会复制 80% 的列且数据散布、跨形态报表困难；用 `kind` 字段 + 多态 JSON 列在同一张表里，公共能力天然共享。
 
@@ -58,10 +58,20 @@
   - `metric_definition` 加 `version INT` 列，发布新语义 = INSERT 新行（旧行不删，status 改为 SUPERSEDED）；
   - `rule_version.metric_dependencies` 从 `["metricCode"]` 升级为 `[{"metricCode":"xxx","metricVersion":1}]`；
   - 发布期校验：被引用的 `(metricCode, metricVersion)` 必须存在且为 ACTIVE 状态；
-  - 评估期：`EvalContext` 按 `(metricCode, metricVersion)` 拉取对应版本的 metric 定义，不再默认取最新版；
+  - 评估期：按规则绑定版本 `resolve(metricCode, metricVersion)` 解析 metric 定义，不再默认取最新版；档1 `EvalContext` 仍按 metricCode 索引单值、过渡期同 code 取最高版本，完整 per-rule 版本投影（EvalContext 二元键）为档2 留后续；
   - 运营 UI：展示"修改此 metric 版本后受影响的规则数"，上线前可提前评估影响范围；
   - 与 §2.12（payloadSchema 版本化）平行演进，schema 版本和 metric 版本同期落地可降低迁移成本。
 - **迁移成本**：中（`metric_definition` 表结构变更 + `rule_version` JSON schema 升级 + 发布期 / 评估期解析逻辑 + UI 影响面展示）。
+
+**已实装（B6 / 2026-06-06，档1）**：
+
+- DDL：`metric_definition` 加 `version INT NOT NULL DEFAULT 1` 列；`status` ENUM 扩展 `SUPERSEDED`；唯一键从 `(tenant_id, metric_code)` 改为 `(tenant_id, metric_code, version)`（Flyway V1_6）；
+- `rule_version.metric_dependencies` 升为对象数组 `[{"metricCode":"xxx","metricVersion":1}]`，发布期静态收集并冻结当前 ACTIVE 版本号；
+- 发布期冻结：被引用 metric 的当前 ACTIVE 版本号在发布时写入快照；
+- 评估期按版本解析：`resolve(metricCode, metricVersion)` 按绑定版本取定义；档1 `EvalContext` 仍按 metricCode 单值索引，同 code 取最高版本，完整 per-rule 版本投影（二元键）为档2 后续；
+- metric 写服务（注册 `POST /api/v1/metrics`）+ 升版（`PUT /api/v1/metrics/{metricCode}?breakingChange=`）；
+- 影响面查询 API：`GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId=`；
+- SDK 下发：DECLARED 模式含被引用的 SUPERSEDED 旧版定义，每项 `MetricDescriptor` 带 `metricVersion`。
 
 ### 2.3 跨 Scene 规则复用（来源 #1）
 
@@ -126,6 +136,15 @@
   - **不做**：跨租户实时同步（由 §2.10 规则模板市场解决）。
 - **迁移成本**：中（独立工具链，不动核心引擎）。
 
+**已实装（B7 / 2026-06-06）：**
+
+- **载体**：HTTP 端点——`GET /api/v1/rules/export?tenantId=&ruleIds=&sceneId=`（按条件批量导出 ACTIVE 版本为 **Bundle JSON 文件下载**，`Content-Disposition: attachment`）、`POST /api/v1/rules/import`（**multipart 文件上传**，幂等批量导入）；Service 落 `rule-config-svc`（`RuleBundleService` → `RuleExportService` / `RuleImportService`，进出 `RuleBundle` 对象），Controller 落 `rule-api`（`RuleBundleController`，做对象↔文件转换）。无 DDL。
+- **批量 + 多规则 Bundle**：导出选取优先级 ruleIds → sceneId → 整租户（入参用 sceneId，前端列表已有；Bundle 内 `RuleEntry.sceneCode` 仍用 code，跨环境按 code 关联）；Bundle 统一为多规则结构 `{bundleVersion, exportedAt, sourceTenantId, rules[], scenes[], metricDefinitions[], decisionDefinitions[], actionTypeManifest[]}`，单规则 = rules 长度 1 特例。所有 JSON 列按原始 JSON 字符串无损搬运。**实装较原始字段集多 `decisionDefinitions[]`**：D27 后 Action 落在 tenant 级 decision_definition，随包搬运才能真正自包含重建。
+- **导入幂等**：Scene / metric / decision 按业务键整体 upsert（缺失则建、已存在跳过不覆盖）；规则逐条——code 不存在 → 新建 rule_definition(DRAFT) + rule_version(DRAFT v1)，已存在 → 仅追加 rule_version(DRAFT, maxVersion+1)，不动 rule_definition 状态/currentVersion。把导入草稿提升为 ACTIVE 走发布/回滚流程（D19，尚未实现）。
+- **metric 安全**：`SQL_AGGREGATE` 类缺失 metric 不自动创建，列入 `metricsRequiringReview`，由运营人工审核后建；发布期 PublishService 的"被引用 metric 无 ACTIVE 版本"校验是安全网。
+- **权限**：v1 沿用 `X-Actor-Id` header；EXPORT / PUBLISH 权限校验留 TODO（后续合规批次 §2.8）。
+- **与本地调试格式正交**：B7 Bundle 专做跨环境 DB 迁移；本地 / 离线调试用 `GET /api/v1/sdk/snapshots`（§8.3），两者不打通。
+
 ### 2.10 规则模板市场（来源 #16）
 
 - **v1 现状**：不考虑平台级规则模板共享。
@@ -139,12 +158,14 @@
 - **演进方向**：定义标准化指标获取协议（参考 OpenTelemetry / OpenFeature 模型），引入 `MetricFetcher` 通用 SDK + 协议测试套件。
 - **迁移成本**：中。
 
-### 2.12 Scene schema 演进（来源 D13 v1 不做的"payloadSchema 演进"）
+### 2.12 Scene schema 演进（来源 D13，v2 阶段已实装基础设施）
 
 - **v1 现状**：`Scene.payloadSchema` 在 Scene 表上，发布期校验 RuleEvent.payload 字段合法性；变更 schema = 直接覆盖。
 - **触发条件**：业务侧调整 payload 字段（新增 / 重命名 / 类型变更），存量规则可能引用了旧字段。
 - **演进方向**：引入 `Scene.payloadSchemaVersion` + 历史版本表 `scene_payload_schema_history`；发布 RuleVersion 时锁定当时的 `(sceneId, payloadSchemaVersion)` 引用；schema 变更走"新版本号 + 影响规则清单 + 灰度切换"流程；与 D20 §3 输入闭合校验联动——校验集合按当时锁定的 schema 版本而非"最新"求解。
 - **迁移成本**：中（schema 历史表 + 引用解析逻辑）。
+
+- **v2 实装（2026-06-04）**：`PayloadFieldSpec` JSON Schema 完整子集（enum/min/max/pattern）、`scene_payload_schema_history` 历史表、`scene.payload_schema_version` 版本号字段已落地。Scene 创建/更新 API 现可持久化 payloadSchema，发布时 triggerEventTypes ⊆ Scene.eventTypes 校验已启用。AST payload 字段引用校验留到 v3（需约定 ConditionNode.params 的字段引用编码规范）。
 
 ### 2.13 评估期预编译完全切换（来源 D20 v1 不做的"完整预编译"）
 
@@ -205,24 +226,24 @@
 
 - **v1 现状**：灰度 hash 种子为 `hash(subjectId, ruleVersionId) % 100`，两条规则各自独立计算桶号——A/B 实验场景下同一用户可能同时命中两条规则，也可能都不命中，无法保证互斥。
 - **触发条件**：业务方需要同一用户在同一实验组内仅命中互斥规则之一（典型：价格实验、权益实验）。
-- **演进方向（v1.5）**：
-  - `rollout` 新增可选字段 `experimentId: String`；
-  - 同一实验的规则共享同一 hash 种子：`hash(subjectId, experimentId ?? ruleVersionId) % 100`；
-  - `experimentId` 为空时行为与 v1 完全一致（向后兼容）；
-  - 不引入"实验"一等公民——`experimentId` 只是字符串标识，实验管理仍由上游 ABTest 平台负责；
-  - `rule_version.rollout` JSON 列内部新增 `experimentId` 可选键，无需 ALTER TABLE，向后兼容。
-- **迁移成本**：低（只改 hash 计算逻辑 + `rollout` JSON 解析，无 DDL 变更）。
+- **设计要点**：
+  - **共享种子**：同一实验的规则共享同一 hash 种子 `hash(subjectId, experimentId ?? ruleVersionId) % 100`——同一 subject 在同实验的多条规则上算出**同一个 bucket**。`experimentId` 为空时退回 `ruleVersionId` 独立分桶，行为与 v1 完全一致（向后兼容）。
+  - **两种命中模式**（共享种子是前提，命中判定决定语义）：
+    - **一致分桶**：多条规则用**相同**区间（如都 `[0,50)`，即 `percentage=50`）→ 同一批人在所有规则上同时命中/同时不命中（人群稳定共选）。
+    - **互斥**：多条规则用**不相交**区间（A `[0,50)`、B `[50,100)`）→ 每个 subject 恰好命中其一，实现真正的 A/B 互斥。
+  - 不引入"实验"一等公民——`experimentId` 只是字符串标识，实验管理仍由上游 ABTest 平台负责；运营自行保证互斥规则的区间不相交（v1.5 仅做单规则校验，不查兄弟规则）。
+  - 无 DDL 变更：`experimentId` / `percentage` / `bucketStart` / `bucketEnd` 均复用 ROLLOUT pre-gate 的 `params` 承载，`PreGateConfig.params` 为 `Map<String,Object>`，任意 key 透明穿透。
+- **已实装**：
+  - `RolloutPreGate.evaluate`（`rule-eval-svc`）：种子按 `gateParams.experimentId` 是否存在选择（`hash(subjectId:experimentId)` 或 `hash(subjectId:ruleVersionId)`），`& 0x7fffffff` 屏蔽符号位避免 `Integer.MIN_VALUE` 边界。命中判定：配 `bucketStart`/`bucketEnd` 时按 `bucketStart <= bucket < bucketEnd`（区间模式，优先）；否则按 `bucket < percentage`（百分比模式，等价于区间 `[0, percentage)`）；两者皆无则 fail-open。
+  - 配置位置在 `rule_version.pre_gates` 列 ROLLOUT 项的 `params`，`pre_gates` JSON → `deserializePreGates` → 快照 `PreGateConfig.params` → `EvalEngine.applyPreGates` 透传至 `RolloutPreGate`，全程零 DDL。
+  - 发布期校验（`PublishService.validatePreGateParams`，仅单规则）：`percentage∈[0,100]`、桶区间 `0<=bucketStart<bucketEnd<=100` 且成对出现、`experimentId` 非空白；越界抛 `IllegalArgumentException`（映射 `INVALID_ARGUMENT`）。
+  - `RolloutPreGateTest` 覆盖区间互斥（同实验不相交区间 → 每 subject `a^b`）/ 一致分桶 / 百分比向后兼容；`PublishServiceTest` + `RolloutParamsTest` 覆盖发布期校验。
+- **迁移成本**：低（已完成，仅 `RolloutPreGate` hash/命中逻辑 + 发布期校验，无 DDL）。
 
-### 2.17 ActionHandler dryRun 全量实装（来源 D7 v1.5 待补）
+### 2.17 ActionHandler dryRun 全量实装（D7 v1.5，已实装）
 
-- **v1 现状**：`ActionHandler` 接口已预留 `dryRun(ActionContext ctx)` 入口；v1 handler 均未实装，Dispatcher 短路返回 `ActionResult{status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED}`，试算面板显示 Action 全部跳过。
-- **触发条件**：运营需要在 dry-run 时预览"会发什么短信 / 给什么优惠券"等 Action 输出，而不只是 AST 节点 trace。
-- **演进方向（v1.5）**：
-  - 各 `ActionHandler` 实现类补齐 `dryRun()` 方法，返回真实预览 `ActionResult`；
-  - `DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生（全量实装后）；
-  - dry-run 响应体 `actionResults` 从 `[{status:SKIPPED}]` 升级为含真实预览输出；
-  - 不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
-- **迁移成本**：低（各 handler 独立补实现，不改协议）。
+- **已实装（v1.5，D7）**：`BlockTransactionHandler.dryRun()` 和 `SendAlertHandler.dryRun()` 均已 override，返回 `ActionResult.success()` 预览结果；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。
+- **背景**：运营需要在 dry-run 时预览"会发什么短信 / 给什么优惠券"等 Action 输出，而不只是 AST 节点 trace。dry-run 响应体 `actionResults` 含真实预览输出；不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
 
 ### 2.18 规则列表查询 API（来源 10-api-contract.md §4.4）
 
@@ -246,7 +267,7 @@
   - `node_trace` 数据量大时配合 §2.5 冷热分级同步推进，避免全表扫描；
   - 查询路径与写路径完全隔离（只读 Mapper），不影响评估性能。
 - **迁移成本**：中（需要补 Mapper 查询 + Service 实现 + Controller 端点 + 分页协议，但无 DDL 变更；`node_trace` 量大时需结合 §2.5 存储分层一起评估）。
-- **已实装（v2）**：`rule-audit-svc` 内建 `EvalSessionRow` / `NodeTraceRow` / `AuditLogRow` 只读 entity + 对应三个 `@Mapper` 接口（Modulith 隔离，不引用其他模块 internal）；`AuditServiceImpl` 用 MyBatis-Plus 分页查询实现 `queryAuditLogs` / `queryEvalSessions` / `queryTrace`（v1 返回扁平列表，树重建留 §2.21）；`AuditController` 补全 `GET /api/v1/evaluation-sessions/{sessionId}/trace` 端点；`AuditService` 新增 `TraceNodeEntry` + `queryTrace` 方法签名。
+- **已实装（v2）**：`rule-audit-svc` 内建 `EvalSessionRow` / `NodeTraceRow` / `AuditLogRow` 只读 entity + 对应三个 `@Mapper` 接口（Modulith 隔离，不引用其他模块 internal）；`AuditServiceImpl` 用 MyBatis-Plus 分页查询实现 `queryAuditLogs` / `queryEvalSessions` / `queryTrace`；`AuditController` 补全 `GET /api/v1/evaluation-sessions/{sessionId}/trace` 扁平端点 + `/trace/tree` 树重建端点（按 `node_path` 点分路径重建嵌套 AST 树，`TraceTreeNode` record，详见 `10-api-contract.md §6.2`）。
 
 ### 2.21 XOR 逻辑节点（来源 trae 参考分析 R1）
 
@@ -261,7 +282,34 @@
   - 无 DDL 变更（AST 存 JSON，加节点类型是 JSON key 变更）；
   - 发布期输入闭合校验（D20 §3）对 XorNode 透明——只关心 ConditionNode 的变量引用，不感知父节点类型。
 - **参考来源**：trae `rule/strategy/RuleXorStrategy.java`，详见 [`docs/superpowers/specs/2026-06-04-trae-reference-design.md`](./specs/2026-06-04-trae-reference-design.md) §三 R1。
+- **已实装（d12-scorecard-evaluator Task 7）**：`XorNode` sealed AST 节点 + `AstJsonCodec` 映射 + `InterpretedExecutor` / `TracingInterpretedExecutor` 全量遍历分支 + 5 个单测覆盖（恰好一个/全部满足/全部不满足/空/两个满足）。
 - **迁移成本**：低（sealed class + evaluator + 前端编辑器，无 DDL，无 schema 迁移）。
+
+### 2.22 基础设施层可观测性（OTLP + LGTM）
+
+- **已实现**（D22，`rule-app` v1）。完整使用说明见 [`07-operability.md §十一`](./07-operability.md#十一基础设施可观测性opentelemetry--lgtm)。
+- **实现要点**：
+  - `rule-app/pom.xml` 加 `spring-boot-starter-opentelemetry` + `opentelemetry-logback-appender-1.0`；
+  - `application.yml` 通过 `management.opentelemetry.{metrics,tracing,logging}.export.otlp.endpoint` 配置三信号推送，并排除 `OtlpMetricsExportAutoConfiguration`（避免 protobuf 版本冲突）；
+  - `logback-spring.xml` 加 `OpenTelemetryAppender`，日志推 Loki，traceId 自动注入；
+  - 本地 `docker-compose.yml` 加 `grafana/otel-lgtm:0.11.5`（Grafana + Loki + Tempo + Mimir 单镜像）；
+  - `rule-observability`（业务 trace 层，`TraceWriterDbImpl` / `RuleMetrics`）不改动，两层可观测性并行。
+
+### 2.23 B20 时间框架：DATE/DATETIME 一等 dataType + 统一时钟注入（来源 D44，已实装）
+
+- **v1 现状（B20 前）**：`EvalContext` 有 `now: Instant` 槽位但未从入口统一注入；`dataType` 枚举不含时间类型；`DATE_BEFORE` / `DATE_AFTER` 文档有描述但实现未完整落地；`time.window` / `time.occurred_at` conditionType 未注册。
+- **触发条件**：业务方需要时间窗口判断（营业时间生效）、日期型指标比较（账户创建时间、到期时间）及事件有效期判断。
+- **设计要点（D44）**：
+  - `EvalContext.now` 在 `EvalServiceImpl.doEvaluate` / `EvalEngine.evaluate` 入口调用一次 `Instant.now()`，整棵 AST 共用同一时钟（禁止默认 `Instant.now()` 重载）；
+  - `DATE` / `DATETIME` 作为一等 `dataType`：`DateComparisonStrategy` / `DateTimeComparisonStrategy` 纯策略；两阶段管线（PlaceholderResolver + TimeZoneResolver → 策略）；
+  - 发布期矩阵（`AstDataTypeResolver`）扩展：EQ/NEQ/BETWEEN/NOT_BETWEEN 允许集合 += DATE/DATETIME；DATE_BEFORE/DATE_AFTER 新增行；
+  - `time.window` / `time.occurred_at` 在 `KernelEvaluators.defaults()` 注册，内置路径闭合集合，无 `metricCode`；
+  - `context_snapshot` 升级为嵌套格式 `{"metrics": {...}, "evalNow": "<ISO>"}`；
+  - `V1_5__add_date_datetime_to_metric_datatype.sql` 扩展 `metric_definition.data_type` ENUM；
+  - Scene 级默认时区（`sceneDefaultTimezone`）槽位保留，B20 阶段暂缓（调用方传 null），由后续批次激活。
+- **不做（B21+ 范畴）**：相对时长算术（`$now-P7D`）；`EvalContext.now` 注入 SQL_AGGREGATE 的 `:now` 绑定变量；Scene 级默认时区激活。
+- **已实装（B20 / D44）**：见 D44 已实装清单。构建于 B19（AstDataTypeResolver 矩阵）之上。
+- **迁移成本**：已完成（B20 批次 13 个 Task）。
 
 ### 2.20 规则草稿创建 API（来源 10-api-contract.md §4.1）
 
@@ -334,7 +382,7 @@ D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔�
 | 来源 | TODO 内容 | 迁入目标 | 状态 |
 |------|-----------|---------|------|
 | [`01-concepts.md`](./01-concepts.md) §3.4 "kind 多态边界" 小节 | D12 演进说明（5 个 kind 的字段映射与共享属性） | §2.1 kind 多态 | ✅ 已迁入 |
-| [`01-concepts.md`](./01-concepts.md) §3.9 `metricVersion` 字段 | Metric 版本化语义 | §2.2 Metric 版本化 | ✅ 已迁入 |
+| [`01-concepts.md`](./01-concepts.md) §3.9 `metricVersion` 字段 | Metric 版本化语义 | §2.2 Metric 版本化 | ✅ 已迁入；✅ 已实装 B6 |
 | [`00-decisions.md`](./00-decisions.md) D14 v1 不做的"敏感数据" | 合规演进路径 | §2.8 合规演进 | ✅ 已迁入 |
 | [`00-decisions.md`](./00-decisions.md) D13 v1 不做的"payloadSchema 演进" | schema 升版本如何兼容存量规则 | §2.12 Scene schema 演进 | ✅ 已迁入 |
 | [`00-decisions.md`](./00-decisions.md) D20 v1 不做的"完整预编译 / alpha 共享" | Visitor 切预编译 lambda + 跨规则条件去重 | §2.13 评估期预编译完全切换 | ✅ 已迁入 |

@@ -12,7 +12,7 @@ class AndNodeTest {
 
     @Test
     void children_areImmutable() {
-        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of());
+        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of(), 0.0);
         List<AstNode> mutable = new ArrayList<>(List.of(leaf));
         AndNode node = new AndNode(mutable, "label", 1.0);
         mutable.add(leaf);
@@ -23,12 +23,12 @@ class AndNodeTest {
     void children_listIsUnmodifiable() {
         AndNode node = new AndNode(List.of(), null, null);
         assertThrows(UnsupportedOperationException.class,
-                () -> node.children().add(new ConditionNode("T", "m", null, Map.of())));
+                () -> node.children().add(new ConditionNode("T", "m", null, Map.of(), 0.0)));
     }
 
     @Test
     void recordEquality_byValue() {
-        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of());
+        ConditionNode leaf = new ConditionNode("T", "m", null, Map.of(), 0.0);
         AndNode a = new AndNode(List.of(leaf), "lbl", 0.5);
         AndNode b = new AndNode(List.of(leaf), "lbl", 0.5);
         assertEquals(a, b);

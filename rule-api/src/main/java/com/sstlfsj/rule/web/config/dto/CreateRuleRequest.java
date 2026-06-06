@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.web.config.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotBlank;
 
 /** 创建规则草稿请求体，对应 10-api-contract.md §4.1。 */
@@ -9,8 +8,9 @@ public record CreateRuleRequest(
         @NotBlank String sceneCode,
         @NotBlank String code,
         @NotBlank String name,
-        JsonNode conditionAst,
-        JsonNode decisionBindings,
-        JsonNode preGates,
-        JsonNode triggerEventTypes
+        String kind,
+        Object conditionAst,
+        Object decisionBindings,
+        Object preGates,
+        Object triggerEventTypes
 ) {}

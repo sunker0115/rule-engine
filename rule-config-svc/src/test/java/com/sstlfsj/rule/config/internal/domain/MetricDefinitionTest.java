@@ -13,6 +13,7 @@ class MetricDefinitionTest {
         metric.setId(3L);
         metric.setTenantId(1L);
         metric.setMetricCode("user.age");
+        metric.setVersion(2);
         metric.setName("年龄");
         metric.setSourceType("ATTRIBUTE");
         metric.setDataType("LONG");
@@ -26,6 +27,7 @@ class MetricDefinitionTest {
         assertEquals(3L, metric.getId());
         assertEquals(1L, metric.getTenantId());
         assertEquals("user.age", metric.getMetricCode());
+        assertEquals(2, metric.getVersion());
         assertEquals("年龄", metric.getName());
         assertEquals("ATTRIBUTE", metric.getSourceType());
         assertEquals("LONG", metric.getDataType());
@@ -41,6 +43,7 @@ class MetricDefinitionTest {
     void defaultValues_areNull() {
         MetricDefinition metric = new MetricDefinition();
         assertNull(metric.getId());
+        assertNull(metric.getVersion());
         assertNull(metric.getAllowProvided());
         assertNull(metric.getCreatedAt());
         assertNull(metric.getUpdatedAt());

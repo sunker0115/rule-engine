@@ -16,8 +16,8 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 AST 节点结构 | ✅ |
-| §三 操作符清单 | ✅ |
+| §二 AST 节点结构 | ✅（含 XorNode §2.5） |
+| §三 操作符清单 | ✅（含 DATE_BEFORE/DATE_AFTER §3.4） |
 | §四 短路求值规则 | ✅ |
 | §五 节点级 trace | ✅ |
 | §六 v1 不支持的表达式 | ✅ |
@@ -27,7 +27,7 @@
 
 ## 二、AST 节点结构
 
-AST 由四种节点类型组成，每种节点字段如下。
+AST 由五种节点类型组成，每种节点字段如下。
 
 ### 2.1 AndNode（与节点）
 
@@ -71,7 +71,28 @@ AST 由四种节点类型组成，每种节点字段如下。
 | `params` | `object` | 是 | 传给 ConditionEvaluator 的参数对象，结构由各 conditionType 定义 |
 | `weight` | `number` | 否 | SCORECARD kind 专用（D12），v1 AST_BOOLEAN 忽略此字段 |
 
-**嵌套约束**：ConditionNode 是叶子节点，不能有 `children`；AndNode / OrNode / NotNode 是中间节点，不能作为最终叶子（children 不能为空）。
+**嵌套约束**：ConditionNode 是叶子节点，不能有 `children`；AndNode / OrNode / NotNode / XorNode 是中间节点，不能作为最终叶子（children 不能为空）。
+
+### 2.5 XorNode（异或节点）
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `"XorNode"` | 是 | 固定值 |
+| `displayLabel` | `string` | 否 | UI 显示名 |
+| `children` | `Node[]` | 是 | 子节点列表，至少 2 个；建议 2–4 个，超大列表可读性差 |
+| `weight` | `number` | 否 | SCORECARD kind 专用（D12），v1 AST_BOOLEAN 忽略此字段 |
+
+**求值语义**：恰好 **1 个**子节点 satisfied=true 时整体 true；0 个或 ≥ 2 个 true 时整体 false。不做短路——所有子节点均需求值才能确定"恰好 1 个"，但内部有优化：已满足 2 个 true 时提前退出（结果已确定为 false）。
+
+**典型用途**：互斥条件——多个分支中有且仅有一个成立，如"只走其中一条风控路径"或"恰好命中一类黑名单"。
+
+**与 OrNode 的区别**：
+
+| | `OrNode` | `XorNode` |
+|--|--|--|
+| 1 个 true | ✅ true | ✅ true |
+| 2 个 true | ✅ true | ❌ false |
+| 0 个 true | ❌ false | ❌ false |
 
 ---
 
@@ -83,14 +104,16 @@ AST 由四种节点类型组成，每种节点字段如下。
 
 | operator | 适用数据类型 | 语义 | null 处理 |
 |----------|------------|------|-----------|
-| `EQ` | LONG / DOUBLE / STRING / BOOLEAN | 相等 | 参数为 null → satisfied=false |
-| `NEQ` | LONG / DOUBLE / STRING / BOOLEAN | 不相等 | 同上 |
+| `EQ` | LONG / DOUBLE / STRING / BOOLEAN / **DATE / DATETIME** | 相等 | 参数为 null → satisfied=false |
+| `NEQ` | LONG / DOUBLE / STRING / BOOLEAN / **DATE / DATETIME** | 不相等 | 同上 |
 | `GT` | LONG / DOUBLE | 严格大于 | 参数为 null → ERROR |
 | `GTE` | LONG / DOUBLE | 大于等于 | 同上 |
 | `LT` | LONG / DOUBLE | 严格小于 | 同上 |
 | `LTE` | LONG / DOUBLE | 小于等于 | 同上 |
-| `BETWEEN` | LONG / DOUBLE | `min <= value <= max`（双端闭区间） | 参数为 null → ERROR |
-| `NOT_BETWEEN` | LONG / DOUBLE | `value < min 或 value > max`（BETWEEN 取反） | 参数为 null → ERROR |
+| `BETWEEN` | LONG / DOUBLE / **DATE / DATETIME** | `min <= value <= max`（双端闭区间） | 参数为 null → ERROR |
+| `NOT_BETWEEN` | LONG / DOUBLE / **DATE / DATETIME** | `value < min 或 value > max`（BETWEEN 取反） | 参数为 null → ERROR |
+
+> **B20 新增**：`EQ` / `NEQ` / `BETWEEN` / `NOT_BETWEEN` 已在 B20 扩展支持 `DATE` / `DATETIME` dataType；发布期矩阵（`AstDataTypeResolver`）对应更新，GT/GTE/LT/LTE 仍仅限数值型。
 
 ### 3.2 集合操作符
 
@@ -109,7 +132,60 @@ AST 由四种节点类型组成，每种节点字段如下。
 | `ENDS_WITH` | STRING | 后缀匹配 | 同上 |
 | `MATCHES` | STRING | 正则匹配（Java `Pattern.matches`）| value 为 null → satisfied=false |
 
-### 3.4 类型转换规则（D20 §3 闭合校验前置）
+### 3.4 日期操作符
+
+> **B20 已实装**。适用于 `dataType=DATE` 或 `dataType=DATETIME` 的 Metric；发布期矩阵（`AstDataTypeResolver`）要求 `DATE_BEFORE` / `DATE_AFTER` 必须配合 DATE 或 DATETIME dataType，其他 dataType 发布时拒绝。
+
+**参数格式与占位符**：
+- 字面量：ISO-8601 日期 `"2026-06-01"`（DATE 语境）或带时区的时刻 `"2026-06-01T00:00:00+08:00"`（DATETIME 语境）
+- `"$now"`：解析为 `EvalContext.now`（注入的统一时钟 `Instant`）
+- `"$today"`：解析为 `EvalContext.now` 投影到时区后的 `LocalDate`；**仅在 DATE 语境有效**，DATETIME / `time.occurred_at` 语境中使用 `"$today"` 会产生 `CONDITION_EVAL_ERROR`
+- 无法识别的 `$x` 占位符或解析失败 → null → `satisfied=false`（不抛异常）
+
+**两阶段管线**（resolve-segment + strategy）：
+1. **解析段（resolve-segment）**：在 evaluator 侧将原始字符串参数经 `PlaceholderResolver` + `TimeZoneResolver` 转换为强类型值（`LocalDate` / `Instant`）
+2. **策略段（strategy）**：`DateComparisonStrategy`（DATE）/ `DateTimeComparisonStrategy`（DATETIME）做纯比较，无 I/O、无副作用
+
+**时区解析优先级**（`TimeZoneResolver`）：字面时区偏移 > `params.timezone` > UTC；Scene 级默认时区（优先级 3）当前**暂缓**（B20 调用方始终传 `sceneDefaultTimezone=null`），槽位已保留。
+
+| operator | 适用数据类型 | 语义 | null 处理 |
+|----------|------------|------|-----------|
+| `DATE_BEFORE` | DATE / DATETIME | `value < threshold`（严格早于） | value 为 null → satisfied=false |
+| `DATE_AFTER` | DATE / DATETIME | `value > threshold`（严格晚于） | value 为 null → satisfied=false |
+
+> `dataType=null` 的历史条件走 DATE_BEFORE/AFTER 时，引擎默认 DATETIME + UTC（兼容旧语义，不报错）。
+
+**示例**：账户创建时间早于 2024-01-01（老账户识别，DATE 类型）：
+
+```json
+{
+  "type": "ConditionNode",
+  "conditionType": "metric.threshold",
+  "metricCode": "account.created_at",
+  "params": {
+    "operator": "DATE_BEFORE",
+    "threshold": "2024-01-01"
+  }
+}
+```
+
+**示例**：用户最后登录时间晚于 $now（异常时间戳检测，DATETIME 类型）：
+
+```json
+{
+  "type": "ConditionNode",
+  "conditionType": "metric.threshold",
+  "metricCode": "user.last_login_at",
+  "params": {
+    "operator": "DATE_AFTER",
+    "threshold": "$now"
+  }
+}
+```
+
+**与 `time.occurred_at` 的区别**：`time.occurred_at` 检查事件本身的业务时间（`EvalContext.event.occurredAt`）；`DATE_BEFORE` / `DATE_AFTER` 检查任意 DATE/DATETIME 类型 Metric 的值——可以是账户创建时间、上次登录时间、到期时间等任何时间类指标。
+
+### 3.5 类型转换规则（D20 §3 闭合校验前置）
 
 发布时引擎静态校验 metric 数据类型与操作符是否匹配（如 STRING metric 不能用 GT/LT）。v1 **不做运行时类型转换**——metric 返回 DOUBLE 但配置了 LONG 类型 metric 时，引擎在 EvalContext 内以 DOUBLE 处理，ConditionEvaluator 收到的就是原始类型。类型不匹配在发布期拒绝，不在运行期推断。
 
@@ -124,6 +200,7 @@ AST 由四种节点类型组成，每种节点字段如下。
 | `AndNode` | 子节点求值结果为 `false` | 停止求值剩余子节点；剩余节点 trace 中 `result=null`（"短路跳过"） |
 | `OrNode` | 子节点求值结果为 `true` | 停止求值剩余子节点；剩余节点 trace 中 `result=null` |
 | `NotNode` | 无短路 | 始终求值 child |
+| `XorNode` | 已有 ≥ 2 个子节点 satisfied=true | 提前退出（结果已确定为 false）；剩余节点 trace 中 `result=null` |
 
 子节点按列表顺序（`sortOrder`）依次求值，无并发求值。
 
@@ -160,7 +237,7 @@ AST 由四种节点类型组成，每种节点字段如下。
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `node_path` | `string` | AST 路径，如 `"0"` = 根，`"0.1"` = 根的第 2 子节点（0-indexed） |
-| `node_type` | `string` | `AndNode` / `OrNode` / `NotNode` / `ConditionNode` / `PRE_GATE_BLOCKED` |
+| `node_type` | `string` | `AndNode` / `OrNode` / `NotNode` / `XorNode` / `ConditionNode` / `PRE_GATE_BLOCKED` |
 | `condition_type` | `string` | 仅 ConditionNode，conditionType 注册码；其余节点为 null |
 | `metric_code` | `string` | 仅 metric 类 ConditionNode；其余为 null |
 | `params` | JSON | 节点参数快照（发布时冻结） |
@@ -205,6 +282,8 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 
 ### 7.1 time.window — 当前时刻在指定时间窗口内
 
+> **B20 已实装**。已在 `KernelEvaluators.defaults()` 注册，属于内置路径闭合集合（D20 §3），发布期校验走内部路径，不经过 operator×dataType 矩阵检查。`conditionType=time.window` 的 ConditionNode 无需 `metricCode`（留 null）。
+
 **语义**：对 `EvalContext.now` 做时间窗口判断，常用于"规则只在营业时间 / 高峰时段生效"。
 
 **参数表**：
@@ -213,7 +292,7 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 |------|------|------|------|
 | `start` | `"HH:mm"` | 是 | 窗口开始时间（含） |
 | `end` | `"HH:mm"` | 是 | 窗口结束时间（含）；`end < start` 表示跨午夜窗口（如 `22:00–06:00`） |
-| `timezone` | IANA 时区名 | 否 | 缺省回落 `Scene.defaultParams.timezone`，仍未配则 `UTC` |
+| `timezone` | IANA 时区名 | 否 | 缺省回落 `Scene.defaultParams.timezone`，仍未配则 `UTC`（Scene 级回落 B20 暂缓，详见 §3.4） |
 | `daysOfWeek` | `String[]` | 否 | `["MON","TUE","WED","THU","FRI","SAT","SUN"]` 子集；缺省 = 全周 |
 | `datesExclude` | `"MM-DD"[]` | 否 | 排除日期列表（节假日豁免），如 `["01-01","10-01"]` |
 
@@ -255,6 +334,8 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 ---
 
 ### 7.2 time.occurred_at — 事件业务时间落在指定范围
+
+> **B20 已实装**。已在 `KernelEvaluators.defaults()` 注册，属于内置路径闭合集合（D20 §3），无需 `metricCode`（留 null）。**`$today` 在本 conditionType 的参数中无效**——`time.occurred_at` 操作的是时刻（DATETIME），`$today` 仅代表日历日期（LocalDate），混用时引擎返回 `CONDITION_EVAL_ERROR`。
 
 **语义**：对 `EvalContext.event.occurredAt`（业务事件时间，可早于 `now`）做比较，常用于"延迟事件 / 补录数据"场景，或"活动有效期"判断。
 
@@ -309,6 +390,8 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 
 **适用场景**：近 N 天交易次数、近 N 小时登录失败次数、30 天内累计金额等。
 
+> **B21 已实装**：SQL_AGGREGATE 的 Metric SQL 用 `:now` 绑定变量注入 `EvalContext.now`（引擎统一时钟），**禁止 DB `NOW()` / `SYSDATE()` / `CURRENT_TIMESTAMP`**（发布期安全扫描拒绝含这些函数或 `${}` 拼接的 SQL）。滚动窗口长度写在 SQL 文本（`INTERVAL 7 DAY`），引擎不做 duration 运算。`:now` 保证 dry-run 重放历史事件时窗口范围与原始评估一致。
+
 **Metric 侧**（SQL_AGGREGATE）：
 
 ```json
@@ -317,7 +400,8 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
   "sourceType": "SQL_AGGREGATE",
   "dataType": "LONG",
   "params": {
-    "sql": "SELECT COUNT(*) FROM transfer_history WHERE user_id = :subjectId AND created_at >= NOW() - INTERVAL 7 DAY"
+    "datasource": "risk_ro",
+    "sql": "SELECT COUNT(*) FROM transfer_history WHERE user_id = :subjectId AND created_at >= :now - INTERVAL 7 DAY"
   },
   "cachePolicyDefault": { "ttl": 0 }
 }

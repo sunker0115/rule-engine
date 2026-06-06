@@ -75,4 +75,70 @@ class AuditControllerTest {
 
         verify(auditService).queryTrace("t1", 99L);
     }
+
+    @Test
+    void getTraceTree_返回嵌套结构() throws Exception {
+        AuditService.TraceTreeNode child = new AuditService.TraceTreeNode(
+                "ConditionNode", "GT", "user.age", "25", true, null, "FETCHED", List.of());
+        AuditService.TraceTreeNode root = new AuditService.TraceTreeNode(
+                "AndNode", null, null, null, true, null, null, List.of(child));
+        when(auditService.queryTraceTree("100", 1L)).thenReturn(List.of(root));
+
+        mockMvc.perform(get("/api/v1/evaluation-sessions/1/trace/tree").param("tenantId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.data[0].nodeType").value("AndNode"))
+                .andExpect(jsonPath("$.data[0].children", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.data[0].children[0].metricCode").value("user.age"));
+    }
+
+    @Test
+    void getTraceTree_空结果返回空数组() throws Exception {
+        when(auditService.queryTraceTree("100", 99L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/evaluation-sessions/99/trace/tree").param("tenantId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void querySessionsByRule_returns200_withDefaultParams() throws Exception {
+        AuditService.PageResult<AuditService.RuleSessionEntry> empty =
+                new AuditService.PageResult<>(List.of(), 0L, 0, 20);
+        when(auditService.querySessionsByRuleDefinition(42L, null, 20, 0)).thenReturn(empty);
+
+        mockMvc.perform(get("/api/v1/rules/42/sessions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(auditService).querySessionsByRuleDefinition(42L, null, 20, 0);
+    }
+
+    @Test
+    void querySessionsByRule_withStatusFilter_passesStatusToService() throws Exception {
+        AuditService.PageResult<AuditService.RuleSessionEntry> empty =
+                new AuditService.PageResult<>(List.of(), 0L, 0, 20);
+        when(auditService.querySessionsByRuleDefinition(7L, "HIT", 20, 0)).thenReturn(empty);
+
+        mockMvc.perform(get("/api/v1/rules/7/sessions").param("status", "HIT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(auditService).querySessionsByRuleDefinition(7L, "HIT", 20, 0);
+    }
+
+    @Test
+    void querySessionsByRule_withLimitOffset_passesCorrectly() throws Exception {
+        AuditService.PageResult<AuditService.RuleSessionEntry> empty =
+                new AuditService.PageResult<>(List.of(), 0L, 2, 10);
+        when(auditService.querySessionsByRuleDefinition(1L, null, 10, 20)).thenReturn(empty);
+
+        mockMvc.perform(get("/api/v1/rules/1/sessions")
+                        .param("limit", "10")
+                        .param("offset", "20"))
+                .andExpect(status().isOk());
+
+        verify(auditService).querySessionsByRuleDefinition(1L, null, 10, 20);
+    }
 }

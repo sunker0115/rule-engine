@@ -1,0 +1,204 @@
+package com.sstlfsj.rule.config.internal.service;
+
+import lombok.RequiredArgsConstructor;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import com.sstlfsj.rule.config.api.service.MetricWriteService;
+import com.sstlfsj.rule.config.internal.domain.AuditLog;
+import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
+import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * MetricWriteService 实现：create 注册 v1；update 带 breakingChange——
+ * true 触发升版（旧 ACTIVE→SUPERSEDED + 插新版本行，同事务保证至多一行 ACTIVE），false 原地更新。
+ * findReferencingRules 扫描所有 ACTIVE rule_version 的 metric_dependencies，返回引用指定版本的规则。
+ */
+@Service
+@Transactional
+@RequiredArgsConstructor
+public class MetricWriteServiceImpl implements MetricWriteService {
+
+    private static final TypeReference<List<MetricDependency>> METRIC_DEP_TYPE =
+            new TypeReference<>() {};
+
+    private final MetricDefinitionMapper metricDefinitionMapper;
+    private final AuditLogMapper auditLogMapper;
+    private final RuleVersionMapper ruleVersionMapper;
+    private final RuleDefinitionMapper ruleDefinitionMapper;
+    private final SceneMapper sceneMapper;
+    private final ObjectMapper objectMapper;
+
+    @Override
+    public Long create(Long tenantId, String metricCode, MetricWriteCommand cmd, String actorId) {
+        MetricDefinition m = new MetricDefinition();
+        m.setTenantId(tenantId);
+        m.setMetricCode(metricCode);
+        m.setVersion(1);
+        applyCommandFields(m, cmd);
+        m.setStatus("ACTIVE");
+        m.setCreatedBy(actorId);
+        m.setCreatedAt(LocalDateTime.now());
+        metricDefinitionMapper.insert(m);
+
+        writeAudit(tenantId, actorId, "CREATE", m.getId().toString(),
+                "{\"metricCode\":\"" + metricCode + "\",\"version\":1}");
+        return m.getId();
+    }
+
+    @Override
+    public int update(Long tenantId, String metricCode, MetricWriteCommand cmd,
+                      boolean breakingChange, String actorId) {
+        MetricDefinition active = metricDefinitionMapper.findActiveByCode(tenantId, metricCode);
+        if (active == null) {
+            throw new IllegalArgumentException("metric 不存在或无 ACTIVE 版本: " + metricCode);
+        }
+
+        // sourceType/dataType 冻结进 AST 快照并影响取数语义，变更必须升版（D6/B6），
+        // 否则存量规则评估期 resolve 到被静默修改的定义。
+        boolean effectiveBreaking = breakingChange
+                || !Objects.equals(active.getSourceType(), cmd.sourceType())
+                || !Objects.equals(active.getDataType(), cmd.dataType());
+
+        if (!effectiveBreaking) {
+            // 原地更新，version 不变
+            applyCommandFields(active, cmd);
+            active.setUpdatedBy(actorId);
+            active.setUpdatedAt(LocalDateTime.now());
+            metricDefinitionMapper.updateById(active);
+
+            writeAudit(tenantId, actorId, "UPDATE", active.getId().toString(),
+                    "{\"metricCode\":\"" + metricCode + "\",\"version\":"
+                    + active.getVersion() + ",\"breaking\":false}");
+            return active.getVersion();
+        }
+
+        // effectiveBreaking=true：旧行 SUPERSEDED + 插入新版本行
+        int newVersion = active.getVersion() + 1;
+        active.setStatus("SUPERSEDED");
+        active.setUpdatedBy(actorId);
+        active.setUpdatedAt(LocalDateTime.now());
+        metricDefinitionMapper.updateById(active);
+
+        MetricDefinition next = new MetricDefinition();
+        next.setTenantId(tenantId);
+        next.setMetricCode(metricCode);
+        next.setVersion(newVersion);
+        applyCommandFields(next, cmd);
+        next.setStatus("ACTIVE");
+        next.setCreatedBy(actorId);
+        next.setCreatedAt(LocalDateTime.now());
+        metricDefinitionMapper.insert(next);
+
+        writeAudit(tenantId, actorId, "UPDATE", next.getId().toString(),
+                "{\"metricCode\":\"" + metricCode + "\",\"version\":"
+                + newVersion + ",\"breaking\":true}");
+        return newVersion;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RuleRef> findReferencingRules(Long tenantId, String metricCode, int metricVersion) {
+        // 第一步：查该 tenant 下所有 rule_definition，取 id/code/name/sceneId/status
+        List<RuleDefinition> defs = ruleDefinitionMapper.findByTenant(tenantId);
+        if (defs.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, RuleDefinition> defMap = defs.stream()
+                .collect(Collectors.toMap(RuleDefinition::getId, d -> d));
+
+        // 第二步：批量查 scene，建 sceneId → sceneCode 索引
+        Set<Long> sceneIds = defs.stream()
+                .map(RuleDefinition::getSceneId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> sceneCodeMap = sceneIds.isEmpty() ? Map.of() :
+                sceneMapper.findByIds(sceneIds)
+                        .stream()
+                        .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
+
+        // 第三步：查这批 rule_definition_id 下所有 ACTIVE rule_version，只取影响面判断所需列
+        // 口径对齐 eval 侧 RuleVersionReadMapper：以 rv.status=ACTIVE 为"参与评估"判定，
+        // 不按 rule_definition.status 过滤（eval 的 loadAllActive/loadActiveByScene 均如此）。
+        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defMap.keySet());
+
+        // 第四步：反序列化 metric_dependencies，筛出含目标 (metricCode, metricVersion) 的行
+        List<RuleRef> result = new ArrayList<>();
+        for (RuleVersion rv : activeVersions) {
+            if (containsDependency(rv.getMetricDependencies(), metricCode, metricVersion)) {
+                RuleDefinition def = defMap.get(rv.getRuleDefinitionId());
+                String sceneCode = sceneCodeMap.getOrDefault(def.getSceneId(), "");
+                result.add(new RuleRef(def.getId(), def.getCode(), def.getName(),
+                        sceneCode, def.getStatus()));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 判断 metric_dependencies JSON 数组是否包含指定 (metricCode, metricVersion)。
+     * 反序列化失败（如 null 或格式异常）视为不包含。
+     */
+    private boolean containsDependency(String metricDependenciesJson,
+                                       String metricCode, int metricVersion) {
+        if (metricDependenciesJson == null || metricDependenciesJson.isBlank()) {
+            return false;
+        }
+        try {
+            List<MetricDependency> deps = objectMapper.readValue(metricDependenciesJson, METRIC_DEP_TYPE);
+            return deps.stream().anyMatch(
+                    d -> metricCode.equals(d.metricCode()) && d.metricVersion() == metricVersion);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 将 MetricWriteCommand 字段批量 set 到 MetricDefinition，含 null 默认值处理。 */
+    private void applyCommandFields(MetricDefinition m, MetricWriteCommand cmd) {
+        m.setName(cmd.name());
+        m.setSourceType(cmd.sourceType());
+        m.setDataType(cmd.dataType());
+        try {
+            // params 为 Map 对象，序列化为 JSON 字符串存库；null 时存空对象
+            m.setParams(cmd.params() == null ? "{}" : objectMapper.writeValueAsString(cmd.params()));
+        } catch (JacksonException e) {
+            // Object → JSON 序列化不应失败，属于内部错误
+            throw new IllegalStateException("params 序列化失败", e);
+        }
+        m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
+        m.setAllowProvided(cmd.allowProvided());
+    }
+
+    /** 写入 audit_log，同事务（D14 约定）。 */
+    private void writeAudit(Long tenantId, String actorId, String action,
+                            String targetId, String afterSnapshot) {
+        AuditLog log = new AuditLog();
+        log.setTenantId(tenantId);
+        log.setActor(actorId);
+        log.setActorType("USER");
+        log.setAction(action);
+        log.setTargetType("metric_definition");
+        log.setTargetId(targetId);
+        log.setAfterSnapshot(afterSnapshot);
+        log.setOperatedAt(LocalDateTime.now());
+        auditLogMapper.insert(log);
+    }
+}

@@ -107,20 +107,21 @@ CREATE TABLE scene (
 CREATE TABLE metric_definition (
   id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id           BIGINT       NOT NULL,
-  metric_code         VARCHAR(128) NOT NULL COMMENT 'metricCode，租户内唯一',
+  metric_code         VARCHAR(128) NOT NULL COMMENT 'metricCode，同 tenant + version 下唯一',
+  version             INT          NOT NULL DEFAULT 1 COMMENT 'B6：指标版本号，单调递增；同 metricCode 升版 = INSERT 新行，旧行 status 改为 SUPERSEDED',
   name                VARCHAR(128) NOT NULL,
   source_type         ENUM('ATTRIBUTE','SQL_AGGREGATE','EXTERNAL_HTTP','STREAM') NOT NULL,
-  data_type           ENUM('LONG','DOUBLE','STRING','BOOLEAN','LIST') NOT NULL,
-  params              JSON         NOT NULL COMMENT 'sourceType 专属参数（sql/url/column 等）',
+  data_type           ENUM('LONG','DOUBLE','STRING','BOOLEAN','LIST','DATE','DATETIME') NOT NULL COMMENT 'B20 新增 DATE（LocalDate，日历日期）/ DATETIME（Instant/带时区偏移，时区相关）；由 Flyway V1_5__add_date_datetime_to_metric_datatype.sql 扩展',
+  params              JSON         NOT NULL COMMENT 'sourceType 专属参数（B21）：SQL_AGGREGATE={datasource(命名只读源),sql(:now命名参数)}；EXTERNAL_HTTP={endpoint(命名端点),path,jsonPath}；ATTRIBUTE={table,column}',
   cache_ttl_seconds   INT          NOT NULL DEFAULT 60 COMMENT '取数结果缓存 TTL，0=不缓存',
   allow_provided      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'D30：是否允许调用方通过 providedMetrics 覆盖；DEFAULT 0 为 SQL_AGGREGATE/STREAM 兜底，ATTRIBUTE/EXTERNAL_HTTP 应用层写入时需显式设为 1（见 04-extension §4.3）',
-  status              ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  status              ENUM('ACTIVE','DISABLED','SUPERSEDED') NOT NULL DEFAULT 'ACTIVE' COMMENT 'B6：SUPERSEDED=被新版本取代（旧行保留，规则仍可按版本解析）',
   created_by          VARCHAR(64)  COMMENT '创建人（D14）',
   created_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by          VARCHAR(64)  COMMENT '最近修改人（D14）',
   updated_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_tenant_code (tenant_id, metric_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标元数据（sourceType / params / cacheTtl / allowProvided）';
+  UNIQUE KEY uk_tenant_code_version (tenant_id, metric_code, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标元数据（sourceType / params / cacheTtl / allowProvided / version B6）';
 ```
 
 **rule_definition**
@@ -156,11 +157,10 @@ CREATE TABLE rule_version (
   version               BIGINT       NOT NULL COMMENT '单调递增，per rule_definition（Long 型，匹配概念层 RuleVersion.version）',
   condition_ast         JSON         NOT NULL COMMENT '完整 AST 节点树，不可变',
   decision_bindings     JSON         NOT NULL COMMENT 'D27/D28：含 actions 快照的 Decision 绑定',
-  pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表（含 ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX 各类型配置）',
-  rollout               JSON         NOT NULL COMMENT 'D6 灰度配置快照（type / percentage / tagConditions）；空对象表示无灰度限制，全量放行',
+  pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表（含 ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX 各类型配置）；灰度由 ROLLOUT 项承载，params 含 percentage / bucketStart / bucketEnd / experimentId（详见 10-api-contract）',
   kind                  ENUM('AST_BOOLEAN','SCORECARD','DECISION_TREE','DECISION_TABLE','EXPRESSION_SCRIPT') NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT 'D12：规则形态冻结；v1 仅 AST_BOOLEAN 实装，其他占位',
   trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
-  metric_dependencies   JSON         NOT NULL COMMENT 'AST 引用的 metricCode 列表（发布期静态收集）',
+  metric_dependencies   JSON         NOT NULL COMMENT 'B6：AST 引用的 (metricCode, metricVersion) 对象数组（发布期冻结当前 ACTIVE 版本），格式 [{metricCode,metricVersion},...]',
   compiled_predicate_ref VARCHAR(256) NULL     COMMENT 'D20 §5：编译产物引用键，v1 留空，v1.5 预编译优化时启用',
   published_at          TIMESTAMP(3)           COMMENT 'NULL = 草稿；非 NULL = 已发布',
   published_by          VARCHAR(64),
@@ -170,6 +170,8 @@ CREATE TABLE rule_version (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则版本快照（不可变，D19）';
 ```
+
+> **已废弃列 `rollout`**：D6 初版曾设独立 `rollout JSON` 列存灰度快照，但 ROLLOUT 改由 `pre_gates` 承载后该列只写不读，已于迁移 `V1_4__drop_rollout.sql` 删除。灰度配置（percentage / 桶区间 / experimentId）统一在 `pre_gates` 的 ROLLOUT 项。
 
 **decision_definition**（D26/D27）
 
@@ -286,7 +288,7 @@ CREATE TABLE audit_log (
   tenant_id       BIGINT       NOT NULL,
   actor           VARCHAR(64)  NOT NULL COMMENT '操作人（来自请求头 X-Actor-Id，D14）',
   actor_type      ENUM('USER','SYSTEM','JOB') NOT NULL DEFAULT 'USER' COMMENT 'D14：操作方类型（来自请求头 X-Actor-Type）',
-  action          VARCHAR(64)  NOT NULL COMMENT 'CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE',
+  action          VARCHAR(64)  NOT NULL COMMENT 'CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE / IMPORT',
   target_type     VARCHAR(64)  NOT NULL COMMENT 'rule_definition / scene / metric_definition 等',
   target_id       VARCHAR(128) NOT NULL,
   before_snapshot JSON         COMMENT '变更前快照',
@@ -322,6 +324,7 @@ CREATE TABLE evaluation_session (
   started_at       TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '引擎开始评估时间',
   finished_at      TIMESTAMP(3)  COMMENT 'status 从 PENDING 更新为终态的时间',
   eval_duration_ms INT          COMMENT '整 session 耗时（ms）',
+  context_snapshot JSON         COMMENT 'EvalContext 取数快照；嵌套格式 {"metrics":{metricCode:value,...},"evalNow":"<ISO-8601 instant>"}（B20）；构建失败时为 null（排障 / dry-run 重放用）',
   UNIQUE KEY uk_tenant_event (tenant_id, event_id),
   KEY idx_scene_subject (scene_code, subject_id),
   KEY idx_started_at (started_at)
@@ -399,6 +402,7 @@ CREATE TABLE dry_run_session (
   trigger          ENUM('MANUAL','API') NOT NULL DEFAULT 'API' COMMENT 'dry-run 触发来源',
   requested_by     VARCHAR(64)  COMMENT 'dry-run 发起人（来自请求头 X-Actor-Id，D14）',
   target_rule_version_id BIGINT COMMENT '指定预览的 RuleVersion id；null 时使用 current_version，可提前预览未发布版本',
+  context_snapshot JSON         COMMENT 'dry-run 试算时 EvalContext 取数快照；嵌套格式 {"metrics":{metricCode:value,...},"evalNow":"<ISO-8601 instant>"}（B20）；构建失败时为 null（排障 / 重放对比用）',
   KEY idx_tenant_started (tenant_id, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 评估主记录（与 prod 隔离，D7）';
 ```
@@ -443,6 +447,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | 表 | 索引 | 查询模式 |
 |---|---|---|
 | `evaluation_session` | `idx_scene_subject (scene_code, subject_id)` | 按用户查历史评估记录 |
+| `evaluation_session` | （无专用索引）按规则查历史 session 走 `node_trace.rule_version_id` IN 该规则所有版本 id → 取 `evaluation_session_id` → JOIN evaluation_session；不在 evaluation_session 加规则外键索引以避免写热点，JOIN 量小可接受（见 10-api-contract §6.4） | |
 | `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
 | `action_execution` | UK `uk_idempotency (tenant_id, event_id, decision_code, action_id)`<br>`idx_status_retryable (status, retryable)`<br>`idx_session_id (evaluation_session_id)` | Action 派发幂等检查（D27 DB 层最终防重）<br>重试队列扫描（查 status=FAILED AND retryable=1）<br>按 session 查 action 执行记录 |
 | `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |

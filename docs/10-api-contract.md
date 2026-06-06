@@ -34,11 +34,12 @@
 | 分组 | 路径前缀 | 主要场景 |
 |------|---------|---------|
 | 评估接口 | `/api/v1/rule/` | 业务方触发评估（PUSH/PULL/dry-run） |
-| 规则管理 | `/api/v1/rules` | 创建 / 发布 / 禁用 / 查询规则 |
+| 规则管理 | `/api/v1/rules` | 创建 / 发布 / 禁用 / 查询规则；批量导出 / 导入 Bundle 文件（B7） |
 | Scene 管理 | `/api/v1/scenes` | 创建 / 更新 / 禁用 Scene |
 | 指标管理 | `/api/v1/metrics` | 注册 / 更新 / 禁用 Metric |
 | 元数据接口 | `/api/v1/scenes/{sceneCode}/metadata`，`/api/v1/scenes/{sceneCode}/provided-metrics` | 前端编辑器拉 ConditionType / ActionType 枚举；D30 allowProvided 发现 |
-| 审计与查询 | `/api/v1/evaluation-sessions` | 查 session / trace / action 执行 |
+| 审计与查询 | `/api/v1/evaluation-sessions`，`/api/v1/rules/{id}/sessions` | 查 session / trace / action 执行；按规则查历史触发记录 |
+| SDK 下发接口 | `/api/v1/sdk/snapshots`，`/api/v1/sdk/metric-definitions` | 嵌入式 SDK 拉规则快照 / metric 定义元数据（HTTP 模式，见 §8.7） |
 
 ---
 
@@ -125,7 +126,7 @@ POST /api/v1/rule/dry-run
 
 **Request：** 同 3.1，额外可传 `ruleVersionId`（指定版本回放，null = 使用当前版本）。
 
-**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段；v1 阶段 handler 均未实装 `dryRun()`，`actionResults` 中所有 Action 显示 `SKIPPED`（不实际派发）；v1.5 后 handler 实装 `dryRun()` 时返回真实预览 ActionResult：
+**Response 200：** 同 3.2，额外包含 `nodeTrace` 字段；v1.5（D7）已全量实装 `dryRun()`，`actionResults` 返回真实预览 ActionResult（不实际派发）：
 ```json
 {
   "eventId": "evt-dry-001",
@@ -155,7 +156,7 @@ POST /api/v1/rule/dry-run
 }
 ```
 
-若 handler 未实装 dryRun() 接口，对应 Action 显示 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`（D7）。见 07-operability §四。
+v1.5（D7）已全量实装 `dryRun()`，`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。见 07-operability §四。
 
 ---
 
@@ -176,14 +177,50 @@ POST /api/v1/rules
   "sceneCode": "risk.transfer",
   "code": "rule-transfer-review",
   "name": "转账人工审核触发",
+  "kind": "AST_BOOLEAN",
   "conditionAst": { "type": "AndNode", "children": [] },
   "decisionBindings": [{ "decisionCode": "REVIEW" }],
-  "preGates": [{ "type": "ROLLOUT", "params": { "percentage": 100 } }],
+  "preGates": [{ "gateType": "ROLLOUT", "params": { "percentage": 100 } }],
   "triggerEventTypes": ["transfer.initiated"]
 }
 ```
 
-> `tenantId` 为数字字符串（对应 `tenant.id` 主键），必填；`sceneCode` / `code` / `name` 必填；其余 JSON 字段可选（缺省存空 AST / 空数组）。
+**请求体字段说明：**
+
+| 字段            | 类型   | 必填 | 说明 |
+|-----------------|--------|------|------|
+| `tenantId`      | String | 是   | 数字字符串，对应 `tenant.id` 主键 |
+| `sceneCode`     | String | 是   | 规则所属场景编码 |
+| `code`          | String | 是   | 规则业务编码，同 tenantId + sceneCode 下唯一 |
+| `name`          | String | 是   | 规则显示名称 |
+| `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` |
+| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST |
+| `decisionBindings` | Array | 否 | 命中决策绑定列表，缺省空数组 |
+| `preGates`      | Array  | 否   | 前置门列表，缺省空数组；每项 `{ gateType, params }`。ROLLOUT 灰度门的 params 见下 |
+| `triggerEventTypes` | Array | 否 | 触发事件类型白名单，缺省空数组 |
+
+**ROLLOUT 灰度门 params 字段：**
+
+| 字段          | 类型   | 必填 | 说明 |
+|---------------|--------|------|------|
+| `percentage`  | Integer | 二选一 | 百分比放量，`[0,100]`，命中条件 `bucket < percentage`，等价于区间 `[0, percentage)` |
+| `bucketStart` | Integer | 二选一 | 桶区间下界（含），`[0,100]`，与 `bucketEnd` 成对出现；命中条件 `bucketStart <= bucket < bucketEnd` |
+| `bucketEnd`   | Integer | 二选一 | 桶区间上界（不含），`(bucketStart,100]` |
+| `experimentId`| String | 否   | 实验标识；同 `experimentId` 的多条规则共享分桶种子 `hash(subjectId:experimentId)`。缺省时种子退回 `hash(subjectId:ruleVersionId)`（各规则独立分桶） |
+
+- `bucket = (murmur3_32(seed) & 0x7fffffff) % 100`，取值 `[0,99]`。
+- `percentage` 与桶区间二选一（同时给时桶区间优先）；两者皆无时该门 fail-open（全量放行）。
+- **一致分桶**：同 `experimentId` 的规则用相同区间 → 同一批 subject 在多条规则上稳定同选。
+- **A/B 互斥**：同 `experimentId` 的规则用不相交区间（如 A `[0,50)`、B `[50,100)`）→ 每个 subject 恰好命中其一。
+- **发布期校验**（单规则）：`percentage∈[0,100]`；桶区间 `0<=bucketStart<bucketEnd<=100` 且必须成对；`experimentId` 非空白。违反返回 400 `INVALID_ARGUMENT`。跨规则区间不重叠由运营自行保证。
+
+互斥配置示例（两条规则同属 `exp-price-001`，平分流量）：
+```json
+// 规则 A
+"preGates": [{ "gateType": "ROLLOUT", "params": { "experimentId": "exp-price-001", "bucketStart": 0, "bucketEnd": 50 } }]
+// 规则 B
+"preGates": [{ "gateType": "ROLLOUT", "params": { "experimentId": "exp-price-001", "bucketStart": 50, "bucketEnd": 100 } }]
+```
 
 **Response 201：**
 ```json
@@ -214,6 +251,156 @@ GET /api/v1/rules?tenantId=demo-tenant&sceneCode=risk.transfer&status=PUBLISHED
 
 **Response 200：** 分页列表，含 `ruleDefinitionId / code / name / status / currentVersion / publishedAt`。
 
+### 4.5 注册 Metric（B6）
+
+```
+POST /api/v1/metrics?tenantId={tenantId}&metricCode={metricCode}
+```
+
+**Headers：**
+
+| Header | 必填 | 说明 |
+|--------|------|------|
+| `X-Actor-Id` | 是 | 操作人标识，写入 audit_log（D14） |
+
+**Request body：**
+```json
+{
+  "name": "KYC 等级",
+  "sourceType": "ATTRIBUTE",
+  "dataType": "LONG",
+  "params": { "table": "user_profile", "column": "kyc_level" },
+  "cacheTtlSeconds": 60,
+  "allowProvided": true
+}
+```
+
+> `tenantId` / `metricCode` 通过 **query param** 传入；`params` 是结构依 `sourceType` 而异的 **JSON 对象**，服务端序列化后存库。
+
+**Response 201：**
+```json
+{ "success": true, "data": 1 }
+```
+
+`data` 为新插入行的 id（裸 Long）。
+
+### 4.6 更新 / 升版 Metric（B6）
+
+```
+PUT /api/v1/metrics/{metricCode}?tenantId={tenantId}&breakingChange=false
+```
+
+**Headers：** 同 §4.5（`X-Actor-Id` 必填）。
+
+- `breakingChange=false`（默认）：原地更新当前 ACTIVE 版本的 name / params / cacheTtlSeconds / allowProvided，不产生新版本行。
+- `breakingChange=true`：INSERT 新版本行（version 递增），旧行 status 改为 `SUPERSEDED`；已发布规则仍绑定旧版本，不受影响。
+- **`sourceType` / `dataType` 变更视为 `breakingChange=true`（强制）**：即使请求参数传 `breakingChange=false`，只要 sourceType 或 dataType 与当前 ACTIVE 行不同，实现层自动走升版路径（D6/B6 冻结语义）。
+
+**Request body：** 同 §4.5 body，省略 `metricCode`（来自路径）。
+
+**Response 200：**
+```json
+{ "success": true, "data": 2 }
+```
+
+`data` 为当前生效行的 version（裸 Integer）。
+
+### 4.7 影响面查询（B6）
+
+```
+GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId={tenantId}
+```
+
+**Response 200：**
+```json
+{
+  "success": true,
+  "data": {
+    "metricCode": "user.kyc.level",
+    "metricVersion": 1,
+    "affectedRules": [
+      {
+        "ruleDefinitionId": 10,
+        "ruleCode": "block-new-account",
+        "ruleName": "封禁新账户",
+        "sceneCode": "risk.transfer",
+        "status": "ACTIVE"
+      }
+    ],
+    "affectedRuleCount": 1
+  }
+}
+```
+
+**口径**：收集所有在 `rule_version.metric_dependencies` 中绑定了该 `(metricCode, version)` 的当前 **ACTIVE rule_version** 对应的规则（按 `rv.status=ACTIVE` 收集，不按 `rule_definition.status` 过滤，口径对齐 eval 侧加载逻辑）。因此 `rule_definition.status=DISABLED` 但其 `rule_version.status=ACTIVE` 的规则仍会出现在结果中，`status` 字段反映 `rule_definition.status` 实际值。
+
+---
+
+### 4.8 批量导出规则 Bundle（B7）
+
+```
+GET /api/v1/rules/export?tenantId={tenantId}&ruleIds={id,id}&sceneId={sceneId}
+```
+
+按条件批量导出规则的当前 ACTIVE 版本为自包含 JSON Bundle，**以文件下载形式返回**（`Content-Type: application/json` + `Content-Disposition: attachment; filename="rule-bundle-{tenantId}-{ts}.json"`），供跨环境 / 跨租户迁移、Incident 复现。选取优先级：`ruleIds` 非空 → 按 id 列表；否则 `sceneId` 非空 → 该场景全部；否则 → 该租户全部。对每条仅导当前 ACTIVE 版本，无 ACTIVE 版本者跳过；最终无可导出规则时返回 `INVALID_ARGUMENT`（JSON 错误体）。导出入参用 `sceneId`；Bundle 内 `rules[].sceneCode` 用 code，跨环境按 code 关联。
+
+**Response 200**：Bundle JSON 文件（attachment），内容为多规则 Bundle：
+
+```json
+{
+  "bundleVersion": 1,
+  "exportedAt": "2026-06-06T10:00:00Z",
+  "sourceTenantId": "1",
+  "rules": [
+    {
+      "code": "rule.night.transfer", "name": "夜间大额转账", "kind": "AST_BOOLEAN",
+      "sceneCode": "risk.transfer",
+      "conditionAst": "{...}", "decisionBindings": "[...]", "preGates": "[]",
+      "triggerEventTypes": "[\"transfer\"]",
+      "metricDependencies": [{"metricCode": "account.age", "metricVersion": 1}]
+    }
+  ],
+  "scenes": [{"code": "risk.transfer", "name": "...", "...": "..."}],
+  "metricDefinitions": [{"metricCode": "account.age", "version": 1, "...": "..."}],
+  "decisionDefinitions": [{"code": "BLOCK", "name": "...", "actions": "[...]"}],
+  "actionTypeManifest": ["BLOCK_TRANSACTION"]
+}
+```
+
+> 所有 JSON 列（conditionAst / decisionBindings / preGates / triggerEventTypes / payloadSchema / eventTypes / defaultParams / actions）以**原始 JSON 字符串**无损搬运。`decisionDefinitions[]` 较 08-evolution §2.9 初设字段集多出，承载 `decisionBindings` 引用的 tenant 级 decision（D27）。
+
+### 4.9 批量导入规则 Bundle（B7）
+
+```
+POST /api/v1/rules/import?tenantId={tenantId}
+```
+
+header `X-Actor-Id`；**`multipart/form-data` 上传 Bundle JSON 文件（字段名 `file`）**。幂等批量导入到目标租户：Scene / metric / decision 缺失则建、已存在跳过；规则逐条落为 DRAFT 版本（同 code 已存在则追加草稿版本，不覆盖已发布版本）。`SQL_AGGREGATE` 类缺失 metric 不自动创建，列入 `metricsRequiringReview`。文件解析失败返回 `INVALID_ARGUMENT`。
+
+> **依赖完整性约定**：
+> - **Scene**：Bundle 的 `scenes[]` 须包含全部规则引用的 Scene。"缺失则建"的主语是**目标环境**——目标无同 code Scene 时从 Bundle 重建，已有则跳过；若 Bundle 未携带且目标也无该 Scene，返回 `INVALID_ARGUMENT`。
+> - **Metric**：upsert 以 **metricCode** 为键（忽略 version）——目标已有同 code 即列入 `metricsSkippedExisting`，**不保证精确版本一致**；版本不匹配不在导入期拦截，而由后续发布期"被引用 metric 无 ACTIVE 版本"校验兜底。
+
+**Response 200**：`ApiResponse<RuleImportResult>`：
+
+```json
+{
+  "success": true,
+  "data": {
+    "rules": [
+      {"ruleDefinitionId": 10, "ruleVersionId": 100, "version": 1,
+       "code": "rule.night.transfer", "sceneCode": "risk.transfer", "ruleAlreadyExisted": false}
+    ],
+    "scenesCreated": ["risk.transfer"], "scenesSkippedExisting": [],
+    "metricsCreated": ["account.age"], "metricsSkippedExisting": [], "metricsRequiringReview": [],
+    "decisionsCreated": ["BLOCK"], "decisionsSkippedExisting": [],
+    "actionTypesReferenced": ["BLOCK_TRANSACTION"]
+  }
+}
+```
+
+> 权限：v1 沿用 `X-Actor-Id`，§2.9 设想的 EXPORT / PUBLISH 权限校验留 TODO。
+
 ---
 
 ## 五、元数据接口
@@ -227,6 +414,8 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 **Response：** 见 `04-extension.md §五` 元数据契约（`conditionTypes` / `actionTypes` / `availableMetrics` 三段）。
 
 ### 5.2 D30 providedMetrics 发现接口
+
+> **已实装（v2 第二阶段）**
 
 ```
 GET /api/v1/scenes/{sceneCode}/provided-metrics?tenantId=demo-tenant
@@ -265,7 +454,10 @@ GET /api/v1/evaluation-sessions?tenantId=demo-tenant&sceneCode=risk.transfer&sub
 GET /api/v1/evaluation-sessions/{sessionId}/trace?tenantId=demo-tenant
 ```
 
-**Response 200：** AST 节点树结构，每节点含 `type / result / actualValue / errorCode / valueSource`。响应格式与 §3.3 dry-run 的 `nodeTrace` 相同（嵌套树）；数据来源是 `node_trace` 表的扁平行，由 API 层按 `node_path` 重建树后返回。dry-run 路径则直接序列化内存中的 AST 求值树，不落 `node_trace` 表。
+**Response 200：** 扁平 trace 列表，按 `node_path` 字典序排列。向后兼容保留。
+
+**嵌套树端点（推荐）**：`GET /api/v1/evaluation-sessions/{sessionId}/trace/tree?tenantId=`  
+返回格式与 §3.3 dry-run `nodeTrace` 相同（嵌套结构），已实装（v2 第二阶段）。数据来源是 `node_trace` 表的扁平行，由 API 层按 `node_path` 重建树后返回。
 
 ### 6.3 查询 audit_log
 
@@ -274,6 +466,55 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 ```
 
 **Response 200：** 分页列表，含 `actor / actorType / action / targetType / targetId / beforeSnapshot / afterSnapshot / operatedAt`。
+
+### 6.4 按规则查历史 evaluation_session
+
+> 排障场景：运营在规则详情页快速看到"这条规则最近触发了哪些 session，结果如何"。
+
+```
+GET /api/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&limit=20&offset=0
+```
+
+**Path 参数：**
+
+| 参数 | 说明 |
+|------|------|
+| `ruleDefinitionId` | 规则定义 ID（`rule_definition.id`） |
+
+**Query 参数：**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `tenantId` | 是 | 租户 ID |
+| `status` | 否 | 筛选终态：`HIT / MISS / BLOCKED / ERROR`；不传则返回全部终态 |
+| `limit` | 否 | 每页条数，默认 20，最大 100 |
+| `offset` | 否 | 偏移量，默认 0 |
+
+**Response 200：**
+```json
+{
+  "total": 135,
+  "items": [
+    {
+      "sessionId": 10001,
+      "eventId": "evt-001",
+      "subjectId": "user-001",
+      "status": "HIT",
+      "finalDecision": "REVIEW",
+      "evalDurationMs": 45,
+      "startedAt": "2026-06-04T10:00:00.123+08:00",
+      "ruleVersionId": 42
+    }
+  ]
+}
+```
+
+**实现说明（供实现参考，不属于 API 契约）：**
+- 查询路由：`node_trace.rule_version_id` IN（ruleDefinitionId 对应的所有 `rule_version.id`）→ 取 `evaluation_session_id` → JOIN `evaluation_session`；
+- 排序：`evaluation_session.started_at DESC`；
+- 响应 `ruleVersionId` 来自关联的 `node_trace.rule_version_id`（该 session 内该规则实际命中的版本）；
+- `tenantId` 为必填，查询层校验，不支持跨租户查询；
+- 索引说明见 [`05-storage.md`](./05-storage.md) 运营查询索引表。
 
 ---
 
@@ -288,6 +529,14 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 | `PAYLOAD_SCHEMA_MISMATCH` | 400 | payload 字段缺必填 / 类型错 | 修复请求体重试 |
 | `INVALID_EVENT_TYPE` | 400 | eventType 不在 Scene 白名单内 | 确认 sceneCode + eventType |
 | `SCENE_NOT_FOUND` | 404 | sceneCode 未注册或 DISABLED | 确认 tenantId + sceneCode |
+
+### 管理接口错误（HTTP 4xx）
+
+§四 规则管理 / Scene / Metric 等写接口的参数校验失败统一返回 `INVALID_ARGUMENT`（400，由全局异常处理器映射 `IllegalArgumentException`）。
+
+| errorCode | HTTP 状态 | 含义 | 调用方建议 |
+|-----------|-----------|------|-----------|
+| `INVALID_ARGUMENT` | 400 | 管理接口参数校验失败。B7 适用情形：导出无可导出的 ACTIVE 规则 / `sceneId` 对应 Scene 不存在；导入 Bundle 文件解析失败 / `rules` 为空 / 规则引用的 Scene 既不在 Bundle 也不在目标环境 | 按 message 修正请求后重试 |
 
 ### 评估期 errorCode（EvalResult.errorCode）
 
@@ -308,7 +557,7 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 | `PREDECESSOR_FAILED` | false | failFast 前置 Action 失败（D18） |
 | `QUEUE_OVERFLOW` | true | Action Dispatcher 队列满，Action 已丢弃入重试队列（D20） |
 | `HANDLER_EXCEPTION` | false | ActionHandler.execute() 抛出未捕获异常（D18） |
-| `DRY_RUN_NOT_IMPLEMENTED` | false | handler 未实装 dryRun()，dry-run 时 Dispatcher 短路返回 SKIPPED（D7） |
+| `DRY_RUN_NOT_IMPLEMENTED` | false | ~~v1 占位~~；v1.5 已全量实装（D7），不再产生 |
 | `NOT_SUPPORTED` | false | compensate() 不支持 |
 
 ### 发布期 errorCode（audit_log.after_snapshot.errorCode）
@@ -326,9 +575,304 @@ GET /api/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=
 
 ## 八、SDK 用法
 
-v1 调用方通过 HTTP 直接调用本文档各接口，无独立 SDK 包装。
+### 8.1 规则来源模式总览
 
-v2 嵌入式 SDK 模式详见 [`08-evolution.md`](./08-evolution.md) §2.14（评估引擎下沉到调用方进程，消除跨进程网络依赖）。
+嵌入式 SDK（`rule-sdk`）支持四种规则来源，通过统一的 `RuleSource` SPI 装载到本地评估索引，`evaluate()` 路径始终零网络跳转：
+
+| 模式 | Builder 入口 | 适用场景 |
+|------|-------------|---------|
+| **HTTP 轮询** | `serverUrl()` + `tenantId()` | 生产，规则由服务端管理，定时热更新 |
+| **JSON 文件** | `ruleFile("classpath:rules.json")` | 离线、测试、规则随代码打包 |
+| **代码 DSL** | `localSnapshot()` + `Condition` DSL | 单测、演示、CI 验证规则逻辑 |
+| **注解模式** | `ruleSource(new AnnotationRuleSource(...))` | 规则与业务代码同类，IDE 静态检查全链路打通 |
+
+多种来源可混用（如文件兜底 + HTTP 热更新），各来源独立写入同一索引。
+
+---
+
+### 8.2 HTTP 轮询模式
+
+`SnapshotPoller` 后台定时拉取 `/api/v1/sdk/snapshots`：
+
+```java
+// 非 Spring 项目
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .serverUrl("http://rule-engine:8080")
+        .tenantId("1001")
+        .fetchMode(FetchMode.DECLARED)
+        .scenes("fraud", "payment")
+        .pollInterval(Duration.ofSeconds(30))
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+Spring Boot 项目通过 `application.yml` 自动装配，支持三种配置模式：
+
+**HTTP 轮询模式**（生产）：
+
+```yaml
+rule:
+  sdk:
+    server-url: http://rule-engine:8080
+    tenant-id: "1001"
+    fetch-mode: DECLARED      # DECLARED（订阅指定场景）或 ALL（全量）
+    scenes: fraud, payment    # fetch-mode=DECLARED 时有效
+    poll-interval: 30s
+```
+
+**JSON 文件模式**（离线/测试）：
+
+```yaml
+rule:
+  sdk:
+    rule-files:
+      - classpath:rules/fraud.json
+      - classpath:rules/payment.json
+```
+
+**混用**（文件兜底 + HTTP 热更新）：`server-url` 与 `rule-files` 同时配置时两路来源均装载，规则写入同一索引。
+
+```java
+@Autowired RuleEngineClient client;
+EvalResult result = client.evaluate(event);
+```
+
+**`@ConditionType` Bean 自动扫描**：实现 `ConditionEvaluator` 接口并标注 `@ConditionType` 的 Spring Bean，AutoConfiguration 启动时自动收集注册，无需手动 `addEvaluator()`：
+
+```java
+@Component
+@ConditionType("BLACKLIST_HIT")
+public class BlacklistEvaluator implements ConditionEvaluator {
+    @Override
+    public boolean evaluate(ConditionNode node, EvalContext ctx) {
+        List<?> list = (List<?>) node.params().get("list");
+        var mv = ctx.metrics().get(node.metricCode());
+        return mv != null && list.contains(mv.value());
+    }
+}
+```
+
+**Listener Bean 注入**：容器中存在 `EvalResultListener` 或 `EvalSessionListener` Bean 时自动注入：
+
+```java
+@Component
+public class AuditListener implements EvalResultListener {
+    @Override
+    public void onResult(RuleEvent event, EvalResult result) {
+        // 写审计日志、打点等
+    }
+}
+```
+
+---
+
+### 8.3 JSON 文件模式
+
+规则以 JSON 文件随代码打包，适合离线 / 测试环境，文件格式与服务端 `GET /api/v1/sdk/snapshots` 响应 `data` 数组一致，可直接从服务端导出后存为文件：
+
+```java
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .ruleFile("classpath:rules/fraud.json")
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+文件结构示例（`src/main/resources/rules/fraud.json`）：
+
+```json
+[
+  {
+    "ruleVersionId": 1,
+    "sceneCode": "fraud",
+    "tenantId": "t1",
+    "kind": "AST_BOOLEAN",
+    "triggerEventTypes": ["TRANSACTION"],
+    "decisionBindings": [{"decisionCode": "BLOCK", "priority": 100}],
+    "preGates": [],
+    "conditionAst": {
+      "type": "AndNode",
+      "children": [
+        { "type": "ConditionNode", "conditionType": "GT", "metricCode": "amount",
+          "params": {"threshold": 1000}, "weight": 0.0 }
+      ]
+    }
+  }
+]
+```
+
+---
+
+### 8.4 代码 DSL 模式
+
+不连接服务端，通过 `Condition` DSL 构造规则，适合单测 / 演示 / CI 验证：
+
+```java
+// 规则：amount > 1000 AND country IN ["CN", "HK"]
+RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+        .ruleVersionId(1L)
+        .tenantId("t1")
+        .sceneCode("fraud")
+        .conditionAst(
+            Condition.gt("amount", 1000)
+                     .and(Condition.in("country", "CN", "HK"))
+                     .toAst()
+        )
+        .addTriggerEventType("TRANSACTION")
+        .addDecisionBinding("BLOCK", 100)
+        .build();
+
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .localSnapshot(snap)
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+---
+
+### 8.5 Condition DSL 速查
+
+`Condition` 类（`rule-sdk`）封装 AST 构造细节，`toAst()` 生成标准 `AstNode`：
+
+```java
+// 数值比较
+Condition.gt("amount", 1000)          // amount > 1000
+Condition.gte("amount", 1000)         // amount >= 1000
+Condition.lt("score", 60)             // score < 60
+Condition.lte("score", 60)            // score <= 60
+
+// 相等判断
+Condition.eq("status", "ACTIVE")      // status == ACTIVE
+Condition.neq("status", "BLOCKED")    // status != BLOCKED
+
+// 集合 / 区间
+Condition.in("country", "CN", "HK")   // country IN [CN, HK]
+Condition.notIn("country", "US")      // country NOT IN [US]
+Condition.between("age", 18, 65)      // age BETWEEN [18, 65]
+
+// 字符串
+Condition.contains("name", "corp")    // name 包含 "corp"
+Condition.matches("email", ".*@corp\\.com")  // 正则
+Condition.startsWith("code", "VIP")
+Condition.endsWith("code", "PRO")
+
+// 自定义算子（需配合 addEvaluator 注册）
+Condition.of("BLACKLIST_HIT", "device_id", Map.of("list", blocklist))
+
+// 逻辑组合（链式，同级 and/or 自动展平）
+Condition.gt("amount", 1000).and(Condition.in("country", "CN", "HK"))
+Condition.gt("amount", 1000).or(Condition.eq("vip", true))
+Condition.eq("blocked", true).not()
+
+// 恒真 / 恒假
+Condition.always()   // 空 AND 节点，永远返回 true
+Condition.never()    // 空 OR 节点，永远返回 false
+```
+
+---
+
+### 8.6 自定义算子（addEvaluator）
+
+注册自定义 `ConditionEvaluator`，叠加在内置算子之上（同名自定义可覆盖内置）：
+
+```java
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .localSnapshot(snap)
+        .addEvaluator("BLACKLIST_HIT", (node, ctx) -> {
+            List<?> list = (List<?>) node.params().get("list");
+            Object val = ctx.providedMetrics().get(node.metricCode());
+            return val != null && list.contains(val);
+        })
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+Spring 项目中，`@ConditionType` 标注的 Bean 由 `AutoConfiguration` 自动收集注入，无需手动 `addEvaluator()`。
+
+---
+
+### 8.7 SDK 下发端点
+
+`SnapshotPoller`（HTTP 轮询模式）内部调用的服务端接口：
+
+```
+GET /api/v1/sdk/snapshots
+  ?tenantId=1001
+  &scenes=fraud,payment   # 可选；不传则返回该租户所有 ACTIVE 快照
+  &since=1717200000000    # 可选；预留增量拉取（v1 忽略，全量返回）
+```
+
+响应格式与 `ApiResponse<List<RuleVersionSnapshot>>` 一致（见 §一），`data` 数组即为 JSON 文件模式的合法输入。
+
+`MetricDefinitionPoller`（HTTP 取数模式，D46 / B23）内部调用的 metric 定义下发接口——仅注入 handler 启用 fetch 时拉取：
+
+```
+GET /api/v1/sdk/metric-definitions
+  ?tenantId=1001
+  &scenes=fraud,payment   # 可选；不传（ALL 模式）返回该租户全部 ACTIVE 定义；
+                          # 传入（DECLARED 模式）只返回这些 scenes 下 ACTIVE rule_version 的 metricDependencies 并集内的定义
+```
+
+响应格式为 `ApiResponse<List<MetricDescriptor>>`（见 §一），仅下发定义元数据（`sourceType`/`dataType`/`allowProvided`/`cacheTtlSeconds`/`params`/`metricVersion`），**不含凭证**——取数 handler 与凭证由宿主提供。`scenes` 过滤口径与快照下发一致（`rv.status=ACTIVE`），保证 SDK 评估这些 scenes 时引用的 metric 定义都已下发。**B6 补注**：DECLARED 模式按被引用 `(metricCode, metricVersion)` 并集下发，含 `SUPERSEDED` 旧版定义（被现存 ACTIVE 规则快照引用的版本必须下发），每项 `MetricDescriptor` 带 `metricVersion` 字段。`rule_version.metric_dependencies` 格式为对象数组 `[{metricCode, metricVersion}]`（B6），非字符串数组。
+
+---
+
+### 8.8 RuleEvent 构造
+
+```java
+RuleEvent event = new RuleEvent(
+        tenantId,       // String，与规则快照的 tenantId 一致
+        sceneCode,      // String，如 "fraud"
+        eventType,      // String，如 "TRANSACTION"
+        subjectId,      // String，业务主体唯一标识
+        eventId,        // String，业务幂等 ID（建议 UUID）
+        Instant.now(),  // occurredAt
+        payload,        // Map<String, Object>，事件 payload
+        providedMetrics // Map<String, Object>，预计算指标（可为 null）
+);
+```
+
+`providedMetrics` 的 key 须与规则中 `ConditionNode.metricCode` 完全一致，引擎直接从此 Map 取值与 `params` 中的阈值比较。
+
+---
+
+### 8.9 注解模式（`@RuleDef`）
+
+规则定义与业务代码同处一个 Java 类，适合单测 / CI 验证 / 离线部署，IDE 静态检查全链路打通：
+
+```java
+@RuleDef(
+    id        = 1L,
+    tenantId  = "t1",
+    sceneCode = "fraud",
+    trigger   = "TRANSACTION",
+    decisions = @DecisionBinding(code = "BLOCK", priority = 100)
+)
+public class AmountFraudRule implements InlineRuleSpec {
+    @Override
+    public Condition condition() {
+        return Condition.gt("amount", 1000)
+                        .and(Condition.in("country", "CN", "HK"));
+    }
+}
+```
+
+**非 Spring 场景**：手动传入列表：
+
+```java
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .ruleSource(new AnnotationRuleSource(List.of(new AmountFraudRule())))
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+**Spring Boot 场景**：`@Component` + Starter 自动装配，`@Autowired RuleEngineClient` 直接使用，无需任何额外配置。
+
+**`@RuleDef.id` 必须稳定**：调用方负责为每个规则类指定唯一且不变的 `id`，用于 `AnnotationRuleSource` 幂等写入索引（重复 `loadInto()` 不产生重复规则）。
 
 ---
 

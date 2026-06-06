@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.eval.internal.listener;
 
-import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -28,7 +28,7 @@ public class IndexStartupLoader {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        Map<String, Map<String, List<RuleVersionSnapshot>>> all = loader.loadAll();
+        Map<String, Map<String, List<RuleVersionSnapshot>>> all = loader.loadAllWithStrategy(index);
         for (Map.Entry<String, Map<String, List<RuleVersionSnapshot>>> outerEntry : all.entrySet()) {
             // 外层 key 格式为 tenantId:sceneCode
             String[] parts = outerEntry.getKey().split(":", 2);

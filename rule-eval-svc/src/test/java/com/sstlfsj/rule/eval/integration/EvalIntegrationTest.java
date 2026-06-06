@@ -1,10 +1,12 @@
 package com.sstlfsj.rule.eval.integration;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
-import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
@@ -17,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -36,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 使用真实 MySQL 容器 + Flyway 建表 + 真实 Spring 上下文。
  */
 @SpringBootTest
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 class EvalIntegrationTest {
 
@@ -52,7 +55,12 @@ class EvalIntegrationTest {
             "com.sstlfsj.rule.config.internal.repository",
             "com.sstlfsj.rule.observability.internal.repository"
     })
-    static class TestApp {}
+    static class TestApp {
+        @Bean
+        ObjectMapper objectMapper() {
+            return JsonMapper.builder().build();
+        }
+    }
 
     /** MySQL 8.0 容器，整个测试类共享（@Container + static = 容器生命周期绑定到类）。 */
     @Container
@@ -143,13 +151,12 @@ class EvalIntegrationTest {
         // 空 AndNode：children=[] 时 AND 求值结果为 true（空集合 AND 短路不发生），规则命中
         jdbc.execute("""
                 INSERT IGNORE INTO rule_version (id, rule_definition_id, version,
-                    condition_ast, decision_bindings, pre_gates, rollout,
+                    condition_ast, decision_bindings, pre_gates,
                     kind, trigger_event_types, metric_dependencies, status)
                 VALUES (1, 1, 1,
                     '{"type":"AndNode","children":[],"displayLabel":null,"weight":null}',
                     '[{"decisionCode":"REJECT","priority":100}]',
                     '[]',
-                    '{"strategy":"ALL"}',
                     'AST_BOOLEAN',
                     '["login"]',
                     '[]',

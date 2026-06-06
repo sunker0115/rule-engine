@@ -23,6 +23,9 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/test/runtime")
         public String runtime() { throw new RuntimeException("内部错误"); }
+
+        @GetMapping("/test/required-param")
+        public String requiredParam(@RequestParam String name) { return name; }
     }
 
     @BeforeEach
@@ -48,5 +51,13 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("INTERNAL_ERROR"));
+    }
+
+    @Test
+    void missingRequiredParam_returns400() throws Exception {
+        mockMvc.perform(get("/test/required-param").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 }

@@ -7,8 +7,13 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
+import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 
@@ -42,7 +47,7 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
         List<NodeTrace> traces = rawTraces.stream()
                 .map(t -> withRuleVersionId(t, rvId))
                 .toList();
-        return new EvalResult(satisfied, null, List.of(), traces, null, List.of());
+        return new EvalResult(satisfied, null, List.of(), traces, null, List.of(), null, null, null);
     }
 
     /** 递归将 ruleVersionId 注入 trace 树（顶层和所有子节点）。 */
@@ -64,10 +69,20 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
      */
     private boolean evalAndTrace(AstNode node, EvalContext ctx, List<NodeTrace> sink) {
         return switch (node) {
-            case AndNode and        -> traceAnd(and, ctx, sink);
-            case OrNode or          -> traceOr(or, ctx, sink);
-            case NotNode not        -> traceNot(not, ctx, sink);
-            case ConditionNode cond -> traceCondition(cond, ctx, sink);
+            case AndNode and          -> traceAnd(and, ctx, sink);
+            case OrNode or            -> traceOr(or, ctx, sink);
+            case NotNode not          -> traceNot(not, ctx, sink);
+            case ConditionNode cond   -> traceCondition(cond, ctx, sink);
+            case XorNode xor          -> traceXor(xor, ctx, sink);
+            // 以下节点由专属 Executor 处理，不应进入此执行器
+            case ScorecardRootNode ignored ->
+                    throw new IllegalStateException("ScorecardRootNode 不能由 TracingInterpretedExecutor 处理");
+            case IfNode ignored ->
+                    throw new IllegalStateException("IfNode 不能由 TracingInterpretedExecutor 处理，请使用 DecisionTreeExecutor");
+            case DecisionLeafNode ignored ->
+                    throw new IllegalStateException("DecisionLeafNode 不能由 TracingInterpretedExecutor 处理，请使用 DecisionTreeExecutor");
+            case DecisionTableNode ignored ->
+                    throw new IllegalStateException("DecisionTableNode 不能由 TracingInterpretedExecutor 处理，请使用 DecisionTableExecutor");
         };
     }
 
@@ -121,19 +136,34 @@ public class TracingInterpretedExecutor implements RuleVersionExecutor {
     }
 
     /**
+     * XOR 节点：全量遍历所有子节点（不短路），有且仅有一个 true 时结果为 true。
+     * 所有子节点均求值并记录 trace，结果汇总到 XorNode trace 的 children 中。
+     */
+    private boolean traceXor(XorNode xor, EvalContext ctx, List<NodeTrace> sink) {
+        List<NodeTrace> childTraces = new ArrayList<>();
+        int satisfiedCount = 0;
+        for (AstNode child : xor.children()) {
+            // XOR 不短路，所有子节点都求值并记录 trace
+            if (evalAndTrace(child, ctx, childTraces)) satisfiedCount++;
+        }
+        boolean result = satisfiedCount == 1;
+        sink.add(new NodeTrace("XorNode", null, null, result, null, null, null, childTraces, null));
+        return result;
+    }
+
+    /**
      * ConditionNode 叶子节点：查找对应 evaluator 求值；无注册 evaluator 时 result=false，errorCode="NO_EVALUATOR"。
      */
     private boolean traceCondition(ConditionNode node, EvalContext ctx, List<NodeTrace> sink) {
-        ConditionEvaluator evaluator = evaluators.get(node.conditionType());
-        if (evaluator == null) {
-            // 未注册 evaluator，记录错误码并返回 false
+        ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
+        if (outcome.isError()) {
+            // ERROR(取数失败/无算子)：节点不命中，trace 标错码，整树继续(D15)
             sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                    false, null, null, "NO_EVALUATOR", List.of(), null));
+                    false, null, null, outcome.errorCode(), List.of(), null));
             return false;
         }
-        boolean result = evaluator.evaluate(node, ctx);
         sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                result, null, null, null, List.of(), null));
-        return result;
+                outcome.satisfied(), null, null, null, List.of(), null));
+        return outcome.satisfied();
     }
 }

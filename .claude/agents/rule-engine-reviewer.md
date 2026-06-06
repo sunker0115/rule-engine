@@ -84,7 +84,7 @@ color: cyan
 3. `PAYLOAD_SCHEMA_MISMATCH` / `INVALID_EVENT_TYPE` / `SCENE_NOT_FOUND` 是入口层 400 错误，不进评估链路，不是 EvalResult.errorCode
 4. `PENDING` 是 `action_execution` 表的 DB 过程状态，不是 ActionResult.status POJO 枚举值（枚举只含 SUCCESS/FAILED/SKIPPED）
 5. `scene_metric_binding` DDL 字段是 `metric_definition_id`（BIGINT FK），不是 `metric_code`——外键指向 metric_definition 表主键
-6. `metricVersion` v1 DDL 无此列——概念占位，已在文档中标注，不是漏写
+6. `metricVersion` 已实装（B6）：`metric_definition.version` 列；规则发布期冻结 (metricCode, metricVersion)，`rule_version.metric_dependencies` 为对象数组 `[{metricCode, metricVersion}]`，不是字符串数组
 7. `decisionStrategy` v2 扩展需 ALTER TABLE MODIFY COLUMN（ENUM 扩展，非加列），已在文档中标注
 8. Pre-Gate 短路：Matcher 阶段无候选规则 → `evaluation_session` 不写入，不是遗漏
 9. `rule_definition.current_version` 存 `rule_version.id`（主键 BIGINT），不是 `rule_version.version`（序号）

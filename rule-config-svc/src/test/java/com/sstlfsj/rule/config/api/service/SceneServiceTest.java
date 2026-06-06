@@ -1,20 +1,32 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** 验证 SceneService 契约：方法签名可编译，Stub 实现能正确抛出 UnsupportedOperationException。 */
+/** 验证 SceneService 契约：stub 实现编译通过、方法签名匹配。 */
 class SceneServiceTest {
 
     private final SceneService stub = new SceneService() {
         @Override
-        public Long createScene(String tenantId, String sceneCode, String name, String actorId) {
+        public Long createScene(String tenantId, String sceneCode, String name,
+                                String description, String dominantMode, String subjectType,
+                                String eventTypesJson, String payloadSchemaJson,
+                                String defaultParamsJson, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public void updateScene(String tenantId, String sceneCode, String actorId) {
+        public void updateScene(String tenantId, String sceneCode,
+                                String name, String eventTypesJson,
+                                String payloadSchemaJson, String defaultParamsJson,
+                                String actorId) {
+            throw new UnsupportedOperationException("stub");
+        }
+
+        @Override
+        public SceneDetailDto getScene(String tenantId, String sceneCode) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -27,13 +39,20 @@ class SceneServiceTest {
     @Test
     void createScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.createScene("t1", "SCENE_A", "场景A", "actor"));
+                () -> stub.createScene("t1", "SCENE_A", "场景A",
+                        null, null, null, null, null, null, "actor"));
     }
 
     @Test
     void updateScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.updateScene("t1", "SCENE_A", "actor"));
+                () -> stub.updateScene("t1", "SCENE_A", null, null, null, null, "actor"));
+    }
+
+    @Test
+    void getScene_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.getScene("t1", "SCENE_A"));
     }
 
     @Test

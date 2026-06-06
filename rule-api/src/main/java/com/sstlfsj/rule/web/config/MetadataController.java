@@ -24,4 +24,12 @@ public class MetadataController {
             @RequestParam String tenantId) {
         return ApiResponse.ok(metadataService.getSceneMetadata(tenantId, sceneCode));
     }
+
+    /** GET /api/v1/scenes/{sceneCode}/provided-metrics — 发现 §5.2 allowProvided 指标 */
+    @GetMapping("/{sceneCode}/provided-metrics")
+    public ApiResponse<MetadataService.ProvidedMetricsResponse> getProvidedMetrics(
+            @PathVariable String sceneCode,
+            @RequestParam String tenantId) {
+        return ApiResponse.ok(metadataService.getProvidedMetrics(tenantId, sceneCode));
+    }
 }

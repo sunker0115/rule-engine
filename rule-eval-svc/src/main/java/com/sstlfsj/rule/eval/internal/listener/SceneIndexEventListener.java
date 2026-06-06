@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.eval.internal.listener;
 
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
-import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import org.springframework.modulith.events.ApplicationModuleListener;
@@ -36,7 +36,7 @@ public class SceneIndexEventListener {
             return;
         }
         Map<String, List<RuleVersionSnapshot>> byEventType =
-                loader.loadByScene(event.tenantId(), event.sceneCode());
+                loader.loadBySceneWithStrategy(event.tenantId(), event.sceneCode(), index);
         for (Map.Entry<String, List<RuleVersionSnapshot>> entry : byEventType.entrySet()) {
             index.update(event.tenantId(), event.sceneCode(),
                          entry.getKey(), entry.getValue());

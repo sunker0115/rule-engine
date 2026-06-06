@@ -9,6 +9,4 @@ import java.lang.annotation.*;
 public @interface MetricSourceType {
     String value();
     String paramsSchema() default "{}";
-    int defaultTimeoutMs() default 1000;
-    int defaultCacheTtlSeconds() default 60;
 }

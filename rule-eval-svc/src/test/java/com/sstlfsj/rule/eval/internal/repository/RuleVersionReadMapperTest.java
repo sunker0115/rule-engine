@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.repository;
 
-import com.sstlfsj.rule.eval.internal.snapshot.RuleVersionRow;
+import com.sstlfsj.rule.kernel.internal.codec.RuleVersionRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 import org.junit.jupiter.api.Test;
@@ -31,6 +31,20 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadAllActive_sqlContainsKind() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadAllActive");
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.kind"), "loadAllActive SQL 应包含 rd.kind 字段");
+    }
+
+    @Test
+    void loadAllActive_sqlContainsDecisionStrategy() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadAllActive");
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.decision_strategy"), "loadAllActive SQL 应包含 decision_strategy 字段");
+    }
+
+    @Test
     void loadActiveByScene_hasCorrectParameters() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod(
                 "loadActiveByScene", Long.class, String.class);
@@ -42,11 +56,41 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadActiveByScene_sqlContainsKind() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "loadActiveByScene", Long.class, String.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.kind"), "loadActiveByScene SQL 应包含 rd.kind 字段");
+    }
+
+    @Test
+    void loadActiveByScene_sqlContainsDecisionStrategy() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "loadActiveByScene", Long.class, String.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.decision_strategy"), "loadActiveByScene SQL 应包含 decision_strategy 字段");
+    }
+
+    @Test
     void loadById_returnsRuleVersionRow() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
         assertEquals(RuleVersionRow.class, method.getReturnType());
         assertNotNull(method.getAnnotation(Select.class));
         String sql = method.getAnnotation(Select.class).value()[0];
         assertTrue(sql.contains("#{ruleVersionId}"), "SQL 应包含 ruleVersionId 参数");
+    }
+
+    @Test
+    void loadById_sqlContainsKind() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.kind"), "loadById SQL 应包含 rd.kind 字段");
+    }
+
+    @Test
+    void loadById_sqlContainsDecisionStrategy() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.decision_strategy"), "loadById SQL 应包含 decision_strategy 字段");
     }
 }

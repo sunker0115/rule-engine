@@ -14,7 +14,8 @@ class MetricSourceHandlerTest {
             new MetricValue(42.0, "DOUBLE", "FETCHED");
 
     private static MetricQuery buildQuery() {
-        return new MetricQuery("ACCOUNT_BALANCE", "t1", "u1", Map.of(), Map.of());
+        return new MetricQuery("ACCOUNT_BALANCE", "t1", "u1", Map.of(), Map.of(),
+                java.time.Instant.parse("2026-06-06T00:00:00Z"));
     }
 
     @Test

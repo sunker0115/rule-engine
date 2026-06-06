@@ -249,6 +249,8 @@
 - 不实现 `executionStrategy` —— 决策集策略留到 08-evolution 路线图，v1 默认 `HIGHEST_PRIORITY`（D29 落定，覆盖本条原写的 `ALL_HITS`）；
 - 不实现脚本沙箱 —— 表达式 evaluator 留到 v1.5。
 
+**后续实装补记**：`SCORECARD` evaluator 已实装（D12 决策时）；`DECISION_TREE` / `DECISION_TABLE` evaluator 已实装（D42）；`ALL_HITS` / `FIRST_HIT` executionStrategy 已实装（D41）；`EXPRESSION_SCRIPT` 仍未实装。
+
 **你的决定**：A（按上述 3 个占位落地）
 
 ---
@@ -1058,6 +1060,422 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 
 ---
 
+## D33. 嵌入式 SDK 本地模式（代码定义规则，零网络）⭐⭐
+
+**为什么重要**：D20 落地的 `RuleEngineClient` 强制要求 `serverUrl`，`SnapshotPoller` 靠 HTTP 拉规则。在以下场景中这是多余的负担：
+- 单测 / CI：只想验证规则逻辑，不想起服务端；
+- 演示 / 原型：规则写死在代码里，不需要动态下发；
+- 完全离线部署：无法访问 rule-engine 服务，规则随业务代码打包。
+
+**两种方案**：
+
+| 方案 | 描述 | 权衡 |
+|------|------|------|
+| A. Builder 支持 `localSnapshot()`，不传 `serverUrl` 时跳过 SnapshotPoller | 直接往 SceneRuleIndex 里塞快照，evaluate() 路径不变 | 侵入 Builder，但用法自然；`RuleVersionSnapshot` 需要补 Builder 辅助方法 |
+| B. 暴露 `SceneRuleIndex.update()` 让调用方手动管理 | 最小改动 | API 太低层，调用方要理解内部索引结构 |
+
+**决定**：A — Builder 新增 `localSnapshot(RuleVersionSnapshot)` 方法，叠加调用；`build()` 时若未配 `serverUrl` 则不启动 `SnapshotPoller`，直接将所有本地快照写入 `SceneRuleIndex`。
+
+**`RuleVersionSnapshot` 构造**：record 目前只有全参构造器，补一个内部 `Builder` 辅助类（不改 record 签名），用于本地模式的链式构造。
+
+**不改的**：
+- `evaluate()` 路径完全不变，本地 / 远程透明；
+- `SnapshotPoller` 不变；
+- `rule-eval-svc` 的服务端路径不变；
+- HTTP 模式仍要求 `serverUrl` 必填。
+
+**落地范围**（D33 实现计划）：
+- `rule-kernel`：`RuleVersionSnapshot` 补 `Builder` 内部类；
+- `rule-sdk`：`RuleEngineClient.Builder` 新增 `localSnapshot()` 方法，`build()` 判断是否启动 poller；
+- 测试：`RuleEngineClientTest` 补本地模式覆盖（无 HTTP、直接评估）。
+
+**已实装**（D33）：`RuleVersionSnapshot.Builder` + `RuleEngineClient.Builder.localSnapshot()` + 本地模式跳过 SnapshotPoller 逻辑 + 测试覆盖。
+
+---
+
+## D35. SDK `RuleSource` 抽象 + 四种规则来源模式 ⭐⭐⭐
+
+**为什么重要**：D34 只解决了"代码直接传 snapshot"，但实际需要支持的场景更多——HTTP 轮询（生产）、JSON 文件（离线/测试）、代码 DSL（单测/演示）、注解扫描（声明式）。四种模式的差异只在"索引怎么填充"，底层 `EvalEngine` 完全一致。需要一个统一抽象避免 `RuleEngineClient` 膨胀成四套分支逻辑。
+
+**核心抽象**：
+
+```java
+/** 规则来源 SPI：将规则装载到评估索引。 */
+public interface RuleSource {
+    void loadInto(SceneRuleIndex index);
+}
+```
+
+**四种实现**：
+
+| 模式 | 实现类 | 典型场景 |
+|---|---|---|
+| HTTP 轮询 | `PollingRuleSource`（含原 `SnapshotPoller` 逻辑） | 生产，规则由服务端管理 |
+| JSON 文件 | `FileRuleSource.classpath("rules.json")` | 离线、测试、规则随代码打包 |
+| 代码 DSL | `DslRuleSource`（由 `LocalBuilder` 构造） | 单测、演示 |
+| 注解扫描 | `AnnotationRuleSource`（未来，D38 之后实现） | 声明式，`@RuleDef` 标注规则类 |
+
+**`RuleEngineClient` 统一入口**：接受一个或多个 `RuleSource`，可混用：
+
+```java
+// 生产：HTTP 轮询
+RuleEngineClient.builder()
+    .tenantId("t1")
+    .serverUrl("http://rule-engine:8080")
+    .build();
+
+// 文件离线
+RuleEngineClient.builder()
+    .tenantId("t1")
+    .ruleFile("classpath:rules/fraud.json")
+    .build();
+
+// 本地 DSL
+RuleEngineClient.local("t1")
+    .rule().scene("fraud").on("TRANSACTION")
+           .when(Condition.gt("amount", 1000))
+           .decide("BLOCK", 100)
+    .build();
+
+// 混用（文件兜底 + HTTP 热更新）
+RuleEngineClient.builder()
+    .tenantId("t1")
+    .ruleSource(FileRuleSource.classpath("rules/baseline.json"))
+    .ruleSource(new PollingRuleSource(serverUrl, tenantId, ...))
+    .build();
+```
+
+**`RuleSource` 不携带 evaluator**：规则数据与算子行为职责分离，evaluator 在 Client 级通过 `addEvaluator()` 注册（见 D37）。
+
+**文件格式**：JSON，与服务端 `GET /api/v1/sdk/snapshots` 响应体 `data` 数组格式完全一致，可直接从服务端导出存为文件离线使用。不做 YAML（需额外依赖 `jackson-dataformat-yaml`），如有需求后续扩展。
+
+**不改的**：`EvalEngine`、`SceneRuleIndex`、服务端任何模块。
+
+**已实装**（D35）：`RuleSource` SPI + `PollingRuleSource` / `FileRuleSource` / `DslRuleSource` / `AnnotationRuleSource` 四种实现；`RuleEngineClient` 统一接受多 `RuleSource`，混用场景覆盖。
+
+---
+
+## D36. `Condition` DSL — 隐藏 AST 构造细节 ⭐⭐
+
+**为什么重要**：`ConditionNode`（5 参构造）+ `AndNode`（3 参构造）对调用方完全暴露 AST 内部结构，手写门槛高，且参数顺序难记（尤其 `weight`、`displayLabel` 几乎每次都是 null/0）。代码 DSL 模式和注解模式都需要一个友好的条件表达层。
+
+**设计**：`Condition` 是 `rule-sdk` 中的工厂 + Builder 类，最终生成 `AstNode`：
+
+```java
+// 叶子条件（内置算子）
+Condition.gt("amount", 1000)           // amount > 1000
+Condition.in("country", "CN", "HK")   // country IN [CN, HK]
+Condition.between("age", 18, 65)
+Condition.matches("email", ".*@corp\\.com")
+
+// 逻辑组合
+Condition.gt("amount", 1000).and(Condition.in("country", "CN", "HK"))
+Condition.gt("amount", 1000).or(Condition.eq("vip", true))
+Condition.gt("amount", 1000).not()
+
+// 自定义算子（需配合 addEvaluator 注册）
+Condition.of("BLACKLIST_HIT", "device_id", Map.of("list", blocklist))
+
+// 恒真 / 恒假
+Condition.always()
+Condition.never()
+```
+
+**实现**：`Condition` 是 `rule-sdk` 的 wrapper，`toAst()` 方法生成对应 `AstNode`，`ConditionNode` 的 `displayLabel` 固定 null、`weight` 固定 0.0（纯 DSL 场景不需要这两个字段）。
+
+**不改的**：`ConditionNode` / `AndNode` 等 record 定义不变，`Condition` 是叠加的便利层。
+
+**已实装**（D36）：`Condition` 工厂类 + 全套内置算子（gt/lt/gte/lte/eq/neq/in/notIn/between/notBetween/contains/notContains/startsWith/endsWith/matches/dateBefore/dateAfter）+ 逻辑组合（and/or/not）+ `always()`/`never()`。
+
+---
+
+## D37. Evaluator 注册策略 — Client 级 `addEvaluator()`，不随 `RuleSource` 携带 ⭐⭐
+
+**为什么重要**：自定义条件算子（如 `BLACKLIST_HIT`）是行为（代码），`RuleSource` 是数据（规则定义）。若把 evaluator 混入 `RuleSource`，会导致一个 `RuleSource` 实例携带可执行代码，破坏数据/行为分离，也使热重载复杂化（数据可以随时重新加载，行为不行）。
+
+**决定**：evaluator 在 `RuleEngineClient` 级注册，所有 `RuleSource` 共享同一套 evaluator map：
+
+```java
+RuleEngineClient.builder()
+    .serverUrl("...")
+    .tenantId("t1")
+    .addEvaluator("BLACKLIST_HIT", (node, ctx) -> {
+        List<?> list = (List<?>) node.params().get("list");
+        Object val = ctx.metrics().get(node.metricCode());
+        return val != null && list.contains(val.value());
+    })
+    .build();
+```
+
+**实现**：`Builder` 新增 `extraEvaluators: Map<String, ConditionEvaluator>`，构建 `InterpretedExecutor` 时用 `KernelEvaluators.defaults()` 作底，`putAll(extraEvaluators)` 叠加（用户自定义可覆盖同名内置算子）。
+
+**Spring 服务端已有路径**：`@ConditionType` Bean 扫描 + `KernelEvaluators.defaults()`，两套路径互不影响。
+
+**未来注解扫描**：`RuleEngineClient.scanEvaluators("com.example")` 扫描 `@ConditionType` Bean 注册，是 `addEvaluator()` 的批量版，底层逻辑相同。
+
+**已实装**（D37）：`RuleEngineClient.Builder.addEvaluator()` + 注册到 `KernelEvaluators` 自定义 map + 传递给 `EvalEngine`。
+
+---
+
+## D38. 注解精简 — 对齐架构现状 ⭐⭐
+
+**背景**：三个注解（`@ActionType` / `@ConditionType` / `@MetricSourceType`）在 rule-kernel 骨架阶段建立，当时框架是 Spring Bean 扫描模式。D20 之后架构迭代，`KernelEvaluators.defaults()` 手工 Map 取代了注解扫描，部分注解的运行时语义已经悬空。
+
+**各注解现状与决定**：
+
+| 注解 | 当前实际使用 | 决定 |
+|---|---|---|
+| `@ActionType` | `EvalAutoConfiguration` 运行时读 `.value()` 映射 handler | **保留，现状合理** |
+| `@ConditionType` | 仅测试中使用，无任何运行时扫描逻辑 | **精简**：去掉 `requiresMetric` 字段（无消费方）；定位调整为"前端 schema 元数据 + SDK `scanEvaluators()` 的注册标记"，不再暗示 Spring Bean 扫描 |
+| `@MetricSourceType` | 仅测试中使用，无任何运行时扫描逻辑 | **精简**：去掉 `defaultTimeoutMs` / `defaultCacheTtlSeconds`（运维参数属于 07-operability，不该放注解里）；只保留 `value()` + `paramsSchema()`；或按需整体删除 |
+| `@RuleDef`（新增） | 未来 SDK 注解模式使用 | **预留接口** `InlineRuleSpec`，注解本身等 D35 注解模式实装时再建 |
+
+**`@ConditionType.requiresMetric` 删除原因**：字段含义模糊（是说"必须有 metricCode"还是"需要从 MetricSource 取数"？），且无任何运行时代码消费它。前端表单校验应由 `paramsSchema` 驱动，不需要额外字段。
+
+**迁移影响**：`@ConditionType` 字段删减是 breaking change，但目前无任何生产代码使用该字段（仅测试），影响面极小。
+
+**已实装**（D38）：`@ConditionType` 删除 `requiresMetric` 字段；`@MetricSourceType` 删除 `defaultTimeoutMs` / `defaultCacheTtlSeconds` 字段；`@RuleDef` 注解 + `InlineRuleSpec` 接口随 D40 一并落地。
+
+---
+
+## D39. Spring Boot Starter 补完 — 文件模式 + Bean 自动扫描 + Listener 注入 ⭐⭐⭐
+
+**背景**：`rule-sdk-spring-boot-starter` v1 只支持 HTTP 轮询模式（`serverUrl` + `tenantId`），三块能力缺失：
+1. 文件模式（`rule-files` 配置列表）；
+2. `@ConditionType` Bean 自动扫描，省去手动 `addEvaluator()`；
+3. `EvalResultListener` / `EvalSessionListener` Bean 自动注入。
+
+**各项设计**：
+
+**文件模式**：`SdkProperties` 新增 `ruleFiles: List<String>`，`AutoConfiguration` 遍历列表调 `builder.ruleFile()`。与 `serverUrl` 互斥校验已在 `RuleEngineClient.Builder.build()` 保障，starter 层不重复校验。
+
+**`@ConditionType` Bean 自动扫描**：`AutoConfiguration` 注入 `ApplicationContext`，调 `ctx.getBeansWithAnnotation(ConditionType.class)`，遍历结果：若 Bean 实现 `ConditionEvaluator`，以注解 `value()` 为 key 调 `builder.addEvaluator()`；否则跳过（不报错）。这是 D37 `addEvaluator()` 的批量版，底层路径完全一致。
+
+**Listener Bean 注入**：`AutoConfiguration` 注入 `Optional<EvalResultListener>` 和 `Optional<EvalSessionListener>`，存在则调 `builder.evalResultListener()` / `builder.evalSessionListener()`。
+
+**不改的**：`RuleEngineClient` 内部逻辑、`RuleSource` SPI、`InterpretedExecutor`、`EvalEngine`。
+
+**落地范围**：
+- `rule-sdk-spring-boot-starter`：`SdkProperties.java`（已加 `ruleFiles`）、`RuleEngineClientAutoConfiguration.java`；
+- `10-api-contract.md §8.2`：补 `rule-files`、`@ConditionType` Bean、Listener Bean 的 Spring 用法说明。
+
+**已实装**（D39）：`SdkProperties.ruleFiles` 字段 + `@ConditionType` Bean 自动扫描 + `EvalResultListener`/`EvalSessionListener` 自动注入。
+
+---
+
+## D40. SDK 注解模式 — `@RuleDef` + `AnnotationRuleSource` ⭐⭐⭐
+
+**背景**：D35 定义了 `RuleSource` SPI 四种模式，注解扫描模式（`AnnotationRuleSource`）当时标注"D38 之后实现"。现有三种模式（HTTP 轮询 / 文件 / DSL）都需要调用方手动构造 `RuleVersionSnapshot` 或写 JSON，注解模式的价值在于：**规则定义与业务代码同处一个 Java 类**，IDE 静态检查、重构、单测全链路打通；Spring 容器中零配置自动装载。
+
+**核心设计**：
+
+```
+InlineRuleSpec（接口，rule-sdk）
+  ├── condition(): Condition   ← 规则条件，由实现类返回
+  └── 从 @RuleDef 注解读：tenantId / sceneCode / trigger / decisions
+```
+
+```java
+@RuleDef(
+    tenantId  = "t1",
+    sceneCode = "fraud",
+    trigger   = "TRANSACTION",
+    decisions = {@Decision(code = "BLOCK", priority = 100)}
+)
+public class AmountFraudRule implements InlineRuleSpec {
+    @Override
+    public Condition condition() {
+        return Condition.gt("amount", 1000)
+                        .and(Condition.in("country", "CN", "HK"));
+    }
+}
+```
+
+**`AnnotationRuleSource`**：
+- 接收 `List<InlineRuleSpec>` 构造（非 Spring 场景）
+- `loadInto(index)` 遍历每个 spec：读 `@RuleDef` 元数据 + 调 `condition().toAst()` → 构建 `RuleVersionSnapshot` → 写入索引
+- `ruleVersionId` 由 `@RuleDef.id()` 显式指定（必填，确保幂等稳定）；`tenantId` 可在 `@RuleDef` 指定，也可在 `RuleEngineClient.Builder.tenantId()` 统一设置（注解值优先）
+
+**Spring 自动装配（D39 starter 内联）**：
+- AutoConfiguration 收集容器内所有 `InlineRuleSpec` Bean → 构造 `AnnotationRuleSource` → `builder.ruleSource()`
+- 与文件模式、HTTP 轮询模式完全正交，可同时使用
+
+**不做的**：
+- `@RuleDef` 不支持多 trigger（v1 一条规则一个 trigger 事件类型，与现有模型一致）
+- 不做 classpath 包路径扫描（非 Spring 场景依赖调用方显式传入 spec 列表）
+- `ruleVersionId` 不自动生成（调用方负责 id 稳定性，避免每次启动 id 不同导致索引不一致）
+
+**落地范围**：
+- `rule-kernel`：新增 `@RuleDef`、`@Decision` 注解（放 `api/annotation` 包）
+- `rule-sdk`：新增 `InlineRuleSpec` 接口、`AnnotationRuleSource` 类
+- `rule-sdk-spring-boot-starter`：D39 AutoConfiguration 内增加 `InlineRuleSpec` Bean 收集逻辑
+- `10-api-contract.md §8.1`：更新模式总览表，补 §8.x 注解模式用法
+
+**已实装**（D40）：`@RuleDef` + `@Decision` 注解 + `InlineRuleSpec` 接口 + `AnnotationRuleSource`（扫描类路径下带 `@RuleDef` 的 `InlineRuleSpec` 实现）+ Starter 自动收集注入。
+
+---
+
+## D41. `Scene.executionStrategy` 扩展 — ALL_HITS / FIRST_HIT ⭐⭐
+
+**背景**：v1 仅实现 `HIGHEST_PRIORITY`（D29）：多规则命中时取最高优先级 Decision。08-evolution §2.1 已记录 v2 补全 `ALL_HITS` / `FIRST_HIT`，现在具备实现条件。
+
+**三种策略语义**：
+
+| strategy | 行为 | 典型场景 |
+|---|---|---|
+| `HIGHEST_PRIORITY`（现有） | 命中规则中取优先级最高的 Decision | 互斥决策（拦截 > 审核 > 放行） |
+| `ALL_HITS` | 返回所有命中规则的 Decision 列表，不去重 | 营销叠加（多券并发 / 多优惠并存） |
+| `FIRST_HIT` | 按规则 `priority` 倒序，第一条命中即停止后续评估 | 短路优化（高优规则命中后不必再跑低优规则） |
+
+**`EvalResult` 已有 `hitDecisions()` 列表**，`ALL_HITS` / `FIRST_HIT` 直接利用，不改 API 签名。`finalDecision()` 语义：
+- `ALL_HITS`：优先级最高的命中 Decision（与 `HIGHEST_PRIORITY` 等价，保持 finalDecision 有意义）
+- `FIRST_HIT`：唯一命中的 Decision
+
+**`Scene.executionStrategy` 字段**：v1 已有列，类型为 VARCHAR，`HIGHEST_PRIORITY` 为默认值；新增 `ALL_HITS` / `FIRST_HIT` 枚举值，Flyway 不需要 DDL 改动（字符串列直接写新值）。
+
+**EvalEngine 改动**：当前 `evaluate()` 遍历所有规则收集命中结果后统一合成；`FIRST_HIT` 策略下评估到第一条命中即短路返回，其余规则跳过（`HIGHEST_PRIORITY` / `ALL_HITS` 仍全量评估）。
+
+**不做的**：`MAJORITY` / `CUSTOM_SPI` 策略留 v2（D26 已说明）。
+
+**落地范围**：
+- `rule-kernel`：`SceneExecutionStrategy` 枚举加 `ALL_HITS` / `FIRST_HIT`；`EvalEngine.evaluate()` 按策略分支
+- `rule-config-svc`：`SceneMapper` / `SceneService` 校验新枚举值
+- `rule-eval-svc`：`SceneRuleIndex` / `EvalContextAssembler` 透传 strategy 字段
+- 测试：`EvalEngine` 三种策略各自独立测试
+
+**已实装**（D41）：`SceneExecutionStrategy` 枚举含三值 + `EvalEngine` 按策略短路/全量分支 + 三策略独立测试。
+
+---
+
+## D42. `DECISION_TREE` / `DECISION_TABLE` evaluator ⭐⭐
+
+**背景**：D12 预留 `Rule.kind` 多态，v1 实现 `AST_BOOLEAN` + `SCORECARD`（D12 evaluator 已落地）。`DECISION_TREE` 与 `DECISION_TABLE` 是下一优先级形态，适合运营 / 风控"多条件分支"场景。
+
+**DECISION_TREE**：
+- `conditionAst` 存储嵌套 if/then/else 树（重用 `AstNode` 的 sealed 体系，新增 `IfNode(condition, thenNode, elseNode)`）
+- evaluator 递归求值：condition 命中走 thenNode，否则走 elseNode；叶子节点为 `DecisionLeafNode(decisionCode)`
+- 输出写入 `EvalResult.category`（字段已在 08-evolution §2.1 预留）
+
+**DECISION_TABLE**：
+- `conditionAst` 存储 JSON 列：`{columns: [{metricCode, operator}], rows: [{conditions: [value], decisionCode}]}`
+- evaluator 行优先匹配：第一条所有列条件满足的行胜出，输出 `EvalResult.decision`
+- 默认 FIRST_HIT 行语义；行顺序即优先级
+
+**与现有评估链路的关系**：`RuleVersionExecutor` SPI 已有，新增 `DecisionTreeExecutor` / `DecisionTableExecutor` 实现，注册进 `ExecutorRegistry`（`kind` → executor 映射），`EvalEngine` 零改动。
+
+**不做的**：v1 不做 EXPRESSION_SCRIPT（CEL / Aviator 沙箱安全 + 性能代价，留 v1.5）。
+
+**落地范围**：
+- `rule-kernel`：`IfNode` / `DecisionLeafNode` AST 节点；`DecisionTreeExecutor` / `DecisionTableExecutor`；`EvalResult` 补 `category` / `decision` 字段
+- `rule-kernel`：`AstJsonCodec` 注册新节点类型
+- `rule-config-svc`：发布校验 kind=DECISION_TREE/TABLE 时的 AST schema 检查
+- `10-api-contract.md`：补 DECISION_TREE / DECISION_TABLE 的请求 / 响应 schema
+
+**已实装**（D42）：`IfNode` / `DecisionLeafNode` / `DecisionTableNode` AST 节点 + `AstJsonCodec` 映射 + `DecisionTreeExecutor` / `DecisionTableExecutor` + 注册进 `EvalAutoConfiguration` + 发布校验覆盖 DECISION_TREE/TABLE kind。
+
+---
+
+## D43. 灰度配置收口 pre_gates ROLLOUT，废弃 `rollout` 列 ⭐⭐
+
+**背景**：D6 初版把灰度设计为 `rule_version.rollout` 独立列，富模型 `{type: PERCENTAGE/USER_TAG/HYBRID, percentage, tagConditions}`（按百分比 + 按用户标签命中）。但实现从未消费该列——灰度实际由 `pre_gates` 列 `gateType=ROLLOUT` 项的 params 承载，且只实装了 percentage 分桶；`rollout` 列 NOT NULL 但只写 `'{}'` 不读，USER_TAG/HYBRID/tagConditions 从未落地。文档 7 处仍按一等字段描述 rollout，与实现长期漂移（上文 §D19 v1 落地范围 step 2 的"含 rollout 冻结"为彼时记录，不追溯改）。
+
+**决策**：以实现为准收口。
+- 灰度统一由 `pre_gates` 的 ROLLOUT pre-gate 承载，params = `percentage` / `bucketStart` / `bucketEnd` / `experimentId`；
+- 删除只写不读的 `rule_version.rollout` 列（Flyway `V1_4__drop_rollout.sql`）；
+- `experimentId` 共享分桶种子 + 桶区间实现 A/B 一致分桶与互斥（详见 08-evolution §2.16）；发布期校验 ROLLOUT params（percentage∈[0,100]、桶区间成对且 `0<=start<end<=100`、experimentId 非空白）；
+- **按用户标签命中（USER_TAG / HYBRID / tagConditions）留演进**：将来作为独立 pre-gate 类型落地，不复活 `rollout` 列。
+
+**已实装**（D43）：`RolloutPreGate` 桶区间 + experimentId 种子；`PublishService.validatePreGateParams` 发布期校验；`V1_4__drop_rollout.sql` 删列 + 全部代码/文档引用对齐（01-concepts §3.4、02-runtime、05-storage、07-operability、08-evolution、README）。
+
+---
+
+## D44. B20 时间框架：EvalContext.now 注入 + DATE/DATETIME 一等 dataType + 时间条件内置 ⭐⭐
+
+**背景**：v1 规则引擎缺乏对时间的原生感知——DATE_BEFORE/AFTER 已有文档但实现未完整落地，EvalContext 无统一时钟注入，dataType 枚举不含时间类型，时间类 conditionType（time.window / time.occurred_at）未注册，发布期矩阵不覆盖 DATE/DATETIME 组合。需一次性补齐。
+
+**决策**：
+
+1. **EvalContext.now 单次注入（统一时钟）**：`now: Instant` 在 `EvalServiceImpl.doEvaluate` / `EvalEngine.evaluate` 入口调用一次 `Instant.now()`，整棵 AST 共用同一个 `now`，保证跨规则时钟一致性。不存在默认 `Instant.now()` 重载（禁止），调用方必须传入 `now`；
+
+2. **时区解析优先级（TimeZoneResolver）**：字面时区偏移（ISO-8601 带 `+HH:mm`）> `params.timezone` > UTC。Scene 级默认时区（优先级 3 对应 `sceneDefaultTimezone` 参数）当前**暂缓**——B20 调用方始终传 `null`，槽位已保留，由后续批次激活；
+
+3. **DATE / DATETIME 作为一等 dataType**：
+   - `DATE` 对应 `LocalDate`（日历日期，无时区）；`DATETIME` 对应 `Instant`/带时区偏移（时区相关）
+   - 纯策略实现：`DateComparisonStrategy`（DATE）/ `DateTimeComparisonStrategy`（DATETIME），无 I/O、无副作用
+   - 两阶段管线：**解析段**在 evaluator 侧将原始参数经 `PlaceholderResolver` + `TimeZoneResolver` 转为强类型；**策略段**做纯比较
+   - 发布期矩阵（`AstDataTypeResolver`）更新：EQ/NEQ 允许集合 += DATE/DATETIME；BETWEEN/NOT_BETWEEN 允许集合 += DATE/DATETIME；DATE_BEFORE/DATE_AFTER 新增行（allowed={DATE,DATETIME}，拒绝其他 dataType）；GT/GTE/LT/LTE 仍仅限数值型
+   - `metric_definition.data_type` ENUM 扩展为含 `DATE` / `DATETIME`（Flyway `V1_5__add_date_datetime_to_metric_datatype.sql`）；
+
+4. **PlaceholderResolver（占位符解析）**：`"$now"` → `EvalContext.now`（`Instant`）；`"$today"` → `EvalContext.now` 投影到时区后的 `LocalDate`，仅在 DATE 语境有效；`time.occurred_at` 语境中使用 `"$today"` → `CONDITION_EVAL_ERROR`；无法识别的 `$x` 或解析失败 → null（不抛异常）；不支持相对时长表达式（`$now-P7D` 等，留 B21）；
+
+5. **context_snapshot 嵌套结构**：`evaluation_session.context_snapshot` 由 v1 原平铺格式 `{metricCode: value}` 升级为嵌套格式 `{"metrics": {metricCode: value, ...}, "evalNow": "<ISO-8601 instant>"}`，其中 `evalNow` 记录本次评估注入的统一时钟值，用于 dry-run 重放时还原历史时间点；
+
+6. **内置时间类 conditionType 注册**：`time.window`（基于 `EvalContext.now` 的时间窗口判断）和 `time.occurred_at`（基于 `event.occurredAt` 的时刻比较）在 `KernelEvaluators.defaults()` 注册，属于内置路径闭合集合（D20 §3），不经过 operator×dataType 矩阵检查，无需 `metricCode`。
+
+**不做的（v1 范围外）**：相对时长算术（`$now-P7D`）；近 N 天滚动聚合 SQL 注入 `EvalContext.now` 作为 `:now` 绑定变量（B21 负责）；Scene 级默认时区激活；DB `NOW()` 注入替代。
+
+**已实装**（D44 / B20）：`EvalContext.now` 单次注入 + `context_snapshot` 嵌套格式；`TimeZoneResolver`；`PlaceholderResolver`（$now/$today）；`DateComparisonStrategy` / `DateTimeComparisonStrategy`；EQ/NEQ/BETWEEN/NOT_BETWEEN 解析段分支（DATE/DATETIME）；DATE_BEFORE/DATE_AFTER 重做（删 `toInstant` 静态方法，接入两阶段管线）；`time.window` / `time.occurred_at` evaluator 注册；发布期矩阵 `AstDataTypeResolver` 更新；`V1_5__add_date_datetime_to_metric_datatype.sql`。
+
+---
+
+## D45. B21 FETCHED 取数层：命名句柄 + :now 绑定 + 失败降级 + provided 优先 + Resolver SPI ⭐⭐⭐
+
+**背景**：v1 `EvalContextAssembler` 是空壳——只把 `providedMetrics` 塞进 metrics，注入的 `MetricSourceHandler` 从不被调用，引擎不取任何数。需让引擎真正具备按 metric `sourceType` 拉取指标值的能力，并锁死外部资源访问的安全姿态。
+
+**决策**：
+
+1. **取数管线接线**：`EvalContextAssembler.assemble(event, candidates, now)` 扫过 Pre-Gate 的候选 `metricDependencies` 并集 → provided 优先 → 查缓存 → 按 sourceType 路由 handler 并发 fetch（`CompletableFuture` + 专用 `fetchExecutor` + 全局超时）；延迟 = max 而非 sum（对齐 D25）。
+
+2. **Metric 定义来源 = 数据源无关 SPI `MetricDefinitionResolver`**（非冻进快照）：服务端实现读 `metric_definition` 表（`DbMetricDefinitionResolver` + Caffeine 缓存），嵌入式 SDK 实现读下发缓存。`sourceType` / `datasource` / `cacheTtlSeconds` 是可热调的操作配置，区别于 B19 冻进 AST 的 `dataType`（类型契约）。
+
+3. **`MetricQuery` 加 `now`**：assembler 绑 `EvalContext.now`；SQL 的 `:now` 取此字段（非 DB `NOW()`），保 dry-run 重放。纯算法不收 ctx、请求对象收 `now`（与 B19/B20 同源原则）。
+
+4. **provided 优先（D30 落地）**：`providedMetrics` 有值且 `def.allowProvided=true` → 用（PROVIDED），跳过 fetch；`allowProvided=false` 即使传也忽略（WARN）；`resolver` 返回 null（运行时无定义）且无 provided → 置 `METRIC_FETCH_FAIL` 降级（无定义视为异常，引用节点不命中、整树继续）。
+
+5. **失败降级（D15 落地）+ 条件求值门面三态**：单 metric 取数失败/超时/无 handler → `MetricValue.error(METRIC_FETCH_FAIL)`，引用节点不命中、整树继续。统一门面 `ConditionEvaluation` 返回三态（满足/不满足/不可判定），各执行器按语义落 ERROR：布尔路径标 `NodeTrace.errorCode` 整树继续；**评分卡整卡 ERROR 不出分（风控保守）**；决策树/表遇 ERROR 整规则 ERROR + miss（不静默走错分支）。
+
+6. **SQL_AGGREGATE 范式**：命名参数（`:subjectId` / `:tenantId` / `:now` / `:payload.x` / `:params.x`），禁 `${}` 拼接、禁 DB 时间函数，窗口长度写 SQL 文本，结果首行首列按 dataType 强转；数据源走 **infra 注册的命名只读 DataSource**（账密在 secrets 不落表）。
+
+7. **EXTERNAL_HTTP 范式**：infra 注册命名 HTTP 端点（baseURL + 鉴权 + 超时），metric 只引用「端点名 + path + jsonPath」，不写自由 URL、不嵌凭证（灭 SSRF）。
+
+8. **缓存**：key = `tenant:metricCode:subjectId:stableHash(params)`；`ttl=0` 不缓存；v1 进程内 Caffeine（`MetricCache` SPI，内核不依赖 Caffeine）。
+
+9. **发布期校验**：拒绝含 DB 时间函数或 `${}` 拼接的 SQL；metric 引用的 datasource/endpoint 名必须已注册（`MetricResourceCatalog` SPI 由 eval-svc 提供，纯 config 部署时跳过资源名校验）。
+
+**前向兼容（嵌入式 SDK 取数 B2，见 `specs/2026-06-06-sdk-fetch-design.md`）**：① metric 定义是独立可下发配置，不冻进 `rule_version` 快照；② `MetricDefinitionResolver` 数据源无关（服务端读库 / 嵌入式读下发缓存共用）；③ `EvalContextAssembler` 富构造为服务端与 SDK 统一取数入口（旧 2 参构造保留为 providedMetrics-only 退化路径）；④ `MetricDescriptor` 为定义下发的序列化契约。
+
+**不做的（v1 范围外）**：`STREAM` sourceType 实装（无 handler → 自动降级）；OAuth2 自动刷 token；Scene 级数据源白名单；相对 duration 运算；Redis 缓存（v1 Caffeine）。
+
+**已实装**（D45 / B21）：`EvalContextAssembler` 取数管线重写；`MetricValue.errorCode` / `MetricQuery.now` / `RuleVersionSnapshot.metricDependencies`；`MetricDescriptor` + `MetricDefinitionResolver` / `MetricCache` SPI；`ConditionEvaluation` 门面三态 + 5 执行器 ERROR 语义；`DbMetricDefinitionResolver`（Caffeine）+ `CaffeineMetricCache` + `fetchExecutor`；`MetricDataSourceRegistry`（只读）+ `SqlAggregateMetricSourceHandler`；`HttpEndpointRegistry` + `ExternalHttpMetricSourceHandler`；`MetricResourceCatalog` SPI + `MetricSafetyValidator`（发布期）。
+
+---
+
+## D46. B23 嵌入式 SDK FETCHED 取数：定义独立下发 + 宿主注入 handler + 默认行为不变 ⭐⭐
+
+**背景**：B21（D45）把取数管线建在数据源无关的 `MetricDefinitionResolver` / `MetricSourceHandler` / `MetricCache` SPI 上，但嵌入式 `RuleEngineClient` 仍用旧 2 参 `EvalContextAssembler` → 仅 providedMetrics 生效、不取数。设计见 `specs/2026-06-06-sdk-fetch-design.md`（设计冻结 2026-06-06，本条落地）。
+
+**决策**：
+
+1. **复用 B21 富构造编排，零重写**：注入 handler 时 SDK 用 6 参富构造装配 `EvalContextAssembler`（服务端与 SDK 同一入口）；未注入则退化旧 2 参 providedMetrics-only——**默认行为不变**。不改 B21 任何签名、不改 rule-kernel（SDK 侧自行按 `@MetricSourceType` 归类 handler）。SDK 侧富构造传 `fetchTimeoutMs=0L`，**不设全局取数超时**（区别于服务端 D45 的全局超时）——各 handler 超时由宿主自行控制（SDK 不内置 handler，连接/超时属宿主职责，对齐 D-C）。
+
+2. **metric 定义独立下发，不进 `rule_version` 快照**：SDK 本地 `MetricDefinitionRegistry`（`tenantId:metricCode → MetricDescriptor`，HTTP 热更整体替换）+ `SnapshotMetricDefinitionResolver`（B21 resolver SPI 的嵌入式实现，读 registry）。
+
+3. **定义来源对称于 `RuleSource`**：`MetricDefinitionSource` SPI —— `DslMetricDefinitionSource` / `FileMetricDefinitionSource`（本地追加 put）/ `PollingMetricDefinitionSource`（HTTP 全量 replace）。HTTP 模式独立 `MetricDefinitionPoller` 复用 `pollInterval` 热更，端点 `GET /api/v1/sdk/metric-definitions`（仅下发元数据，不含凭证）。
+
+4. **handler 由宿主注入，SDK 不内置 SQL/HTTP handler**：SDK 跑宿主进程，凭证/连接池属宿主职责。`RuleEngineClient.Builder` 加注入入口：`metricSourceHandler` / `metricDefinitionResolver` / `metricCache` / `fetchExecutor` / `metricDefinitionSource` / `localMetric`。
+
+5. **配置错误 fail-fast**：配置了取数项（定义来源 / resolver / cache / executor）但未注入 handler → `build()` 抛 `IllegalArgumentException`，不静默 no-op。
+
+6. **服务端下发 scope 按 scenes 收紧**：`MetadataService.listMetricDefinitions` —— `scenes` 为空（`FetchMode.ALL`）返回租户全部 ACTIVE 定义；`scenes` 非空（`FetchMode.DECLARED`）只返回「这些 scenes 下 ACTIVE rule_version 的 `metricDependencies` 并集」内的定义（口径对齐快照下发 `rv.status=ACTIVE`，保证 SDK 拿到的规则引用的 metric 定义无遗漏；不需 `scene_metric_binding` 表）。SDK 侧 `?tenantId=&scenes=` wire 契约不变，零改动。
+
+7. **starter 自动注入**：`RuleEngineClientAutoConfiguration` 用 `ObjectProvider` 收集 handler/resolver/cache/定义来源 Bean 注入 Builder；无 Bean → fetch 不启用。
+
+**不做的**：SDK 内置 SQL_AGGREGATE / EXTERNAL_HTTP handler（永远宿主提供）；定义冻进 `rule_version` 快照；HTTP 模式「本地算不了回源服务端评估」（破坏零网络/本地决策定位）；宿主 handler 的连接池/凭证管理。
+
+**已实装**（D46 / B23）：`MetricDefinitionRegistry` + `SnapshotMetricDefinitionResolver`；`MetricDefinitionSource` SPI + `Dsl`/`File`/`Polling` 三实现 + `MetricDefinitionPoller`；`RuleEngineClient.Builder` 取数注入入口 + 富构造装配 + `close()` 停 poller + 无 handler fail-fast；服务端 `MetadataService.listMetricDefinitions` + `SdkMetricDefinitionController`；starter `ObjectProvider` 自动注入。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1095,5 +1513,12 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 | D31 | 前端技术栈 | A    | React 18 + react-querybuilder + Ant Design 5 + Vite + Zustand；前端工程放 `frontend/` 目录，与 `src/` 平级 |
 | D32 | ArchUnit 版本与 rule-kernel 编译目标 | B（临时） | ArchUnit 1.4.0 + rule-kernel maven.compiler.release=21；升级至 ArchUnit 1.5+ 后需删除 override |
 | D33 | Modulith verify() 不适用于多 JAR 共享库 | A | rule-kernel 是跨模块共享库（SPI+模型），Modulith 在多 JAR 结构下将其视为 Modulith 模块导致 exposed 检查误报；骨架阶段跳过 verify()，架构边界由 ArchUnit（KernelArchTest）保证；等 v2 业务实现时视 Modulith 版本再评估是否启用 verify() |
+| D34 | 嵌入式 SDK 本地模式（代码定义规则，零网络） | A | `RuleEngineClient.Builder.localSnapshot()` 直接写入本地索引，不启动 SnapshotPoller；`RuleVersionSnapshot` 补 Builder 辅助类；适用单测/演示/离线部署 |
+| D39 | Spring Boot Starter 补完 | A | 文件模式（`rule-files`）+ `@ConditionType` Bean 自动扫描 + `EvalResultListener`/`EvalSessionListener` Bean 注入；三项均委托现有 Builder API，starter 零额外逻辑 |
+| D40 | SDK 注解模式（`@RuleDef`） | A | `InlineRuleSpec` 接口 + `@RuleDef/@Decision` 注解 + `AnnotationRuleSource`；Spring Starter 自动收集 Bean；`ruleVersionId` 调用方显式指定保证幂等 |
+| D41 | `executionStrategy` 扩展 | A | 新增 `ALL_HITS`（全部命中）/ `FIRST_HIT`（短路）；`EvalResult.hitDecisions()` 直接复用；Flyway 无 DDL 改动 |
+| D42 | `DECISION_TREE` / `DECISION_TABLE` evaluator | A | 新增 `IfNode`/`DecisionLeafNode` AST 节点；独立 Executor SPI 实现；`EvalResult` 补 `category`/`decision` 字段；`EXPRESSION_SCRIPT` 留 v1.5 |
+| D43 | 灰度收口 pre_gates ROLLOUT，废弃 `rollout` 列 | A | 灰度由 ROLLOUT pre-gate 承载（percentage/bucketStart/bucketEnd/experimentId）；`V1_4` 删 `rollout` 列；桶区间+experimentId 实现一致分桶/互斥 + 发布期校验；USER_TAG/HYBRID 标签命中留演进 |
+| D44 | B20 时间框架：EvalContext.now 注入 + DATE/DATETIME 一等 dataType + 时间条件内置 | A | now 单次注入+单时钟约束；TimeZoneResolver（字面偏移>params.timezone>UTC，Scene级暂缓）；DATE/DATETIME 纯策略+两阶段管线；PlaceholderResolver($now/$today，不含相对时长)；context_snapshot 嵌套格式；time.window/time.occurred_at 注册；V1_5 扩展 ENUM |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

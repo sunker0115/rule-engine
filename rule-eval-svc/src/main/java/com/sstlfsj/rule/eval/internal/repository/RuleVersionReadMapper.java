@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.repository;
 
-import com.sstlfsj.rule.eval.internal.snapshot.RuleVersionRow;
+import com.sstlfsj.rule.kernel.internal.codec.RuleVersionRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -20,7 +20,10 @@ public interface RuleVersionReadMapper {
               rv.condition_ast   AS conditionAstJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
-              rv.trigger_event_types AS triggerEventTypesJson
+              rv.trigger_event_types AS triggerEventTypesJson,
+              rd.kind            AS kind,
+              s.decision_strategy AS decisionStrategy,
+              rv.metric_dependencies AS metricDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -37,7 +40,10 @@ public interface RuleVersionReadMapper {
               rv.condition_ast   AS conditionAstJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
-              rv.trigger_event_types AS triggerEventTypesJson
+              rv.trigger_event_types AS triggerEventTypesJson,
+              rd.kind            AS kind,
+              s.decision_strategy AS decisionStrategy,
+              rv.metric_dependencies AS metricDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -57,7 +63,10 @@ public interface RuleVersionReadMapper {
               rv.condition_ast   AS conditionAstJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
-              rv.trigger_event_types AS triggerEventTypesJson
+              rv.trigger_event_types AS triggerEventTypesJson,
+              rd.kind            AS kind,
+              s.decision_strategy AS decisionStrategy,
+              rv.metric_dependencies AS metricDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id

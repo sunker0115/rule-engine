@@ -1,0 +1,17 @@
+[
+  {
+    "ruleVersionId": 100,
+    "sceneCode": "test",
+    "tenantId": "t1",
+    "kind": "AST_BOOLEAN",
+    "triggerEventTypes": ["TEST_EVENT"],
+    "decisionBindings": [{"decisionCode": "PASS", "priority": 10}],
+    "preGates": [],
+    "conditionAst": {
+      "type": "AndNode",
+      "children": [],
+      "displayLabel": null,
+      "weight": null
+    }
+  }
+]

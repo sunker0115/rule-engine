@@ -58,7 +58,7 @@ Decision           actionType               │
   │                │   1:N │ current_version 指向                │
   │                │       ▼                                     │
   └──────────────► │  RuleVersion (不可变发布快照, D6/D19)       │
-                   │  持有: AST + preGates + rollout              │
+                   │  持有: AST + preGates（含 ROLLOUT 灰度）    │
                    │       + decision_bindings                    │
                    └────────────────────────────────────────────┘
                             │
@@ -214,25 +214,24 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `ruleId` | 规则 ID |
 | `tenantId / scene` | 归属 |
 | `name / description` | 给运营看 |
-| `kind` | 规则形态枚举：`AST_BOOLEAN`（v1 唯一实现）/ `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT`。v1 发布校验拒绝非 `AST_BOOLEAN` 的 kind（详见下方 **kind 多态边界**） |
+| `kind` | 规则形态枚举：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE`（已实装）/ `EXPRESSION_SCRIPT`（未实装，留 v1.5）。发布校验按 kind 校验 AST schema（详见下方 **kind 多态边界**） |
 | `triggerEventTypes` | 数组：哪些 eventType 触发本规则（如 `["trade.completed"]`） |
 | `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 kind 用各自的 JSON 内部结构，与 ast 互斥） |
 | `preGates` | 准入闸门列表（频次 / 互斥 / 黑白名单 / 灰度命中） |
 | `actions` | **已迁移到 Decision**（D27）：Rule 不再直接持 actions；命中后要执行的动作由 Rule 绑定的 Decision.actions 决定 |
 | `status` | 状态机：`DRAFT` → `PUBLISHING`（瞬时）→ `PUBLISHED` / `PUBLISH_FAILED`；`PUBLISHED ↔ DISABLED` 独立分支；`PUBLISH_FAILED → DRAFT` 需 UI 显式确认（D19） |
 | `current_version` | 指向当前生效 `rule_version` 行的**主键 id**（`BIGINT`，即 `rule_version.id`，而非业务版本序号 `rule_version.version`）。`PUBLISHED` / `DISABLED` 状态下有值；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本。`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
-| `rollout` | 灰度配置（命中算法 + 比例 + 标签） |
 | `published_by / published_at` | 发布审计字段（D14，仅 PUBLISHED 状态有值；通用 `created_by` / `updated_by` 见 §三 顶部横切说明） |
 
-**`rollout` 字段结构**（D6 灰度配置）：
+**灰度（ROLLOUT pre-gate）**（D6；实装见 [`08-evolution.md §2.16`](./08-evolution.md)）：灰度不是独立字段，而是 `preGates` 列表里 `gateType=ROLLOUT` 的一项，params 承载灰度配置（无独立 `rollout` 列，D43）：
 
-| 字段 | 类型 | 说明 |
+| params 字段 | 类型 | 说明 |
 |------|------|------|
-| `type` | Enum | `PERCENTAGE`（按百分比放量）/ `USER_TAG`（按用户标签命中）/ `HYBRID`（百分比 + 标签同时满足） |
-| `percentage` | Int (0-100) | `PERCENTAGE` / `HYBRID` 类型下生效；`type=USER_TAG` 时为 null |
-| `tagConditions` | List | `USER_TAG` / `HYBRID` 类型下生效；标签命中条件列表（具体节点 schema 与 `ConditionNode` 同源，由 [`03-rule-expression.md`](./03-rule-expression.md) 定义） |
+| `percentage` | Int (0-100) | 百分比放量，命中条件 `bucket < percentage`，等价于桶区间 `[0, percentage)` |
+| `bucketStart` / `bucketEnd` | Int (0-100) | 桶区间（成对），命中条件 `bucketStart <= bucket < bucketEnd`；用于 A/B 互斥 |
+| `experimentId` | String? | 实验标识；同 `experimentId` 的规则共享分桶种子（一致分桶 / 互斥）；缺省种子退回 `ruleVersionId` |
 
-桶号算法固定为 `hash(subjectId, ruleVersionId) % 100`（D6 派生），**不在 `rollout` 内开放自定义 hash 种子或灰度计算降级策略**——稳定哈希是 D6 灰度桶稳定性的承诺；版本切换触发桶漂移是 D6 固有语义，不在 Rollout 配置层兜底。**空对象（`{}`）或 null 表示无灰度限制，全量放行。**
+桶号 `bucket = hash(subjectId, experimentId ?? ruleVersionId) % 100`（D6 派生）。`percentage` 与桶区间二选一（桶区间优先），都不配时该门全量放行。**按用户标签命中（`USER_TAG` / `HYBRID` / `tagConditions`）v1 未实装，留演进**（将来作为独立 pre-gate 类型落地，不复活 `rollout` 列）。稳定哈希是 D6 灰度桶稳定性的承诺，版本切换触发桶漂移是固有语义，不在配置层兜底。
 
 **EvalResult 输出契约（多态，v1 仅填 `satisfied`）**：
 
@@ -267,7 +266,7 @@ DecisionRef {
 - **Rule 不直接含 Condition**：Condition 是 AST 的叶子节点（`ConditionNode`），不能脱离 AST 存在。
 - **Rule 内表达任意复杂逻辑**全靠 AST：`AndNode` / `OrNode` / `NotNode` 任意嵌套，没有"层数"限制。
 - **AST 节点上的 `displayLabel`** 是给运营 UI 看的分组标题，后端评估时忽略它，只看逻辑结构。
-- **v1 仅实现 `kind = AST_BOOLEAN`**：发布校验拒绝其他 kind，前端 UI 也只暴露"AST 编辑器"一种类型（D12 占位字段保留扩展位，演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态）。
+- **已实装 `kind`**：`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）；`EXPRESSION_SCRIPT` 未实装（留 v1.5）。发布校验按 kind 校验 AST schema；演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态。
 - **评估失败单节点降级，整树继续短路求值**（D15）：单个 `ConditionNode` 失败 → 该节点 satisfied=false，其他节点正常评估；整树评估完毕后若有失败节点，`EvalResult.errorCode` 非空。规则间隔离：单条 Rule 失败不影响同 (scene + eventType) 下其他 Rule。PUSH 默认安静失败不派发 Action；PULL 返回 `{satisfied, errorCode}`，调用方按 fail-secure / fail-open 决策。对账四态：`HIT / MISS / BLOCKED / ERROR`（D22）。
 - **运行时锁定快照版本**（D17 派生）：evaluation_session 开始时拍当前候选规则版本快照，整 session 用同一快照——即使中途发生 publish 切版本，本次评估不受影响。索引热更：单服务模式由 Modulith `RulePublishedEvent` 触发（毫秒级）；嵌入式 SDK 模式由 `DbPollingRuleWatcher`（默认 15s 轮询）触发（15s 最终一致）。
 - **发布是单条规则原子事务**（D19）：状态机迁移 + 新 version 行写入 + audit_log 在同一 DB 事务；事务失败 → 状态落 `PUBLISH_FAILED`（不是自动回 DRAFT），同时追加一条 `audit_log.action = PUBLISH_FAILED` 记录失败原因；运营从 UI 看到 `PUBLISH_FAILED` 后显式点"重新编辑"才会迁回 DRAFT，避免静默丢失发布上下文。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。"回滚到旧版本" = 用旧版本快照建新草稿走标准发布流程产出新版本号，不可变快照永不覆盖。
@@ -379,7 +378,7 @@ if (!r.satisfied()) {
 | `HANDLER_EXCEPTION` | D18 | `ActionHandler.execute` 抛未捕获异常，引擎归一为 `status=FAILED, retryable=false` |
 | `TIMEOUT` | D18 | `ActionHandler.execute` 超过 handler 自身声明的超时阈值（同步等待 / 调外部 HTTP / MQ ack 等），引擎归一为 `status=FAILED, retryable=true`。超时阈值由 handler 在 `@ActionType` 注解 / 注册元数据声明（详见 04-extension），未声明回落引擎默认 |
 | `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED`，不入重试队列 |
-| `DRY_RUN_NOT_IMPLEMENTED` | D7 v1 | dry-run 调用时该 handler 未实装 `dryRun(ActionContext ctx)` 方法，由 Dispatcher 短路返回 `status=SKIPPED`，仅 v1 阶段出现，v1.5 全量补齐后不再产生 |
+| `DRY_RUN_NOT_IMPLEMENTED` | D7 | ~~v1 阶段占位~~；v1.5 已全量实装（`BlockTransactionHandler` + `SendAlertHandler` 均 override `dryRun()`），此 errorCode 不再产生 |
 | `QUEUE_OVERFLOW` | D20 | 异步 Dispatcher 内部队列满拒绝该 ActionInstance；引擎归一为 `status=FAILED, retryable=true`，监控告警 |
 | `EXTERNAL_SERVICE_ERROR` | D18 | Handler 调用外部系统返回 5xx / 连接失败；`retryable=true` |
 | `BUSINESS_REJECTED` | D18 | 外部系统明确拒绝（如工单系统返回 400）；`retryable=false` |
@@ -398,7 +397,7 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。
 - **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。DDL 另有 `PENDING`（已入队待执行）和 `RETRYING`（重试进行中）两个过程态——对账、监控、失败率统计只看最终三态，过程态由引擎内部维护。
 - **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
-- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **接口已预留 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。**v1 范围（D7）**：评估层 dry-run 一等公民（走完整评估链路 + 节点 trace），ActionHandler 层的 `dryRun` 实装在 **v1.5** 由各 handler 补齐；v1 阶段未补齐的 handler 在 dry-run 时由 Dispatcher 短路返回占位预览（`status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED`）。dry-run 完整行为契约见 §五 Q10。
+- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **提供 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。评估层 dry-run 是一等公民（走完整评估链路 + 节点 trace）；`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7），返回 `ActionResult.success()` 预览结果。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
 - **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(ActionContext ctx)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
 
@@ -413,7 +412,7 @@ EvalContext {
     event:    RuleEvent              // 原始事件
     subject:  Subject                // 业务主体（用户 / 账户 / 设备）的属性快照
     metrics:  Map<metricCode, Value> // 本次评估涉及的指标快照
-    now:      Instant                // 评估开始时间（统一时钟）
+    now:      Instant                // 评估开始时间（统一时钟）— 已实装（B20）：由 EvalServiceImpl.doEvaluate / EvalEngine.evaluate 入口注入一次（单个 Instant.now()），整棵 AST 共用同一个 now，保证跨规则时钟一致性；不存在默认 Instant.now() 重载（禁止）
     traceId:  String                 // 链路 ID
     dryRun:   Boolean                // 引擎内部路由标志（D7/D21）：true 时 TraceWriter 写 dry_run_session 系列表而非 prod 表
 }
@@ -461,11 +460,11 @@ EvalContext {
 | 字段 | 说明 |
 |------|------|
 | `metricCode` | 全局唯一，命名 `<domain>.<entity>.<measure>[.<window>]` |
-| `metricVersion` | 指标定义版本号概念占位（**v1 DDL 无此列**，v1 规则发布快照仅引用 `metricCode` 字符串，不带版本号）——指标语义变更等同于新建新 `metricCode`（业务约定）。强制 `(metricCode, metricVersion)` 绑定的版本化演进留 [`08-evolution.md §2.2`](./08-evolution.md) |
+| `metricVersion` | 已实装（B6）：`metric_definition.version` 列；规则发布期冻结 (metricCode, metricVersion) 绑定，评估期按绑定版本解析定义，详见 [`08-evolution.md §2.2`](./08-evolution.md) |
 | `tenantId` | 归属租户；`*` 表示平台级共享指标 |
 | `sourceType` | 取数方式，见下方 sourceType 对比表 |
 | `params` | 取数参数（结构依 sourceType 而异，见下方对比表） |
-| `dataType` | `LONG` / `DOUBLE` / `STRING` / `BOOLEAN` / `LIST` |
+| `dataType` | `LONG` / `DOUBLE` / `STRING` / `BOOLEAN` / `LIST` / `DATE` / `DATETIME` — `DATE` 对应日历日期（`LocalDate`，无时区）；`DATETIME` 对应时刻（`Instant`/带时区偏移，时区相关）；已在 B20 作为一等 dataType 实装，发布期矩阵和运行期策略均支持（详见 `03-rule-expression.md` §3.4） |
 | `cachePolicyDefault` | 默认缓存策略（TTL / 不缓存 / 评估范围内缓存）；实时性敏感场景配 `ttl=0` 强制每次取数 |
 | `allowProvided` | 是否允许调用方通过 `providedMetrics` 覆盖本指标取数结果（D30）。按 `sourceType` 给推荐默认值：`ATTRIBUTE` / `EXTERNAL_HTTP` 建议创建时显式设为 `true`（业务方通常手里就有这个值）；`SQL_AGGREGATE` / `STREAM` 保持 `false`（平台权威计算，不应被覆盖）。DDL 列级 `DEFAULT 0` 是保守兜底，应用层 API 按 `sourceType` 写入正确值，不依赖列默认。例外情况手动覆盖；`false` 时引擎忽略 `providedMetrics` 中对应 key 并 WARN |
 
@@ -474,8 +473,8 @@ EvalContext {
 | sourceType | 取数方式 | 适用场景 | `params` 关键字段 | `cacheTtl` 建议 | `allowProvided` 默认 |
 |------------|---------|---------|------------------|----------------|---------------------|
 | `ATTRIBUTE` | 从主体属性表（`subject_attribute` 或业务库指定表/列）读单值 | KYC 等级、会员等级、账户状态等慢变属性 | `table`, `column` | 60–300s | `true` |
-| `SQL_AGGREGATE` | 执行 SQL 聚合查询（支持 `:subjectId` / `:now` 占位符） | 近 N 天交易次数、累计金额、历史行为统计 | `sql` | 3600s（聚合结果更新慢；见 04-extension §4.3） | `false` |
-| `EXTERNAL_HTTP` | 调外部 HTTP 服务，取 JSON 响应中的指定字段 | 设备指纹分、IP 信誉、第三方评分 | `url`（含 `{payload.xxx}` 占位符）, `jsonPath` | 60s 左右 | `true` |
+| `SQL_AGGREGATE` | 执行 SQL 聚合查询（命名参数 `:subjectId` / `:tenantId` / `:now` / `:payload.x` / `:params.x`；禁 DB 时间函数与 `${}` 拼接） | 近 N 天交易次数、累计金额、历史行为统计 | `datasource`（命名只读源）, `sql` | 3600s（聚合结果更新慢；见 04-extension §4.3） | `false` |
+| `EXTERNAL_HTTP` | 调命名 HTTP 端点（infra 注册 baseURL+鉴权，灭 SSRF），取 JSON 响应字段 | 设备指纹分、IP 信誉、第三方评分 | `endpoint`（命名端点）, `path`（含 `{payload.x}` / `{params.x}` 占位符）, `jsonPath` | 60s 左右 | `true` |
 | `STREAM` | 从流处理平台（Flink / Kafka）读预聚合结果（v1 占位，v2 接入） | 实时 CEP 序列特征、滑动窗口计数 | `topic`, `keyExpr` | `0`（流结果已是最新） | `false` |
 
 > `params` 完整字段 schema 及 `EXTERNAL_HTTP` 的 `jsonPath` 语法、`STREAM` 适配协议见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南。
@@ -558,8 +557,8 @@ interface Scheduler {
 - **仅 PUSH / HYBRID Scene 可绑定 Job**：PULL Scene 是同步业务调用语义，定时触发没意义；发布拒绝 + UI 屏蔽。
 - **幂等 = Redis trySet + DB uk 双兜底**：`eventId = hash(jobRunId + subjectId)` 落 `evaluation_session` 的 eventId 列，`evaluation_session(tenant_id, event_id)` 维持 DB unique key 作为"下半层"兜底（Redis trySet 是上半层快速路径，DB uk 是持久化最终校验，D11 / D21 均依赖此双层结构）；重跑同一 jobRun 不会重复评估。具体 DDL 详见 [`05-storage.md`](./05-storage.md)。
 - **rateLimit 是注入端控制**：调度器按 `rateLimit` 缓冲注入，下游 Matcher / Action 不需要再做令牌桶。
-- **Job 与规则灰度独立**：Job 负责"对谁发事件"，规则的 `rollout` 灰度仍按命中算法决定"对哪些主体最终命中"——Job 不要做灰度抽样，二级灰度逻辑只会让排障复杂。
-- **灰度桶计算时机**（D6 + D11 派生）：所有 RuleEvent（含 Job 合成）的灰度桶在**引擎 Pre-Gate 阶段**按 `hash(subjectId, ruleVersionId)` 算（D6）；Job 端只负责合成 RuleEvent 注入，**不**在调度器端预算桶 / 预筛主体——预算桶会让 Job 与具体 RuleVersion 形成隐式耦合，违反"Job 不要做灰度抽样"约束。
+- **Job 与规则灰度独立**：Job 负责"对谁发事件"，规则的 ROLLOUT 灰度仍按命中算法决定"对哪些主体最终命中"——Job 不要做灰度抽样，二级灰度逻辑只会让排障复杂。
+- **灰度桶计算时机**（D6 + D11 派生）：所有 RuleEvent（含 Job 合成）的灰度桶在**引擎 Pre-Gate 阶段**按 `hash(subjectId, experimentId ?? ruleVersionId)` 算（D6）；Job 端只负责合成 RuleEvent 注入，**不**在调度器端预算桶 / 预筛主体——预算桶会让 Job 与具体 RuleVersion 形成隐式耦合，违反"Job 不要做灰度抽样"约束。
 
 ### 3.11 AuditLog（操作审计，不是一等公民）
 
@@ -575,7 +574,7 @@ interface Scheduler {
 | `actor_type` | `USER` / `SYSTEM` / `JOB` |
 | `target_type` | 操作对象类型：`RULE` / `SCENE` / `METRIC_BINDING` / `ACTION_BINDING` / `JOB` / ... |
 | `target_id` | 对象 ID |
-| `action` | 动作：`CREATE` / `UPDATE` / `PUBLISH` / `PUBLISH_FAILED` / `ENABLE` / `DISABLE` / `DELETE`（D19：发布事务回滚后单独追加 PUBLISH_FAILED 记录） |
+| `action` | 动作：`CREATE` / `UPDATE` / `PUBLISH` / `PUBLISH_FAILED` / `ENABLE` / `DISABLE` / `DELETE` / `IMPORT`（D19：发布事务回滚后单独追加 PUBLISH_FAILED 记录；B7：Bundle 导入逐条落草稿记 IMPORT） |
 | `before_snapshot` | 变更前的 JSON 全量快照（DELETE / UPDATE 时填） |
 | `after_snapshot` | 变更后的 JSON 全量快照（CREATE / UPDATE / PUBLISH 时填）；`PUBLISH_FAILED` 时填错误诊断 JSON（含 `errorCode` / `stackTrace` 摘要，详见下方关键边界） |
 | `operated_at` | 操作时间（DDL 列名；与 `evaluation_session.occurred_at` 含义不同，后者是业务事件时间） |
@@ -613,9 +612,8 @@ interface Scheduler {
 | `rule_definition_id` | 归属规则（FK → `rule_definition.id`）；按 Scene 查所有候选版本通过 JOIN rule_definition 实现，不冗余 scene_id |
 | `trigger_event_types` | 冻结：发布瞬间的 eventType 数组 |
 | `condition_ast` | 冻结：完整 AST JSON（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
-| `pre_gates` | 冻结：preGates 列表（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
+| `pre_gates` | 冻结：preGates 列表（含 ROLLOUT 灰度配置；无独立 `rollout` 列，D43）（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
 | `decision_bindings` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `compensateActionType` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
-| `rollout` | 冻结：灰度配置（含 type / percentage / tagConditions） |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |
 | `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。发布期由 AST 静态分析得出；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
 | `compiled_predicate_ref?` | 可选字符串，编译产物引用键（D20 §5）。v1 留空；v1.5 启用，由 `CompiledExecutor` + `ExecutorRegistry` 按版本 id 检索编译产物 |
@@ -626,7 +624,7 @@ interface Scheduler {
 - **不可变**（D6）：行写入后永不 UPDATE，永不 DELETE。修改规则 = 在 `rule_definition` 改草稿 → 走标准发布产生新一行 `rule_version`。
 - **回滚不是覆盖**（D19）：回滚到 `version=N-2` = 把 N-2 的快照内容拷回 `rule_definition` 草稿，走标准发布产出 `version=N+1`（内容等于 N-2），审计链完整可追溯，N-1 / N-2 行均原样保留。
 - **运行时锁定**（D17 派生）：`evaluation_session` 开始时按 `(scene, eventType)` **倒排索引**拿当前候选 `rule_version` 列表（`current_version` 在索引预热时已解析）并拍快照，整 session 用同一组版本——即使中途切版本，本次评估不受影响。
-- **灰度桶稳定性**（D6 派生）：`hash(subjectId, ruleVersionId)` 计算桶号，每个不可变版本对应稳定的桶分布；版本切换会触发桶漂移，这是 D6 的固有语义。`subjectId` 由 Scene.subjectType 决定语义（v1 仅 USER 实装），与 §3.10 Job / §3.4 rollout 子表口径一致。
+- **灰度桶稳定性**（D6 派生）：`hash(subjectId, experimentId ?? ruleVersionId)` 计算桶号，每个不可变版本对应稳定的桶分布；版本切换会触发桶漂移，这是 D6 的固有语义。`subjectId` 由 Scene.subjectType 决定语义（v1 仅 USER 实装），与 §3.10 Job / §3.4 ROLLOUT 灰度口径一致。
 - **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键，且 `node_trace` 记 `rule_version_id` 便于按版本对账 trace；`action_execution` 记 `decision_code`，可与 `rule_version.decision_bindings` 关联溯源。
 
 ### 3.13 Subject（业务主体，运行时填充体）
@@ -663,7 +661,7 @@ interface Scheduler {
 
 | 类型 | 用途 | 状态影响 |
 |------|------|---------|
-| **灰度命中** | 按 `Rule.rollout` 配置计算桶号是否落入命中区（D6） | 纯只读判定，无副作用 |
+| **灰度命中**（ROLLOUT） | 按 `preGates` 中 ROLLOUT 项 params 计算桶号是否落入命中区（D6） | 纯只读判定，无副作用 |
 | **频次上限** | 按 `(tenantId, ruleId, subjectId, 时间窗口)` 检查命中次数是否超阈值 | 真实评估期会写新计数；dry-run 仅读不写（§五 Q10） |
 | **白名单**（WHITELIST） | 按 `(ruleId, subjectId)` 查白名单表，subject 不在白名单则拦截 | 纯只读判定 |
 | **黑名单**（BLACKLIST） | 按 `(ruleId, subjectId)` 查黑名单表，subject 在黑名单则拦截 | 纯只读判定 |
@@ -710,6 +708,7 @@ interface Scheduler {
 | `started_at` | 评估开始时间 |
 | `finished_at` | 评估结束时间 |
 | `eval_duration_ms` | 整 session 耗时（ms） |
+| `context_snapshot` | nullable JSON；EvalContext 构建完成后的快照，已在 B20 升级为嵌套结构 `{"metrics": {metricCode: value, ...}, "evalNow": "<ISO-8601 instant>"}`，其中 `metrics` 为各指标取数结果，`evalNow` 为本次评估注入的 `EvalContext.now`（统一时钟）；用于 dry-run 重放时还原历史 metric 值及时间点，避免重放时取到当前新值；EvalContext 构建失败（`status=ERROR, errorCode=METRIC_FETCH_FAIL`）时为 null |
 
 **`status` 聚合语义**（session 结束时由引擎按规则集合结果填充）：
 
@@ -728,6 +727,7 @@ interface Scheduler {
 - **生产专用**：dry-run 场景写独立的 `dry_run_session` 表（§3.16），不污染生产幂等键；
 - **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键关联，可从 session 横向拉出完整评估链路；
 - **与 `rule_version` 的关联**：`action_execution` 记 `decision_code`（D27 幂等键变更），可与 `rule_version.decision_bindings` 关联追溯对应 Decision 快照；`node_trace` 记 `rule_version_id` 提供按版本对账路径（§3.12 派生）；
+- **`context_snapshot` 写入时机**：EvalContext 构建成功后、进入 AST 评估前，由评估线程同步写入 `evaluation_session` 行（与 session INSERT 同事务，开销为一次 JSON 序列化）；构建失败时置 null，不阻塞 session 落库；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §evaluation_session 表。
 
 ### 3.16 DryRunSession（试算会话，非一等公民）
@@ -752,6 +752,7 @@ interface Scheduler {
 | `trigger` | `MANUAL` / `API`；dry-run 触发来源（MANUAL=运营从管理台手动发起，API=调用方通过接口触发） |
 | `requested_by` | 发起 dry-run 的操作人 ID（来源 `X-Actor-Id` header，D14） |
 | `target_rule_version_id` | nullable；调用方指定 dry-run 的目标 RuleVersion；未指定时使用 `current_version`（可提前预览未发布版本效果） |
+| `context_snapshot` | 同 §3.15；dry-run 场景下为本次试算时真实取到的 metric 快照，方便运营对比"重放时 metric 值"与"当前 metric 值"的差异 |
 
 **关键边界**：
 
@@ -1074,7 +1075,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | **Pre-Gate 互斥规则** | **读**互斥锁状态用于判定，**不占用**新锁 |
 | **EvalContext 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
 | **AST 评估 + 节点 trace** | 真实评估、真实节点 trace；trace 写入 `dry_run_session` 表，不进 `evaluation_session` |
-| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。**v1 范围**：接口已预留，全部 handler 实装在 **v1.5** 补齐（D7）；v1 阶段未补齐的 handler 由 Dispatcher 短路返回 `status=SKIPPED, errorCode=DRY_RUN_NOT_IMPLEMENTED` |
+| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7）。 |
 | **`action_execution` 写入** | 不落生产表，预览结果随 dry-run 响应返回 |
 | **审计 `audit_log`** | 不写入（dry-run 不是发布操作） |
 

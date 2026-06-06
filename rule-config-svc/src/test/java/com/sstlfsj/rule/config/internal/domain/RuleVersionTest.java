@@ -16,7 +16,6 @@ class RuleVersionTest {
         ver.setConditionAst("{\"type\":\"ConditionNode\"}");
         ver.setDecisionBindings("[]");
         ver.setPreGates("[]");
-        ver.setRollout("{}");
         ver.setKind("AST_BOOLEAN");
         ver.setTriggerEventTypes("[\"payment.initiated\"]");
         ver.setMetricDependencies("[\"user.age\"]");
@@ -29,7 +28,6 @@ class RuleVersionTest {
         assertEquals("{\"type\":\"ConditionNode\"}", ver.getConditionAst());
         assertEquals("[]", ver.getDecisionBindings());
         assertEquals("[]", ver.getPreGates());
-        assertEquals("{}", ver.getRollout());
         assertEquals("AST_BOOLEAN", ver.getKind());
         assertEquals("[\"payment.initiated\"]", ver.getTriggerEventTypes());
         assertEquals("[\"user.age\"]", ver.getMetricDependencies());

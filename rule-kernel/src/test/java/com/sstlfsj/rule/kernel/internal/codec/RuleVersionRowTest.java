@@ -1,0 +1,41 @@
+package com.sstlfsj.rule.kernel.internal.codec;
+
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class RuleVersionRowTest {
+
+    @Test
+    void record_fieldsAccessible() {
+        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
+                "AST_BOOLEAN", "HIGHEST_PRIORITY");
+        assertThat(row.ruleVersionId()).isEqualTo(1L);
+        assertThat(row.sceneCode()).isEqualTo("scene");
+        assertThat(row.tenantId()).isEqualTo(2L);
+        assertThat(row.kind()).isEqualTo("AST_BOOLEAN");
+        assertThat(row.decisionStrategy()).isEqualTo("HIGHEST_PRIORITY");
+    }
+
+    @Test
+    void record_nullKind_isAllowed() {
+        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
+                null, null);
+        assertThat(row.kind()).isNull();
+        assertThat(row.decisionStrategy()).isNull();
+    }
+
+    @Test
+    void record_metricDependenciesJson_retained() {
+        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
+                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\"]");
+        assertThat(row.metricDependenciesJson()).isEqualTo("[\"balance\"]");
+    }
+
+    @Test
+    void record_legacyConstructor_nullMetricDependenciesJson() {
+        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
+                "AST_BOOLEAN", "HIGHEST_PRIORITY");
+        assertThat(row.metricDependenciesJson()).isNull();
+    }
+}

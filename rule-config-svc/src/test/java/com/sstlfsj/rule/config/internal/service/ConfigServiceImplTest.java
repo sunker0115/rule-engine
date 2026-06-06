@@ -35,8 +35,8 @@ class ConfigServiceImplTest {
     void publish_delegates_to_publishService() {
         RuleVersionSnapshot expected = new RuleVersionSnapshot(
                 42L, "PAYMENT", "1",
-                new ConditionNode("c.type", null, null, Map.of()),
-                List.of(), List.of(), null
+                new ConditionNode("c.type", null, null, Map.of(), 0.0),
+                List.of(), List.of(), null, null
         );
         when(publishService.publish(1L, 10L, "actor1")).thenReturn(expected);
 
@@ -71,7 +71,7 @@ class ConfigServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("risk.transfer");
-        when(sceneMapper.selectOne(any())).thenReturn(scene);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         RuleDefinition rd = new RuleDefinition();
         rd.setId(10L);
@@ -84,7 +84,7 @@ class ConfigServiceImplTest {
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> mockPage =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 1);
         mockPage.setRecords(java.util.List.of(rd));
-        when(ruleDefinitionMapper.selectPage(any(), any())).thenReturn(mockPage);
+        when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any())).thenReturn(mockPage);
 
         var result = configService.listRules("1", "risk.transfer", "PUBLISHED", 1, 20);
 
@@ -95,13 +95,13 @@ class ConfigServiceImplTest {
         assertThat(item.code()).isEqualTo("rule.a");
         assertThat(item.status()).isEqualTo("PUBLISHED");
         assertThat(item.currentVersion()).isEqualTo(42L);
-        verify(sceneMapper).selectOne(any());
-        verify(ruleDefinitionMapper).selectPage(any(), any());
+        verify(sceneMapper).findByCode(any(), any());
+        verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any());
     }
 
     @Test
     void listRules_sceneNotFound_returnsEmptyPage() {
-        when(sceneMapper.selectOne(any())).thenReturn(null);
+        when(sceneMapper.findByCode(any(), any())).thenReturn(null);
 
         var result = configService.listRules("1", "nonexistent.scene", null, 1, 20);
 
@@ -115,12 +115,12 @@ class ConfigServiceImplTest {
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> emptyPage =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
         emptyPage.setRecords(java.util.List.of());
-        when(ruleDefinitionMapper.selectPage(any(), any())).thenReturn(emptyPage);
+        when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any())).thenReturn(emptyPage);
 
         var result = configService.listRules("1", null, null, 1, 20);
 
         assertThat(result.getRecords()).isEmpty();
-        verify(ruleDefinitionMapper).selectPage(any(), any());
+        verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any());
         verifyNoInteractions(sceneMapper);
     }
 
@@ -128,13 +128,13 @@ class ConfigServiceImplTest {
     void createDraft_delegatesToPublishService() {
         DraftCreatedResult expected = new DraftCreatedResult(1L, 2L, 1L, "DRAFT");
         when(publishService.createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                "{}", "[]", "[]", "[]", "actor1")).thenReturn(expected);
+                "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1")).thenReturn(expected);
 
         DraftCreatedResult result = configService.createDraft("1", "risk.transfer",
-                "rule.a", "规则A", "{}", "[]", "[]", "[]", "actor1");
+                "rule.a", "规则A", "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(1L);
         verify(publishService).createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                "{}", "[]", "[]", "[]", "actor1");
+                "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1");
     }
 }

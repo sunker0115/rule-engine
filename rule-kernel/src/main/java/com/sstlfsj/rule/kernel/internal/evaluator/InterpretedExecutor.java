@@ -6,8 +6,13 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
+import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 
@@ -30,10 +35,20 @@ public class InterpretedExecutor implements RuleVersionExecutor {
 
     private boolean evaluate(AstNode node, EvalContext ctx) {
         return switch (node) {
-            case AndNode and     -> evaluateAnd(and, ctx);
-            case OrNode or       -> evaluateOr(or, ctx);
-            case NotNode not     -> !evaluate(not.child(), ctx);
-            case ConditionNode c -> evaluateCondition(c, ctx);
+            case AndNode and          -> evaluateAnd(and, ctx);
+            case OrNode or            -> evaluateOr(or, ctx);
+            case NotNode not          -> !evaluate(not.child(), ctx);
+            case ConditionNode c      -> evaluateCondition(c, ctx);
+            case XorNode xor          -> evaluateXor(xor, ctx);
+            // 以下节点由专属 Executor 处理，不应进入此执行器
+            case ScorecardRootNode ignored ->
+                    throw new IllegalStateException("ScorecardRootNode 不能由 InterpretedExecutor 处理");
+            case IfNode ignored ->
+                    throw new IllegalStateException("IfNode 不能由 InterpretedExecutor 处理，请使用 DecisionTreeExecutor");
+            case DecisionLeafNode ignored ->
+                    throw new IllegalStateException("DecisionLeafNode 不能由 InterpretedExecutor 处理，请使用 DecisionTreeExecutor");
+            case DecisionTableNode ignored ->
+                    throw new IllegalStateException("DecisionTableNode 不能由 InterpretedExecutor 处理，请使用 DecisionTableExecutor");
         };
     }
 
@@ -51,12 +66,25 @@ public class InterpretedExecutor implements RuleVersionExecutor {
         return false;
     }
 
-    private boolean evaluateCondition(ConditionNode node, EvalContext ctx) {
-        ConditionEvaluator evaluator = evaluators.get(node.conditionType());
-        if (evaluator == null) {
-            throw new IllegalStateException(
-                    "No ConditionEvaluator registered for type: " + node.conditionType());
+    private boolean evaluateXor(XorNode xor, EvalContext ctx) {
+        int satisfiedCount = 0;
+        for (AstNode child : xor.children()) {
+            if (evaluate(child, ctx)) satisfiedCount++;
+            if (satisfiedCount > 1) break; // 已超过1个，提前退出（优化）
         }
-        return evaluator.evaluate(node, ctx);
+        return satisfiedCount == 1;
+    }
+
+    private boolean evaluateCondition(ConditionNode node, EvalContext ctx) {
+        ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
+        if (outcome.isError()) {
+            // 无算子是配置错误，保留严格中止；取数失败则降级不命中
+            if (ConditionEvaluation.NO_EVALUATOR.equals(outcome.errorCode())) {
+                throw new IllegalStateException(
+                        "No ConditionEvaluator registered for type: " + node.conditionType());
+            }
+            return false;
+        }
+        return outcome.satisfied();
     }
 }

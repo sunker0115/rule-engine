@@ -14,7 +14,7 @@ class ConditionTypeTest {
     @ConditionType("AMOUNT_GT")
     static class MinimalHandler {}
 
-    @ConditionType(value = "AGE_LT", displayName = "年龄小于", paramsSchema = "{}", requiresMetric = true)
+    @ConditionType(value = "AGE_LT", displayName = "年龄小于", paramsSchema = "{}")
     static class FullHandler {}
 
     @Test
@@ -33,7 +33,6 @@ class ConditionTypeTest {
         ConditionType ann = MinimalHandler.class.getAnnotation(ConditionType.class);
         assertEquals("", ann.displayName());
         assertEquals("{}", ann.paramsSchema());
-        assertFalse(ann.requiresMetric());
     }
 
     @Test
@@ -42,7 +41,6 @@ class ConditionTypeTest {
         assertEquals("AGE_LT", ann.value());
         assertEquals("年龄小于", ann.displayName());
         assertEquals("{}", ann.paramsSchema());
-        assertTrue(ann.requiresMetric());
     }
 
     @Test

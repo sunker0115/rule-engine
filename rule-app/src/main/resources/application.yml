@@ -1,10 +1,14 @@
 spring:
   application:
     name: rule-engine
+  autoconfigure:
+    # OTel SDK 已通过 management.opentelemetry.* 推送 OTLP 指标；排除 Micrometer 的 OTLP registry
+    # 避免其 protobuf 4.26.1 与 OTel SDK 4.32.0 版本冲突导致 NPE
+    exclude: org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsExportAutoConfiguration
   datasource:
-    url: jdbc:mysql://localhost:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123456
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   modulith:
     events:
@@ -24,6 +28,22 @@ management:
     export:
       prometheus:
         enabled: true
+  opentelemetry:
+    metrics:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+    logging:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:http://localhost:4318/v1/logs}
+  tracing:
+    sampling:
+      probability: 1.0
 
 engine:
   rule:
@@ -53,6 +73,3 @@ engine:
       eval-error-rate-threshold: 0.05
       trace-queue-full-threshold: 0.8
 
-logging:
-  level:
-    com.sstlfsj.rule: DEBUG

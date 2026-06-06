@@ -50,6 +50,7 @@ public interface ConfigService {
      * @param decisionBindingsJson  决策绑定 JSON 字符串
      * @param preGatesJson          前置门 JSON 字符串
      * @param triggerEventTypesJson 触发事件类型 JSON 字符串
+     * @param kind                  规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
      * @param actorId               操作人 ID
      * @return 新建草稿的 ID 信息
      */
@@ -57,5 +58,5 @@ public interface ConfigService {
             String code, String name,
             String conditionAstJson, String decisionBindingsJson,
             String preGatesJson, String triggerEventTypesJson,
-            String actorId);
+            String kind, String actorId);
 }

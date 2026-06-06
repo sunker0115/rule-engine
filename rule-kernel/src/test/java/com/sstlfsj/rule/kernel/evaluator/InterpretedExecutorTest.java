@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.evaluator;
 
 // execute() 委托给 EvalResult.hit()/miss() 工厂方法；ruleHit 断言覆盖两条路径。
+// D42: IfNode/DecisionLeafNode/DecisionTableNode 抛 IllegalState，交由专属 Executor 处理。
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
@@ -11,6 +12,11 @@ import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
+import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import org.junit.jupiter.api.Test;
@@ -37,19 +43,19 @@ class InterpretedExecutorTest {
     private EvalContext minimalContext() {
         RuleEvent event = new RuleEvent("t1", "scene1", "ORDER_PLACED", "u1",
                 "evt-1", Instant.now(), Map.of(), null);
-        return new EvalContext("t1", event, null, Map.of());
+        return new EvalContext("t1", event, null, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
     private RuleVersionSnapshot snapshot(AstNode ast) {
-        return new RuleVersionSnapshot(1L, "scene1", "t1", ast, null, null, null);
+        return new RuleVersionSnapshot(1L, "scene1", "t1", ast, null, null, null, null);
     }
 
     private ConditionNode trueNode() {
-        return new ConditionNode(ALWAYS_TRUE, null, null, Map.of());
+        return new ConditionNode(ALWAYS_TRUE, null, null, Map.of(), 0.0);
     }
 
     private ConditionNode falseNode() {
-        return new ConditionNode(ALWAYS_FALSE, null, null, Map.of());
+        return new ConditionNode(ALWAYS_FALSE, null, null, Map.of(), 0.0);
     }
 
     @Test
@@ -82,7 +88,7 @@ class InterpretedExecutorTest {
             return false;
         };
         // AND(counting_false, counting_false, counting_false) — 第一个 false 后必须短路停止
-        ConditionNode countingNode = new ConditionNode("COUNTING", null, null, Map.of());
+        ConditionNode countingNode = new ConditionNode("COUNTING", null, null, Map.of(), 0.0);
         AstNode ast = new AndNode(List.of(countingNode, countingNode, countingNode), null, null);
         InterpretedExecutor executor = executorWith(Map.of("COUNTING", counting));
 
@@ -146,5 +152,84 @@ class InterpretedExecutorTest {
         EvalResult result = executor.execute(snapshot(ast), minimalContext());
 
         assertThat(result.ruleHit()).isTrue();
+    }
+
+    @Test
+    void xorNode_exactlyOneTrue_returns_ruleHit() {
+        // XOR(true, false, false) = true
+        AstNode ast = new XorNode(List.of(trueNode(), falseNode(), falseNode()), null);
+        InterpretedExecutor executor = executorWith(Map.of(
+                ALWAYS_TRUE, alwaysTrue,
+                ALWAYS_FALSE, alwaysFalse));
+
+        EvalResult result = executor.execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isTrue();
+    }
+
+    @Test
+    void xorNode_allTrue_returns_miss() {
+        // XOR(true, true) = false
+        AstNode ast = new XorNode(List.of(trueNode(), trueNode()), null);
+        InterpretedExecutor executor = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue));
+
+        EvalResult result = executor.execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isFalse();
+    }
+
+    @Test
+    void xorNode_allFalse_returns_miss() {
+        // XOR(false, false) = false
+        AstNode ast = new XorNode(List.of(falseNode(), falseNode()), null);
+        InterpretedExecutor executor = executorWith(Map.of(ALWAYS_FALSE, alwaysFalse));
+
+        EvalResult result = executor.execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isFalse();
+    }
+
+    @Test
+    void scorecardRootNode_throwsIllegalState() {
+        AstNode ast = new ScorecardRootNode(List.of(), 0.6);
+        InterpretedExecutor executor = executorWith(Map.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executor.execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ScorecardRootNode");
+    }
+
+    @Test
+    void ifNode_throwsIllegalState() {
+        AstNode ast = new IfNode(trueNode(), new DecisionLeafNode("BLOCK", null), null);
+        InterpretedExecutor executor = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executor.execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("IfNode");
+    }
+
+    @Test
+    void decisionLeafNode_throwsIllegalState() {
+        AstNode ast = new DecisionLeafNode("BLOCK", "HIGH_RISK");
+        InterpretedExecutor executor = executorWith(Map.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executor.execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DecisionLeafNode");
+    }
+
+    @Test
+    void decisionTableNode_throwsIllegalState() {
+        AstNode ast = new DecisionTableNode(List.of(), List.of());
+        InterpretedExecutor executor = executorWith(Map.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executor.execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DecisionTableNode");
     }
 }

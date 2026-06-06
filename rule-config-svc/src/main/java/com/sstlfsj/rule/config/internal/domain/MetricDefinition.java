@@ -15,6 +15,7 @@ public class MetricDefinition {
     private Long id;
     private Long tenantId;
     private String metricCode;
+    private Integer version;
     private String name;
     private String sourceType;
     private String dataType;

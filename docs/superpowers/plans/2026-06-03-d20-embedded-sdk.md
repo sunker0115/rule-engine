@@ -2,70 +2,80 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把评估热路径从 `rule-eval-svc` 下沉到 `rule-kernel`，新建 `rule-sdk` 和 `rule-sdk-spring-boot-starter` 模块，让业务服务无需 HTTP 调用即可在 JVM 内本地评估规则。
+**Goal:** 把评估热路径从 `rule-eval-svc` 下沉到 `rule-kernel`（去 Spring 依赖），新建 `rule-sdk` 和 `rule-sdk-spring-boot-starter` 模块，让业务服务无需 HTTP 调用即可在 JVM 内本地评估规则。
 
-**Architecture:** `EvalEngine`（纯 Java）从 `EvalServiceImpl.doEvaluate()` 提取编排逻辑下沉到 `rule-kernel`，`SceneRuleIndex` 和 `EvalContextAssembler` 同步迁入；`rule-sdk` 持有 `SnapshotPoller`（HTTP 轮询 rule-api）和 `RuleEngineClient` 门面；`rule-eval-svc` 的 `EvalServiceImpl` 变薄为调用 `EvalEngine` + 副作用壳；`rule-api` 新增 `GET /api/v1/sdk/snapshots` 端点。
+**Architecture:** `EvalEngine`（纯 Java）从 `EvalServiceImpl.doEvaluate()` 提取编排逻辑下沉到 `rule-kernel`；所有 `ConditionEvaluator` 实现、`SceneRuleIndex`、`EvalContextAssembler`、`AstJsonCodec`、`SnapshotAssembler` 全部迁入 `rule-kernel` 并去掉 Spring 注解（Task 0 前置）；`rule-sdk` 持有 `SnapshotPoller`（HTTP 轮询 rule-api）和 `RuleEngineClient` 门面；`rule-eval-svc` 的 `EvalServiceImpl` 变薄为调用 `EvalEngine` + 副作用壳；`rule-api` 新增 `GET /api/v1/sdk/snapshots` 端点。
 
-**Tech Stack:** Java 25、Spring Boot 4、Jackson（`rule-sdk` 用于 HTTP 响应反序列化）、`java.net.http.HttpClient`（JDK 内置，`rule-sdk` 零额外依赖）
+**Tech Stack:** Java 25、Spring Boot 4、Jackson（`rule-kernel` 作为 optional 依赖、`rule-sdk` 直接依赖）、`java.net.http.HttpClient`（JDK 内置，`rule-sdk` 零额外 HTTP 客户端依赖）
 
 ---
 
 ## 文件清单
 
-### rule-kernel（改动 + 新增）
+### rule-kernel（迁入 + 新增）
 
 | 操作 | 文件 |
 |------|------|
-| 迁入（去 @Component） | `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/index/SceneRuleIndex.java` |
-| 迁入（去 @Component） | `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/context/EvalContextAssembler.java` |
-| 新增 | `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/engine/EvalEngine.java` |
-| 新增测试 | `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/engine/EvalEngineTest.java` |
-| 新增测试 | `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/index/SceneRuleIndexTest.java`（已有则扩充）|
+| pom.xml 加依赖 | `rule-kernel/pom.xml`（添加 jackson-databind optional） |
+| 迁入（去 @Component） | `rule-kernel/…/kernel/internal/condition/` 下所有 ConditionEvaluator 实现 |
+| 新增工厂 | `rule-kernel/…/kernel/internal/condition/KernelEvaluators.java` |
+| 迁入（去 @Component） | `rule-kernel/…/kernel/internal/codec/AstJsonCodec.java` |
+| 迁入（去 @Component） | `rule-kernel/…/kernel/internal/codec/SnapshotAssembler.java` |
+| 迁入（去 @Component） | `rule-kernel/…/kernel/internal/index/SceneRuleIndex.java` |
+| 迁入（去 @Component） | `rule-kernel/…/kernel/internal/context/EvalContextAssembler.java` |
+| 新增 | `rule-kernel/…/kernel/internal/engine/EvalEngine.java` |
+| 新增测试 | `rule-kernel/…/test/…/engine/EvalEngineTest.java` |
+| 新增测试 | `rule-kernel/…/test/…/index/SceneRuleIndexTest.java` |
+| 新增测试 | `rule-kernel/…/test/…/context/EvalContextAssemblerTest.java` |
 
 ### rule-eval-svc（改动）
 
 | 操作 | 文件 |
 |------|------|
-| 删除 | `rule-eval-svc/…/internal/index/SceneRuleIndex.java`（迁移到 kernel） |
-| 删除 | `rule-eval-svc/…/internal/context/EvalContextAssembler.java`（迁移到 kernel） |
-| 改动 | `rule-eval-svc/…/internal/service/EvalServiceImpl.java`（委托 EvalEngine，保留副作用） |
-| 改动 | `rule-eval-svc/…/EvalAutoConfiguration.java`（注册 EvalEngine Bean） |
-| 改动 | `rule-eval-svc/…/internal/listener/RuleIndexEventListener.java`（import 改为 kernel 包路径） |
-| 改动 | `rule-eval-svc/…/internal/listener/SceneIndexEventListener.java`（同上） |
-| 改动 | `rule-eval-svc/…/internal/listener/IndexStartupLoader.java`（同上） |
+| 删除 | `rule-eval-svc/…/eval/internal/condition/` 下所有 ConditionEvaluator 实现（及对应测试） |
+| 删除 | `rule-eval-svc/…/eval/internal/index/SceneRuleIndex.java` |
+| 删除 | `rule-eval-svc/…/eval/internal/context/EvalContextAssembler.java` |
+| 删除 | `rule-eval-svc/…/eval/internal/snapshot/AstJsonCodec.java` |
+| 删除 | `rule-eval-svc/…/eval/internal/snapshot/SnapshotAssembler.java` |
+| 改动 import | `rule-eval-svc/…/eval/internal/listener/IndexStartupLoader.java` |
+| 改动 import | `rule-eval-svc/…/eval/internal/listener/RuleIndexEventListener.java` |
+| 改动 import | `rule-eval-svc/…/eval/internal/listener/SceneIndexEventListener.java` |
+| 改动 import | `rule-eval-svc/…/eval/internal/snapshot/SceneSnapshotLoader.java` |
+| 改动 | `rule-eval-svc/…/eval/internal/service/EvalServiceImpl.java` |
+| 改动 | `rule-eval-svc/…/eval/EvalAutoConfiguration.java` |
 
 ### rule-api（改动）
 
 | 操作 | 文件 |
 |------|------|
-| 新增 | `rule-api/src/main/java/com/sstlfsj/rule/web/sdk/SdkSnapshotController.java` |
-| 改动 | `rule-api/src/main/java/com/sstlfsj/rule/web/ApiAutoConfiguration.java`（注册 SdkSnapshotController） |
-| 新增测试 | `rule-api/src/test/java/com/sstlfsj/rule/web/sdk/SdkSnapshotControllerTest.java` |
+| 新增 | `rule-api/…/web/sdk/SdkSnapshotController.java` |
+| 改动 | `rule-api/…/web/ApiAutoConfiguration.java` |
+| 新增测试 | `rule-api/…/test/…/web/sdk/SdkSnapshotControllerTest.java` |
 
 ### rule-sdk（新建模块）
 
 | 操作 | 文件 |
 |------|------|
 | 新增 | `rule-sdk/pom.xml` |
-| 新增 | `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/FetchMode.java` |
-| 新增 | `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/EvalResultListener.java` |
-| 新增 | `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/EvalSessionListener.java` |
-| 新增 | `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/SnapshotPoller.java` |
-| 新增 | `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/RuleEngineClient.java` |
-| 新增测试 | `rule-sdk/src/test/java/com/sstlfsj/rule/sdk/SnapshotPollerTest.java` |
-| 新增测试 | `rule-sdk/src/test/java/com/sstlfsj/rule/sdk/RuleEngineClientTest.java` |
+| 新增 | `rule-sdk/…/sdk/FetchMode.java` |
+| 新增 | `rule-sdk/…/sdk/EvalResultListener.java` |
+| 新增 | `rule-sdk/…/sdk/EvalSessionListener.java` |
+| 新增 | `rule-sdk/…/sdk/SnapshotPoller.java` |
+| 新增 | `rule-sdk/…/sdk/RuleEngineClient.java` |
+| 新增测试 | `rule-sdk/…/test/…/sdk/SnapshotPollerTest.java` |
+| 新增测试 | `rule-sdk/…/test/…/sdk/RuleEngineClientTest.java` |
 
 ### rule-sdk-spring-boot-starter（新建模块）
 
 | 操作 | 文件 |
 |------|------|
 | 新增 | `rule-sdk-spring-boot-starter/pom.xml` |
-| 新增 | `rule-sdk-spring-boot-starter/src/main/java/com/sstlfsj/rule/sdk/starter/SdkProperties.java` |
-| 新增 | `rule-sdk-spring-boot-starter/src/main/java/com/sstlfsj/rule/sdk/starter/RuleEngineClientAutoConfiguration.java` |
-| 新增 | `rule-sdk-spring-boot-starter/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` |
-| 新增测试 | `rule-sdk-spring-boot-starter/src/test/java/com/sstlfsj/rule/sdk/starter/RuleEngineClientAutoConfigurationTest.java` |
+| 新增 | `…/sdk/starter/SdkProperties.java` |
+| 新增 | `…/sdk/starter/RuleEngineClientAutoConfiguration.java` |
+| 新增 | `…/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` |
+| 新增测试 | `…/test/…/starter/RuleEngineClientAutoConfigurationTest.java` |
 
-### 根 pom.xml（改动）
+### 根 pom.xml
 
 追加两个 `<module>` 条目：`rule-sdk`、`rule-sdk-spring-boot-starter`
 
@@ -74,31 +84,225 @@
 ## Maven 环境
 
 ```bash
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-8.jdk/Contents/Home
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-25.jdk/Contents/Home
 export PATH=$JAVA_HOME/bin:$PATH
 MVN=/Users/sunke/.m2/wrapper/dists/apache-maven-3.9.9-bin/4nf9hui3q3djbarqar9g711ggc/apache-maven-3.9.9/bin/mvn
 ```
 
 ---
 
-## Task 1：SceneRuleIndex 迁入 rule-kernel
+## Task 0：rule-kernel 纯 Java 化（D20 前置）
 
-**目标：** 把 `SceneRuleIndex` 从 `rule-eval-svc` 迁移到 `rule-kernel`，去掉 `@Component`，修正所有 import 路径，保持逻辑不变。
+**目标：** 把所有评估热路径的纯 Java 逻辑从 `rule-eval-svc` 迁入 `rule-kernel`，去掉 Spring 注解，使 `rule-kernel` 可在无 Spring 容器的进程中运行。涵盖：所有 ConditionEvaluator、AstJsonCodec、SnapshotAssembler、SceneRuleIndex、EvalContextAssembler。修正 `EvalAutoConfiguration` 不再依赖 Spring 自动收集 evaluator，修正 3 个 listener 的 import 路径。
 
 **Files:**
-- 新建: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/index/SceneRuleIndex.java`
-- 删除: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/index/SceneRuleIndex.java`
-- 改动: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/listener/RuleIndexEventListener.java`
-- 改动: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/listener/SceneIndexEventListener.java`
-- 改动: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/listener/IndexStartupLoader.java`
-- 改动: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImpl.java`（import 路径）
-- 改动: `rule-eval-svc/pom.xml`（确认已依赖 rule-kernel，通常已有）
-- 测试: `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/index/SceneRuleIndexTest.java`
+- 改动: `rule-kernel/pom.xml`
+- 新建: `rule-kernel/…/kernel/internal/condition/`（迁入全部 evaluator 实现类，包含 KernelEvaluators 工厂）
+- 新建: `rule-kernel/…/kernel/internal/codec/AstJsonCodec.java`
+- 新建: `rule-kernel/…/kernel/internal/codec/SnapshotAssembler.java`
+- 新建: `rule-kernel/…/kernel/internal/index/SceneRuleIndex.java`
+- 新建: `rule-kernel/…/kernel/internal/context/EvalContextAssembler.java`
+- 删除: `rule-eval-svc` 中对应原始文件
+- 改动: `rule-eval-svc/…/EvalAutoConfiguration.java`
+- 改动: `rule-eval-svc/…/snapshot/SceneSnapshotLoader.java`（import SnapshotAssembler）
+- 改动: `rule-eval-svc/…/listener/IndexStartupLoader.java`（import SceneRuleIndex）
+- 改动: `rule-eval-svc/…/listener/RuleIndexEventListener.java`（import SceneRuleIndex）
+- 改动: `rule-eval-svc/…/listener/SceneIndexEventListener.java`（import SceneRuleIndex）
 
-- [ ] **Step 1: 在 rule-kernel 新建 SceneRuleIndex**
+---
+
+### Step 0-1：rule-kernel/pom.xml 添加 jackson-databind optional 依赖
+
+在 `rule-kernel/pom.xml` 的 `<dependencies>` 中追加：
+
+```xml
+<!-- AstJsonCodec 需要 Jackson；rule-sdk 使用时通过直接依赖引入，rule-eval-svc 已由 Spring Boot 传递 -->
+<dependency>
+    <groupId>com.fasterxml.jackson.core</groupId>
+    <artifactId>jackson-databind</artifactId>
+    <optional>true</optional>
+</dependency>
+```
+
+运行编译确认 pom 语法正确：
+
+```bash
+$MVN -pl rule-kernel -am compile
+```
+
+期望：BUILD SUCCESS
+
+---
+
+### Step 0-2：迁移所有 ConditionEvaluator 实现到 rule-kernel
+
+**操作说明：** 将 `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/condition/` 下所有 `*Evaluator.java` 文件复制到 `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/condition/`，并对每个文件做以下改动：
+
+1. 修改 `package` 声明：`com.sstlfsj.rule.eval.internal.condition` → `com.sstlfsj.rule.kernel.internal.condition`
+2. 删除 `@Component("TYPE_CODE")` 注解及其 import
+3. 删除 `org.springframework.stereotype.Component` import
+4. 将类访问修饰符从 `class`（包私有）改为 `public class`（因为 EvalAutoConfiguration 需要 `new` 构造）
+5. 对于 `DateAfterEvaluator`：将对 `DateBeforeEvaluator.toInstant()` 的调用保持不变（同包，路径一致）
+
+涉及文件（根据实际包内容为准，先用 glob 确认）：
+
+```bash
+ls rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/condition/
+```
+
+**BaseEvaluatorTest 不迁移**（测试辅助类留在 rule-eval-svc/test）。
+
+迁移完成后，**新建 `KernelEvaluators.java`** 工厂类：
 
 ```java
-// rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/index/SceneRuleIndex.java
+// rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/condition/KernelEvaluators.java
+package com.sstlfsj.rule.kernel.internal.condition;
+
+import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 内置 ConditionEvaluator 工厂：返回全量默认算子 Map，无 Spring 依赖。
+ * rule-eval-svc 的 EvalAutoConfiguration 和 rule-sdk 的 RuleEngineClient 均通过此方法获取算子。
+ */
+public final class KernelEvaluators {
+
+    private KernelEvaluators() {}
+
+    /**
+     * 返回所有内置算子的不可变 Map，key 为算子 type code（与 ConditionNode.conditionType 对应）。
+     */
+    public static Map<String, ConditionEvaluator> defaults() {
+        Map<String, ConditionEvaluator> m = new HashMap<>();
+        // 数值 / 字符串比较
+        m.put("EQ",          new EqEvaluator());
+        m.put("NEQ",         new NeqEvaluator());
+        m.put("GT",          new GtEvaluator());
+        m.put("GTE",         new GteEvaluator());
+        m.put("LT",          new LtEvaluator());
+        m.put("LTE",         new LteEvaluator());
+        // 集合
+        m.put("IN",          new InEvaluator());
+        m.put("NOT_IN",      new NotInEvaluator());
+        m.put("BETWEEN",     new BetweenEvaluator());
+        m.put("NOT_BETWEEN", new NotBetweenEvaluator());
+        // 字符串
+        m.put("CONTAINS",     new ContainsEvaluator());
+        m.put("NOT_CONTAINS", new NotContainsEvaluator());
+        m.put("STARTS_WITH",  new StartsWithEvaluator());
+        m.put("ENDS_WITH",    new EndsWithEvaluator());
+        m.put("MATCHES",      new MatchesEvaluator());
+        // 日期
+        m.put("DATE_BEFORE",  new DateBeforeEvaluator());
+        m.put("DATE_AFTER",   new DateAfterEvaluator());
+        return Map.copyOf(m);
+    }
+}
+```
+
+> 若实际包内还有其他 evaluator（如 `REGEX`），在上方 Map 追加对应条目。
+
+运行 rule-kernel 编译：
+
+```bash
+$MVN -pl rule-kernel -am compile
+```
+
+期望：BUILD SUCCESS（若有遗漏的 evaluator 类名，按报错修正）
+
+---
+
+### Step 0-3：迁移 AstJsonCodec 和 SnapshotAssembler 到 rule-kernel
+
+**AstJsonCodec：** 复制 `rule-eval-svc/…/snapshot/AstJsonCodec.java` 到 `rule-kernel/…/kernel/internal/codec/AstJsonCodec.java`，修改如下：
+
+1. `package com.sstlfsj.rule.kernel.internal.codec;`
+2. 删除 `@Component` 及其 import
+3. 改为 `public class AstJsonCodec`
+4. 新增 `public ObjectMapper createMapper()` 方法（原有逻辑不变，只是改名暴露）
+
+最终结构：
+
+```java
+package com.sstlfsj.rule.kernel.internal.codec;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sstlfsj.rule.kernel.api.model.ast.*;
+
+// 保留原有 AstNodeMixin、@JsonTypeInfo、@JsonSubTypes 内部接口/注解定义
+
+/**
+ * AST JSON 编解码器：配置 Jackson 多态反序列化，支持所有 AstNode 子类型。
+ * 纯 Java，无 Spring 依赖；rule-sdk SnapshotPoller 和 rule-eval-svc SnapshotAssembler 均使用。
+ */
+public class AstJsonCodec {
+
+    /**
+     * 返回已配置多态 Mixin 的 ObjectMapper，每次调用返回新实例（ObjectMapper 线程安全后可复用）。
+     */
+    public ObjectMapper createMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.addMixIn(AstNode.class, AstNodeMixin.class);
+        return mapper;
+    }
+
+    // 保留原有 AstNodeMixin 内部接口（@JsonTypeInfo / @JsonSubTypes 注解）
+    // ... 原文件中 AstNodeMixin 定义保持不变 ...
+}
+```
+
+**SnapshotAssembler：** 复制 `rule-eval-svc/…/snapshot/SnapshotAssembler.java` 到 `rule-kernel/…/kernel/internal/codec/SnapshotAssembler.java`，修改如下：
+
+1. `package com.sstlfsj.rule.kernel.internal.codec;`
+2. 删除 `@Component` 及其 import
+3. 改为 `public class SnapshotAssembler`
+4. 构造器改为无参或接受 `AstJsonCodec`：
+
+```java
+package com.sstlfsj.rule.kernel.internal.codec;
+
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+
+// 保留原有 import（RuleVersionRow 等），调整包名
+
+/**
+ * 将数据库行对象 RuleVersionRow 装配为 RuleVersionSnapshot（含 AST 反序列化）。
+ * 纯 Java，无 Spring 依赖。
+ */
+public class SnapshotAssembler {
+
+    private final AstJsonCodec codec;
+
+    public SnapshotAssembler() {
+        this.codec = new AstJsonCodec();
+    }
+
+    public SnapshotAssembler(AstJsonCodec codec) {
+        this.codec = codec;
+    }
+
+    // 保留原有 assemble() 方法，使用 codec.createMapper() 替换原来的注入 mapper
+    // ... 原 assemble() 逻辑不变 ...
+}
+```
+
+运行编译：
+
+```bash
+$MVN -pl rule-kernel -am compile
+```
+
+期望：BUILD SUCCESS
+
+---
+
+### Step 0-4：迁移 SceneRuleIndex 到 rule-kernel
+
+新建 `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/index/SceneRuleIndex.java`：
+
+```java
 package com.sstlfsj.rule.kernel.internal.index;
 
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -153,122 +357,13 @@ public class SceneRuleIndex {
 }
 ```
 
-- [ ] **Step 2: 在 rule-kernel 新建 SceneRuleIndexTest（先写，故意失败）**
-
-```java
-// rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/index/SceneRuleIndexTest.java
-package com.sstlfsj.rule.kernel.internal.index;
-
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
-import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-class SceneRuleIndexTest {
-
-    private static RuleVersionSnapshot snap(Long id, String tenant, String scene, List<String> types) {
-        return new RuleVersionSnapshot(id, scene, tenant,
-                new AndNode(List.of()), List.of(), List.of(), types);
-    }
-
-    @Test
-    void match_exactEventType_returnsSnap() {
-        SceneRuleIndex idx = new SceneRuleIndex();
-        RuleVersionSnapshot s = snap(1L, "t1", "payment", List.of("ORDER"));
-        idx.update("t1", "payment", "ORDER", List.of(s));
-
-        assertThat(idx.match("t1", "payment", "ORDER")).containsExactly(s);
-    }
-
-    @Test
-    void match_wildcardFallback_returnsSnap() {
-        SceneRuleIndex idx = new SceneRuleIndex();
-        RuleVersionSnapshot s = snap(2L, "t1", "payment", List.of());
-        idx.update("t1", "payment", "*", List.of(s));
-
-        assertThat(idx.match("t1", "payment", "ANYTHING")).containsExactly(s);
-    }
-
-    @Test
-    void match_mergesExactAndWildcard_noDuplicates() {
-        SceneRuleIndex idx = new SceneRuleIndex();
-        RuleVersionSnapshot exact = snap(1L, "t1", "fraud", List.of("LOGIN"));
-        RuleVersionSnapshot wild  = snap(2L, "t1", "fraud", List.of());
-        idx.update("t1", "fraud", "LOGIN", List.of(exact));
-        idx.update("t1", "fraud", "*",     List.of(wild));
-
-        List<RuleVersionSnapshot> result = idx.match("t1", "fraud", "LOGIN");
-        assertThat(result).hasSize(2).contains(exact, wild);
-    }
-
-    @Test
-    void remove_deletesAllEntriesForScene() {
-        SceneRuleIndex idx = new SceneRuleIndex();
-        idx.update("t1", "payment", "ORDER", List.of(snap(1L, "t1", "payment", List.of("ORDER"))));
-        idx.remove("t1", "payment");
-        assertThat(idx.match("t1", "payment", "ORDER")).isEmpty();
-    }
-}
-```
-
-- [ ] **Step 3: 运行测试，确认通过**
-
-```bash
-$MVN -pl rule-kernel -am test -Dtest='SceneRuleIndexTest' -Dsurefire.failIfNoSpecifiedTests=false
-```
-
-期望：BUILD SUCCESS
-
-- [ ] **Step 4: 删除 rule-eval-svc 中的旧 SceneRuleIndex**
-
-删除文件：`rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/index/SceneRuleIndex.java`
-
-- [ ] **Step 5: 修正 rule-eval-svc 中引用 SceneRuleIndex 的 import**
-
-以下四个文件的 import 从 `com.sstlfsj.rule.eval.internal.index.SceneRuleIndex` 改为 `com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex`：
-
-- `rule-eval-svc/…/listener/RuleIndexEventListener.java`
-- `rule-eval-svc/…/listener/SceneIndexEventListener.java`
-- `rule-eval-svc/…/listener/IndexStartupLoader.java`
-- `rule-eval-svc/…/service/EvalServiceImpl.java`
-
-- [ ] **Step 6: 运行 rule-eval-svc 全量测试，确认无编译错误**
-
-```bash
-$MVN -pl rule-eval-svc -am test
-```
-
-期望：BUILD SUCCESS
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/index/ \
-        rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/index/ \
-        rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/
-git commit -m "refactor(kernel): 将 SceneRuleIndex 迁入 rule-kernel，去掉 Spring 注解"
-```
-
 ---
 
-## Task 2：EvalContextAssembler 迁入 rule-kernel
+### Step 0-5：迁移 EvalContextAssembler 到 rule-kernel
 
-**目标：** 把 `EvalContextAssembler` 从 `rule-eval-svc` 迁移到 `rule-kernel`，去掉 `@Component`，改为构造器注入。
-
-**Files:**
-- 新建: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/context/EvalContextAssembler.java`
-- 删除: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/context/EvalContextAssembler.java`
-- 改动: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImpl.java`（import）
-- 改动: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/EvalAutoConfiguration.java`（注册 EvalContextAssembler Bean）
-- 新增测试: `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/context/EvalContextAssemblerTest.java`
-
-- [ ] **Step 1: 在 rule-kernel 新建 EvalContextAssembler**
+新建 `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/context/EvalContextAssembler.java`：
 
 ```java
-// rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/context/EvalContextAssembler.java
 package com.sstlfsj.rule.kernel.internal.context;
 
 import com.sstlfsj.rule.kernel.api.model.*;
@@ -290,16 +385,14 @@ public class EvalContextAssembler {
 
     public EvalContextAssembler(List<SubjectLoader> subjectLoaders,
                                 List<MetricSourceHandler> metricHandlers) {
-        this.subjectLoader = subjectLoaders == null ? null : subjectLoaders.stream()
+        this.subjectLoader = (subjectLoaders == null) ? null : subjectLoaders.stream()
                 .filter(l -> l.supportedTypes().contains(SubjectType.USER))
                 .findFirst()
                 .orElse(null);
         this.metricHandlers = metricHandlers == null ? List.of() : List.copyOf(metricHandlers);
     }
 
-    /**
-     * 装配一次评估的 EvalContext。
-     */
+    /** 装配一次评估的 EvalContext。 */
     public EvalContext assemble(RuleEvent event, List<RuleVersionSnapshot> candidates) {
         Subject subject = loadSubject(event);
         Map<String, MetricValue> metrics = new HashMap<>();
@@ -323,79 +416,51 @@ public class EvalContextAssembler {
 }
 ```
 
-- [ ] **Step 2: 新建 EvalContextAssemblerTest**
-
-```java
-// rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/context/EvalContextAssemblerTest.java
-package com.sstlfsj.rule.kernel.internal.context;
-
-import com.sstlfsj.rule.kernel.api.model.*;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-class EvalContextAssemblerTest {
-
-    private static RuleEvent event(Map<String, Object> metrics) {
-        return new RuleEvent(UUID.randomUUID().toString(), "t1", "scene1",
-                "sub1", "EVT", Map.of(), metrics, null);
-    }
-
-    @Test
-    void assemble_noSubjectLoader_returnsMinimalSubject() {
-        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
-        RuleEvent ev = event(Map.of());
-        EvalContext ctx = asm.assemble(ev, List.of());
-        assertThat(ctx.subject().subjectId()).isEqualTo("sub1");
-    }
-
-    @Test
-    void assemble_providedMetrics_areIncludedInContext() {
-        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
-        RuleEvent ev = event(Map.of("amount", 1000));
-        EvalContext ctx = asm.assemble(ev, List.of());
-        assertThat(ctx.metrics()).containsKey("amount");
-        assertThat(ctx.metrics().get("amount").value()).isEqualTo(1000);
-    }
-}
-```
-
-- [ ] **Step 3: 运行测试，确认通过**
+运行 rule-kernel 全量编译：
 
 ```bash
-$MVN -pl rule-kernel -am test -Dtest='EvalContextAssemblerTest' -Dsurefire.failIfNoSpecifiedTests=false
+$MVN -pl rule-kernel -am compile
 ```
 
 期望：BUILD SUCCESS
 
-- [ ] **Step 4: 删除 rule-eval-svc 中的旧 EvalContextAssembler**
+---
 
-删除文件：`rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/context/EvalContextAssembler.java`
+### Step 0-6：修正 EvalAutoConfiguration
 
-- [ ] **Step 5: 修正 EvalServiceImpl 的 import**
+修改 `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/EvalAutoConfiguration.java`：
 
-`rule-eval-svc/…/service/EvalServiceImpl.java` 的 import：
+1. 将 `ruleVersionExecutor` Bean 改为使用 `KernelEvaluators.defaults()` 构建 evaluator map，不再依赖 Spring 自动注入的 `Map<String, ConditionEvaluator>`
+2. 显式注册 `SceneRuleIndex`、`EvalContextAssembler` Bean（使用 kernel 包路径 `new` 构造）
+
+关键改动片段（`ruleVersionExecutor` 方法）：
+
 ```java
-// 旧
-import com.sstlfsj.rule.eval.internal.context.EvalContextAssembler;
-// 新
-import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
+import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
+
+// 删除原 @Autowired(required = false) Map<String, ConditionEvaluator> 参数
+@Bean
+public RuleVersionExecutor ruleVersionExecutor() {
+    return new TracingInterpretedExecutor(KernelEvaluators.defaults());
+}
 ```
 
-- [ ] **Step 6: 在 EvalAutoConfiguration 注册 EvalContextAssembler Bean**
+`SceneRuleIndex` Bean：
 
-在 `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/EvalAutoConfiguration.java` 追加：
+```java
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+
+@Bean
+public SceneRuleIndex sceneRuleIndex() {
+    return new SceneRuleIndex();
+}
+```
+
+`EvalContextAssembler` Bean：
 
 ```java
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
-import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
-import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
 
-// 在类中新增 Bean 方法：
 @Bean
 public EvalContextAssembler evalContextAssembler(
         @Autowired(required = false) List<SubjectLoader> subjectLoaders,
@@ -406,26 +471,207 @@ public EvalContextAssembler evalContextAssembler(
 }
 ```
 
-- [ ] **Step 7: 运行 rule-eval-svc 全量测试**
+`@ComponentScan("com.sstlfsj.rule.eval.internal")` **保留**（仍需扫描 ActionDispatchService、SessionWriter 等 eval-svc 内部 Bean）；evaluator 已手动注册，不再依赖 scan 收集。
+
+---
+
+### Step 0-7：修正 eval-svc 中引用迁出类的 import 路径
+
+**IndexStartupLoader：** `@EventListener(ApplicationReadyEvent.class)` 保持不变（Spring 环境中运行，`@EventListener` 是正确做法；SDK 路径由 `SnapshotPoller.start()` 替代）。只需修正 import：
+
+```java
+// 旧
+import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+// 新
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+```
+
+**RuleIndexEventListener：**
+
+```java
+// 旧
+import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+// 新
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+```
+
+**SceneIndexEventListener：**
+
+```java
+// 旧
+import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+// 新
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+```
+
+**SceneSnapshotLoader：**
+
+```java
+// 旧
+import com.sstlfsj.rule.eval.internal.snapshot.SnapshotAssembler;
+// 新
+import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
+```
+
+**EvalServiceImpl：** 修正 import SceneRuleIndex 和 EvalContextAssembler。
+
+---
+
+### Step 0-8：删除 rule-eval-svc 中已迁出的原始文件
+
+删除以下文件（**先确认 git 状态无误再删**）：
+
+```bash
+# 确认新文件已在 rule-kernel 中存在且编译通过后再执行
+rm rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/condition/*Evaluator.java
+rm rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/index/SceneRuleIndex.java
+rm rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/context/EvalContextAssembler.java
+rm rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/snapshot/AstJsonCodec.java
+rm rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/snapshot/SnapshotAssembler.java
+```
+
+同步删除 rule-eval-svc 中 evaluator 的测试文件（迁到 rule-kernel test 目录，见 Step 0-9）：
+
+```bash
+rm rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/condition/*EvaluatorTest.java
+```
+
+> `BaseEvaluatorTest` 也删除（rule-kernel 中测试直接 new，不再需要 Spring Test 基类）。
+
+---
+
+### Step 0-9：在 rule-kernel 中为迁入类补充/迁移测试
+
+将 rule-eval-svc 中的 evaluator 测试迁移到 rule-kernel：
+
+1. **包路径** 改为 `com.sstlfsj.rule.kernel.internal.condition`
+2. 去掉 `BaseEvaluatorTest` 继承，改为直接 `new EvalContext(...)` 构造（所需工具方法内联到每个测试类或提取到独立 `KernelBaseEvaluatorTest`）
+3. `EvalContext` import 从 kernel api 包
+
+新增 SceneRuleIndex 测试：
+
+```java
+// rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/index/SceneRuleIndexTest.java
+package com.sstlfsj.rule.kernel.internal.index;
+
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class SceneRuleIndexTest {
+
+    private static RuleVersionSnapshot snap(Long id, String tenant, String scene) {
+        return new RuleVersionSnapshot(id, scene, tenant,
+                new AndNode(List.of()), List.of(), List.of(), List.of());
+    }
+
+    @Test
+    void match_exactEventType_returnsSnap() {
+        SceneRuleIndex idx = new SceneRuleIndex();
+        RuleVersionSnapshot s = snap(1L, "t1", "payment");
+        idx.update("t1", "payment", "ORDER", List.of(s));
+        assertThat(idx.match("t1", "payment", "ORDER")).containsExactly(s);
+    }
+
+    @Test
+    void match_wildcardFallback_returnsSnap() {
+        SceneRuleIndex idx = new SceneRuleIndex();
+        RuleVersionSnapshot s = snap(2L, "t1", "payment");
+        idx.update("t1", "payment", "*", List.of(s));
+        assertThat(idx.match("t1", "payment", "ANYTHING")).containsExactly(s);
+    }
+
+    @Test
+    void match_mergesExactAndWildcard_noDuplicates() {
+        SceneRuleIndex idx = new SceneRuleIndex();
+        RuleVersionSnapshot exact = snap(1L, "t1", "fraud");
+        RuleVersionSnapshot wild  = snap(2L, "t1", "fraud");
+        idx.update("t1", "fraud", "LOGIN", List.of(exact));
+        idx.update("t1", "fraud", "*",     List.of(wild));
+        assertThat(idx.match("t1", "fraud", "LOGIN")).hasSize(2).contains(exact, wild);
+    }
+
+    @Test
+    void remove_deletesAllEntriesForScene() {
+        SceneRuleIndex idx = new SceneRuleIndex();
+        idx.update("t1", "payment", "ORDER", List.of(snap(1L, "t1", "payment")));
+        idx.remove("t1", "payment");
+        assertThat(idx.match("t1", "payment", "ORDER")).isEmpty();
+    }
+}
+```
+
+新增 EvalContextAssembler 测试：
+
+```java
+// rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/context/EvalContextAssemblerTest.java
+package com.sstlfsj.rule.kernel.internal.context;
+
+import com.sstlfsj.rule.kernel.api.model.*;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class EvalContextAssemblerTest {
+
+    private static RuleEvent event(Map<String, Object> metrics) {
+        return new RuleEvent("t1", "s1", "E", "sub1", "id1",
+                Instant.now(), Map.of(), metrics);
+    }
+
+    @Test
+    void assemble_noSubjectLoader_returnsMinimalSubject() {
+        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
+        EvalContext ctx = asm.assemble(event(Map.of()), List.of());
+        assertThat(ctx.subject().subjectId()).isEqualTo("sub1");
+    }
+
+    @Test
+    void assemble_providedMetrics_areIncludedInContext() {
+        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
+        EvalContext ctx = asm.assemble(event(Map.of("amount", 1000)), List.of());
+        assertThat(ctx.metrics()).containsKey("amount");
+        assertThat(ctx.metrics().get("amount").value()).isEqualTo(1000);
+    }
+}
+```
+
+---
+
+### Step 0-10：全量测试 rule-kernel + rule-eval-svc
+
+```bash
+$MVN -pl rule-kernel -am test
+```
+
+期望：BUILD SUCCESS
 
 ```bash
 $MVN -pl rule-eval-svc -am test
 ```
 
-期望：BUILD SUCCESS
+期望：BUILD SUCCESS（原 evaluator 测试已迁移到 rule-kernel，eval-svc 测试不应减少，因为 ConditionEvaluatorTest 已被迁走）
 
-- [ ] **Step 8: Commit**
+---
+
+### Step 0-11：Commit
 
 ```bash
-git add rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/context/ \
-        rule-kernel/src/test/java/com/sstlfsj/rule/kernel/internal/context/ \
-        rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/
-git commit -m "refactor(kernel): 将 EvalContextAssembler 迁入 rule-kernel，去掉 Spring 注解"
+git add rule-kernel/ rule-eval-svc/
+git commit -m "refactor(kernel): rule-kernel 纯 Java 化——迁入 evaluator/codec/index/context，去 Spring 注解"
 ```
 
 ---
 
-## Task 3：新建 EvalEngine（rule-kernel）
+## Task 1：新建 EvalEngine（rule-kernel）
 
 **目标：** 从 `EvalServiceImpl.doEvaluate()` 提取 matcher → pre-gate → context → executor 编排逻辑，封装为纯 Java `EvalEngine`，无副作用。
 
@@ -443,21 +689,22 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
+import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class EvalEngineTest {
 
     private static RuleEvent event(String tenant, String scene, String evtType) {
-        return new RuleEvent(UUID.randomUUID().toString(), tenant, scene,
-                "sub1", evtType, Map.of(), Map.of(), null);
+        return new RuleEvent("id1", tenant, scene, "sub1", evtType,
+                Instant.now(), Map.of(), Map.of());
     }
 
     private static RuleVersionSnapshot snapshot(Long id, String tenant, String scene) {
@@ -472,11 +719,12 @@ class EvalEngineTest {
     void evaluate_noMatchInIndex_returnsMiss() {
         SceneRuleIndex index = new SceneRuleIndex();
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
-        RuleVersionExecutor executor = (snap, ctx) -> new EvalResult(false, null, List.of(), List.of(), null, List.of());
+        RuleVersionExecutor executor = (snap, ctx) ->
+                new EvalResult(false, null, List.of(), List.of(), null, List.of());
 
-        EvalEngine engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", executor));
-        EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"));
-        assertThat(result.ruleHit()).isFalse();
+        EvalEngine engine = new EvalEngine(index, asm, Map.of(),
+                Map.of("AST_BOOLEAN", executor));
+        assertThat(engine.evaluate(event("t1", "scene", "ORDER")).ruleHit()).isFalse();
     }
 
     @Test
@@ -486,13 +734,14 @@ class EvalEngineTest {
         index.update("t1", "scene", "*", List.of(snap));
 
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
-        // executor 返回命中
         RuleVersionExecutor executor = (s, ctx) ->
-                new EvalResult(true, new Decision("BLOCK", "", 10, s.ruleVersionId()),
+                new EvalResult(true,
+                        new Decision("BLOCK", "", 10, s.ruleVersionId()),
                         List.of(new Decision("BLOCK", "", 10, s.ruleVersionId())),
                         List.of(), null, List.of());
 
-        EvalEngine engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", executor));
+        EvalEngine engine = new EvalEngine(index, asm, Map.of(),
+                Map.of("AST_BOOLEAN", executor));
         EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"));
         assertThat(result.ruleHit()).isTrue();
         assertThat(result.decision().decisionCode()).isEqualTo("BLOCK");
@@ -508,7 +757,6 @@ class EvalEngineTest {
                 List.of());
         index.update("t1", "scene", "*", List.of(snap));
 
-        // gate 总是拦截
         PreGate blockingGate = ctx -> new PreGateResult(false, "ROLLOUT");
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         RuleVersionExecutor executor = (s, ctx) ->
@@ -517,8 +765,7 @@ class EvalEngineTest {
         EvalEngine engine = new EvalEngine(index, asm,
                 Map.of("ROLLOUT", blockingGate),
                 Map.of("AST_BOOLEAN", executor));
-        EvalResult result = engine.evaluate(event("t1", "scene", "EVT"));
-        assertThat(result.ruleHit()).isFalse();
+        assertThat(engine.evaluate(event("t1", "scene", "EVT")).ruleHit()).isFalse();
     }
 }
 ```
@@ -533,7 +780,7 @@ $MVN -pl rule-kernel -am test -Dtest='EvalEngineTest' -Dsurefire.failIfNoSpecifi
 
 - [ ] **Step 3: 新建 EvalEngine**
 
-`RuleVersionSnapshot` 目前没有 `kind` 字段（D12 Task 4 才加）。Task 3 暂时对所有快照用默认 executor（key `"AST_BOOLEAN"`）；D12 Task 5 再改为按 kind 路由。
+`RuleVersionSnapshot` 目前没有 `kind` 字段（D12 Task 4 才加）。暂时对所有快照用默认 executor key `"AST_BOOLEAN"`；D12 Task 5 再改为按 kind 路由。
 
 ```java
 // rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/engine/EvalEngine.java
@@ -574,20 +821,26 @@ public class EvalEngine {
     public EvalResult evaluate(RuleEvent event) {
         List<RuleVersionSnapshot> candidates =
                 index.match(event.tenantId(), event.sceneCode(), event.eventType());
+        return evaluate(event, candidates);
+    }
+
+    /**
+     * 对指定候选快照列表求值，跳过索引查找步骤。
+     * 供 dry-run 路径：直接传入从 DB 加载的单条快照。
+     */
+    public EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates) {
         if (candidates.isEmpty()) return EvalResult.miss();
 
         List<RuleVersionSnapshot> passed = new ArrayList<>();
         for (RuleVersionSnapshot snap : candidates) {
-            if (applyPreGates(event, snap) == null) {
-                passed.add(snap);
-            }
+            if (applyPreGates(event, snap) == null) passed.add(snap);
         }
         if (passed.isEmpty()) return EvalResult.miss();
 
         EvalContext ctx = contextAssembler.assemble(event, passed);
 
         List<Decision> hitDecisions = new ArrayList<>();
-        List<NodeTrace> allTraces = new ArrayList<>();
+        List<NodeTrace> allTraces   = new ArrayList<>();
         String errorCode = null;
 
         for (RuleVersionSnapshot snap : passed) {
@@ -632,10 +885,10 @@ public class EvalEngine {
         for (RuleVersionSnapshot.PreGateConfig cfg : snap.preGates()) {
             PreGate gate = preGates.get(cfg.gateType());
             if (gate == null) continue;
-            PreGateContext ctx = new PreGateContext(
+            PreGateContext pCtx = new PreGateContext(
                     event.tenantId(), event.sceneCode(), event.subjectId(),
                     event, snap.ruleVersionId(), cfg.params());
-            PreGateResult result = gate.evaluate(ctx);
+            PreGateResult result = gate.evaluate(pCtx);
             if (!result.passed()) return result.blockedBy();
         }
         return null;
@@ -661,16 +914,16 @@ git commit -m "feat(kernel): 新增 EvalEngine，提取无副作用评估编排�
 
 ---
 
-## Task 4：EvalServiceImpl 变薄 + EvalAutoConfiguration 注册 EvalEngine
+## Task 2：EvalServiceImpl 变薄 + EvalAutoConfiguration 注册 EvalEngine
 
-**目标：** `EvalServiceImpl` 委托 `EvalEngine` 做纯计算，自身只保留 session 写入、trace 写入、Action 派发等副作用。`EvalAutoConfiguration` 注册 `EvalEngine` Bean。
+**目标：** `EvalServiceImpl` 委托 `EvalEngine` 做纯计算，自身只保留 session 写入、trace 写入、Action 派发等副作用。`EvalAutoConfiguration` 注册 `EvalEngine` Bean 并使用 `KernelEvaluators.defaults()` 构建完整 evaluator map。
 
 **Files:**
 - 改动: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImpl.java`
 - 改动: `rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/EvalAutoConfiguration.java`
 - 测试: `rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImplTest.java`（已有，扩充）
 
-- [ ] **Step 1: 改 EvalAutoConfiguration，注册 SceneRuleIndex 和 EvalEngine**
+- [ ] **Step 1: 改 EvalAutoConfiguration，完整注册 EvalEngine 相关 Bean**
 
 ```java
 // rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/EvalAutoConfiguration.java
@@ -685,6 +938,7 @@ import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
+import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
@@ -717,12 +971,13 @@ public class EvalAutoConfiguration {
                 metricHandlers == null ? List.of() : metricHandlers);
     }
 
+    /**
+     * 使用 KernelEvaluators.defaults() 构建完整 evaluator map，不依赖 Spring 自动收集。
+     * 业务方如需扩展算子，可在自己的 Configuration 中注册额外 Bean 并调整此方法。
+     */
     @Bean
-    public RuleVersionExecutor ruleVersionExecutor(
-            @Autowired(required = false)
-            Map<String, com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator> conditionEvaluators) {
-        return new TracingInterpretedExecutor(
-                conditionEvaluators == null ? Map.of() : conditionEvaluators);
+    public RuleVersionExecutor ruleVersionExecutor() {
+        return new TracingInterpretedExecutor(KernelEvaluators.defaults());
     }
 
     @Bean
@@ -771,9 +1026,12 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /** EvalService 实现：委托 EvalEngine 做纯计算，负责 session 写入和 Action 派发副作用。 */
 @Service
@@ -805,16 +1063,11 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         this.dispatcher = new EvalActionDispatcher(10000, this::evaluate);
     }
 
-    @Override
-    public void afterPropertiesSet() { dispatcher.start(); }
+    @Override public void afterPropertiesSet() { dispatcher.start(); }
+    @Override public void destroy() { dispatcher.stop(); }
 
     @Override
-    public void destroy() { dispatcher.stop(); }
-
-    @Override
-    public boolean acceptEvent(RuleEvent event) {
-        return dispatcher.submit(event);
-    }
+    public boolean acceptEvent(RuleEvent event) { return dispatcher.submit(event); }
 
     @Override
     public EvalResult evaluate(RuleEvent event) {
@@ -828,7 +1081,6 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     private EvalResult doEvaluate(RuleEvent event, boolean isDryRun, Long specificVersionId) {
         if (isDryRun && specificVersionId != null) {
-            // dry-run 指定版本：绕过 index，直接从 DB 加载，传给 EvalEngine 重载方法
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);
             if (snap == null) return EvalResult.miss();
             EvalResult result = evalEngine.evaluate(event, List.of(snap));
@@ -838,7 +1090,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             return result;
         }
 
-        // ① 标准评估路径
+        // 标准评估路径
         List<RuleVersionSnapshot> candidates = index.match(
                 event.tenantId(), event.sceneCode(), event.eventType());
         if (candidates.isEmpty()) return EvalResult.miss();
@@ -863,52 +1115,6 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 }
 ```
 
-**注意：** dry-run 路径需要用指定快照替换索引来求值。EvalEngine 暴露一个接受快照列表的重载方法即可，无需 getter 穿透模块边界。在 Task 3 的 EvalEngine 中追加一个 `evaluate(RuleEvent, List<RuleVersionSnapshot>)` 重载：
-
-```java
-// 在 EvalEngine.java 追加（public，供 rule-eval-svc 的 dry-run 路径调用）
-/**
- * 对指定候选快照列表求值，跳过索引查找步骤。
- * 供 dry-run 路径：直接传入从 DB 加载的单条快照。
- */
-public EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates) {
-    if (candidates.isEmpty()) return EvalResult.miss();
-    // 复用私有 applyPreGates + context + executor 逻辑
-    List<RuleVersionSnapshot> passed = new ArrayList<>();
-    for (RuleVersionSnapshot snap : candidates) {
-        if (applyPreGates(event, snap) == null) passed.add(snap);
-    }
-    if (passed.isEmpty()) return EvalResult.miss();
-    EvalContext ctx = contextAssembler.assemble(event, passed);
-    List<Decision> hitDecisions = new ArrayList<>();
-    List<NodeTrace> allTraces = new ArrayList<>();
-    String errorCode = null;
-    for (RuleVersionSnapshot snap : passed) {
-        try {
-            RuleVersionExecutor exec = executors.getOrDefault(
-                    DEFAULT_EXECUTOR_KEY, executors.values().iterator().next());
-            EvalResult r = exec.execute(snap, ctx);
-            allTraces.addAll(r.nodeTrace());
-            if (r.ruleHit()) {
-                snap.decisionBindings().stream()
-                        .max(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                        .ifPresent(b -> hitDecisions.add(
-                                new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId())));
-            }
-            if (r.errorCode() != null && errorCode == null) errorCode = r.errorCode();
-        } catch (Exception e) {
-            if (errorCode == null) errorCode = "CONDITION_EVAL_ERROR";
-        }
-    }
-    Decision finalDecision = hitDecisions.stream()
-            .max(Comparator.comparingInt(Decision::priority)).orElse(null);
-    return new EvalResult(!hitDecisions.isEmpty(), finalDecision,
-            List.copyOf(hitDecisions), List.copyOf(allTraces), errorCode, List.of());
-}
-```
-
-`EvalServiceImpl` 的 dry-run 路径改为调用此重载，无需临时 SceneRuleIndex，也无需暴露 getter。
-
 - [ ] **Step 3: 运行 rule-eval-svc 全量测试**
 
 ```bash
@@ -927,14 +1133,13 @@ git commit -m "refactor(eval): EvalServiceImpl 委托 EvalEngine，保留 DB/Act
 
 ---
 
-## Task 5：rule-api 新增 GET /api/v1/sdk/snapshots 端点
+## Task 3：rule-api 新增 GET /api/v1/sdk/snapshots 端点
 
-**目标：** 提供 SDK 快照拉取端点，供 `SnapshotPoller` 启动加载和增量热更新。复用 `RuleVersionReadMapper.loadActiveByScene()`，响应 `List<RuleVersionSnapshot>`。
+**目标：** 提供 SDK 快照拉取端点，供 `SnapshotPoller` 启动加载和增量热更新。复用 `SceneSnapshotLoader`，响应 `List<RuleVersionSnapshot>`。
 
 **Files:**
 - 新增: `rule-api/src/main/java/com/sstlfsj/rule/web/sdk/SdkSnapshotController.java`
 - 改动: `rule-api/src/main/java/com/sstlfsj/rule/web/ApiAutoConfiguration.java`
-- 改动: `rule-api/pom.xml`（追加 rule-eval-svc 依赖，已有则跳过）
 - 测试: `rule-api/src/test/java/com/sstlfsj/rule/web/sdk/SdkSnapshotControllerTest.java`
 
 - [ ] **Step 1: 新建 SdkSnapshotControllerTest（先写，期望 404 失败）**
@@ -955,7 +1160,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 import java.util.Map;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -964,7 +1169,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SdkSnapshotControllerTest {
 
     @Autowired MockMvc mockMvc;
-
     @MockitoBean SceneSnapshotLoader snapshotLoader;
 
     @Test
@@ -1032,7 +1236,7 @@ public class SdkSnapshotController {
      * @param tenantId 租户 ID（必填）
      * @param scenes   场景编码列表，逗号分隔；不传则加载该租户所有快照
      * @param since    增量拉取时间戳（毫秒），暂不过滤，预留参数
-     * @return 快照列表
+     * @return 快照列表（已去重）
      */
     @GetMapping("/snapshots")
     public ApiResponse<List<RuleVersionSnapshot>> getSnapshots(
@@ -1052,11 +1256,7 @@ public class SdkSnapshotController {
                     snapshotLoader.loadAll();
             all.values().forEach(inner -> inner.values().forEach(result::addAll));
         }
-        // 去重（同一快照可能出现在多个 eventType bucket）
-        List<RuleVersionSnapshot> deduped = result.stream()
-                .distinct()
-                .toList();
-        return ApiResponse.ok(deduped);
+        return ApiResponse.ok(result.stream().distinct().toList());
     }
 }
 ```
@@ -1087,22 +1287,25 @@ git commit -m "feat(api): 新增 GET /api/v1/sdk/snapshots 端点，供 Snapshot
 
 ---
 
-## Task 6：新建 rule-sdk 模块
+## Task 4：新建 rule-sdk 模块
 
-**目标：** 纯 Java 模块，依赖 `rule-kernel`，提供 `FetchMode`、`EvalResultListener`、`EvalSessionListener` SPI、`SnapshotPoller`（HTTP 轮询）、`RuleEngineClient` 门面。
+**目标：** 纯 Java 模块，依赖 `rule-kernel`，提供 `FetchMode`、`EvalResultListener`、`EvalSessionListener` SPI、`SnapshotPoller`（HTTP 轮询）、`RuleEngineClient` 门面。`SnapshotPoller` 使用 `AstJsonCodec.createMapper()` 反序列化，`RuleEngineClient` 使用 `KernelEvaluators.defaults()` 构建完整 evaluator map。
 
 **Files:**
 - 新增: `rule-sdk/pom.xml`
-- 新增: `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/FetchMode.java`
-- 新增: `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/EvalResultListener.java`
-- 新增: `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/EvalSessionListener.java`
-- 新增: `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/SnapshotPoller.java`
-- 新增: `rule-sdk/src/main/java/com/sstlfsj/rule/sdk/RuleEngineClient.java`
-- 改动: `pom.xml`（根 pom 追加 `<module>rule-sdk</module>`）
+- 新增: `rule-sdk/…/sdk/FetchMode.java`
+- 新增: `rule-sdk/…/sdk/EvalResultListener.java`
+- 新增: `rule-sdk/…/sdk/EvalSessionListener.java`
+- 新增: `rule-sdk/…/sdk/SnapshotPoller.java`
+- 新增: `rule-sdk/…/sdk/RuleEngineClient.java`
+- 改动: 根 `pom.xml`（追加 `<module>rule-sdk</module>`）
+- 测试: `rule-sdk/…/test/…/sdk/SnapshotPollerTest.java`
+- 测试: `rule-sdk/…/test/…/sdk/RuleEngineClientTest.java`
 
 - [ ] **Step 1: 根 pom.xml 追加 rule-sdk 模块**
 
 在 `pom.xml` 的 `<modules>` 块末尾追加：
+
 ```xml
 <module>rule-sdk</module>
 ```
@@ -1131,7 +1334,7 @@ git commit -m "feat(api): 新增 GET /api/v1/sdk/snapshots 端点，供 Snapshot
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-kernel</artifactId>
         </dependency>
-        <!-- Jackson：反序列化 HTTP 响应的 List<RuleVersionSnapshot> -->
+        <!-- Jackson：反序列化 HTTP 响应的 List<RuleVersionSnapshot>；传递 rule-kernel 的 optional jackson-databind -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -1190,6 +1393,8 @@ public interface EvalSessionListener {
 
 - [ ] **Step 4: 新建 SnapshotPoller**
 
+`SnapshotPoller` 使用 `AstJsonCodec.createMapper()` 而非 `new ObjectMapper()`，确保 `conditionAst` 的多态反序列化正确。
+
 ```java
 // rule-sdk/src/main/java/com/sstlfsj/rule/sdk/SnapshotPoller.java
 package com.sstlfsj.rule.sdk;
@@ -1198,6 +1403,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 
 import java.net.URI;
@@ -1212,7 +1418,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 规则快照同步器：启动时全量拉取，后台线程定时增量刷新。
- * 使用 JDK 内置 HttpClient，无额外依赖。
+ * 使用 JDK 内置 HttpClient，无额外依赖；使用 AstJsonCodec 保证 AstNode 多态反序列化正确。
  */
 public class SnapshotPoller {
 
@@ -1234,7 +1440,8 @@ public class SnapshotPoller {
         this.scenes = List.copyOf(scenes);
         this.pollInterval = pollInterval;
         this.index = index;
-        this.mapper = new ObjectMapper();
+        // 使用 AstJsonCodec 配置好的 ObjectMapper，支持 AstNode 多态类型反序列化
+        this.mapper = new AstJsonCodec().createMapper();
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
@@ -1259,9 +1466,8 @@ public class SnapshotPoller {
 
     private void poll() {
         try {
-            String url = buildUrl();
             HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                    .uri(URI.create(buildUrl()))
                     .timeout(Duration.ofSeconds(10))
                     .GET()
                     .build();
@@ -1274,7 +1480,7 @@ public class SnapshotPoller {
                 refreshIndex(snapshots);
             }
         } catch (Exception e) {
-            // 轮询失败不抛出，下次重试（保持最后一次成功的索引状态）
+            // 轮询失败静默处理，保持最后一次成功的索引状态
             System.err.println("[SnapshotPoller] 轮询失败: " + e.getMessage());
         }
     }
@@ -1303,6 +1509,8 @@ public class SnapshotPoller {
 
 - [ ] **Step 5: 新建 RuleEngineClient**
 
+`RuleEngineClient` 使用 `KernelEvaluators.defaults()` 构建完整 evaluator map，确保 SDK 路径所有条件算子均可用。
+
 ```java
 // rule-sdk/src/main/java/com/sstlfsj/rule/sdk/RuleEngineClient.java
 package com.sstlfsj.rule.sdk;
@@ -1311,6 +1519,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
+import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
@@ -1325,6 +1534,7 @@ import java.util.Map;
 /**
  * 嵌入式规则评估门面。
  * 持有本地 SceneRuleIndex 和 EvalEngine，evaluate() 路径零网络跳转。
+ * 使用 KernelEvaluators.defaults() 确保所有内置算子均可用。
  */
 public class RuleEngineClient implements AutoCloseable {
 
@@ -1336,10 +1546,13 @@ public class RuleEngineClient implements AutoCloseable {
     private RuleEngineClient(Builder b) {
         SceneRuleIndex index = new SceneRuleIndex();
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        RuleVersionExecutor executor = new InterpretedExecutor(Map.of());
+        // 使用全量内置算子，业务方可通过 Builder.executor() 替换为自定义执行器
+        RuleVersionExecutor executor = b.executor != null
+                ? b.executor
+                : new InterpretedExecutor(KernelEvaluators.defaults());
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
-                Map.of("AST_BOOLEAN", b.executor != null ? b.executor : executor));
+                Map.of("AST_BOOLEAN", executor));
         this.poller = new SnapshotPoller(b.serverUrl, b.tenantId, b.fetchMode,
                 b.scenes, b.pollInterval, index);
         this.evalResultListener = b.evalResultListener;
@@ -1356,9 +1569,7 @@ public class RuleEngineClient implements AutoCloseable {
     }
 
     @Override
-    public void close() {
-        poller.stop();
-    }
+    public void close() { poller.stop(); }
 
     public static Builder builder() { return new Builder(); }
 
@@ -1373,10 +1584,10 @@ public class RuleEngineClient implements AutoCloseable {
         private RuleVersionExecutor executor;
         private Map<String, PreGate> preGates;
 
-        public Builder serverUrl(String v) { this.serverUrl = v; return this; }
-        public Builder tenantId(String v) { this.tenantId = v; return this; }
+        public Builder serverUrl(String v)   { this.serverUrl = v; return this; }
+        public Builder tenantId(String v)    { this.tenantId = v; return this; }
         public Builder fetchMode(FetchMode v) { this.fetchMode = v; return this; }
-        public Builder scenes(String... v) { scenes.addAll(Arrays.asList(v)); return this; }
+        public Builder scenes(String... v)   { scenes.addAll(Arrays.asList(v)); return this; }
         public Builder pollInterval(Duration v) { this.pollInterval = v; return this; }
         public Builder evalResultListener(EvalResultListener v) { this.evalResultListener = v; return this; }
         public Builder evalSessionListener(EvalSessionListener v) { this.evalSessionListener = v; return this; }
@@ -1405,6 +1616,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
@@ -1433,17 +1645,16 @@ class RuleEngineClientTest {
 
     @Test
     void evaluate_emptyIndex_returnsMiss() {
-        // SnapshotPoller 会启动后台线程，但无法连接到 localhost，poll 失败静默处理
-        // index 为空，evaluate 返回 miss
+        // SnapshotPoller 启动后台线程，连接 localhost:19999 失败，静默处理，index 为空
         try (RuleEngineClient client = RuleEngineClient.builder()
-                .serverUrl("http://localhost:19999")  // 不存在的端口
+                .serverUrl("http://localhost:19999")
                 .tenantId("t1")
-                .pollInterval(Duration.ofHours(1))    // 不再重试
+                .pollInterval(Duration.ofHours(1))
                 .build()) {
             RuleEvent event = new RuleEvent(UUID.randomUUID().toString(),
-                    "t1", "scene1", "sub1", "ORDER", Map.of(), Map.of(), null);
-            EvalResult result = client.evaluate(event);
-            assertThat(result.ruleHit()).isFalse();
+                    "t1", "scene1", "sub1", "ORDER",
+                    Instant.now(), Map.of(), Map.of());
+            assertThat(client.evaluate(event).ruleHit()).isFalse();
         }
     }
 
@@ -1457,7 +1668,8 @@ class RuleEngineClientTest {
                 .evalResultListener((ev, res) -> called[0] = true)
                 .build()) {
             RuleEvent event = new RuleEvent(UUID.randomUUID().toString(),
-                    "t1", "scene1", "sub1", "ORDER", Map.of(), Map.of(), null);
+                    "t1", "scene1", "sub1", "ORDER",
+                    Instant.now(), Map.of(), Map.of());
             client.evaluate(event);
         }
         assertThat(called[0]).isTrue();
@@ -1482,21 +1694,22 @@ git commit -m "feat(sdk): 新建 rule-sdk 模块，EvalEngine 本地评估 + Sna
 
 ---
 
-## Task 7：新建 rule-sdk-spring-boot-starter 模块
+## Task 5：新建 rule-sdk-spring-boot-starter 模块
 
 **目标：** 薄 Spring 胶水层，读 `application.yml`，自动装配 `RuleEngineClient` Bean。
 
 **Files:**
 - 新增: `rule-sdk-spring-boot-starter/pom.xml`
-- 新增: `rule-sdk-spring-boot-starter/src/main/java/com/sstlfsj/rule/sdk/starter/SdkProperties.java`
-- 新增: `rule-sdk-spring-boot-starter/src/main/java/com/sstlfsj/rule/sdk/starter/RuleEngineClientAutoConfiguration.java`
-- 新增: `rule-sdk-spring-boot-starter/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
-- 改动: `pom.xml`（根 pom 追加 `<module>rule-sdk-spring-boot-starter</module>`）
-- 测试: `rule-sdk-spring-boot-starter/src/test/java/com/sstlfsj/rule/sdk/starter/RuleEngineClientAutoConfigurationTest.java`
+- 新增: `…/sdk/starter/SdkProperties.java`
+- 新增: `…/sdk/starter/RuleEngineClientAutoConfiguration.java`
+- 新增: `…/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+- 改动: 根 `pom.xml`（追加 `<module>rule-sdk-spring-boot-starter</module>`）
+- 测试: `…/test/…/starter/RuleEngineClientAutoConfigurationTest.java`
 
 - [ ] **Step 1: 根 pom.xml 追加模块**
 
 在 `pom.xml` 的 `<modules>` 追加：
+
 ```xml
 <module>rule-sdk-spring-boot-starter</module>
 ```
@@ -1561,29 +1774,25 @@ public class SdkProperties {
 
     /** rule-api 服务地址，必填。 */
     private String serverUrl;
-
     /** 租户 ID，必填。 */
     private String tenantId;
-
     /** 快照拉取模式，默认 DECLARED。 */
     private FetchMode fetchMode = FetchMode.DECLARED;
-
     /** fetchMode=DECLARED 时要订阅的场景列表。 */
     private List<String> scenes = List.of();
-
     /** 轮询间隔，默认 30 秒。 */
     private Duration pollInterval = Duration.ofSeconds(30);
 
-    public String getServerUrl() { return serverUrl; }
-    public void setServerUrl(String serverUrl) { this.serverUrl = serverUrl; }
-    public String getTenantId() { return tenantId; }
-    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
-    public FetchMode getFetchMode() { return fetchMode; }
-    public void setFetchMode(FetchMode fetchMode) { this.fetchMode = fetchMode; }
-    public List<String> getScenes() { return scenes; }
-    public void setScenes(List<String> scenes) { this.scenes = scenes; }
-    public Duration getPollInterval() { return pollInterval; }
-    public void setPollInterval(Duration pollInterval) { this.pollInterval = pollInterval; }
+    public String getServerUrl()            { return serverUrl; }
+    public void setServerUrl(String v)      { this.serverUrl = v; }
+    public String getTenantId()             { return tenantId; }
+    public void setTenantId(String v)       { this.tenantId = v; }
+    public FetchMode getFetchMode()         { return fetchMode; }
+    public void setFetchMode(FetchMode v)   { this.fetchMode = v; }
+    public List<String> getScenes()         { return scenes; }
+    public void setScenes(List<String> v)   { this.scenes = v; }
+    public Duration getPollInterval()       { return pollInterval; }
+    public void setPollInterval(Duration v) { this.pollInterval = v; }
 }
 ```
 
@@ -1620,7 +1829,7 @@ public class RuleEngineClientAutoConfiguration {
                 .fetchMode(props.getFetchMode())
                 .pollInterval(props.getPollInterval());
         if (props.getScenes() != null) {
-            props.getScenes().forEach(s -> builder.scenes(s));
+            props.getScenes().forEach(builder::scenes);
         }
         return builder.build();
     }
@@ -1629,8 +1838,11 @@ public class RuleEngineClientAutoConfiguration {
 
 - [ ] **Step 5: 新建 AutoConfiguration.imports**
 
+文件路径：`rule-sdk-spring-boot-starter/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+
+内容：
+
 ```
-# rule-sdk-spring-boot-starter/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
 com.sstlfsj.rule.sdk.starter.RuleEngineClientAutoConfiguration
 ```
 
@@ -1661,9 +1873,7 @@ class RuleEngineClientAutoConfigurationTest {
                         "rule.sdk.fetch-mode=ALL")
                 .run(ctx -> {
                     assertThat(ctx).hasSingleBean(RuleEngineClient.class);
-                    RuleEngineClient client = ctx.getBean(RuleEngineClient.class);
-                    assertThat(client).isNotNull();
-                    client.close();
+                    ctx.getBean(RuleEngineClient.class).close();
                 });
     }
 
@@ -1714,7 +1924,7 @@ git commit -m "feat(sdk): 新建 rule-sdk-spring-boot-starter，AutoConfiguratio
 
 ---
 
-## Task 8：全量验证
+## Task 6：全量验证
 
 **目标：** 所有模块测试通过，确认无编译错误、无测试失败。
 

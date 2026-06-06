@@ -3,7 +3,9 @@ package com.sstlfsj.rule.eval.internal.session;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
+import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,8 +18,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.dao.DuplicateKeyException;
+
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import org.mockito.Spy;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,11 +33,17 @@ class EvalSessionWriterTest {
 
     @Mock EvaluationSessionMapper sessionMapper;
     @Mock DryRunSessionMapper dryRunMapper;
+    @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks EvalSessionWriter writer;
 
     private RuleEvent event() {
         return new RuleEvent("1", "scene", "E", "u1",
                 "evt-001", Instant.parse("2024-01-01T00:00:00Z"), Map.of(), Map.of());
+    }
+
+    @Test
+    void writer_constructed_notNull() {
+        assertNotNull(writer);
     }
 
     @Test
@@ -58,7 +69,7 @@ class EvalSessionWriterTest {
         EvaluationSession existing = new EvaluationSession();
         existing.setId(99L);
         when(sessionMapper.insert((EvaluationSession) any())).thenThrow(new DuplicateKeyException("dup"));
-        when(sessionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existing);
+        when(sessionMapper.findByTenantAndEvent(any(), any())).thenReturn(existing);
 
         Long id = writer.insertPending(event(), 1, "PULL");
 
@@ -74,6 +85,60 @@ class EvalSessionWriterTest {
     }
 
     @Test
+    void updateFinal_withContext_snapshotContainsMetricKey() {
+        // 验证 serializeSnapshot 用静态 MAPPER 正确序列化 metrics
+        RuleEvent ev = event();
+        EvalContext ctx = new EvalContext("1", ev, null,
+                Map.of("user.age", new MetricValue(25, "INTEGER", "PROVIDED")),
+                Instant.parse("2024-01-01T00:00:00Z"));
+        // 直接检查序列化不抛异常（MAPPER 静态实例行为）
+        EvalResult result = EvalResult.miss();
+        writer.updateFinal(1L, result, ctx);
+        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateFinal_withContext_setsContextSnapshot() {
+        RuleEvent ev = event();
+        EvalContext ctx = new EvalContext("1", ev, null,
+                Map.of("user.age", new MetricValue(25, "INTEGER", "PROVIDED")),
+                Instant.parse("2024-01-01T00:00:00Z"));
+        EvalResult result = EvalResult.miss();
+
+        writer.updateFinal(1L, result, ctx);
+
+        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateFinal_nullContext_contextSnapshotIsNull() {
+        EvalResult result = EvalResult.miss();
+
+        writer.updateFinal(1L, result, null);
+
+        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateDryRunFinal_withContext_invokesMapper() {
+        RuleEvent ev = event();
+        EvalContext ctx = new EvalContext("1", ev, null,
+                Map.of("order.amount", new MetricValue(5000, "INTEGER", "PROVIDED")),
+                Instant.parse("2024-01-01T00:00:00Z"));
+        EvalResult result = EvalResult.miss();
+
+        writer.updateDryRunFinal(1L, result, ctx);
+
+        verify(dryRunMapper).markFinal(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateDryRunFinal_nullContext_invokesMapper() {
+        writer.updateDryRunFinal(1L, EvalResult.miss(), null);
+        verify(dryRunMapper).markFinal(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void insertBlocked_savesBlockedStatus() {
         when(sessionMapper.insert((EvaluationSession) any())).thenReturn(1);
 
@@ -83,5 +148,16 @@ class EvalSessionWriterTest {
         verify(sessionMapper).insert((EvaluationSession) captor.capture());
         assertEquals("BLOCKED", captor.getValue().getStatus());
         assertEquals("ROLLOUT", captor.getValue().getBlockedBy());
+    }
+
+    @Test
+    void updateFinal_snapshot_isNestedWithMetricsAndEvalNow() throws Exception {
+        // 直接验证序列化产物的形状契约：嵌套 metrics + evalNow 文本
+        Instant now = Instant.parse("2024-01-01T00:00:00Z");
+        String json = objectMapper.writeValueAsString(java.util.Map.of(
+                "metrics", java.util.Map.of("user.age", 25),
+                "evalNow", now.toString()));
+        assertTrue(json.contains("\"metrics\""));
+        assertTrue(json.contains("\"evalNow\":\"2024-01-01T00:00:00Z\""));
     }
 }

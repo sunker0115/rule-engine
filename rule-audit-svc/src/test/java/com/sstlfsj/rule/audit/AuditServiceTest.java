@@ -4,6 +4,7 @@ import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.audit.api.service.AuditService.AuditLogEntry;
 import com.sstlfsj.rule.audit.api.service.AuditService.EvalSessionEntry;
 import com.sstlfsj.rule.audit.api.service.AuditService.PageResult;
+import com.sstlfsj.rule.audit.api.service.AuditService.RuleSessionEntry;
 import com.sstlfsj.rule.audit.api.service.AuditService.TraceNodeEntry;
 import org.junit.jupiter.api.Test;
 
@@ -108,5 +109,37 @@ class AuditServiceTest {
         TraceNodeEntry b = new TraceNodeEntry("0.1.2", "CONDITION", null, null, null, null, null, null);
 
         assertThat(a.nodePath().compareTo(b.nodePath())).isLessThan(0);
+    }
+
+    @Test
+    void ruleSessionEntry_字段赋值与读取正确() {
+        Instant now = Instant.now();
+        RuleSessionEntry entry = new RuleSessionEntry(
+                "sess-100", "evt-abc", "u1",
+                "HIT", "REJECT", 35, now, 7L
+        );
+
+        assertThat(entry.sessionId()).isEqualTo("sess-100");
+        assertThat(entry.eventId()).isEqualTo("evt-abc");
+        assertThat(entry.subjectId()).isEqualTo("u1");
+        assertThat(entry.status()).isEqualTo("HIT");
+        assertThat(entry.finalDecision()).isEqualTo("REJECT");
+        assertThat(entry.evalDurationMs()).isEqualTo(35);
+        assertThat(entry.startedAt()).isEqualTo(now);
+        assertThat(entry.ruleVersionId()).isEqualTo(7L);
+    }
+
+    @Test
+    void ruleSessionEntry_可选字段允许为null() {
+        RuleSessionEntry entry = new RuleSessionEntry(
+                "sess-200", "evt-xyz", null,
+                "MISS", null, null, null, null
+        );
+
+        assertThat(entry.subjectId()).isNull();
+        assertThat(entry.finalDecision()).isNull();
+        assertThat(entry.evalDurationMs()).isNull();
+        assertThat(entry.startedAt()).isNull();
+        assertThat(entry.ruleVersionId()).isNull();
     }
 }

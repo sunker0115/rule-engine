@@ -63,9 +63,9 @@
     { "decisionCode": "REJECT" }
   ],
   "metricDependencies": [
-    "user.device.trust.score",
-    "user.ip.reputation.score",
-    "user.kyc.level",
-    "user.blacklist.hit"
+    { "metricCode": "user.device.trust.score", "metricVersion": 1 },
+    { "metricCode": "user.ip.reputation.score", "metricVersion": 1 },
+    { "metricCode": "user.kyc.level", "metricVersion": 1 },
+    { "metricCode": "user.blacklist.hit", "metricVersion": 1 }
   ]
 }

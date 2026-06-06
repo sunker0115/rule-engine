@@ -1,21 +1,20 @@
 package com.sstlfsj.rule.config.internal.publish;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sstlfsj.rule.kernel.api.model.ast.*;
+import tools.jackson.databind.ObjectMapper;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.springframework.stereotype.Component;
 
-/** 负责 AstNode 与 JSON 字符串互转，用于 rule_version.condition_ast 存储。 */
+/**
+ * 负责 AstNode 与 JSON 字符串互转，用于 rule_version.condition_ast 存储。
+ * 注入 Spring 全局 ObjectMapper，与 HTTP 层序列化行为一致；AstNode 多态由接口注解保证。
+ */
 @Component
 public class AstSerializer {
 
     private final ObjectMapper mapper;
 
-    public AstSerializer() {
-        this.mapper = new ObjectMapper();
-        // 使用 type 字段区分多态类型，仅作用于 AstNode 层级
-        this.mapper.addMixIn(AstNode.class, AstNodeMixin.class);
+    public AstSerializer(ObjectMapper mapper) {
+        this.mapper = mapper;
     }
 
     /**
@@ -45,14 +44,4 @@ public class AstSerializer {
             throw new IllegalStateException("AST 反序列化失败: " + e.getMessage(), e);
         }
     }
-
-    /** Jackson mixin：为 AstNode sealed interface 声明多态类型映射。 */
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
-    @JsonSubTypes({
-        @JsonSubTypes.Type(value = AndNode.class,       name = "AndNode"),
-        @JsonSubTypes.Type(value = OrNode.class,        name = "OrNode"),
-        @JsonSubTypes.Type(value = NotNode.class,       name = "NotNode"),
-        @JsonSubTypes.Type(value = ConditionNode.class, name = "ConditionNode")
-    })
-    interface AstNodeMixin {}
 }

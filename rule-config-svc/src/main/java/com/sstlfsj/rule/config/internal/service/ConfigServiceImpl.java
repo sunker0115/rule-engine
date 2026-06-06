@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.config.internal.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
@@ -60,28 +59,15 @@ class ConfigServiceImpl implements ConfigService {
         // 按 sceneCode 解析 sceneId（未传时不过滤）
         Long sceneId = null;
         if (sceneCode != null && !sceneCode.isBlank()) {
-            SceneDef scene = sceneMapper.selectOne(
-                    new LambdaQueryWrapper<SceneDef>()
-                            .eq(SceneDef::getTenantId, Long.valueOf(tenantId))
-                            .eq(SceneDef::getCode, sceneCode)
-            );
+            SceneDef scene = sceneMapper.findByCode(Long.valueOf(tenantId), sceneCode);
             if (scene == null) {
                 return new Page<>(page, size);
             }
             sceneId = scene.getId();
         }
 
-        LambdaQueryWrapper<RuleDefinition> wrapper = new LambdaQueryWrapper<RuleDefinition>()
-                .eq(RuleDefinition::getTenantId, Long.valueOf(tenantId));
-        if (sceneId != null) {
-            wrapper.eq(RuleDefinition::getSceneId, sceneId);
-        }
-        if (status != null && !status.isBlank()) {
-            wrapper.eq(RuleDefinition::getStatus, status);
-        }
-        wrapper.orderByDesc(RuleDefinition::getId);
-
-        Page<RuleDefinition> rdPage = ruleDefinitionMapper.selectPage(new Page<>(page, size), wrapper);
+        Page<RuleDefinition> rdPage = ruleDefinitionMapper.selectRulePage(
+                new Page<>(page, size), Long.valueOf(tenantId), sceneId, status);
 
         Page<RuleListItemVO> voPage = new Page<>(rdPage.getCurrent(), rdPage.getSize(), rdPage.getTotal());
         voPage.setRecords(rdPage.getRecords().stream()
@@ -98,11 +84,11 @@ class ConfigServiceImpl implements ConfigService {
             String code, String name,
             String conditionAstJson, String decisionBindingsJson,
             String preGatesJson, String triggerEventTypesJson,
-            String actorId) {
+            String kind, String actorId) {
         return publishService.createDraft(Long.valueOf(tenantId), sceneCode,
                 code, name,
                 conditionAstJson, decisionBindingsJson,
                 preGatesJson, triggerEventTypesJson,
-                actorId);
+                kind, actorId);
     }
 }

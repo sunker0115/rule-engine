@@ -18,7 +18,6 @@ public class RuleVersion {
     private String conditionAst;
     private String decisionBindings;
     private String preGates;
-    private String rollout;
     private String kind;
     private String triggerEventTypes;
     private String metricDependencies;

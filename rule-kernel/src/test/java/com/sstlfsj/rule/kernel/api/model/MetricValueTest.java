@@ -24,4 +24,20 @@ class MetricValueTest {
         MetricValue mv = new MetricValue("active", "STRING", "PROVIDED");
         assertEquals("PROVIDED", mv.valueSource());
     }
+
+    @Test
+    void threeArgConstructor_keepsErrorCodeNull() {
+        MetricValue mv = new MetricValue(42, "LONG", "PROVIDED");
+        assertNull(mv.errorCode());
+        assertFalse(mv.isError());
+    }
+
+    @Test
+    void error_factory_marksError() {
+        MetricValue mv = MetricValue.error("METRIC_FETCH_FAIL");
+        assertTrue(mv.isError());
+        assertEquals("METRIC_FETCH_FAIL", mv.errorCode());
+        assertNull(mv.value());
+        assertEquals("FETCHED", mv.valueSource());
+    }
 }

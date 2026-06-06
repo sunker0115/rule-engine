@@ -1,32 +1,36 @@
 package com.sstlfsj.rule.eval.internal.session;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import lombok.RequiredArgsConstructor;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.Decision;
+import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /** 封装 evaluation_session 和 dry_run_session 的同步写入逻辑（D11/D21）。 */
 @Component
+@RequiredArgsConstructor
 public class EvalSessionWriter {
+
+    private static final Logger log = LoggerFactory.getLogger(EvalSessionWriter.class);
 
     private final EvaluationSessionMapper sessionMapper;
     private final DryRunSessionMapper dryRunMapper;
-
-    public EvalSessionWriter(EvaluationSessionMapper sessionMapper,
-                             DryRunSessionMapper dryRunMapper) {
-        this.sessionMapper = sessionMapper;
-        this.dryRunMapper = dryRunMapper;
-    }
+    private final ObjectMapper objectMapper;
 
     /**
      * INSERT evaluation_session（status=PENDING）。
@@ -48,10 +52,8 @@ public class EvalSessionWriter {
             return session.getId();
         } catch (DuplicateKeyException e) {
             // 幂等：相同 eventId 已处理过，查回已有 id
-            EvaluationSession existing = sessionMapper.selectOne(
-                    new LambdaQueryWrapper<EvaluationSession>()
-                            .eq(EvaluationSession::getTenantId, Long.valueOf(event.tenantId()))
-                            .eq(EvaluationSession::getEventId, event.eventId()));
+            EvaluationSession existing = sessionMapper.findByTenantAndEvent(
+                    Long.valueOf(event.tenantId()), event.eventId());
             if (existing == null) {
                 throw new IllegalStateException("幂等查询失败：eventId=" + event.eventId() + " 记录不存在");
             }
@@ -81,12 +83,13 @@ public class EvalSessionWriter {
     }
 
     /**
-     * UPDATE evaluation_session：将 PENDING 更新为终态（HIT / MISS / ERROR）。
+     * UPDATE evaluation_session：将 PENDING 更新为终态（HIT / MISS / ERROR），同步写入 context_snapshot。
      *
      * @param sessionId 待更新的会话 id
      * @param result    评估结果
+     * @param ctx       本次评估上下文，用于序列化 metrics 快照；为 null 时 context_snapshot 写 null
      */
-    public void updateFinal(Long sessionId, EvalResult result) {
+    public void updateFinal(Long sessionId, EvalResult result, EvalContext ctx) {
         String status;
         if (result.errorCode() != null) {
             status = "ERROR";
@@ -101,15 +104,9 @@ public class EvalSessionWriter {
                     .map(Decision::code)
                     .collect(Collectors.joining("\",\"", "[\"", "\"]"));
 
-        sessionMapper.update(new EvaluationSession(),
-                new LambdaUpdateWrapper<EvaluationSession>()
-                        .eq(EvaluationSession::getId, sessionId)
-                        .set(EvaluationSession::getStatus, status)
-                        .set(EvaluationSession::getFinalDecision, finalDecision)
-                        .set(EvaluationSession::getHitDecisions, hitDecisionsJson)
-                        .set(EvaluationSession::getErrorCode, result.errorCode())
-                        .set(EvaluationSession::getHitRuleCount, result.hitDecisions().size())
-                        .set(EvaluationSession::getFinishedAt, LocalDateTime.now()));
+        sessionMapper.markFinal(sessionId, status, finalDecision, hitDecisionsJson,
+                result.errorCode(), result.hitDecisions().size(), LocalDateTime.now(),
+                serializeSnapshot(ctx));
     }
 
     /**
@@ -136,23 +133,40 @@ public class EvalSessionWriter {
     }
 
     /**
-     * UPDATE dry_run_session 为终态（HIT / MISS / ERROR）。
+     * UPDATE dry_run_session 为终态（HIT / MISS / ERROR），同步写入 context_snapshot。
      *
      * @param sessionId 待更新的 dry-run 会话 id
      * @param result    评估结果
+     * @param ctx       本次 dry-run 评估上下文；为 null 时 context_snapshot 写 null
      */
-    public void updateDryRunFinal(Long sessionId, EvalResult result) {
+    public void updateDryRunFinal(Long sessionId, EvalResult result, EvalContext ctx) {
         String status = result.ruleHit() ? "HIT" : "MISS";
         if (result.errorCode() != null) status = "ERROR";
 
-        dryRunMapper.update(new DryRunSession(),
-                new LambdaUpdateWrapper<DryRunSession>()
-                        .eq(DryRunSession::getId, sessionId)
-                        .set(DryRunSession::getStatus, status)
-                        .set(DryRunSession::getErrorCode, result.errorCode())
-                        .set(DryRunSession::getFinalDecision,
-                                result.finalDecision() != null ? result.finalDecision().code() : null)
-                        .set(DryRunSession::getFinishedAt, LocalDateTime.now()));
+        dryRunMapper.markFinal(sessionId, status, result.errorCode(),
+                result.finalDecision() != null ? result.finalDecision().code() : null,
+                LocalDateTime.now(), serializeSnapshot(ctx));
+    }
+
+    /**
+     * 将 EvalContext 序列化为 {@code {"metrics": {metricCode: rawValue}, "evalNow": "<ISO>"}} JSON；
+     * ctx 为 null 或序列化失败时返回 null。
+     */
+    private String serializeSnapshot(EvalContext ctx) {
+        if (ctx == null) return null;
+        Map<String, Object> metrics = ctx.metrics().entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().value() != null ? e.getValue().value() : "null"));
+        Map<String, Object> snapshot = new HashMap<>();
+        snapshot.put("metrics", metrics);
+        snapshot.put("evalNow", ctx.now() != null ? ctx.now().toString() : null);
+        try {
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (JacksonException e) {
+            log.warn("context_snapshot 序列化失败，写 null", e);
+            return null;
+        }
     }
 
     private EvaluationSession buildSession(RuleEvent event, String source) {

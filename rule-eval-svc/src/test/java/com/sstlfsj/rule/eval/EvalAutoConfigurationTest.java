@@ -1,17 +1,28 @@
 package com.sstlfsj.rule.eval;
 
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
+import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
+import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
+import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Primary;
 
 import java.util.List;
 
@@ -22,6 +33,13 @@ import static org.mockito.Mockito.mock;
 class EvalAutoConfigurationTest {
 
     private final EvalAutoConfiguration config = new EvalAutoConfiguration();
+
+    /** 取数资源配置桩（默认超时 800ms），供 evalContextAssembler 装配。 */
+    private static FetchResourceProperties fetchProps() {
+        FetchResourceProperties p = new FetchResourceProperties();
+        p.setTimeoutMs(800);
+        return p;
+    }
 
     @Test
     void hasAutoConfigurationAnnotation() {
@@ -36,23 +54,93 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
-    void ruleVersionExecutor_nullEvaluators_returnsTracingInterpretedExecutor() {
-        // conditionEvaluators 为 null（无注册实现时 Spring 传入 null）
-        RuleVersionExecutor executor = config.ruleVersionExecutor(null);
+    void ruleVersionExecutor_returnsTracingInterpretedExecutor() {
+        RuleVersionExecutor executor = config.ruleVersionExecutor();
         assertNotNull(executor);
         assertInstanceOf(TracingInterpretedExecutor.class, executor);
     }
 
     @Test
-    void ruleVersionExecutor_emptyEvaluators_returnsTracingInterpretedExecutor() {
-        RuleVersionExecutor executor = config.ruleVersionExecutor(java.util.Map.of());
+    void ruleVersionExecutor_hasPrimaryAnnotation() throws Exception {
+        var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor");
+        assertNotNull(method.getAnnotation(Primary.class),
+                "ruleVersionExecutor 必须标注 @Primary，否则与 ScorecardExecutor 并存时 Spring 无法消歧义");
+    }
+
+    @Test
+    void scorecardExecutor_returnsScorecardExecutor() {
+        ScorecardExecutor executor = config.scorecardExecutor();
         assertNotNull(executor);
-        assertInstanceOf(TracingInterpretedExecutor.class, executor);
+        assertInstanceOf(ScorecardExecutor.class, executor);
+    }
+
+    @Test
+    void decisionTreeExecutor_returnsInstance() {
+        DecisionTreeExecutor executor = config.decisionTreeExecutor();
+        assertNotNull(executor);
+        assertInstanceOf(DecisionTreeExecutor.class, executor);
+    }
+
+    @Test
+    void decisionTableExecutor_returnsInstance() {
+        DecisionTableExecutor executor = config.decisionTableExecutor();
+        assertNotNull(executor);
+        assertInstanceOf(DecisionTableExecutor.class, executor);
+    }
+
+    @Test
+    void sceneRuleIndex_returnsNewInstance() {
+        SceneRuleIndex index = config.sceneRuleIndex();
+        assertNotNull(index);
+    }
+
+    @Test
+    void evalContextAssembler_nullLists_returnsInstance() {
+        EvalContextAssembler assembler = config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps());
+        assertNotNull(assembler);
+    }
+
+    @Test
+    void evalContextAssembler_emptyLists_returnsInstance() {
+        EvalContextAssembler assembler = config.evalContextAssembler(
+                List.of(), List.of(), null, null, Runnable::run, fetchProps());
+        assertNotNull(assembler);
+    }
+
+    @Test
+    void snapshotAssembler_returnsInstance() {
+        SnapshotAssembler assembler = config.snapshotAssembler(JsonMapper.builder().build());
+        assertNotNull(assembler);
+    }
+
+    @Test
+    void evalEngine_nullPreGates_returnsInstance() {
+        EvalEngine engine = config.evalEngine(
+                config.sceneRuleIndex(),
+                config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps()),
+                null,
+                config.ruleVersionExecutor(),
+                config.scorecardExecutor(),
+                config.decisionTreeExecutor(),
+                config.decisionTableExecutor());
+        assertNotNull(engine);
+    }
+
+    @Test
+    void evalEngine_emptyPreGates_returnsInstance() {
+        EvalEngine engine = config.evalEngine(
+                config.sceneRuleIndex(),
+                config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps()),
+                List.of(),
+                config.ruleVersionExecutor(),
+                config.scorecardExecutor(),
+                config.decisionTreeExecutor(),
+                config.decisionTableExecutor());
+        assertNotNull(engine);
     }
 
     @Test
     void actionDispatchService_nullHandlers_returnsInstance() {
-        // actionHandlers 为 null（容器无任何 ActionHandler Bean 时 Spring 传入 null）
         ActionDispatchService svc = config.actionDispatchService(
                 null,
                 mock(SceneActionBindingReadMapper.class),
@@ -62,7 +150,6 @@ class EvalAutoConfigurationTest {
 
     @Test
     void actionDispatchService_withAnnotatedHandler_buildsHandlerMap() {
-        // 注册了一个带 @ActionType("BLOCK_TX") 的 handler，构建后应能正确索引
         ActionHandler handler = new BlockTxStub();
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(handler),
@@ -73,7 +160,6 @@ class EvalAutoConfigurationTest {
 
     @Test
     void actionDispatchService_handlerWithoutAnnotation_isIgnored() {
-        // 没有 @ActionType 注解的 handler 不应注册到 map，也不应抛异常
         ActionHandler noAnnotation = ctx -> ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(noAnnotation),

@@ -2,7 +2,7 @@ package com.sstlfsj.rule.eval.internal.listener;
 
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
-import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -28,15 +28,17 @@ class RuleIndexEventListenerTest {
     @Test
     void onRulePublished_reloadsSnapshotsForScene() {
         RulePublishedEvent event = new RulePublishedEvent("1", "fraud_check", 42L);
-        ConditionNode condNode = new ConditionNode("GT", "score", null, Map.of());
+        ConditionNode condNode = new ConditionNode("GT", "score", null, Map.of(), 0.0);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 42L, "fraud_check", "1", condNode, List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), null);
-        when(loader.loadByScene("1", "fraud_check")).thenReturn(
+                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), null, null);
+        when(loader.loadBySceneWithStrategy("1", "fraud_check", index)).thenReturn(
                 Map.of("RISK_EVENT", List.of(snap)));
 
         ruleListener.onRulePublished(event);
 
+        // 策略由 loadBySceneWithStrategy 写入 index，此处只验证快照写入
+        verify(loader).loadBySceneWithStrategy("1", "fraud_check", index);
         verify(index).update("1", "fraud_check", "RISK_EVENT", List.of(snap));
     }
 
@@ -52,15 +54,15 @@ class RuleIndexEventListenerTest {
 
     @Test
     void onSceneEnabled_reloadsSnapshots() {
-        ConditionNode condNode = new ConditionNode("EQ", "status", null, Map.of());
+        ConditionNode condNode = new ConditionNode("EQ", "status", null, Map.of(), 0.0);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
-                10L, "fraud_check", "1", condNode, List.of(), List.of(), null);
+                10L, "fraud_check", "1", condNode, List.of(), List.of(), null, null);
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
-        when(loader.loadByScene("1", "fraud_check")).thenReturn(Map.of("*", List.of(snap)));
+        when(loader.loadBySceneWithStrategy("1", "fraud_check", index)).thenReturn(Map.of("*", List.of(snap)));
 
         sceneListener.onSceneChanged(event);
 
-        verify(loader).loadByScene("1", "fraud_check");
+        verify(loader).loadBySceneWithStrategy("1", "fraud_check", index);
         verify(index).update("1", "fraud_check", "*", List.of(snap));
     }
 }

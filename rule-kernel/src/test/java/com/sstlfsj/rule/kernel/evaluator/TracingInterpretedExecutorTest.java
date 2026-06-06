@@ -8,8 +8,14 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+// D42: import 与 InterpretedExecutor 对称，覆盖异常路径的测试用例已存在于下方。
 import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
+import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import org.junit.jupiter.api.Test;
@@ -36,19 +42,19 @@ class TracingInterpretedExecutorTest {
     private EvalContext minimalContext() {
         RuleEvent event = new RuleEvent("t1", "scene1", "ORDER_PLACED", "u1",
                 "evt-1", Instant.now(), Map.of(), null);
-        return new EvalContext("t1", event, null, Map.of());
+        return new EvalContext("t1", event, null, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
     private RuleVersionSnapshot snapshot(AstNode ast) {
-        return new RuleVersionSnapshot(1L, "scene1", "t1", ast, null, null, null);
+        return new RuleVersionSnapshot(1L, "scene1", "t1", ast, null, null, null, null);
     }
 
     private ConditionNode trueNode() {
-        return new ConditionNode(ALWAYS_TRUE, "metric1", null, Map.of());
+        return new ConditionNode(ALWAYS_TRUE, "metric1", null, Map.of(), 0.0);
     }
 
     private ConditionNode falseNode() {
-        return new ConditionNode(ALWAYS_FALSE, "metric2", null, Map.of());
+        return new ConditionNode(ALWAYS_FALSE, "metric2", null, Map.of(), 0.0);
     }
 
     @Test
@@ -140,7 +146,7 @@ class TracingInterpretedExecutorTest {
     @Test
     void conditionNode_noEvaluator_traceHasErrorCode() {
         // 无对应 evaluator 时 result=false，errorCode=NO_EVALUATOR
-        AstNode ast = new ConditionNode("UNKNOWN_TYPE", "metric1", null, Map.of());
+        AstNode ast = new ConditionNode("UNKNOWN_TYPE", "metric1", null, Map.of(), 0.0);
         EvalResult result = executorWith(Map.of())
                 .execute(snapshot(ast), minimalContext());
 
@@ -164,5 +170,94 @@ class TracingInterpretedExecutorTest {
         // 子节点也必须携带 ruleVersionId
         assertThat(andTrace.children()).allSatisfy(
                 child -> assertThat(child.ruleVersionId()).isEqualTo(1L));
+    }
+
+    @Test
+    void scorecardRootNode_throwsIllegalState() {
+        // TracingInterpretedExecutor 只处理 AST_BOOLEAN 规则，遇到 ScorecardRootNode 应抛出异常
+        AstNode ast = new ScorecardRootNode(List.of(), 0.6);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executorWith(Map.of()).execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ScorecardRootNode");
+    }
+
+    @Test
+    void xorNode_exactlyOneTrue_producesTraceWithAllChildren() {
+        // XOR 不短路，全量遍历；XOR(TRUE, FALSE, FALSE) = true，children 应有 3 条 trace
+        AstNode ast = new XorNode(List.of(trueNode(), falseNode(), falseNode()), null);
+        EvalResult result = executorWith(Map.of(
+                        ALWAYS_TRUE, alwaysTrue,
+                        ALWAYS_FALSE, alwaysFalse))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.nodeTrace()).hasSize(1);
+        NodeTrace xorTrace = result.nodeTrace().get(0);
+        assertThat(xorTrace.nodeType()).isEqualTo("XorNode");
+        assertThat(xorTrace.result()).isTrue();
+        // 全量遍历，3 个子节点均有 trace
+        assertThat(xorTrace.children()).hasSize(3);
+    }
+
+    @Test
+    void xorNode_twoTrue_producesTrace_miss() {
+        // XOR(TRUE, TRUE) = false，trace result=false，children 有 2 条
+        AstNode ast = new XorNode(List.of(trueNode(), trueNode()), null);
+        EvalResult result = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.ruleHit()).isFalse();
+        NodeTrace xorTrace = result.nodeTrace().get(0);
+        assertThat(xorTrace.nodeType()).isEqualTo("XorNode");
+        assertThat(xorTrace.result()).isFalse();
+        assertThat(xorTrace.children()).hasSize(2);
+    }
+
+    @Test
+    void execute_scoreIsNull_forBooleanRules() {
+        // AST_BOOLEAN executor 不计算 score，EvalResult.score() 必须为 null
+        AstNode ast = trueNode();
+        EvalResult result = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.score()).isNull();
+    }
+
+    @Test
+    void execute_category_and_decision_areNull_forBooleanRules() {
+        AstNode ast = trueNode();
+        EvalResult result = executorWith(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(ast), minimalContext());
+
+        assertThat(result.category()).isNull();
+        assertThat(result.decision()).isNull();
+    }
+
+    @Test
+    void ifNode_throwsIllegalState() {
+        AstNode ast = new IfNode(trueNode(), new DecisionLeafNode("BLOCK", null), null);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executorWith(Map.of(ALWAYS_TRUE, alwaysTrue)).execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("IfNode");
+    }
+
+    @Test
+    void decisionLeafNode_throwsIllegalState() {
+        AstNode ast = new DecisionLeafNode("BLOCK", "HIGH_RISK");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executorWith(Map.of()).execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DecisionLeafNode");
+    }
+
+    @Test
+    void decisionTableNode_throwsIllegalState() {
+        AstNode ast = new DecisionTableNode(List.of(), List.of());
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> executorWith(Map.of()).execute(snapshot(ast), minimalContext()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DecisionTableNode");
     }
 }

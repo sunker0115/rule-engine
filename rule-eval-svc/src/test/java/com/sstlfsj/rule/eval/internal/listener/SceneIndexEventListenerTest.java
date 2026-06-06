@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.eval.internal.listener;
 
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
-import com.sstlfsj.rule.eval.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import org.junit.jupiter.api.Test;
@@ -37,11 +37,11 @@ class SceneIndexEventListenerTest {
     @Test
     void onSceneChanged_enabled_reloadsSnapshots() {
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
-        when(loader.loadByScene("1", "fraud_check")).thenReturn(Map.of());
+        when(loader.loadBySceneWithStrategy("1", "fraud_check", index)).thenReturn(Map.of());
 
         listener.onSceneChanged(event);
 
-        verify(loader).loadByScene("1", "fraud_check");
+        verify(loader).loadBySceneWithStrategy("1", "fraud_check", index);
         verifyNoMoreInteractions(index);
     }
 
@@ -50,8 +50,8 @@ class SceneIndexEventListenerTest {
     void onSceneChanged_enabled_updatesIndexForEachEventType() {
         SceneChangedEvent event = new SceneChangedEvent("1", "fraud_check", true);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(42L, "fraud_check", "1",
-                null, List.of(), List.of(), null);
-        when(loader.loadByScene("1", "fraud_check"))
+                null, List.of(), List.of(), null, null);
+        when(loader.loadBySceneWithStrategy("1", "fraud_check", index))
                 .thenReturn(Map.of("*", List.of(snap)));
 
         listener.onSceneChanged(event);

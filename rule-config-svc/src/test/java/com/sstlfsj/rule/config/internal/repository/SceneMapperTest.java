@@ -5,11 +5,14 @@ import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import org.apache.ibatis.annotations.Mapper;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
+import java.util.Collection;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** 验证 SceneMapper 接口结构：继承 BaseMapper<SceneDef>、携带 @Mapper 注解。 */
+/** 验证 SceneMapper 接口结构及 B7 新增语义查询方法签名。 */
 class SceneMapperTest {
 
     @Test
@@ -22,5 +25,19 @@ class SceneMapperTest {
     @Test
     void hasMapperAnnotation() {
         assertNotNull(SceneMapper.class.getAnnotation(Mapper.class));
+    }
+
+    @Test
+    void findByCode_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = SceneMapper.class.getDeclaredMethod("findByCode", Long.class, String.class);
+        assertTrue(m.isDefault(), "findByCode 应为 default 方法");
+        assertEquals(SceneDef.class, m.getReturnType());
+    }
+
+    @Test
+    void findByIds_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = SceneMapper.class.getDeclaredMethod("findByIds", Collection.class);
+        assertTrue(m.isDefault(), "findByIds 应为 default 方法");
+        assertEquals(List.class, m.getReturnType());
     }
 }
