@@ -18,7 +18,7 @@
 
 > **B19 类型化比较策略工厂 / B20 时间框架 / B21 FETCHED 取数层 / B23 嵌入式 SDK 取数 已落地，2026-06-06 移除。** 遗留小项（未完成 / 归后续，记录在此）：
 > - **B20 时区解析序的 Scene 级默认时区（优先级3）暂缓**：解析序为 字面量 offset > 条件 `params.timezone` > **Scene 默认（暂缓）** > UTC。运行时 `EvalContext`/`RuleVersionSnapshot` 不携带 `Scene.defaultParams.timezone`，需 config→snapshot→`EvalContext` 管线打通后激活；当前 `TimeZoneResolver.resolve(paramsTz, sceneTz)` 形参已预留，调用方一律传 `sceneTz=null`。
-> - **B19 `ComparisonStrategyFactory` 的 LIST 走 `DefaultComparisonStrategy`**（无独立 `ListComparisonStrategy`；数值仍走 BigDecimal 不丢精度）；决策表列级 dataType 冻结 + 发布校验 → 归 **B22**。
+> - **B19 `ComparisonStrategyFactory` 的 LIST 走 `DefaultComparisonStrategy`**（无独立 `ListComparisonStrategy`；LIST 算子 CONTAINS/NOT_CONTAINS 走各自 evaluator，本就不经 ComparisonStrategy，无需独立策略）。决策表列级 dataType 冻结 + 发布校验已落地（**B22**，2026-06-06）。
 > - **B21 v1 不做（留 v2）**：`STREAM` sourceType 实装（当前无 handler → 自动降级 `METRIC_FETCH_FAIL`）；HTTP OAuth2 自动刷 token；Scene 级数据源白名单；Redis 缓存（v1 进程内 Caffeine）；metric `required` 字段分级。全局取数超时阈值待 `07-operability` 统一管理。
 
 ---
@@ -43,7 +43,6 @@
 | B14 | **`evaluation_session` 异步化路径** | profile 显示 session insert 进热路径 P99；依赖 B11 | 08-evo §2.15 | 幂等基础设施切换（持久化 KV）；对账数据源切换；父子表时序重设计 |
 | B16 | **合规演进**（字段级加密 + 审计 hash chain + 数据右遗忘） | 高合规场景 | 08-evo §2.8 | 涉及所有持久化对象 |
 | B18 | **Scene schema 自动放量 / 回退**（按 SLO 推进） | 自动化放量需求（v2 范畴） | 08-evo §2.7 | 灰度 v1 已完成；自动化放量是 v2 范畴 |
-| B22 | **决策表列 dataType 冻结 + 发布校验**（B19 已知边界延续） | 决策表重度使用 / 出现声明≠运行时类型问题 | B19 设计 §2 边界 | 现状：`DecisionTableNode.Column` 不冻结 dataType，求值期合成节点走 Default 策略（数值仍走 BigDecimal，不丢精度）；缺的是列级发布期算子×dataType 校验 + 声明类型驱动路由。改动：Column 加 dataType（发布期从 metricCode 冻结）+ AstDataTypeResolver 处理 Column + DecisionTableExecutor 传该 dataType 进合成 ConditionNode。不紧急 |
 
 ---
 
