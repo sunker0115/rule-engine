@@ -3,7 +3,7 @@
 整理自文档中所有"未实装 / 留到 v1.5 / 留到 v2 / 演进方向"标注。
 按**执行性质**分组：主动推进序列 → 大件能力 → 触发式 → v3 远期；组内按建议执行顺序排列。
 
-> 主动推进序列默认**正确性/运维兜底优先**（B6/B7 靠前）。若改为"能力/性能优先"，把 B1、B5 提到 B6 之前即可。
+> 主动推进序列默认**正确性/运维兜底优先**（B7 靠前）。若改为"能力/性能优先"，把 B1、B5 提到 B7 之前即可。
 
 ---
 
@@ -11,10 +11,9 @@
 
 | 序 | # | 功能 | 来源 | 预计改动范围 | 备注 |
 |---|---|------|------|------------|------|
-| 1 | B6 | **Metric 版本化** | 08-evo §2.2 | `metric_definition` 加 `version` 列；`rule_version.metric_dependencies` JSON 升级；发布期 + 评估期解析逻辑；运营 UI 影响面展示 | 正确性兜底：Metric 语义变更时防止存量规则静默错误的根本解法；改动面横跨发布期/评估期两端；先锁此处 JSON schema，B7 导出 Bundle 才能一次设计到位 |
-| 2 | B7 | **规则导出 / 导入** | 08-evo §2.9 | 独立工具链；导出格式 JSON Bundle；导入幂等写入 + 权限校验；无核心引擎变动 | 风险最低（不动引擎），可穿插做；跨环境迁移、Incident 复现的基础工具；**解锁 B15** |
-| 3 | B1 | **EXPRESSION_SCRIPT evaluator**（CEL / Aviator 脚本沙箱） | D42 / 08-evo §2.1 / trae R2 | `rule-kernel`：新增 `ScriptExecutor`；commons-pool2 对象池管理 `ScriptEngine` 实例（非线程安全，每次 borrow/return）；沙箱安全边界；发布期 schema 校验 | 加表达力，SPI 已预留，不动现有执行路径；CEL 开源直接用；**对象池（trae R2）必须同步落地**，否则 ScriptEngine 初始化开销是秒级灾难 |
-| 4 | B5 | **预编译执行器**（`CompiledExecutor`） | D20 §5 / 08-evo §2.13 / trae R5 | `rule-kernel`：`CompiledExecutor` + Janino/LambdaMetafactory；`ExecutorRegistry` 灰度切换；`rule_version.compiled_predicate_ref` 启用；可同期落地 alpha 节点共享（`ConditionEvaluationKey` 缓存去重，参考 trae R5） | TPS 可从 5–10 μs/规则降至 0.3–1 μs；已有 SPI + 字段预留；**B13 的前置** |
+| 1 | B7 | **规则导出 / 导入** | 08-evo §2.9 | 独立工具链；导出格式 JSON Bundle；导入幂等写入 + 权限校验；无核心引擎变动 | 风险最低（不动引擎），可穿插做；跨环境迁移、Incident 复现的基础工具；`rule_version.metric_dependencies` schema 已由 B6 锁定为 `[{metricCode,metricVersion}]` 对象数组，Bundle 可一次设计到位；**解锁 B15** |
+| 2 | B1 | **EXPRESSION_SCRIPT evaluator**（CEL / Aviator 脚本沙箱） | D42 / 08-evo §2.1 / trae R2 | `rule-kernel`：新增 `ScriptExecutor`；commons-pool2 对象池管理 `ScriptEngine` 实例（非线程安全，每次 borrow/return）；沙箱安全边界；发布期 schema 校验 | 加表达力，SPI 已预留，不动现有执行路径；CEL 开源直接用；**对象池（trae R2）必须同步落地**，否则 ScriptEngine 初始化开销是秒级灾难 |
+| 3 | B5 | **预编译执行器**（`CompiledExecutor`） | D20 §5 / 08-evo §2.13 / trae R5 | `rule-kernel`：`CompiledExecutor` + Janino/LambdaMetafactory；`ExecutorRegistry` 灰度切换；`rule_version.compiled_predicate_ref` 启用；可同期落地 alpha 节点共享（`ConditionEvaluationKey` 缓存去重，参考 trae R5） | TPS 可从 5–10 μs/规则降至 0.3–1 μs；已有 SPI + 字段预留；**B13 的前置** |
 
 ---
 
