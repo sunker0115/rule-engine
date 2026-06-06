@@ -16,7 +16,7 @@ class DslMetricDefinitionSourceTest {
         MetricDefinitionRegistry registry = new MetricDefinitionRegistry();
         MetricDescriptor d = new MetricDescriptor("risk.score", "TEST", "LONG", false, 0, Map.of());
         new DslMetricDefinitionSource("t1", List.of(d)).loadInto(registry);
-        assertThat(registry.get("t1", "risk.score")).isNotNull();
+        assertThat(registry.get("t1", "risk.score", 1)).isNotNull();
     }
 
     @Test
@@ -26,7 +26,7 @@ class DslMetricDefinitionSourceTest {
         new DslMetricDefinitionSource("t1",
                 List.of(new MetricDescriptor("b", "TEST", "LONG", false, 0, Map.of())))
                 .loadInto(registry);
-        assertThat(registry.get("t1", "a")).isNotNull();
-        assertThat(registry.get("t1", "b")).isNotNull();
+        assertThat(registry.get("t1", "a", 1)).isNotNull();
+        assertThat(registry.get("t1", "b", 1)).isNotNull();
     }
 }

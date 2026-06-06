@@ -19,7 +19,7 @@ public class SnapshotMetricDefinitionResolver implements MetricDefinitionResolve
     }
 
     @Override
-    public MetricDescriptor resolve(String tenantId, String metricCode) {
-        return registry.get(tenantId, metricCode);
+    public MetricDescriptor resolve(String tenantId, String metricCode, int metricVersion) {
+        return registry.get(tenantId, metricCode, metricVersion);
     }
 }

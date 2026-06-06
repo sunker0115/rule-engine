@@ -19,6 +19,6 @@ class MetricDefinitionSourceTest {
         MetricDefinitionRegistry registry = new MetricDefinitionRegistry();
         custom.loadInto(registry);   // 经 SPI 引用调用
 
-        assertThat(registry.get("t9", "custom.m")).isNotNull();
+        assertThat(registry.get("t9", "custom.m", 1)).isNotNull();
     }
 }

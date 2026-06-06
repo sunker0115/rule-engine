@@ -34,17 +34,18 @@ public class DbMetricDefinitionResolver implements MetricDefinitionResolver {
     }
 
     @Override
-    public MetricDescriptor resolve(String tenantId, String metricCode) {
-        String key = tenantId + ":" + metricCode;
+    public MetricDescriptor resolve(String tenantId, String metricCode, int metricVersion) {
+        // 缓存键含 version，避免不同版本互相覆盖
+        String key = tenantId + ":" + metricCode + ":" + metricVersion;
         MetricDescriptor cached = cache.getIfPresent(key);
         if (cached != null) return cached;
-        MetricDefinitionRow row = mapper.findActive(Long.parseLong(tenantId), metricCode);
+        MetricDefinitionRow row = mapper.findByVersion(Long.parseLong(tenantId), metricCode, metricVersion);
         if (row == null) return null;   // 不缓存 null，避免遮蔽新建定义
         // 把 dataType 一并塞进 params，供 SQL/HTTP handler 结果强转使用
         Map<String, Object> params = new HashMap<>(parseParams(row.paramsJson()));
         params.put("dataType", row.dataType());
         MetricDescriptor d = new MetricDescriptor(
-                row.metricCode(), row.sourceType(), row.dataType(),
+                row.metricCode(), row.version(), row.sourceType(), row.dataType(),
                 Boolean.TRUE.equals(row.allowProvided()),
                 row.cacheTtlSeconds() == null ? 0 : row.cacheTtlSeconds(),
                 params);

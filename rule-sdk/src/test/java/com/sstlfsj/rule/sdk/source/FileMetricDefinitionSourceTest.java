@@ -13,7 +13,7 @@ class FileMetricDefinitionSourceTest {
         MetricDefinitionRegistry registry = new MetricDefinitionRegistry();
         FileMetricDefinitionSource.classpath("t1", "metric-definitions/test-defs.json")
                 .loadInto(registry);
-        assertThat(registry.get("t1", "risk.score").params()).containsEntry("window", "30d");
+        assertThat(registry.get("t1", "risk.score", 1).params()).containsEntry("window", "30d");
     }
 
     @Test

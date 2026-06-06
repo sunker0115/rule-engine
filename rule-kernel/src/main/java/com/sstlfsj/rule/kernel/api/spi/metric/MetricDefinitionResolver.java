@@ -11,11 +11,12 @@ import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 public interface MetricDefinitionResolver {
 
     /**
-     * 解析指定租户下某 metric 的运行时定义。
+     * 解析指定租户下某 metric 指定版本的运行时定义。
      *
-     * @param tenantId   租户 id
-     * @param metricCode 指标编码
-     * @return 定义快照；不存在或未启用时返回 null
+     * @param tenantId      租户 id
+     * @param metricCode    指标编码
+     * @param metricVersion 规则快照绑定的版本号
+     * @return 定义快照；不存在时返回 null
      */
-    MetricDescriptor resolve(String tenantId, String metricCode);
+    MetricDescriptor resolve(String tenantId, String metricCode, int metricVersion);
 }
