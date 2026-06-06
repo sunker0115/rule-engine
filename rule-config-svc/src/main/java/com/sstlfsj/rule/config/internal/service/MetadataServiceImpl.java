@@ -3,8 +3,12 @@ package com.sstlfsj.rule.config.internal.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import lombok.RequiredArgsConstructor;
@@ -13,8 +17,10 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** MetadataService 实现：为前端编辑器提供可用的 metric / conditionType / actionType 元数据。 */
 @Service
@@ -23,6 +29,8 @@ class MetadataServiceImpl implements MetadataService {
 
     private final SceneMapper sceneMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
+    private final RuleDefinitionMapper ruleDefinitionMapper;
+    private final RuleVersionMapper ruleVersionMapper;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -62,14 +70,56 @@ class MetadataServiceImpl implements MetadataService {
 
     @Override
     public List<MetricDescriptor> listMetricDefinitions(String tenantId, List<String> scenes) {
-        // v1 简化：忽略 scenes 白名单，返回该租户全部 ACTIVE 定义（与 getSceneMetadata 口径一致）。
-        // 仅 HTTP 模式 SDK 经此端点；scenes 已在 wire 契约里，未来收紧无需改 SDK——
-        // 收紧路径：按 scenes 下已发布 rule_version 的 metricDependencies 并集过滤（不需 scene_metric_binding 表）。
-        List<MetricDefinition> rows = metricDefinitionMapper.selectList(
-                new LambdaQueryWrapper<MetricDefinition>()
-                        .eq(MetricDefinition::getTenantId, Long.valueOf(tenantId))
-                        .eq(MetricDefinition::getStatus, "ACTIVE"));
-        return rows.stream().map(this::toDescriptor).toList();
+        Long tid = Long.valueOf(tenantId);
+        List<MetricDescriptor> all = metricDefinitionMapper.selectList(
+                        new LambdaQueryWrapper<MetricDefinition>()
+                                .eq(MetricDefinition::getTenantId, tid)
+                                .eq(MetricDefinition::getStatus, "ACTIVE"))
+                .stream().map(this::toDescriptor).toList();
+
+        // scenes 为空（FetchMode.ALL）：返回该租户全部 ACTIVE 定义
+        if (scenes == null || scenes.isEmpty()) {
+            return all;
+        }
+        // scenes 非空（FetchMode.DECLARED）：仅返回这些 scenes 下 ACTIVE rule_version 的 metricDependencies 并集内的定义。
+        // 口径与快照下发一致（rv.status=ACTIVE），保证 SDK 拿到的规则引用的 metric 定义都已下发，无遗漏。
+        Set<String> required = collectRequiredMetricCodes(tid, scenes);
+        return all.stream().filter(d -> required.contains(d.metricCode())).toList();
+    }
+
+    /** 取 scenes 下 ACTIVE rule_version 的 metricDependencies 并集（scene code → scene id → ruleDefinition id → ACTIVE 版本依赖）。 */
+    private Set<String> collectRequiredMetricCodes(Long tenantId, List<String> scenes) {
+        List<Long> sceneIds = sceneMapper.selectList(
+                        new LambdaQueryWrapper<SceneDef>()
+                                .eq(SceneDef::getTenantId, tenantId)
+                                .in(SceneDef::getCode, scenes))
+                .stream().map(SceneDef::getId).toList();
+        if (sceneIds.isEmpty()) return Set.of();
+
+        List<Long> defIds = ruleDefinitionMapper.selectList(
+                        new LambdaQueryWrapper<RuleDefinition>()
+                                .eq(RuleDefinition::getTenantId, tenantId)
+                                .in(RuleDefinition::getSceneId, sceneIds))
+                .stream().map(RuleDefinition::getId).toList();
+        if (defIds.isEmpty()) return Set.of();
+
+        Set<String> codes = new HashSet<>();
+        for (RuleVersion rv : ruleVersionMapper.selectList(
+                new LambdaQueryWrapper<RuleVersion>()
+                        .in(RuleVersion::getRuleDefinitionId, defIds)
+                        .eq(RuleVersion::getStatus, "ACTIVE"))) {
+            codes.addAll(parseStringList(rv.getMetricDependencies()));
+        }
+        return codes;
+    }
+
+    private List<String> parseStringList(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     private MetricDescriptor toDescriptor(MetricDefinition m) {
