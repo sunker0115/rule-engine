@@ -8,6 +8,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /** 全局异常处理器：将常见异常映射为 ApiResponse 错误格式。 */
 @RestControllerAdvice
@@ -37,6 +38,13 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleIllegalArgument(IllegalArgumentException ex) {
         return ApiResponse.error("INVALID_ARGUMENT", ex.getMessage());
+    }
+
+    /** 无映射路径（含静态资源未命中）→ 404，而非被兜底成 500。 */
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleNotFound(NoResourceFoundException ex) {
+        return ApiResponse.error("NOT_FOUND", "接口不存在: " + ex.getResourcePath());
     }
 
     /** 兜底：未预期异常 → 500。 */

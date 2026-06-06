@@ -6,6 +6,8 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import com.sstlfsj.rule.web.common.PageResponse;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.web.admin.dto.CreateRuleRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -55,7 +57,7 @@ public class RuleController {
      * @return 发布后的 RuleVersionSnapshot
      */
     @PostMapping("/{ruleId}/publish")
-    public ApiResponse<Object> publish(
+    public ApiResponse<RuleVersionSnapshot> publish(
             @PathVariable Long ruleId,
             @RequestParam String tenantId,
             @RequestHeader("X-Actor-Id") String actorId) {
@@ -90,13 +92,14 @@ public class RuleController {
      * @return 分页规则列表
      */
     @GetMapping
-    public ApiResponse<Page<RuleListItemVO>> listRules(
+    public ApiResponse<PageResponse<RuleListItemVO>> listRules(
             @RequestParam String tenantId,
             @RequestParam(required = false) String sceneCode,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(configService.listRules(tenantId, sceneCode, status, page, size));
+        Page<RuleListItemVO> result = configService.listRules(tenantId, sceneCode, status, page, size);
+        return ApiResponse.ok(PageResponse.of(result.getRecords(), result.getTotal(), page, size));
     }
 
     /** 将 Object 序列化为 JSON 字符串，值为 null 时返回 defaultVal。 */

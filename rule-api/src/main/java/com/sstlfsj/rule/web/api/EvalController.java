@@ -4,10 +4,9 @@ import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import com.sstlfsj.rule.web.api.dto.PushEventResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 /** 规则评估 HTTP 入口，支持 PUSH 异步和 PULL 同步两种模式（D14）。 */
 @RestController
@@ -24,11 +23,11 @@ public class EvalController {
      * @param event 待评估的规则事件
      * @return 是否已接受 */
     @PostMapping("/event")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> pushEvent(
+    public ResponseEntity<ApiResponse<PushEventResponse>> pushEvent(
             @RequestBody RuleEvent event) {
         boolean accepted = evalService.acceptEvent(event);
         return ResponseEntity.accepted()
-                .body(ApiResponse.ok(Map.of("eventId", event.eventId(), "accepted", accepted)));
+                .body(ApiResponse.ok(new PushEventResponse(event.eventId(), accepted)));
     }
 
     /** POST /api/v1/rule/evaluate — PULL 评估（同步，返回 200）

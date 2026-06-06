@@ -6,11 +6,10 @@ import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.admin.dto.CreateSceneRequest;
+import com.sstlfsj.rule.web.admin.dto.CreateSceneResponse;
 import com.sstlfsj.rule.web.admin.dto.UpdateSceneRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 /** 场景管理入口：创建、更新、查询场景（D13）。 */
 @RestController
@@ -30,7 +29,7 @@ public class SceneController {
      * POST /admin/v1/scenes — 创建场景（含 payloadSchema / eventTypes 等 D13 字段）。
      */
     @PostMapping
-    public ApiResponse<Map<String, Object>> createScene(
+    public ApiResponse<CreateSceneResponse> createScene(
             @Valid @RequestBody CreateSceneRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
         try {
@@ -46,7 +45,7 @@ public class SceneController {
                     req.description(), req.dominantMode(), req.subjectType(),
                     eventTypesJson, payloadSchemaJson, defaultParamsJson,
                     actorId);
-            return ApiResponse.ok(Map.of("id", id));
+            return ApiResponse.ok(new CreateSceneResponse(id));
         } catch (JacksonException e) {
             // Object → JSON 序列化不应失败，属于内部错误
             throw new IllegalStateException("JSON 序列化失败", e);

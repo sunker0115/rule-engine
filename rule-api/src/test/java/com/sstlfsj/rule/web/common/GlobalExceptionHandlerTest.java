@@ -5,8 +5,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -59,5 +62,13 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void noResourceFound_returns404_withErrorCode() {
+        NoResourceFoundException ex = new NoResourceFoundException(HttpMethod.GET, "/api/v1/rules", "/api/v1/rules");
+        ApiResponse<Void> resp = new GlobalExceptionHandler().handleNotFound(ex);
+        assertThat(resp.success()).isFalse();
+        assertThat(resp.errorCode()).isEqualTo("NOT_FOUND");
     }
 }

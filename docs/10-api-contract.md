@@ -41,6 +41,8 @@
 | admin | 审计与查询 | `/admin/v1/evaluation-sessions`，`/admin/v1/rules/{id}/sessions` | 查 session / trace / action 执行；按规则查历史触发记录 |
 | sdk | SDK 下发接口 | `/sdk/v1/snapshots`，`/sdk/v1/metric-definitions` | 嵌入式 SDK 拉规则快照 / metric 定义元数据（HTTP 模式，见 §8.7） |
 
+**分页约定**：所有 admin 列表接口统一返回 `PageResponse{ items, total, page, size }`——`items` 为当页数据数组，`total` 总记录数，`page` 当前页码（**从 1 起**），`size` 每页条数。查询参数统一用 `page` / `size`。
+
 ---
 
 ## 三、评估接口
@@ -235,7 +237,7 @@ POST /admin/v1/rules
 POST /admin/v1/rules/{ruleDefinitionId}/publish
 ```
 
-**响应**：发布成功 200，返回新 `ruleVersion`；发布校验失败 422 + errorCode（`UNRESOLVED_VARIABLE` / `METRIC_NOT_BOUND` 等，见 §七）。
+**响应**：发布成功 200，返回新激活的 `RuleVersionSnapshot`；发布校验失败 422 + errorCode（`UNRESOLVED_VARIABLE` / `METRIC_NOT_BOUND` 等，见 §七）。
 
 ### 4.3 禁用规则
 
@@ -251,7 +253,7 @@ POST /admin/v1/rules/{ruleDefinitionId}/disable
 GET /admin/v1/rules?tenantId=demo-tenant&sceneCode=risk.transfer&status=PUBLISHED
 ```
 
-**Response 200：** 分页列表，含 `ruleDefinitionId / code / name / status / currentVersion / publishedAt`。
+**Response 200：** `PageResponse`（见 §二分页约定），`items` 元素含 `ruleDefinitionId / code / name / status / currentVersion / publishedAt`。
 
 ### 4.5 注册 Metric（B6）
 
@@ -448,7 +450,7 @@ GET /admin/v1/scenes/{sceneCode}/provided-metrics?tenantId=demo-tenant
 GET /admin/v1/evaluation-sessions?tenantId=demo-tenant&sceneCode=risk.transfer&subjectId=user-001&from=2026-05-01T00:00:00Z&to=2026-06-01T00:00:00Z
 ```
 
-**Response 200：** 分页列表，含 `sessionId / eventId / status / finalDecision / startedAt / evalDurationMs`。
+**Response 200：** `PageResponse`（见 §二分页约定），`items` 元素含 `sessionId / eventId / status / finalDecision / startedAt / evalDurationMs`。
 
 ### 6.2 查询 node_trace
 
@@ -467,14 +469,14 @@ GET /admin/v1/evaluation-sessions/{sessionId}/trace?tenantId=demo-tenant
 GET /admin/v1/audit-logs?tenantId=demo-tenant&targetType=rule_definition&targetId=1&from=2026-05-01T00:00:00Z
 ```
 
-**Response 200：** 分页列表，含 `actor / actorType / action / targetType / targetId / beforeSnapshot / afterSnapshot / operatedAt`。
+**Response 200：** `PageResponse`（见 §二分页约定），`items` 元素含 `actor / actorType / action / targetType / targetId / beforeSnapshot / afterSnapshot / operatedAt`。
 
 ### 6.4 按规则查历史 evaluation_session
 
 > 排障场景：运营在规则详情页快速看到"这条规则最近触发了哪些 session，结果如何"。
 
 ```
-GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&limit=20&offset=0
+GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&page=1&size=20
 ```
 
 **Path 参数：**
@@ -489,13 +491,12 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 |------|------|------|
 | `tenantId` | 是 | 租户 ID |
 | `status` | 否 | 筛选终态：`HIT / MISS / BLOCKED / ERROR`；不传则返回全部终态 |
-| `limit` | 否 | 每页条数，默认 20，最大 100 |
-| `offset` | 否 | 偏移量，默认 0 |
+| `page` | 否 | 页码，从 1 起，默认 1 |
+| `size` | 否 | 每页条数，默认 20，最大 100 |
 
 **Response 200：**
 ```json
 {
-  "total": 135,
   "items": [
     {
       "sessionId": 10001,
@@ -507,7 +508,10 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
       "startedAt": "2026-06-04T10:00:00.123+08:00",
       "ruleVersionId": 42
     }
-  ]
+  ],
+  "total": 135,
+  "page": 1,
+  "size": 20
 }
 ```
 

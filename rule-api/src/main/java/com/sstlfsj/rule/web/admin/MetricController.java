@@ -31,11 +31,11 @@ public class MetricController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Long> create(@RequestParam Long tenantId,
+    public ApiResponse<Long> create(@RequestParam String tenantId,
                                     @RequestParam String metricCode,
                                     @RequestHeader("X-Actor-Id") String actorId,
                                     @RequestBody MetricWriteCommand cmd) {
-        return ApiResponse.ok(service.create(tenantId, metricCode, cmd, actorId));
+        return ApiResponse.ok(service.create(Long.parseLong(tenantId), metricCode, cmd, actorId));
     }
 
     /**
@@ -50,11 +50,11 @@ public class MetricController {
      */
     @PutMapping("/{metricCode}")
     public ApiResponse<Integer> update(@PathVariable String metricCode,
-                                       @RequestParam Long tenantId,
+                                       @RequestParam String tenantId,
                                        @RequestParam(defaultValue = "false") boolean breakingChange,
                                        @RequestHeader("X-Actor-Id") String actorId,
                                        @RequestBody MetricWriteCommand cmd) {
-        return ApiResponse.ok(service.update(tenantId, metricCode, cmd, breakingChange, actorId));
+        return ApiResponse.ok(service.update(Long.parseLong(tenantId), metricCode, cmd, breakingChange, actorId));
     }
 
     /**
@@ -68,8 +68,8 @@ public class MetricController {
     @GetMapping("/{metricCode}/versions/{version}/impact")
     public ApiResponse<ImpactResponse> impact(@PathVariable String metricCode,
                                               @PathVariable int version,
-                                              @RequestParam Long tenantId) {
-        List<RuleRef> rules = service.findReferencingRules(tenantId, metricCode, version);
+                                              @RequestParam String tenantId) {
+        List<RuleRef> rules = service.findReferencingRules(Long.parseLong(tenantId), metricCode, version);
         return ApiResponse.ok(new ImpactResponse(metricCode, version, rules, rules.size()));
     }
 

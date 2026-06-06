@@ -145,9 +145,9 @@ class RuleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.records[0].ruleDefinitionId").value(10))
-                .andExpect(jsonPath("$.data.records[0].code").value("rule.a"))
-                .andExpect(jsonPath("$.data.records[0].status").value("PUBLISHED"));
+                .andExpect(jsonPath("$.data.items[0].ruleDefinitionId").value(10))
+                .andExpect(jsonPath("$.data.items[0].code").value("rule.a"))
+                .andExpect(jsonPath("$.data.items[0].status").value("PUBLISHED"));
 
         verify(configService).listRules("t1", "risk.transfer", "PUBLISHED", 1, 20);
     }

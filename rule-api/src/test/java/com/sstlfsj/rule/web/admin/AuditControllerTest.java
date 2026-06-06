@@ -31,8 +31,11 @@ class AuditControllerTest {
 
         mockMvc.perform(get("/admin/v1/evaluation-sessions").param("tenantId", "t1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(0))
+                .andExpect(jsonPath("$.data.page").value(1));
 
+        // 默认 page=1 → service 收到 0-based 的 0
         verify(auditService).queryEvalSessions("t1", null, 0, 20);
     }
 
@@ -129,14 +132,15 @@ class AuditControllerTest {
     }
 
     @Test
-    void querySessionsByRule_withLimitOffset_passesCorrectly() throws Exception {
+    void querySessionsByRule_withPageSize_passesCorrectly() throws Exception {
         AuditService.PageResult<AuditService.RuleSessionEntry> empty =
                 new AuditService.PageResult<>(List.of(), 0L, 2, 10);
         when(auditService.querySessionsByRuleDefinition(1L, null, 10, 20)).thenReturn(empty);
 
+        // page=3,size=10 → offset=(3-1)*10=20
         mockMvc.perform(get("/admin/v1/rules/1/sessions")
-                        .param("limit", "10")
-                        .param("offset", "20"))
+                        .param("page", "3")
+                        .param("size", "10"))
                 .andExpect(status().isOk());
 
         verify(auditService).querySessionsByRuleDefinition(1L, null, 10, 20);
