@@ -16,11 +16,11 @@
 | 3 | B6 | **Metric 版本化** | 08-evo §2.2 | `metric_definition` 加 `version` 列；`rule_version.metric_dependencies` JSON 升级；发布期 + 评估期解析逻辑；运营 UI 影响面展示 | 正确性兜底：Metric 语义变更时防止存量规则静默错误的根本解法；改动面横跨发布期/评估期两端 |
 | 4 | B7 | **规则导出 / 导入** | 08-evo §2.9 | 独立工具链；导出格式 JSON Bundle；导入幂等写入 + 权限校验；无核心引擎变动 | 风险最低（不动引擎），可穿插做；跨环境迁移、Incident 复现的基础工具；**解锁 B15** |
 
-> **B19 类型化比较策略工厂 / B20 时间框架 / B21 FETCHED 取数层 已落地，2026-06-06 移除。** 遗留小项（未完成 / 归后续，记录在此）：
+> **B19 类型化比较策略工厂 / B20 时间框架 / B21 FETCHED 取数层 / B23 嵌入式 SDK 取数 已落地，2026-06-06 移除。** 遗留小项（未完成 / 归后续，记录在此）：
 > - **B20 时区解析序的 Scene 级默认时区（优先级3）暂缓**：解析序为 字面量 offset > 条件 `params.timezone` > **Scene 默认（暂缓）** > UTC。运行时 `EvalContext`/`RuleVersionSnapshot` 不携带 `Scene.defaultParams.timezone`，需 config→snapshot→`EvalContext` 管线打通后激活；当前 `TimeZoneResolver.resolve(paramsTz, sceneTz)` 形参已预留，调用方一律传 `sceneTz=null`。
 > - **B19 `ComparisonStrategyFactory` 的 LIST 走 `DefaultComparisonStrategy`**（无独立 `ListComparisonStrategy`；数值仍走 BigDecimal 不丢精度）；决策表列级 dataType 冻结 + 发布校验 → 归 **B22**。
 > - **B21 v1 不做（留 v2）**：`STREAM` sourceType 实装（当前无 handler → 自动降级 `METRIC_FETCH_FAIL`）；HTTP OAuth2 自动刷 token；Scene 级数据源白名单；Redis 缓存（v1 进程内 Caffeine）；metric `required` 字段分级。全局取数超时阈值待 `07-operability` 统一管理。
-> - **B21 衍生 = B23 嵌入式 SDK 取数**（设计已出 `specs/2026-06-06-sdk-fetch-design.md`，未实现）：metric 定义随独立通道下发（对称于 `RuleSource`）+ 宿主注入 handler；`MetricDefinitionResolver` 数据源无关已为此预留。EXTERNAL_HTTP 命名端点范式即 **B10**（`MetricFetcher` SDK）协议基础。
+> - **B23 嵌入式 SDK 取数已落地**（D46，实现见 `plans/2026-06-06-b23-sdk-fetch.md`）：定义独立下发（对称 `RuleSource` 的 DSL/File/Polling 三来源）+ 宿主注入 handler + 注入 handler 才启用 fetch（默认 providedMetrics-only 不变）。衍生小项（留后续）：服务端 `listMetricDefinitions` v1 忽略 scenes 白名单（返回租户全部 ACTIVE 定义），未来按「scenes 下 `rule_version` 的 `metricDependencies` 并集」收紧（不需 `scene_metric_binding` 表，详见 D46 §6）。EXTERNAL_HTTP 命名端点范式即 **B10**（`MetricFetcher` SDK）协议基础。
 
 ---
 
