@@ -1,18 +1,28 @@
 package com.sstlfsj.rule.sdk;
 
+import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
+import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
+import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.sdk.metric.MetricDefinitionRegistry;
+import com.sstlfsj.rule.sdk.metric.SnapshotMetricDefinitionResolver;
+import com.sstlfsj.rule.sdk.source.DslMetricDefinitionSource;
 import com.sstlfsj.rule.sdk.source.DslRuleSource;
 import com.sstlfsj.rule.sdk.source.FileRuleSource;
+import com.sstlfsj.rule.sdk.source.MetricDefinitionSource;
+import com.sstlfsj.rule.sdk.source.PollingMetricDefinitionSource;
 import com.sstlfsj.rule.sdk.source.PollingRuleSource;
 import com.sstlfsj.rule.sdk.source.RuleSource;
 
@@ -20,8 +30,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 /**
  * 嵌入式规则评估门面。
@@ -32,12 +44,28 @@ public class RuleEngineClient implements AutoCloseable {
 
     private final EvalEngine evalEngine;
     private final List<PollingRuleSource> pollingSources;
+    private final List<PollingMetricDefinitionSource> metricPollingSources;
     private final EvalResultListener evalResultListener;
     private final EvalSessionListener evalSessionListener;
 
     private RuleEngineClient(Builder b) {
         SceneRuleIndex index = new SceneRuleIndex();
-        EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
+
+        // metric 取数装配：注入 handler 才启用 fetch（默认仅 providedMetrics，行为不变）
+        MetricDefinitionRegistry metricRegistry = new MetricDefinitionRegistry();
+        boolean fetchEnabled = !b.metricHandlers.isEmpty();
+        EvalContextAssembler assembler;
+        if (fetchEnabled) {
+            MetricDefinitionResolver resolver = b.metricDefinitionResolver != null
+                    ? b.metricDefinitionResolver
+                    : new SnapshotMetricDefinitionResolver(metricRegistry);
+            assembler = new EvalContextAssembler(List.of(),
+                    toSourceTypeMap(b.metricHandlers),
+                    resolver, b.metricCache, b.fetchExecutor, 0L);
+        } else {
+            assembler = new EvalContextAssembler(List.of(), List.of());
+        }
+
         // 以内置算子为底，用户自定义叠加（同名自定义覆盖内置）
         Map<String, ConditionEvaluator> evaluators = new HashMap<>(KernelEvaluators.defaults());
         evaluators.putAll(b.extraEvaluators);
@@ -48,7 +76,7 @@ public class RuleEngineClient implements AutoCloseable {
                 b.preGates != null ? b.preGates : Map.of(),
                 Map.of("AST_BOOLEAN", executor));
 
-        // 汇总所有 RuleSource：显式 ruleSource() + localSnapshot() 转 DslRuleSource + serverUrl 转 PollingRuleSource
+        // 规则来源：显式 ruleSource() + localSnapshot() 转 DslRuleSource + serverUrl 转 PollingRuleSource
         List<RuleSource> allSources = new ArrayList<>(b.ruleSources);
         if (!b.localSnapshots.isEmpty()) {
             allSources.add(new DslRuleSource(b.localSnapshots));
@@ -57,8 +85,6 @@ public class RuleEngineClient implements AutoCloseable {
             allSources.add(new PollingRuleSource(b.serverUrl, b.tenantId,
                     b.fetchMode, b.scenes, b.pollInterval));
         }
-
-        // 统一 loadInto，收集需要 stop() 的 PollingRuleSource
         List<PollingRuleSource> polling = new ArrayList<>();
         for (RuleSource source : allSources) {
             source.loadInto(index);
@@ -66,8 +92,34 @@ public class RuleEngineClient implements AutoCloseable {
         }
         this.pollingSources = List.copyOf(polling);
 
+        // metric 定义来源：localMetric → DslMetricDefinitionSource；HTTP+fetch → PollingMetricDefinitionSource
+        List<MetricDefinitionSource> metricSources = new ArrayList<>(b.metricDefinitionSources);
+        for (Map.Entry<String, List<MetricDescriptor>> e : b.localMetrics.entrySet()) {
+            metricSources.add(new DslMetricDefinitionSource(e.getKey(), e.getValue()));
+        }
+        if (fetchEnabled && b.serverUrl != null && !b.serverUrl.isBlank()) {
+            metricSources.add(new PollingMetricDefinitionSource(b.serverUrl, b.tenantId,
+                    b.fetchMode, b.scenes, b.pollInterval));
+        }
+        List<PollingMetricDefinitionSource> metricPolling = new ArrayList<>();
+        for (MetricDefinitionSource s : metricSources) {
+            s.loadInto(metricRegistry);
+            if (s instanceof PollingMetricDefinitionSource p) metricPolling.add(p);
+        }
+        this.metricPollingSources = List.copyOf(metricPolling);
+
         this.evalResultListener = b.evalResultListener;
         this.evalSessionListener = b.evalSessionListener;
+    }
+
+    /** 把 handler 列表按 @MetricSourceType 归类为 sourceType → handler 映射。 */
+    private static Map<String, MetricSourceHandler> toSourceTypeMap(List<MetricSourceHandler> handlers) {
+        Map<String, MetricSourceHandler> m = new HashMap<>();
+        for (MetricSourceHandler h : handlers) {
+            MetricSourceType ann = h.getClass().getAnnotation(MetricSourceType.class);
+            if (ann != null) m.put(ann.value(), h);
+        }
+        return m;
     }
 
     /** 对单个事件本地求值，零网络跳转。 */
@@ -81,6 +133,7 @@ public class RuleEngineClient implements AutoCloseable {
     @Override
     public void close() {
         pollingSources.forEach(PollingRuleSource::stop);
+        metricPollingSources.forEach(PollingMetricDefinitionSource::stop);
     }
 
     /** @return 新建 Builder */
@@ -102,6 +155,12 @@ public class RuleEngineClient implements AutoCloseable {
         private final List<RuleVersionSnapshot> localSnapshots = new ArrayList<>();
         private final List<RuleSource> ruleSources = new ArrayList<>();
         private final Map<String, ConditionEvaluator> extraEvaluators = new HashMap<>();
+        private final List<MetricSourceHandler> metricHandlers = new ArrayList<>();
+        private MetricDefinitionResolver metricDefinitionResolver;
+        private MetricCache metricCache;
+        private Executor fetchExecutor;
+        private final List<MetricDefinitionSource> metricDefinitionSources = new ArrayList<>();
+        private final Map<String, List<MetricDescriptor>> localMetrics = new LinkedHashMap<>();
 
         /** @param v rule-api 服务地址（HTTP 模式必填，本地模式不填） */
         public Builder serverUrl(String v)      { this.serverUrl = v; return this; }
@@ -149,6 +208,58 @@ public class RuleEngineClient implements AutoCloseable {
          */
         public Builder ruleFile(String classpathPath) {
             ruleSources.add(FileRuleSource.classpath(classpathPath)); return this;
+        }
+
+        /**
+         * 注入宿主自带的 metric 取数 handler（按 @MetricSourceType 归类）。注入任一 handler 即启用 fetch。
+         *
+         * @param v MetricSourceHandler 实现，类上须标注 @MetricSourceType
+         */
+        public Builder metricSourceHandler(MetricSourceHandler... v) {
+            metricHandlers.addAll(Arrays.asList(v)); return this;
+        }
+
+        /**
+         * 覆盖默认的 metric 定义解析器（默认 SnapshotMetricDefinitionResolver 读本地下发缓存）。
+         *
+         * @param v 自定义 MetricDefinitionResolver
+         */
+        public Builder metricDefinitionResolver(MetricDefinitionResolver v) {
+            this.metricDefinitionResolver = v; return this;
+        }
+
+        /**
+         * 注入取数结果缓存（可选）。
+         *
+         * @param v MetricCache 实现
+         */
+        public Builder metricCache(MetricCache v) { this.metricCache = v; return this; }
+
+        /**
+         * 注入并发取数线程池（可选，默认 ForkJoinPool.commonPool）。
+         *
+         * @param v Executor
+         */
+        public Builder fetchExecutor(Executor v) { this.fetchExecutor = v; return this; }
+
+        /**
+         * 添加 metric 定义来源（HTTP/文件/DSL），写入本地定义注册表。
+         *
+         * @param v MetricDefinitionSource 实现
+         */
+        public Builder metricDefinitionSource(MetricDefinitionSource v) {
+            metricDefinitionSources.add(v); return this;
+        }
+
+        /**
+         * 本地声明单个 metric 定义（DSL 便捷入口），按租户归类后转 DslMetricDefinitionSource。
+         *
+         * @param tenantId   定义所属租户 id
+         * @param descriptor metric 定义快照
+         */
+        public Builder localMetric(String tenantId, MetricDescriptor descriptor) {
+            localMetrics.computeIfAbsent(tenantId, k -> new ArrayList<>()).add(descriptor);
+            return this;
         }
 
         /**
