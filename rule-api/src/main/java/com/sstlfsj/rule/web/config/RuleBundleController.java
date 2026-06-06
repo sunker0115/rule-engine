@@ -20,7 +20,7 @@ import java.util.List;
 /**
  * 规则批量导出 / 导入入口（B7 / 08-evolution §2.9）。
  * <p>导出为 Bundle JSON 文件下载，导入为 multipart 文件上传；Service 进出 {@link RuleBundle} 对象，
- * 本 Controller 负责对象 ↔ 文件的转换。权限 v1 沿用 X-Actor-Id（EXPORT / PUBLISH 校验留 TODO）。</p>
+ * 本 Controller 负责对象 ↔ 文件的转换。权限 v1 沿用 X-Actor-Id，暂不做 EXPORT / PUBLISH 细粒度校验。</p>
  */
 @RestController
 @RequiredArgsConstructor

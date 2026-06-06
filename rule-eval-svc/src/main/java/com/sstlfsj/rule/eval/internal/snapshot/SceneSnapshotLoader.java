@@ -42,7 +42,7 @@ public class SceneSnapshotLoader {
 
     /**
      * 全量加载并同步将场景执行策略写入索引。
-     * 供 IndexStartupLoader 使用，避免二次查询 scene 表。
+     * 在同一次扫描内顺带写入场景执行策略，避免二次查询 scene 表。
      *
      * @param index 目标倒排索引
      * @return 双层 Map，外层 key = tenantId:sceneCode，内层 key = eventType
