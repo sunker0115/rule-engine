@@ -86,7 +86,26 @@ class RuleEngineClientFetchTest {
             RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION", "sub1",
                     UUID.randomUUID().toString(), Instant.now(), Map.of(),
                     Map.of("risk.score", 10));
-            assertThat(client.evaluate(event).ruleHit()).isTrue();
+            EvalResult result = client.evaluate(event);
+            assertThat(result.ruleHit()).isTrue();
+            assertThat(result.finalDecision().code()).isEqualTo("BLOCK");
+        }
+    }
+
+    @Test
+    void fetchHandler_allowProvidedTrue_usesProvidedValueOverFetch() {
+        // allowProvided=true：调用方推送 risk.score=10 被采纳（10<80 → miss），不走 fetch
+        MetricDescriptor riskScore =
+                new MetricDescriptor("risk.score", "TEST", "LONG", true, 0, Map.of());
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .localSnapshot(riskScoreGt80())
+                .localMetric("t1", riskScore)
+                .metricSourceHandler(new TestHandler())
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION", "sub1",
+                    UUID.randomUUID().toString(), Instant.now(), Map.of(),
+                    Map.of("risk.score", 10));
+            assertThat(client.evaluate(event).ruleHit()).isFalse();
         }
     }
 }
