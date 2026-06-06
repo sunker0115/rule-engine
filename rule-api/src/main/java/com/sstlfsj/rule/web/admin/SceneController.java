@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
+import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.admin.dto.CreateSceneRequest;
@@ -10,6 +11,8 @@ import com.sstlfsj.rule.web.admin.dto.CreateSceneResponse;
 import com.sstlfsj.rule.web.admin.dto.UpdateSceneRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /** 场景管理入口：创建、更新、查询场景（D13）。 */
 @RestController
@@ -23,6 +26,17 @@ public class SceneController {
     public SceneController(SceneService sceneService, ObjectMapper objectMapper) {
         this.sceneService = sceneService;
         this.objectMapper = objectMapper;
+    }
+
+    /**
+     * GET /admin/v1/scenes — 查询租户全部场景（精简列表，供前端场景选择器 / 列表页）。
+     *
+     * @param tenantId 租户 ID
+     * @return 场景精简列表
+     */
+    @GetMapping
+    public ApiResponse<List<SceneListItem>> listScenes(@RequestParam String tenantId) {
+        return ApiResponse.ok(sceneService.listScenes(tenantId));
     }
 
     /**

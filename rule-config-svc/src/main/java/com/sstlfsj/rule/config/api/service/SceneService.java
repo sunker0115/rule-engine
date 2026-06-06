@@ -1,9 +1,20 @@
 package com.sstlfsj.rule.config.api.service;
 
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
+import com.sstlfsj.rule.config.api.dto.SceneListItem;
+
+import java.util.List;
 
 /** 场景生命周期管理：创建、更新、查询、禁用。 */
 public interface SceneService {
+
+    /**
+     * 查询租户全部场景（精简列表，供前端场景选择器 / 列表页）。
+     *
+     * @param tenantId 租户 ID
+     * @return 场景精简列表
+     */
+    List<SceneListItem> listScenes(String tenantId);
 
     /**
      * 为指定租户创建新场景（含 D13 元数据）。

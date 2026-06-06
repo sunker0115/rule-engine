@@ -1,7 +1,10 @@
 package com.sstlfsj.rule.config.api.service;
 
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
+import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -34,6 +37,11 @@ class SceneServiceTest {
         public void disableScene(String tenantId, String sceneCode, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
+
+        @Override
+        public List<SceneListItem> listScenes(String tenantId) {
+            throw new UnsupportedOperationException("stub");
+        }
     };
 
     @Test
@@ -59,5 +67,11 @@ class SceneServiceTest {
     void disableScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.disableScene("t1", "SCENE_A", "actor"));
+    }
+
+    @Test
+    void listScenes_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.listScenes("t1"));
     }
 }

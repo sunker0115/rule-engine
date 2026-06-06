@@ -4,6 +4,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
+import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
@@ -98,6 +99,14 @@ class SceneServiceImpl implements SceneService {
     public SceneDetailDto getScene(String tenantId, String sceneCode) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
         return toDto(scene);
+    }
+
+    @Override
+    public List<SceneListItem> listScenes(String tenantId) {
+        return sceneMapper.findByTenantId(Long.valueOf(tenantId)).stream()
+                .map(s -> new SceneListItem(s.getId(), s.getCode(), s.getName(),
+                        s.getDominantMode(), s.getSubjectType(), s.getStatus()))
+                .toList();
     }
 
     @Override

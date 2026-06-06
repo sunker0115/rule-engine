@@ -1,12 +1,16 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -19,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -29,6 +34,8 @@ class ConfigServiceImplTest {
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
     @Mock AuditLogMapper auditLogMapper;
     @Mock SceneMapper sceneMapper;
+    @Mock RuleVersionMapper ruleVersionMapper;
+    @Mock ObjectMapper objectMapper;
     @InjectMocks ConfigServiceImpl configService;
 
     @Test
@@ -136,5 +143,48 @@ class ConfigServiceImplTest {
         assertThat(result.ruleDefinitionId()).isEqualTo(1L);
         verify(publishService).createDraft(1L, "risk.transfer", "rule.a", "规则A",
                 "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1");
+    }
+
+    @Test
+    void getRuleDetail_组装定义与ACTIVE版本() {
+        RuleDefinition rule = new RuleDefinition();
+        rule.setId(10L);
+        rule.setTenantId(1L);
+        rule.setSceneId(5L);
+        rule.setCode("rule.a");
+        rule.setName("规则A");
+        rule.setStatus("PUBLISHED");
+        rule.setKind("AST_BOOLEAN");
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
+
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setCode("risk.transfer");
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+
+        RuleVersion active = new RuleVersion();
+        active.setId(42L);
+        active.setConditionAst("{\"type\":\"AndNode\"}");
+        active.setDecisionBindings("[]");
+        when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(active);
+        when(objectMapper.readValue("{\"type\":\"AndNode\"}", Object.class))
+                .thenReturn(Map.of("type", "AndNode"));
+        when(objectMapper.readValue("[]", Object.class)).thenReturn(List.of());
+
+        RuleDetailVO vo = configService.getRuleDetail("1", 10L);
+
+        assertThat(vo.ruleDefinitionId()).isEqualTo(10L);
+        assertThat(vo.code()).isEqualTo("rule.a");
+        assertThat(vo.sceneCode()).isEqualTo("risk.transfer");
+        assertThat(vo.currentVersionId()).isEqualTo(42L);
+        assertThat(vo.conditionAst()).isInstanceOf(Map.class);
+    }
+
+    @Test
+    void getRuleDetail_规则不存在_抛IllegalArgument() {
+        when(ruleDefinitionMapper.selectById(99L)).thenReturn(null);
+        assertThatThrownBy(() -> configService.getRuleDetail("1", 99L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("规则不存在");
     }
 }

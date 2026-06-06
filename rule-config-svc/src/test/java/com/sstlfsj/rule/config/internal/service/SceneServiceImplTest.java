@@ -16,6 +16,8 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
@@ -212,6 +214,25 @@ class SceneServiceImplTest {
         assertThatThrownBy(() -> sceneService.getScene("1", "NOT_EXIST"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Scene 不存在");
+    }
+
+    @Test
+    void listScenes_映射为精简列表() {
+        SceneDef s = new SceneDef();
+        s.setId(5L);
+        s.setCode("PAYMENT");
+        s.setName("支付场景");
+        s.setDominantMode("PUSH");
+        s.setSubjectType("USER");
+        s.setStatus("ACTIVE");
+        when(sceneMapper.findByTenantId(1L)).thenReturn(List.of(s));
+
+        var list = sceneService.listScenes("1");
+
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).id()).isEqualTo(5L);
+        assertThat(list.get(0).sceneCode()).isEqualTo("PAYMENT");
+        assertThat(list.get(0).status()).isEqualTo("ACTIVE");
     }
 
     @Test

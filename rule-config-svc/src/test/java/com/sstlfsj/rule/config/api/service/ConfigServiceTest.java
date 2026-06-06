@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.api.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,11 @@ class ConfigServiceTest {
                 String kind, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
+
+        @Override
+        public RuleDetailVO getRuleDetail(String tenantId, Long ruleId) {
+            throw new UnsupportedOperationException("stub");
+        }
     };
 
     @Test
@@ -60,5 +66,11 @@ class ConfigServiceTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.createDraft("t1", "SCENE_A", "RULE_001", "规则名",
                         null, null, null, null, null, "actor"));
+    }
+
+    @Test
+    void getRuleDetail_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.getRuleDetail("t1", 1L));
     }
 }

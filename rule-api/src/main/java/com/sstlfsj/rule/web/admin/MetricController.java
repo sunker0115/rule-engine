@@ -1,8 +1,10 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
+import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -15,9 +17,22 @@ import java.util.List;
 public class MetricController {
 
     private final MetricWriteService service;
+    private final MetadataService metadataService;
 
-    public MetricController(MetricWriteService service) {
+    public MetricController(MetricWriteService service, MetadataService metadataService) {
         this.service = service;
+        this.metadataService = metadataService;
+    }
+
+    /**
+     * GET /admin/v1/metrics — 查询租户全部 metric 运行时定义。
+     *
+     * @param tenantId 租户 ID
+     * @return metric 定义列表
+     */
+    @GetMapping
+    public ApiResponse<List<MetricDescriptor>> listMetrics(@RequestParam String tenantId) {
+        return ApiResponse.ok(metadataService.listMetricDefinitions(tenantId, List.of()));
     }
 
     /**

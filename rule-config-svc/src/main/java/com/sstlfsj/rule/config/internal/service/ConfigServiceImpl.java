@@ -1,15 +1,19 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +31,8 @@ class ConfigServiceImpl implements ConfigService {
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final AuditLogMapper auditLogMapper;
     private final SceneMapper sceneMapper;
+    private final RuleVersionMapper ruleVersionMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
     public RuleVersionSnapshot publish(String tenantId, Long ruleDefinitionId, String actorId) {
@@ -77,6 +83,32 @@ class ConfigServiceImpl implements ConfigService {
                 ))
                 .toList());
         return voPage;
+    }
+
+    @Override
+    public RuleDetailVO getRuleDetail(String tenantId, Long ruleId) {
+        RuleDefinition rule = ruleDefinitionMapper.selectById(ruleId);
+        if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
+            throw new IllegalArgumentException("规则不存在: id=" + ruleId);
+        }
+        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        RuleVersion active = ruleVersionMapper.findActiveVersion(ruleId);
+        return new RuleDetailVO(
+                rule.getId(), rule.getCode(), rule.getName(), rule.getStatus(), rule.getKind(),
+                scene != null ? scene.getCode() : null,
+                active != null ? parseJson(active.getConditionAst()) : null,
+                active != null ? parseJson(active.getDecisionBindings()) : null,
+                active != null ? active.getId() : null);
+    }
+
+    /** 把库中存的 JSON 字符串反序列化为结构化对象供前端直接使用；空值返回 null。 */
+    private Object parseJson(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, Object.class);
+        } catch (Exception e) {
+            throw new IllegalStateException("JSON 反序列化失败", e);
+        }
     }
 
     @Override

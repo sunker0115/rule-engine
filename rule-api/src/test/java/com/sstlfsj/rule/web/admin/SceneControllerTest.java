@@ -2,6 +2,7 @@ package com.sstlfsj.rule.web.admin;
 
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -33,6 +36,20 @@ class SceneControllerTest {
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
+    }
+
+    @Test
+    void listScenes_returns200_withList() throws Exception {
+        when(sceneService.listScenes("1")).thenReturn(List.of(
+                new SceneListItem(5L, "PAYMENT", "支付场景", "PUSH", "USER", "ACTIVE")));
+
+        mockMvc.perform(get("/admin/v1/scenes").param("tenantId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].sceneCode").value("PAYMENT"))
+                .andExpect(jsonPath("$.data[0].status").value("ACTIVE"));
+
+        verify(sceneService).listScenes("1");
     }
 
     @Test

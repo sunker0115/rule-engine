@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.api.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 
@@ -38,6 +39,15 @@ public interface ConfigService {
      * @return 分页规则列表
      */
     Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status, int page, int size);
+
+    /**
+     * 查询规则详情：定义基本信息 + 当前 ACTIVE 版本的 conditionAst / decisionBindings。
+     *
+     * @param tenantId 租户 ID
+     * @param ruleId   规则定义 ID
+     * @return 规则详情
+     */
+    RuleDetailVO getRuleDetail(String tenantId, Long ruleId);
 
     /**
      * 创建规则草稿：新建 rule_definition（DRAFT）+ rule_version（DRAFT）。

@@ -405,6 +405,22 @@ header `X-Actor-Id`；**`multipart/form-data` 上传 Bundle JSON 文件（字段
 
 > 权限：v1 沿用 `X-Actor-Id`，§2.9 设想的 EXPORT / PUBLISH 权限校验留 TODO。
 
+### 4.10 查询规则详情
+
+```
+GET /admin/v1/rules/{ruleDefinitionId}?tenantId=demo-tenant
+```
+
+**Response 200：** `RuleDetailVO`，含 `ruleDefinitionId / code / name / status / kind / sceneCode / conditionAst / decisionBindings / currentVersionId`。`conditionAst`（对象）与 `decisionBindings`（数组）取自当前 ACTIVE 版本并反序列化为结构化 JSON，供前端编辑回填；无 ACTIVE 版本时两者为 null。
+
+### 4.11 查询 Metric 定义列表
+
+```
+GET /admin/v1/metrics?tenantId=demo-tenant
+```
+
+**Response 200：** `MetricDescriptor` 数组，每项含 `metricCode / metricVersion / sourceType / dataType / allowProvided / cacheTtlSeconds / params`（与 §8.7 SDK 下发的 MetricDescriptor 同构）。
+
 ---
 
 ## 五、元数据接口
@@ -439,6 +455,14 @@ GET /admin/v1/scenes/{sceneCode}/provided-metrics?tenantId=demo-tenant
   ]
 }
 ```
+
+### 5.3 查询 Scene 列表
+
+```
+GET /admin/v1/scenes?tenantId=demo-tenant
+```
+
+**Response 200：** `SceneListItem` 数组，每项含 `id / sceneCode / name / dominantMode / subjectType / status`，供前端场景选择器 / 列表页。
 
 ---
 

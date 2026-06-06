@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.web.common.ApiResponse;
@@ -100,6 +101,19 @@ public class RuleController {
             @RequestParam(defaultValue = "20") int size) {
         Page<RuleListItemVO> result = configService.listRules(tenantId, sceneCode, status, page, size);
         return ApiResponse.ok(PageResponse.of(result.getRecords(), result.getTotal(), page, size));
+    }
+
+    /**
+     * GET /admin/v1/rules/{ruleId} — 查询规则详情（含 ACTIVE 版本 conditionAst / decisionBindings）。
+     *
+     * @param ruleId   规则定义 ID
+     * @param tenantId 租户 ID
+     * @return 规则详情
+     */
+    @GetMapping("/{ruleId}")
+    public ApiResponse<RuleDetailVO> getDetail(@PathVariable Long ruleId,
+                                               @RequestParam String tenantId) {
+        return ApiResponse.ok(configService.getRuleDetail(tenantId, ruleId));
     }
 
     /** 将 Object 序列化为 JSON 字符串，值为 null 时返回 defaultVal。 */

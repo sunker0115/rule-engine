@@ -1,9 +1,11 @@
 package com.sstlfsj.rule.web.admin;
 
 import tools.jackson.databind.json.JsonMapper;
+import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
+import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,16 +26,32 @@ class MetricControllerTest {
 
     private MockMvc mockMvc;
     private MetricWriteService service;
+    private MetadataService metadataService;
 
     @BeforeEach
     void setUp() {
         service = mock(MetricWriteService.class);
+        metadataService = mock(MetadataService.class);
         JsonMapper mapper = JsonMapper.builder().build();
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new MetricController(service))
+                .standaloneSetup(new MetricController(service, metadataService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .build();
+    }
+
+    @Test
+    void listMetrics_returns200_withDefinitions() throws Exception {
+        when(metadataService.listMetricDefinitions("1", List.of())).thenReturn(List.of(
+                new MetricDescriptor("account.age", 1, "ATTRIBUTE", "LONG", false, 60, java.util.Map.of())));
+
+        mockMvc.perform(get("/admin/v1/metrics").param("tenantId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].metricCode").value("account.age"))
+                .andExpect(jsonPath("$.data[0].dataType").value("LONG"));
+
+        verify(metadataService).listMetricDefinitions("1", List.of());
     }
 
     // ── POST /admin/v1/metrics ──────────────────────────────────────────────────

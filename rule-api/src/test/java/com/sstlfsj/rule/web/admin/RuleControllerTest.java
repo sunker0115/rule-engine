@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,24 @@ class RuleControllerTest {
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .build();
+    }
+
+    @Test
+    void getDetail_returns200_withRuleDetail() throws Exception {
+        when(configService.getRuleDetail("t1", 10L)).thenReturn(
+                new RuleDetailVO(10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
+                        "risk.transfer", java.util.Map.of("type", "AndNode"),
+                        java.util.List.of(), 42L));
+
+        mockMvc.perform(get("/admin/v1/rules/10").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.ruleDefinitionId").value(10))
+                .andExpect(jsonPath("$.data.sceneCode").value("risk.transfer"))
+                .andExpect(jsonPath("$.data.conditionAst.type").value("AndNode"))
+                .andExpect(jsonPath("$.data.currentVersionId").value(42));
+
+        verify(configService).getRuleDetail("t1", 10L);
     }
 
     @Test

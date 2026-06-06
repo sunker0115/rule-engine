@@ -32,4 +32,11 @@ public interface SceneMapper extends BaseMapper<SceneDef> {
                 .eq(SceneDef::getTenantId, tenantId)
                 .in(SceneDef::getCode, codes));
     }
+
+    /** 按 tenantId 查该租户全部 Scene，按 id 倒序。 */
+    default List<SceneDef> findByTenantId(Long tenantId) {
+        return selectList(new LambdaQueryWrapper<SceneDef>()
+                .eq(SceneDef::getTenantId, tenantId)
+                .orderByDesc(SceneDef::getId));
+    }
 }
