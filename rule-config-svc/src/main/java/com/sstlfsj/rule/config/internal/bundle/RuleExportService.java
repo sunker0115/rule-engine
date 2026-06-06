@@ -12,6 +12,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -31,6 +32,7 @@ import java.util.Set;
  * scenes / metrics / decisions / actionTypeManifest 跨规则去重。</p>
  */
 @Service
+@RequiredArgsConstructor
 public class RuleExportService {
 
     private static final TypeReference<List<MetricDependency>> METRIC_DEP_TYPE = new TypeReference<>() {};
@@ -42,20 +44,6 @@ public class RuleExportService {
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
     private final ObjectMapper objectMapper;
-
-    public RuleExportService(RuleDefinitionMapper ruleDefinitionMapper,
-                             RuleVersionMapper ruleVersionMapper,
-                             SceneMapper sceneMapper,
-                             MetricDefinitionMapper metricDefinitionMapper,
-                             DecisionDefinitionMapper decisionDefinitionMapper,
-                             ObjectMapper objectMapper) {
-        this.ruleDefinitionMapper = ruleDefinitionMapper;
-        this.ruleVersionMapper = ruleVersionMapper;
-        this.sceneMapper = sceneMapper;
-        this.metricDefinitionMapper = metricDefinitionMapper;
-        this.decisionDefinitionMapper = decisionDefinitionMapper;
-        this.objectMapper = objectMapper;
-    }
 
     /** 按条件批量导出规则当前 ACTIVE 版本为 Bundle。 */
     @Transactional(readOnly = true)

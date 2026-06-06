@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.RequiredArgsConstructor;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class MetricWriteServiceImpl implements MetricWriteService {
 
     private static final TypeReference<List<MetricDependency>> METRIC_DEP_TYPE =
@@ -45,20 +47,6 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
     private final ObjectMapper objectMapper;
-
-    public MetricWriteServiceImpl(MetricDefinitionMapper metricDefinitionMapper,
-                                  AuditLogMapper auditLogMapper,
-                                  RuleVersionMapper ruleVersionMapper,
-                                  RuleDefinitionMapper ruleDefinitionMapper,
-                                  SceneMapper sceneMapper,
-                                  ObjectMapper objectMapper) {
-        this.metricDefinitionMapper = metricDefinitionMapper;
-        this.auditLogMapper = auditLogMapper;
-        this.ruleVersionMapper = ruleVersionMapper;
-        this.ruleDefinitionMapper = ruleDefinitionMapper;
-        this.sceneMapper = sceneMapper;
-        this.objectMapper = objectMapper;
-    }
 
     @Override
     public Long create(Long tenantId, String metricCode, MetricWriteCommand cmd, String actorId) {

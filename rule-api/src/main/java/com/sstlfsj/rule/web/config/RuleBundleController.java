@@ -4,6 +4,7 @@ import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,7 @@ import java.util.List;
  * 本 Controller 负责对象 ↔ 文件的转换。权限 v1 沿用 X-Actor-Id（EXPORT / PUBLISH 校验留 TODO）。</p>
  */
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/v1/rules")
 public class RuleBundleController {
 
@@ -29,11 +31,6 @@ public class RuleBundleController {
 
     private final RuleBundleService ruleBundleService;
     private final ObjectMapper objectMapper;
-
-    public RuleBundleController(RuleBundleService ruleBundleService, ObjectMapper objectMapper) {
-        this.ruleBundleService = ruleBundleService;
-        this.objectMapper = objectMapper;
-    }
 
     /**
      * GET /api/v1/rules/export — 按条件导出规则当前 ACTIVE 版本为 Bundle JSON 文件下载。
