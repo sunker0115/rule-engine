@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
@@ -205,8 +206,13 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setName(cmd.name());
         m.setSourceType(cmd.sourceType());
         m.setDataType(cmd.dataType());
-        // params 为 Map 对象，序列化为 JSON 字符串存库；null 时存空对象
-        m.setParams(cmd.params() == null ? "{}" : objectMapper.writeValueAsString(cmd.params()));
+        try {
+            // params 为 Map 对象，序列化为 JSON 字符串存库；null 时存空对象
+            m.setParams(cmd.params() == null ? "{}" : objectMapper.writeValueAsString(cmd.params()));
+        } catch (JacksonException e) {
+            // Object → JSON 序列化不应失败，属于内部错误
+            throw new IllegalStateException("params 序列化失败", e);
+        }
         m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
         m.setAllowProvided(cmd.allowProvided());
     }
