@@ -5,6 +5,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.sdk.metric.MetricDefinitionRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -22,6 +24,8 @@ import java.util.concurrent.TimeUnit;
  * 用 JDK 内置 HttpClient + 普通 ObjectMapper（MetricDescriptor 无多态字段）。
  */
 public class MetricDefinitionPoller {
+
+    private static final Logger log = LoggerFactory.getLogger(MetricDefinitionPoller.class);
 
     private final String serverUrl;
     private final String tenantId;
@@ -87,8 +91,8 @@ public class MetricDefinitionPoller {
                 registry.replaceAll(tenantId, defs);
             }
         } catch (Exception e) {
-            // 轮询失败静默处理，保持最后一次成功的定义集合
-            System.err.println("[MetricDefinitionPoller] 轮询失败: " + e.getMessage());
+            // 轮询失败保持最后一次成功的定义集合，记录告警供排障
+            log.warn("metric 定义轮询失败: {}", e.getMessage());
         }
     }
 

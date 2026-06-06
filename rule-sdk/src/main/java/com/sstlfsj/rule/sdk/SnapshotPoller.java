@@ -6,6 +6,8 @@ import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -22,6 +24,8 @@ import java.util.concurrent.TimeUnit;
  * 使用 JDK 内置 HttpClient，无额外依赖；使用 AstJsonCodec 保证 AstNode 多态反序列化正确。
  */
 public class SnapshotPoller {
+
+    private static final Logger log = LoggerFactory.getLogger(SnapshotPoller.class);
 
     private final String serverUrl;
     private final String tenantId;
@@ -81,8 +85,8 @@ public class SnapshotPoller {
                 refreshIndex(snapshots);
             }
         } catch (Exception e) {
-            // 轮询失败静默处理，保持最后一次成功的索引状态
-            System.err.println("[SnapshotPoller] 轮询失败: " + e.getMessage());
+            // 轮询失败保持最后一次成功的索引状态，记录告警供排障
+            log.warn("快照轮询失败: {}", e.getMessage());
         }
     }
 
