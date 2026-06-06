@@ -288,7 +288,7 @@ CREATE TABLE audit_log (
   tenant_id       BIGINT       NOT NULL,
   actor           VARCHAR(64)  NOT NULL COMMENT '操作人（来自请求头 X-Actor-Id，D14）',
   actor_type      ENUM('USER','SYSTEM','JOB') NOT NULL DEFAULT 'USER' COMMENT 'D14：操作方类型（来自请求头 X-Actor-Type）',
-  action          VARCHAR(64)  NOT NULL COMMENT 'CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE',
+  action          VARCHAR(64)  NOT NULL COMMENT 'CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE / IMPORT',
   target_type     VARCHAR(64)  NOT NULL COMMENT 'rule_definition / scene / metric_definition 等',
   target_id       VARCHAR(128) NOT NULL,
   before_snapshot JSON         COMMENT '变更前快照',

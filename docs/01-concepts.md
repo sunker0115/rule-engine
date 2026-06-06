@@ -574,7 +574,7 @@ interface Scheduler {
 | `actor_type` | `USER` / `SYSTEM` / `JOB` |
 | `target_type` | 操作对象类型：`RULE` / `SCENE` / `METRIC_BINDING` / `ACTION_BINDING` / `JOB` / ... |
 | `target_id` | 对象 ID |
-| `action` | 动作：`CREATE` / `UPDATE` / `PUBLISH` / `PUBLISH_FAILED` / `ENABLE` / `DISABLE` / `DELETE`（D19：发布事务回滚后单独追加 PUBLISH_FAILED 记录） |
+| `action` | 动作：`CREATE` / `UPDATE` / `PUBLISH` / `PUBLISH_FAILED` / `ENABLE` / `DISABLE` / `DELETE` / `IMPORT`（D19：发布事务回滚后单独追加 PUBLISH_FAILED 记录；B7：Bundle 导入逐条落草稿记 IMPORT） |
 | `before_snapshot` | 变更前的 JSON 全量快照（DELETE / UPDATE 时填） |
 | `after_snapshot` | 变更后的 JSON 全量快照（CREATE / UPDATE / PUBLISH 时填）；`PUBLISH_FAILED` 时填错误诊断 JSON（含 `errorCode` / `stackTrace` 摘要，详见下方关键边界） |
 | `operated_at` | 操作时间（DDL 列名；与 `evaluation_session.occurred_at` 含义不同，后者是业务事件时间） |

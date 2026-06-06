@@ -34,7 +34,7 @@
 | 分组 | 路径前缀 | 主要场景 |
 |------|---------|---------|
 | 评估接口 | `/api/v1/rule/` | 业务方触发评估（PUSH/PULL/dry-run） |
-| 规则管理 | `/api/v1/rules` | 创建 / 发布 / 禁用 / 查询规则 |
+| 规则管理 | `/api/v1/rules` | 创建 / 发布 / 禁用 / 查询规则；批量导出 / 导入 Bundle 文件（B7） |
 | Scene 管理 | `/api/v1/scenes` | 创建 / 更新 / 禁用 Scene |
 | 指标管理 | `/api/v1/metrics` | 注册 / 更新 / 禁用 Metric |
 | 元数据接口 | `/api/v1/scenes/{sceneCode}/metadata`，`/api/v1/scenes/{sceneCode}/provided-metrics` | 前端编辑器拉 ConditionType / ActionType 枚举；D30 allowProvided 发现 |
@@ -336,6 +336,73 @@ GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId={tenantId}
 
 ---
 
+### 4.8 批量导出规则 Bundle（B7）
+
+```
+GET /api/v1/rules/export?tenantId={tenantId}&ruleIds={id,id}&sceneId={sceneId}
+```
+
+按条件批量导出规则的当前 ACTIVE 版本为自包含 JSON Bundle，**以文件下载形式返回**（`Content-Type: application/json` + `Content-Disposition: attachment; filename="rule-bundle-{tenantId}-{ts}.json"`），供跨环境 / 跨租户迁移、Incident 复现。选取优先级：`ruleIds` 非空 → 按 id 列表；否则 `sceneId` 非空 → 该场景全部；否则 → 该租户全部。对每条仅导当前 ACTIVE 版本，无 ACTIVE 版本者跳过；最终无可导出规则时返回 `INVALID_ARGUMENT`（JSON 错误体）。导出入参用 `sceneId`；Bundle 内 `rules[].sceneCode` 用 code，跨环境按 code 关联。
+
+**Response 200**：Bundle JSON 文件（attachment），内容为多规则 Bundle：
+
+```json
+{
+  "bundleVersion": 1,
+  "exportedAt": "2026-06-06T10:00:00Z",
+  "sourceTenantId": "1",
+  "rules": [
+    {
+      "code": "rule.night.transfer", "name": "夜间大额转账", "kind": "AST_BOOLEAN",
+      "sceneCode": "risk.transfer",
+      "conditionAst": "{...}", "decisionBindings": "[...]", "preGates": "[]",
+      "triggerEventTypes": "[\"transfer\"]",
+      "metricDependencies": [{"metricCode": "account.age", "metricVersion": 1}]
+    }
+  ],
+  "scenes": [{"code": "risk.transfer", "name": "...", "...": "..."}],
+  "metricDefinitions": [{"metricCode": "account.age", "version": 1, "...": "..."}],
+  "decisionDefinitions": [{"code": "BLOCK", "name": "...", "actions": "[...]"}],
+  "actionTypeManifest": ["BLOCK_TRANSACTION"]
+}
+```
+
+> 所有 JSON 列（conditionAst / decisionBindings / preGates / triggerEventTypes / payloadSchema / eventTypes / defaultParams / actions）以**原始 JSON 字符串**无损搬运。`decisionDefinitions[]` 较 08-evolution §2.9 初设字段集多出，承载 `decisionBindings` 引用的 tenant 级 decision（D27）。
+
+### 4.9 批量导入规则 Bundle（B7）
+
+```
+POST /api/v1/rules/import?tenantId={tenantId}
+```
+
+header `X-Actor-Id`；**`multipart/form-data` 上传 Bundle JSON 文件（字段名 `file`）**。幂等批量导入到目标租户：Scene / metric / decision 缺失则建、已存在跳过；规则逐条落为 DRAFT 版本（同 code 已存在则追加草稿版本，不覆盖已发布版本）。`SQL_AGGREGATE` 类缺失 metric 不自动创建，列入 `metricsRequiringReview`。文件解析失败返回 `INVALID_ARGUMENT`。
+
+> **依赖完整性约定**：
+> - **Scene**：Bundle 的 `scenes[]` 须包含全部规则引用的 Scene。"缺失则建"的主语是**目标环境**——目标无同 code Scene 时从 Bundle 重建，已有则跳过；若 Bundle 未携带且目标也无该 Scene，返回 `INVALID_ARGUMENT`。
+> - **Metric**：upsert 以 **metricCode** 为键（忽略 version）——目标已有同 code 即列入 `metricsSkippedExisting`，**不保证精确版本一致**；版本不匹配不在导入期拦截，而由后续发布期"被引用 metric 无 ACTIVE 版本"校验兜底。
+
+**Response 200**：`ApiResponse<RuleImportResult>`：
+
+```json
+{
+  "success": true,
+  "data": {
+    "rules": [
+      {"ruleDefinitionId": 10, "ruleVersionId": 100, "version": 1,
+       "code": "rule.night.transfer", "sceneCode": "risk.transfer", "ruleAlreadyExisted": false}
+    ],
+    "scenesCreated": ["risk.transfer"], "scenesSkippedExisting": [],
+    "metricsCreated": ["account.age"], "metricsSkippedExisting": [], "metricsRequiringReview": [],
+    "decisionsCreated": ["BLOCK"], "decisionsSkippedExisting": [],
+    "actionTypesReferenced": ["BLOCK_TRANSACTION"]
+  }
+}
+```
+
+> 权限：v1 沿用 `X-Actor-Id`，§2.9 设想的 EXPORT / PUBLISH 权限校验留 TODO。
+
+---
+
 ## 五、元数据接口
 
 ### 5.1 拉 Scene 元数据（前端编辑器）
@@ -462,6 +529,14 @@ GET /api/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&li
 | `PAYLOAD_SCHEMA_MISMATCH` | 400 | payload 字段缺必填 / 类型错 | 修复请求体重试 |
 | `INVALID_EVENT_TYPE` | 400 | eventType 不在 Scene 白名单内 | 确认 sceneCode + eventType |
 | `SCENE_NOT_FOUND` | 404 | sceneCode 未注册或 DISABLED | 确认 tenantId + sceneCode |
+
+### 管理接口错误（HTTP 4xx）
+
+§四 规则管理 / Scene / Metric 等写接口的参数校验失败统一返回 `INVALID_ARGUMENT`（400，由全局异常处理器映射 `IllegalArgumentException`）。
+
+| errorCode | HTTP 状态 | 含义 | 调用方建议 |
+|-----------|-----------|------|-----------|
+| `INVALID_ARGUMENT` | 400 | 管理接口参数校验失败。B7 适用情形：导出无可导出的 ACTIVE 规则 / `sceneId` 对应 Scene 不存在；导入 Bundle 文件解析失败 / `rules` 为空 / 规则引用的 Scene 既不在 Bundle 也不在目标环境 | 按 message 修正请求后重试 |
 
 ### 评估期 errorCode（EvalResult.errorCode）
 

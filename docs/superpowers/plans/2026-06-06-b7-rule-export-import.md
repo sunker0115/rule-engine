@@ -701,6 +701,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -719,6 +720,7 @@ import java.util.Set;
  * scenes / metrics / decisions / actionTypeManifest 跨规则去重。</p>
  */
 @Service
+@RequiredArgsConstructor
 public class RuleExportService {
 
     private static final TypeReference<List<MetricDependency>> METRIC_DEP_TYPE = new TypeReference<>() {};
@@ -730,20 +732,6 @@ public class RuleExportService {
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
     private final ObjectMapper objectMapper;
-
-    public RuleExportService(RuleDefinitionMapper ruleDefinitionMapper,
-                             RuleVersionMapper ruleVersionMapper,
-                             SceneMapper sceneMapper,
-                             MetricDefinitionMapper metricDefinitionMapper,
-                             DecisionDefinitionMapper decisionDefinitionMapper,
-                             ObjectMapper objectMapper) {
-        this.ruleDefinitionMapper = ruleDefinitionMapper;
-        this.ruleVersionMapper = ruleVersionMapper;
-        this.sceneMapper = sceneMapper;
-        this.metricDefinitionMapper = metricDefinitionMapper;
-        this.decisionDefinitionMapper = decisionDefinitionMapper;
-        this.objectMapper = objectMapper;
-    }
 
     /** 按条件批量导出规则当前 ACTIVE 版本为 Bundle。 */
     @Transactional(readOnly = true)
@@ -1106,6 +1094,7 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import lombok.RequiredArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -1119,6 +1108,7 @@ import java.util.Map;
  * SQL_AGGREGATE 类缺失 metric 不自动创建，列入待审清单。</p>
  */
 @Service
+@RequiredArgsConstructor
 public class RuleImportService {
 
     private final RuleDefinitionMapper ruleDefinitionMapper;
@@ -1127,20 +1117,6 @@ public class RuleImportService {
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
     private final AuditLogMapper auditLogMapper;
-
-    public RuleImportService(RuleDefinitionMapper ruleDefinitionMapper,
-                             RuleVersionMapper ruleVersionMapper,
-                             SceneMapper sceneMapper,
-                             MetricDefinitionMapper metricDefinitionMapper,
-                             DecisionDefinitionMapper decisionDefinitionMapper,
-                             AuditLogMapper auditLogMapper) {
-        this.ruleDefinitionMapper = ruleDefinitionMapper;
-        this.ruleVersionMapper = ruleVersionMapper;
-        this.sceneMapper = sceneMapper;
-        this.metricDefinitionMapper = metricDefinitionMapper;
-        this.decisionDefinitionMapper = decisionDefinitionMapper;
-        this.auditLogMapper = auditLogMapper;
-    }
 
     /** 幂等批量导入 Bundle 到目标租户。 */
     @Transactional

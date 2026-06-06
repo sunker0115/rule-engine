@@ -136,6 +136,15 @@
   - **不做**：跨租户实时同步（由 §2.10 规则模板市场解决）。
 - **迁移成本**：中（独立工具链，不动核心引擎）。
 
+**已实装（B7 / 2026-06-06）：**
+
+- **载体**：HTTP 端点——`GET /api/v1/rules/export?tenantId=&ruleIds=&sceneId=`（按条件批量导出 ACTIVE 版本为 **Bundle JSON 文件下载**，`Content-Disposition: attachment`）、`POST /api/v1/rules/import`（**multipart 文件上传**，幂等批量导入）；Service 落 `rule-config-svc`（`RuleBundleService` → `RuleExportService` / `RuleImportService`，进出 `RuleBundle` 对象），Controller 落 `rule-api`（`RuleBundleController`，做对象↔文件转换）。无 DDL。
+- **批量 + 多规则 Bundle**：导出选取优先级 ruleIds → sceneId → 整租户（入参用 sceneId，前端列表已有；Bundle 内 `RuleEntry.sceneCode` 仍用 code，跨环境按 code 关联）；Bundle 统一为多规则结构 `{bundleVersion, exportedAt, sourceTenantId, rules[], scenes[], metricDefinitions[], decisionDefinitions[], actionTypeManifest[]}`，单规则 = rules 长度 1 特例。所有 JSON 列按原始 JSON 字符串无损搬运。**实装较原始字段集多 `decisionDefinitions[]`**：D27 后 Action 落在 tenant 级 decision_definition，随包搬运才能真正自包含重建。
+- **导入幂等**：Scene / metric / decision 按业务键整体 upsert（缺失则建、已存在跳过不覆盖）；规则逐条——code 不存在 → 新建 rule_definition(DRAFT) + rule_version(DRAFT v1)，已存在 → 仅追加 rule_version(DRAFT, maxVersion+1)，不动 rule_definition 状态/currentVersion。把导入草稿提升为 ACTIVE 走发布/回滚流程（D19，尚未实现）。
+- **metric 安全**：`SQL_AGGREGATE` 类缺失 metric 不自动创建，列入 `metricsRequiringReview`，由运营人工审核后建；发布期 PublishService 的"被引用 metric 无 ACTIVE 版本"校验是安全网。
+- **权限**：v1 沿用 `X-Actor-Id` header；EXPORT / PUBLISH 权限校验留 TODO（后续合规批次 §2.8）。
+- **与本地调试格式正交**：B7 Bundle 专做跨环境 DB 迁移；本地 / 离线调试用 `GET /api/v1/sdk/snapshots`（§8.3），两者不打通。
+
 ### 2.10 规则模板市场（来源 #16）
 
 - **v1 现状**：不考虑平台级规则模板共享。
