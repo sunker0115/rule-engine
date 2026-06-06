@@ -1,16 +1,29 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
+import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -20,8 +33,24 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class MetricWriteServiceImplTest {
 
+    /**
+     * LambdaQueryWrapper 在执行 .eq(Entity::getField, val) 时依赖 MP TableInfo 缓存。
+     * 纯 Mockito 环境无 Spring 容器初始化，这里手动注册所有用到 LambdaQueryWrapper 的实体。
+     */
+    @BeforeAll
+    static void initMybatisPlusTableInfo() {
+        MybatisConfiguration cfg = new MybatisConfiguration();
+        MapperBuilderAssistant assistant = new MapperBuilderAssistant(cfg, "");
+        TableInfoHelper.initTableInfo(assistant, MetricDefinition.class);
+        TableInfoHelper.initTableInfo(assistant, RuleDefinition.class);
+        TableInfoHelper.initTableInfo(assistant, RuleVersion.class);
+    }
+
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock AuditLogMapper auditLogMapper;
+    @Mock RuleVersionMapper ruleVersionMapper;
+    @Mock RuleDefinitionMapper ruleDefinitionMapper;
+    @Spy  ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks MetricWriteServiceImpl sut;
 
     private static final Long TENANT = 1L;
@@ -122,6 +151,74 @@ class MetricWriteServiceImplTest {
                 .hasMessageContaining(CODE);
     }
 
+    // ── findReferencingRules ──────────────────────────────────────────────────
+
+    @Test
+    void findReferencingRules_returnsOnlyMatchingRules() {
+        // rule_definition：两条属于 TENANT
+        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控");
+        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控");
+
+        // rule_version：
+        //   rv1 属于 rd1，ACTIVE，metric_dependencies 含 {account.age,1} → 应被选中
+        //   rv2 属于 rd1，ACTIVE，metric_dependencies 含 {account.age,2} → 版本不匹配，排除
+        //   rv3 属于 rd2，ACTIVE，metric_dependencies 含 {account.age,1} → 应被选中
+        //   rv4 属于 rd2，ACTIVE，metric_dependencies 为空 → 排除
+        RuleVersion rv1 = ruleVersion(1001L, 101L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1}]");
+        RuleVersion rv2 = ruleVersion(1002L, 101L, "[{\"metricCode\":\"account.age\",\"metricVersion\":2}]");
+        RuleVersion rv3 = ruleVersion(1003L, 102L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1},{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
+        RuleVersion rv4 = ruleVersion(1004L, 102L, "[]");
+
+        // mock：先查该 tenant 下所有 ruleDefinition id
+        when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(rd1, rd2));
+        // mock：再查 ACTIVE rule_version
+        when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(rv1, rv2, rv3, rv4));
+
+        List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
+
+        // 只有 rv1、rv3 匹配
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(RuleRef::ruleVersionId)
+                .containsExactlyInAnyOrder(1001L, 1003L);
+        assertThat(result).extracting(RuleRef::ruleDefinitionId)
+                .containsExactlyInAnyOrder(101L, 102L);
+        // 验证 code/name 正确从 ruleDefinition 携带
+        assertThat(result).anySatisfy(ref ->
+                assertThat(ref.ruleCode()).isEqualTo("risk.transfer"));
+        assertThat(result).anySatisfy(ref ->
+                assertThat(ref.ruleName()).isEqualTo("登录风控"));
+    }
+
+    @Test
+    void findReferencingRules_noActiveRules_returnsEmpty() {
+        when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of());
+
+        List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
+
+        assertThat(result).isEmpty();
+        // 无 ruleDefinition 时不查 ruleVersion
+        verifyNoInteractions(ruleVersionMapper);
+    }
+
+    @Test
+    void findReferencingRules_malformedDependenciesJson_treatedAsNoMatch() {
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控");
+        // metric_dependencies 为非法 JSON，应静默忽略，不抛异常
+        RuleVersion rv = ruleVersion(1001L, 101L, "not-valid-json");
+
+        when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(rd));
+        when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(rv));
+
+        List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
+
+        assertThat(result).isEmpty();
+    }
+
     // ── 辅助 ──────────────────────────────────────────────────────────────────
 
     private MetricDefinition activeRow(int version) {
@@ -135,5 +232,23 @@ class MetricWriteServiceImplTest {
         m.setDataType("LONG");
         m.setStatus("ACTIVE");
         return m;
+    }
+
+    private RuleDefinition ruleDefinition(Long id, String code, String name) {
+        RuleDefinition rd = new RuleDefinition();
+        rd.setId(id);
+        rd.setTenantId(TENANT);
+        rd.setCode(code);
+        rd.setName(name);
+        return rd;
+    }
+
+    private RuleVersion ruleVersion(Long id, Long ruleDefinitionId, String metricDependencies) {
+        RuleVersion rv = new RuleVersion();
+        rv.setId(id);
+        rv.setRuleDefinitionId(ruleDefinitionId);
+        rv.setStatus("ACTIVE");
+        rv.setMetricDependencies(metricDependencies);
+        return rv;
     }
 }

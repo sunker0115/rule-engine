@@ -33,4 +33,23 @@ class MetricWriteServiceTest {
         assertNull(cmd.paramsJson());
         assertNull(cmd.cacheTtlSeconds());
     }
+
+    // ── RuleRef ───────────────────────────────────────────────────────────────
+
+    @Test
+    void ruleRef_recordAccessors() {
+        var ref = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控", 200L);
+
+        assertEquals(10L, ref.ruleDefinitionId());
+        assertEquals("risk.transfer", ref.ruleCode());
+        assertEquals("转账风控", ref.ruleName());
+        assertEquals(200L, ref.ruleVersionId());
+    }
+
+    @Test
+    void ruleRef_recordEquality() {
+        var a = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控", 200L);
+        var b = new MetricWriteService.RuleRef(10L, "risk.transfer", "转账风控", 200L);
+        assertEquals(a, b);
+    }
 }
