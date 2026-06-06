@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.internal.context;
 
 import com.sstlfsj.rule.kernel.api.model.*;
+import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
 import org.junit.jupiter.api.Test;
 
@@ -88,5 +89,21 @@ class EvalContextAssemblerTest {
 
         assertThat(ctx.now()).isEqualTo(NOW);
         assertThat(ctx.getNow()).isEqualTo(NOW);
+    }
+
+    @Test
+    void metricDependency_bridging_extractsCodeFromObject() {
+        // 临时桥接（Task 5 前）：collectMetricCodes 只取 MetricDependency::metricCode，
+        // 验证 provided 指标能通过 metricDependencies 声明后被纳入 context
+        ConditionNode ast = new ConditionNode("GT", "balance", null, Map.of("threshold", 0), 0.0);
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(1L).sceneCode("s1").tenantId("t1").conditionAst(ast)
+                .addMetricDependency("balance", 1).build();
+
+        EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
+        EvalContext ctx = assembler.assemble(event(Map.of("balance", 500)), List.of(snap), NOW);
+
+        assertThat(ctx.metrics()).containsKey("balance");
+        assertThat(ctx.metrics().get("balance").value()).isEqualTo(500);
     }
 }

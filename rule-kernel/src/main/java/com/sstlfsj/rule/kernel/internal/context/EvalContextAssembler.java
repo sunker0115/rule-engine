@@ -150,6 +150,7 @@ public class EvalContextAssembler {
     private static Set<String> collectMetricCodes(List<RuleVersionSnapshot> candidates) {
         Set<String> codes = new LinkedHashSet<>();
         for (RuleVersionSnapshot snap : candidates) {
+            // Task 5 改为按绑定版本解析；此处暂只取 metricCode 作临时桥接
             snap.metricDependencies().stream()
                     .map(MetricDependency::metricCode)
                     .forEach(codes::add);
