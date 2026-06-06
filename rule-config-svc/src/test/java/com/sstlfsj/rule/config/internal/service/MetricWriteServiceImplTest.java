@@ -26,6 +26,7 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,7 +63,7 @@ class MetricWriteServiceImplTest {
     private static final String ACTOR = "dev";
 
     private MetricWriteCommand cmd() {
-        return new MetricWriteCommand("用户年龄", "ATTRIBUTE", "LONG", "{}", 60, false);
+        return new MetricWriteCommand("用户年龄", "ATTRIBUTE", "LONG", Map.of(), 60, false);
     }
 
     // ── create ────────────────────────────────────────────────────────────────
@@ -160,7 +161,7 @@ class MetricWriteServiceImplTest {
         }).when(metricDefinitionMapper).insert(any(MetricDefinition.class));
 
         // cmd 将 sourceType 改为 EVENT_PAYLOAD，即使 breakingChange=false
-        MetricWriteCommand changedCmd = new MetricWriteCommand("用户年龄", "EVENT_PAYLOAD", "LONG", "{}", 60, false);
+        MetricWriteCommand changedCmd = new MetricWriteCommand("用户年龄", "EVENT_PAYLOAD", "LONG", Map.of(), 60, false);
         int version = sut.update(TENANT, CODE, changedCmd, false, ACTOR);
 
         // 应走升版路径：version=2，旧行 SUPERSEDED
@@ -187,7 +188,7 @@ class MetricWriteServiceImplTest {
         }).when(metricDefinitionMapper).insert(any(MetricDefinition.class));
 
         // cmd 将 dataType 改为 DOUBLE
-        MetricWriteCommand changedCmd = new MetricWriteCommand("用户年龄", "ATTRIBUTE", "DOUBLE", "{}", 60, false);
+        MetricWriteCommand changedCmd = new MetricWriteCommand("用户年龄", "ATTRIBUTE", "DOUBLE", Map.of(), 60, false);
         int version = sut.update(TENANT, CODE, changedCmd, false, ACTOR);
 
         assertThat(version).isEqualTo(2);
@@ -209,7 +210,7 @@ class MetricWriteServiceImplTest {
         when(metricDefinitionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(active);
 
         // cmd 只改 name，sourceType/dataType 不变
-        MetricWriteCommand sameTypeCmd = new MetricWriteCommand("新名称", "ATTRIBUTE", "LONG", "{}", 120, false);
+        MetricWriteCommand sameTypeCmd = new MetricWriteCommand("新名称", "ATTRIBUTE", "LONG", Map.of(), 120, false);
         int version = sut.update(TENANT, CODE, sameTypeCmd, false, ACTOR);
 
         assertThat(version).isEqualTo(1);

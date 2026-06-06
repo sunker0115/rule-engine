@@ -21,6 +21,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,7 +70,7 @@ class MetricVersioningIntegrationTest {
     }
 
     private MetricWriteCommand cmd(String name) {
-        return new MetricWriteCommand(name, "ATTRIBUTE", "LONG", "{}", 60, false);
+        return new MetricWriteCommand(name, "ATTRIBUTE", "LONG", Map.of(), 60, false);
     }
 
     @Test

@@ -205,7 +205,8 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setName(cmd.name());
         m.setSourceType(cmd.sourceType());
         m.setDataType(cmd.dataType());
-        m.setParams(cmd.paramsJson() == null ? "{}" : cmd.paramsJson());
+        // params 为 Map 对象，序列化为 JSON 字符串存库；null 时存空对象
+        m.setParams(cmd.params() == null ? "{}" : objectMapper.writeValueAsString(cmd.params()));
         m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
         m.setAllowProvided(cmd.allowProvided());
     }

@@ -269,13 +269,13 @@ POST /api/v1/metrics?tenantId={tenantId}&metricCode={metricCode}
   "name": "KYC 等级",
   "sourceType": "ATTRIBUTE",
   "dataType": "LONG",
-  "paramsJson": "{\"table\":\"user_profile\",\"column\":\"kyc_level\"}",
+  "params": { "table": "user_profile", "column": "kyc_level" },
   "cacheTtlSeconds": 60,
   "allowProvided": true
 }
 ```
 
-> `tenantId` / `metricCode` 通过 **query param** 传入；`paramsJson` 是**JSON 字符串**（序列化后的取数参数），非嵌套对象。
+> `tenantId` / `metricCode` 通过 **query param** 传入；`params` 是结构依 `sourceType` 而异的 **JSON 对象**，服务端序列化后存库。
 
 **Response 201：**
 ```json
@@ -292,7 +292,7 @@ PUT /api/v1/metrics/{metricCode}?tenantId={tenantId}&breakingChange=false
 
 **Headers：** 同 §4.5（`X-Actor-Id` 必填）。
 
-- `breakingChange=false`（默认）：原地更新当前 ACTIVE 版本的 name / paramsJson / cacheTtlSeconds / allowProvided，不产生新版本行。
+- `breakingChange=false`（默认）：原地更新当前 ACTIVE 版本的 name / params / cacheTtlSeconds / allowProvided，不产生新版本行。
 - `breakingChange=true`：INSERT 新版本行（version 递增），旧行 status 改为 `SUPERSEDED`；已发布规则仍绑定旧版本，不受影响。
 - **`sourceType` / `dataType` 变更视为 `breakingChange=true`（强制）**：即使请求参数传 `breakingChange=false`，只要 sourceType 或 dataType 与当前 ACTIVE 行不同，实现层自动走升版路径（D6/B6 冻结语义）。
 

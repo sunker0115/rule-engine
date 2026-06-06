@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.api.service;
 
 import java.util.List;
+import java.util.Map;
 
 /** Metric 注册 / 更新 / 升版写服务（10-api-contract §3 /api/v1/metrics）。 */
 public interface MetricWriteService {
@@ -19,12 +20,12 @@ public interface MetricWriteService {
     /** 查询引用某 (metricCode, version) 的所有 ACTIVE 规则（运营升版前评估影响面）。 */
     List<RuleRef> findReferencingRules(Long tenantId, String metricCode, int metricVersion);
 
-    /** metric 写入参数。 */
+    /** metric 写入参数。params 为结构依 sourceType 而异的 JSON 对象（前端直接传对象，服务端序列化存库）。 */
     record MetricWriteCommand(
             String name,
             String sourceType,
             String dataType,
-            String paramsJson,
+            Map<String, Object> params,
             Integer cacheTtlSeconds,
             boolean allowProvided) {}
 

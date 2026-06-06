@@ -49,7 +49,7 @@ class MetricControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                             {"name":"账龄","sourceType":"ATTRIBUTE","dataType":"LONG",
-                             "paramsJson":"{}","cacheTtlSeconds":60,"allowProvided":false}
+                             "params":{},"cacheTtlSeconds":60,"allowProvided":false}
                             """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
@@ -81,7 +81,7 @@ class MetricControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                             {"name":"账龄v2","sourceType":"ATTRIBUTE","dataType":"LONG",
-                             "paramsJson":"{}","cacheTtlSeconds":60,"allowProvided":false}
+                             "params":{},"cacheTtlSeconds":60,"allowProvided":false}
                             """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -101,7 +101,7 @@ class MetricControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                             {"name":"账龄","sourceType":"ATTRIBUTE","dataType":"LONG",
-                             "paramsJson":"{}","cacheTtlSeconds":60,"allowProvided":false}
+                             "params":{},"cacheTtlSeconds":60,"allowProvided":false}
                             """))
                 .andExpect(status().isOk());
 
@@ -121,7 +121,7 @@ class MetricControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                             {"name":"账龄","sourceType":"ATTRIBUTE","dataType":"LONG",
-                             "paramsJson":"{}","cacheTtlSeconds":60,"allowProvided":false}
+                             "params":{},"cacheTtlSeconds":60,"allowProvided":false}
                             """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
