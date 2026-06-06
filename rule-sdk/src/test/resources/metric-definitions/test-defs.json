@@ -1,0 +1,10 @@
+[
+  {
+    "metricCode": "risk.score",
+    "sourceType": "TEST",
+    "dataType": "LONG",
+    "allowProvided": false,
+    "cacheTtlSeconds": 0,
+    "params": { "window": "30d" }
+  }
+]
