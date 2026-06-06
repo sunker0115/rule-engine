@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** MetricController 单元测试：create / update / impact 路由与委托。 */
+/** MetricController 单元测试：create / update / impact 路由与委托。create 的 metricCode 以 query param 传入。 */
 class MetricControllerTest {
 
     private MockMvc mockMvc;

@@ -159,11 +159,11 @@ class MetricWriteServiceImplTest {
         RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控");
         RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控");
 
-        // rule_version：
-        //   rv1 属于 rd1，ACTIVE，metric_dependencies 含 {account.age,1} → 应被选中
-        //   rv2 属于 rd1，ACTIVE，metric_dependencies 含 {account.age,2} → 版本不匹配，排除
-        //   rv3 属于 rd2，ACTIVE，metric_dependencies 含 {account.age,1} → 应被选中
-        //   rv4 属于 rd2，ACTIVE，metric_dependencies 为空 → 排除
+        // rule_version（mock 只返回裁列后仍包含的三个字段：id/ruleDefinitionId/metricDependencies）：
+        //   rv1 属于 rd1，含 {account.age,1} → 应被选中
+        //   rv2 属于 rd1，含 {account.age,2} → 版本不匹配，排除
+        //   rv3 属于 rd2，含 {account.age,1} → 应被选中
+        //   rv4 属于 rd2，dependencies 为空 → 排除
         RuleVersion rv1 = ruleVersion(1001L, 101L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1}]");
         RuleVersion rv2 = ruleVersion(1002L, 101L, "[{\"metricCode\":\"account.age\",\"metricVersion\":2}]");
         RuleVersion rv3 = ruleVersion(1003L, 102L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1},{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
@@ -172,7 +172,7 @@ class MetricWriteServiceImplTest {
         // mock：先查该 tenant 下所有 ruleDefinition id
         when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.of(rd1, rd2));
-        // mock：再查 ACTIVE rule_version
+        // mock：再查 ACTIVE rule_version（.select 裁列由 wrapper 控制，mock 行为不变）
         when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(List.of(rv1, rv2, rv3, rv4));
 
@@ -189,6 +189,22 @@ class MetricWriteServiceImplTest {
                 assertThat(ref.ruleCode()).isEqualTo("risk.transfer"));
         assertThat(result).anySatisfy(ref ->
                 assertThat(ref.ruleName()).isEqualTo("登录风控"));
+    }
+
+    @Test
+    void findReferencingRules_differentMetricCode_notIncluded() {
+        // 纯反例：规则只引用 {user.level,1}，查 account.age/1 时不应出现
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控");
+        RuleVersion rv = ruleVersion(1001L, 101L, "[{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
+
+        when(ruleDefinitionMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(rd));
+        when(ruleVersionMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(rv));
+
+        List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
+
+        assertThat(result).isEmpty();
     }
 
     @Test

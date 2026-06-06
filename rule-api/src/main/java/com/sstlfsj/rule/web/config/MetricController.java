@@ -23,10 +23,10 @@ public class MetricController {
     /**
      * POST /api/v1/metrics — 注册新 metric（version=1, status=ACTIVE）。
      *
-     * @param tenantId  租户 ID
-     * @param actorId   操作人
-     * @param metricCode metric 编码（路径占位符不适用 create，用 body 字段或 param 均可；此处取 metricCode 作为独立 param）
-     * @param cmd       写入参数
+     * @param tenantId   租户 ID
+     * @param metricCode metric 编码，作为 query param 传入
+     * @param actorId    操作人
+     * @param cmd        写入参数
      * @return 新建行的 id
      */
     @PostMapping

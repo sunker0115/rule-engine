@@ -131,11 +131,15 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         Map<Long, RuleDefinition> defMap = defs.stream()
                 .collect(Collectors.toMap(RuleDefinition::getId, d -> d));
 
-        // 第二步：查这批 rule_definition_id 下所有 ACTIVE rule_version
+        // 第二步：查这批 rule_definition_id 下所有 ACTIVE rule_version，只取影响面判断所需列
+        // 口径对齐 eval 侧 RuleVersionReadMapper：以 rv.status=ACTIVE 为"参与评估"判定，
+        // 不按 rule_definition.status 过滤（eval 的 loadAllActive/loadActiveByScene 均如此）。
         List<RuleVersion> activeVersions = ruleVersionMapper.selectList(
                 new LambdaQueryWrapper<RuleVersion>()
                         .in(RuleVersion::getRuleDefinitionId, defMap.keySet())
-                        .eq(RuleVersion::getStatus, "ACTIVE"));
+                        .eq(RuleVersion::getStatus, "ACTIVE")
+                        .select(RuleVersion::getId, RuleVersion::getRuleDefinitionId,
+                                RuleVersion::getMetricDependencies));
 
         // 第三步：反序列化 metric_dependencies，筛出含目标 (metricCode, metricVersion) 的行
         List<RuleRef> result = new ArrayList<>();
