@@ -16,9 +16,8 @@
 | 3 | B6 | **Metric 版本化** | 08-evo §2.2 | `metric_definition` 加 `version` 列；`rule_version.metric_dependencies` JSON 升级；发布期 + 评估期解析逻辑；运营 UI 影响面展示 | 正确性兜底：Metric 语义变更时防止存量规则静默错误的根本解法；改动面横跨发布期/评估期两端 |
 | 4 | B7 | **规则导出 / 导入** | 08-evo §2.9 | 独立工具链；导出格式 JSON Bundle；导入幂等写入 + 权限校验；无核心引擎变动 | 风险最低（不动引擎），可穿插做；跨环境迁移、Incident 复现的基础工具；**解锁 B15** |
 
-> **B19 类型化比较策略工厂 / B20 时间框架 / B21 FETCHED 取数层 / B23 嵌入式 SDK 取数 已落地，2026-06-06 移除。** 遗留小项（未完成 / 归后续，记录在此）：
+> **B19 类型化比较策略工厂 / B20 时间框架 / B21 FETCHED 取数层 / B22 决策表列 dataType 冻结 / B23 嵌入式 SDK 取数 已落地，2026-06-06 移除。** 遗留小项（未完成 / 归后续，记录在此）：
 > - **B20 时区解析序的 Scene 级默认时区（优先级3）暂缓**：解析序为 字面量 offset > 条件 `params.timezone` > **Scene 默认（暂缓）** > UTC。运行时 `EvalContext`/`RuleVersionSnapshot` 不携带 `Scene.defaultParams.timezone`，需 config→snapshot→`EvalContext` 管线打通后激活；当前 `TimeZoneResolver.resolve(paramsTz, sceneTz)` 形参已预留，调用方一律传 `sceneTz=null`。
-> - **B19 `ComparisonStrategyFactory` 的 LIST 走 `DefaultComparisonStrategy`**（无独立 `ListComparisonStrategy`；LIST 算子 CONTAINS/NOT_CONTAINS 走各自 evaluator，本就不经 ComparisonStrategy，无需独立策略）。决策表列级 dataType 冻结 + 发布校验已落地（**B22**，2026-06-06）。
 > - **B21 v1 不做（留 v2）**：`STREAM` sourceType 实装（当前无 handler → 自动降级 `METRIC_FETCH_FAIL`）；HTTP OAuth2 自动刷 token；Scene 级数据源白名单；Redis 缓存（v1 进程内 Caffeine）；metric `required` 字段分级。全局取数超时阈值待 `07-operability` 统一管理。
 
 ---
