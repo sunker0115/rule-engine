@@ -139,6 +139,9 @@ com.sstlfsj.rule
 | `Scheduler` | `kernel.api.spi.scheduler` | D11 | ✅ |
 | `TraceWriter` | `kernel.api.spi.trace` | D21 | ✅ |
 | Pre-Gate 各接口 | `kernel.api.spi.pregate` | §3.14 | ✅ |
+| `MetricDefinitionResolver` | `kernel.api.spi.metric` | D45 / B21 | ✅（数据源无关：服务端读库 / 嵌入式 SDK 读下发缓存） |
+| `MetricCache` | `kernel.api.spi.metric` | D45 / B21 | ✅（v1 Caffeine，内核不依赖） |
+| `MetricResourceCatalog` | `config.api.spi`（**跨模块例外**，非 kernel） | D45 / B21 | 由 rule-eval-svc 实现，config 发布期校验可选注入 |
 
 **SPI 实现归属**：
 

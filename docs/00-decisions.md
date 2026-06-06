@@ -1430,7 +1430,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 3. **`MetricQuery` 加 `now`**：assembler 绑 `EvalContext.now`；SQL 的 `:now` 取此字段（非 DB `NOW()`），保 dry-run 重放。纯算法不收 ctx、请求对象收 `now`（与 B19/B20 同源原则）。
 
-4. **provided 优先（D30 落地）**：`providedMetrics` 有值且 `def.allowProvided=true` → 用（PROVIDED），跳过 fetch；`allowProvided=false` 即使传也忽略（WARN）；无定义且无 provided 则该 metric 缺失（节点不命中），非 ERROR。
+4. **provided 优先（D30 落地）**：`providedMetrics` 有值且 `def.allowProvided=true` → 用（PROVIDED），跳过 fetch；`allowProvided=false` 即使传也忽略（WARN）；`resolver` 返回 null（运行时无定义）且无 provided → 置 `METRIC_FETCH_FAIL` 降级（无定义视为异常，引用节点不命中、整树继续）。
 
 5. **失败降级（D15 落地）+ 条件求值门面三态**：单 metric 取数失败/超时/无 handler → `MetricValue.error(METRIC_FETCH_FAIL)`，引用节点不命中、整树继续。统一门面 `ConditionEvaluation` 返回三态（满足/不满足/不可判定），各执行器按语义落 ERROR：布尔路径标 `NodeTrace.errorCode` 整树继续；**评分卡整卡 ERROR 不出分（风控保守）**；决策树/表遇 ERROR 整规则 ERROR + miss（不静默走错分支）。
 

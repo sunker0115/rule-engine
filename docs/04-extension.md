@@ -239,7 +239,7 @@ public interface MetricSourceHandler {
     /**
      * 取单个 metric 值。引擎在 EvalContext 构建阶段并发调用（D20）。
      * @param query  含 metricCode + params + subjectId + eventPayload
-     * @return MetricValue（含值 + valueType）；取数失败 → 抛异常（引擎归 METRIC_FETCH_FAIL，D15）
+     * @return MetricValue（成功值；取数失败返回 MetricValue.error(METRIC_FETCH_FAIL) 降级，B21 推荐）；抛异常作退路，assembler 兜底归 METRIC_FETCH_FAIL（D15）
      */
     MetricValue fetch(MetricQuery query);
 }
@@ -253,9 +253,8 @@ public interface MetricSourceHandler {
 public @interface MetricSourceType {
     String value();   // "ATTRIBUTE" / "SQL_AGGREGATE" / "EXTERNAL_HTTP" / "STREAM" / 自定义
     String paramsSchema() default "{}";        // metric_definition.params 的 JSON Schema
-    int defaultTimeoutMs() default 1000;
-    int defaultCacheTtlSeconds() default 60;
 }
+// 注：defaultTimeoutMs / defaultCacheTtlSeconds 已于 D38 精简删除；超时阈值见 07-operability，TTL 由 metric_definition.cache_ttl_seconds 控制
 ```
 
 ### 4.3 内置 sourceType 建议参数
@@ -270,8 +269,8 @@ public @interface MetricSourceType {
 ### 4.4 实现要求
 
 - fetch() 自行管 timeout / retry / circuit breaker（引擎核心不重试，D15）
-- 结果按 metric 的 `cachePolicyDefault.ttl` 写 Redis；key 格式占位规范：`rule:metric:{tenantId}:{metricCode}:{subjectId}`（待 `07-operability.md` §九展开时确认）；ttl=0 则不写缓存（强一致场景）
-- 无法取数时**抛异常**（不返回 null），引擎统一处理
+- 结果经 `MetricCache` SPI 缓存（B21 实装，v1 进程内 Caffeine `CaffeineMetricCache`）；key 格式：`{tenantId}:{metricCode}:{subjectId}:{stableHash(params)}`（murmur3，params 排序后哈希）；`cache_ttl_seconds=0` 不缓存（强一致场景）。多实例升 Redis 留 v2
+- **推荐错误通道（B21）**：取数失败返回 `MetricValue.error(METRIC_FETCH_FAIL)`（不返回业务值）；抛异常作退路，assembler 用 `.exceptionally()` 兜底统一归 `METRIC_FETCH_FAIL`（D15）
 - `allowProvided` 在 metric_definition 配置，不在 Handler 里判断（Handler 不感知 providedMetrics，D30）
 
 ---
