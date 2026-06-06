@@ -4,7 +4,7 @@
 
 | # | 计划文件 | 说明 | 状态 |
 |---|---------|------|------|
-| 01 | [docs-completion](2026-05-31-docs-completion.md) | 文档补全（概念/运行时/扩展/存储/可运维/前端/演进/API 契约） | ✅ |
+| 01 | [docs-completion](../../archive/2026-05-31-docs-completion.md) | 文档补全（概念/运行时/扩展/存储/可运维/前端/演进/API 契约）（已归档至 docs/archive/） | ✅ |
 | 02 | [backend-skeleton](2026-06-02-backend-skeleton.md) | Maven 多模块骨架 + SPI 接口 + InterpretedExecutor + ArchUnit | ✅ |
 | 03 | [config-layer](2026-06-02-config-layer.md) | rule-config-svc：Flyway 建表 + Mapper + PublishService（DRAFT→PUBLISHED） | ✅ |
 | 04 | [eval-layer](2026-06-02-eval-layer.md) | rule-eval-svc：索引加载 + EvalContextAssembler + EvalServiceImpl | ✅ |
@@ -31,3 +31,10 @@
 | 25 | [d42-decision-tree-table](2026-06-04-d42-decision-tree-table.md) | D42：DECISION_TREE / DECISION_TABLE evaluator | ✅ |
 | 26 | [execution-context-snapshot-and-rule-session-query](2026-06-04-execution-context-snapshot-and-rule-session-query.md) | context_snapshot 字段补全 + 按规则查历史 Session 端点 | ✅ |
 | 27 | [rule-kind-schema](2026-06-05-rule-kind-schema.md) | Rule Kind Schema 修复：AstSerializer 类型注册、createDraft kind 字段、DECISION_TREE/TABLE 发布期结构校验 | ✅ |
+| 28 | [d22-otlp-lgtm-observability](2026-06-04-d22-otlp-lgtm-observability.md) | D22：基础设施可观测性——OTLP push + grafana/otel-lgtm 三信号（metrics/traces/logs） | ✅ |
+| 29 | [b19-comparison-strategy](2026-06-05-b19-comparison-strategy.md) | B19：类型化比较策略——dataType 驱动 ComparisonStrategy，发布期冻结 dataType | ✅ |
+| 30 | [rollout-ab-bucket-range](2026-06-05-rollout-ab-bucket-range.md) | D43：RolloutPreGate 桶区间 bucketStart/bucketEnd + experimentId A/B 真互斥 | ✅ |
+| 31 | [otel-javaagent-migration](2026-06-05-otel-javaagent-migration.md) | OTel Java Agent 迁移评估——维持 Spring SDK 方案，迁移暂缓 | 🔲 |
+| 32 | [time-framework](2026-06-06-time-framework.md) | B20 / D44：时间框架——EvalContext.now 注入 + DATE/DATETIME 一等 dataType + 时间条件内置 | ✅ |
+| 33 | [fetch-layer](2026-06-06-fetch-layer.md) | B21 / D45：FETCHED 取数层——取数管线 + Resolver/Cache SPI + 命名句柄 + 失败降级 | ✅ |
+| 34 | [b23-sdk-fetch](2026-06-06-b23-sdk-fetch.md) | B23 / D46：嵌入式 SDK 取数——定义独立下发 + 宿主注入 handler + 默认行为不变 | ✅ |
