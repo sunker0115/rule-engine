@@ -40,6 +40,8 @@ import java.util.concurrent.Executor;
 /** 自动装配规则评估模块。 */
 @AutoConfiguration
 @ComponentScan("com.sstlfsj.rule.eval.internal")
+@org.springframework.boot.context.properties.EnableConfigurationProperties(
+        com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class)
 public class EvalAutoConfiguration {
 
     /**
