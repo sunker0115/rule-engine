@@ -17,13 +17,35 @@ public record RuleVersionSnapshot(
         /** 该版本监听的事件类型列表；空列表表示通配（匹配任意 eventType）。 */
         List<String> triggerEventTypes,
         /** 规则类型，默认 AST_BOOLEAN；SCORECARD 时由 ScorecardExecutor 求值。 */
-        String kind
+        String kind,
+        /** AST 引用的 metricCode 列表（发布期冻结），供取数管线确定取数范围。 */
+        List<String> metricDependencies
 ) {
     public RuleVersionSnapshot {
         preGates = preGates == null ? List.of() : List.copyOf(preGates);
         decisionBindings = decisionBindings == null ? List.of() : List.copyOf(decisionBindings);
         triggerEventTypes = triggerEventTypes == null ? List.of() : List.copyOf(triggerEventTypes);
         kind = kind == null ? "AST_BOOLEAN" : kind;
+        metricDependencies = metricDependencies == null ? List.of() : List.copyOf(metricDependencies);
+    }
+
+    /**
+     * 兼容旧调用点的便利构造（无 metricDependencies，默认空列表）。
+     *
+     * @param ruleVersionId     规则版本 id
+     * @param sceneCode         场景编码
+     * @param tenantId          租户 id
+     * @param conditionAst      条件 AST 根节点
+     * @param preGates          Pre-Gate 配置列表
+     * @param decisionBindings  Decision 绑定列表
+     * @param triggerEventTypes 监听事件类型列表
+     * @param kind              规则类型
+     */
+    public RuleVersionSnapshot(Long ruleVersionId, String sceneCode, String tenantId, AstNode conditionAst,
+                               List<PreGateConfig> preGates, List<DecisionBinding> decisionBindings,
+                               List<String> triggerEventTypes, String kind) {
+        this(ruleVersionId, sceneCode, tenantId, conditionAst, preGates, decisionBindings,
+                triggerEventTypes, kind, List.of());
     }
 
     /** Pre-Gate 配置快照。 */
@@ -49,6 +71,7 @@ public record RuleVersionSnapshot(
         private final List<PreGateConfig> preGates = new ArrayList<>();
         private final List<DecisionBinding> decisionBindings = new ArrayList<>();
         private final List<String> triggerEventTypes = new ArrayList<>();
+        private final List<String> metricDependencies = new ArrayList<>();
 
         /** 规则版本 ID（本地模式可传任意 Long）。 */
         public Builder ruleVersionId(Long v)  { this.ruleVersionId = v; return this; }
@@ -70,11 +93,15 @@ public record RuleVersionSnapshot(
         public Builder addPreGate(String gateType, Map<String, Object> params) {
             preGates.add(new PreGateConfig(gateType, params)); return this;
         }
+        /** 追加一个 metric 依赖。 */
+        public Builder addMetricDependency(String metricCode) {
+            metricDependencies.add(metricCode); return this;
+        }
 
         /** 构建 RuleVersionSnapshot。 */
         public RuleVersionSnapshot build() {
             return new RuleVersionSnapshot(ruleVersionId, sceneCode, tenantId, conditionAst,
-                    preGates, decisionBindings, triggerEventTypes, kind);
+                    preGates, decisionBindings, triggerEventTypes, kind, metricDependencies);
         }
     }
 }

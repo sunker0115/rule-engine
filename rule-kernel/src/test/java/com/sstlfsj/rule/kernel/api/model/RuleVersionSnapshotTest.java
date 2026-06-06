@@ -118,4 +118,16 @@ class RuleVersionSnapshotTest {
         assertEquals(1, snap.decisionBindings().size());
         assertEquals("BLOCK", snap.decisionBindings().get(0).decisionCode());
     }
+
+    @Test
+    void metricDependencies_defaultEmpty_andBuilderAccumulates() {
+        RuleVersionSnapshot legacy = new RuleVersionSnapshot(1L, "s1", "t1", leaf(), null, null, null, null);
+        assertNotNull(legacy.metricDependencies());
+        assertTrue(legacy.metricDependencies().isEmpty());
+
+        RuleVersionSnapshot built = RuleVersionSnapshot.builder()
+                .ruleVersionId(1L).sceneCode("s1").tenantId("t1").conditionAst(leaf())
+                .addMetricDependency("balance").addMetricDependency("score").build();
+        assertEquals(List.of("balance", "score"), built.metricDependencies());
+    }
 }

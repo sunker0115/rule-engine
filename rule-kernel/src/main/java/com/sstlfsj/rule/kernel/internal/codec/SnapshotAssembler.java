@@ -37,6 +37,8 @@ public class SnapshotAssembler {
                 codec.deserializeDecisionBindings(row.decisionBindingsJson());
         List<String> triggerEventTypes = codec.deserializeStringList(
                 row.triggerEventTypesJson() == null ? "[]" : row.triggerEventTypesJson());
+        List<String> metricDependencies = codec.deserializeStringList(
+                row.metricDependenciesJson() == null ? "[]" : row.metricDependenciesJson());
 
         return new RuleVersionSnapshot(
                 row.ruleVersionId(),
@@ -46,7 +48,8 @@ public class SnapshotAssembler {
                 preGates,
                 decisionBindings,
                 triggerEventTypes,
-                row.kind() != null ? row.kind() : "AST_BOOLEAN"
+                row.kind() != null ? row.kind() : "AST_BOOLEAN",
+                metricDependencies
         );
     }
 

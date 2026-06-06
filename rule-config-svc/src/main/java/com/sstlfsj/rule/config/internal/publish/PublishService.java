@@ -234,7 +234,8 @@ public class PublishService {
                 List.of(),   // preGates v1 暂时不反序列化
                 List.of(),   // decisionBindings v1 暂时不反序列化
                 List.of(),   // triggerEventTypes v1 暂时不反序列化，通配
-                kind
+                kind,
+                metricDeps
         );
 
         // 11. 发布 Modulith 事件（事务提交后由 Spring 事件机制触发，eval-svc 监听热更索引）

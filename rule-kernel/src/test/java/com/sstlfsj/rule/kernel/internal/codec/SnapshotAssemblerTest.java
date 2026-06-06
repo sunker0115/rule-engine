@@ -59,4 +59,22 @@ class SnapshotAssemblerTest {
     void assembleAll_emptyInput_returnsEmptyList() {
         assertTrue(assembler.assembleAll(List.of()).isEmpty());
     }
+
+    @Test
+    void assemble_populatesMetricDependencies() throws Exception {
+        RuleVersionRow r = new RuleVersionRow(1L, "PAY", 1L,
+                "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"score\",\"params\":{\"threshold\":1}}",
+                "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\",\"score\"]");
+        RuleVersionSnapshot snap = assembler.assemble(r);
+        assertEquals(List.of("balance", "score"), snap.metricDependencies());
+    }
+
+    @Test
+    void assemble_nullMetricDependenciesJson_yieldsEmptyList() throws Exception {
+        RuleVersionRow r = row(1L, "PAY", 1L,
+                "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
+                "[]", "[]", "[]", "AST_BOOLEAN");
+        RuleVersionSnapshot snap = assembler.assemble(r);
+        assertTrue(snap.metricDependencies().isEmpty());
+    }
 }

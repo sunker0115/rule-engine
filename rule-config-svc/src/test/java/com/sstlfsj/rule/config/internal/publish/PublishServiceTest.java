@@ -102,6 +102,8 @@ class PublishServiceTest {
         assertThat(snapshot.triggerEventTypes()).isEmpty();
         // kind 从 rule_definition 流转到 snapshot
         assertThat(snapshot.kind()).isEqualTo("AST_BOOLEAN");
+        // metricDependencies 由 AST 收集并冻结进 snapshot（B21 取数范围来源）
+        assertThat(snapshot.metricDependencies()).containsExactly("m.code");
         // 验证 rule_version 被插入，version=1，status=ACTIVE
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());
