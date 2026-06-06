@@ -89,7 +89,6 @@ class EvalContextAssemblerTest {
         EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
 
         assertThat(ctx.now()).isEqualTo(NOW);
-        assertThat(ctx.getNow()).isEqualTo(NOW);
     }
 
     @Test
