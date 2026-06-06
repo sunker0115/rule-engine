@@ -88,13 +88,14 @@ class EvalAutoConfigurationTest {
 
     @Test
     void evalContextAssembler_nullLists_returnsInstance() {
-        EvalContextAssembler assembler = config.evalContextAssembler(null, null);
+        EvalContextAssembler assembler = config.evalContextAssembler(null, null, null, null, Runnable::run, 800L);
         assertNotNull(assembler);
     }
 
     @Test
     void evalContextAssembler_emptyLists_returnsInstance() {
-        EvalContextAssembler assembler = config.evalContextAssembler(List.of(), List.of());
+        EvalContextAssembler assembler = config.evalContextAssembler(
+                List.of(), List.of(), null, null, Runnable::run, 800L);
         assertNotNull(assembler);
     }
 
@@ -108,7 +109,7 @@ class EvalAutoConfigurationTest {
     void evalEngine_nullPreGates_returnsInstance() {
         EvalEngine engine = config.evalEngine(
                 config.sceneRuleIndex(),
-                config.evalContextAssembler(null, null),
+                config.evalContextAssembler(null, null, null, null, Runnable::run, 800L),
                 null,
                 config.ruleVersionExecutor(),
                 config.scorecardExecutor(),
@@ -121,7 +122,7 @@ class EvalAutoConfigurationTest {
     void evalEngine_emptyPreGates_returnsInstance() {
         EvalEngine engine = config.evalEngine(
                 config.sceneRuleIndex(),
-                config.evalContextAssembler(null, null),
+                config.evalContextAssembler(null, null, null, null, Runnable::run, 800L),
                 List.of(),
                 config.ruleVersionExecutor(),
                 config.scorecardExecutor(),

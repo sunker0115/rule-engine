@@ -22,7 +22,8 @@ public interface RuleVersionReadMapper {
               rv.decision_bindings AS decisionBindingsJson,
               rv.trigger_event_types AS triggerEventTypesJson,
               rd.kind            AS kind,
-              s.decision_strategy AS decisionStrategy
+              s.decision_strategy AS decisionStrategy,
+              rv.metric_dependencies AS metricDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -41,7 +42,8 @@ public interface RuleVersionReadMapper {
               rv.decision_bindings AS decisionBindingsJson,
               rv.trigger_event_types AS triggerEventTypesJson,
               rd.kind            AS kind,
-              s.decision_strategy AS decisionStrategy
+              s.decision_strategy AS decisionStrategy,
+              rv.metric_dependencies AS metricDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -63,7 +65,8 @@ public interface RuleVersionReadMapper {
               rv.decision_bindings AS decisionBindingsJson,
               rv.trigger_event_types AS triggerEventTypesJson,
               rd.kind            AS kind,
-              s.decision_strategy AS decisionStrategy
+              s.decision_strategy AS decisionStrategy,
+              rv.metric_dependencies AS metricDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id

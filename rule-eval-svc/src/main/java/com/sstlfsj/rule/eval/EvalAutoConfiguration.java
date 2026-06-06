@@ -6,6 +6,9 @@ import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
+import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
+import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
@@ -21,6 +24,9 @@ import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -29,6 +35,7 @@ import org.springframework.context.annotation.Primary;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 /** 自动装配规则评估模块。 */
 @AutoConfiguration
@@ -99,19 +106,51 @@ public class EvalAutoConfiguration {
     }
 
     /**
-     * 装配 EvalContext；SubjectLoader / MetricSourceHandler 由 SPI 可选注入。
+     * 取数专用线程池：并发 fetch 多个 metric，延迟 = max 而非 sum。
      *
-     * @param subjectLoaders  可选 SubjectLoader SPI 实现列表
-     * @param metricHandlers  可选 MetricSourceHandler SPI 实现列表
+     * @return 命名为 metricFetchExecutor 的线程池
+     */
+    @Bean(name = "metricFetchExecutor")
+    public Executor metricFetchExecutor() {
+        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
+        ex.setCorePoolSize(8);
+        ex.setMaxPoolSize(32);
+        ex.setQueueCapacity(256);
+        ex.setThreadNamePrefix("metric-fetch-");
+        ex.initialize();
+        return ex;
+    }
+
+    /**
+     * 装配 EvalContext；按 @MetricSourceType 归类 handler，注入 resolver/cache/fetchExecutor。
+     * resolver 为 null（无定义解析器）时 assembler 退化为仅 providedMetrics 生效。
+     *
+     * @param subjectLoaders     可选 SubjectLoader SPI 列表
+     * @param metricHandlers     可选 MetricSourceHandler SPI 列表
+     * @param definitionResolver metric 定义解析器（可选）
+     * @param metricCache        取数缓存（可选）
+     * @param fetchExecutor      取数线程池
+     * @param fetchTimeoutMs     全局取数超时毫秒
      * @return EvalContextAssembler 实例
      */
     @Bean
     public EvalContextAssembler evalContextAssembler(
             @Autowired(required = false) List<SubjectLoader> subjectLoaders,
-            @Autowired(required = false) List<MetricSourceHandler> metricHandlers) {
+            @Autowired(required = false) List<MetricSourceHandler> metricHandlers,
+            @Autowired(required = false) MetricDefinitionResolver definitionResolver,
+            @Autowired(required = false) MetricCache metricCache,
+            @Qualifier("metricFetchExecutor") Executor fetchExecutor,
+            @Value("${rule.fetch.timeout-ms:800}") long fetchTimeoutMs) {
+        Map<String, MetricSourceHandler> bySource = new HashMap<>();
+        if (metricHandlers != null) {
+            for (MetricSourceHandler h : metricHandlers) {
+                MetricSourceType ann = h.getClass().getAnnotation(MetricSourceType.class);
+                if (ann != null) bySource.put(ann.value(), h);
+            }
+        }
         return new EvalContextAssembler(
                 subjectLoaders == null ? List.of() : subjectLoaders,
-                metricHandlers == null ? List.of() : metricHandlers);
+                bySource, definitionResolver, metricCache, fetchExecutor, fetchTimeoutMs);
     }
 
     /**

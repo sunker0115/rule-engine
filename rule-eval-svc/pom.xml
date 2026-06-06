@@ -92,6 +92,11 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
+        <!-- 取数结果缓存（CaffeineMetricCache）+ metric 定义缓存；版本由 Spring Boot BOM 管理 -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
         <!-- Jackson：AstJsonCodec 反序列化 AST JSON，版本由 Spring Boot BOM 管理 -->
         <dependency>
             <groupId>tools.jackson.core</groupId>
