@@ -195,6 +195,7 @@ public class PublishService {
                     throw new IllegalArgumentException(
                             "被引用的 metric 无 ACTIVE 版本: " + code);
                 }
+                // version 为 null：存量无版本行，兜底为首版本号 1
                 int ver = m.getVersion() == null ? 1 : m.getVersion();
                 metricDeps.add(new MetricDependency(code, ver));
             }
@@ -207,7 +208,7 @@ public class PublishService {
                     ? metricResourceCatalog.datasourceNames() : null;
             java.util.Set<String> epNames = metricResourceCatalog != null
                     ? metricResourceCatalog.endpointNames() : null;
-            new MetricSafetyValidator(objectMapper).validate(metricDefs, dsNames, epNames);
+            new MetricSafetyValidator(objectMapper).validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
         }
 
         // 5. 计算新版本号（max(version)+1）

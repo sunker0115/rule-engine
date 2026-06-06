@@ -731,6 +731,35 @@ class PublishServiceTest {
     }
 
     @Test
+    void publish_multipleActiveVersions_throwsDataAnomaly() {
+        // B6 兜底：同一 metricCode 存在两行 ACTIVE（数据异常）→ 发布拒绝
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(draftVersion);
+
+        ConditionNode ast = new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0);
+        when(astSerializer.fromJson(anyString())).thenReturn(ast);
+
+        // 同 code 两行 ACTIVE，版本不同
+        MetricDefinition mdV2 = new MetricDefinition();
+        mdV2.setMetricCode("account.age");
+        mdV2.setDataType("LONG");
+        mdV2.setVersion(2);
+        mdV2.setStatus("ACTIVE");
+        MetricDefinition mdV3 = new MetricDefinition();
+        mdV3.setMetricCode("account.age");
+        mdV3.setDataType("LONG");
+        mdV3.setVersion(3);
+        mdV3.setStatus("ACTIVE");
+        when(metricDefinitionMapper.selectList(any())).thenReturn(List.of(mdV2, mdV3));
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("数据异常")
+                .hasMessageContaining("account.age");
+    }
+
+    @Test
     void publish_referencedMetricHasNoActiveVersion_throwsIllegalArgument() {
         // B6：被引用的 metric 无 ACTIVE 行 → 发布拒绝
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
