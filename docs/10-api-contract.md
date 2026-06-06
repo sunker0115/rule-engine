@@ -251,6 +251,61 @@ GET /api/v1/rules?tenantId=demo-tenant&sceneCode=risk.transfer&status=PUBLISHED
 
 **Response 200：** 分页列表，含 `ruleDefinitionId / code / name / status / currentVersion / publishedAt`。
 
+### 4.5 注册 Metric（B6）
+
+```
+POST /api/v1/metrics
+```
+
+**Request：**
+```json
+{
+  "tenantId": "demo-tenant",
+  "metricCode": "user.kyc.level",
+  "name": "KYC 等级",
+  "sourceType": "ATTRIBUTE",
+  "dataType": "LONG",
+  "params": { "table": "user_profile", "column": "kyc_level" },
+  "cacheTtlSeconds": 60,
+  "allowProvided": true
+}
+```
+
+**Response 201：** `{ "metricId": 1, "metricCode": "user.kyc.level", "version": 1, "status": "ACTIVE" }`
+
+### 4.6 更新 / 升版 Metric（B6）
+
+```
+PUT /api/v1/metrics/{metricCode}?tenantId=demo-tenant&breakingChange=true
+```
+
+- `breakingChange=false`（默认）：原地更新当前 ACTIVE 版本的 name / params / cacheTtlSeconds / allowProvided，不产生新版本行。
+- `breakingChange=true`：INSERT 新版本行（version 递增），旧行 status 改为 `SUPERSEDED`，返回新版本信息；已发布规则仍绑定旧版本，不受影响。
+
+**Request：** 同注册，省略 `metricCode`（来自路径）；`sourceType` / `dataType` 变更视为 `breakingChange=true`（强制）。
+
+**Response 200：** `{ "metricCode": "user.kyc.level", "version": 2, "status": "ACTIVE", "previousVersion": 1 }`
+
+### 4.7 影响面查询（B6）
+
+```
+GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId=demo-tenant
+```
+
+**Response 200：**
+```json
+{
+  "metricCode": "user.kyc.level",
+  "metricVersion": 1,
+  "affectedRules": [
+    { "ruleDefinitionId": 10, "ruleCode": "block-new-account", "sceneCode": "risk.transfer", "status": "PUBLISHED" }
+  ],
+  "affectedRuleCount": 1
+}
+```
+
+含所有在 `rule_version.metric_dependencies` 中绑定了该 `(metricCode, version)` 的已发布规则。
+
 ---
 
 ## 五、元数据接口
@@ -658,7 +713,7 @@ GET /api/v1/sdk/metric-definitions
                           # 传入（DECLARED 模式）只返回这些 scenes 下 ACTIVE rule_version 的 metricDependencies 并集内的定义
 ```
 
-响应格式为 `ApiResponse<List<MetricDescriptor>>`（见 §一），仅下发定义元数据（`sourceType`/`dataType`/`allowProvided`/`cacheTtlSeconds`/`params`），**不含凭证**——取数 handler 与凭证由宿主提供。`scenes` 过滤口径与快照下发一致（`rv.status=ACTIVE`），保证 SDK 评估这些 scenes 时引用的 metric 定义都已下发。
+响应格式为 `ApiResponse<List<MetricDescriptor>>`（见 §一），仅下发定义元数据（`sourceType`/`dataType`/`allowProvided`/`cacheTtlSeconds`/`params`/`metricVersion`），**不含凭证**——取数 handler 与凭证由宿主提供。`scenes` 过滤口径与快照下发一致（`rv.status=ACTIVE`），保证 SDK 评估这些 scenes 时引用的 metric 定义都已下发。**B6 补注**：DECLARED 模式按被引用 `(metricCode, metricVersion)` 并集下发，含 `SUPERSEDED` 旧版定义（被现存 ACTIVE 规则快照引用的版本必须下发），每项 `MetricDescriptor` 带 `metricVersion` 字段。`rule_version.metric_dependencies` 格式为对象数组 `[{metricCode, metricVersion}]`（B6），非字符串数组。
 
 ---
 

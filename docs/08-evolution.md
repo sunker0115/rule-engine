@@ -58,10 +58,20 @@
   - `metric_definition` 加 `version INT` 列，发布新语义 = INSERT 新行（旧行不删，status 改为 SUPERSEDED）；
   - `rule_version.metric_dependencies` 从 `["metricCode"]` 升级为 `[{"metricCode":"xxx","metricVersion":1}]`；
   - 发布期校验：被引用的 `(metricCode, metricVersion)` 必须存在且为 ACTIVE 状态；
-  - 评估期：`EvalContext` 按 `(metricCode, metricVersion)` 拉取对应版本的 metric 定义，不再默认取最新版；
+  - 评估期：按规则绑定版本 `resolve(metricCode, metricVersion)` 解析 metric 定义，不再默认取最新版；档1 `EvalContext` 仍按 metricCode 索引单值、过渡期同 code 取最高版本，完整 per-rule 版本投影（EvalContext 二元键）为档2 留后续；
   - 运营 UI：展示"修改此 metric 版本后受影响的规则数"，上线前可提前评估影响范围；
   - 与 §2.12（payloadSchema 版本化）平行演进，schema 版本和 metric 版本同期落地可降低迁移成本。
 - **迁移成本**：中（`metric_definition` 表结构变更 + `rule_version` JSON schema 升级 + 发布期 / 评估期解析逻辑 + UI 影响面展示）。
+
+**已实装（B6 / 2026-06-06，档1）**：
+
+- DDL：`metric_definition` 加 `version INT NOT NULL DEFAULT 1` 列；`status` ENUM 扩展 `SUPERSEDED`；唯一键从 `(tenant_id, metric_code)` 改为 `(tenant_id, metric_code, version)`（Flyway V1_6）；
+- `rule_version.metric_dependencies` 升为对象数组 `[{"metricCode":"xxx","metricVersion":1}]`，发布期静态收集并冻结当前 ACTIVE 版本号；
+- 发布期冻结：被引用 metric 的当前 ACTIVE 版本号在发布时写入快照；
+- 评估期按版本解析：`resolve(metricCode, metricVersion)` 按绑定版本取定义；档1 `EvalContext` 仍按 metricCode 单值索引，同 code 取最高版本，完整 per-rule 版本投影（二元键）为档2 后续；
+- metric 写服务（注册 `POST /api/v1/metrics`）+ 升版（`PUT /api/v1/metrics/{metricCode}?breakingChange=`）；
+- 影响面查询 API：`GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId=`；
+- SDK 下发：DECLARED 模式含被引用的 SUPERSEDED 旧版定义，每项 `MetricDescriptor` 带 `metricVersion`。
 
 ### 2.3 跨 Scene 规则复用（来源 #1）
 
@@ -363,7 +373,7 @@ D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔�
 | 来源 | TODO 内容 | 迁入目标 | 状态 |
 |------|-----------|---------|------|
 | [`01-concepts.md`](./01-concepts.md) §3.4 "kind 多态边界" 小节 | D12 演进说明（5 个 kind 的字段映射与共享属性） | §2.1 kind 多态 | ✅ 已迁入 |
-| [`01-concepts.md`](./01-concepts.md) §3.9 `metricVersion` 字段 | Metric 版本化语义 | §2.2 Metric 版本化 | ✅ 已迁入 |
+| [`01-concepts.md`](./01-concepts.md) §3.9 `metricVersion` 字段 | Metric 版本化语义 | §2.2 Metric 版本化 | ✅ 已迁入；✅ 已实装 B6 |
 | [`00-decisions.md`](./00-decisions.md) D14 v1 不做的"敏感数据" | 合规演进路径 | §2.8 合规演进 | ✅ 已迁入 |
 | [`00-decisions.md`](./00-decisions.md) D13 v1 不做的"payloadSchema 演进" | schema 升版本如何兼容存量规则 | §2.12 Scene schema 演进 | ✅ 已迁入 |
 | [`00-decisions.md`](./00-decisions.md) D20 v1 不做的"完整预编译 / alpha 共享" | Visitor 切预编译 lambda + 跨规则条件去重 | §2.13 评估期预编译完全切换 | ✅ 已迁入 |

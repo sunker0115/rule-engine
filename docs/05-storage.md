@@ -107,20 +107,21 @@ CREATE TABLE scene (
 CREATE TABLE metric_definition (
   id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id           BIGINT       NOT NULL,
-  metric_code         VARCHAR(128) NOT NULL COMMENT 'metricCode，租户内唯一',
+  metric_code         VARCHAR(128) NOT NULL COMMENT 'metricCode，同 tenant + version 下唯一',
+  version             INT          NOT NULL DEFAULT 1 COMMENT 'B6：指标版本号，单调递增；同 metricCode 升版 = INSERT 新行，旧行 status 改为 SUPERSEDED',
   name                VARCHAR(128) NOT NULL,
   source_type         ENUM('ATTRIBUTE','SQL_AGGREGATE','EXTERNAL_HTTP','STREAM') NOT NULL,
   data_type           ENUM('LONG','DOUBLE','STRING','BOOLEAN','LIST','DATE','DATETIME') NOT NULL COMMENT 'B20 新增 DATE（LocalDate，日历日期）/ DATETIME（Instant/带时区偏移，时区相关）；由 Flyway V1_5__add_date_datetime_to_metric_datatype.sql 扩展',
   params              JSON         NOT NULL COMMENT 'sourceType 专属参数（B21）：SQL_AGGREGATE={datasource(命名只读源),sql(:now命名参数)}；EXTERNAL_HTTP={endpoint(命名端点),path,jsonPath}；ATTRIBUTE={table,column}',
   cache_ttl_seconds   INT          NOT NULL DEFAULT 60 COMMENT '取数结果缓存 TTL，0=不缓存',
   allow_provided      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'D30：是否允许调用方通过 providedMetrics 覆盖；DEFAULT 0 为 SQL_AGGREGATE/STREAM 兜底，ATTRIBUTE/EXTERNAL_HTTP 应用层写入时需显式设为 1（见 04-extension §4.3）',
-  status              ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  status              ENUM('ACTIVE','DISABLED','SUPERSEDED') NOT NULL DEFAULT 'ACTIVE' COMMENT 'B6：SUPERSEDED=被新版本取代（旧行保留，规则仍可按版本解析）',
   created_by          VARCHAR(64)  COMMENT '创建人（D14）',
   created_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by          VARCHAR(64)  COMMENT '最近修改人（D14）',
   updated_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_tenant_code (tenant_id, metric_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标元数据（sourceType / params / cacheTtl / allowProvided）';
+  UNIQUE KEY uk_tenant_code_version (tenant_id, metric_code, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标元数据（sourceType / params / cacheTtl / allowProvided / version B6）';
 ```
 
 **rule_definition**
@@ -159,7 +160,7 @@ CREATE TABLE rule_version (
   pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表（含 ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX 各类型配置）；灰度由 ROLLOUT 项承载，params 含 percentage / bucketStart / bucketEnd / experimentId（详见 10-api-contract）',
   kind                  ENUM('AST_BOOLEAN','SCORECARD','DECISION_TREE','DECISION_TABLE','EXPRESSION_SCRIPT') NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT 'D12：规则形态冻结；v1 仅 AST_BOOLEAN 实装，其他占位',
   trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
-  metric_dependencies   JSON         NOT NULL COMMENT 'AST 引用的 metricCode 列表（发布期静态收集）',
+  metric_dependencies   JSON         NOT NULL COMMENT 'B6：AST 引用的 (metricCode, metricVersion) 对象数组（发布期冻结当前 ACTIVE 版本），格式 [{metricCode,metricVersion},...]',
   compiled_predicate_ref VARCHAR(256) NULL     COMMENT 'D20 §5：编译产物引用键，v1 留空，v1.5 预编译优化时启用',
   published_at          TIMESTAMP(3)           COMMENT 'NULL = 草稿；非 NULL = 已发布',
   published_by          VARCHAR(64),

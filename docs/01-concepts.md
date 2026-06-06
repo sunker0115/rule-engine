@@ -460,7 +460,7 @@ EvalContext {
 | 字段 | 说明 |
 |------|------|
 | `metricCode` | 全局唯一，命名 `<domain>.<entity>.<measure>[.<window>]` |
-| `metricVersion` | 指标定义版本号概念占位（**v1 DDL 无此列**，v1 规则发布快照仅引用 `metricCode` 字符串，不带版本号）——指标语义变更等同于新建新 `metricCode`（业务约定）。强制 `(metricCode, metricVersion)` 绑定的版本化演进留 [`08-evolution.md §2.2`](./08-evolution.md) |
+| `metricVersion` | 已实装（B6）：`metric_definition.version` 列；规则发布期冻结 (metricCode, metricVersion) 绑定，评估期按绑定版本解析定义，详见 [`08-evolution.md §2.2`](./08-evolution.md) |
 | `tenantId` | 归属租户；`*` 表示平台级共享指标 |
 | `sourceType` | 取数方式，见下方 sourceType 对比表 |
 | `params` | 取数参数（结构依 sourceType 而异，见下方对比表） |

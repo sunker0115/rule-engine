@@ -64,8 +64,8 @@
     { "decisionCode": "REVIEW" }
   ],
   "metricDependencies": [
-    "user.account.age.days",
-    "user.kyc.level",
-    "user.transfer.dest.trust.score"
+    { "metricCode": "user.account.age.days", "metricVersion": 1 },
+    { "metricCode": "user.kyc.level", "metricVersion": 1 },
+    { "metricCode": "user.transfer.dest.trust.score", "metricVersion": 1 }
   ]
 }
