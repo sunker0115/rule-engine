@@ -10,6 +10,7 @@ import java.util.Map;
  */
 public record MetricDescriptor(
         String metricCode,
+        int metricVersion,
         String sourceType,
         String dataType,
         boolean allowProvided,

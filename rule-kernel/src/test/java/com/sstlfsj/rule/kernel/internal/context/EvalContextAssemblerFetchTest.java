@@ -31,7 +31,7 @@ class EvalContextAssemblerFetchTest {
     }
 
     private MetricDescriptor sqlDef(String code, boolean allowProvided, int ttl) {
-        return new MetricDescriptor(code, "SQL_AGGREGATE", "LONG", allowProvided, ttl, Map.of());
+        return new MetricDescriptor(code, 1, "SQL_AGGREGATE", "LONG", allowProvided, ttl, Map.of());
     }
 
     @Test

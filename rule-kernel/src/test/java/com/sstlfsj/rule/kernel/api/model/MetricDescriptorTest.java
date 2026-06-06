@@ -10,13 +10,13 @@ class MetricDescriptorTest {
 
     @Test
     void nullParams_normalizedToEmptyImmutableMap() {
-        MetricDescriptor d = new MetricDescriptor("balance", "SQL_AGGREGATE", "LONG", false, 60, null);
+        MetricDescriptor d = new MetricDescriptor("balance", 1, "SQL_AGGREGATE", "LONG", false, 60, null);
         assertThat(d.params()).isEmpty();
     }
 
     @Test
     void holdsAllFields() {
-        MetricDescriptor d = new MetricDescriptor("balance", "SQL_AGGREGATE", "LONG", true, 0,
+        MetricDescriptor d = new MetricDescriptor("balance", 1, "SQL_AGGREGATE", "LONG", true, 0,
                 Map.of("datasource", "risk_ro"));
         assertThat(d.sourceType()).isEqualTo("SQL_AGGREGATE");
         assertThat(d.allowProvided()).isTrue();

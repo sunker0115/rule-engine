@@ -12,7 +12,7 @@ class MetricDefinitionResolverTest {
     @Test
     void resolve_viaLambda_returnsDescriptor() {
         MetricDefinitionResolver resolver = (tenant, code) ->
-                new MetricDescriptor(code, "SQL_AGGREGATE", "LONG", false, 60, Map.of());
+                new MetricDescriptor(code, 1, "SQL_AGGREGATE", "LONG", false, 60, Map.of());
         MetricDescriptor d = resolver.resolve("1", "balance");
         assertNotNull(d);
         assertEquals("balance", d.metricCode());
