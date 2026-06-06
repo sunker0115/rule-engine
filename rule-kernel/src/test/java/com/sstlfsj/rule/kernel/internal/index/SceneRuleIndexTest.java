@@ -43,6 +43,20 @@ class SceneRuleIndexTest {
     }
 
     @Test
+    void match_sameIdInBothBuckets_dedupedKeepsExact() {
+        SceneRuleIndex idx = new SceneRuleIndex();
+        RuleVersionSnapshot exact = snap(1L, "t1", "fraud");
+        RuleVersionSnapshot wildSameId = snap(1L, "t1", "fraud");
+        RuleVersionSnapshot wildOther = snap(2L, "t1", "fraud");
+        idx.update("t1", "fraud", "LOGIN", List.of(exact));
+        idx.update("t1", "fraud", "*", List.of(wildSameId, wildOther));
+
+        // id=1 仅保留 exact 实例，id=2 从 wildcard 补入；exact 优先在前
+        assertThat(idx.match("t1", "fraud", "LOGIN"))
+                .containsExactly(exact, wildOther);
+    }
+
+    @Test
     void match_noEntry_returnsEmpty() {
         assertThat(new SceneRuleIndex().match("t1", "scene", "ORDER")).isEmpty();
     }
