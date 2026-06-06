@@ -65,4 +65,13 @@ class MetricSafetyValidatorTest {
         assertThatCode(() -> validator.validate(List.of(clean), null, null))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void rejectsCurrentDate() {
+        MetricDefinition m = sqlMetric("balance",
+                "{\"datasource\":\"ro\",\"sql\":\"SELECT 1 WHERE d >= CURRENT_DATE - INTERVAL 7 DAY\"}");
+        assertThatThrownBy(() -> validator.validate(List.of(m), Set.of("ro"), Set.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("CURRENT_DATE");
+    }
 }

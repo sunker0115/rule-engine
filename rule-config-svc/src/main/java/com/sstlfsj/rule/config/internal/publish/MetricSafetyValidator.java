@@ -19,9 +19,9 @@ import java.util.regex.Pattern;
  */
 class MetricSafetyValidator {
 
-    // 大小写不敏感匹配 DB 时间函数调用（NOW()/SYSDATE()/CURRENT_TIMESTAMP）。
+    // 大小写不敏感匹配 DB 时间函数调用（NOW()/SYSDATE()/CURRENT_TIMESTAMP/CURRENT_DATE）。
     private static final Pattern DB_TIME = Pattern.compile(
-            "(?i)\\b(NOW|SYSDATE)\\s*\\(|(?i)\\bCURRENT_TIMESTAMP\\b");
+            "(?i)\\b(NOW|SYSDATE)\\s*\\(|(?i)\\b(CURRENT_TIMESTAMP|CURRENT_DATE)\\b");
     private static final Pattern DOLLAR_BRACE = Pattern.compile("\\$\\{");
 
     private final ObjectMapper objectMapper;
@@ -55,7 +55,7 @@ class MetricSafetyValidator {
             String text = sql.toString();
             if (DB_TIME.matcher(text).find()) {
                 throw new IllegalArgumentException(
-                        "metric=" + m.getMetricCode() + " 的 SQL 含 DB 时间函数（NOW/SYSDATE/CURRENT_TIMESTAMP），请用 :now");
+                        "metric=" + m.getMetricCode() + " 的 SQL 含 DB 时间函数（NOW/SYSDATE/CURRENT_TIMESTAMP/CURRENT_DATE），请用 :now");
             }
             if (DOLLAR_BRACE.matcher(text).find()) {
                 throw new IllegalArgumentException(
