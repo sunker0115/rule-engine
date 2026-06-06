@@ -286,4 +286,39 @@ class MetadataServiceImplTest {
         // 关键断言：下发的版本是 1（SUPERSEDED 旧版），而非当前 ACTIVE 的 v2
         assertThat(d.metricVersion()).isEqualTo(1);
     }
+
+    /**
+     * DECLARED 模式：按精确 (code,version) 查不到定义时容错跳过，返回空列表（不抛异常）。
+     * 对应 warn 日志分支——定义被物理删除等数据一致性异常场景。
+     */
+    @Test
+    void listMetricDefinitions_declaredMode_missingDefinition_skipsGracefully() {
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setTenantId(1L);
+        scene.setCode("fraud");
+        when(sceneMapper.selectList(any())).thenReturn(List.of(scene));
+
+        RuleDefinition def = new RuleDefinition();
+        def.setId(11L);
+        def.setTenantId(1L);
+        def.setSceneId(5L);
+        when(ruleDefinitionMapper.selectList(any())).thenReturn(List.of(def));
+
+        RuleVersion rv = new RuleVersion();
+        rv.setRuleDefinitionId(11L);
+        rv.setStatus("ACTIVE");
+        rv.setMetricDependencies("[{\"metricCode\":\"ghost.metric\",\"metricVersion\":2}]");
+        when(ruleVersionMapper.selectList(any())).thenReturn(List.of(rv));
+
+        // 定义已被物理删除：selectOne 返回 null
+        when(metricDefinitionMapper.selectOne(any())).thenReturn(null);
+
+        MetadataServiceImpl service = new MetadataServiceImpl(
+                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
+                new tools.jackson.databind.ObjectMapper());
+
+        // 容错：跳过缺失定义，不抛异常，返回空列表
+        assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();
+    }
 }

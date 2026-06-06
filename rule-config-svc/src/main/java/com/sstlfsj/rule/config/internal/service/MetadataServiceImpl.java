@@ -13,6 +13,8 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -28,6 +30,8 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 class MetadataServiceImpl implements MetadataService {
+
+    private static final Logger log = LoggerFactory.getLogger(MetadataServiceImpl.class);
 
     private final SceneMapper sceneMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
@@ -95,9 +99,12 @@ class MetadataServiceImpl implements MetadataService {
                             .eq(MetricDefinition::getTenantId, tid)
                             .eq(MetricDefinition::getMetricCode, dep.metricCode())
                             .eq(MetricDefinition::getVersion, dep.metricVersion()));
-            // 查不到（定义已被物理删除等异常情况）容错跳过
             if (row != null) {
                 result.add(toDescriptor(row));
+            } else {
+                // 规则绑了物理不存在的定义，属数据一致性异常；静默跳过会让 SDK 评估失败且无排障线索
+                log.warn("metric 定义不存在，跳过下发: tenantId={}, code={}, version={}",
+                        tid, dep.metricCode(), dep.metricVersion());
             }
         }
         return result;
