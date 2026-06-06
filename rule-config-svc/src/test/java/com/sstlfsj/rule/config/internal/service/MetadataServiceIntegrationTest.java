@@ -1,0 +1,177 @@
+package com.sstlfsj.rule.config.internal.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.sstlfsj.rule.config.api.service.MetadataService;
+import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
+import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * B23 集成测试：真 MySQL（Testcontainers）+ Flyway 建表，端到端验证
+ * {@link MetadataService#listMetricDefinitions} 的 scenes 过滤 SQL：
+ * ALL 模式返回租户全部 ACTIVE 定义；DECLARED 模式按 scenes 下 ACTIVE rule_version 的
+ * metricDependencies 并集过滤。seed 走 MyBatis-Plus 仓储 + 领域实体（与生产数据层一致，回填生成 id 维持关联）。
+ */
+@SpringBootTest
+@Testcontainers(disabledWithoutDocker = true)
+@ActiveProfiles("test")
+class MetadataServiceIntegrationTest {
+
+    /** 内嵌测试应用：扫 config.internal 全部 Bean（含 JacksonConfig 的 ObjectMapper）+ MapperScan 仓储。 */
+    @SpringBootApplication(scanBasePackages = "com.sstlfsj.rule.config.internal")
+    @MapperScan("com.sstlfsj.rule.config.internal.repository")
+    static class TestApp {
+    }
+
+    @Container
+    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
+            .withDatabaseName("rule_engine_test")
+            .withUsername("test")
+            .withPassword("test");
+
+    @DynamicPropertySource
+    static void datasource(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", mysql::getJdbcUrl);
+        registry.add("spring.datasource.username", mysql::getUsername);
+        registry.add("spring.datasource.password", mysql::getPassword);
+    }
+
+    private static final long TENANT = 1L;
+    private static final String AND_NODE =
+            "{\"type\":\"AndNode\",\"children\":[],\"displayLabel\":null,\"weight\":null}";
+
+    @Autowired private MetadataService metadataService;
+    @Autowired private SceneMapper sceneMapper;
+    @Autowired private MetricDefinitionMapper metricDefinitionMapper;
+    @Autowired private RuleDefinitionMapper ruleDefinitionMapper;
+    @Autowired private RuleVersionMapper ruleVersionMapper;
+
+    @BeforeEach
+    void seed() {
+        // 清理（带 WHERE id IS NOT NULL，规避全表删除拦截；auto_increment 不复位，故下方用回填 id 维持关联）
+        ruleVersionMapper.delete(new LambdaQueryWrapper<RuleVersion>().isNotNull(RuleVersion::getId));
+        ruleDefinitionMapper.delete(new LambdaQueryWrapper<RuleDefinition>().isNotNull(RuleDefinition::getId));
+        metricDefinitionMapper.delete(new LambdaQueryWrapper<MetricDefinition>().isNotNull(MetricDefinition::getId));
+        sceneMapper.delete(new LambdaQueryWrapper<SceneDef>().isNotNull(SceneDef::getId));
+
+        SceneDef fraud = scene("fraud", "[\"login\"]");
+        sceneMapper.insert(fraud);
+        SceneDef payment = scene("payment", "[\"pay\"]");
+        sceneMapper.insert(payment);
+
+        // 三个 ACTIVE metric 定义；user.age 不被任何规则引用
+        metricDefinitionMapper.insert(metric("risk.score", "SQL_AGGREGATE", "LONG"));
+        metricDefinitionMapper.insert(metric("account.balance", "SQL_AGGREGATE", "DOUBLE"));
+        metricDefinitionMapper.insert(metric("user.age", "ATTRIBUTE", "LONG"));
+
+        // 两条规则：fraud 引用 risk.score，payment 引用 account.balance（用回填的 scene/ruleDef id 关联）
+        RuleDefinition rdFraud = ruleDef(fraud.getId(), "r-fraud");
+        ruleDefinitionMapper.insert(rdFraud);
+        RuleDefinition rdPay = ruleDef(payment.getId(), "r-pay");
+        ruleDefinitionMapper.insert(rdPay);
+
+        ruleVersionMapper.insert(ruleVersion(rdFraud.getId(), "[\"risk.score\"]"));
+        ruleVersionMapper.insert(ruleVersion(rdPay.getId(), "[\"account.balance\"]"));
+    }
+
+    private SceneDef scene(String code, String eventTypesJson) {
+        SceneDef s = new SceneDef();
+        s.setTenantId(TENANT);
+        s.setCode(code);
+        s.setName(code);
+        s.setDominantMode("PUSH");
+        s.setDecisionStrategy("HIGHEST_PRIORITY");
+        s.setSubjectType("USER");
+        s.setEventTypes(eventTypesJson);
+        s.setStatus("ACTIVE");
+        return s;
+    }
+
+    private MetricDefinition metric(String code, String sourceType, String dataType) {
+        MetricDefinition m = new MetricDefinition();
+        m.setTenantId(TENANT);
+        m.setMetricCode(code);
+        m.setName(code);
+        m.setSourceType(sourceType);
+        m.setDataType(dataType);
+        m.setParams("{}");
+        m.setCacheTtlSeconds(60);
+        m.setAllowProvided(false);
+        m.setStatus("ACTIVE");
+        return m;
+    }
+
+    private RuleDefinition ruleDef(Long sceneId, String code) {
+        RuleDefinition r = new RuleDefinition();
+        r.setTenantId(TENANT);
+        r.setSceneId(sceneId);
+        r.setCode(code);
+        r.setName(code);
+        r.setStatus("PUBLISHED");
+        r.setKind("AST_BOOLEAN");
+        r.setCurrentVersion(1L);
+        return r;
+    }
+
+    private RuleVersion ruleVersion(Long ruleDefinitionId, String metricDepsJson) {
+        RuleVersion v = new RuleVersion();
+        v.setRuleDefinitionId(ruleDefinitionId);
+        v.setVersion(1L);
+        v.setConditionAst(AND_NODE);
+        v.setDecisionBindings("[]");
+        v.setPreGates("[]");
+        v.setKind("AST_BOOLEAN");
+        v.setTriggerEventTypes("[\"e\"]");
+        v.setMetricDependencies(metricDepsJson);
+        v.setStatus("ACTIVE");
+        return v;
+    }
+
+    @Test
+    void allMode_noScenes_returnsAllActiveDefinitions() {
+        List<MetricDescriptor> defs = metadataService.listMetricDefinitions("1", List.of());
+        assertThat(defs).extracting(MetricDescriptor::metricCode)
+                .containsExactlyInAnyOrder("risk.score", "account.balance", "user.age");
+    }
+
+    @Test
+    void declaredMode_singleScene_filtersToMetricDependencyUnion() {
+        List<MetricDescriptor> defs = metadataService.listMetricDefinitions("1", List.of("fraud"));
+        assertThat(defs).extracting(MetricDescriptor::metricCode).containsExactly("risk.score");
+    }
+
+    @Test
+    void declaredMode_multiScene_unionOfDeps_excludesUnreferenced() {
+        List<MetricDescriptor> defs = metadataService.listMetricDefinitions("1", List.of("fraud", "payment"));
+        // risk.score + account.balance 在并集内；user.age 未被引用，排除
+        assertThat(defs).extracting(MetricDescriptor::metricCode)
+                .containsExactlyInAnyOrder("risk.score", "account.balance");
+    }
+
+    @Test
+    void declaredMode_unknownScene_returnsEmpty() {
+        assertThat(metadataService.listMetricDefinitions("1", List.of("nope"))).isEmpty();
+    }
+}
