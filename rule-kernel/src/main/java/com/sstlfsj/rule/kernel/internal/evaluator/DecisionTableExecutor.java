@@ -34,31 +34,39 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
         List<DecisionTableNode.Column> columns = table.columns();
 
         for (DecisionTableNode.Row row : table.rows()) {
-            if (rowMatches(row, columns, ctx)) {
+            RowResult rr = rowMatches(row, columns, ctx);
+            if (rr.error() != null) {
+                // 取数失败：不静默落下一行，整表置 ERROR + miss
+                return new EvalResult(false, null, List.of(), List.of(),
+                        rr.error(), List.of(), null, null, null);
+            }
+            if (rr.matched()) {
                 return hit(row.decisionCode(), snapshot);
             }
         }
         return EvalResult.miss();
     }
 
-    private boolean rowMatches(DecisionTableNode.Row row,
-                                List<DecisionTableNode.Column> columns,
-                                EvalContext ctx) {
+    /** 行匹配结果：matched=该行是否全列满足；error 非 null 表示取数失败（中止整表）。 */
+    private record RowResult(boolean matched, String error) {}
+
+    private RowResult rowMatches(DecisionTableNode.Row row,
+                                 List<DecisionTableNode.Column> columns,
+                                 EvalContext ctx) {
         List<Object> conditions = row.conditions();
         for (int i = 0; i < columns.size(); i++) {
             Object condValue = (i < conditions.size()) ? conditions.get(i) : null;
             if (condValue == null) continue; // null 表示通配
 
             DecisionTableNode.Column col = columns.get(i);
-            ConditionEvaluator ev = evaluators.get(col.operator());
-            if (ev == null) return false;
-
             // 将列的 condValue 包装为 ConditionNode params，复用现有 ConditionEvaluator 约定
             Map<String, Object> params = buildParams(col.operator(), condValue);
             ConditionNode node = new ConditionNode(col.operator(), col.metricCode(), null, params, 0.0);
-            if (!ev.evaluate(node, ctx)) return false;
+            ConditionOutcome o = ConditionEvaluation.evaluate(node, ctx, evaluators);
+            if (o.isError()) return new RowResult(false, o.errorCode());
+            if (!o.satisfied()) return new RowResult(false, null); // 本行不匹配
         }
-        return true;
+        return new RowResult(true, null);
     }
 
     /**

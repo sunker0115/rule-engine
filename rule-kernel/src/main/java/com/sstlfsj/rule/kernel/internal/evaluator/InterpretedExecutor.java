@@ -76,11 +76,15 @@ public class InterpretedExecutor implements RuleVersionExecutor {
     }
 
     private boolean evaluateCondition(ConditionNode node, EvalContext ctx) {
-        ConditionEvaluator evaluator = evaluators.get(node.conditionType());
-        if (evaluator == null) {
-            throw new IllegalStateException(
-                    "No ConditionEvaluator registered for type: " + node.conditionType());
+        ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
+        if (outcome.isError()) {
+            // 无算子是配置错误，保留严格中止；取数失败则降级不命中
+            if (ConditionEvaluation.NO_EVALUATOR.equals(outcome.errorCode())) {
+                throw new IllegalStateException(
+                        "No ConditionEvaluator registered for type: " + node.conditionType());
+            }
+            return false;
         }
-        return evaluator.evaluate(node, ctx);
+        return outcome.satisfied();
     }
 }

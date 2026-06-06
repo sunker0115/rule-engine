@@ -37,24 +37,23 @@ public class ScorecardExecutor implements RuleVersionExecutor {
 
         List<NodeTrace> traces = new ArrayList<>();
         double score = 0.0;
+        Long rvId = snapshot.ruleVersionId();
 
         for (ConditionNode node : root.conditions()) {
-            ConditionEvaluator evaluator = evaluators.get(node.conditionType());
-            boolean met = false;
-            String errorCode = null;
-
-            if (evaluator == null) {
-                errorCode = "NO_EVALUATOR";
-            } else {
-                met = evaluator.evaluate(node, ctx);
-                if (met && node.weight() != null) {
-                    score += node.weight();
-                }
+            ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
+            if (outcome.isError()) {
+                // 风控保守：任一条件取数失败/无算子 → 整卡置 ERROR 不出分，避免漏分误判
+                traces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+                        false, null, null, outcome.errorCode(), List.of(), rvId));
+                return new EvalResult(false, null, List.of(), traces,
+                        outcome.errorCode(), List.of(), null, null, null);
             }
-
-            Long rvId = snapshot.ruleVersionId();
+            boolean met = outcome.satisfied();
+            if (met && node.weight() != null) {
+                score += node.weight();
+            }
             traces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                    met, null, null, errorCode, List.of(), rvId));
+                    met, null, null, null, List.of(), rvId));
         }
 
         boolean hit = score >= root.threshold();

@@ -41,8 +41,13 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
     }
 
     private EvalResult evaluateIf(IfNode ifNode, RuleVersionSnapshot snapshot, EvalContext ctx) {
-        boolean condResult = evaluateCondition(ifNode.condition(), ctx);
-        if (condResult) {
+        ConditionOutcome cond = evaluateCondition(ifNode.condition(), ctx);
+        if (cond.isError()) {
+            // 取数失败：不静默走 else，整规则置 ERROR + miss（避免命中错误叶子）
+            return new EvalResult(false, null, List.of(), List.of(),
+                    cond.errorCode(), List.of(), null, null, null);
+        }
+        if (cond.satisfied()) {
             return evaluate(ifNode.thenBranch(), snapshot, ctx);
         } else if (ifNode.elseBranch() != null) {
             return evaluate(ifNode.elseBranch(), snapshot, ctx);
@@ -51,26 +56,32 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         }
     }
 
-    private boolean evaluateCondition(AstNode node, EvalContext ctx) {
+    private ConditionOutcome evaluateCondition(AstNode node, EvalContext ctx) {
         return switch (node) {
-            case ConditionNode c -> {
-                ConditionEvaluator ev = evaluators.get(c.conditionType());
-                yield ev != null && ev.evaluate(c, ctx);
-            }
+            case ConditionNode c -> ConditionEvaluation.evaluate(c, ctx, evaluators);
             case AndNode and -> {
                 for (AstNode child : and.children()) {
-                    if (!evaluateCondition(child, ctx)) yield false;
+                    ConditionOutcome o = evaluateCondition(child, ctx);
+                    if (o.isError()) yield o;                       // ERROR 传播
+                    if (!o.satisfied()) yield ConditionOutcome.NOT_SATISFIED; // 短路 false
                 }
-                yield true;
+                yield ConditionOutcome.SATISFIED;
             }
             case OrNode or -> {
+                String errCode = null;
                 for (AstNode child : or.children()) {
-                    if (evaluateCondition(child, ctx)) yield true;
+                    ConditionOutcome o = evaluateCondition(child, ctx);
+                    if (o.satisfied()) yield ConditionOutcome.SATISFIED; // 命中即短路，不在意其它
+                    if (o.isError()) errCode = o.errorCode();
                 }
-                yield false;
+                // 全不满足；若曾有 ERROR 则整体不可判定（保守）
+                yield errCode != null ? ConditionOutcome.error(errCode) : ConditionOutcome.NOT_SATISFIED;
             }
-            case NotNode not -> !evaluateCondition(not.child(), ctx);
-            default -> false;
+            case NotNode not -> {
+                ConditionOutcome o = evaluateCondition(not.child(), ctx);
+                yield o.isError() ? o : ConditionOutcome.of(!o.satisfied());
+            }
+            default -> ConditionOutcome.error(ConditionEvaluation.NO_EVALUATOR);
         };
     }
 
