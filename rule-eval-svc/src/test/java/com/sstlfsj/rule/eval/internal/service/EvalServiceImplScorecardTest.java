@@ -1,13 +1,11 @@
 package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
-import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,20 +29,18 @@ import static org.mockito.Mockito.*;
 class EvalServiceImplScorecardTest {
 
     @Mock EvalEngine evalEngine;
-    @Mock SceneRuleIndex index;
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock EvalSessionWriter sessionWriter;
     @Mock TraceWriter traceWriter;
     @Mock DryRunTraceWriter dryRunTraceWriter;
     @Mock ActionDispatchService actionDispatchService;
-    @Mock EvalContextAssembler contextAssembler;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, index, snapshotLoader,
-                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService, contextAssembler);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader,
+                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService);
     }
 
     private RuleEvent event() {
@@ -52,19 +48,30 @@ class EvalServiceImplScorecardTest {
                 "evt-001", Instant.now(), Map.of(), Map.of());
     }
 
-    /** EvalEngine 返回带 score 的结果，EvalServiceImpl 应原样透传。 */
-    @Test
-    void scorecard_result_score_isPropagated() {
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+    private RuleVersionSnapshot scorecardSnapshot() {
+        return new RuleVersionSnapshot(
                 1L, "fraud_check", "1", null, List.of(),
                 List.of(new RuleVersionSnapshot.DecisionBinding("HIGH_RISK", 10)),
                 null, "SCORECARD");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
+    }
 
+    private EvalContext ctx() {
+        return new EvalContext("1", event(), null, Map.of(), Instant.parse("2024-01-01T00:00:00Z"));
+    }
+
+    private void stubPull(EvalResult engineResult) {
+        when(evalEngine.match(any(RuleEvent.class))).thenReturn(List.of(scorecardSnapshot()));
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class)))
+                .thenReturn(new EvalOutcome(engineResult, ctx()));
+        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+    }
+
+    /** EvalEngine 返回带 score 的结果，EvalServiceImpl 应原样透传。 */
+    @Test
+    void scorecard_result_score_isPropagated() {
         Decision d = new Decision("HIGH_RISK", "", 10, 1L);
         EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(engineResult);
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(engineResult);
 
         EvalResult result = impl.evaluate(event());
 
@@ -75,13 +82,7 @@ class EvalServiceImplScorecardTest {
     /** MISS 时 score 为 null，EvalServiceImpl 透传。 */
     @Test
     void scorecard_miss_score_isNull() {
-        RuleVersionSnapshot snap = new RuleVersionSnapshot(
-                1L, "fraud_check", "1", null, List.of(),
-                List.of(new RuleVersionSnapshot.DecisionBinding("HIGH_RISK", 10)),
-                null, "SCORECARD");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(EvalResult.miss());
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(EvalResult.miss());
 
         EvalResult result = impl.evaluate(event());
 

@@ -8,9 +8,7 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
-import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
-import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
@@ -23,31 +21,25 @@ import java.util.List;
 class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     private final EvalEngine evalEngine;
-    private final SceneRuleIndex index;
     private final SceneSnapshotLoader snapshotLoader;
     private final EvalSessionWriter sessionWriter;
     private final TraceWriter traceWriter;
     private final DryRunTraceWriter dryRunTraceWriter;
     private final ActionDispatchService actionDispatchService;
-    private final EvalContextAssembler contextAssembler;
     private final EvalActionDispatcher dispatcher;
 
     EvalServiceImpl(EvalEngine evalEngine,
-                    SceneRuleIndex index,
                     SceneSnapshotLoader snapshotLoader,
                     EvalSessionWriter sessionWriter,
                     TraceWriter traceWriter,
                     DryRunTraceWriter dryRunTraceWriter,
-                    ActionDispatchService actionDispatchService,
-                    EvalContextAssembler contextAssembler) {
+                    ActionDispatchService actionDispatchService) {
         this.evalEngine = evalEngine;
-        this.index = index;
         this.snapshotLoader = snapshotLoader;
         this.sessionWriter = sessionWriter;
         this.traceWriter = traceWriter;
         this.dryRunTraceWriter = dryRunTraceWriter;
         this.actionDispatchService = actionDispatchService;
-        this.contextAssembler = contextAssembler;
         // 构造器末尾创建 dispatcher，不调用 start
         this.dispatcher = new EvalActionDispatcher(10000, this::evaluate);
     }
@@ -83,23 +75,23 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         if (isDryRun && specificVersionId != null) {
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);
             if (snap == null) return EvalResult.miss();
-            EvalContext ctx = contextAssembler.assemble(event, List.of(snap), evalNow);
-            EvalResult result = evalEngine.evaluate(event, List.of(snap), evalNow);
+            EvalOutcome outcome = evalEngine.evaluateWithContext(
+                    event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow);
             Long sessionId = sessionWriter.insertDryRunPending(event, specificVersionId);
-            sessionWriter.updateDryRunFinal(sessionId, result, ctx);
-            dryRunTraceWriter.write(event.tenantId(), sessionId.toString(), result.nodeTrace());
-            return result;
+            sessionWriter.updateDryRunFinal(sessionId, outcome.result(), outcome.context());
+            dryRunTraceWriter.write(event.tenantId(), sessionId.toString(),
+                    outcome.result().nodeTrace());
+            return outcome.result();
         }
 
-        List<RuleVersionSnapshot> candidates = index.match(
-                event.tenantId(), event.sceneCode(), event.eventType());
+        List<RuleVersionSnapshot> candidates = evalEngine.match(event);
         if (candidates.isEmpty()) return EvalResult.miss();
 
         Long sessionId = sessionWriter.insertPending(event, candidates.size(), "PULL");
-        EvalContext ctx = contextAssembler.assemble(event, candidates, evalNow);
-        EvalResult result = evalEngine.evaluate(event, evalNow);
+        EvalOutcome outcome = evalEngine.evaluateWithContext(event, candidates, evalNow);
+        EvalResult result = outcome.result();
 
-        sessionWriter.updateFinal(sessionId, result, ctx);
+        sessionWriter.updateFinal(sessionId, result, outcome.context());
         traceWriter.write(event.tenantId(), sessionId.toString(), result.nodeTrace());
 
         if (result.ruleHit()) {

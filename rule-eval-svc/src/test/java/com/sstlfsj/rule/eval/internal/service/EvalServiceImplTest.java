@@ -1,14 +1,12 @@
 package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
-import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,20 +26,18 @@ import static org.mockito.Mockito.*;
 class EvalServiceImplTest {
 
     @Mock EvalEngine evalEngine;
-    @Mock SceneRuleIndex index;
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock EvalSessionWriter sessionWriter;
     @Mock TraceWriter traceWriter;
     @Mock DryRunTraceWriter dryRunTraceWriter;
     @Mock ActionDispatchService actionDispatchService;
-    @Mock EvalContextAssembler contextAssembler;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, index, snapshotLoader,
-                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService, contextAssembler);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader,
+                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService);
     }
 
     private RuleEvent event() {
@@ -63,37 +59,43 @@ class EvalServiceImplTest {
         return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
     }
 
-    @Test
-    void evaluate_withCandidates_contextAssemblerCalled() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(EvalResult.miss());
+    private EvalContext ctx() {
+        return new EvalContext("1", event(), null, Map.of(), Instant.parse("2024-01-01T00:00:00Z"));
+    }
+
+    /** PULL：stub match 返回候选 + evaluateWithContext 返回 outcome。 */
+    private void stubPull(RuleVersionSnapshot snap, EvalOutcome outcome) {
+        when(evalEngine.match(any(RuleEvent.class))).thenReturn(List.of(snap));
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class)))
+                .thenReturn(outcome);
         when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
-        when(contextAssembler.assemble(any(), anyList(), any())).thenReturn(
-                new com.sstlfsj.rule.kernel.api.model.EvalContext("1", event(), null, Map.of(), Instant.parse("2024-01-01T00:00:00Z")));
+    }
+
+    @Test
+    void evaluate_passesEngineContextToUpdateFinal() {
+        EvalContext engineCtx = ctx();
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), engineCtx));
 
         impl.evaluate(event());
 
-        verify(contextAssembler).assemble(any(), anyList(), any());
+        // 复用引擎组装的上下文写快照，不再二次取数
+        verify(sessionWriter).updateFinal(eq(1L), any(), eq(engineCtx));
     }
 
     @Test
     void evaluate_noMatchingRules_returnsMiss() {
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of());
+        when(evalEngine.match(any(RuleEvent.class))).thenReturn(List.of());
 
         EvalResult result = impl.evaluate(event());
 
         assertFalse(result.ruleHit());
         verifyNoInteractions(sessionWriter);
-        verifyNoInteractions(evalEngine);
+        verify(evalEngine, never()).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
     }
 
     @Test
     void evaluate_ruleHit_returnsHitWithDecision() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(hitResult("REJECT", 10, 1L));
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(hitResult("REJECT", 10, 1L), ctx()));
 
         EvalResult result = impl.evaluate(event());
 
@@ -106,10 +108,7 @@ class EvalServiceImplTest {
 
     @Test
     void evaluate_ruleMiss_returnsMiss() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(EvalResult.miss());
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
 
         EvalResult result = impl.evaluate(event());
 
@@ -120,15 +119,12 @@ class EvalServiceImplTest {
 
     @Test
     void evaluate_multipleHits_highestPriorityWins() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
         // EvalEngine already picks highest priority; test just verifies propagation
         Decision highPriority = new Decision("REJECT", "", 20, 2L);
         EvalResult engineResult = new EvalResult(true, highPriority,
                 List.of(new Decision("LOW_RISK", "", 5, 1L), highPriority),
                 List.of(), null, List.of(), null, null, null);
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(engineResult);
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
 
         EvalResult result = impl.evaluate(event());
 
@@ -149,23 +145,27 @@ class EvalServiceImplTest {
     }
 
     @Test
-    void dryRun_contextAssemblerCalled() {
+    void dryRun_reusesEngineOutcome() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
+        EvalContext engineCtx = ctx();
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluate(any(RuleEvent.class), anyList(), any(Instant.class))).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
+                any(SceneExecutionStrategy.class), any(Instant.class)))
+                .thenReturn(new EvalOutcome(EvalResult.miss(), engineCtx));
         when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         impl.dryRun(event(), 42L);
 
-        verify(contextAssembler).assemble(any(), anyList(), any());
-        verify(sessionWriter).updateDryRunFinal(anyLong(), any(), any());
+        verify(sessionWriter).updateDryRunFinal(eq(1L), any(), eq(engineCtx));
     }
 
     @Test
     void dryRun_writesToDryRunSessionNotProd() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluate(any(RuleEvent.class), anyList(), any(Instant.class))).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
+                any(SceneExecutionStrategy.class), any(Instant.class)))
+                .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
         when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         EvalResult result = impl.dryRun(event(), 42L);
@@ -177,10 +177,7 @@ class EvalServiceImplTest {
 
     @Test
     void evaluate_ruleHit_callsProdTraceWriter_notDryRunWriter() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(hitResult("REJECT", 10, 1L));
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(hitResult("REJECT", 10, 1L), ctx()));
 
         impl.evaluate(event());
 
@@ -192,7 +189,9 @@ class EvalServiceImplTest {
     void dryRun_writesDryRunTraceWriter_notProdWriter() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluate(any(RuleEvent.class), anyList(), any(Instant.class))).thenReturn(EvalResult.miss());
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
+                any(SceneExecutionStrategy.class), any(Instant.class)))
+                .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
         when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         impl.dryRun(event(), 42L);
@@ -203,10 +202,7 @@ class EvalServiceImplTest {
 
     @Test
     void evaluate_ruleHit_dispatchesAction() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(hitResult("REJECT", 10, 1L));
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(hitResult("REJECT", 10, 1L), ctx()));
 
         impl.evaluate(event());
 
@@ -215,10 +211,7 @@ class EvalServiceImplTest {
 
     @Test
     void evaluate_ruleMiss_doesNotDispatchAction() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(EvalResult.miss());
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
 
         impl.evaluate(event());
 
@@ -229,7 +222,9 @@ class EvalServiceImplTest {
     void dryRun_doesNotDispatchAction() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluate(any(RuleEvent.class), anyList(), any(Instant.class))).thenReturn(hitResult("PASS", 10, 42L));
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
+                any(SceneExecutionStrategy.class), any(Instant.class)))
+                .thenReturn(new EvalOutcome(hitResult("PASS", 10, 42L), ctx()));
         when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         impl.dryRun(event(), 42L);
@@ -239,12 +234,9 @@ class EvalServiceImplTest {
 
     @Test
     void evaluate_scoreFromEngine_isPropagated() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
         Decision d = new Decision("REJECT", "", 10, 1L);
         EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(engineResult);
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
 
         EvalResult result = impl.evaluate(event());
 
@@ -253,10 +245,7 @@ class EvalServiceImplTest {
 
     @Test
     void evaluate_scoreIsNull_forBooleanRules() {
-        RuleVersionSnapshot snap = snapshot(1L, "REJECT");
-        when(index.match("1", "fraud_check", "RISK_EVENT")).thenReturn(List.of(snap));
-        when(evalEngine.evaluate(any(RuleEvent.class), any(Instant.class))).thenReturn(hitResult("REJECT", 10, 1L));
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(hitResult("REJECT", 10, 1L), ctx()));
 
         EvalResult result = impl.evaluate(event());
 

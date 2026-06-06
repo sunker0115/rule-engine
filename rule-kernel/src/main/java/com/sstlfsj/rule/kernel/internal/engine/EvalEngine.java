@@ -38,46 +38,62 @@ public class EvalEngine {
         this.executors = Map.copyOf(executors);
     }
 
-    /** 标准入口：在此注入一次评估时刻 now，整棵 AST 共用。 */
+    /** 标准入口：match → 评估，注入一次评估时刻 now，整棵 AST 共用。 */
     public EvalResult evaluate(RuleEvent event) {
-        return evaluate(event, Instant.now());
+        return evaluateWithContext(event, match(event), Instant.now()).result();
     }
 
-    /** 标准入口（外部注入 now，供 EvalServiceImpl 与快照共用同一时刻）。 */
-    public EvalResult evaluate(RuleEvent event, Instant now) {
-        List<RuleVersionSnapshot> candidates =
-                index.match(event.tenantId(), event.sceneCode(), event.eventType());
+    /**
+     * 匹配候选快照（倒排索引查询，廉价内存操作，无副作用）。
+     *
+     * @param event 触发事件
+     * @return 命中的候选快照列表（未过 Pre-Gate）
+     */
+    public List<RuleVersionSnapshot> match(RuleEvent event) {
+        return index.match(event.tenantId(), event.sceneCode(), event.eventType());
+    }
+
+    /**
+     * 用场景配置策略评估给定候选，返回结果 + 组装好的上下文。
+     *
+     * @param event      触发事件
+     * @param candidates 候选快照（通常来自 {@link #match}）
+     * @param now        本次评估统一时刻
+     * @return 结果与上下文的聚合；早返回 miss 时 context 为 null
+     */
+    public EvalOutcome evaluateWithContext(RuleEvent event,
+                                           List<RuleVersionSnapshot> candidates, Instant now) {
         SceneExecutionStrategy strategy = index.getStrategy(event.tenantId(), event.sceneCode());
-        return evaluate(event, candidates, strategy, now);
+        return evaluateWithContext(event, candidates, strategy, now);
     }
 
-    /** dry-run 入口：直接传候选快照，使用 HIGHEST_PRIORITY 策略，注入一次 now。 */
-    public EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates) {
-        return evaluate(event, candidates, Instant.now());
-    }
-
-    /** dry-run 入口（外部注入 now）。 */
-    public EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates, Instant now) {
-        return evaluate(event, candidates, SceneExecutionStrategy.HIGHEST_PRIORITY, now);
-    }
-
-    private EvalResult evaluate(RuleEvent event, List<RuleVersionSnapshot> candidates,
-                                SceneExecutionStrategy strategy, Instant now) {
-        if (candidates.isEmpty()) return EvalResult.miss();
+    /**
+     * 用显式策略评估给定候选，返回结果 + 组装好的上下文（dry-run 传 HIGHEST_PRIORITY）。
+     *
+     * @param event      触发事件
+     * @param candidates 候选快照
+     * @param strategy   执行策略
+     * @param now        本次评估统一时刻
+     * @return 结果与上下文的聚合；早返回 miss 时 context 为 null
+     */
+    public EvalOutcome evaluateWithContext(RuleEvent event, List<RuleVersionSnapshot> candidates,
+                                           SceneExecutionStrategy strategy, Instant now) {
+        if (candidates.isEmpty()) return new EvalOutcome(EvalResult.miss(), null);
 
         List<RuleVersionSnapshot> passed = new ArrayList<>();
         for (RuleVersionSnapshot snap : candidates) {
             if (applyPreGates(event, snap) == null) passed.add(snap);
         }
-        if (passed.isEmpty()) return EvalResult.miss();
+        if (passed.isEmpty()) return new EvalOutcome(EvalResult.miss(), null);
 
         EvalContext ctx = contextAssembler.assemble(event, passed, now);
 
-        return switch (strategy) {
+        EvalResult result = switch (strategy) {
             case FIRST_HIT -> evaluateFirstHit(event, passed, ctx);
             // HIGHEST_PRIORITY / ALL_HITS：语义相同，均全量评估收集所有命中决策
             case HIGHEST_PRIORITY, ALL_HITS -> evaluateAllCandidates(passed, ctx);
         };
+        return new EvalOutcome(result, ctx);
     }
 
     /** FIRST_HIT：按快照最高 decisionBinding priority 倒序，第一条命中即返回。 */
