@@ -34,29 +34,14 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setTenantId(tenantId);
         m.setMetricCode(metricCode);
         m.setVersion(1);
-        m.setName(cmd.name());
-        m.setSourceType(cmd.sourceType());
-        m.setDataType(cmd.dataType());
-        m.setParams(cmd.paramsJson() == null ? "{}" : cmd.paramsJson());
-        m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
-        m.setAllowProvided(cmd.allowProvided());
+        applyCommandFields(m, cmd);
         m.setStatus("ACTIVE");
         m.setCreatedBy(actorId);
         m.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(m);
 
-        // 审计写入，参照 PublishService 风格（内联构造，同事务 D14）
-        AuditLog log = new AuditLog();
-        log.setTenantId(tenantId);
-        log.setActor(actorId);
-        log.setActorType("USER");
-        log.setAction("CREATE");
-        log.setTargetType("metric_definition");
-        log.setTargetId(m.getId().toString());
-        log.setAfterSnapshot("{\"metricCode\":\"" + metricCode + "\",\"version\":1}");
-        log.setOperatedAt(LocalDateTime.now());
-        auditLogMapper.insert(log);
-
+        writeAudit(tenantId, actorId, "CREATE", m.getId().toString(),
+                "{\"metricCode\":\"" + metricCode + "\",\"version\":1}");
         return m.getId();
     }
 
@@ -74,33 +59,19 @@ public class MetricWriteServiceImpl implements MetricWriteService {
 
         if (!breakingChange) {
             // 原地更新，version 不变
-            active.setName(cmd.name());
-            active.setSourceType(cmd.sourceType());
-            active.setDataType(cmd.dataType());
-            active.setParams(cmd.paramsJson() == null ? "{}" : cmd.paramsJson());
-            active.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
-            active.setAllowProvided(cmd.allowProvided());
+            applyCommandFields(active, cmd);
             active.setUpdatedBy(actorId);
             active.setUpdatedAt(LocalDateTime.now());
             metricDefinitionMapper.updateById(active);
 
-            AuditLog log = new AuditLog();
-            log.setTenantId(tenantId);
-            log.setActor(actorId);
-            log.setActorType("USER");
-            log.setAction("UPDATE");
-            log.setTargetType("metric_definition");
-            log.setTargetId(active.getId().toString());
-            log.setAfterSnapshot("{\"metricCode\":\"" + metricCode + "\",\"version\":"
+            writeAudit(tenantId, actorId, "UPDATE", active.getId().toString(),
+                    "{\"metricCode\":\"" + metricCode + "\",\"version\":"
                     + active.getVersion() + ",\"breaking\":false}");
-            log.setOperatedAt(LocalDateTime.now());
-            auditLogMapper.insert(log);
-
-            return active.getVersion() == null ? 1 : active.getVersion();
+            return active.getVersion();
         }
 
         // breakingChange=true：旧行 SUPERSEDED + 插入新版本行
-        int newVersion = (active.getVersion() == null ? 1 : active.getVersion()) + 1;
+        int newVersion = active.getVersion() + 1;
         active.setStatus("SUPERSEDED");
         active.setUpdatedBy(actorId);
         active.setUpdatedAt(LocalDateTime.now());
@@ -110,29 +81,40 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         next.setTenantId(tenantId);
         next.setMetricCode(metricCode);
         next.setVersion(newVersion);
-        next.setName(cmd.name());
-        next.setSourceType(cmd.sourceType());
-        next.setDataType(cmd.dataType());
-        next.setParams(cmd.paramsJson() == null ? "{}" : cmd.paramsJson());
-        next.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
-        next.setAllowProvided(cmd.allowProvided());
+        applyCommandFields(next, cmd);
         next.setStatus("ACTIVE");
         next.setCreatedBy(actorId);
         next.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(next);
 
+        writeAudit(tenantId, actorId, "UPDATE", next.getId().toString(),
+                "{\"metricCode\":\"" + metricCode + "\",\"version\":"
+                + newVersion + ",\"breaking\":true}");
+        return newVersion;
+    }
+
+    /** 将 MetricWriteCommand 字段批量 set 到 MetricDefinition，含 null 默认值处理。 */
+    private void applyCommandFields(MetricDefinition m, MetricWriteCommand cmd) {
+        m.setName(cmd.name());
+        m.setSourceType(cmd.sourceType());
+        m.setDataType(cmd.dataType());
+        m.setParams(cmd.paramsJson() == null ? "{}" : cmd.paramsJson());
+        m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
+        m.setAllowProvided(cmd.allowProvided());
+    }
+
+    /** 写入 audit_log，同事务（D14 约定）。 */
+    private void writeAudit(Long tenantId, String actorId, String action,
+                            String targetId, String afterSnapshot) {
         AuditLog log = new AuditLog();
         log.setTenantId(tenantId);
         log.setActor(actorId);
         log.setActorType("USER");
-        log.setAction("UPDATE");
+        log.setAction(action);
         log.setTargetType("metric_definition");
-        log.setTargetId(next.getId().toString());
-        log.setAfterSnapshot("{\"metricCode\":\"" + metricCode + "\",\"version\":"
-                + newVersion + ",\"breaking\":true}");
+        log.setTargetId(targetId);
+        log.setAfterSnapshot(afterSnapshot);
         log.setOperatedAt(LocalDateTime.now());
         auditLogMapper.insert(log);
-
-        return newVersion;
     }
 }
