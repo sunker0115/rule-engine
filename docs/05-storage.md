@@ -246,20 +246,20 @@ CREATE TABLE scene_action_binding (
 CREATE TABLE job_definition (
   id              BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id       BIGINT       NOT NULL,
-  scene_id        BIGINT       NOT NULL COMMENT '关联 scene.id，PULL Scene 不允许配置 Job（发布拒绝）',
-  code            VARCHAR(128) NOT NULL COMMENT 'Job 标识，Scene 内唯一',
-  name            VARCHAR(255) NOT NULL,
-  cron_expression VARCHAR(128) NOT NULL COMMENT 'Cron 表达式，如 0 2 * * *',
-  subject_query   JSON         NOT NULL COMMENT '主体集合查询配置（SQL / API），到点批量拉取触发主体',
+  scene_code      VARCHAR(64)  NOT NULL COMMENT '关联 scene.code，PULL Scene 不允许配置 Job（发布拒绝）',
+  code            VARCHAR(64)  NOT NULL COMMENT 'Job 标识，租户 + 场景内唯一',
+  name            VARCHAR(128) NOT NULL,
+  cron_expression VARCHAR(128) NOT NULL COMMENT 'Spring 6 段 cron（秒 分 时 日 月 周）',
+  subject_query   JSON         NOT NULL COMMENT '主体集合查询配置，首期仅 type=SQL（EXTERNAL_HTTP / METRIC_RESULT 后续），到点批量拉取触发主体',
   event_type      VARCHAR(64)  NOT NULL COMMENT '合成 RuleEvent 时使用的 eventType',
-  payload_template JSON        COMMENT '合成 RuleEvent.payload 的模板（支持占位符替换）',
+  payload_template JSON        COMMENT '合成 RuleEvent.payload 的模板（占位符按主体行同名字段填充）',
   status          ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_by      VARCHAR(64)  COMMENT '创建人（D14）',
   created_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by      VARCHAR(64)  COMMENT '最近修改人（D14）',
   updated_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_scene_code (scene_id, code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时触发规则配置（§3.10）；调度器到点合成 RuleEvent 注入标准评估链路';
+  UNIQUE KEY uk_tenant_scene_code (tenant_id, scene_code, code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时触发规则配置（§3.10，迁移 V1_7）；调度器到点合成 RuleEvent 注入标准评估链路';
 ```
 
 **job_execution**（每次 Job 运行记录）
@@ -457,7 +457,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `rule_decision_binding` | UK `uk_rule_decision (rule_definition_id, decision_id)` | 规则与 Decision 绑定唯一性 |
 | `scene_metric_binding` | UK `uk_scene_metric (scene_id, metric_definition_id)` | Rule 发布时验证 metricCode 在白名单内 |
 | `scene_action_binding` | UK `uk_scene_action (scene_id, action_type)` | Rule 发布时验证 actionType 在白名单内 |
-| `job_definition` | UK `uk_scene_code (scene_id, code)` | Scene 内 Job 唯一性约束 |
+| `job_definition` | UK `uk_tenant_scene_code (tenant_id, scene_code, code)` | 租户 + 场景内 Job 唯一性约束 |
 | `job_execution` | `idx_job_trigger (job_definition_id, trigger_at)` | 按 Job 查运行历史 |
 
 ### 分区建议（v1 不做，v2 演进）

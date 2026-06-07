@@ -1520,5 +1520,6 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D42 | `DECISION_TREE` / `DECISION_TABLE` evaluator | A | 新增 `IfNode`/`DecisionLeafNode` AST 节点；独立 Executor SPI 实现；`EvalResult` 补 `category`/`decision` 字段；`EXPRESSION_SCRIPT` 留 v1.5 |
 | D43 | 灰度收口 pre_gates ROLLOUT，废弃 `rollout` 列 | A | 灰度由 ROLLOUT pre-gate 承载（percentage/bucketStart/bucketEnd/experimentId）；`V1_4` 删 `rollout` 列；桶区间+experimentId 实现一致分桶/互斥 + 发布期校验；USER_TAG/HYBRID 标签命中留演进 |
 | D44 | B20 时间框架：EvalContext.now 注入 + DATE/DATETIME 一等 dataType + 时间条件内置 | A | now 单次注入+单时钟约束；TimeZoneResolver（字面偏移>params.timezone>UTC，Scene级暂缓）；DATE/DATETIME 纯策略+两阶段管线；PlaceholderResolver($now/$today，不含相对时长)；context_snapshot 嵌套格式；time.window/time.occurred_at 注册；V1_5 扩展 ENUM |
+| D47 | D11 Job 模式落地 | A | 独立模块 `rule-job-svc`；`Scheduler` SPI 精简为 `schedule/unschedule`（cron→Runnable），手动触发/运行记录查询等管理能力上移 `JobService`；首个实现 `ThreadPoolSchedulerAdapter`（进程内 `ThreadPoolTaskScheduler`+`CronTrigger`，单实例，多实例需选主/xxl-job，作已知限制）；subjectQuery 首期仅 `type=SQL`（MyBatis `@Select` 跑配置化只读 SQL，EXTERNAL_HTTP/METRIC_RESULT 后续）；`job_definition` 以 `scene_code` 关联（非 scene_id），对齐 RuleEvent/SceneService 口径；注入点 `EvalService.acceptEvent`（PUSH 语义）；`eventId=murmur3(jobRunId+":"+subjectId)` 复用 `evaluation_session(tenant_id,event_id)` uk 幂等；迁移 V1_7 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

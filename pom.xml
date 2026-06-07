@@ -22,6 +22,7 @@
         <module>rule-kernel-polling</module>
         <module>rule-config-svc</module>
         <module>rule-eval-svc</module>
+        <module>rule-job-svc</module>
         <module>rule-audit-svc</module>
         <module>rule-observability</module>
         <module>rule-api</module>
@@ -218,6 +219,11 @@
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-eval-svc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-job-svc</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

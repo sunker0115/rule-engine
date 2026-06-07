@@ -30,6 +30,10 @@
         </dependency>
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-job-svc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-audit-svc</artifactId>
         </dependency>
         <dependency>

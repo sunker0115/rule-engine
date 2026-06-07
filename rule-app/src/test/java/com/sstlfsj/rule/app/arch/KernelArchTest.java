@@ -28,4 +28,29 @@ public class KernelArchTest {
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.sstlfsj.rule.eval..")
                     .because("svc 模块间禁止直接依赖（只通过 Modulith 事件通信，09-skeleton §五）");
+
+    @ArchTest
+    static final ArchRule jobSvcMustNotDependOnEvalInternal =
+            noClasses()
+                    .that().resideInAPackage("com.sstlfsj.rule.job..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.sstlfsj.rule.eval.internal..")
+                    .because("job 只能用 eval 的 api（EvalService），不碰 internal（D11）");
+
+    @ArchTest
+    static final ArchRule jobSvcMustNotDependOnConfigInternal =
+            noClasses()
+                    .that().resideInAPackage("com.sstlfsj.rule.job..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.sstlfsj.rule.config.internal..")
+                    .because("job 只能用 config 的 api（SceneService），不碰 internal（D11）");
+
+    @ArchTest
+    static final ArchRule evalAndConfigMustNotDependOnJob =
+            noClasses()
+                    .that().resideInAPackage("com.sstlfsj.rule.eval..")
+                    .or().resideInAPackage("com.sstlfsj.rule.config..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.sstlfsj.rule.job..")
+                    .because("job 是下游 Trigger 适配器，eval/config 不得反向依赖（D11）");
 }

@@ -513,7 +513,7 @@ EvalContext {
 | 字段 | 说明 |
 |------|------|
 | `id` | 主键（DDL 列名；概念层有时称 `jobId`） |
-| `tenantId / sceneId` | 归属（DDL 列 `tenant_id` / `scene_id`；PULL Scene 拒绝绑定） |
+| `tenantId / sceneCode` | 归属（DDL 列 `tenant_id` / `scene_code`，关联 scene.code，与 RuleEvent.sceneCode / SceneService 口径一致；PULL Scene 拒绝绑定） |
 | `name` | 给运营看的名称 |
 | `cronExpression` | 标准 cron 表达式（DDL 列名 `cron_expression`）；时区可选——cron 自带时区时以 cron 为准（如 `CRON_TZ=Asia/Shanghai 0 30 0 * * *`），未指定时回落 `Scene.defaultParams.timezone`，仍未配回落引擎默认（`UTC`） |
 | `subjectQuery` | 主体集合查询配置 JSON（DDL 单列，包含 `type`（`SQL`/`EXTERNAL_HTTP`/`METRIC_RESULT`）和查询参数） |
@@ -537,19 +537,25 @@ EvalContext {
 | `status` | `RUNNING` / `SUCCESS` / `PARTIAL_FAIL` / `FAILED`（DDL ENUM 值，`PARTIAL_FAIL` 无 ED 后缀） |
 | `errorSummary` | 错误明细摘要（DDL 列名 `error_summary`） |
 
-**调度器接口（`Scheduler`）**：
+**调度器接口（`Scheduler` SPI，rule-kernel）**：
 
 ```
 interface Scheduler {
-    void register(JobDefinition def);
-    void unregister(String jobId);
-    JobRunHandle triggerOnce(String jobId);      // 手动触发
-    JobStatus status(String jobId);
-    Iterable<JobRunRecord> recentRuns(String jobId, int limit);
+    void schedule(String jobCode, String cronExpression, Runnable task);  // 注册 cron 周期任务
+    void unschedule(String jobCode);                                       // 撤销
 }
 ```
 
-`XxlJobScheduler` 是首个实现（D11），底层对接 xxl-job 调度中心 + 执行器集群。未来切 Quartz / 云调度仅替换 Adapter，业务侧 `JobDefinition` / `JobExecution` 不变。
+SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable），不耦合 JobDefinition 业务模型。早期设计草案在 `Scheduler` 上画的 `register/unregister/triggerOnce/status/recentRuns` 等业务方法（D47 落地时）按下表重新落位——能力不丢，只是从 SPI 方法变为 `JobService` 方法或内部机制：
+
+| 原草案 SPI 方法 | 落位 |
+|------|------|
+| `register(JobDefinition)` / `unregister(jobId)` | 内部 `JobScheduleManager`（createJob/enableJob 注册、disableJob 撤销，自动调 `schedule/unschedule`） |
+| `triggerOnce(jobId)` | `JobService.triggerOnce(tenantId, jobId)`（手动触发一次，不经调度器） |
+| `recentRuns(jobId, limit)` | `JobService.recentExecutions(tenantId, jobId, limit)` |
+| `status(jobId)` | `JobService.getJob()` 返回的 `status`（ACTIVE/DISABLED）；进程内单实例下调度运行态≈配置态，未单独暴露，多实例时再补 |
+
+`ThreadPoolSchedulerAdapter`（进程内 `ThreadPoolTaskScheduler` + `CronTrigger`，单实例）是 v1 首个实现；多实例部署会重复触发，属已知限制，需 HA 时替换为选主或外部调度（xxl-job），业务侧 `JobDefinition` / `JobExecution` 不变。
 
 **关键边界**：
 
