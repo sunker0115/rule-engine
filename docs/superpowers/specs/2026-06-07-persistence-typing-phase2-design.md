@@ -4,7 +4,7 @@
 
 ## 背景与关键技术前提
 
-**MP 内置 JacksonTypeHandler 不可用**：字节码确认 `com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler` 引用 `com.fasterxml.jackson.databind.ObjectMapper`（Jackson 2）；本项目源码全用 `tools.jackson.databind`（Jackson 3，`JacksonConfig` 提供全局 bean），无 Jackson 2 databind。→ **必须写自定义 Jackson 3 TypeHandler**，顺带用 `TypeReference` 钉死泛型、绕开 MP handler 的 List 类型擦除坑。
+**用 MP 3.5.16 的 `Jackson3TypeHandler`（无需自定义）**：MP extension 3.5.16 同时提供 Jackson 2 版 `JacksonTypeHandler` 和 **Jackson 3 版 `Jackson3TypeHandler`**。字节码确认后者引用 `tools.jackson.databind.ObjectMapper`（与本项目一致），且构造器 `(Class<*>, java.lang.reflect.Field)` 通过 `TypeFactory.constructType(field.getGenericType())` **从字段捕获泛型**——故 `List<DecisionBinding>` 不会退化为 `List<LinkedHashMap>`，**Jackson 3 兼容 + List 擦除两个问题一并解决**。用法：`@TableName(autoResultMap=true)` + `@TableField(typeHandler=Jackson3TypeHandler.class)`。`autoResultMap` 仅对 BaseMapper 内置方法生效（config-svc `RuleVersionMapper` 是纯 BaseMapper，覆盖；eval-svc 自定义 @Select 需 @Results，见二期 B）。多态由 `AstNode` 等类型上的 Jackson 注解驱动，任何 Jackson 3 mapper 均可解析。
 
 **实体类型化与 service 写签名耦合**：若只 typed 实体而 service 仍收 String，写链路出现 `typed→String→typed→String` 的多余往返。故二期把 `RuleVersion` 实体 typed + `ConfigService.createDraft` 写签名 typed **一起做**。
 
@@ -12,28 +12,23 @@
 - config-svc `RuleVersionMapper`：纯 BaseMapper（唯一 @Select 返 Long）→ `autoResultMap` 直接覆盖。**二期主战场**。
 - eval-svc `RuleVersionReadMapper`：自定义 @Select 3 表 JOIN → `RuleVersionRow`（String）→ kernel `SnapshotAssembler` 反序列化。是与 rule-sdk **共享**的 canonical 边界。
 
-## 自定义 TypeHandler 设计
+## TypeHandler：直接用 MP `Jackson3TypeHandler`
+
+无需自定义类。实体字段统一标注 MP 的 `com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler`：
 
 ```java
-// rule-config-svc internal/typehandler（MyBatis 在 svc 模块；handler 非 Spring bean，用共享静态 Jackson3 mapper）
-public abstract class Jackson3JsonTypeHandler<T> extends BaseTypeHandler<T> {
-    // 共享 mapper：annotation 驱动多态，与 kernel AstJsonCodec 同策略（禁 FAIL_ON_UNKNOWN）
-    protected static final ObjectMapper MAPPER =
-            JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
-    private final TypeReference<T> typeRef;
-    protected Jackson3JsonTypeHandler(TypeReference<T> typeRef) { this.typeRef = typeRef; }
-    // setNonNullParameter: MAPPER.writeValueAsString(parameter) → VARCHAR/JSON
-    // getNullableResult: rs.getString(col) → MAPPER.readValue(s, typeRef)（空/blank 返 null）
+@TableName(value = "rule_version", autoResultMap = true)
+class RuleVersion {
+    @TableField(typeHandler = Jackson3TypeHandler.class)
+    private AstNode conditionAst;
+    @TableField(typeHandler = Jackson3TypeHandler.class)
+    private List<DecisionBinding> decisionBindings;   // field 泛型被 constructType 捕获，不退化为 Map
+    // preGates: List<PreGateConfig> / metricDependencies: List<MetricDependency> / triggerEventTypes: List<String> 同理
+    // 动态字段 defaultParams / params: Map<String,Object>，同一 handler
 }
 ```
 
-每个 typed 字段一个薄的具体 handler（类型唯一、零擦除歧义）：
-- `AstNodeTypeHandler extends Jackson3JsonTypeHandler<AstNode>`
-- `DecisionBindingListTypeHandler extends Jackson3JsonTypeHandler<List<DecisionBinding>>`
-- `PreGateConfigListTypeHandler extends Jackson3JsonTypeHandler<List<PreGateConfig>>`
-- `MetricDependencyListTypeHandler extends Jackson3JsonTypeHandler<List<MetricDependency>>`
-- `StringListTypeHandler extends Jackson3JsonTypeHandler<List<String>>`（triggerEventTypes 等）
-- `StringObjectMapTypeHandler extends Jackson3JsonTypeHandler<Map<String,Object>>`（defaultParams/params 等动态字段，仍 Map）
+> 校验点（集成测覆盖）：`List<DecisionBinding>` 读回元素必须是 `DecisionBinding` 而非 `LinkedHashMap`——这是 MP `Jackson3TypeHandler` 用 `field.getGenericType()` 的关键验证。
 
 ## 范围
 
