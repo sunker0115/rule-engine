@@ -1,20 +1,19 @@
 package com.sstlfsj.rule.job.internal.subject;
 
+import com.sstlfsj.rule.job.api.BeanMethodQuery;
 import com.sstlfsj.rule.job.api.JobTarget;
+import com.sstlfsj.rule.job.api.SubjectQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
-import java.util.Map;
 
 /**
- * 主体查询实现：解析 subjectQuery 配置（{@code type=BEAN_METHOD}），反射调用 {@code @RuleJob}
- * 注解的业务查询方法取目标（{@link JobTarget} 列表）。
+ * 主体查询实现：解析 subjectQuery 配置为 typed {@link SubjectQuery}，按子类型反射调用
+ * {@code @RuleJob} 注解的业务查询方法取目标（{@link JobTarget} 列表）。
  *
- * <p>首期仅支持 BEAN_METHOD（主体由开发者业务方法返回，如「查 10 分钟前登录的用户」）。
- * 将来若新增 EXTERNAL_HTTP / METRIC_RESULT 等多种 type，再抽出按 type 分发层。
+ * <p>首期仅 BEAN_METHOD；新增子类型只需扩 {@code SubjectQuery} permits + 下方 switch 分支。
  */
 @Component
 @RequiredArgsConstructor
@@ -25,22 +24,12 @@ class BeanMethodSubjectQueryRunner implements SubjectQueryRunner {
 
     @Override
     public List<JobTarget> query(String subjectQueryJson) {
-        Map<String, Object> config = parse(subjectQueryJson);
-        Object type = config.get("type");
-        if (!"BEAN_METHOD".equals(type)) {
-            throw new IllegalArgumentException("不支持的 subjectQuery type: " + type + "（当前仅 BEAN_METHOD）");
-        }
-        Object ref = config.get("ref");
-        if (!(ref instanceof String r) || r.isBlank()) {
-            throw new IllegalArgumentException("subjectQuery.ref 不能为空");
-        }
-        return registry.invoke(r);
-    }
-
-    private Map<String, Object> parse(String json) {
-        if (json == null || json.isBlank()) {
+        if (subjectQueryJson == null || subjectQueryJson.isBlank()) {
             throw new IllegalArgumentException("subjectQuery 配置不能为空");
         }
-        return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        SubjectQuery query = objectMapper.readValue(subjectQueryJson, SubjectQuery.class);
+        return switch (query) {
+            case BeanMethodQuery b -> registry.invoke(b.ref());
+        };
     }
 }

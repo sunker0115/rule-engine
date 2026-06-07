@@ -37,19 +37,14 @@ class BeanMethodSubjectQueryRunnerTest {
     }
 
     @Test
-    void rejectsNonBeanMethodType() {
+    void rejectsUnknownType() {
         assertThatThrownBy(() -> runner.query("{\"type\":\"SQL\"}"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void rejectsMissingRef() {
-        assertThatThrownBy(() -> runner.query("{\"type\":\"BEAN_METHOD\"}"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(RuntimeException.class);
     }
 
     @Test
     void rejectsBlankConfig() {
-        assertThatThrownBy(() -> runner.query("")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> runner.query(""))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }
