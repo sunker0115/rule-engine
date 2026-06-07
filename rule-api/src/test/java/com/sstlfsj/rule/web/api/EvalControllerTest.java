@@ -2,12 +2,16 @@ package com.sstlfsj.rule.web.api;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
+import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -39,6 +43,22 @@ class EvalControllerTest {
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accepted").value(true));
+    }
+
+    @Test
+    void pushEvent_injectsHttpSource() throws Exception {
+        // 渠道由 controller 权威设为 HTTP，不依赖请求体携带
+        when(evalService.acceptEvent(any())).thenReturn(true);
+
+        mockMvc.perform(post("/api/v1/rule/event")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(EVENT_JSON))
+                .andExpect(status().isAccepted());
+
+        ArgumentCaptor<RuleEvent> captor = ArgumentCaptor.forClass(RuleEvent.class);
+        verify(evalService).acceptEvent(captor.capture());
+        assertThat(captor.getValue().source()).isEqualTo(EventSource.HTTP);
+        assertThat(captor.getValue().eventId()).isEqualTo("evt-1");
     }
 
     @Test

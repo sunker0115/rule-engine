@@ -2,8 +2,10 @@ package com.sstlfsj.rule.web.api;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import com.sstlfsj.rule.web.api.dto.EvalEventRequest;
 import com.sstlfsj.rule.web.api.dto.PushEventResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,32 +22,48 @@ public class EvalController {
     }
 
     /** POST /api/v1/rule/event — PUSH 评估（异步，返回 202）
-     * @param event 待评估的规则事件
+     * @param req 待评估的事件请求体
      * @return 是否已接受 */
     @PostMapping("/event")
     public ResponseEntity<ApiResponse<PushEventResponse>> pushEvent(
-            @RequestBody RuleEvent event) {
+            @RequestBody EvalEventRequest req) {
+        RuleEvent event = toEvent(req);
         boolean accepted = evalService.acceptEvent(event);
         return ResponseEntity.accepted()
                 .body(ApiResponse.ok(new PushEventResponse(event.eventId(), accepted)));
     }
 
     /** POST /api/v1/rule/evaluate — PULL 评估（同步，返回 200）
-     * @param event 待评估的规则事件
+     * @param req 待评估的事件请求体
      * @return 完整评估结果 */
     @PostMapping("/evaluate")
-    public ApiResponse<EvalResult> evaluate(@RequestBody RuleEvent event) {
-        return ApiResponse.ok(evalService.evaluate(event));
+    public ApiResponse<EvalResult> evaluate(@RequestBody EvalEventRequest req) {
+        return ApiResponse.ok(evalService.evaluate(toEvent(req)));
     }
 
     /** POST /api/v1/rule/dry-run — dry-run（含 nodeTrace，不派发 Action）
-     * @param event 待评估的规则事件
+     * @param req 待评估的事件请求体
      * @param ruleVersionId null 表示使用当前活跃版本
      * @return 评估结果（含节点 trace） */
     @PostMapping("/dry-run")
     public ApiResponse<EvalResult> dryRun(
-            @RequestBody RuleEvent event,
+            @RequestBody EvalEventRequest req,
             @RequestParam(required = false) Long ruleVersionId) {
-        return ApiResponse.ok(evalService.dryRun(event, ruleVersionId));
+        return ApiResponse.ok(evalService.dryRun(toEvent(req), ruleVersionId));
+    }
+
+    /** 将 HTTP 请求体转为 RuleEvent，渠道由入口权威设为 HTTP。 */
+    private RuleEvent toEvent(EvalEventRequest r) {
+        return RuleEvent.builder()
+                .tenantId(r.tenantId())
+                .sceneCode(r.sceneCode())
+                .eventType(r.eventType())
+                .subjectId(r.subjectId())
+                .eventId(r.eventId())
+                .occurredAt(r.occurredAt())
+                .payload(r.payload())
+                .providedMetrics(r.providedMetrics())
+                .source(EventSource.HTTP)
+                .build();
     }
 }
