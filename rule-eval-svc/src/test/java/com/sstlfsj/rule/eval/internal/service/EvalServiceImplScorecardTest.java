@@ -1,11 +1,10 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
+import com.sstlfsj.rule.eval.internal.async.EvaluationEventPublisher;
 import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
-import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,16 +30,15 @@ class EvalServiceImplScorecardTest {
     @Mock EvalEngine evalEngine;
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock EvalSessionWriter sessionWriter;
-    @Mock TraceWriter traceWriter;
     @Mock DryRunTraceWriter dryRunTraceWriter;
-    @Mock ActionDispatchService actionDispatchService;
+    @Mock EvaluationEventPublisher eventPublisher;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
         impl = new EvalServiceImpl(evalEngine, snapshotLoader,
-                sessionWriter, traceWriter, dryRunTraceWriter, actionDispatchService);
+                sessionWriter, dryRunTraceWriter, eventPublisher);
     }
 
     private RuleEvent event() {
@@ -63,7 +61,6 @@ class EvalServiceImplScorecardTest {
         when(evalEngine.match(any(RuleEvent.class))).thenReturn(List.of(scorecardSnapshot()));
         when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class)))
                 .thenReturn(new EvalOutcome(engineResult, ctx()));
-        when(sessionWriter.insertPending(any(), anyInt(), anyString())).thenReturn(1L);
     }
 
     /** EvalEngine 返回带 score 的结果，EvalServiceImpl 应原样透传。 */

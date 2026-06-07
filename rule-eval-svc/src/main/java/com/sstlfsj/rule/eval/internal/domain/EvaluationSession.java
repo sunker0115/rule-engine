@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
 @TableName("evaluation_session")
 public class EvaluationSession {
 
-    @TableId(type = IdType.AUTO)
+    // 客户端赋值（请求线程 snowflake）：异步落库需提前确定 id，供 node_trace/action 关联
+    @TableId(type = IdType.INPUT)
     private Long id;
     private Long tenantId;
     private String eventId;

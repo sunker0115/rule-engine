@@ -185,18 +185,15 @@ class EvalIntegrationTest {
      * 空 AndNode 条件在 TracingInterpretedExecutor 中返回 true，故规则命中。
      */
     @Test
-    void pull_evaluate_writesSessionToDb() {
+    void pull_evaluate_writesSessionToDb() throws InterruptedException {
         RuleEvent event = makeEvent("pull-001", "fraud_check");
         EvalResult result = evalService.evaluate(event);
 
         // 返回值验证：规则应命中
         assertThat(result.ruleHit()).isTrue();
 
-        // 数据库验证：evaluation_session 有一条 HIT 记录
-        List<EvaluationSession> sessions = sessionMapper.selectList(
-                new LambdaQueryWrapper<EvaluationSession>()
-                        .eq(EvaluationSession::getEventId, "pull-001")
-                        .eq(EvaluationSession::getTenantId, 1L));
+        // 数据库验证：审计异步落库，轮询等待 evaluation_session 出现 HIT 记录
+        List<EvaluationSession> sessions = awaitSessions("pull-001");
         assertThat(sessions).hasSize(1);
         assertThat(sessions.get(0).getStatus()).isEqualTo("HIT");
         // source 取自 event 渠道，mode 由 evaluate() 入口判定为 PULL
@@ -210,12 +207,13 @@ class EvalIntegrationTest {
      * 相同 eventId 两次调用 evaluate()，evaluation_session 只应有 1 条记录（幂等保证）。
      */
     @Test
-    void pull_idempotent_duplicateEventId_onlyOneSession() {
+    void pull_idempotent_duplicateEventId_onlyOneSession() throws InterruptedException {
         RuleEvent event = makeEvent("pull-idem-001", "fraud_check");
 
         evalService.evaluate(event);
         evalService.evaluate(event);
 
+        awaitSessions("pull-idem-001");   // 等异步落库（第二次重复因 uk_tenant_event 被吞，仅 1 行）
         long count = sessionMapper.selectCount(
                 new LambdaQueryWrapper<EvaluationSession>()
                         .eq(EvaluationSession::getEventId, "pull-idem-001")
@@ -301,5 +299,20 @@ class EvalIntegrationTest {
                         .eq(EvaluationSession::getEventId, "no-rule-001")
                         .eq(EvaluationSession::getTenantId, 1L));
         assertThat(count).isEqualTo(0);
+    }
+
+    /** 轮询最多 3 秒，等指定 eventId 的 evaluation_session 异步落库出现，返回查到的行。 */
+    private List<EvaluationSession> awaitSessions(String eventId) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 3_000;
+        List<EvaluationSession> sessions = List.of();
+        while (System.currentTimeMillis() < deadline) {
+            sessions = sessionMapper.selectList(
+                    new LambdaQueryWrapper<EvaluationSession>()
+                            .eq(EvaluationSession::getEventId, eventId)
+                            .eq(EvaluationSession::getTenantId, 1L));
+            if (!sessions.isEmpty()) break;
+            Thread.sleep(100);
+        }
+        return sessions;
     }
 }
