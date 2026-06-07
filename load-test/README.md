@@ -14,6 +14,7 @@
 | 基线 | 50 | 10 | on | **246** | 272 / **1520** | 0 | 10/10 · **107** |
 | 池-100 | 50 | 100 | on | **583** | 137 / **520** | 0 | 100/100 · 17 |
 | trace-off | 50 | 100 | off | **589** | 128 / **526** | 0 | 100/100 · 16 |
+| 事件化异步后 | 50 | 10 | on | **215** | 329 / **1750** | 0 | 10/10 · **116** |
 
 > 注：所有请求 100% 命中（rule_hits = http_reqs）；同机压测（k6 与 app 争 CPU），绝对值偏保守，**臂间相对差**是结论依据。
 
@@ -27,6 +28,16 @@
    - b. `action_execution` 批量/异步（本轮 action 未覆盖，见下）；
    - c. 缓存 `scene_action_binding`（去掉每命中一次 SELECT，本轮 bindings 为空未触发）；
    - d. **trace 已验证：开/关零差异（583↔589 req/s）**——trace 异步批量不占请求线程。**这反证了同步 session 写才是墙，把 session 改异步是最高 ROI 的二期改造**（异步这条路 trace 臂已证明零成本）。
+
+## 事件化异步复测发现（2026-06-08，重要）
+
+把 session 写改事件驱动异步后，池=10 仍 **215 req/s（≈原基线 246，没变好）**，Hikari 仍 10/10 满、pending=116。
+
+**诊断**：请求线程唯一的同步 DB 操作变成 `ModulithOutboxDeliveryChannel.deliver` 的 **@Transactional 持久事件写**（BEGIN+INSERT event_publication+COMMIT）。压测规则命中且有 PASS 决策 → 每请求发一次 ActionRequested → 每请求一次 outbox 事务写，成本与原 session 两写相当（事务 3 往返 ≈ 原 2 次自动提交写）。session 写确实搬异步了，但被 outbox 写顶替。
+
+**根因（spec↔实现偏差）**：spec §3 说"命中**且有 action 绑定**才发持久事件"，实现成了"命中**且有决策**"。压测场景命中、有决策、**无 action 绑定** → 按 spec 本不该发 outbox，实现却发了。
+
+**结论**：架构正确（审计已脱离请求线程），但**真正的吞吐收益（无 action 评估请求线程 0 DB 写）要靠"无绑定时跳过 outbox"** —— 需一个内存 action-binding 索引（即"缓存 scene_action_binding"优化）让请求线程廉价判断有无绑定。这是事件化设计的**必要后续一步**，单独决策（binding 缓存落点/更新机制）。
 
 ## 已知未覆盖
 - **action_execution 写**：本轮 scene_action_binding 无写入路径（config-svc 无该写服务），`dispatch` 因 bindings 空提前 return，action 写**未压到**；session+trace 写已覆盖（命中触发 `updateFinal`+trace）。二期补 action 写路径后再测。
