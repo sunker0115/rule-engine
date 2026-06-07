@@ -41,7 +41,8 @@ class RuleControllerTest {
     void getDetail_returns200_withRuleDetail() throws Exception {
         when(configService.getRuleDetail("t1", 10L)).thenReturn(
                 new RuleDetailVO(10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
-                        "risk.transfer", java.util.Map.of("type", "AndNode"),
+                        "risk.transfer",
+                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
                         java.util.List.of(), 42L));
 
         mockMvc.perform(get("/admin/v1/rules/10").param("tenantId", "t1"))
