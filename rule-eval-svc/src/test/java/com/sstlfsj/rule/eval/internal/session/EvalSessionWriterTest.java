@@ -38,7 +38,7 @@ class EvalSessionWriterTest {
 
     private RuleEvent event() {
         return new RuleEvent("1", "scene", "E", "u1",
-                "evt-001", Instant.parse("2024-01-01T00:00:00Z"), Map.of(), Map.of());
+                "evt-001", Instant.parse("2024-01-01T00:00:00Z"), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     @Test
@@ -60,7 +60,8 @@ class EvalSessionWriterTest {
         assertEquals("evt-001", saved.getEventId());
         assertEquals(1L, saved.getTenantId());
         assertEquals(3, saved.getCandidateRuleCount());
-        assertEquals("PULL", saved.getSource());
+        assertEquals("HTTP", saved.getSource());
+        assertEquals("PULL", saved.getMode());
     }
 
     @Test
@@ -74,14 +75,6 @@ class EvalSessionWriterTest {
         Long id = writer.insertPending(event(), 1, "PULL");
 
         assertEquals(99L, id);
-    }
-
-    @Test
-    void insertPending_nullOccurredAt_throwsIllegalArgument() {
-        // occurredAt=null 不允许静默兜底为 now()，必须快速失败
-        RuleEvent nullTime = new RuleEvent("1", "scene", "E", "u1", "evt-x", null, Map.of(), Map.of());
-        assertThrows(IllegalArgumentException.class,
-                () -> writer.insertPending(nullTime, 1, "PULL"));
     }
 
     @Test

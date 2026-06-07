@@ -38,11 +38,11 @@ public class EvalSessionWriter {
      *
      * @param event          触发事件
      * @param candidateCount 候选规则数量
-     * @param source         来源标识（PUSH / PULL / REPLAY）
+     * @param mode           评估模式（PUSH / PULL）；渠道 source 取自 event.source()
      * @return 写入行的自增 id
      */
-    public Long insertPending(RuleEvent event, int candidateCount, String source) {
-        EvaluationSession session = buildSession(event, source);
+    public Long insertPending(RuleEvent event, int candidateCount, String mode) {
+        EvaluationSession session = buildSession(event, mode);
         session.setStatus("PENDING");
         session.setCandidateRuleCount(candidateCount);
         session.setHitRuleCount(0);
@@ -66,10 +66,10 @@ public class EvalSessionWriter {
      *
      * @param event     触发事件
      * @param blockedBy 首个阻断的 Gate 类型
-     * @param source    来源标识
+     * @param mode      评估模式（PUSH / PULL）
      */
-    public void insertBlocked(RuleEvent event, String blockedBy, String source) {
-        EvaluationSession session = buildSession(event, source);
+    public void insertBlocked(RuleEvent event, String blockedBy, String mode) {
+        EvaluationSession session = buildSession(event, mode);
         session.setStatus("BLOCKED");
         session.setBlockedBy(blockedBy);
         session.setCandidateRuleCount(0);
@@ -169,14 +169,15 @@ public class EvalSessionWriter {
         }
     }
 
-    private EvaluationSession buildSession(RuleEvent event, String source) {
+    private EvaluationSession buildSession(RuleEvent event, String mode) {
         EvaluationSession s = new EvaluationSession();
         s.setTenantId(Long.valueOf(event.tenantId()));
         s.setEventId(event.eventId());
         s.setSceneCode(event.sceneCode());
         s.setEventType(event.eventType());
         s.setSubjectId(event.subjectId());
-        s.setSource(source);
+        s.setSource(event.source().name());   // 渠道取自 event
+        s.setMode(mode);                        // 模式由入口判定传入
         s.setOccurredAt(toLocalDateTime(event.occurredAt()));
         s.setStartedAt(LocalDateTime.now());
         return s;

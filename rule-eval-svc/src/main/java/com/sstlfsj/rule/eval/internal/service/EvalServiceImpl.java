@@ -40,8 +40,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         this.traceWriter = traceWriter;
         this.dryRunTraceWriter = dryRunTraceWriter;
         this.actionDispatchService = actionDispatchService;
-        // 构造器末尾创建 dispatcher，不调用 start
-        this.dispatcher = new EvalActionDispatcher(10000, this::evaluate);
+        // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
+        this.dispatcher = new EvalActionDispatcher(10000, e -> doEvaluate(e, "PUSH", false, null));
     }
 
     @Override
@@ -62,15 +62,15 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     @Override
     public EvalResult evaluate(RuleEvent event) {
-        return doEvaluate(event, false, null);
+        return doEvaluate(event, "PULL", false, null);
     }
 
     @Override
     public EvalResult dryRun(RuleEvent event, Long ruleVersionId) {
-        return doEvaluate(event, true, ruleVersionId);
+        return doEvaluate(event, "PULL", true, ruleVersionId);
     }
 
-    private EvalResult doEvaluate(RuleEvent event, boolean isDryRun, Long specificVersionId) {
+    private EvalResult doEvaluate(RuleEvent event, String mode, boolean isDryRun, Long specificVersionId) {
         Instant evalNow = Instant.now();
         if (isDryRun && specificVersionId != null) {
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);
@@ -87,7 +87,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         List<RuleVersionSnapshot> candidates = evalEngine.match(event);
         if (candidates.isEmpty()) return EvalResult.miss();
 
-        Long sessionId = sessionWriter.insertPending(event, candidates.size(), "PULL");
+        Long sessionId = sessionWriter.insertPending(event, candidates.size(), mode);
         EvalOutcome outcome = evalEngine.evaluateWithContext(event, candidates, evalNow);
         EvalResult result = outcome.result();
 

@@ -175,7 +175,7 @@ class EvalIntegrationTest {
                 Instant.now(),
                 Map.of(),
                 Map.of()
-        );
+        , com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     // ===== 测试 1：PULL 同步评估写入 evaluation_session =====
@@ -199,6 +199,9 @@ class EvalIntegrationTest {
                         .eq(EvaluationSession::getTenantId, 1L));
         assertThat(sessions).hasSize(1);
         assertThat(sessions.get(0).getStatus()).isEqualTo("HIT");
+        // source 取自 event 渠道，mode 由 evaluate() 入口判定为 PULL
+        assertThat(sessions.get(0).getSource()).isEqualTo("HTTP");
+        assertThat(sessions.get(0).getMode()).isEqualTo("PULL");
     }
 
     // ===== 测试 2：相同 eventId 幂等，只写一条 session =====
@@ -243,6 +246,14 @@ class EvalIntegrationTest {
             Thread.sleep(100);
         }
         assertThat(count).isGreaterThan(0);
+
+        // PUSH 异步路径 mode 应记为 PUSH（acceptEvent 经 dispatcher 以 mode=PUSH 评估）
+        List<EvaluationSession> sessions = sessionMapper.selectList(
+                new LambdaQueryWrapper<EvaluationSession>()
+                        .eq(EvaluationSession::getEventId, "push-001")
+                        .eq(EvaluationSession::getTenantId, 1L));
+        assertThat(sessions.get(0).getSource()).isEqualTo("HTTP");
+        assertThat(sessions.get(0).getMode()).isEqualTo("PUSH");
     }
 
     // ===== 测试 4：dry-run 写入 dry_run_session，不污染生产表 =====

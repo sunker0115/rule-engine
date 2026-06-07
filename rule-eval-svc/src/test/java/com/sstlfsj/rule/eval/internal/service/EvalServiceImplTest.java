@@ -42,7 +42,7 @@ class EvalServiceImplTest {
 
     private RuleEvent event() {
         return new RuleEvent("1", "fraud_check", "RISK_EVENT", "u1",
-                "evt-001", Instant.now(), Map.of(), Map.of());
+                "evt-001", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     private RuleVersionSnapshot snapshot(Long id, String decisionCode) {
