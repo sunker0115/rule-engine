@@ -81,6 +81,19 @@
         </dependency>
     </dependencies>
 
+    <profiles>
+        <!-- 按需把 xxl 适配器纳入构建/镜像；默认不引入，保持 in-process 部署的镜像精简 -->
+        <profile>
+            <id>xxl</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.sstlfsj.rule</groupId>
+                    <artifactId>rule-job-xxl</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
     <build>
         <plugins>
             <plugin>

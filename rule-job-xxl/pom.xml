@@ -17,7 +17,7 @@
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-kernel</artifactId>
         </dependency>
-        <!-- xxl-job 执行器 + IJobHandler + 动态注册 API -->
+        <!-- xxl-job 执行器 + IJobHandler + 动态注册 API（Groovy 版本由根 BOM 锁回 4.x） -->
         <dependency>
             <groupId>com.xuxueli</groupId>
             <artifactId>xxl-job-core</artifactId>

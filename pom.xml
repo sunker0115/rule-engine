@@ -50,6 +50,10 @@
         <springdoc.version>3.0.3</springdoc.version>
         <!-- xxl-job-core 3.4.0：稳定版（2026-04-05），自身基于 Spring Boot 4.0.5 构建，无 javax 引用 -->
         <xxl-job.version>3.4.0</xxl-job.version>
+        <!-- 把 xxl-job-core 传递的 Groovy 5 锁回 4.x：GraalVM 内置 GroovySubstitutions 仅适配 Groovy 4，
+             对 Groovy 5 因 IndyInterface.invalidateSwitchPoints() 缺失导致 native 编译失败（GR-60622）。
+             适配器走 glueType=BEAN 不跑脚本，仅需 GroovyClassLoader 可加载，4.x 运行期等价。 -->
+        <groovy.version>4.0.24</groovy.version>
     </properties>
 
     <build>
@@ -208,6 +212,12 @@
                 <groupId>com.xuxueli</groupId>
                 <artifactId>xxl-job-core</artifactId>
                 <version>${xxl-job.version}</version>
+            </dependency>
+            <!-- 强制 Groovy 4.x：覆盖 xxl-job-core 传递的 5.0.5（理由见 groovy.version 属性注释） -->
+            <dependency>
+                <groupId>org.apache.groovy</groupId>
+                <artifactId>groovy</artifactId>
+                <version>${groovy.version}</version>
             </dependency>
 
             <!-- 内部模块版本管理 -->
