@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.web.admin.dto;
 
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -37,7 +38,7 @@ class UpdateSceneRequestTest {
                 "t1",
                 "新场景名称",
                 List.of("payment.initiated", "payment.settled"),
-                List.of(Map.of("name", "amount", "type", "NUMBER")),
+                List.of(new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null)),
                 Map.of("timezone", "Asia/Shanghai")
         );
         Set<ConstraintViolation<UpdateSceneRequest>> violations = validator.validate(req);
