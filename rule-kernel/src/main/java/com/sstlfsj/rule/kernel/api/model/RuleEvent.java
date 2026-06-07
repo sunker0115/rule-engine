@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /** 触发规则评估的业务事件，eventId 用于幂等校验；source 为渠道（由注入入口权威设置）。 */
-@Builder
+@Builder(toBuilder = true)
 public record RuleEvent(
         String tenantId,
         String sceneCode,

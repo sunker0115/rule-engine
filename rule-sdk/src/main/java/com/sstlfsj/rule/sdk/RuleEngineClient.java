@@ -2,6 +2,7 @@ package com.sstlfsj.rule.sdk;
 
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -122,11 +123,13 @@ public class RuleEngineClient implements AutoCloseable {
         return m;
     }
 
-    /** 对单个事件本地求值，零网络跳转。 */
+    /** 对单个事件本地求值，零网络跳转；渠道由 SDK 入口权威设为 SDK，不信任调用方传入。 */
     public EvalResult evaluate(RuleEvent event) {
-        EvalResult result = evalEngine.evaluate(event);
-        if (evalResultListener != null) evalResultListener.onResult(event, result);
-        if (evalSessionListener != null) evalSessionListener.onSession(event, result);
+        RuleEvent sdkEvent = event.source() == EventSource.SDK
+                ? event : event.toBuilder().source(EventSource.SDK).build();
+        EvalResult result = evalEngine.evaluate(sdkEvent);
+        if (evalResultListener != null) evalResultListener.onResult(sdkEvent, result);
+        if (evalSessionListener != null) evalSessionListener.onSession(sdkEvent, result);
         return result;
     }
 

@@ -63,6 +63,17 @@ class RuleEventTest {
     }
 
     @Test
+    void toBuilderOverridesSourceKeepingOtherFields() {
+        // toBuilder 复制原值，仅改写 source —— SDK 入口据此把渠道权威改为 SDK
+        RuleEvent original = base().payload(Map.of("k", "v")).build();
+        RuleEvent rebuilt = original.toBuilder().source(EventSource.SDK).build();
+        assertThat(rebuilt.source()).isEqualTo(EventSource.SDK);
+        assertThat(rebuilt.tenantId()).isEqualTo("t1");
+        assertThat(rebuilt.eventId()).isEqualTo("evt-1");
+        assertThat(rebuilt.payload()).containsEntry("k", "v");
+    }
+
+    @Test
     void recordEqualityByValue() {
         Instant now = Instant.EPOCH;
         RuleEvent a = base().occurredAt(now).build();

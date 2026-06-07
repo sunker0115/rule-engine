@@ -83,12 +83,12 @@ class AnnotationRuleSourceTest {
                 .build()) {
             RuleEvent hit = new RuleEvent("t1", "fraud", "TRANSACTION",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of("amount", 1500));
+                    Instant.now(), Map.of(), Map.of("amount", 1500), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(hit).ruleHit()).isTrue();
 
             RuleEvent miss = new RuleEvent("t1", "fraud", "TRANSACTION",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of("amount", 500));
+                    Instant.now(), Map.of(), Map.of("amount", 500), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(miss).ruleHit()).isFalse();
         }
     }
