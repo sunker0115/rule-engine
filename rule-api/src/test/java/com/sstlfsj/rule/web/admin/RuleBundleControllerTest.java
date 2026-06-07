@@ -47,7 +47,9 @@ class RuleBundleControllerTest {
     private RuleBundle sampleBundle() {
         return new RuleBundle(1, "2026-06-06T10:00:00Z", "1",
                 List.of(new RuleBundle.RuleEntry("rule.a", "规则A", "AST_BOOLEAN", "risk.transfer",
-                        "{}", "[]", "[]", "[]", List.of(new MetricDependency("account.age", 1)))),
+                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
+                        java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                        List.of(new MetricDependency("account.age", 1)))),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", null, "USER",
                         "PUSH", "HIGHEST_PRIORITY", "[]", "{}", "{}", 1)),
                 List.of(), List.of(), List.of());
@@ -102,8 +104,9 @@ class RuleBundleControllerTest {
         String bundleJson = """
                 {"bundleVersion":1,"exportedAt":"t","sourceTenantId":"9",
                  "rules":[{"code":"rule.a","name":"规则A","kind":"AST_BOOLEAN",
-                         "sceneCode":"risk.transfer","conditionAst":"{}",
-                         "decisionBindings":"[]","preGates":"[]","triggerEventTypes":"[]",
+                         "sceneCode":"risk.transfer",
+                         "conditionAst":{"type":"AndNode","children":[]},
+                         "decisionBindings":[],"preGates":[],"triggerEventTypes":[],
                          "metricDependencies":[]}],
                  "scenes":[{"code":"risk.transfer","name":"转账风控","description":null,
                           "subjectType":"USER","dominantMode":"PUSH",
