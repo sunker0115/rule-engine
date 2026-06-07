@@ -57,6 +57,21 @@ class RuleControllerTest {
     }
 
     @Test
+    void createDraft_returns400_whenAstTypeUnknown() throws Exception {
+        // conditionAst 多态 type 不存在 → typed 绑定反序列化失败 → 400（本期新失败模式）
+        String badBody = """
+                {"tenantId":"t1","sceneCode":"s","code":"c","name":"n",
+                 "conditionAst":{"type":"NoSuchNode"}}
+                """;
+        mockMvc.perform(post("/admin/v1/rules")
+                        .header("X-Actor-Id", "u1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(badBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
     void publish_returns200_andCallsService() throws Exception {
         when(configService.publish(any(), any(), any())).thenReturn(null);
 
