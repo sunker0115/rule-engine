@@ -24,9 +24,9 @@ public class JobAutoConfiguration {
      * </ul>
      * 同时保留 {@link ConditionalOnMissingBean}：外部显式注册的 Scheduler Bean 始终优先。
      *
-     * @return ThreadPoolSchedulerAdapter 实例
+     * @return ThreadPoolSchedulerAdapter 实例（实现 AutoCloseable，容器销毁时经接口关闭线程池）
      */
-    @Bean(destroyMethod = "shutdown")
+    @Bean
     @ConditionalOnMissingBean(Scheduler.class)
     @ConditionalOnProperty(prefix = "engine.rule.job", name = "scheduler",
             havingValue = "in-process", matchIfMissing = true)

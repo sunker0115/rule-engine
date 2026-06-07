@@ -16,7 +16,7 @@ class ThreadPoolSchedulerAdapterTest {
 
     @AfterEach
     void tearDown() {
-        adapter.shutdown();
+        adapter.close();
     }
 
     @Test

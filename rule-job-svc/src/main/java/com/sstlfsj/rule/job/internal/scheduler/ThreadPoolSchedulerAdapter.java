@@ -16,7 +16,7 @@ import java.util.concurrent.ScheduledFuture;
  * <p>单实例语义——多实例部署会重复触发，这是已知限制（见 docs/01-concepts.md §3.10）；
  * 需要 HA 时替换为选主或外部调度（xxl-job），业务侧 JobDefinition / JobExecution 不变。
  */
-public class ThreadPoolSchedulerAdapter implements Scheduler {
+public class ThreadPoolSchedulerAdapter implements Scheduler, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(ThreadPoolSchedulerAdapter.class);
 
@@ -48,8 +48,9 @@ public class ThreadPoolSchedulerAdapter implements Scheduler {
         }
     }
 
-    /** 关闭调度线程池，由容器在 bean 销毁时调用。 */
-    public void shutdown() {
+    /** 关闭调度线程池，由容器在 bean 销毁时经 AutoCloseable 调用（接口式销毁，native AOT 无需按名反射）。 */
+    @Override
+    public void close() {
         taskScheduler.shutdown();
     }
 }
