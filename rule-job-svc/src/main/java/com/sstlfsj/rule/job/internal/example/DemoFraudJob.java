@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.job.internal.example;
 
+import com.sstlfsj.rule.job.api.JobPage;
 import com.sstlfsj.rule.job.api.JobTarget;
 import com.sstlfsj.rule.job.api.annotation.RuleJob;
 import org.springframework.context.annotation.Profile;
@@ -28,5 +29,25 @@ class DemoFraudJob {
             scene = "fraud_check", eventType = "login", name = "演示每日欺诈扫描")
     public List<JobTarget> recentLoginUsers() {
         return List.of(JobTarget.of("user-001"), JobTarget.of("user-002"));
+    }
+
+    /**
+     * 演示大数据量分页主体查询（仿 ElasticJob DataflowJob）：框架从 page 0 起反复调用，
+     * 拉到空批为止。真实场景方法体用 {@code page.offset()} / {@code page.pageSize()} 作 SQL
+     * {@code LIMIT ... OFFSET ...}；此处用 3 页假数据演示，page≥3 返空批停止。
+     *
+     * @param page 分页上下文（框架注入）
+     * @return 当前页目标列表，空列表表示已无更多页
+     */
+    @RuleJob(code = "demo-paged", cron = "0 30 3 * * *", tenant = "1",
+            scene = "fraud_check", eventType = "login", name = "演示分页欺诈扫描")
+    public List<JobTarget> recentLoginUsersPaged(JobPage page) {
+        if (page.pageNumber() >= 3) {
+            return List.of();   // 空批 → 框架停止翻页
+        }
+        // 演示用每页 2 条（真实场景：login 表 SQL LIMIT page.pageSize() OFFSET page.offset()）
+        return List.of(
+                JobTarget.of("paged-user-" + page.pageNumber() + "-0"),
+                JobTarget.of("paged-user-" + page.pageNumber() + "-1"));
     }
 }

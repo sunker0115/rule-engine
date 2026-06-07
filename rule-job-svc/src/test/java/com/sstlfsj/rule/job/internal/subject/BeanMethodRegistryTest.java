@@ -1,66 +1,64 @@
 package com.sstlfsj.rule.job.internal.subject;
 
+import com.sstlfsj.rule.job.api.JobPage;
 import com.sstlfsj.rule.job.api.JobTarget;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.List;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class BeanMethodRegistryTest {
 
-    /** 模拟 @RuleJob 注解的主体查询方法（List / Stream / 非法返回类型）。 */
+    /** 模拟 @RuleJob 注解的主体查询方法（无参 / 单 JobPage 参）。 */
     static class Probe {
-        public List<JobTarget> users() {
-            return List.of(JobTarget.of("u1"), JobTarget.of("u2"));
+        public List<JobTarget> all() {
+            return List.of(JobTarget.of("u1"));
         }
 
-        public Stream<JobTarget> streamUsers() {
-            return Stream.of(JobTarget.of("s1"), JobTarget.of("s2"));
-        }
-
-        public String wrongType() {
-            return "nope";
+        public List<JobTarget> paged(JobPage page) {
+            return List.of(JobTarget.of("p" + page.pageNumber()));
         }
     }
 
     @Test
-    void invokesListReturningMethodAsStream() throws Exception {
-        Probe probe = new Probe();
-        BeanMethodRegistry registry = new BeanMethodRegistry();
-        registry.register("Probe#users", probe, Probe.class.getMethod("users"));
+    @SuppressWarnings("unchecked")
+    void invokeNoArgReturnsResult() throws Exception {
+        BeanMethodRegistry reg = new BeanMethodRegistry();
+        reg.register("p#all", new Probe(), Probe.class.getMethod("all"));
 
-        List<JobTarget> targets = registry.invoke("Probe#users").toList();
-        assertThat(targets).hasSize(2);
-        assertThat(targets.get(0).subjectId()).isEqualTo("u1");
+        Object r = reg.invoke("p#all");
+        assertThat(r).isInstanceOf(List.class);
+        assertThat((List<JobTarget>) r).hasSize(1);
     }
 
     @Test
-    void invokesStreamReturningMethod() throws Exception {
-        Probe probe = new Probe();
-        BeanMethodRegistry registry = new BeanMethodRegistry();
-        registry.register("Probe#streamUsers", probe, Probe.class.getMethod("streamUsers"));
+    @SuppressWarnings("unchecked")
+    void invokeWithJobPageArg() throws Exception {
+        BeanMethodRegistry reg = new BeanMethodRegistry();
+        reg.register("p#paged", new Probe(), Probe.class.getMethod("paged", JobPage.class));
 
-        List<JobTarget> targets = registry.invoke("Probe#streamUsers").toList();
-        assertThat(targets).hasSize(2);
-        assertThat(targets.get(0).subjectId()).isEqualTo("s1");
+        Object r = reg.invoke("p#paged", new JobPage(2, 100));
+        assertThat(((List<JobTarget>) r).get(0).subjectId()).isEqualTo("p2");
     }
 
     @Test
-    void rejectsUnsupportedReturnType() throws Exception {
-        Probe probe = new Probe();
-        BeanMethodRegistry registry = new BeanMethodRegistry();
-        registry.register("Probe#wrongType", probe, Probe.class.getMethod("wrongType"));
+    void methodReturnsRegisteredMethodForSignatureInspection() throws Exception {
+        BeanMethodRegistry reg = new BeanMethodRegistry();
+        Method m = Probe.class.getMethod("paged", JobPage.class);
+        reg.register("p#paged", new Probe(), m);
 
-        assertThatThrownBy(() -> registry.invoke("Probe#wrongType"))
-                .isInstanceOf(IllegalStateException.class);
+        assertThat(reg.method("p#paged")).isEqualTo(m);
+        assertThat(reg.method("p#paged").getParameterTypes()[0]).isEqualTo(JobPage.class);
     }
 
     @Test
     void rejectsUnregisteredRef() {
         assertThatThrownBy(() -> new BeanMethodRegistry().invoke("missing#ref"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new BeanMethodRegistry().method("missing#ref"))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

@@ -1,18 +1,15 @@
 package com.sstlfsj.rule.job.internal.subject;
 
-import com.sstlfsj.rule.job.api.JobTarget;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
-import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
 
 /**
  * {@code @RuleJob} 主体查询方法注册表：ref（{@code <bean>#<method>}）→ 目标 bean + 方法。
  *
- * <p>由 RuleJobScanner 启动期填充，{@link BeanMethodSubjectQueryRunner} 触发时按 ref 反射调用。
+ * <p>由 RuleJobScanner 启动期填充，{@link BeanMethodSubjectQueryRunner} 触发时按 ref 取方法签名分发、反射调用。
  */
 @Component
 public class BeanMethodRegistry {
@@ -27,31 +24,38 @@ public class BeanMethodRegistry {
     }
 
     /**
-     * 按 ref 反射调用主体查询方法，统一归一为惰性 {@link Stream}。
-     * 方法可返回 {@code Stream<JobTarget>}（流式，原样透传）或 {@code Collection<JobTarget>}（如 List，转流）。
+     * 返回 ref 对应的方法对象，供调用方按签名（无参 / 单 JobPage 参）分发。
      *
      * @param ref {@code <bean>#<method>}
-     * @return 方法返回的目标流
+     * @return 方法对象
      */
-    @SuppressWarnings("unchecked")
-    public Stream<JobTarget> invoke(String ref) {
+    public Method method(String ref) {
+        return handle(ref).method();
+    }
+
+    /**
+     * 按 ref 反射调用主体查询方法。
+     *
+     * @param ref  {@code <bean>#<method>}
+     * @param args 调用参数（无参方法传空，分页方法传 JobPage）
+     * @return 方法返回值
+     */
+    public Object invoke(String ref, Object... args) {
+        Handle handle = handle(ref);
+        try {
+            // 注解 bean 类可能为包私有，放开访问再反射调用
+            handle.method().setAccessible(true);
+            return handle.method().invoke(handle.bean(), args);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("调用 @RuleJob 主体查询方法失败: " + ref, e);
+        }
+    }
+
+    private Handle handle(String ref) {
         Handle handle = handles.get(ref);
         if (handle == null) {
             throw new IllegalStateException("未注册的 @RuleJob 主体查询方法: " + ref);
         }
-        try {
-            // 注解 bean 类可能为包私有，放开访问再反射调用
-            handle.method().setAccessible(true);
-            Object result = handle.method().invoke(handle.bean());
-            return switch (result) {
-                case Stream<?> s -> (Stream<JobTarget>) s;
-                case Collection<?> c -> ((Collection<JobTarget>) c).stream();
-                case null -> Stream.empty();
-                default -> throw new IllegalStateException(
-                        "@RuleJob 方法返回类型不支持（需 List 或 Stream<JobTarget>）: " + ref);
-            };
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("调用 @RuleJob 主体查询方法失败: " + ref, e);
-        }
+        return handle;
     }
 }

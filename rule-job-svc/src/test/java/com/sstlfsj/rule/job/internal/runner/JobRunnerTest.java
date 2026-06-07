@@ -16,11 +16,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Map;
-import java.util.stream.Stream;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -47,6 +49,18 @@ class JobRunnerTest {
         });
     }
 
+    /** mock forEachTarget：把给定目标依次推给 runner 提供的 sink。 */
+    @SuppressWarnings("unchecked")
+    private void givenTargets(JobTarget... targets) {
+        doAnswer(inv -> {
+            Consumer<JobTarget> sink = (Consumer<JobTarget>) inv.getArgument(1);
+            for (JobTarget t : targets) {
+                sink.accept(t);
+            }
+            return null;
+        }).when(subjectQueryRunner).forEachTarget(any(), any());
+    }
+
     private JobDefinition def() {
         JobDefinition d = new JobDefinition();
         d.setId(7L);
@@ -60,8 +74,7 @@ class JobRunnerTest {
 
     @Test
     void allAcceptedResultsInSuccess() {
-        when(subjectQueryRunner.query(any())).thenReturn(
-                Stream.of(JobTarget.of("u1"), JobTarget.of("u2")));
+        givenTargets(JobTarget.of("u1"), JobTarget.of("u2"));
         when(evalService.acceptEvent(any())).thenReturn(true);
 
         JobExecution exec = runner.run(def());
@@ -77,7 +90,7 @@ class JobRunnerTest {
     @Test
     void backpressureRetriesThenSucceeds() {
         // 队列瞬时满（前两次拒绝），退避重试后第三次入队成功，应计成功而非错误
-        when(subjectQueryRunner.query(any())).thenReturn(Stream.of(JobTarget.of("u1")));
+        givenTargets(JobTarget.of("u1"));
         when(evalService.acceptEvent(any())).thenReturn(false, false, true);
 
         JobExecution exec = runner.run(def());
@@ -90,8 +103,7 @@ class JobRunnerTest {
 
     @Test
     void persistentlyFullResultsInError() {
-        // 队列持续满、重试耗尽仍入不进 → 计错
-        when(subjectQueryRunner.query(any())).thenReturn(Stream.of(JobTarget.of("u1")));
+        givenTargets(JobTarget.of("u1"));
         when(evalService.acceptEvent(any())).thenReturn(false);
 
         JobExecution exec = runner.run(def());
@@ -103,8 +115,7 @@ class JobRunnerTest {
 
     @Test
     void partialFailWhenOneSubjectPersistentlyFull() {
-        when(subjectQueryRunner.query(any())).thenReturn(
-                Stream.of(JobTarget.of("u1"), JobTarget.of("u2")));
+        givenTargets(JobTarget.of("u1"), JobTarget.of("u2"));
         // 第一个主体首次即入队成功；第二个主体此后一直被拒（重试耗尽计错）
         when(evalService.acceptEvent(any())).thenReturn(true, false);
 
@@ -117,7 +128,8 @@ class JobRunnerTest {
 
     @Test
     void subjectQueryFailureResultsInFailedWithoutInjection() {
-        when(subjectQueryRunner.query(any())).thenThrow(new IllegalArgumentException("bad ref"));
+        doThrow(new IllegalArgumentException("bad ref"))
+                .when(subjectQueryRunner).forEachTarget(any(), any());
 
         JobExecution exec = runner.run(def());
 
@@ -131,7 +143,7 @@ class JobRunnerTest {
         // 目标携带 payload + providedMetrics，应原样透传进合成事件；渠道由 JobRunner 设为 JOB
         JobTarget target = JobTarget.of("u1", Map.of("k", "v"))
                 .withProvidedMetrics(Map.of("score", 0.9));
-        when(subjectQueryRunner.query(any())).thenReturn(Stream.of(target));
+        givenTargets(target);
         when(evalService.acceptEvent(any())).thenReturn(true);
 
         runner.run(def());
