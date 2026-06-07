@@ -56,18 +56,55 @@ public class HttpXxlJobAdminClient implements XxlJobAdminClient {
         return insertJobInfo(groupId, handlerName, cron);
     }
 
-    // ---- Task 4 补全 group / jobinfo 逻辑；本任务先留桩占位，保证编译 ----
-
+    /** 确保 appname 对应的 jobgroup 存在，返回其 id（不存在则按 appname 建组）。 */
     private int ensureJobGroup() {
-        throw new UnsupportedOperationException("Task 4 实现");
+        JsonNode page = post("/jobgroup/pageList", form(
+                "offset", "0", "pagesize", "10",
+                "appname", props.getAppname(), "title", props.getAppname()), true).path("data");
+        for (JsonNode g : page.path("data")) {
+            if (props.getAppname().equals(g.path("appname").asString(""))) {
+                return g.path("id").asInt();
+            }
+        }
+        JsonNode data = post("/jobgroup/insert", form(
+                "appname", props.getAppname(), "title", props.getAppname(),
+                "addressType", "0", "addressList", ""), true).path("data");
+        log.info("xxl-job admin 新建 jobgroup appname={} id={}", props.getAppname(), data.asInt());
+        return data.asInt();
     }
 
+    /** pageList 查同组下 handler，executorHandler 是模糊匹配，需客户端再精确 equals；命中返回 id，否则 null。 */
     private Long findJobInfoId(int groupId, String handlerName) {
-        throw new UnsupportedOperationException("Task 4 实现");
+        JsonNode page = post("/jobinfo/pageList", form(
+                "offset", "0", "pagesize", "100",
+                "jobGroup", String.valueOf(groupId), "triggerStatus", "-1",
+                "jobDesc", "", "executorHandler", handlerName, "author", ""), true).path("data");
+        for (JsonNode job : page.path("data")) {
+            if (handlerName.equals(job.path("executorHandler").asString(""))) {
+                return job.path("id").asLong();
+            }
+        }
+        return null;
     }
 
+    /** 新建 jobinfo（scheduleType=CRON、glueType=BEAN、executorHandler=handlerName、triggerStatus=1 启用）。 */
     private long insertJobInfo(int groupId, String handlerName, String cron) {
-        throw new UnsupportedOperationException("Task 4 实现");
+        JsonNode data = post("/jobinfo/insert", form(
+                "jobGroup", String.valueOf(groupId),
+                "jobDesc", handlerName,
+                "author", "rule-engine",
+                "scheduleType", "CRON",
+                "scheduleConf", cron,
+                "glueType", "BEAN",
+                "executorHandler", handlerName,
+                "executorRouteStrategy", "FIRST",
+                "misfireStrategy", "DO_NOTHING",
+                "executorBlockStrategy", "SERIAL_EXECUTION",
+                "executorTimeout", "0",
+                "executorFailRetryCount", "0",
+                "triggerStatus", "1"), true).path("data");
+        log.info("xxl-job admin 新建 job handler={} id={} cron={}", handlerName, data.asLong(), cron);
+        return data.asLong();
     }
 
     /** form-urlencoded POST；withAuth=true 带登录 cookie，遇登录失效清 token 重试一次。成功返回响应 JSON 根。 */
@@ -137,7 +174,7 @@ public class HttpXxlJobAdminClient implements XxlJobAdminClient {
     private static String encode(Map<String, String> form) {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, String> e : form.entrySet()) {
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append('&');
             }
             sb.append(URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8))

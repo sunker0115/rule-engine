@@ -83,4 +83,53 @@ class HttpXxlJobAdminClientTest {
         assertThat(hits).containsKey("/xxl-job-admin/auth/doLogin");
         assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isZero();
     }
+
+    @Test
+    void seedInsertsWhenAbsentAndReturnsNewId() {
+        responses.put("/xxl-job-admin/jobgroup/pageList",
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":7,\"appname\":\"rule-engine\"}],\"total\":1}}");
+        // jobinfo 列表为空 → 视为不存在
+        responses.put("/xxl-job-admin/jobinfo/pageList",
+                "{\"code\":200,\"data\":{\"data\":[],\"total\":0}}");
+        responses.put("/xxl-job-admin/jobinfo/insert",
+                "{\"code\":200,\"msg\":null,\"data\":99}");
+
+        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+
+        assertThat(id).isEqualTo(99L);
+        assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isEqualTo(1);
+    }
+
+    @Test
+    void seedFuzzyMatchIsRefinedByExactEquals() {
+        // pageList 模糊匹配返回了 handler 前缀相近但不相等的行 → 客户端精确 equals 应判为不存在 → insert
+        responses.put("/xxl-job-admin/jobgroup/pageList",
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":7,\"appname\":\"rule-engine\"}],\"total\":1}}");
+        responses.put("/xxl-job-admin/jobinfo/pageList",
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"executorHandler\":\"job:10\"}],\"total\":1}}");
+        responses.put("/xxl-job-admin/jobinfo/insert",
+                "{\"code\":200,\"data\":100}");
+
+        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+
+        assertThat(id).isEqualTo(100L);
+        assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isEqualTo(1);
+    }
+
+    @Test
+    void seedCreatesJobGroupWhenAbsent() {
+        responses.put("/xxl-job-admin/jobgroup/pageList",
+                "{\"code\":200,\"data\":{\"data\":[],\"total\":0}}");
+        responses.put("/xxl-job-admin/jobgroup/insert",
+                "{\"code\":200,\"data\":15}");
+        responses.put("/xxl-job-admin/jobinfo/pageList",
+                "{\"code\":200,\"data\":{\"data\":[],\"total\":0}}");
+        responses.put("/xxl-job-admin/jobinfo/insert",
+                "{\"code\":200,\"data\":101}");
+
+        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+
+        assertThat(id).isEqualTo(101L);
+        assertThat(hits.getOrDefault("/xxl-job-admin/jobgroup/insert", 0)).isEqualTo(1);
+    }
 }
