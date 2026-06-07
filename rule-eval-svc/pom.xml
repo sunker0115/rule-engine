@@ -26,16 +26,6 @@
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-events-api</artifactId>
         </dependency>
-        <!-- 持久事件 outbox：event_publication 登记表，崩溃未完成项重启重投（action 不丢） -->
-        <dependency>
-            <groupId>org.springframework.modulith</groupId>
-            <artifactId>spring-modulith-events-jdbc</artifactId>
-        </dependency>
-        <!-- 事件序列化器（EventSerializer）：持久事件写入 SERIALIZED_EVENT 列所需 -->
-        <dependency>
-            <groupId>org.springframework.modulith</groupId>
-            <artifactId>spring-modulith-events-jackson</artifactId>
-        </dependency>
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-observability</artifactId>
