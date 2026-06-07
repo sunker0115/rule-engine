@@ -15,13 +15,18 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Job 单次运行：查主体 → 合成 RuleEvent → {@link EvalService#acceptEvent} 注入 → 记 JobExecution。
  *
  * <p>下游 Matcher / AST / Action 对 Job 完全无感（D11）。{@code acceptEvent} 为异步 PUSH，
  * 成功入队即计入 successCount（= 成功注入评估链路的主体数），不等待评估结果。
+ *
+ * <p>主体以惰性 {@link Stream} 消费（try-with-resources 释放底层游标），支持大数据量流式分批不爆内存；
+ * PUSH 队列满时按退避重试做背压（{@link #injectWithBackpressure}），重试耗尽才计错，避免大批量注入瞬间打满队列被误判失败。
  */
 @Component
 @RequiredArgsConstructor
@@ -29,6 +34,10 @@ public class JobRunner {
 
     private static final Logger log = LoggerFactory.getLogger(JobRunner.class);
     private static final int ERROR_SUMMARY_MAX = 2000;
+    /** 背压：单主体注入遇队列满的最大重试次数。 */
+    private static final int INJECT_MAX_RETRY = 20;
+    /** 背压：每次重试前的退避毫秒。 */
+    private static final long INJECT_BACKOFF_MS = 50;
 
     private final SubjectQueryRunner subjectQueryRunner;
     private final EvalService evalService;
@@ -52,14 +61,17 @@ public class JobRunner {
         executionMapper.insert(exec);
         long jobRunId = exec.getId();
 
+        int subjectCount = 0;
         int success = 0;
         int error = 0;
         List<String> errors = new ArrayList<>();
-        try {
-            List<JobTarget> targets = subjectQueryRunner.query(def.getSubjectQuery());
-            exec.setSubjectCount(targets.size());
-            String tenantId = String.valueOf(def.getTenantId());
-            for (JobTarget target : targets) {
+        String tenantId = String.valueOf(def.getTenantId());
+        // try-with-resources：消费完关闭流，释放底层 MyBatis Cursor（流式来源）
+        try (Stream<JobTarget> targets = subjectQueryRunner.query(def.getSubjectQuery())) {
+            Iterator<JobTarget> it = targets.iterator();
+            while (it.hasNext()) {
+                JobTarget target = it.next();
+                subjectCount++;
                 String subjectId = target.subjectId();
                 try {
                     String eventId = EventIdHasher.hash(jobRunId, subjectId);
@@ -73,11 +85,11 @@ public class JobRunner {
                             .providedMetrics(target.providedMetrics())
                             .source(EventSource.JOB)
                             .build();
-                    if (evalService.acceptEvent(event)) {
+                    if (injectWithBackpressure(event)) {
                         success++;
                     } else {
                         error++;
-                        errors.add("subjectId=" + subjectId + " 被拒绝（队列满）");
+                        errors.add("subjectId=" + subjectId + " 注入失败（队列持续满，重试耗尽）");
                     }
                 } catch (RuntimeException e) {
                     error++;
@@ -92,6 +104,7 @@ public class JobRunner {
             errors.add("主体查询失败: " + e.getMessage());
             log.error("Job 主体查询失败 jobRunId={} jobCode={}", jobRunId, def.getCode(), e);
         }
+        exec.setSubjectCount(subjectCount);
         exec.setSuccessCount(success);
         exec.setErrorCount(error);
         exec.setFinishedAt(LocalDateTime.now());
@@ -100,6 +113,25 @@ public class JobRunner {
         }
         executionMapper.updateById(exec);
         return exec;
+    }
+
+    /**
+     * 注入事件，PUSH 队列满时退避重试（背压）；重试耗尽仍满返回 false 计错。
+     * 正常情况下首次即入队成功、不 sleep；仅队列瞬时打满时短暂退避等消费侧腾空。
+     */
+    private boolean injectWithBackpressure(RuleEvent event) {
+        for (int attempt = 0; attempt < INJECT_MAX_RETRY; attempt++) {
+            if (evalService.acceptEvent(event)) {
+                return true;
+            }
+            try {
+                Thread.sleep(INJECT_BACKOFF_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
     }
 
     private static String truncate(String s) {

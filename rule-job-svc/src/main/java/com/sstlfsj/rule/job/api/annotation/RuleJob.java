@@ -8,8 +8,9 @@ import java.lang.annotation.Target;
 /**
  * 注解式定时 Job：标在 Spring Bean 的「主体查询方法」上（D11 / D47）。
  *
- * <p>被标注的方法即该 Job 的目标来源，须无参、返回 {@code List<JobTarget>}
+ * <p>被标注的方法即该 Job 的目标来源，须无参、返回 {@code List<JobTarget>} 或 {@code Stream<JobTarget>}
  * （{@code JobTarget.subjectId} 为 subjectId，{@code payload} / {@code providedMetrics} 随合成事件透传）。
+ * 大数据量场景返回 {@code Stream}（如 MyBatis {@code Cursor.stream()}）即可流式分批、不爆内存。
  *
  * <p>启动期由 RuleJobScanner 自动 upsert 到 {@code job_definition}
  * （{@code subject_query = {"type":"BEAN_METHOD","ref":"<bean>#<method>"}}）并注册到调度器，

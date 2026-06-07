@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * 主体查询实现：解析 subjectQuery 配置为 typed {@link SubjectQuery}，按子类型反射调用
@@ -23,7 +23,7 @@ class BeanMethodSubjectQueryRunner implements SubjectQueryRunner {
     private final ObjectMapper objectMapper;
 
     @Override
-    public List<JobTarget> query(String subjectQueryJson) {
+    public Stream<JobTarget> query(String subjectQueryJson) {
         if (subjectQueryJson == null || subjectQueryJson.isBlank()) {
             throw new IllegalArgumentException("subjectQuery 配置不能为空");
         }

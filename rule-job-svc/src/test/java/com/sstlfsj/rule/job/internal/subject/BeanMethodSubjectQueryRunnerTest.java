@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,9 +30,8 @@ class BeanMethodSubjectQueryRunnerTest {
 
     @Test
     void invokesRegisteredMethodAndReturnsTargets() {
-        when(registry.invoke("a#b")).thenReturn(
-                List.of(JobTarget.of("u1"), JobTarget.of("u2")));
-        List<JobTarget> targets = runner.query("{\"type\":\"BEAN_METHOD\",\"ref\":\"a#b\"}");
+        when(registry.invoke("a#b")).thenReturn(Stream.of(JobTarget.of("u1"), JobTarget.of("u2")));
+        List<JobTarget> targets = runner.query("{\"type\":\"BEAN_METHOD\",\"ref\":\"a#b\"}").toList();
         assertThat(targets).hasSize(2);
         assertThat(targets.get(0).subjectId()).isEqualTo("u1");
     }
