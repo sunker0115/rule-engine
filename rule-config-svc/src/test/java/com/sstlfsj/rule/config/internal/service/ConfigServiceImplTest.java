@@ -13,11 +13,13 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -35,7 +37,7 @@ class ConfigServiceImplTest {
     @Mock AuditLogMapper auditLogMapper;
     @Mock SceneMapper sceneMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
-    @Mock ObjectMapper objectMapper;
+    @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks ConfigServiceImpl configService;
 
     @Test
@@ -164,12 +166,9 @@ class ConfigServiceImplTest {
 
         RuleVersion active = new RuleVersion();
         active.setId(42L);
-        active.setConditionAst("{\"type\":\"AndNode\"}");
-        active.setDecisionBindings("[]");
+        active.setConditionAst("{\"type\":\"AndNode\",\"children\":[]}");
+        active.setDecisionBindings("[{\"decisionCode\":\"BLOCK\",\"priority\":100}]");
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(active);
-        when(objectMapper.readValue("{\"type\":\"AndNode\"}", Object.class))
-                .thenReturn(Map.of("type", "AndNode"));
-        when(objectMapper.readValue("[]", Object.class)).thenReturn(List.of());
 
         RuleDetailVO vo = configService.getRuleDetail("1", 10L);
 
@@ -177,7 +176,10 @@ class ConfigServiceImplTest {
         assertThat(vo.code()).isEqualTo("rule.a");
         assertThat(vo.sceneCode()).isEqualTo("risk.transfer");
         assertThat(vo.currentVersionId()).isEqualTo(42L);
-        assertThat(vo.conditionAst()).isInstanceOf(Map.class);
+        assertThat(vo.conditionAst()).isInstanceOf(AndNode.class);
+        assertThat(vo.decisionBindings()).hasSize(1);
+        assertThat(vo.decisionBindings().get(0).decisionCode()).isEqualTo("BLOCK");
+        assertThat(vo.decisionBindings().get(0).priority()).isEqualTo(100);
     }
 
     @Test

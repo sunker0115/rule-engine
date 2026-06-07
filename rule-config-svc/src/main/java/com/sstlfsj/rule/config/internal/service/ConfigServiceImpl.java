@@ -96,18 +96,30 @@ class ConfigServiceImpl implements ConfigService {
         return new RuleDetailVO(
                 rule.getId(), rule.getCode(), rule.getName(), rule.getStatus(), rule.getKind(),
                 scene != null ? scene.getCode() : null,
-                active != null ? parseJson(active.getConditionAst()) : null,
-                active != null ? parseJson(active.getDecisionBindings()) : null,
+                active != null ? parseAst(active.getConditionAst()) : null,
+                active != null ? parseDecisionBindings(active.getDecisionBindings()) : null,
                 active != null ? active.getId() : null);
     }
 
-    /** 把库中存的 JSON 字符串反序列化为结构化对象供前端直接使用；空值返回 null。 */
-    private Object parseJson(String json) {
+    /** 把库中 conditionAst JSON 反序列化为 AstNode（多态）；空值返回 null。 */
+    private com.sstlfsj.rule.kernel.api.model.ast.AstNode parseAst(String json) {
         if (json == null || json.isBlank()) return null;
         try {
-            return objectMapper.readValue(json, Object.class);
+            return objectMapper.readValue(json, com.sstlfsj.rule.kernel.api.model.ast.AstNode.class);
         } catch (Exception e) {
-            throw new IllegalStateException("JSON 反序列化失败", e);
+            throw new IllegalStateException("conditionAst 反序列化失败", e);
+        }
+    }
+
+    /** 把库中 decisionBindings JSON 反序列化为 List&lt;DecisionBinding&gt;；空值返回 null。 */
+    private java.util.List<com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding>
+            parseDecisionBindings(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json,
+                    new tools.jackson.core.type.TypeReference<>() {});
+        } catch (Exception e) {
+            throw new IllegalStateException("decisionBindings 反序列化失败", e);
         }
     }
 
