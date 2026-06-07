@@ -46,6 +46,8 @@ v1 阶段 10 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个
 
 **`rule-kernel` / `rule-sdk` Native Image 说明**：两者均零 Spring 零 DB，完全兼容 GraalVM Native Image。主服务（`rule-app`）因 MyBatis-Plus 动态代理机制，v1 不支持 Native Image 编译（详见架构设计文档约束 5）。
 
+> **kernel 引入 Lombok（D49）**：`rule-kernel` 自 D49 起引 Lombok（如 `RuleEvent` 的 `@Builder(toBuilder)`）。Lombok 是**编译期注解处理器**，编译后无运行时依赖，不破坏 kernel「运行时零依赖 / GraalVM Native 兼容」承诺。
+
 ---
 
 ## 三、包命名与包结构
@@ -82,17 +84,20 @@ com.sstlfsj.rule
 │       ├── session                 # evaluation_session 幂等落库
 │       └── dispatcher              # Action Dispatcher（自研 BlockingQueue，D20）
 │
-├── job                             # rule-job-svc 模块（D11）
+├── job                             # rule-job-svc 模块（D11 / D48）
 │   ├── api
-│   │   ├── service                 # JobService（CRUD + triggerOnce + recentExecutions，供 rule-api 调用）
-│   │   └── dto                     # JobDefinitionDto / JobExecutionVO / CreateJobCommand
+│   │   ├── service                 # JobService（管理类：enable/disable/get/list/triggerOnce/recentExecutions）
+│   │   ├── dto                     # JobDefinitionDto / JobExecutionVO
+│   │   ├── annotation              # @RuleJob（注解式 Job 定义）
+│   │   └── JobTarget               # @RuleJob 方法返回元素（subjectId + payload + providedMetrics）
 │   └── internal
 │       ├── domain                  # JobDefinition / JobExecution
-│       ├── repository              # MyBatis-Plus Mapper + SubjectQueryMapper（@Select 跑配置化只读 SQL）
+│       ├── repository              # MyBatis-Plus Mapper（JobDefinition / JobExecution）
 │       ├── scheduler               # ThreadPoolSchedulerAdapter（进程内 Scheduler 实现）
-│       ├── subject                 # SubjectQueryRunner（主体集合查询，首期仅 SQL）
-│       ├── runner                  # JobRunner（合成 RuleEvent + acceptEvent 注入）+ payload 渲染 + eventId hash
-│       └── service                 # JobServiceImpl + 调度注册中介 + 启动注册
+│       ├── subject                 # SubjectQueryRunner ← BeanMethodSubjectQueryRunner + BeanMethodRegistry（反射 @RuleJob 方法取 JobTarget）
+│       ├── runner                  # JobRunner（builder 合成 RuleEvent，source=JOB + acceptEvent 注入）+ EventIdHasher
+│       ├── example                 # DemoFraudJob（@Profile local 注解式 Job 示例）
+│       └── service                 # JobServiceImpl + JobScheduleManager + JobStartupRegistrar + RuleJobScanner（扫描 @RuleJob upsert）
 │
 ├── audit                           # rule-audit-svc 模块
 │   ├── api

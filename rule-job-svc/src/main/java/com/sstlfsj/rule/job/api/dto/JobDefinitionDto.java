@@ -9,9 +9,9 @@ package com.sstlfsj.rule.job.api.dto;
  * @param code            Job 编码
  * @param name            Job 名称
  * @param cronExpression  Spring 6 段 cron
- * @param subjectQuery    主体查询配置 JSON
+ * @param subjectQuery    主体查询配置 JSON（type=BEAN_METHOD，D48）
  * @param eventType       合成 RuleEvent 的 eventType
- * @param payloadTemplate payload 模板 JSON
+ * @param payloadTemplate D49 遗留列，已不再使用（payload 由 JobTarget 携带）
  * @param status          ACTIVE / DISABLED
  */
 public record JobDefinitionDto(

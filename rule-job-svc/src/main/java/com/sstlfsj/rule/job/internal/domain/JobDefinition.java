@@ -21,10 +21,10 @@ public class JobDefinition {
     private String name;
     /** Spring 6 段 cron（秒 分 时 日 月 周）。 */
     private String cronExpression;
-    /** JSON：主体查询配置，如 {"type":"SQL","sql":"SELECT ... AS subjectId ..."}。 */
+    /** JSON：主体查询配置，如 {"type":"BEAN_METHOD","ref":"<bean>#<method>"}（D48）。 */
     private String subjectQuery;
     private String eventType;
-    /** JSON 对象模板，值含 ${col} 占位符，按主体行同名字段填充。 */
+    /** D49 遗留列，已不再使用——payload 由 @RuleJob 方法返回的 JobTarget.payload 直接携带。 */
     private String payloadTemplate;
     private String status;
     private String createdBy;

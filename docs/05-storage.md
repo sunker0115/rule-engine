@@ -250,9 +250,9 @@ CREATE TABLE job_definition (
   code            VARCHAR(64)  NOT NULL COMMENT 'Job 标识，租户 + 场景内唯一',
   name            VARCHAR(128) NOT NULL,
   cron_expression VARCHAR(128) NOT NULL COMMENT 'Spring 6 段 cron（秒 分 时 日 月 周）',
-  subject_query   JSON         NOT NULL COMMENT '主体集合查询配置，首期仅 type=SQL（EXTERNAL_HTTP / METRIC_RESULT 后续），到点批量拉取触发主体',
+  subject_query   JSON         NOT NULL COMMENT '主体集合查询配置（D48）：type=BEAN_METHOD，ref=<bean>#<method> 指向 @RuleJob 注解的业务查询方法（EXTERNAL_HTTP / METRIC_RESULT 后续）',
   event_type      VARCHAR(64)  NOT NULL COMMENT '合成 RuleEvent 时使用的 eventType',
-  payload_template JSON        COMMENT '合成 RuleEvent.payload 的模板（占位符按主体行同名字段填充）',
+  payload_template JSON        COMMENT 'D49 遗留列，已不再使用——payload 改由 @RuleJob 方法返回的 JobTarget.payload 直接携带，不做占位符渲染',
   status          ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_by      VARCHAR(64)  COMMENT '创建人（D14）',
   created_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -312,7 +312,8 @@ CREATE TABLE evaluation_session (
   scene_code       VARCHAR(64)  NOT NULL,
   event_type       VARCHAR(64)  NOT NULL COMMENT '业务事件类型（Matcher 路由三元组之一）',
   subject_id       VARCHAR(128) NOT NULL,
-  source           ENUM('PUSH','PULL','REPLAY') NOT NULL DEFAULT 'PUSH' COMMENT 'D23：评估触发方式（PUSH=异步推送含 Job 触发 / PULL=同步调用 / REPLAY=事件回放）；与 RuleEvent.source（HTTP/MQ/JOB/SDK/REPLAY 五值，记事件来源渠道）不同维度，不改幂等语义',
+  source           ENUM('HTTP','MQ','JOB','SDK','REPLAY') NOT NULL DEFAULT 'HTTP' COMMENT 'D49：事件来源渠道，取自 RuleEvent.source（由注入入口权威设置）',
+  mode             ENUM('PUSH','PULL') NOT NULL DEFAULT 'PULL' COMMENT 'D49：评估模式，由 EvalService 入口判定（acceptEvent=PUSH 异步 / evaluate·dryRun=PULL 同步）；与 source 渠道正交',
   status           ENUM('PENDING','HIT','MISS','BLOCKED','ERROR','FAILED') NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING=进行中；HIT/MISS/BLOCKED/ERROR=D22 四态；FAILED=异常崩溃',
   final_decision   VARCHAR(64)  COMMENT '最终决策码（nullable，未命中或 BLOCKED 时为 null）',
   hit_decisions    JSON         COMMENT '命中的所有决策码列表',
@@ -330,6 +331,8 @@ CREATE TABLE evaluation_session (
   KEY idx_started_at (started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评估会话主记录（D11/D21，v1 同步写）';
 ```
+
+> **D49 渠道/模式拆分**：原 `source ENUM('PUSH','PULL','REPLAY')` 把"评估模式"塞进了来源列。迁移 `V1_8__session_source_mode.sql` 将 `source` 改为渠道枚举（`HTTP/MQ/JOB/SDK/REPLAY`，取自 `RuleEvent.source`），并新增 `mode ENUM('PUSH','PULL')` 存评估模式（入口判定，与渠道正交）。
 
 **node_trace**（D7/D21 异步批写；30 天 TTL）
 

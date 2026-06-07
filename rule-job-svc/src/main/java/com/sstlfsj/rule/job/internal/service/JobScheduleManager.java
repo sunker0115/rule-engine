@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  * Job 与调度器的注册中介：把 JobDefinition 注册/撤销到 {@link Scheduler}。
  *
  * <p>调度触发时按 jobId 重新查最新定义再运行，确保 cron 外的运行时字段（subjectQuery /
- * payloadTemplate / status）取当前值，且 DISABLED 的 Job 即使遗留触发也不执行。
+ * status）取当前值，且 DISABLED 的 Job 即使遗留触发也不执行。
  */
 @Component
 @RequiredArgsConstructor

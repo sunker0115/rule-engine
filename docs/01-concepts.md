@@ -201,7 +201,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 - `payload` 在线协议层是 schemaless 的 Map，但**实际可消费字段由 `Scene.payloadSchema` 约束**（D13）：事件接入校验 + 规则发布校验 + 前端编辑器变量补全都按它走。schema 之外的字段被静默丢弃（v1）或拒收（v2 严格模式）。
 - `eventType` 必须 ∈ `Scene.eventTypes` 白名单，不在的事件直接拒收（D13）。
 - 不允许在 RuleEvent 里塞"指标"——指标按需在 EvalContext 构建阶段取。
-- **Job Trigger 同样产出标准 `RuleEvent`**：调度器到点查询主体集合 → 按模板批量合成 RuleEvent（`eventId = hash(jobRunId + subjectId)`）→ 注入标准评估链路；下游 Matcher / Rule / Action 完全无感（详见 §3.10）。
+- **Job Trigger 同样产出标准 `RuleEvent`**：调度器到点经 `@RuleJob` 方法查 `JobTarget` 集合 → 经 `RuleEvent.builder` 批量合成（`source=JOB`、`eventId = hash(jobRunId + subjectId)`，payload/providedMetrics 由 JobTarget 携带）→ 注入标准评估链路；下游 Matcher / Rule / Action 完全无感（详见 §3.10）。
 
 ### 3.4 Rule（规则）
 
@@ -504,8 +504,8 @@ EvalContext {
 
 **是什么**：把"定时类规则"接入引擎的 Trigger 适配器，**不引入第四个一等概念**。调度器到点后：
 
-1. 按 `JobDefinition.subjectQuery` 查询本批次主体集合（用户列表 / 账户列表 / 订单列表）；
-2. 按 `eventTypeTemplate` / `payloadTemplate` 为每个主体合成 `RuleEvent`（`eventId = hash(jobRunId + subjectId)`，与 `record_no` 模式同构幂等）；
+1. 按 `JobDefinition.subjectQuery`（`type=BEAN_METHOD`）反射调用 `@RuleJob` 业务方法，查出本批次 `JobTarget` 集合（每个含 subjectId + 可选 payload + 可选 providedMetrics）；
+2. 经 `RuleEvent.builder` 为每个 `JobTarget` 合成 `RuleEvent`（`source=JOB`、`eventId = hash(jobRunId + subjectId)` 与 `record_no` 模式同构幂等，payload/providedMetrics 由 JobTarget 透传）；
 3. 批量注入标准评估链路（Matcher → Pre-Gate → EvalContext 构建 → AST → Action），下游完全无感。
 
 **字段（JobDefinition）**：
@@ -516,12 +516,14 @@ EvalContext {
 | `tenantId / sceneCode` | 归属（DDL 列 `tenant_id` / `scene_code`，关联 scene.code，与 RuleEvent.sceneCode / SceneService 口径一致；PULL Scene 拒绝绑定） |
 | `name` | 给运营看的名称 |
 | `cronExpression` | 标准 cron 表达式（DDL 列名 `cron_expression`）；时区可选——cron 自带时区时以 cron 为准（如 `CRON_TZ=Asia/Shanghai 0 30 0 * * *`），未指定时回落 `Scene.defaultParams.timezone`，仍未配回落引擎默认（`UTC`） |
-| `subjectQuery` | 主体集合查询配置 JSON（DDL 单列，包含 `type`（`SQL`/`EXTERNAL_HTTP`/`METRIC_RESULT`）和查询参数） |
+| `subjectQuery` | 主体集合查询配置 JSON（DDL 单列）。`type=BEAN_METHOD`（首期，`@RuleJob` 注解的业务查询方法，`ref=<bean>#<method>`，主体由方法返回）/ `EXTERNAL_HTTP` / `METRIC_RESULT`（后续）。详见下方「Job 定义方式」 |
 | `eventType` | 合成 RuleEvent 时使用的 eventType（DDL 列名 `event_type`；概念层有时称 `eventTypeTemplate`） |
-| `payloadTemplate` | 合成事件的 payload 模板（占位符填充主体字段） |
+| `payloadTemplate` | DDL 遗留列，D49 后不再使用——payload 改由 `@RuleJob` 方法返回的 `JobTarget.payload` 直接携带，不再做占位符模板渲染 |
 | `concurrency` | 单次运行并发 fan-out 上限（调度器运行时配置，非 DDL 独立列，存于 `subject_query` JSON 或外部配置） |
 | `rateLimit` | 注入引擎事件速率上限（保护下游；同 `concurrency` 为运行时配置） |
 | `status` | `ACTIVE` / `DISABLED`（DDL ENUM；概念层有时写 `PAUSED`，DDL 对应值为 `DISABLED`） |
+
+**Job 定义方式（D48 / D49）**：Job 由 `@RuleJob` 注解定义——开发者在 Spring Bean 方法上标注（`code`/`cron`/`tenant`/`scene`/`eventType`），方法体即自定义主体查询，返回 `List<JobTarget>`（每个 `JobTarget` 含 `subjectId` + 可选 `payload` + 可选 `providedMetrics`，如「查 10 分钟前登录的用户并带上其评分」）。启动期 `RuleJobScanner` 扫描注解 → upsert 到 `job_definition`（`subjectQuery.type=BEAN_METHOD`，`ref=<bean>#<method>`）→ 注册调度。触发时 `JobRunner` 经 `RuleEvent.builder` 把每个 `JobTarget` 合成事件（`source=JOB`、payload/providedMetrics 透传、`eventId=hash(jobRunId+subjectId)`）注入 `acceptEvent`。运营 API（`/admin/v1/jobs`）只做管理（列表 / 详情 / 启用 / 禁用 / 手动触发 / 执行记录），**不含创建**——"查哪些主体"是业务代码逻辑，不由运营在 UI 配；规则本身仍由运营事先经 Scene / Rule API 配好，Job 只定时触发对其评估。
 
 **字段（JobExecution，每次运行的记录）**：
 
@@ -550,7 +552,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 | 原草案 SPI 方法 | 落位 |
 |------|------|
-| `register(JobDefinition)` / `unregister(jobId)` | 内部 `JobScheduleManager`（createJob/enableJob 注册、disableJob 撤销，自动调 `schedule/unschedule`） |
+| `register(JobDefinition)` / `unregister(jobId)` | 内部 `JobScheduleManager`（启动期 RuleJobScanner / enableJob 注册、disableJob 撤销，自动调 `schedule/unschedule`） |
 | `triggerOnce(jobId)` | `JobService.triggerOnce(tenantId, jobId)`（手动触发一次，不经调度器） |
 | `recentRuns(jobId, limit)` | `JobService.recentExecutions(tenantId, jobId, limit)` |
 | `status(jobId)` | `JobService.getJob()` 返回的 `status`（ACTIVE/DISABLED）；进程内单实例下调度运行态≈配置态，未单独暴露，多实例时再补 |
@@ -709,7 +711,8 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 | `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
 | `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
 | `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |
-| `source` | `PUSH / PULL / REPLAY`；记录**评估触发方式**（PUSH=异步推送 / PULL=同步调用 / REPLAY=事件回放）；与 `RuleEvent.source`（HTTP / MQ / JOB / SDK / REPLAY）含义不同——RuleEvent.source 记录事件来源渠道，session.source 记录引擎调用方式；Job 触发时 session.source 填 `PUSH`（Job 是异步推送的一种，与业务方 HTTP 推送同属 PUSH 语义）；不改幂等语义（D23） |
+| `source` | `HTTP / MQ / JOB / SDK / REPLAY`（D49）；记录**事件来源渠道**，取自 `RuleEvent.source`（由注入入口权威设置）；不改幂等语义（D23：`source=REPLAY` 仅作来源标记） |
+| `mode` | `PUSH / PULL`（D49）；记录**评估模式**，由 EvalService 入口判定（`acceptEvent`=PUSH 异步 / `evaluate`·`dryRun`=PULL 同步）；与 `source` 渠道正交——Job 触发走 `acceptEvent` 故 mode=PUSH、source=JOB |
 | `occurred_at` | 业务事件发生时间（来自 RuleEvent.occurredAt，非引擎收到时间） |
 | `started_at` | 评估开始时间 |
 | `finished_at` | 评估结束时间 |
