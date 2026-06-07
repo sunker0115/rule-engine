@@ -2,6 +2,8 @@ package com.sstlfsj.rule.job.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.service.SceneService;
+import com.sstlfsj.rule.job.api.BeanMethodQuery;
+import com.sstlfsj.rule.job.api.dto.JobDefinitionDto;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
 import com.sstlfsj.rule.job.internal.repository.JobExecutionMapper;
@@ -10,11 +12,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,6 +40,8 @@ class JobServiceImplTest {
     JobScheduleManager scheduleManager;
     @Mock
     JobRunner jobRunner;
+    @Spy
+    ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     JobServiceImpl service;
@@ -103,5 +110,17 @@ class JobServiceImplTest {
         when(jobMapper.selectById(5L)).thenReturn(null);
 
         assertThrows(IllegalArgumentException.class, () -> service.getJob("1", 5L));
+    }
+
+    @Test
+    void getJobParsesSubjectQueryToTypedUnion() {
+        JobDefinition d = job("ACTIVE");
+        d.setSubjectQuery("{\"type\":\"BEAN_METHOD\",\"ref\":\"a#b\"}");
+        when(jobMapper.selectById(5L)).thenReturn(d);
+
+        JobDefinitionDto dto = service.getJob("1", 5L);
+
+        assertThat(dto.subjectQuery()).isInstanceOf(BeanMethodQuery.class);
+        assertThat(((BeanMethodQuery) dto.subjectQuery()).ref()).isEqualTo("a#b");
     }
 }

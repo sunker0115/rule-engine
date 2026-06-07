@@ -35,7 +35,7 @@ class JobControllerTest {
 
     private JobDefinitionDto jobDto() {
         return new JobDefinitionDto(5L, "1", "fraud", "j1", "Job1", "0 0 0 * * *",
-                "{\"type\":\"BEAN_METHOD\",\"ref\":\"demo#subjects\"}", "login", null, "ACTIVE");
+                new com.sstlfsj.rule.job.api.BeanMethodQuery("demo#subjects"), "login", "ACTIVE");
     }
 
     private JobExecutionVO execVO() {
@@ -62,7 +62,9 @@ class JobControllerTest {
 
         mockMvc.perform(get("/admin/v1/jobs/5").param("tenantId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.sceneCode").value("fraud"));
+                .andExpect(jsonPath("$.data.sceneCode").value("fraud"))
+                .andExpect(jsonPath("$.data.subjectQuery.type").value("BEAN_METHOD"))
+                .andExpect(jsonPath("$.data.subjectQuery.ref").value("demo#subjects"));
     }
 
     @Test

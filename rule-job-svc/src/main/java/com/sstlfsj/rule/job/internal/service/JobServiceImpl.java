@@ -13,6 +13,7 @@ import com.sstlfsj.rule.job.internal.runner.JobRunner;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +28,7 @@ class JobServiceImpl implements JobService {
     private final SceneService sceneService;
     private final JobScheduleManager scheduleManager;
     private final JobRunner jobRunner;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -52,7 +54,7 @@ class JobServiceImpl implements JobService {
     @Override
     public List<JobDefinitionDto> listJobs(String tenantId) {
         return jobMapper.findByTenantId(Long.valueOf(tenantId)).stream()
-                .map(JobServiceImpl::toDto)
+                .map(this::toDto)
                 .toList();
     }
 
@@ -91,7 +93,7 @@ class JobServiceImpl implements JobService {
         return def;
     }
 
-    private static JobDefinitionDto toDto(JobDefinition def) {
+    private JobDefinitionDto toDto(JobDefinition def) {
         return new JobDefinitionDto(
                 def.getId(),
                 String.valueOf(def.getTenantId()),
@@ -99,9 +101,8 @@ class JobServiceImpl implements JobService {
                 def.getCode(),
                 def.getName(),
                 def.getCronExpression(),
-                def.getSubjectQuery(),
+                objectMapper.readValue(def.getSubjectQuery(), com.sstlfsj.rule.job.api.SubjectQuery.class),
                 def.getEventType(),
-                def.getPayloadTemplate(),
                 def.getStatus());
     }
 
