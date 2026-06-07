@@ -24,6 +24,11 @@
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-config-svc</artifactId>
         </dependency>
+        <!-- MyBatis-Plus 的 GraalVM native-image 支持（vendored PR #7017，仅 native 构建生效） -->
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-mybatis-native</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-eval-svc</artifactId>
