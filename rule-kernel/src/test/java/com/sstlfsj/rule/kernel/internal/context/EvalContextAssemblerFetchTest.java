@@ -20,7 +20,7 @@ class EvalContextAssemblerFetchTest {
     private static final Instant NOW = Instant.parse("2026-06-06T00:00:00Z");
 
     private RuleEvent event(Map<String, Object> provided) {
-        return new RuleEvent("1", "PAY", "transfer", "u1", "e1", NOW, Map.of("amt", 500), provided);
+        return new RuleEvent("1", "PAY", "transfer", "u1", "e1", NOW, Map.of("amt", 500), provided, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     private RuleVersionSnapshot snapWithDep(String metricCode) {

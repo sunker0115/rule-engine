@@ -18,7 +18,7 @@ class MetricVersionResolveTest {
 
     /** 构造含 providedMetrics 的 RuleEvent，与 EvalContextAssemblerFetchTest 保持一致。 */
     private RuleEvent event(Map<String, Object> provided) {
-        return new RuleEvent("1", "PAY", "transfer", "u1", "e1", NOW, Map.of("amt", 500), provided);
+        return new RuleEvent("1", "PAY", "transfer", "u1", "e1", NOW, Map.of("amt", 500), provided, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     @Test

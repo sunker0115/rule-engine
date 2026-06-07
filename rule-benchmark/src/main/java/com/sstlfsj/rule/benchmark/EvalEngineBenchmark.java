@@ -75,7 +75,7 @@ public class EvalEngineBenchmark {
         Map<String, Object> provided = new HashMap<>();
         for (String c : METRIC_CODES) provided.put(c, 1L);
         event = new RuleEvent("1", "scene", "ORDER", "sub1", "evt-1",
-                Instant.now(), Map.of(), provided);
+                Instant.now(), Map.of(), provided, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     @Benchmark

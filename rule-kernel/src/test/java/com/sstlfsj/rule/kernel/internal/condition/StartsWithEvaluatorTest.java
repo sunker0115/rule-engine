@@ -19,7 +19,7 @@ class StartsWithEvaluatorTest {
 
     private EvalContext ctx(String metric, Object value) {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
-                Instant.now(), Map.of(), Map.of());
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", event, new Subject("sub1", SubjectType.USER, Map.of()),
                 Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")), Instant.parse("2026-06-01T00:00:00Z"));
     }
@@ -41,7 +41,7 @@ class StartsWithEvaluatorTest {
     @Test
     void metricMissing_returnsFalse() {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
-                Instant.now(), Map.of(), Map.of());
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext emptyCtx = new EvalContext("t1", event,
                 new Subject("sub1", SubjectType.USER, Map.of()), Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(evaluator.evaluate(node("code", "VIP"), emptyCtx)).isFalse();

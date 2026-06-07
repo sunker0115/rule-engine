@@ -20,7 +20,7 @@ class EvalEngineStrategyTest {
 
     private static RuleEvent event(String tenantId, String sceneCode) {
         return new RuleEvent(tenantId, sceneCode, "ORDER", "sub1", "evt-1",
-                Instant.now(), Map.of(), Map.of());
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     private static RuleVersionSnapshot snapshot(Long id, String tenantId, String sceneCode,

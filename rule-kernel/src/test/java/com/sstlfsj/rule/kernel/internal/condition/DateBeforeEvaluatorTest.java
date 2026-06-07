@@ -19,7 +19,7 @@ class DateBeforeEvaluatorTest {
 
     private EvalContext ctx(String metric, Object value) {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
-                Instant.now(), Map.of(), Map.of());
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         Subject subject = new Subject("sub1", SubjectType.USER, Map.of());
         return new EvalContext("t1", event, subject,
                 Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")), Instant.parse("2026-06-01T00:00:00Z"));
@@ -59,7 +59,7 @@ class DateBeforeEvaluatorTest {
     @Test
     void metricMissing_returnsFalse() {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
-                Instant.now(), Map.of(), Map.of());
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         Subject subject = new Subject("sub1", SubjectType.USER, Map.of());
         EvalContext emptyCtx = new EvalContext("t1", event, subject, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(evaluator.evaluate(node("d", "2023-01-01"), emptyCtx)).isFalse();
@@ -71,7 +71,7 @@ class DateBeforeEvaluatorTest {
         Instant now = Instant.parse("2026-06-02T00:00:00Z");
         ConditionNode node = new ConditionNode("DATE_BEFORE", "d", "",
                 Map.of("threshold", "$today"), 0.0, "DATE");
-        RuleEvent event = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of());
+        RuleEvent event = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext ctx = new EvalContext("t1", event, null,
                 Map.of("d", new MetricValue("2026-06-01", "DATE", "PROVIDED")), now);
         assertThat(evaluator.evaluate(node, ctx)).isTrue();

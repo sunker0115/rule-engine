@@ -22,7 +22,7 @@ class DecisionTreeExecutorTest {
 
     private EvalContext ctx() {
         RuleEvent event = new RuleEvent("t1", "scene", "EVT", "u1",
-                "e1", Instant.now(), Map.of(), Map.of());
+                "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", event, null, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 

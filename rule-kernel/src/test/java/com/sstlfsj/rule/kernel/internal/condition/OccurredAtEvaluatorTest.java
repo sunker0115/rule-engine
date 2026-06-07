@@ -16,7 +16,7 @@ class OccurredAtEvaluatorTest {
     private final OccurredAtEvaluator evaluator = new OccurredAtEvaluator();
 
     private EvalContext ctx(Instant occurredAt, Instant now) {
-        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", occurredAt, Map.of(), Map.of());
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", occurredAt, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", ev, null, Map.of(), now);
     }
 
@@ -66,7 +66,7 @@ class OccurredAtEvaluatorTest {
 
     @Test
     void nullOccurredAt_returnsFalse() {
-        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", null, Map.of(), Map.of());
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", null, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext c = new EvalContext("t1", ev, null, Map.of(), Instant.EPOCH);
         ConditionNode n = node(Map.of("operator", "BEFORE", "value", "$now"));
         assertThat(evaluator.evaluate(n, c)).isFalse();

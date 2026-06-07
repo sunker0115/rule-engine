@@ -13,7 +13,7 @@ class EvalContextTest {
     private static final Instant NOW = Instant.parse("2026-06-01T00:00:00Z");
 
     private static RuleEvent event() {
-        return new RuleEvent("t1", "s1", "LOGIN", "u1", "e1", Instant.EPOCH, Map.of(), null);
+        return new RuleEvent("t1", "s1", "LOGIN", "u1", "e1", Instant.EPOCH, Map.of(), null, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     private static Subject subject() {

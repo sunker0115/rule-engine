@@ -19,7 +19,7 @@ class EqEvaluatorTest {
 
     private EvalContext ctx(String metric, Object value) {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
-                Instant.now(), Map.of(), Map.of());
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", event, new Subject("sub1", SubjectType.USER, Map.of()),
                 Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")), Instant.parse("2026-06-01T00:00:00Z"));
     }
@@ -51,7 +51,7 @@ class EqEvaluatorTest {
     @Test
     void metricMissing_returnsFalse() {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
-                Instant.now(), Map.of(), Map.of());
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext emptyCtx = new EvalContext("t1", event,
                 new Subject("sub1", SubjectType.USER, Map.of()), Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(evaluator.evaluate(node("score", 100), emptyCtx)).isFalse();
@@ -88,7 +88,7 @@ class EqEvaluatorTest {
         ConditionNode node = new ConditionNode("EQ", "d", "",
                 Map.of("threshold", "2026-06-01"), 0.0, "DATE");
         RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1",
-                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of());
+                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext ctx = new EvalContext("t1", ev, null,
                 Map.of("d", new MetricValue("2026-06-01", "DATE", "PROVIDED")),
                 Instant.parse("2026-06-01T00:00:00Z"));
@@ -100,7 +100,7 @@ class EqEvaluatorTest {
         Instant now = Instant.parse("2026-06-01T10:00:00Z");
         ConditionNode node = new ConditionNode("EQ", "d", "",
                 Map.of("threshold", "$now"), 0.0, "DATETIME");
-        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of());
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext ctx = new EvalContext("t1", ev, null,
                 Map.of("d", new MetricValue(now, "DATETIME", "PROVIDED")), now);
         assertThat(new EqEvaluator().evaluate(node, ctx)).isTrue();

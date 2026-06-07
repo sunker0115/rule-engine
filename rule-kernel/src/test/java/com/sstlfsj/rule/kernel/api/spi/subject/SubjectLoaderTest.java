@@ -27,7 +27,7 @@ class SubjectLoaderTest {
 
     private static RuleEvent buildEvent() {
         return new RuleEvent("t1", "SCENE1", "PAYMENT",
-                "u1", "e1", Instant.now(), Map.of(), Map.of());
+                "u1", "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     @Test

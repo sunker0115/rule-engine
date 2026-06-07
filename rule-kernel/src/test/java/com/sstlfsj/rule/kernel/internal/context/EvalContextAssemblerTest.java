@@ -18,7 +18,7 @@ class EvalContextAssemblerTest {
 
     private RuleEvent event(Map<String, Object> providedMetrics) {
         return new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
-                Instant.now(), Map.of(), providedMetrics);
+                Instant.now(), Map.of(), providedMetrics, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     @Test

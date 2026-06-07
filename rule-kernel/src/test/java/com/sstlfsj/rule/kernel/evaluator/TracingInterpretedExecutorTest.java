@@ -41,7 +41,7 @@ class TracingInterpretedExecutorTest {
 
     private EvalContext minimalContext() {
         RuleEvent event = new RuleEvent("t1", "scene1", "ORDER_PLACED", "u1",
-                "evt-1", Instant.now(), Map.of(), null);
+                "evt-1", Instant.now(), Map.of(), null, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", event, null, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 

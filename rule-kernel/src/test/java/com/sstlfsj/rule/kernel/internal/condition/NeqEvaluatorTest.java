@@ -19,7 +19,7 @@ class NeqEvaluatorTest {
 
     private EvalContext ctx(String metric, Object value) {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
-                Instant.now(), Map.of(), Map.of());
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", event, new Subject("sub1", SubjectType.USER, Map.of()),
                 Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")), Instant.parse("2026-06-01T00:00:00Z"));
     }
@@ -70,7 +70,7 @@ class NeqEvaluatorTest {
         ConditionNode node = new ConditionNode("NEQ", "d", "",
                 Map.of("threshold", "2026-06-01"), 0.0, "DATE");
         RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1",
-                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of());
+                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext ctx = new EvalContext("t1", ev, null,
                 Map.of("d", new MetricValue("2026-01-01", "DATE", "PROVIDED")),
                 Instant.parse("2026-06-01T00:00:00Z"));
@@ -82,7 +82,7 @@ class NeqEvaluatorTest {
         ConditionNode node = new ConditionNode("NEQ", "d", "",
                 Map.of("threshold", "2026-06-01"), 0.0, "DATE");
         RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1",
-                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of());
+                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext ctx = new EvalContext("t1", ev, null,
                 Map.of("d", new MetricValue("2026-06-01", "DATE", "PROVIDED")),
                 Instant.parse("2026-06-01T00:00:00Z"));
@@ -95,7 +95,7 @@ class NeqEvaluatorTest {
         ConditionNode node = new ConditionNode("NEQ", "d", "",
                 Map.of("threshold", "2026-06-01"), 0.0, "DATE");
         RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1",
-                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of());
+                Instant.parse("2026-06-01T00:00:00Z"), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext ctx = new EvalContext("t1", ev, null,
                 Map.of("d", new MetricValue("not-a-date", "DATE", "PROVIDED")),
                 Instant.parse("2026-06-01T00:00:00Z"));
