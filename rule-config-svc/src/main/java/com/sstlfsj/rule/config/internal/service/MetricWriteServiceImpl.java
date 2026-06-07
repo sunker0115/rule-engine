@@ -2,7 +2,6 @@ package com.sstlfsj.rule.config.internal.service;
 
 import lombok.RequiredArgsConstructor;
 import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
@@ -36,9 +35,6 @@ import java.util.stream.Collectors;
 @Transactional
 @RequiredArgsConstructor
 public class MetricWriteServiceImpl implements MetricWriteService {
-
-    private static final TypeReference<List<MetricDependency>> METRIC_DEP_TYPE =
-            new TypeReference<>() {};
 
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final AuditLogMapper auditLogMapper;
@@ -153,22 +149,14 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         return result;
     }
 
-    /**
-     * 判断 metric_dependencies JSON 数组是否包含指定 (metricCode, metricVersion)。
-     * 反序列化失败（如 null 或格式异常）视为不包含。
-     */
-    private boolean containsDependency(String metricDependenciesJson,
+    /** 判断 typed metricDependencies 列表是否包含指定 (metricCode, metricVersion)；null 视为不包含。 */
+    private boolean containsDependency(List<MetricDependency> deps,
                                        String metricCode, int metricVersion) {
-        if (metricDependenciesJson == null || metricDependenciesJson.isBlank()) {
+        if (deps == null || deps.isEmpty()) {
             return false;
         }
-        try {
-            List<MetricDependency> deps = objectMapper.readValue(metricDependenciesJson, METRIC_DEP_TYPE);
-            return deps.stream().anyMatch(
-                    d -> metricCode.equals(d.metricCode()) && d.metricVersion() == metricVersion);
-        } catch (Exception e) {
-            return false;
-        }
+        return deps.stream().anyMatch(
+                d -> metricCode.equals(d.metricCode()) && d.metricVersion() == metricVersion);
     }
 
     /** 将 MetricWriteCommand 字段批量 set 到 MetricDefinition，含 null 默认值处理。 */

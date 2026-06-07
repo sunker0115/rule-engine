@@ -1,6 +1,9 @@
 package com.sstlfsj.rule.config.api.dto;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -21,13 +24,13 @@ class RuleBundleTest {
                 List.of(
                         new RuleBundle.RuleEntry(
                                 "rule.night.transfer", "夜间大额转账", "AST_BOOLEAN", "risk.transfer",
-                                "{\"type\":\"AndNode\",\"children\":[]}",
-                                "[{\"decisionCode\":\"BLOCK\",\"priority\":100}]",
-                                "[]", "[\"transfer\"]",
+                                new AndNode(List.of(), null, null),
+                                List.of(new DecisionBinding("BLOCK", 100)),
+                                List.of(), List.of("transfer"),
                                 List.of(new MetricDependency("account.age", 1))),
                         new RuleBundle.RuleEntry(
                                 "rule.new.account", "新户拦截", "AST_BOOLEAN", "risk.transfer",
-                                "{\"type\":\"ConditionNode\"}", "[]", "[]", "[]", List.of())),
+                                new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), List.of())),
                 List.of(new RuleBundle.SceneSnapshot(
                         "risk.transfer", "转账风控", "desc", "USER", "PUSH", "HIGHEST_PRIORITY",
                         "[\"transfer\"]", "{\"amount\":\"NUMBER\"}", "{}", 1)),
@@ -43,7 +46,9 @@ class RuleBundleTest {
 
         assertThat(back).isEqualTo(bundle);
         assertThat(back.rules()).hasSize(2);
-        assertThat(back.rules().getFirst().conditionAst()).isEqualTo("{\"type\":\"AndNode\",\"children\":[]}");
+        AstNode backAst = back.rules().getFirst().conditionAst();
+        assertThat(backAst).isInstanceOf(AndNode.class);
+        assertThat(back.rules().getFirst().decisionBindings()).containsExactly(new DecisionBinding("BLOCK", 100));
         assertThat(back.rules().getFirst().metricDependencies()).containsExactly(new MetricDependency("account.age", 1));
         assertThat(back.scenes()).hasSize(1);
         assertThat(back.metricDefinitions().getFirst().sourceType()).isEqualTo("ATTRIBUTE");

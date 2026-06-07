@@ -14,6 +14,9 @@ import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
@@ -112,10 +115,11 @@ class RuleBundleIntegrationTest {
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(rd.getId()); rv.setVersion(1L);
-        rv.setConditionAst("{\"type\":\"AndNode\",\"children\":[]}");
-        rv.setDecisionBindings("[{\"decisionCode\":\"BLOCK\",\"priority\":100}]");
-        rv.setPreGates("[]"); rv.setKind("AST_BOOLEAN"); rv.setTriggerEventTypes("[\"transfer\"]");
-        rv.setMetricDependencies("[{\"metricCode\":\"account.age\",\"metricVersion\":1}]");
+        rv.setConditionAst(new AndNode(java.util.List.of(), null, null));
+        rv.setDecisionBindings(java.util.List.of(new DecisionBinding("BLOCK", 100)));
+        rv.setPreGates(java.util.List.of()); rv.setKind("AST_BOOLEAN");
+        rv.setTriggerEventTypes(java.util.List.of("transfer"));
+        rv.setMetricDependencies(java.util.List.of(new MetricDependency("account.age", 1)));
         rv.setStatus("ACTIVE"); rv.setPublishedBy("seed"); rv.setPublishedAt(LocalDateTime.now());
         rv.setCreatedAt(LocalDateTime.now());
         ruleVersionMapper.insert(rv);
@@ -153,8 +157,9 @@ class RuleBundleIntegrationTest {
                         result.rules().stream().map(RuleImportResult.ImportedRule::ruleDefinitionId).toList()));
         assertThat(draftCount).isEqualTo(2);
         RuleVersion anyDraft = ruleVersionMapper.selectById(result.rules().getFirst().ruleVersionId());
-        // MySQL JSON 列读取会规范化空白（添加 ": " 等），用忽略空白比较验证 AST 内容无损搬运
-        assertThat(anyDraft.getConditionAst()).isEqualToIgnoringWhitespace("{\"type\":\"AndNode\",\"children\":[]}");
+        // typed 列经 MySQL JSON 往返后反序列化回 AndNode，验证 AST 内容无损搬运
+        assertThat(anyDraft.getConditionAst()).isInstanceOf(AndNode.class);
+        assertThat(((AndNode) anyDraft.getConditionAst()).children()).isEmpty();
     }
 
     @Test

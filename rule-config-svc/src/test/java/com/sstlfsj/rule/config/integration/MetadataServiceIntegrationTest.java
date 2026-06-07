@@ -10,7 +10,9 @@ import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
@@ -59,8 +61,7 @@ class MetadataServiceIntegrationTest {
     }
 
     private static final long TENANT = 1L;
-    private static final String AND_NODE =
-            "{\"type\":\"AndNode\",\"children\":[],\"displayLabel\":null,\"weight\":null}";
+    private static final AndNode AND_NODE = new AndNode(List.of(), null, null);
 
     @Autowired private MetadataService metadataService;
     @Autowired private SceneMapper sceneMapper;
@@ -93,9 +94,9 @@ class MetadataServiceIntegrationTest {
         ruleDefinitionMapper.insert(rdPay);
 
         ruleVersionMapper.insert(ruleVersion(rdFraud.getId(),
-                "[{\"metricCode\":\"risk.score\",\"metricVersion\":1}]"));
+                List.of(new MetricDependency("risk.score", 1))));
         ruleVersionMapper.insert(ruleVersion(rdPay.getId(),
-                "[{\"metricCode\":\"account.balance\",\"metricVersion\":1}]"));
+                List.of(new MetricDependency("account.balance", 1))));
     }
 
     private SceneDef scene(String code, String eventTypesJson) {
@@ -137,16 +138,16 @@ class MetadataServiceIntegrationTest {
         return r;
     }
 
-    private RuleVersion ruleVersion(Long ruleDefinitionId, String metricDepsJson) {
+    private RuleVersion ruleVersion(Long ruleDefinitionId, List<MetricDependency> metricDeps) {
         RuleVersion v = new RuleVersion();
         v.setRuleDefinitionId(ruleDefinitionId);
         v.setVersion(1L);
         v.setConditionAst(AND_NODE);
-        v.setDecisionBindings("[]");
-        v.setPreGates("[]");
+        v.setDecisionBindings(List.of());
+        v.setPreGates(List.of());
         v.setKind("AST_BOOLEAN");
-        v.setTriggerEventTypes("[\"e\"]");
-        v.setMetricDependencies(metricDepsJson);
+        v.setTriggerEventTypes(List.of("e"));
+        v.setMetricDependencies(metricDeps);
         v.setStatus("ACTIVE");
         return v;
     }

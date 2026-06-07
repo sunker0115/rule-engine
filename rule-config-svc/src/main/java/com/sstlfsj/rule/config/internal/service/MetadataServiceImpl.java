@@ -112,19 +112,9 @@ class MetadataServiceImpl implements MetadataService {
 
         Set<MetricDependency> deps = new HashSet<>();
         for (RuleVersion rv : ruleVersionMapper.findActiveByRuleDefIds(defIds)) {
-            deps.addAll(parseDepList(rv.getMetricDependencies()));
+            deps.addAll(rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of());
         }
         return deps;
-    }
-
-    /** 解析 metric_dependencies 对象数组，取出 MetricDependency 列表。 */
-    private List<MetricDependency> parseDepList(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<MetricDependency>>() {});
-        } catch (Exception e) {
-            return List.of();
-        }
     }
 
     private MetricDescriptor toDescriptor(MetricDefinition m) {

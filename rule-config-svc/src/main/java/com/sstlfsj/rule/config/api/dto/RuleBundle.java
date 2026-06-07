@@ -1,6 +1,9 @@
 package com.sstlfsj.rule.config.api.dto;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
 import java.util.List;
 
@@ -37,10 +40,10 @@ public record RuleBundle(
             String name,
             String kind,
             String sceneCode,
-            String conditionAst,
-            String decisionBindings,
-            String preGates,
-            String triggerEventTypes,
+            AstNode conditionAst,
+            List<DecisionBinding> decisionBindings,
+            List<PreGateConfig> preGates,
+            List<String> triggerEventTypes,
             List<MetricDependency> metricDependencies
     ) {}
 

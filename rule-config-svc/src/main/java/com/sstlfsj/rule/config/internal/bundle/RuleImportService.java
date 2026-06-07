@@ -170,12 +170,13 @@ public class RuleImportService {
             RuleVersion rv = new RuleVersion();
             rv.setRuleDefinitionId(rd.getId());
             rv.setVersion(newVersion);
-            rv.setConditionAst(blankTo(rule.conditionAst(), "{}"));
-            rv.setDecisionBindings(blankTo(rule.decisionBindings(), "[]"));
-            rv.setPreGates(blankTo(rule.preGates(), "[]"));
+            rv.setConditionAst(rule.conditionAst() != null ? rule.conditionAst()
+                    : new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null));
+            rv.setDecisionBindings(rule.decisionBindings() != null ? rule.decisionBindings() : java.util.List.of());
+            rv.setPreGates(rule.preGates() != null ? rule.preGates() : java.util.List.of());
             rv.setKind(kind);
-            rv.setTriggerEventTypes(blankTo(rule.triggerEventTypes(), "[]"));
-            rv.setMetricDependencies(metricDepsJson(rule));
+            rv.setTriggerEventTypes(rule.triggerEventTypes() != null ? rule.triggerEventTypes() : java.util.List.of());
+            rv.setMetricDependencies(rule.metricDependencies() != null ? rule.metricDependencies() : java.util.List.of());
             rv.setStatus("DRAFT");
             rv.setCreatedAt(LocalDateTime.now());
             ruleVersionMapper.insert(rv);
@@ -213,25 +214,5 @@ public class RuleImportService {
         }
         sceneIdByCode.put(sceneCode, scene.getId());
         return scene.getId();
-    }
-
-    private static String blankTo(String s, String def) {
-        return (s == null || s.isBlank()) ? def : s;
-    }
-
-    /**
-     * metricDependencies 原文序列化：rule_version 列存 [{metricCode,metricVersion}] 数组。
-     * 手拼 JSON 避免为单一序列化点引入 ObjectMapper 依赖；metricCode 受发布期字符集约束，无需转义。
-     */
-    private static String metricDepsJson(RuleBundle.RuleEntry rule) {
-        if (rule.metricDependencies() == null || rule.metricDependencies().isEmpty()) return "[]";
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < rule.metricDependencies().size(); i++) {
-            var d = rule.metricDependencies().get(i);
-            if (i > 0) sb.append(',');
-            sb.append("{\"metricCode\":\"").append(d.metricCode())
-              .append("\",\"metricVersion\":").append(d.metricVersion()).append('}');
-        }
-        return sb.append(']').toString();
     }
 }

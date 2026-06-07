@@ -15,6 +15,8 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -51,9 +53,9 @@ class RuleImportServiceTest {
 
     private RuleBundle.RuleEntry ruleEntry(String code) {
         return new RuleBundle.RuleEntry(code, "规则" + code, "AST_BOOLEAN", "risk.transfer",
-                "{\"type\":\"AndNode\",\"children\":[]}",
-                "[{\"decisionCode\":\"BLOCK\",\"priority\":100}]",
-                "[]", "[\"transfer\"]",
+                new AndNode(List.of(), null, null),
+                List.of(new DecisionBinding("BLOCK", 100)),
+                List.of(), List.of("transfer"),
                 List.of(new MetricDependency("account.age", 1)));
     }
 

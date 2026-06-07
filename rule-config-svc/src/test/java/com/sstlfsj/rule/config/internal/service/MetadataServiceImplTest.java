@@ -9,6 +9,7 @@ import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -174,7 +175,7 @@ class MetadataServiceImplTest {
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus("ACTIVE");
-        rv.setMetricDependencies("[{\"metricCode\":\"risk.score\",\"metricVersion\":1}]");
+        rv.setMetricDependencies(List.of(new MetricDependency("risk.score", 1)));
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         // DECLARED 分支按精确 (code,version) 查 selectOne，返回 risk.score 定义
@@ -212,7 +213,7 @@ class MetadataServiceImplTest {
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus("ACTIVE");
-        rv.setMetricDependencies("[]");   // 规则不引用任何 metric
+        rv.setMetricDependencies(List.of());   // 规则不引用任何 metric
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         MetadataServiceImpl service = new MetadataServiceImpl(
@@ -268,7 +269,7 @@ class MetadataServiceImplTest {
         rv.setRuleDefinitionId(11L);
         rv.setStatus("ACTIVE");
         // 对象数组格式：绑 risk.score v1
-        rv.setMetricDependencies("[{\"metricCode\":\"risk.score\",\"metricVersion\":1}]");
+        rv.setMetricDependencies(List.of(new MetricDependency("risk.score", 1)));
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         // DECLARED 分支按精确 (code,version) 查，不限 status（含 SUPERSEDED）
@@ -308,7 +309,7 @@ class MetadataServiceImplTest {
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus("ACTIVE");
-        rv.setMetricDependencies("[{\"metricCode\":\"ghost.metric\",\"metricVersion\":2}]");
+        rv.setMetricDependencies(List.of(new MetricDependency("ghost.metric", 2)));
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         // 定义已被物理删除：selectOne 返回 null

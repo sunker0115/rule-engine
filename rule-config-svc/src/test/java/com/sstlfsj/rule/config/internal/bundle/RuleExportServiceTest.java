@@ -11,6 +11,9 @@ import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -56,11 +59,11 @@ class RuleExportServiceTest {
         RuleVersion v = new RuleVersion();
         v.setId(100L + rdId); v.setRuleDefinitionId(rdId); v.setVersion(3L); v.setStatus("ACTIVE");
         v.setKind("AST_BOOLEAN");
-        v.setConditionAst("{\"type\":\"AndNode\",\"children\":[]}");
-        v.setDecisionBindings("[{\"decisionCode\":\"BLOCK\",\"priority\":100}]");
-        v.setPreGates("[]");
-        v.setTriggerEventTypes("[\"transfer\"]");
-        v.setMetricDependencies("[{\"metricCode\":\"account.age\",\"metricVersion\":1}]");
+        v.setConditionAst(new AndNode(List.of(), null, null));
+        v.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
+        v.setPreGates(List.of());
+        v.setTriggerEventTypes(List.of("transfer"));
+        v.setMetricDependencies(List.of(new MetricDependency("account.age", 1)));
         return v;
     }
 

@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
@@ -32,7 +31,6 @@ class ConfigServiceImpl implements ConfigService {
     private final AuditLogMapper auditLogMapper;
     private final SceneMapper sceneMapper;
     private final RuleVersionMapper ruleVersionMapper;
-    private final ObjectMapper objectMapper;
 
     @Override
     public RuleVersionSnapshot publish(String tenantId, Long ruleDefinitionId, String actorId) {
@@ -96,31 +94,9 @@ class ConfigServiceImpl implements ConfigService {
         return new RuleDetailVO(
                 rule.getId(), rule.getCode(), rule.getName(), rule.getStatus(), rule.getKind(),
                 scene != null ? scene.getCode() : null,
-                active != null ? parseAst(active.getConditionAst()) : null,
-                active != null ? parseDecisionBindings(active.getDecisionBindings()) : null,
+                active != null ? active.getConditionAst() : null,
+                active != null ? active.getDecisionBindings() : null,
                 active != null ? active.getId() : null);
-    }
-
-    /** 把库中 conditionAst JSON 反序列化为 AstNode（多态）；空值返回 null。 */
-    private com.sstlfsj.rule.kernel.api.model.ast.AstNode parseAst(String json) {
-        if (json == null || json.isBlank()) return null;
-        try {
-            return objectMapper.readValue(json, com.sstlfsj.rule.kernel.api.model.ast.AstNode.class);
-        } catch (Exception e) {
-            throw new IllegalStateException("conditionAst 反序列化失败", e);
-        }
-    }
-
-    /** 把库中 decisionBindings JSON 反序列化为 List&lt;DecisionBinding&gt;；空值返回 null。 */
-    private java.util.List<com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding>
-            parseDecisionBindings(String json) {
-        if (json == null || json.isBlank()) return null;
-        try {
-            return objectMapper.readValue(json,
-                    new tools.jackson.core.type.TypeReference<>() {});
-        } catch (Exception e) {
-            throw new IllegalStateException("decisionBindings 反序列化失败", e);
-        }
     }
 
     @Override

@@ -17,6 +17,7 @@ import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -265,10 +266,11 @@ class MetricWriteServiceImplTest {
         //   rv2 属于 rd1，含 {account.age,2} → 版本不匹配，排除
         //   rv3 属于 rd2（rd.status=DISABLED），含 {account.age,1} → 仍应被选中（口径按 rv.status=ACTIVE）
         //   rv4 属于 rd2，dependencies 为空 → 排除
-        RuleVersion rv1 = ruleVersion(1001L, 101L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1}]");
-        RuleVersion rv2 = ruleVersion(1002L, 101L, "[{\"metricCode\":\"account.age\",\"metricVersion\":2}]");
-        RuleVersion rv3 = ruleVersion(1003L, 102L, "[{\"metricCode\":\"account.age\",\"metricVersion\":1},{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
-        RuleVersion rv4 = ruleVersion(1004L, 102L, "[]");
+        RuleVersion rv1 = ruleVersion(1001L, 101L, List.of(new MetricDependency("account.age", 1)));
+        RuleVersion rv2 = ruleVersion(1002L, 101L, List.of(new MetricDependency("account.age", 2)));
+        RuleVersion rv3 = ruleVersion(1003L, 102L,
+                List.of(new MetricDependency("account.age", 1), new MetricDependency("user.level", 1)));
+        RuleVersion rv4 = ruleVersion(1004L, 102L, List.of());
 
         when(ruleDefinitionMapper.findByTenant(any()))
                 .thenReturn(List.of(rd1, rd2));
@@ -302,7 +304,7 @@ class MetricWriteServiceImplTest {
     void findReferencingRules_differentMetricCode_notIncluded() {
         // 纯反例：规则只引用 {user.level,1}，查 account.age/1 时不应出现
         RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
-        RuleVersion rv = ruleVersion(1001L, 101L, "[{\"metricCode\":\"user.level\",\"metricVersion\":1}]");
+        RuleVersion rv = ruleVersion(1001L, 101L, List.of(new MetricDependency("user.level", 1)));
 
         when(ruleDefinitionMapper.findByTenant(any()))
                 .thenReturn(List.of(rd));
@@ -329,10 +331,10 @@ class MetricWriteServiceImplTest {
     }
 
     @Test
-    void findReferencingRules_malformedDependenciesJson_treatedAsNoMatch() {
+    void findReferencingRules_nullDependencies_treatedAsNoMatch() {
         RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
-        // metric_dependencies 为非法 JSON，应静默忽略，不抛异常
-        RuleVersion rv = ruleVersion(1001L, 101L, "not-valid-json");
+        // metric_dependencies 为 null（列空/未设置），containsDependency 视为不匹配，不抛异常
+        RuleVersion rv = ruleVersion(1001L, 101L, null);
 
         when(ruleDefinitionMapper.findByTenant(any()))
                 .thenReturn(List.of(rd));
@@ -379,7 +381,7 @@ class MetricWriteServiceImplTest {
         return sc;
     }
 
-    private RuleVersion ruleVersion(Long id, Long ruleDefinitionId, String metricDependencies) {
+    private RuleVersion ruleVersion(Long id, Long ruleDefinitionId, List<MetricDependency> metricDependencies) {
         RuleVersion rv = new RuleVersion();
         rv.setId(id);
         rv.setRuleDefinitionId(ruleDefinitionId);

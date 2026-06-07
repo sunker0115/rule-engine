@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.config.internal.service;
 
-import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
@@ -13,13 +12,13 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -37,7 +36,6 @@ class ConfigServiceImplTest {
     @Mock AuditLogMapper auditLogMapper;
     @Mock SceneMapper sceneMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
-    @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks ConfigServiceImpl configService;
 
     @Test
@@ -166,8 +164,8 @@ class ConfigServiceImplTest {
 
         RuleVersion active = new RuleVersion();
         active.setId(42L);
-        active.setConditionAst("{\"type\":\"AndNode\",\"children\":[]}");
-        active.setDecisionBindings("[{\"decisionCode\":\"BLOCK\",\"priority\":100}]");
+        active.setConditionAst(new AndNode(List.of(), null, null));
+        active.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(active);
 
         RuleDetailVO vo = configService.getRuleDetail("1", 10L);

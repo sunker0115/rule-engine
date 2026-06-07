@@ -40,7 +40,6 @@ public class PublishService {
     private final RuleVersionMapper ruleVersionMapper;
     private final AuditLogMapper auditLogMapper;
     private final ApplicationEventPublisher eventPublisher;
-    private final AstSerializer astSerializer;
     private final ObjectMapper objectMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
 
@@ -85,8 +84,8 @@ public class PublishService {
         // 3.6. 校验 pre_gates 中 ROLLOUT 项参数合法性
         validatePreGateParams(draftVersion.getPreGates());
 
-        // 4. 反序列化 AST，收集 metricDependencies
-        AstNode ast = astSerializer.fromJson(draftVersion.getConditionAst());
+        // 4. 取草稿 AST（已 typed），收集 metricDependencies
+        AstNode ast = draftVersion.getConditionAst();
         // kind 合法性校验：null/blank 视为 AST_BOOLEAN（兼容历史存量数据）
         String rawKind = rule.getKind();
         String kind = (rawKind == null || rawKind.isBlank()) ? "AST_BOOLEAN" : rawKind;
@@ -187,14 +186,17 @@ public class PublishService {
         RuleVersion newRv = new RuleVersion();
         newRv.setRuleDefinitionId(ruleDefinitionId);
         newRv.setVersion(newVersion);
-        newRv.setConditionAst(astSerializer.toJson(resolvedAst));
+        newRv.setConditionAst(resolvedAst);
         newRv.setDecisionBindings(draftVersion.getDecisionBindings() != null
-                ? draftVersion.getDecisionBindings() : "[]");
+                ? draftVersion.getDecisionBindings() : java.util.List.of());
         newRv.setPreGates(draftVersion.getPreGates() != null
-                ? draftVersion.getPreGates() : "[]");
+                ? draftVersion.getPreGates() : java.util.List.of());
         newRv.setKind(rule.getKind() != null ? rule.getKind() : "AST_BOOLEAN");
-        newRv.setTriggerEventTypes(scene.getEventTypes());
-        newRv.setMetricDependencies(toJson(metricDeps));
+        // scene.eventTypes 仍是 String JSON（SceneDef 未 typed），反序列化后写入 typed 列
+        newRv.setTriggerEventTypes(isBlank(scene.getEventTypes()) ? java.util.List.of()
+                : objectMapper.readValue(scene.getEventTypes(),
+                    new tools.jackson.core.type.TypeReference<java.util.List<String>>() {}));
+        newRv.setMetricDependencies(metricDeps);
         newRv.setStatus("ACTIVE");
         newRv.setPublishedBy(actorId);
         newRv.setPublishedAt(LocalDateTime.now());
@@ -298,15 +300,24 @@ public class PublishService {
         ruleDefinitionMapper.insert(rd);
 
         // 5. INSERT rule_version（version=1，status=DRAFT）
+        // 入参仍是 String JSON，方法内 parse 成 typed；非法 JSON 即视为非法输入，异常上抛 fail-fast
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(rd.getId());
         rv.setVersion(1L);
-        rv.setConditionAst(isBlank(conditionAstJson) ? "{}" : conditionAstJson);
-        rv.setDecisionBindings(isBlank(decisionBindingsJson) ? "[]" : decisionBindingsJson);
-        rv.setPreGates(isBlank(preGatesJson) ? "[]" : preGatesJson);
+        rv.setConditionAst(isBlank(conditionAstJson)
+                ? new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null)
+                : objectMapper.readValue(conditionAstJson, AstNode.class));
+        rv.setDecisionBindings(isBlank(decisionBindingsJson) ? java.util.List.of()
+                : objectMapper.readValue(decisionBindingsJson,
+                    new tools.jackson.core.type.TypeReference<java.util.List<RuleVersionSnapshot.DecisionBinding>>() {}));
+        rv.setPreGates(isBlank(preGatesJson) ? java.util.List.of()
+                : objectMapper.readValue(preGatesJson,
+                    new tools.jackson.core.type.TypeReference<java.util.List<RuleVersionSnapshot.PreGateConfig>>() {}));
         rv.setKind(effectiveKind);
-        rv.setTriggerEventTypes(isBlank(triggerEventTypesJson) ? "[]" : triggerEventTypesJson);
-        rv.setMetricDependencies("[]");
+        rv.setTriggerEventTypes(isBlank(triggerEventTypesJson) ? java.util.List.of()
+                : objectMapper.readValue(triggerEventTypesJson,
+                    new tools.jackson.core.type.TypeReference<java.util.List<String>>() {}));
+        rv.setMetricDependencies(java.util.List.of());
         rv.setStatus("DRAFT");
         rv.setCreatedAt(LocalDateTime.now());
         ruleVersionMapper.insert(rv);
@@ -331,20 +342,12 @@ public class PublishService {
      * percentage∈[0,100]；若给桶区间则 0<=bucketStart<bucketEnd<=100；experimentId 非空白。
      * pre_gates JSON 格式异常时容错跳过（不阻断发布），仅参数语义越界抛 IllegalArgumentException。
      */
-    private void validatePreGateParams(String preGatesJson) {
-        if (preGatesJson == null || preGatesJson.isBlank()) return;
-        java.util.List<java.util.Map<String, Object>> gates;
-        try {
-            gates = objectMapper.readValue(preGatesJson, new tools.jackson.core.type.TypeReference<>() {});
-        } catch (Exception e) {
-            return;   // 格式异常容错跳过
-        }
-        for (java.util.Map<String, Object> gate : gates) {
-            if (!"ROLLOUT".equals(String.valueOf(gate.get("gateType")))) continue;
-            Object p = gate.get("params");
-            if (!(p instanceof java.util.Map<?, ?> raw)) continue;
-            @SuppressWarnings("unchecked")
-            RolloutParams params = RolloutParams.from((java.util.Map<String, Object>) raw);
+    private void validatePreGateParams(List<RuleVersionSnapshot.PreGateConfig> gates) {
+        if (gates == null || gates.isEmpty()) return;
+        for (RuleVersionSnapshot.PreGateConfig gate : gates) {
+            if (!"ROLLOUT".equals(gate.gateType())) continue;
+            if (gate.params() == null) continue;
+            RolloutParams params = RolloutParams.from(gate.params());
 
             if (params.percentage() != null
                     && (params.percentage() < 0 || params.percentage() > 100)) {
@@ -377,12 +380,9 @@ public class PublishService {
      * scene.eventTypes 为空时跳过（Scene 尚未配置白名单，容错）；
      * triggerEventTypes 为空时也跳过（规则通配所有事件）。
      */
-    private void validateTriggerEventTypes(String triggerEventTypesJson, String sceneEventTypesJson) {
+    private void validateTriggerEventTypes(List<String> ruleTypes, String sceneEventTypesJson) {
         try {
-            if (triggerEventTypesJson == null || triggerEventTypesJson.isBlank()) return;
-            java.util.List<String> ruleTypes = objectMapper.readValue(triggerEventTypesJson,
-                    new tools.jackson.core.type.TypeReference<>() {});
-            if (ruleTypes.isEmpty()) return;
+            if (ruleTypes == null || ruleTypes.isEmpty()) return;
 
             java.util.List<String> sceneTypes = objectMapper.readValue(sceneEventTypesJson,
                     new tools.jackson.core.type.TypeReference<>() {});
@@ -406,13 +406,5 @@ public class PublishService {
     /** 判断字符串是否为 null 或空白。 */
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
-    }
-
-    private String toJson(Object obj) {
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (Exception e) {
-            return "[]";
-        }
     }
 }
