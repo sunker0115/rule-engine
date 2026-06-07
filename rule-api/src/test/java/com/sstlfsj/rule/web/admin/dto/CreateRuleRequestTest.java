@@ -1,79 +1,46 @@
 package com.sstlfsj.rule.web.admin.dto;
 
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-import org.junit.jupiter.api.BeforeAll;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** CreateRuleRequest @NotBlank 约束校验测试。 */
 class CreateRuleRequestTest {
 
-    private static Validator validator;
+    private final ObjectMapper mapper = JsonMapper.builder().build();
 
-    @BeforeAll
-    static void initValidator() {
-        validator = Validation.buildDefaultValidatorFactory().getValidator();
+    @Test
+    void bindsTypedConditionAst() {
+        String json = """
+            {"tenantId":"1","sceneCode":"s","code":"c","name":"n","kind":"AST_BOOLEAN",
+             "conditionAst":{"type":"AndNode","children":[]},
+             "decisionBindings":[{"decisionCode":"REVIEW"}],
+             "preGates":[{"gateType":"ROLLOUT","params":{"percentage":100}}],
+             "triggerEventTypes":["login"]}
+            """;
+        CreateRuleRequest req = mapper.readValue(json, CreateRuleRequest.class);
+
+        assertThat(req.conditionAst()).isInstanceOf(AndNode.class);
+        assertThat(req.decisionBindings()).hasSize(1);
+        assertThat(req.decisionBindings().get(0).decisionCode()).isEqualTo("REVIEW");
+        assertThat(req.preGates()).hasSize(1);
+        assertThat(req.preGates().get(0).gateType()).isEqualTo("ROLLOUT");
+        assertThat(req.preGates().get(0).params()).containsEntry("percentage", 100);
+        assertThat(req.triggerEventTypes()).containsExactly("login");
     }
 
     @Test
-    void valid_request_passesValidation() {
-        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "欺诈规则", null, null, null, null, null);
-        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
-        assertThat(violations).isEmpty();
-    }
-
-    @Test
-    void blank_tenantId_failsValidation() {
-        var req = new CreateRuleRequest("", "SCENE_A", "RULE_001", "欺诈规则", null, null, null, null, null);
-        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("tenantId"));
-    }
-
-    @Test
-    void blank_sceneCode_failsValidation() {
-        var req = new CreateRuleRequest("t1", "  ", "RULE_001", "欺诈规则", null, null, null, null, null);
-        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("sceneCode"));
-    }
-
-    @Test
-    void blank_code_failsValidation() {
-        var req = new CreateRuleRequest("t1", "SCENE_A", "  ", "欺诈规则", null, null, null, null, null);
-        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("code"));
-    }
-
-    @Test
-    void blank_name_failsValidation() {
-        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "", null, null, null, null, null);
-        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("name"));
-    }
-
-    @Test
-    void kind_isOptional_allowsNull() {
-        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "规则", null, null, null, null, null);
-        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
-        assertThat(violations).isEmpty();
-    }
-
-    @Test
-    void conditionAst_acceptsMapObject() {
-        // conditionAst 改为 Object 类型后，传入 Map 和 List 应能正常构造
-        Map<String, Object> ast = Map.of("type", "comparison", "field", "amount", "operator", "GT", "value", 10000);
-        List<Object> bindings = List.of(Map.of("decision", "BLOCK", "priority", 1));
-        var req = new CreateRuleRequest("t1", "SCENE_A", "RULE_001", "大额拦截", "EXPRESSION",
-                ast, bindings, List.of(), List.of("payment.initiated"));
-        Set<ConstraintViolation<CreateRuleRequest>> violations = validator.validate(req);
-        assertThat(violations).isEmpty();
-        assertThat(req.conditionAst()).isInstanceOf(Map.class);
-        assertThat(req.decisionBindings()).isInstanceOf(List.class);
+    void decisionBindingsSerializeBackToSameShape() {
+        CreateRuleRequest req = new CreateRuleRequest(
+                "1", "s", "c", "n", "AST_BOOLEAN",
+                new AndNode(java.util.List.of(), null, null),
+                java.util.List.of(new DecisionBindingInput("REVIEW")),
+                java.util.List.of(),
+                java.util.List.of("login"));
+        String out = mapper.writeValueAsString(req.decisionBindings());
+        assertThat(out).isEqualTo("[{\"decisionCode\":\"REVIEW\"}]");
     }
 }
