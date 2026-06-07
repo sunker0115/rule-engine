@@ -192,8 +192,10 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `subjectId` | String | 业务主体 ID（用户 ID / 账户 ID / 订单 ID） |
 | `occurredAt` | Instant | 业务时间，不是引擎收到时间 |
 | `payload` | Map<String, Object> | 业务原始数据快照 |
-| `traceId` | String | 链路 ID，贯穿评估和动作执行 |
-| `source` | Enum | 事件来源：`HTTP` / `MQ` / `JOB` / `SDK` / `REPLAY`；不带链式标识（D16） |
+| `providedMetrics` | Map<String, Object> | 调用方预提供的指标值；EvalContext 构建时优先采用、跳过 sourceType 取数（`allowProvided=true` 才生效，D30）；因子评分等"值已在手"的场景零改造接入路径 |
+| `source` | Enum | 事件来源渠道：`HTTP` / `MQ` / `JOB` / `SDK` / `REPLAY`；由注入入口权威设置（D49），不带链式标识（D16） |
+
+> **链路 ID（traceId）不在 RuleEvent 上**：链路追踪是横切的可观测性关注点，由 MDC / OTel 贯穿日志与 span（如 `ApiResponse` 从 `MDC.get("traceId")` 取），不作为领域事件字段重复携带。
 
 **关键边界**：
 
@@ -409,14 +411,15 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 
 ```
 EvalContext {
+    tenantId: String                 // 租户 ID
     event:    RuleEvent              // 原始事件
     subject:  Subject                // 业务主体（用户 / 账户 / 设备）的属性快照
     metrics:  Map<metricCode, Value> // 本次评估涉及的指标快照
     now:      Instant                // 评估开始时间（统一时钟）— 已实装（B20）：由 EvalServiceImpl.doEvaluate / EvalEngine.evaluate 入口注入一次（单个 Instant.now()），整棵 AST 共用同一个 now，保证跨规则时钟一致性；不存在默认 Instant.now() 重载（禁止）
-    traceId:  String                 // 链路 ID
-    dryRun:   Boolean                // 引擎内部路由标志（D7/D21）：true 时 TraceWriter 写 dry_run_session 系列表而非 prod 表
 }
 ```
+
+> **`traceId` / `dryRun` 不是 EvalContext 字段**：链路 ID 走 MDC / OTel 横切层（见 §3.3）；dry-run 是引擎内部路由标志，由 `EvalServiceImpl.doEvaluate` 单独以 `isDryRun` 入参传递（true 时 TraceWriter 写 `dry_run_session` 系列表而非 prod 表，D7/D21），不进 EvalContext。
 
 **AST 条件表达式的内置可寻址路径**（D20 §3 闭合枚举——发布期输入引用闭合校验的根路径表）：
 
@@ -432,7 +435,7 @@ EvalContext {
 | `subjectId` | `String` | RuleEvent | 业务主体 ID（用户 / 账户 / 设备 / 订单），灰度桶 hash 输入 |
 | `ruleVersionId` | `Long` | Matcher 锁定 | 当前评估的 RuleVersion id，与 `subjectId` 一同作为灰度桶稳定性输入（D6） |
 
-> 新增内置路径需走决策（影响所有已发布 RuleVersion 的校验集合）。`subject` / `metrics` / `traceId` 属于运行时填充体，不参与发布期闭合校验。
+> 新增内置路径需走决策（影响所有已发布 RuleVersion 的校验集合）。`subject` / `metrics` 属于运行时填充体，不参与发布期闭合校验。
 
 **关键边界**：
 
@@ -1058,7 +1061,7 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 
 ### Q9: EvalContext 里能放任意业务数据吗？
 
-**不能任意**。EvalContext 的字段是约定的（`event` / `subject` / `metrics` / `now` / `traceId`），扩展字段有明确入口（D13）：
+**不能任意**。EvalContext 的字段是约定的（`tenantId` / `event` / `subject` / `metrics` / `now`），扩展字段有明确入口（D13）：
 
 - **事件维度的扩展**：通过 `RuleEvent.payload` 进入，但字段必须 ∈ `Scene.payloadSchema`；
 - **主体维度的扩展**：通过 subject 属性进入，主体来源由 `Scene.subjectType` 决定（USER → user_profile / ACCOUNT → account 等）；
