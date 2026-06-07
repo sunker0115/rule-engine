@@ -1,21 +1,16 @@
 package com.sstlfsj.rule.job.api.service;
 
-import com.sstlfsj.rule.job.api.dto.CreateJobCommand;
 import com.sstlfsj.rule.job.api.dto.JobDefinitionDto;
 import com.sstlfsj.rule.job.api.dto.JobExecutionVO;
 
 import java.util.List;
 
-/** Job 生命周期管理：CRUD + 手动触发 + 执行记录查询（D11）。 */
+/**
+ * Job 管理：启用 / 禁用 / 查询 / 手动触发 / 执行记录查询（D11 / D48）。
+ *
+ * <p>Job 定义由 {@code @RuleJob} 注解驱动、启动期自动落库，本接口不含创建入口。
+ */
 public interface JobService {
-
-    /**
-     * 创建 Job。绑定的 Scene 为 PULL 时拒绝创建。
-     *
-     * @param cmd 创建入参
-     * @return 新建 Job 主键
-     */
-    Long createJob(CreateJobCommand cmd);
 
     /**
      * 启用 Job 并注册到调度器。绑定的 Scene 为 PULL 时拒绝启用。

@@ -2,7 +2,6 @@ package com.sstlfsj.rule.job.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.service.SceneService;
-import com.sstlfsj.rule.job.api.dto.CreateJobCommand;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
 import com.sstlfsj.rule.job.internal.repository.JobExecutionMapper;
@@ -45,42 +44,41 @@ class JobServiceImplTest {
                 List.of(), List.of(), Map.of(), 1, "ACTIVE");
     }
 
-    private CreateJobCommand cmd() {
-        return new CreateJobCommand("1", "s1", "j1", "Job1", "* * * * * *",
-                "{\"type\":\"SQL\",\"sql\":\"x\"}", "trade.completed", null, "actor");
+    private JobDefinition job(String status) {
+        JobDefinition d = new JobDefinition();
+        d.setId(5L);
+        d.setTenantId(1L);
+        d.setSceneCode("s1");
+        d.setStatus(status);
+        return d;
     }
 
     @Test
-    void createsJobForPushSceneAndRegistersSchedule() {
+    void enableJobForPushSceneRegistersSchedule() {
+        JobDefinition d = job("DISABLED");
+        when(jobMapper.selectById(5L)).thenReturn(d);
         when(sceneService.getScene("1", "s1")).thenReturn(scene("PUSH"));
-        when(jobMapper.insert(any(JobDefinition.class))).thenAnswer(inv -> {
-            ((JobDefinition) inv.getArgument(0)).setId(5L);
-            return 1;
-        });
 
-        Long id = service.createJob(cmd());
+        service.enableJob("1", 5L);
 
-        assertEquals(5L, id);
-        verify(jobMapper).insert(any(JobDefinition.class));
-        verify(scheduleManager).register(any());
+        assertEquals("ACTIVE", d.getStatus());
+        verify(scheduleManager).register(d);
     }
 
     @Test
-    void rejectsJobCreationForPullScene() {
+    void rejectsEnableForPullScene() {
+        JobDefinition d = job("DISABLED");
+        when(jobMapper.selectById(5L)).thenReturn(d);
         when(sceneService.getScene("1", "s1")).thenReturn(scene("PULL"));
 
-        assertThrows(IllegalArgumentException.class, () -> service.createJob(cmd()));
+        assertThrows(IllegalArgumentException.class, () -> service.enableJob("1", 5L));
 
-        verify(jobMapper, never()).insert(any(JobDefinition.class));
         verify(scheduleManager, never()).register(any());
     }
 
     @Test
     void disableJobUnregistersSchedule() {
-        JobDefinition d = new JobDefinition();
-        d.setId(5L);
-        d.setTenantId(1L);
-        d.setStatus("ACTIVE");
+        JobDefinition d = job("ACTIVE");
         when(jobMapper.selectById(5L)).thenReturn(d);
 
         service.disableJob("1", 5L);

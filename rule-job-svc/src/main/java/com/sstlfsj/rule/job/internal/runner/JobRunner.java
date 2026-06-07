@@ -1,21 +1,21 @@
 package com.sstlfsj.rule.job.internal.runner;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
+import com.sstlfsj.rule.job.api.JobTarget;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.domain.JobExecution;
 import com.sstlfsj.rule.job.internal.repository.JobExecutionMapper;
 import com.sstlfsj.rule.job.internal.subject.SubjectQueryRunner;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Job 单次运行：查主体 → 合成 RuleEvent → {@link EvalService#acceptEvent} 注入 → 记 JobExecution。
@@ -31,7 +31,6 @@ public class JobRunner {
     private static final int ERROR_SUMMARY_MAX = 2000;
 
     private final SubjectQueryRunner subjectQueryRunner;
-    private final PayloadTemplateRenderer payloadRenderer;
     private final EvalService evalService;
     private final JobExecutionMapper executionMapper;
 
@@ -57,17 +56,23 @@ public class JobRunner {
         int error = 0;
         List<String> errors = new ArrayList<>();
         try {
-            List<Map<String, Object>> subjects = subjectQueryRunner.query(def.getSubjectQuery());
-            exec.setSubjectCount(subjects.size());
+            List<JobTarget> targets = subjectQueryRunner.query(def.getSubjectQuery());
+            exec.setSubjectCount(targets.size());
             String tenantId = String.valueOf(def.getTenantId());
-            Instant now = Instant.now();
-            for (Map<String, Object> row : subjects) {
-                String subjectId = String.valueOf(row.get("subjectId"));
+            for (JobTarget target : targets) {
+                String subjectId = target.subjectId();
                 try {
                     String eventId = EventIdHasher.hash(jobRunId, subjectId);
-                    Map<String, Object> payload = payloadRenderer.render(def.getPayloadTemplate(), row);
-                    RuleEvent event = new RuleEvent(tenantId, def.getSceneCode(), def.getEventType(),
-                            subjectId, eventId, now, payload, null);
+                    RuleEvent event = RuleEvent.builder()
+                            .tenantId(tenantId)
+                            .sceneCode(def.getSceneCode())
+                            .eventType(def.getEventType())
+                            .subjectId(subjectId)
+                            .eventId(eventId)
+                            .payload(target.payload())
+                            .providedMetrics(target.providedMetrics())
+                            .source(EventSource.JOB)
+                            .build();
                     if (evalService.acceptEvent(event)) {
                         success++;
                     } else {

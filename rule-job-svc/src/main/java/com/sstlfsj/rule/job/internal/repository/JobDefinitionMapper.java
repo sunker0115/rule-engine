@@ -23,4 +23,12 @@ public interface JobDefinitionMapper extends BaseMapper<JobDefinition> {
         return selectList(new LambdaQueryWrapper<JobDefinition>()
                 .eq(JobDefinition::getStatus, "ACTIVE"));
     }
+
+    /** 按 (tenantId, sceneCode, code) 查 Job，不存在返回 null；供注解 Job upsert。 */
+    default JobDefinition findByTenantSceneCode(Long tenantId, String sceneCode, String code) {
+        return selectOne(new LambdaQueryWrapper<JobDefinition>()
+                .eq(JobDefinition::getTenantId, tenantId)
+                .eq(JobDefinition::getSceneCode, sceneCode)
+                .eq(JobDefinition::getCode, code));
+    }
 }

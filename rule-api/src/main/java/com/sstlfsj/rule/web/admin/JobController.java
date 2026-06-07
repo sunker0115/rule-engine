@@ -1,57 +1,26 @@
 package com.sstlfsj.rule.web.admin;
 
-import com.sstlfsj.rule.job.api.dto.CreateJobCommand;
 import com.sstlfsj.rule.job.api.dto.JobDefinitionDto;
 import com.sstlfsj.rule.job.api.dto.JobExecutionVO;
 import com.sstlfsj.rule.job.api.service.JobService;
-import com.sstlfsj.rule.web.admin.dto.CreateJobRequest;
-import com.sstlfsj.rule.web.admin.dto.CreateJobResponse;
 import com.sstlfsj.rule.web.common.ApiResponse;
-import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
-/** Job 管理入口：创建 / 启用 / 禁用 / 查询 / 手动触发 / 运行记录（D11）。 */
+/**
+ * Job 管理入口：启用 / 禁用 / 查询 / 手动触发 / 运行记录（D11 / D48）。
+ *
+ * <p>Job 定义由 {@code @RuleJob} 注解驱动、启动期自动落库，故无创建接口；本控制器只做管理。
+ */
 @RestController
 @RequestMapping("/admin/v1/jobs")
 public class JobController {
 
     private final JobService jobService;
-    /** Spring Boot 自动配置的 ObjectMapper bean，用于把请求中的 JSON 对象转为字符串。 */
-    private final ObjectMapper objectMapper;
 
-    public JobController(JobService jobService, ObjectMapper objectMapper) {
+    public JobController(JobService jobService) {
         this.jobService = jobService;
-        this.objectMapper = objectMapper;
-    }
-
-    /**
-     * POST /admin/v1/jobs — 创建 Job。绑定 PULL Scene 时被拒绝（返回 400）。
-     *
-     * @param req     创建请求
-     * @param actorId 操作人 ID（请求头 X-Actor-Id）
-     * @return 新建 Job 主键
-     */
-    @PostMapping
-    public ApiResponse<CreateJobResponse> createJob(
-            @Valid @RequestBody CreateJobRequest req,
-            @RequestHeader("X-Actor-Id") String actorId) {
-        try {
-            String subjectQueryJson = objectMapper.writeValueAsString(req.subjectQuery());
-            String payloadTemplateJson = req.payloadTemplate() != null
-                    ? objectMapper.writeValueAsString(req.payloadTemplate()) : null;
-            Long id = jobService.createJob(new CreateJobCommand(
-                    req.tenantId(), req.sceneCode(), req.code(), req.name(),
-                    req.cronExpression(), subjectQueryJson, req.eventType(),
-                    payloadTemplateJson, actorId));
-            return ApiResponse.ok(new CreateJobResponse(id));
-        } catch (JacksonException e) {
-            // 请求对象 → JSON 序列化不应失败，属内部错误
-            throw new IllegalStateException("JSON 序列化失败", e);
-        }
     }
 
     /**

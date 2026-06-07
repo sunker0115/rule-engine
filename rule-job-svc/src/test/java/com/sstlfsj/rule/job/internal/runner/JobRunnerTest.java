@@ -1,10 +1,12 @@
 package com.sstlfsj.rule.job.internal.runner;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
+import com.sstlfsj.rule.job.api.JobTarget;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.domain.JobExecution;
 import com.sstlfsj.rule.job.internal.repository.JobExecutionMapper;
 import com.sstlfsj.rule.job.internal.subject.SubjectQueryRunner;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,8 +31,6 @@ class JobRunnerTest {
     @Mock
     SubjectQueryRunner subjectQueryRunner;
     @Mock
-    PayloadTemplateRenderer payloadRenderer;
-    @Mock
     EvalService evalService;
     @Mock
     JobExecutionMapper executionMapper;
@@ -39,7 +39,7 @@ class JobRunnerTest {
 
     @BeforeEach
     void setUp() {
-        runner = new JobRunner(subjectQueryRunner, payloadRenderer, evalService, executionMapper);
+        runner = new JobRunner(subjectQueryRunner, evalService, executionMapper);
         // insert 时回填 id（jobRunId 依赖 exec.getId()）
         when(executionMapper.insert(any(JobExecution.class))).thenAnswer(inv -> {
             ((JobExecution) inv.getArgument(0)).setId(99L);
@@ -53,7 +53,7 @@ class JobRunnerTest {
         d.setTenantId(1L);
         d.setSceneCode("s1");
         d.setEventType("trade.completed");
-        d.setSubjectQuery("{\"type\":\"SQL\",\"sql\":\"x\"}");
+        d.setSubjectQuery("{\"type\":\"BEAN_METHOD\",\"ref\":\"a#b\"}");
         d.setCode("j1");
         return d;
     }
@@ -61,8 +61,7 @@ class JobRunnerTest {
     @Test
     void allAcceptedResultsInSuccess() {
         when(subjectQueryRunner.query(any())).thenReturn(
-                List.of(Map.of("subjectId", "u1"), Map.of("subjectId", "u2")));
-        when(payloadRenderer.render(any(), any())).thenReturn(Map.of());
+                List.of(JobTarget.of("u1"), JobTarget.of("u2")));
         when(evalService.acceptEvent(any())).thenReturn(true);
 
         JobExecution exec = runner.run(def());
@@ -78,8 +77,7 @@ class JobRunnerTest {
     @Test
     void partialRejectionResultsInPartialFail() {
         when(subjectQueryRunner.query(any())).thenReturn(
-                List.of(Map.of("subjectId", "u1"), Map.of("subjectId", "u2")));
-        when(payloadRenderer.render(any(), any())).thenReturn(Map.of());
+                List.of(JobTarget.of("u1"), JobTarget.of("u2")));
         when(evalService.acceptEvent(any())).thenReturn(true, false);
 
         JobExecution exec = runner.run(def());
@@ -91,8 +89,7 @@ class JobRunnerTest {
 
     @Test
     void allRejectedResultsInFailed() {
-        when(subjectQueryRunner.query(any())).thenReturn(List.of(Map.of("subjectId", "u1")));
-        when(payloadRenderer.render(any(), any())).thenReturn(Map.of());
+        when(subjectQueryRunner.query(any())).thenReturn(List.of(JobTarget.of("u1")));
         when(evalService.acceptEvent(any())).thenReturn(false);
 
         JobExecution exec = runner.run(def());
@@ -104,7 +101,7 @@ class JobRunnerTest {
 
     @Test
     void subjectQueryFailureResultsInFailedWithoutInjection() {
-        when(subjectQueryRunner.query(any())).thenThrow(new IllegalArgumentException("bad sql"));
+        when(subjectQueryRunner.query(any())).thenThrow(new IllegalArgumentException("bad ref"));
 
         JobExecution exec = runner.run(def());
 
@@ -114,9 +111,11 @@ class JobRunnerTest {
     }
 
     @Test
-    void synthesizedRuleEventHasCorrectFields() {
-        when(subjectQueryRunner.query(any())).thenReturn(List.of(Map.of("subjectId", "u1")));
-        when(payloadRenderer.render(any(), any())).thenReturn(Map.of("k", "v"));
+    void synthesizedRuleEventHasCorrectFieldsAndJobSource() {
+        // 目标携带 payload + providedMetrics，应原样透传进合成事件；渠道由 JobRunner 设为 JOB
+        JobTarget target = JobTarget.of("u1", Map.of("k", "v"))
+                .withProvidedMetrics(Map.of("score", 0.9));
+        when(subjectQueryRunner.query(any())).thenReturn(List.of(target));
         when(evalService.acceptEvent(any())).thenReturn(true);
 
         runner.run(def());
@@ -130,6 +129,8 @@ class JobRunnerTest {
         assertEquals("u1", e.subjectId());
         assertEquals(EventIdHasher.hash(99L, "u1"), e.eventId());
         assertEquals("v", e.payload().get("k"));
+        assertEquals(0.9, e.providedMetrics().get("score"));
+        assertEquals(EventSource.JOB, e.source());
         assertNotNull(e.occurredAt());
     }
 }

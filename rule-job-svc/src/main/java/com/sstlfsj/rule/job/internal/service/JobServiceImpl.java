@@ -2,7 +2,6 @@ package com.sstlfsj.rule.job.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.service.SceneService;
-import com.sstlfsj.rule.job.api.dto.CreateJobCommand;
 import com.sstlfsj.rule.job.api.dto.JobDefinitionDto;
 import com.sstlfsj.rule.job.api.dto.JobExecutionVO;
 import com.sstlfsj.rule.job.api.service.JobService;
@@ -18,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** JobService 实现：Job CRUD + PULL Scene 拒绝校验 + 手动触发 + 执行记录查询。 */
+/** JobService 实现：Job 启用 / 禁用 / 查询 / 手动触发 / 执行记录查询（D48：定义走 @RuleJob 注解）。 */
 @Service
 @RequiredArgsConstructor
 class JobServiceImpl implements JobService {
@@ -28,26 +27,6 @@ class JobServiceImpl implements JobService {
     private final SceneService sceneService;
     private final JobScheduleManager scheduleManager;
     private final JobRunner jobRunner;
-
-    @Override
-    @Transactional
-    public Long createJob(CreateJobCommand cmd) {
-        rejectIfPullScene(cmd.tenantId(), cmd.sceneCode());
-        JobDefinition def = new JobDefinition();
-        def.setTenantId(Long.valueOf(cmd.tenantId()));
-        def.setSceneCode(cmd.sceneCode());
-        def.setCode(cmd.code());
-        def.setName(cmd.name());
-        def.setCronExpression(cmd.cronExpression());
-        def.setSubjectQuery(cmd.subjectQuery());
-        def.setEventType(cmd.eventType());
-        def.setPayloadTemplate(cmd.payloadTemplate());
-        def.setStatus("ACTIVE");
-        def.setCreatedBy(cmd.actorId());
-        jobMapper.insert(def);
-        scheduleManager.register(def);
-        return def.getId();
-    }
 
     @Override
     @Transactional
