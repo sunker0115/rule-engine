@@ -4,6 +4,7 @@ import com.sstlfsj.rule.job.api.dto.JobDefinitionDto;
 import com.sstlfsj.rule.job.api.dto.JobExecutionVO;
 import com.sstlfsj.rule.job.api.service.JobService;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,13 +16,10 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/admin/v1/jobs")
+@RequiredArgsConstructor
 public class JobController {
 
     private final JobService jobService;
-
-    public JobController(JobService jobService) {
-        this.jobService = jobService;
-    }
 
     /**
      * GET /admin/v1/jobs?tenantId=xxx — 查询租户全部 Job。

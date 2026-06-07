@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.web.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
@@ -17,15 +18,11 @@ import org.springframework.web.bind.annotation.*;
 /** 规则版本生命周期管理入口：发布、禁用、查询。 */
 @RestController
 @RequestMapping("/admin/v1/rules")
+@RequiredArgsConstructor
 public class RuleController {
 
     private final ConfigService configService;
     private final ObjectMapper objectMapper;
-
-    public RuleController(ConfigService configService, ObjectMapper objectMapper) {
-        this.configService = configService;
-        this.objectMapper = objectMapper;
-    }
 
     /**
      * POST /admin/v1/rules — 创建规则草稿。

@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.web.admin;
 
+import lombok.RequiredArgsConstructor;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
@@ -16,17 +17,13 @@ import java.util.List;
 
 /** 场景管理入口：创建、更新、查询场景（D13）。 */
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/admin/v1/scenes")
 public class SceneController {
 
     private final SceneService sceneService;
     /** Spring Boot 自动配置的 ObjectMapper bean，通过构造器注入。 */
     private final ObjectMapper objectMapper;
-
-    public SceneController(SceneService sceneService, ObjectMapper objectMapper) {
-        this.sceneService = sceneService;
-        this.objectMapper = objectMapper;
-    }
 
     /**
      * GET /admin/v1/scenes — 查询租户全部场景（精简列表，供前端场景选择器 / 列表页）。

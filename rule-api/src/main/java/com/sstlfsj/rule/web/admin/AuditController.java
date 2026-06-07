@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.common.PageResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,13 +11,10 @@ import java.util.List;
 /** 审计日志与评估会话查询入口。 */
 @RestController
 @RequestMapping("/admin/v1")
+@RequiredArgsConstructor
 public class AuditController {
 
     private final AuditService auditService;
-
-    public AuditController(AuditService auditService) {
-        this.auditService = auditService;
-    }
 
     /** GET /admin/v1/evaluation-sessions — 分页查询评估会话
      * @param tenantId 租户 @param eventId 可选过滤 @param page 页码 @param size 每页大小

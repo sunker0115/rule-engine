@@ -6,6 +6,7 @@ import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,15 +15,11 @@ import java.util.List;
 /** Metric 注册 / 更新 / 影响面查询入口（10-api-contract §3 /admin/v1/metrics）。 */
 @RestController
 @RequestMapping("/admin/v1/metrics")
+@RequiredArgsConstructor
 public class MetricController {
 
     private final MetricWriteService service;
     private final MetadataService metadataService;
-
-    public MetricController(MetricWriteService service, MetadataService metadataService) {
-        this.service = service;
-        this.metadataService = metadataService;
-    }
 
     /**
      * GET /admin/v1/metrics — 查询租户全部 metric 运行时定义。

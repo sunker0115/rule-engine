@@ -7,19 +7,17 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.api.dto.EvalEventRequest;
 import com.sstlfsj.rule.web.api.dto.PushEventResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /** 规则评估 HTTP 入口，支持 PUSH 异步和 PULL 同步两种模式（D14）。 */
 @RestController
 @RequestMapping("/api/v1/rule")
+@RequiredArgsConstructor
 public class EvalController {
 
     private final EvalService evalService;
-
-    public EvalController(EvalService evalService) {
-        this.evalService = evalService;
-    }
 
     /** POST /api/v1/rule/event — PUSH 评估（异步，返回 202）
      * @param req 待评估的事件请求体
