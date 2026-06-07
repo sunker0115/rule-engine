@@ -21,8 +21,10 @@ public class EvaluationSession {
     private String sceneCode;
     private String eventType;
     private String subjectId;
-    /** 评估触发来源：PUSH / PULL / REPLAY。 */
+    /** 事件渠道：HTTP / MQ / JOB / SDK / REPLAY（取自 RuleEvent.source）。 */
     private String source;
+    /** 评估模式：PUSH（异步）/ PULL（同步），由 EvalService 入口判定。 */
+    private String mode;
     /** 状态：PENDING / HIT / MISS / BLOCKED / ERROR / FAILED。 */
     private String status;
     private String finalDecision;
