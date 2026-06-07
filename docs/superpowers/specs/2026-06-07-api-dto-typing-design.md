@@ -51,12 +51,18 @@ API DTO 层 (web.*.dto / config.api.dto)   ← 本期改这里（Object/String �
 
 - `RuleEvent.payload` / `providedMetrics` —— CloudEvents 信封模式（typed 信封 + 开放 data），A 原则。
 - `PreGateConfig.params` —— 按 `gateType` 变形的 seam：**外层 List/wrapper 类型化，params 内层仍 `Map<String,Object>`**。
-- `SceneDetailDto.defaultParams` —— Scene 开放配置（timezone/currency...），保持 `Map<String,Object>`。
+- `SceneDetailDto.defaultParams` / `CreateSceneRequest.defaultParams` / `UpdateSceneRequest.defaultParams` —— Scene 开放配置（timezone/currency...），保持 `Map<String,Object>`（动态但精确）。
 - `ConditionNode.params` / `MetricDescriptor.params` —— SPI 插件 seam，不动。
+- **异构/不透明 JSON（执行期确认保持，与上同理）**：`AuditService.AuditLogEntry.before/afterSnapshot`（任意配置实体变更快照，无统一形状）、`AuditService.TraceNodeEntry.actualValue`（节点实际值，随 metric 而变）、`MetadataService.ConditionTypeMeta/ActionTypeMeta.paramsSchema`（开放 JSON Schema，给前端渲染参数表单）。这些是异构 by design，硬塞 record 是错的；要更精确顶多升 `JsonNode`，但属"换一种弱类型"，本期不动。
+
+### 本期已含（执行期补充）
+
+- **Scene 写侧 DTO**：`CreateSceneRequest` / `UpdateSceneRequest` 的 `payloadSchema` `Object`→`List<PayloadFieldSpec>`、`defaultParams` `Object`→`Map<String,Object>`，对齐已 typed 的读侧 `SceneDetailDto`。
 
 ### 不在本期（独立 spec / 二期）
 
 - **二期**：持久化实体层 String → typed field（MyBatis `JacksonTypeHandler` + `autoResultMap`，自定义 mapper 加 `@Results`，泛型 List 写自定义 handler 绕类型擦除），消灭散落的 `objectMapper.readValue/writeValueAsString`。
+- **二期**：service 签名层（如 `ConfigService.createDraft(String conditionAstJson, ...)` 收 typed 而非 String，序列化推迟到 service 内部靠近持久化处）。比 DTO 层深、比实体 TypeHandler 浅，动 config service 内部 + publish 路径，与实体层一并做。
 - **独立可选 spec**：CloudEvents 入口适配器（仅当出现"外部系统按 CE 格式推事件进来"的真实场景时拉起；域模型 RuleEvent 不动，在 HTTP/MQ 入口 `CloudEvent → RuleEvent` 映射）。
 
 ## 为什么"一个字段三种形状"要定专用 record
