@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS job_execution (
   job_definition_id BIGINT       NOT NULL COMMENT '归属 Job',
   tenant_id         BIGINT       NOT NULL,
   trigger_at        TIMESTAMP(3) NOT NULL COMMENT '调度器触发时间',
-  status            ENUM('RUNNING','SUCCESS','PARTIAL_FAIL','FAILED') NOT NULL,
+  status            ENUM('RUNNING','SUCCESS','PARTIAL_FAIL','FAILED') NOT NULL DEFAULT 'RUNNING',
   subject_count     INT          NOT NULL DEFAULT 0 COMMENT '查询到的主体总数',
   success_count     INT          NOT NULL DEFAULT 0 COMMENT '成功注入评估链路的主体数',
   error_count       INT          NOT NULL DEFAULT 0,

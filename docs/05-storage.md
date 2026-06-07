@@ -271,7 +271,7 @@ CREATE TABLE job_execution (
   tenant_id       BIGINT       NOT NULL,
   trigger_at      TIMESTAMP(3)  NOT NULL COMMENT '调度器触发时间',
   status          ENUM('RUNNING','SUCCESS','PARTIAL_FAIL','FAILED') NOT NULL DEFAULT 'RUNNING',
-  subject_count   INT          NOT NULL DEFAULT 0 COMMENT '本次批次主体总数',
+  subject_count   INT          NOT NULL DEFAULT 0 COMMENT '查询到的主体总数',
   success_count   INT          NOT NULL DEFAULT 0 COMMENT '成功注入评估链路的主体数',
   error_count     INT          NOT NULL DEFAULT 0 COMMENT '失败数（含主体查询失败 + 事件注入失败）',
   error_summary   TEXT         COMMENT '失败摘要（抽样错误信息）',
