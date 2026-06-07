@@ -23,6 +23,7 @@
         <module>rule-config-svc</module>
         <module>rule-eval-svc</module>
         <module>rule-job-svc</module>
+        <module>rule-job-xxl</module>
         <module>rule-audit-svc</module>
         <module>rule-observability</module>
         <module>rule-api</module>
@@ -47,6 +48,8 @@
         <opentelemetry-instrumentation.version>2.16.0-alpha</opentelemetry-instrumentation.version>
         <!-- springdoc 3.x 系列适配 Spring Boot 4（3.0.3 以 spring-boot 4.0.5 为 parent） -->
         <springdoc.version>3.0.3</springdoc.version>
+        <!-- xxl-job-core 3.4.0：稳定版（2026-04-05），自身基于 Spring Boot 4.0.5 构建，无 javax 引用 -->
+        <xxl-job.version>3.4.0</xxl-job.version>
     </properties>
 
     <build>
@@ -200,6 +203,13 @@
                 <version>${springdoc.version}</version>
             </dependency>
 
+            <!-- xxl-job 执行器核心（adapter 模块按需引入；admin 端独立部署不在此） -->
+            <dependency>
+                <groupId>com.xuxueli</groupId>
+                <artifactId>xxl-job-core</artifactId>
+                <version>${xxl-job.version}</version>
+            </dependency>
+
             <!-- 内部模块版本管理 -->
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
@@ -224,6 +234,11 @@
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-job-svc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-job-xxl</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
