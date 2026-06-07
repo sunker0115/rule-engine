@@ -72,6 +72,19 @@ public final class MyBatisPlusNativeImageConfiguration {
         public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
             AotUtils aotUtils = new AotUtils(hints, classLoader);
             registerXml(aotUtils);
+            registerJsonTypeHandlers(aotUtils);
+        }
+
+        // JSON TypeHandler 经 @TableField(typeHandler=...) 由 MyBatis 反射调用 (Class) 构造器实例化，
+        // native 下须注册其构造器；按需注册（含 Jackson 3 新实现，PR #7017 原版未覆盖任何 TypeHandler）
+        void registerJsonTypeHandlers(AotUtils aotUtils) {
+            aotUtils.registerReflectionIfPresent(
+                "com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler",
+                "com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler",
+                "com.baomidou.mybatisplus.extension.handlers.Fastjson2TypeHandler",
+                "com.baomidou.mybatisplus.extension.handlers.FastjsonTypeHandler",
+                "com.baomidou.mybatisplus.extension.handlers.GsonTypeHandler",
+                "com.baomidou.mybatisplus.extension.handlers.AbstractJsonTypeHandler");
         }
 
         private void registerXml(AotUtils aotUtils) {

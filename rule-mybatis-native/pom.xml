@@ -37,5 +37,11 @@
             <version>25.0.3</version>
             <scope>provided</scope>
         </dependency>
+        <!-- JUnit5 + AssertJ：验证 RuntimeHints 注册（RuntimeHintsPredicates 在 spring-core，经 provided 传递） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
