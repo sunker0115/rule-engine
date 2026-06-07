@@ -11,9 +11,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import com.sstlfsj.rule.eval.api.service.EvalService;
+import com.sstlfsj.rule.web.api.EvalController;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /** 验证 GlobalExceptionHandler 对常见异常的 HTTP 响应映射。 */
@@ -83,5 +87,20 @@ class GlobalExceptionHandlerTest {
         ApiResponse<Void> resp = new GlobalExceptionHandler().handleNotFound(ex);
         assertThat(resp.success()).isFalse();
         assertThat(resp.errorCode()).isEqualTo("NOT_FOUND");
+    }
+
+    @Test
+    void malformedBody_returns400_notReadable() throws Exception {
+        MockMvc evalMvc = MockMvcBuilders
+                .standaloneSetup(new EvalController(mock(EvalService.class)))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+        String badJson = "{\"tenantId\":\"1\",\"occurredAt\":\"not-a-timestamp\"}";
+        evalMvc.perform(post("/api/v1/rule/evaluate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(badJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 }

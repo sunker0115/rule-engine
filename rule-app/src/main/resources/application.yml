@@ -13,6 +13,9 @@ spring:
   modulith:
     events:
       republish-outstanding-events-on-restart: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
