@@ -2,12 +2,8 @@ package com.sstlfsj.rule.kernel.internal.condition.strategy;
 
 import java.math.BigDecimal;
 
-/**
- * 数值比较策略：内核使用 BigDecimal，避免 double 精度丢失。
- * 适用于 dataType=LONG 和 dataType=DOUBLE。
- * null、NaN、Infinity 无法转换时：compare 返回哨兵值 Integer.MAX_VALUE，equals 返回 false。
- */
-class NumericComparisonStrategy implements ComparisonStrategy {
+/** 精确小数比较策略：DECIMAL dataType + 各数值快路径的回退;用 BigDecimal 避免精度丢失。 */
+class DecimalComparisonStrategy implements ComparisonStrategy {
 
     @Override
     public int compare(Object actual, Object operand) {

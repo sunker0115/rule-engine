@@ -7,11 +7,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证 ComparisonStrategy 接口契约：
  * compare 无法完成比较时必须返回哨兵 Integer.MAX_VALUE，调用方据此视为 false。
- * 通过 NumericComparisonStrategy 覆盖该契约（它是唯一会返回哨兵的实现）。
+ * 通过 DecimalComparisonStrategy 覆盖该契约（它是唯一会返回哨兵的实现）。
  */
 class ComparisonStrategyTest {
 
-    private final ComparisonStrategy strategy = new NumericComparisonStrategy();
+    private final ComparisonStrategy strategy = new DecimalComparisonStrategy();
 
     @Test
     void compare_sentinel_isIntegerMaxValue() {

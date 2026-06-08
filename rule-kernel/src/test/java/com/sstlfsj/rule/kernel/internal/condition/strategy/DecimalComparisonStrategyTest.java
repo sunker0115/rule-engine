@@ -6,9 +6,9 @@ import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class NumericComparisonStrategyTest {
+class DecimalComparisonStrategyTest {
 
-    private final NumericComparisonStrategy strategy = new NumericComparisonStrategy();
+    private final DecimalComparisonStrategy strategy = new DecimalComparisonStrategy();
 
     @Test
     void compare_integerEqual_returnsZero() {

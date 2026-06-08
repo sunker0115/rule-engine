@@ -11,13 +11,19 @@ class ComparisonStrategyFactoryTest {
     @Test
     void forType_long_returnsNumeric() {
         assertThat(ComparisonStrategyFactory.forType("LONG"))
-                .isInstanceOf(NumericComparisonStrategy.class);
+                .isInstanceOf(DecimalComparisonStrategy.class);
     }
 
     @Test
     void forType_double_returnsNumeric() {
         assertThat(ComparisonStrategyFactory.forType("DOUBLE"))
-                .isInstanceOf(NumericComparisonStrategy.class);
+                .isInstanceOf(DecimalComparisonStrategy.class);
+    }
+
+    @Test
+    void forType_decimal_returnsDecimal() {
+        assertThat(ComparisonStrategyFactory.forType("DECIMAL"))
+                .isInstanceOf(DecimalComparisonStrategy.class);
     }
 
     @Test
