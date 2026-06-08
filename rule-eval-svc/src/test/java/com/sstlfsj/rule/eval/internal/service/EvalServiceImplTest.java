@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
+import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
 import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecorded;
@@ -23,14 +23,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计、经 ActionDeliveryChannel 投递 action；dry-run 发 DryRunRecorded 事件。 */
+/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计、经 ActionCommandChannel 投递 action；dry-run 发 DryRunRecorded 事件。 */
 @ExtendWith(MockitoExtension.class)
 class EvalServiceImplTest {
 
     @Mock EvalEngine evalEngine;
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock DomainEventPublisher eventPublisher;
-    @Mock ActionDeliveryChannel actionDelivery;
+    @Mock ActionCommandChannel actionDelivery;
 
     EvalServiceImpl impl;
 

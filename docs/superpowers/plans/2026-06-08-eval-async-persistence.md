@@ -4,7 +4,7 @@
 
 **Goal:** 把评估后副作用（审计落库 + action 派发）从请求线程搬到事件驱动异步：审计 best-effort 内存异步（可丢、请求线程 0 DB 写），action 持久 outbox at-least-once（不可丢、handler 幂等），预留 Delivery 抽象作 MQ 缝。
 
-**Architecture:** `EvalServiceImpl.doEvaluate` 算完即发事件并同步返回 EvalResult。`AuditRecorded`（内存 @Async）→ `AuditPersister` 批量落 session（单次终态 INSERT）；`DispatchActionsCommand`（命中且有 action 时，经 `ActionDeliveryChannel` 持久投递）→ `ActionDispatcher` 异步执行 handler。sessionId 由请求线程用 MyBatis-Plus `IdWorker` 生成。
+**Architecture:** `EvalServiceImpl.doEvaluate` 算完即发事件并同步返回 EvalResult。`AuditRecorded`（内存 @Async）→ `AuditPersister` 批量落 session（单次终态 INSERT）；`DispatchActionsCommand`（命中且有 action 时，经 `ActionCommandChannel` 持久投递）→ `ActionDispatcher` 异步执行 handler。sessionId 由请求线程用 MyBatis-Plus `IdWorker` 生成。
 
 **Tech Stack:** Spring Boot 4.0.6 / Spring Modulith 2.0.6（events-api 已在，本期加 events-jdbc 做 outbox）/ MyBatis-Plus `IdWorker`（snowflake）/ 虚拟线程异步队列（仿 `TraceWriterDbImpl`）/ JUnit5+Mockito+AssertJ + `@ApplicationModuleTest`/`@SpringBootTest`。
 
@@ -32,7 +32,7 @@ rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/
 │   ├── DispatchActionsCommand.java            (Task 4) 持久 action 事件 record
 │   ├── EvaluationEventPublisher.java   (Task 2/4) 发布点（命中有 action 才发 DispatchActionsCommand）
 │   ├── AuditPersister.java             (Task 3) 消费 AuditRecorded，批量落 session
-│   ├── ActionDeliveryChannel.java      (Task 4) 投递抽象（MQ 缝）
+│   ├── ActionCommandChannel.java      (Task 4) 投递抽象（MQ 缝）
 │   ├── ModulithOutboxDeliveryChannel.java (Task 4) 本期实现
 │   └── ActionDispatcher.java           (Task 4) 消费 DispatchActionsCommand，执行 handler
 ├── service/EvalServiceImpl.java        (Task 5) 改造：发事件、去同步写、snowflake id
@@ -479,7 +479,7 @@ git commit -m "feat(eval-async): AuditPersister 异步批量落 session（单次
 ## Task 4: DispatchActionsCommand + Delivery 抽象 + ActionDispatcher
 
 **Files:**
-- Create: `DispatchActionsCommand.java` / `ActionDeliveryChannel.java` / `ModulithOutboxDeliveryChannel.java` / `ActionDispatcher.java`（均 rule-eval-svc/.../internal/async/）
+- Create: `DispatchActionsCommand.java` / `ActionCommandChannel.java` / `ModulithOutboxDeliveryChannel.java` / `ActionDispatcher.java`（均 rule-eval-svc/.../internal/async/）
 - Modify: `EvaluationEventPublisher.java`（加 `publishActions`）
 - Test: `ActionDispatcherIdempotencyTest.java`
 
@@ -499,13 +499,13 @@ public record DispatchActionsCommand(long sessionId, long tenantId, String event
                               String sceneCode, List<Decision> hitDecisions) implements Serializable {}
 ```
 
-`ActionDeliveryChannel.java`：
+`ActionCommandChannel.java`：
 
 ```java
 package com.sstlfsj.rule.eval.internal.async;
 
 /** action 派发事件的可靠投递契约（at-least-once）。本期 Modulith outbox 实现，下期可换 MQ。 */
-public interface ActionDeliveryChannel {
+public interface ActionCommandChannel {
     void deliver(DispatchActionsCommand event);
 }
 ```
@@ -521,7 +521,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** 本期实现：发布持久事件（Modulith event_publication outbox）。须在事务内发布。 */
 @Component
-public class ModulithOutboxDeliveryChannel implements ActionDeliveryChannel {
+public class ModulithOutboxDeliveryChannel implements ActionCommandChannel {
 
     private final ApplicationEventPublisher publisher;
 
@@ -567,8 +567,8 @@ public class ActionDispatcher {
 `EvaluationEventPublisher` 加方法：
 
 ```java
-    private final ActionDeliveryChannel actionDelivery;
-    // 构造器注入 ActionDeliveryChannel（与 ApplicationEventPublisher 一起）
+    private final ActionCommandChannel actionDelivery;
+    // 构造器注入 ActionCommandChannel（与 ApplicationEventPublisher 一起）
 
     /** 命中且有 action 绑定时发持久 action 事件。 */
     public void publishActions(long sessionId, long tenantId, String eventId, String sceneCode,
@@ -576,7 +576,7 @@ public class ActionDispatcher {
         actionDelivery.deliver(new DispatchActionsCommand(sessionId, tenantId, eventId, sceneCode, hitDecisions));
     }
 ```
-> 调整 `EvaluationEventPublisher` 构造器为 `(ApplicationEventPublisher, ActionDeliveryChannel)`，Task 2 的测试同步改 mock 两参。
+> 调整 `EvaluationEventPublisher` 构造器为 `(ApplicationEventPublisher, ActionCommandChannel)`，Task 2 的测试同步改 mock 两参。
 
 - [ ] **Step 2: 写幂等测试**
 
@@ -622,7 +622,7 @@ Expected：PASS（EvaluationEventPublisherTest 已按两参构造器更新）。
 - [ ] **Step 4: Commit**
 
 ```bash
-git add rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/DispatchActionsCommand.java rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/ActionDeliveryChannel.java rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/ModulithOutboxDeliveryChannel.java rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/ActionDispatcher.java rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/EvaluationEventPublisher.java rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/async/ActionDispatcherIdempotencyTest.java rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/async/EvaluationEventPublisherTest.java
+git add rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/DispatchActionsCommand.java rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/ActionCommandChannel.java rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/ModulithOutboxDeliveryChannel.java rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/ActionDispatcher.java rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/async/EvaluationEventPublisher.java rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/async/ActionDispatcherIdempotencyTest.java rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/async/EvaluationEventPublisherTest.java
 git commit -m "feat(eval-async): DispatchActionsCommand + Delivery 抽象 + ActionDispatcher（持久 at-least-once）"
 ```
 
@@ -770,7 +770,7 @@ git commit -m "test(eval-async): 事件化后压测复测（吞吐 vs 基线）"
 **1. Spec coverage（对照 2026-06-08-eval-async-persistence-design.md）：**
 - §3 请求线程纯计算同步返回 + 两事件 → Task 5 ✅
 - §3 审计内存可丢 / action 持久不丢、持久写仅命中有 action → Task 2/3（内存）+ Task 4（持久,publishActions 条件）✅
-- §4 ActionDeliveryChannel 抽象 + Modulith outbox 实现 → Task 4 ✅
+- §4 ActionCommandChannel 抽象 + Modulith outbox 实现 → Task 4 ✅
 - §5 at-least-once + handler 幂等 / 审计 best-effort / session 两写合一 / snowflake → Task 1(outbox)/3(单插)/4(幂等)/5(id) ✅
 - §6 组件边界 / EvalEngine 不动 / 契约不变 → Task 5（仅改 doEvaluate）✅
 - §7 测试（发布点/批量/幂等/at-least-once/端到端）+ 验收压测 → Task 2-6 ✅
@@ -778,4 +778,4 @@ git commit -m "test(eval-async): 事件化后压测复测（吞吐 vs 基线）"
 
 **2. Placeholder scan：** Task 1 三未知点 (a)(b)(c) 是 spike 显式待解项（给了报错→动作）。`EvaluationSession` 现注解、`EvalServiceImpl` 现构造签名标注"以现有代码 + 测试为准对齐"——这两处需实现时读文件定签名，属合理（依赖现状）。trace 落库迁移位置在 Task 5 给了明确方案（注入 TraceWriter 到 AuditPersister）。无 TODO/空话。
 
-**3. Type consistency：** `AuditRecorded(sessionId,event,mode,candidateCount,result,context)` Task 2 定义、Task 3 消费、Task 5 发布一致；`DispatchActionsCommand(sessionId,tenantId,eventId,sceneCode,hitDecisions)` Task 4 定义、Task 4/5 用一致；`EvaluationEventPublisher.publishAudit/publishActions` 签名跨 Task 2/4/5 一致；`ActionDeliveryChannel.deliver(DispatchActionsCommand)` Task 4 定义/实现/调用一致；`IdWorker.getId():long` 与 session id 客户端赋值一致。
+**3. Type consistency：** `AuditRecorded(sessionId,event,mode,candidateCount,result,context)` Task 2 定义、Task 3 消费、Task 5 发布一致；`DispatchActionsCommand(sessionId,tenantId,eventId,sceneCode,hitDecisions)` Task 4 定义、Task 4/5 用一致；`EvaluationEventPublisher.publishAudit/publishActions` 签名跨 Task 2/4/5 一致；`ActionCommandChannel.deliver(DispatchActionsCommand)` Task 4 定义/实现/调用一致；`IdWorker.getId():long` 与 session id 客户端赋值一致。

@@ -11,15 +11,15 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * {@link ActionDeliveryChannel} 的本期实现：进程内异步队列 + 虚拟线程消费，best-effort 派发 action。
+ * {@link ActionCommandChannel} 的本期实现：进程内异步队列 + 虚拟线程消费，best-effort 派发 action。
  *
  * <p>请求线程仅非阻塞入队，派发在后台执行，不阻塞评估、不占 DB 连接。队列满/进程崩溃则丢弃——
  * 本期 ActionHandler 为 stub，副作用可丢；待接入真实「不可丢」handler 时，换 Kafka/AMQP 实现本接口即可，
  * 发布方（评估服务）不动。这是预留的 MQ 缝。
  */
 @Component
-public class InProcessAsyncDeliveryChannel
-        implements ActionDeliveryChannel, InitializingBean, DisposableBean {
+public class InProcessAsyncCommandChannel
+        implements ActionCommandChannel, InitializingBean, DisposableBean {
 
     private final int queueCapacity;
     private final int batchSize;
@@ -30,7 +30,7 @@ public class InProcessAsyncDeliveryChannel
     private volatile boolean running = false;
     private Thread consumerThread;
 
-    public InProcessAsyncDeliveryChannel(int queueCapacity, int batchSize, long flushIntervalMs,
+    public InProcessAsyncCommandChannel(int queueCapacity, int batchSize, long flushIntervalMs,
                                          ActionDispatchService dispatchService) {
         this.queueCapacity = queueCapacity;
         this.batchSize = batchSize;
@@ -39,7 +39,7 @@ public class InProcessAsyncDeliveryChannel
     }
 
     @Autowired
-    public InProcessAsyncDeliveryChannel(ActionDispatchService dispatchService) {
+    public InProcessAsyncCommandChannel(ActionDispatchService dispatchService) {
         this(10000, 500, 200, dispatchService);
     }
 

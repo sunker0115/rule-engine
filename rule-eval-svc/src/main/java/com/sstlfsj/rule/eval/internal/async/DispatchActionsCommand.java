@@ -6,7 +6,7 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * action 派发命令：触发「去执行这次命中的 action」。本期经 {@link ActionDeliveryChannel} 进程内异步投递（best-effort）；
+ * action 派发命令：触发「去执行这次命中的 action」。本期经 {@link ActionCommandChannel} 进程内异步投递（best-effort）；
  * 实现 {@link Serializable} 以便将来换 MQ 投递时序列化。
  *
  * @param sessionId    评估会话 id

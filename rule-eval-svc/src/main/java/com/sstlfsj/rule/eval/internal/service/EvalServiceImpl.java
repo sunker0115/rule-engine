@@ -2,7 +2,7 @@ package com.sstlfsj.rule.eval.internal.service;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
-import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
+import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
 import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecorded;
@@ -18,19 +18,19 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.List;
 
-/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件、经 ActionDeliveryChannel 投递 action，自身不做内联持久化。 */
+/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件、经 ActionCommandChannel 投递 action，自身不做内联持久化。 */
 @Service
 class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     private final EvalEngine evalEngine;
     private final SceneSnapshotLoader snapshotLoader;
     private final DomainEventPublisher eventPublisher;
-    private final ActionDeliveryChannel actionDelivery;
+    private final ActionCommandChannel actionDelivery;
     private final EvalActionDispatcher dispatcher;
 
     EvalServiceImpl(EvalEngine evalEngine, SceneSnapshotLoader snapshotLoader,
                     DomainEventPublisher eventPublisher,
-                    ActionDeliveryChannel actionDelivery) {
+                    ActionCommandChannel actionDelivery) {
         this.evalEngine = evalEngine;
         this.snapshotLoader = snapshotLoader;
         this.eventPublisher = eventPublisher;

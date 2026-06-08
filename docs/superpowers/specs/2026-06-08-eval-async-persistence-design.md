@@ -2,7 +2,7 @@
 
 > Status: 已实施并 right-size（2026-06-08）。把评估后的副作用（审计落库 + action 派发）从请求线程搬到**事件驱动异步**，请求线程只做纯计算并同步返回 EvalResult。压测（2026-06-08-load-test）已证明：同步 `session` 两写是吞吐墙（池绑定，本机 ~600 req/s 封顶），trace 已异步则零成本。
 
-> **实施调整（right-size，2026-06-08）**：§2/§4/§5 的"action 持久 outbox（Modulith events-jdbc + EVENT_PUBLICATION + at-least-once）"在实施后**降级为本期内存 best-effort 异步**（`InProcessAsyncDeliveryChannel`）。原因：v1 ActionHandler 为 stub、无真实不可丢副作用，DB outbox 既过度设计（YAGNI）又在压测中成为新瓶颈（@Transactional 持久写顶替 session 写、吞吐无提升）。**保留 `ActionDeliveryChannel` 抽象作 MQ 缝**——待真实「不可丢」handler 落地，经此缝换 Kafka/AMQP 实现 durable，发布方不动。审计内存异步（可丢）维持原设计。right-size 后压测：池=10 吞吐 246→**24,434 req/s（~100×）**，p95 1.52s→12ms。详见 `load-test/README.md`。
+> **实施调整（right-size，2026-06-08）**：§2/§4/§5 的"action 持久 outbox（Modulith events-jdbc + EVENT_PUBLICATION + at-least-once）"在实施后**降级为本期内存 best-effort 异步**（`InProcessAsyncCommandChannel`）。原因：v1 ActionHandler 为 stub、无真实不可丢副作用，DB outbox 既过度设计（YAGNI）又在压测中成为新瓶颈（@Transactional 持久写顶替 session 写、吞吐无提升）。**保留 `ActionCommandChannel` 抽象作 MQ 缝**——待真实「不可丢」handler 落地，经此缝换 Kafka/AMQP 实现 durable，发布方不动。审计内存异步（可丢）维持原设计。right-size 后压测：池=10 吞吐 246→**24,434 req/s（~100×）**，p95 1.52s→12ms。详见 `load-test/README.md`。
 
 ## 1. 动机（压测实证）
 
@@ -49,7 +49,7 @@ EvalServiceImpl.doEvaluate（请求线程，纯内存）
 
 ```java
 /** action 派发事件的可靠投递契约：保证 at-least-once 投递到 ActionDispatcher。 */
-public interface ActionDeliveryChannel {
+public interface ActionCommandChannel {
     void deliver(DispatchActionsCommand event);
 }
 ```
@@ -73,7 +73,7 @@ public interface ActionDeliveryChannel {
 - `AuditRecorded` / `DispatchActionsCommand`：领域事件 record。
 - `AuditPersister`：消费 ①，有界队列+批量落库（复用/参照 `TraceWriterDbImpl` 模式）。
 - `ActionDispatcher`：消费 ②，复用现 `ActionDispatchService` 的派发逻辑（移到异步、加幂等）。
-- `ActionDeliveryChannel` + `ModulithOutboxDeliveryChannel`。
+- `ActionCommandChannel` + `ModulithOutboxDeliveryChannel`。
 - `SnowflakeId`（或复用项目既有 id 生成；无则新增最小实现）。
 
 **改造：**

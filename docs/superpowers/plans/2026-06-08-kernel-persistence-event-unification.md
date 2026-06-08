@@ -33,7 +33,7 @@ cd /Users/sunke/dev/ai-project/rule-engine
 | `internal/async/DryRunRecorded.java` | 建(事件) |
 | `internal/async/DryRunPersister.java` (+Test) | 建(persister,吸收 EvalSessionWriter) |
 | `internal/domain/DryRunSession.java` | 改(@TableId INPUT) |
-| `internal/service/EvalServiceImpl.java` (+Tests) | 改(注入 DomainEventPublisher+ActionDeliveryChannel,publish-only) |
+| `internal/service/EvalServiceImpl.java` (+Tests) | 改(注入 DomainEventPublisher+ActionCommandChannel,publish-only) |
 | `internal/async/EvaluationEventPublisher.java` (+Test) | 删 |
 | `internal/session/EvalSessionWriter.java` (+Test) | 删 |
 | `EvalAutoConfiguration.java` | 改(dispatch bean 注入 DomainEventPublisher) |
@@ -509,18 +509,18 @@ git commit -m "feat(eval): DryRunRecorded + DryRunPersister(单次终态,吸收 
 
 **Files:** Modify `internal/service/EvalServiceImpl.java` (+`EvalServiceImplTest`, `DoEvaluateEmitsEventsTest`); Delete `internal/async/EvaluationEventPublisher.java` (+Test), `internal/session/EvalSessionWriter.java` (+Test)
 
-- [ ] **Step 1: 改 `EvalServiceImpl`**(注入 `DomainEventPublisher` + `ActionDeliveryChannel`,删 `EvalSessionWriter`/`DryRunTraceWriter`/`EvaluationEventPublisher`)
+- [ ] **Step 1: 改 `EvalServiceImpl`**(注入 `DomainEventPublisher` + `ActionCommandChannel`,删 `EvalSessionWriter`/`DryRunTraceWriter`/`EvaluationEventPublisher`)
   - 字段/构造器改为:
   ```java
       private final EvalEngine evalEngine;
       private final SceneSnapshotLoader snapshotLoader;
       private final com.sstlfsj.rule.eval.internal.event.DomainEventPublisher eventPublisher;
-      private final com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel actionDelivery;
+      private final com.sstlfsj.rule.eval.internal.async.ActionCommandChannel actionDelivery;
       private final EvalActionDispatcher dispatcher;
 
       EvalServiceImpl(EvalEngine evalEngine, SceneSnapshotLoader snapshotLoader,
                       com.sstlfsj.rule.eval.internal.event.DomainEventPublisher eventPublisher,
-                      com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel actionDelivery) {
+                      com.sstlfsj.rule.eval.internal.async.ActionCommandChannel actionDelivery) {
           this.evalEngine = evalEngine;
           this.snapshotLoader = snapshotLoader;
           this.eventPublisher = eventPublisher;
@@ -566,8 +566,8 @@ git rm rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/session/EvalSe
        rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/session/EvalSessionWriterTest.java
 ```
 
-- [ ] **Step 4: 改 `EvalServiceImplTest` + `DoEvaluateEmitsEventsTest`** —— 把对 `EvaluationEventPublisher`/`EvalSessionWriter` 的 mock/verify 改为 `DomainEventPublisher` + `ActionDeliveryChannel`:
-  - 构造 `EvalServiceImpl` 改为 4 参 `(engine, snapshotLoader, mock(DomainEventPublisher), mock(ActionDeliveryChannel))`。
+- [ ] **Step 4: 改 `EvalServiceImplTest` + `DoEvaluateEmitsEventsTest`** —— 把对 `EvaluationEventPublisher`/`EvalSessionWriter` 的 mock/verify 改为 `DomainEventPublisher` + `ActionCommandChannel`:
+  - 构造 `EvalServiceImpl` 改为 4 参 `(engine, snapshotLoader, mock(DomainEventPublisher), mock(ActionCommandChannel))`。
   - 主路径命中:`verify(eventPublisher).publish(argThat(o -> o instanceof AuditRecorded))` + `verify(actionDelivery).deliver(argThat(o -> o instanceof DispatchActionsCommand ar && ar.eventId().equals("e1")))`。
   - 评估 MISS(有候选):`verify(eventPublisher).publish(any(AuditRecorded.class))` + `verify(actionDelivery, never()).deliver(any())`。
   - BLOCKED:publish 的 AuditRecorded.blockedBy() == "ROLLOUT"。
@@ -581,7 +581,7 @@ git rm rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/session/EvalSe
 ```bash
 git add -A rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/service/EvalServiceImpl.java \
         rule-eval-svc/src/test/java/com/sstlfsj/rule/eval/internal/service/
-git commit -m "refactor(eval): EvalServiceImpl 只经 DomainEventPublisher 发布(audit/dry-run)+ ActionDeliveryChannel(action),删 EvaluationEventPublisher/EvalSessionWriter"
+git commit -m "refactor(eval): EvalServiceImpl 只经 DomainEventPublisher 发布(audit/dry-run)+ ActionCommandChannel(action),删 EvaluationEventPublisher/EvalSessionWriter"
 ```
 
 ---
@@ -590,7 +590,7 @@ git commit -m "refactor(eval): EvalServiceImpl 只经 DomainEventPublisher 发�
 
 **Files:** Modify `EvalAutoConfiguration.java`(若有遗留装配);验证
 
-- [ ] **Step 1: 检查装配**——确认 `EvalServiceImpl`(@Service 自动注入 DomainEventPublisher + ActionDeliveryChannel)、`InProcessDomainEventPublisher`/`ActionExecutionPersister`/`DryRunPersister`(@Component 被 `@ComponentScan("com.sstlfsj.rule.eval.internal")` 扫到)均可装配。`actionDispatchService` @Bean 已在 Task 3 改注入 DomainEventPublisher。无遗漏则本步无改动。
+- [ ] **Step 1: 检查装配**——确认 `EvalServiceImpl`(@Service 自动注入 DomainEventPublisher + ActionCommandChannel)、`InProcessDomainEventPublisher`/`ActionExecutionPersister`/`DryRunPersister`(@Component 被 `@ComponentScan("com.sstlfsj.rule.eval.internal")` 扫到)均可装配。`actionDispatchService` @Bean 已在 Task 3 改注入 DomainEventPublisher。无遗漏则本步无改动。
 
 - [ ] **Step 2: 全量回归**
 `$MVN -pl rule-kernel,rule-eval-svc -am test 2>&1 | grep -E 'Tests run:.*Failures|BUILD' | grep -vE 'Time elapsed' | tail -6` → 全部 Failures:0,BUILD SUCCESS
@@ -605,7 +605,7 @@ git commit -m "refactor(eval): EvalServiceImpl 只经 DomainEventPublisher 发�
 
 **Spec 覆盖:** §2 契约→Task1;§3 AuditRecorded→Task2、ActionExecuted→Task3、DryRunRecorded→Task4;§4 三 persister→Task1(publisher)/2/3/4;§5 生产方只发布+删 EvaluationEventPublisher/EvalSessionWriter→Task3(dispatch)+Task5(EvalServiceImpl);§6 进程内实现→Task1;§7 durability/uk backstop→Task3(ActionExecutionPersister)/Task2;§8 测试→各 Task + Task6 全量;§9 非目标(MQ/durable/表结构)未实现,符合。
 
-**类型一致性:** `DomainEvent.durability():Durability`、`DomainEventPublisher.publish(DomainEvent)` 全程统一;`ActionExecuted(sessionId,tenantId,eventId,actionId,actionType,decisionCode,result)` Task3 定义并在 dispatch/persister/test 一致;`DryRunRecorded(sessionId,event,ruleVersionId,result,context)` Task4 定义并在 persister/EvalServiceImpl 一致;`ActionDispatchService` 新构造器 `(handlers,bindingMapper,DomainEventPublisher,idempotencyGuard)` Task3 定义、EvalAutoConfiguration 调用一致;`EvalServiceImpl` 新构造器 `(engine,snapshotLoader,DomainEventPublisher,ActionDeliveryChannel)` Task5。
+**类型一致性:** `DomainEvent.durability():Durability`、`DomainEventPublisher.publish(DomainEvent)` 全程统一;`ActionExecuted(sessionId,tenantId,eventId,actionId,actionType,decisionCode,result)` Task3 定义并在 dispatch/persister/test 一致;`DryRunRecorded(sessionId,event,ruleVersionId,result,context)` Task4 定义并在 persister/EvalServiceImpl 一致;`ActionDispatchService` 新构造器 `(handlers,bindingMapper,DomainEventPublisher,idempotencyGuard)` Task3 定义、EvalAutoConfiguration 调用一致;`EvalServiceImpl` 新构造器 `(engine,snapshotLoader,DomainEventPublisher,ActionCommandChannel)` Task5。
 
 **占位符:** 无 TBD;新文件含完整代码;修改步骤给出替换后代码或精确指令。Task6 Step3 native 为条件式验证(已知模式),非占位。
 

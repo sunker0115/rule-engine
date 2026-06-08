@@ -18,7 +18,7 @@
 - **actionId 确定化 = `binding.actionType()`**:`scene_action_binding` 有 `uk_scene_action (scene_id, action_type)`,一个 scene 内 actionType 唯一;事件只属一个 scene。故 `(tenant, eventId, decisionCode, actionType)` 是稳定唯一的逻辑 action 键,无需给 DTO 加 binding id。
 - **claim-before-execute + 失败释放(方案 b)**:执行前原子占坑(挡并发双执行);handler 失败 → 释放占坑(让「重复 eventId = 重试」能重新执行到成功);成功 → 保留占坑至 TTL 过期。
 - **TTL 配置化**:`engine.rule.action.idempotency.ttl-seconds`(默认 600)。
-- **缝抽象**:`ActionIdempotencyGuard` 接口,进程内 Caffeine 实现;升级 Redis/durable 只换 Bean,派发方不动(同 `ActionDeliveryChannel` 手法)。
+- **缝抽象**:`ActionIdempotencyGuard` 接口,进程内 Caffeine 实现;升级 Redis/durable 只换 Bean,派发方不动(同 `ActionCommandChannel` 手法)。
 - **best-effort 显式接受**:进程内缓存重启丢 / 多实例不共享,这两种情况 TTL 窗口内重复缓存挡不住、会重复执行;DB uk 留行级 backstop;硬保证留 Redis 升级。
 
 ## 3. 组件
@@ -43,7 +43,7 @@
 - `ActionDispatchService`：构造器注入 `ActionIdempotencyGuard`;`dispatch` 内 actionId 改 `binding.actionType()`、加 claim/release 流程(见 §4)。
 - `EvalAutoConfiguration`：`actionDispatchService(...)` @Bean 增加 guard 参数;启用 `ActionIdempotencyProperties`(`@EnableConfigurationProperties` 或等价)。
 
-**不动:** ActionHandler SPI、ActionResult、action_execution 表结构(uk 已存在)、InProcessAsyncDeliveryChannel、请求热路径。
+**不动:** ActionHandler SPI、ActionResult、action_execution 表结构(uk 已存在)、InProcessAsyncCommandChannel、请求热路径。
 
 ## 4. 数据流(`ActionDispatchService.dispatch`)
 
@@ -59,7 +59,7 @@ for decision in hitDecisions:
             binding.actionType(), decision.code(), result);           // 审计行(已有 try-catch;best-effort + uk backstop)
 ```
 
-- `claim` 在**异步派发消费者**(InProcessAsyncDeliveryChannel 消费 → dispatch),off 请求热路径,不影响请求吞吐。
+- `claim` 在**异步派发消费者**(InProcessAsyncCommandChannel 消费 → dispatch),off 请求热路径,不影响请求吞吐。
 - `executeHandler` 维持现状不额外捕获异常(handler 约定返回 ActionResult,不抛);极端情况 handler 抛异常则向上传播(同现状),占坑到 TTL 过期(不阻塞超过 TTL 的重发)——不为不存在的场景加 catch(YAGNI)。
 - `SUCCESS` / `SKIPPED(NO_HANDLER)` → 不 release(成功无需重试;无 handler 重试也没用),占坑到 TTL 过期。
 - claim 失败的重复 → skip handler **且 skip insert**(原始那次已留审计行;确定 actionId 下重复 insert 也撞 uk)。

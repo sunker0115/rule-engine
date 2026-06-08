@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
+import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
 import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** 验证 doEvaluate 改事件驱动：命中发审计事件 + 投递 action；有候选未命中只发审计；无候选不发事件；均经 DomainEventPublisher/ActionDeliveryChannel。 */
+/** 验证 doEvaluate 改事件驱动：命中发审计事件 + 投递 action；有候选未命中只发审计；无候选不发事件；均经 DomainEventPublisher/ActionCommandChannel。 */
 class DoEvaluateEmitsEventsTest {
 
     private RuleEvent event(String eventId) {
@@ -38,7 +38,7 @@ class DoEvaluateEmitsEventsTest {
     }
 
     private EvalServiceImpl service(EvalEngine engine, DomainEventPublisher publisher,
-                                   ActionDeliveryChannel actionDelivery) {
+                                   ActionCommandChannel actionDelivery) {
         return new EvalServiceImpl(engine, mock(SceneSnapshotLoader.class), publisher, actionDelivery);
     }
 
@@ -46,7 +46,7 @@ class DoEvaluateEmitsEventsTest {
     void hitEvaluation_publishesAuditAndActions() {
         EvalEngine engine = mock(EvalEngine.class);
         DomainEventPublisher publisher = mock(DomainEventPublisher.class);
-        ActionDeliveryChannel actionDelivery = mock(ActionDeliveryChannel.class);
+        ActionCommandChannel actionDelivery = mock(ActionCommandChannel.class);
         RuleEvent event = event("e1");
         when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
         Decision pass = new Decision("PASS", "", 1, 3L);
@@ -77,7 +77,7 @@ class DoEvaluateEmitsEventsTest {
         // 有候选但全未命中：审计无条件发(落 status=MISS)，action 受 ruleHit 门控不投递
         EvalEngine engine = mock(EvalEngine.class);
         DomainEventPublisher publisher = mock(DomainEventPublisher.class);
-        ActionDeliveryChannel actionDelivery = mock(ActionDeliveryChannel.class);
+        ActionCommandChannel actionDelivery = mock(ActionCommandChannel.class);
         RuleEvent event = event("e3");
         when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
         EvalResult miss = new EvalResult(false, null, List.of(), List.of(),
@@ -97,7 +97,7 @@ class DoEvaluateEmitsEventsTest {
         // 候选被 Pre-Gate 全拦截：审计带 blockedBy(落 status=BLOCKED)，action 不投递
         EvalEngine engine = mock(EvalEngine.class);
         DomainEventPublisher publisher = mock(DomainEventPublisher.class);
-        ActionDeliveryChannel actionDelivery = mock(ActionDeliveryChannel.class);
+        ActionCommandChannel actionDelivery = mock(ActionCommandChannel.class);
         RuleEvent event = event("e4");
         when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
         EvalResult miss = new EvalResult(false, null, List.of(), List.of(),
@@ -117,7 +117,7 @@ class DoEvaluateEmitsEventsTest {
     void noCandidates_returnsMiss_noEvents() {
         EvalEngine engine = mock(EvalEngine.class);
         DomainEventPublisher publisher = mock(DomainEventPublisher.class);
-        ActionDeliveryChannel actionDelivery = mock(ActionDeliveryChannel.class);
+        ActionCommandChannel actionDelivery = mock(ActionCommandChannel.class);
         RuleEvent event = event("e2");
         when(engine.match(event)).thenReturn(List.of());
 
