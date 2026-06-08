@@ -16,7 +16,6 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 /** 验证审计事件被消费后单次 INSERT 终态 session（不再 PENDING→UPDATE），并旁路写 trace。 */
@@ -44,7 +43,6 @@ class AuditPersisterTest {
         assertThat(s.getStatus()).isEqualTo("MISS");
         assertThat(s.getTenantId()).isEqualTo(1L);
         assertThat(s.getMode()).isEqualTo("PULL");
-        verify(mapper, never()).markFinal(anyLong(), any(), any(), any(), any(), any(), any(), any());
         verify(traceWriter, times(1)).write(eq("1"), eq("42"), any());
     }
 

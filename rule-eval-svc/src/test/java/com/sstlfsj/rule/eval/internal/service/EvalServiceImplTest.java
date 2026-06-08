@@ -169,7 +169,6 @@ class EvalServiceImplTest {
 
         assertFalse(result.ruleHit());
         verify(sessionWriter).insertDryRunPending(any(), eq(42L));
-        verify(sessionWriter, never()).insertPending(any(), anyInt(), anyString());
         verifyNoInteractions(eventPublisher);
     }
 

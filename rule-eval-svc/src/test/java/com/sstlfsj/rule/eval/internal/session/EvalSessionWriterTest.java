@@ -1,28 +1,22 @@
 package com.sstlfsj.rule.eval.internal.session;
 
-import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
-import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-
-import org.springframework.dao.DuplicateKeyException;
 
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-import org.mockito.Spy;
+
+import java.time.Instant;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,7 +25,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EvalSessionWriterTest {
 
-    @Mock EvaluationSessionMapper sessionMapper;
     @Mock DryRunSessionMapper dryRunMapper;
     @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks EvalSessionWriter writer;
@@ -44,72 +37,6 @@ class EvalSessionWriterTest {
     @Test
     void writer_constructed_notNull() {
         assertNotNull(writer);
-    }
-
-    @Test
-    void insertPending_savesSessionWithPendingStatus() {
-        when(sessionMapper.insert((EvaluationSession) any())).thenReturn(1);
-        RuleEvent ev = event();
-
-        writer.insertPending(ev, 3, "PULL");
-
-        ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
-        verify(sessionMapper).insert((EvaluationSession) captor.capture());
-        EvaluationSession saved = captor.getValue();
-        assertEquals("PENDING", saved.getStatus());
-        assertEquals("evt-001", saved.getEventId());
-        assertEquals(1L, saved.getTenantId());
-        assertEquals(3, saved.getCandidateRuleCount());
-        assertEquals("HTTP", saved.getSource());
-        assertEquals("PULL", saved.getMode());
-    }
-
-    @Test
-    void insertPending_duplicateKey_returnsExistingId() {
-        // DuplicateKeyException 时走幂等查询分支，返回已有行 id
-        EvaluationSession existing = new EvaluationSession();
-        existing.setId(99L);
-        when(sessionMapper.insert((EvaluationSession) any())).thenThrow(new DuplicateKeyException("dup"));
-        when(sessionMapper.findByTenantAndEvent(any(), any())).thenReturn(existing);
-
-        Long id = writer.insertPending(event(), 1, "PULL");
-
-        assertEquals(99L, id);
-    }
-
-    @Test
-    void updateFinal_withContext_snapshotContainsMetricKey() {
-        // 验证 serializeSnapshot 用静态 MAPPER 正确序列化 metrics
-        RuleEvent ev = event();
-        EvalContext ctx = new EvalContext("1", ev, null,
-                Map.of("user.age", new MetricValue(25, "INTEGER", "PROVIDED")),
-                Instant.parse("2024-01-01T00:00:00Z"));
-        // 直接检查序列化不抛异常（MAPPER 静态实例行为）
-        EvalResult result = EvalResult.miss();
-        writer.updateFinal(1L, result, ctx);
-        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void updateFinal_withContext_setsContextSnapshot() {
-        RuleEvent ev = event();
-        EvalContext ctx = new EvalContext("1", ev, null,
-                Map.of("user.age", new MetricValue(25, "INTEGER", "PROVIDED")),
-                Instant.parse("2024-01-01T00:00:00Z"));
-        EvalResult result = EvalResult.miss();
-
-        writer.updateFinal(1L, result, ctx);
-
-        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void updateFinal_nullContext_contextSnapshotIsNull() {
-        EvalResult result = EvalResult.miss();
-
-        writer.updateFinal(1L, result, null);
-
-        verify(sessionMapper).markFinal(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -132,23 +59,11 @@ class EvalSessionWriterTest {
     }
 
     @Test
-    void insertBlocked_savesBlockedStatus() {
-        when(sessionMapper.insert((EvaluationSession) any())).thenReturn(1);
-
-        writer.insertBlocked(event(), "ROLLOUT", "PULL");
-
-        ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
-        verify(sessionMapper).insert((EvaluationSession) captor.capture());
-        assertEquals("BLOCKED", captor.getValue().getStatus());
-        assertEquals("ROLLOUT", captor.getValue().getBlockedBy());
-    }
-
-    @Test
-    void updateFinal_snapshot_isNestedWithMetricsAndEvalNow() throws Exception {
-        // 直接验证序列化产物的形状契约：嵌套 metrics + evalNow 文本
+    void snapshot_isNestedWithMetricsAndEvalNow() {
+        // context_snapshot 形状契约：嵌套 metrics + evalNow 文本（serializeSnapshot 产物）
         Instant now = Instant.parse("2024-01-01T00:00:00Z");
-        String json = objectMapper.writeValueAsString(java.util.Map.of(
-                "metrics", java.util.Map.of("user.age", 25),
+        String json = objectMapper.writeValueAsString(Map.of(
+                "metrics", Map.of("user.age", 25),
                 "evalNow", now.toString()));
         assertTrue(json.contains("\"metrics\""));
         assertTrue(json.contains("\"evalNow\":\"2024-01-01T00:00:00Z\""));
