@@ -21,14 +21,14 @@ class AstDataTypeResolver {
 
     static {
         Map<String, Set<String>> m = new HashMap<>();
-        m.put("EQ",           Set.of("LONG", "DOUBLE", "STRING", "BOOLEAN", "DATE", "DATETIME"));
-        m.put("NEQ",          Set.of("LONG", "DOUBLE", "STRING", "BOOLEAN", "DATE", "DATETIME"));
-        m.put("GT",           Set.of("LONG", "DOUBLE"));
-        m.put("GTE",          Set.of("LONG", "DOUBLE"));
-        m.put("LT",           Set.of("LONG", "DOUBLE"));
-        m.put("LTE",          Set.of("LONG", "DOUBLE"));
-        m.put("BETWEEN",      Set.of("LONG", "DOUBLE", "DATE", "DATETIME"));
-        m.put("NOT_BETWEEN",  Set.of("LONG", "DOUBLE", "DATE", "DATETIME"));
+        m.put("EQ",           Set.of("LONG", "DOUBLE", "DECIMAL", "STRING", "BOOLEAN", "DATE", "DATETIME"));
+        m.put("NEQ",          Set.of("LONG", "DOUBLE", "DECIMAL", "STRING", "BOOLEAN", "DATE", "DATETIME"));
+        m.put("GT",           Set.of("LONG", "DOUBLE", "DECIMAL"));
+        m.put("GTE",          Set.of("LONG", "DOUBLE", "DECIMAL"));
+        m.put("LT",           Set.of("LONG", "DOUBLE", "DECIMAL"));
+        m.put("LTE",          Set.of("LONG", "DOUBLE", "DECIMAL"));
+        m.put("BETWEEN",      Set.of("LONG", "DOUBLE", "DECIMAL", "DATE", "DATETIME"));
+        m.put("NOT_BETWEEN",  Set.of("LONG", "DOUBLE", "DECIMAL", "DATE", "DATETIME"));
         m.put("IN",           Set.of("LONG", "STRING"));
         m.put("NOT_IN",       Set.of("LONG", "STRING"));
         m.put("CONTAINS",     Set.of("LIST"));

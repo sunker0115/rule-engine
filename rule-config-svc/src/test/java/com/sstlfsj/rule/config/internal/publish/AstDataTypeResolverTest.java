@@ -279,6 +279,32 @@ class AstDataTypeResolverTest {
         assertThat(((ConditionNode) result).dataType()).isEqualTo("STRING");
     }
 
+    // ── DECIMAL 数值算子兼容矩阵 ──────────────────────────────────────────────
+
+    @Test
+    void resolve_gteWithDecimal_ok() {
+        // GTE 允许 DECIMAL（精确小数/金额）-> 不报错，dataType 冻结为 DECIMAL
+        ConditionNode cond = new ConditionNode("GTE", "balance", null,
+                Map.of("threshold", "9999.99"), 0.0);
+        Map<String, String> typeMap = Map.of("balance", "DECIMAL");
+
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("DECIMAL");
+    }
+
+    @Test
+    void resolve_inWithDecimal_throwsIllegalArgument() {
+        // IN 仅允许 LONG/STRING；DECIMAL 不在允许集 -> 报错（DECIMAL 不渗入非数值算子）
+        ConditionNode cond = new ConditionNode("IN", "balance", null,
+                Map.of("values", List.of("9999.99")), 0.0);
+        Map<String, String> typeMap = Map.of("balance", "DECIMAL");
+
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("IN")
+                .hasMessageContaining("DECIMAL");
+    }
+
     // ── B20 时间行 ────────────────────────────────────────────────────────────
 
     @Test
