@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
+import com.sstlfsj.rule.eval.internal.action.ActionIdempotencyGuard;
 import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
@@ -40,8 +41,9 @@ import java.util.concurrent.Executor;
 /** 自动装配规则评估模块。 */
 @AutoConfiguration
 @ComponentScan("com.sstlfsj.rule.eval.internal")
-@org.springframework.boot.context.properties.EnableConfigurationProperties(
-        com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class)
+@org.springframework.boot.context.properties.EnableConfigurationProperties({
+        com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
+        com.sstlfsj.rule.eval.internal.action.ActionIdempotencyProperties.class})
 public class EvalAutoConfiguration {
 
     /**
@@ -200,7 +202,8 @@ public class EvalAutoConfiguration {
     public ActionDispatchService actionDispatchService(
             @Autowired(required = false) List<ActionHandler> actionHandlers,
             SceneActionBindingReadMapper bindingMapper,
-            ActionExecutionMapper executionMapper) {
+            ActionExecutionMapper executionMapper,
+            ActionIdempotencyGuard idempotencyGuard) {
         Map<String, ActionHandler> handlerMap = new HashMap<>();
         if (actionHandlers != null) {
             for (ActionHandler handler : actionHandlers) {
@@ -210,6 +213,6 @@ public class EvalAutoConfiguration {
                 }
             }
         }
-        return new ActionDispatchService(handlerMap, bindingMapper, executionMapper);
+        return new ActionDispatchService(handlerMap, bindingMapper, executionMapper, idempotencyGuard);
     }
 }

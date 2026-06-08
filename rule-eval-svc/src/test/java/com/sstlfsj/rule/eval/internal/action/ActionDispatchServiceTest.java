@@ -23,6 +23,7 @@ class ActionDispatchServiceTest {
     private SceneActionBindingReadMapper bindingMapper;
     private ActionExecutionMapper executionMapper;
     private ActionHandler stubHandler;
+    private ActionIdempotencyGuard guard;
     private ActionDispatchService service;
 
     @BeforeEach
@@ -31,11 +32,14 @@ class ActionDispatchServiceTest {
         executionMapper = mock(ActionExecutionMapper.class);
         stubHandler = mock(ActionHandler.class);
         when(stubHandler.execute(any())).thenReturn(ActionResult.success("aid", "BLOCK_TRANSACTION"));
+        guard = mock(ActionIdempotencyGuard.class);
+        when(guard.claim(any())).thenReturn(true);   // 默认放行；去重用例单独 stub false
 
         service = new ActionDispatchService(
                 Map.of("BLOCK_TRANSACTION", stubHandler),
                 bindingMapper,
-                executionMapper);
+                executionMapper,
+                guard);
     }
 
     @Test
@@ -89,5 +93,45 @@ class ActionDispatchServiceTest {
         // 插入异常不应向上传播，不影响 EvalResult
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
                 List.of(new Decision("REJECT", "", 10, 1L)));
+    }
+
+    @Test
+    void dispatch_actionId_isDeterministicActionType() {
+        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
+                .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
+
+        service.dispatch(42L, 1L, "evt-001", "fraud_check",
+                List.of(new Decision("REJECT", "", 10, 1L)));
+
+        verify(executionMapper).insert(argThat((ActionExecutionEntity e) ->
+                "BLOCK_TRANSACTION".equals(e.getActionId())));
+    }
+
+    @Test
+    void dispatch_claimRejected_skipsHandlerAndInsert() {
+        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
+                .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
+        when(guard.claim(any())).thenReturn(false);   // 已被占坑（重复 eventId）
+
+        service.dispatch(42L, 1L, "evt-001", "fraud_check",
+                List.of(new Decision("REJECT", "", 10, 1L)));
+
+        verifyNoInteractions(stubHandler);
+        verify(executionMapper, never()).insert(any(ActionExecutionEntity.class));
+    }
+
+    @Test
+    void dispatch_handlerFailed_releasesClaimForRetry() {
+        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
+                .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
+        when(stubHandler.execute(any()))
+                .thenReturn(ActionResult.failed("BLOCK_TRANSACTION", "BLOCK_TRANSACTION", "ERR", true));
+
+        service.dispatch(42L, 1L, "evt-001", "fraud_check",
+                List.of(new Decision("REJECT", "", 10, 1L)));
+
+        verify(guard).release(anyString());
+        verify(executionMapper).insert(argThat((ActionExecutionEntity e) ->
+                "FAILED".equals(e.getStatus())));
     }
 }
