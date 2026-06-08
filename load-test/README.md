@@ -136,3 +136,40 @@ PULL `/evaluate` 同步返回 EvalResult；PUSH `/event` 入队即返 **202**，
 - **action_execution 写（压测层面无需补）**：right-size 后 action 派发已**异步、离开请求线程**——压测场景无 scene_action_binding（config-svc 无写服务），但即便有，请求路径也只入队即返、**不影响吞吐**；后台消费侧在 24k/s 下本就被本地 DB 限速（审计已大量丢，best-effort 预期内）。该写路径由单测覆盖委托 + 一次功能冒烟（seed binding → evaluate → 异步落 `action_execution`）确认端到端，非压测目标。
 - **审计落库 keep-up**：24k req/s 远超 AuditPersister 批写能力（~500/200ms）+ 本地 MySQL 写入速率 → 大量 session 被丢（设计内「可丢」）。需强审计的场景另议（该 metric 走 outbox / MQ）。
 - **PUSH 单消费者并行化、native 镜像对比、SLO 验收**：本轮非目标，留二期。
+
+## 内核落库事件化重构后复测（PULL · 候选50 · 池10 · JVM zulu-25 · 2026-06-08）
+
+把内核四条落库统一成「领域事件 → `DomainEventPublisher` 单一缝 → 各 persister」（`AuditRecorded` / `ActionExecuted` / `DryRunRecorded`）后复测，验证重构未给请求线程加成本，并首次压 action 派发路径与幂等去重。
+
+### 回归校验：重构无吞吐回退
+
+| run | 吞吐 | p50/p95/p99 | err% | Hikari(400VU 平台) |
+|---|---|---|---|---|
+| 重构后 PULL 基线（无 binding） | **21,374 req/s** | 2.88 / 13.43 / 23.84ms | 0 | 3/10 · pending 0 |
+
+落在最可比的「native 对比 JVM 臂」22,014 的 **-2.9%**（同机噪声内；历史同配置三次自身散 22.0k–25.8k）。请求线程仍 0 同步 DB 写，DB 不是墙——重构没把任何写搬回热路径。
+
+### Track A：action 派发路径（首次 seed binding 压测）
+
+seed 一条 `scene_action_binding`(scene17, SEND_ALERT)，PULL 候选50 复跑（3.5M 请求，150s 阶梯）：
+
+| 路径 | 落库 / 3.5M 请求 | 落库率 | 消费侧形态 |
+|---|---|---|---|
+| 审计 evaluation_session | 68,739 (~458/s) | 2.0% | AuditPersister：有界队列 + 批量 500/200ms + 虚拟线程**异步** |
+| action_execution | **4,500 (~30/s)** | **0.13%** | ActionExecutionPersister：**同步内联 insert**（无自有队列/批） |
+
+- **active action 派发对请求线程吞吐零影响**：带 binding **23,371 req/s**（≈ 无 binding 21,374，差值噪声），p95 12.3ms，0 err，Hikari 3/10·pending 0。因 `InProcessAsyncDeliveryChannel.deliver()` 是 `offer()`（满即丢、不阻塞），`dispatch`+claim+handler+insert 全在单条异步消费线程上，离开请求线程。
+- **action 落库高 QPS 下 99.87% best-effort 丢弃**，比审计低 15×。根因：`ActionExecutionPersister.accept` 是同步内联 insert（Spring 默认同步多播），串在单条 action-delivery 消费线程上 → 单连接串行 insert ≈ 30/s 是地板。0 写库错误 → 丢弃静默，符合设计。
+- **请求内幂等去重生效**：50 个 PASS 决策同键 → 1 行（Caffeine claim）。
+- **结论（→ 二期）**：action persister 缺自有异步批量消费者，是 action keep-up 瓶颈；改成与 AuditPersister 同构的异步批量消费（解耦 insert 出 delivery 线程）。
+
+### Track B：幂等去重（Caffeine claim-before-execute）
+
+有界 eventId 空间 200 + `constant-arrival-rate` 1000/s（低于 2500/s drain 上限，消费侧 keep-up）跑 40s（~40k 请求）：
+
+| 请求数 | eventId 空间 | action_execution 总行数 | 每幂等键最大行数 | uk backstop 命中 |
+|---|---|---|---|---|
+| ~40,000 | 200 | **200** | **1** | **0** |
+
+- ~40k 并发重复事件 → 恰好 200 行、**每键 1 行、零重复**，去重比 200:1。
+- **0 uk backstop 命中** → Caffeine claim 在 insert 之前完成 100% 去重，uk_idempotency 兜底未触发。claim-before-execute 在并发下完全可靠。
