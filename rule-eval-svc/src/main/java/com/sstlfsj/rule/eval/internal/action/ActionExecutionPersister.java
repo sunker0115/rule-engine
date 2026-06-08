@@ -9,7 +9,6 @@ import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -79,18 +78,13 @@ public class ActionExecutionPersister implements InitializingBean, DisposableBea
     private void flushBatch() {
         List<ActionExecuted> batch = new ArrayList<>(batchSize);
         queue.drainTo(batch, batchSize);
-        for (ActionExecuted e : batch) {
-            try {
-                executionMapper.insert(toEntity(e));
-            } catch (DuplicateKeyException ex) {
-                // 行级 backstop：缓存漏掉的重复（重启/多实例）在此撞 uk_idempotency，预期内
-                log.debug("action_execution 幂等行已存在(uk backstop)，actionId={}, eventId={}",
-                        e.actionId(), e.eventId());
-            } catch (RuntimeException ex) {
-                // best-effort：写库失败丢弃，不影响其余批次与消费线程
-                log.warn("action_execution 写库失败，actionId={}, actionType={}: {}",
-                        e.actionId(), e.actionType(), ex.getMessage());
-            }
+        if (batch.isEmpty()) return;
+        try {
+            // 多行批量 INSERT（uk 重复经 ON DUPLICATE KEY 空更新跳过），单次往返/单次 fsync
+            executionMapper.insertBatch(batch.stream().map(this::toEntity).toList());
+        } catch (RuntimeException ex) {
+            // best-effort：整批写库失败丢弃，不影响后续批次与消费线程
+            log.warn("action_execution 批量写库失败，丢弃 {} 行: {}", batch.size(), ex.getMessage());
         }
     }
 

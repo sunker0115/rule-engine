@@ -10,7 +10,6 @@ import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.event.EventListener;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -86,14 +85,14 @@ public class AuditPersister implements InitializingBean, DisposableBean {
     private void flushBatch() {
         List<AuditRecorded> batch = new ArrayList<>(batchSize);
         queue.drainTo(batch, batchSize);
+        if (batch.isEmpty()) return;
+        try {
+            // 多行批量 INSERT 终态 session（uk 重复 eventId 经 ON DUPLICATE KEY 空更新跳过），单次往返/单次 fsync
+            sessionMapper.insertBatch(batch.stream().map(this::toSession).toList());
+        } catch (RuntimeException ignored) {
+            // 审计可丢，整批写库失败不影响主流程
+        }
         for (AuditRecorded e : batch) {
-            try {
-                sessionMapper.insert(toSession(e));
-            } catch (DuplicateKeyException ignored) {
-                // 幂等：相同 eventId 已落库，丢弃重复（best-effort）
-            } catch (RuntimeException ignored) {
-                // 审计可丢，不影响主流程
-            }
             try {
                 traceWriter.write(e.event().tenantId(), String.valueOf(e.sessionId()),
                         e.result().nodeTrace());

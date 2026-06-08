@@ -13,13 +13,19 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/** 验证审计事件被消费后单次 INSERT 终态 session（不再 PENDING→UPDATE），并旁路写 trace。 */
+/** 验证审计事件被消费后多行批量 INSERT 终态 session（不再 PENDING→UPDATE），并旁路写 trace。 */
 class AuditPersisterTest {
+
+    @SuppressWarnings("unchecked")
+    private static ArgumentCaptor<List<EvaluationSession>> batchCaptor() {
+        return ArgumentCaptor.forClass(List.class);
+    }
 
     @Test
     void insertsTerminalSessionOnceAndWritesTrace() throws Exception {
@@ -36,9 +42,9 @@ class AuditPersisterTest {
         Thread.sleep(300);   // 等异步消费
         persister.destroy();
 
-        ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
-        verify(mapper, times(1)).insert(captor.capture());
-        EvaluationSession s = captor.getValue();
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        EvaluationSession s = captor.getValue().get(0);
         assertThat(s.getId()).isEqualTo(42L);
         assertThat(s.getStatus()).isEqualTo("MISS");
         assertThat(s.getTenantId()).isEqualTo(1L);
@@ -62,9 +68,9 @@ class AuditPersisterTest {
         Thread.sleep(300);
         persister.destroy();
 
-        ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
-        verify(mapper, times(1)).insert(captor.capture());
-        EvaluationSession s = captor.getValue();
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        EvaluationSession s = captor.getValue().get(0);
         assertThat(s.getStatus()).isEqualTo("BLOCKED");
         assertThat(s.getBlockedBy()).isEqualTo("ROLLOUT");
     }
@@ -87,9 +93,9 @@ class AuditPersisterTest {
         Thread.sleep(300);
         persister.destroy();
 
-        ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
-        verify(mapper, times(1)).insert(captor.capture());
-        assertThat(captor.getValue().getScore()).isEqualTo(87.5);
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        assertThat(captor.getValue().get(0).getScore()).isEqualTo(87.5);
     }
 
     @Test
@@ -111,9 +117,9 @@ class AuditPersisterTest {
         Thread.sleep(300);
         persister.destroy();
 
-        ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
-        verify(mapper, times(1)).insert(captor.capture());
-        EvaluationSession s = captor.getValue();
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        EvaluationSession s = captor.getValue().get(0);
         assertThat(s.getCategory()).isEqualTo("中危");
         assertThat(s.getHitDecisions()).contains("\"category\":\"中危\"")
                 .contains("\"category\":\"大额\"").contains("\"ruleVersionId\":11");
