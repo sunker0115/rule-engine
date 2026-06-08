@@ -55,5 +55,6 @@
 - **设计教训**：审计「可丢」→ 内存异步是 80/20 收益；action 的 DB outbox 在 stub handler 阶段既过度设计又恰是瓶颈。durable 留到真 handler，经 `ActionDeliveryChannel` 缝换 MQ。
 
 ## 已知未覆盖
-- **action_execution 写**：本轮 scene_action_binding 无写入路径（config-svc 无该写服务），`dispatch` 因 bindings 空提前 return，action 写**未压到**；session+trace 写已覆盖（命中触发 `updateFinal`+trace）。二期补 action 写路径后再测。
+- **action_execution 写（压测层面无需补）**：right-size 后 action 派发已**异步、离开请求线程**——压测场景无 scene_action_binding（config-svc 无写服务），但即便有，请求路径也只入队即返、**不影响吞吐**；后台消费侧在 24k/s 下本就被本地 DB 限速（审计已大量丢，best-effort 预期内）。该写路径由单测覆盖委托 + 一次功能冒烟（seed binding → evaluate → 异步落 `action_execution`）确认端到端，非压测目标。
+- **审计落库 keep-up**：24k req/s 远超 AuditPersister 批写能力（~500/200ms）+ 本地 MySQL 写入速率 → 大量 session 被丢（设计内「可丢」）。需强审计的场景另议（该 metric 走 outbox / MQ）。
 - PUSH `/event` 路径与背压、native 镜像对比、SLO 验收：本轮非目标，留二期。
