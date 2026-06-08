@@ -155,6 +155,41 @@ class EvalEngineStrategyTest {
     }
 
     @Test
+    void firstHit_tie_picksLowerRuleVersionId() {
+        // 最高 binding priority 相同时，FIRST_HIT 按 ruleVersionId 升序选取（确定可复现）；
+        // 反转候选插入顺序结果不变 → 排序不随遍历顺序漂移
+        AtomicInteger fwdCount = new AtomicInteger(0);
+        EvalResult forward = evalFirstHitCounting(fwdCount,
+                snapshot(1L, "t1", "fraud", "DECISION_A", 10),
+                snapshot(2L, "t1", "fraud", "DECISION_B", 10));
+        AtomicInteger revCount = new AtomicInteger(0);
+        EvalResult reversed = evalFirstHitCounting(revCount,
+                snapshot(2L, "t1", "fraud", "DECISION_B", 10),
+                snapshot(1L, "t1", "fraud", "DECISION_A", 10));
+
+        assertEquals("DECISION_A", forward.finalDecision().code());
+        assertEquals("DECISION_A", reversed.finalDecision().code());
+        // ruleVersionId=1 排首并命中即短路，只执行 1 次
+        assertEquals(1, fwdCount.get());
+        assertEquals(1, revCount.get());
+    }
+
+    private static EvalResult evalFirstHitCounting(AtomicInteger count, RuleVersionSnapshot... snaps) {
+        RuleVersionExecutor countingHit = (snap, ctx) -> {
+            count.incrementAndGet();
+            RuleVersionSnapshot.DecisionBinding b = snap.decisionBindings().get(0);
+            Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
+            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+        };
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.setStrategy("t1", "fraud", SceneExecutionStrategy.FIRST_HIT);
+        index.update("t1", "fraud", "*", List.of(snaps));
+        EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
+                Map.of(), Map.of("AST_BOOLEAN", countingHit), true);
+        return engine.evaluate(event("t1", "fraud"));
+    }
+
+    @Test
     void firstHit_noMatch_returnsMiss() {
         RuleVersionExecutor missExec = (snap, ctx) ->
                 new EvalResult(false, null, List.of(), List.of(), null, List.of(), null, null, null);

@@ -27,6 +27,16 @@ public class EvalEngine {
                     .thenComparing(Decision::fromRuleVersionId,
                             Comparator.nullsFirst(Comparator.naturalOrder()));
 
+    /** FIRST_HIT 候选排序：最高 binding priority 倒序，平局按 ruleVersionId 升序（确定可复现）。 */
+    private static final Comparator<RuleVersionSnapshot> FIRST_HIT_ORDER =
+            Comparator.comparingInt(EvalEngine::maxBindingPriority).reversed()
+                    .thenComparingLong(RuleVersionSnapshot::ruleVersionId);
+
+    /** binding 回退裁决：priority 越大越优先，平局按 decisionCode 字典序。 */
+    private static final Comparator<RuleVersionSnapshot.DecisionBinding> BINDING_PRECEDENCE =
+            Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority)
+                    .thenComparing(RuleVersionSnapshot.DecisionBinding::decisionCode);
+
     private final SceneRuleIndex index;
     private final EvalContextAssembler contextAssembler;
     private final Map<String, PreGate> preGates;
@@ -146,18 +156,16 @@ public class EvalEngine {
     private EvalResult evaluateFirstHit(RuleEvent event,
                                         List<RuleVersionSnapshot> passed, EvalContext ctx) {
         // 平局确定化：最高 binding priority 相同时按 ruleVersionId 升序，保证 FIRST_HIT 选取稳定可复现
-        List<RuleVersionSnapshot> sorted = passed.stream()
-                .sorted(Comparator.comparingInt(EvalEngine::maxBindingPriority).reversed()
-                        .thenComparingLong(RuleVersionSnapshot::ruleVersionId))
-                .toList();
+        List<RuleVersionSnapshot> sorted = new ArrayList<>(passed);
+        sorted.sort(FIRST_HIT_ORDER);
 
         for (RuleVersionSnapshot snap : sorted) {
             try {
                 EvalResult r = selectExecutor(snap).execute(snap, ctx);
                 if (r.ruleHit()) {
-                    Decision winner = resolveRuleDecisions(snap, r).stream()
-                            .max(DECISION_PRECEDENCE)
-                            .orElse(null);
+                    List<Decision> decisions = resolveRuleDecisions(snap, r);
+                    Decision winner = decisions.isEmpty() ? null
+                            : Collections.max(decisions, DECISION_PRECEDENCE);
                     // winner==null（命中但无决策/无 binding）不计 FIRST_HIT，与 evaluateAllCandidates 的「无决策即非命中」一致
                     if (winner == null) continue;
                     return new EvalResult(true, winner, List.of(winner),
@@ -219,19 +227,25 @@ public class EvalEngine {
      */
     private static List<Decision> resolveRuleDecisions(RuleVersionSnapshot snap, EvalResult r) {
         if (!r.hitDecisions().isEmpty()) return r.hitDecisions();
-        return snap.decisionBindings().stream()
-                .max(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority)
-                        .thenComparing(RuleVersionSnapshot.DecisionBinding::decisionCode))
-                .map(b -> List.<Decision>of(
-                        new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId())))
-                .orElse(List.of());
+        List<RuleVersionSnapshot.DecisionBinding> bindings = snap.decisionBindings();
+        if (bindings.isEmpty()) return List.of();
+        RuleVersionSnapshot.DecisionBinding best = bindings.get(0);
+        for (int i = 1; i < bindings.size(); i++) {
+            RuleVersionSnapshot.DecisionBinding b = bindings.get(i);
+            if (BINDING_PRECEDENCE.compare(b, best) > 0) best = b;
+        }
+        return List.of(new Decision(best.decisionCode(), "", best.priority(), snap.ruleVersionId()));
     }
 
     /** 快照 decisionBindings 的最高 priority；无 binding 时返回 0。供 FIRST_HIT 排序用。 */
     private static int maxBindingPriority(RuleVersionSnapshot snap) {
-        return snap.decisionBindings().stream()
-                .mapToInt(RuleVersionSnapshot.DecisionBinding::priority)
-                .max().orElse(0);
+        List<RuleVersionSnapshot.DecisionBinding> bindings = snap.decisionBindings();
+        if (bindings.isEmpty()) return 0;
+        int max = Integer.MIN_VALUE;
+        for (RuleVersionSnapshot.DecisionBinding b : bindings) {
+            if (b.priority() > max) max = b.priority();
+        }
+        return max;
     }
 
     /** 按快照 kind 选择 executor；找不到时回退到 AST_BOOLEAN。 */
