@@ -68,7 +68,20 @@ DB 出热路径后系统转为 eval-CPU 绑定，候选规则数（每请求评�
 - **全程 Hikari 3/10、pending 0** → 瓶颈彻底从 DB 转到 eval-CPU；DB 不再是墙。
 - 容量规划：本机单实例 200 条候选规则 ≈ 1.3 万 QPS（笔记本 + k6 争核，服务器上更高）。
 
+## PUSH `/event` 路径与背压实证（2026-06-08）
+
+PULL `/evaluate` 同步返回 EvalResult；PUSH `/event` 入队即返 **202**，评估在后台**单条虚拟线程消费者**（`EvalActionDispatcher`，队列 `LinkedBlockingQueue(10000)`）串行 drain，队列满时 `submit` 返回 false → body `data.accepted=false` 表达**背压**（HTTP 仍 202，不靠拖慢响应）。压测脚本 `k6/event.js`，计数 `push_accepted` / `push_rejected`。
+
+| 候选 | 摄入(req/s) | accepted(drain上限) | rejected(背压) | 背压率 | p95 | 诊断 |
+|---|---|---|---|---|---|---|
+| 50 | 28,469 | **28,457** | 12.7 | **0.04%** | ~12ms | 摄入≈单线程 eval，几乎不溢出 |
+| 200 | 27,962 | **10,230** | **17,732** | **63%** | 11.67ms | 单线程 drain 10.2k/s ≪ 摄入 28k/s → 队列填满主动拒 |
+
+- **背压机制验证**：候选=200 时单线程 eval 慢到 ~10.2k/s（候选越多每条越慢，与 PULL 线性成本一致），摄入端 28k/s 远超 drain → 队列瞬间填满 10000 → 稳定 **63% 主动拒绝**，而 **p95 仍 11.67ms**——证明背压走「入队即返 202 + body.accepted=false」而非堆积拖垮延迟，符合设计。
+- **PUSH vs PULL 取舍**：PUSH 把 eval 移出请求线程，摄入吞吐只受 HTTP+入队限制（候选 50/200 摄入都 ~28k/s，**与候选数无关**）；代价是单消费者 drain 成新瓶颈（候选 200 仅 10.2k/s 真正被评估）。需要高 eval 吞吐应**多消费者并行 drain**（当前单线程是有意的最简实现），或继续用 PULL（请求线程并行评估，candidate 曲线见上）。
+- **结论**：背压设计正确且可观测（rejected 计数 = 队列保护生效）。单消费者是当前刻意的下限，**并行消费**留二期（与审计/​action 异步消费侧同一优化方向）。
+
 ## 已知未覆盖
 - **action_execution 写（压测层面无需补）**：right-size 后 action 派发已**异步、离开请求线程**——压测场景无 scene_action_binding（config-svc 无写服务），但即便有，请求路径也只入队即返、**不影响吞吐**；后台消费侧在 24k/s 下本就被本地 DB 限速（审计已大量丢，best-effort 预期内）。该写路径由单测覆盖委托 + 一次功能冒烟（seed binding → evaluate → 异步落 `action_execution`）确认端到端，非压测目标。
 - **审计落库 keep-up**：24k req/s 远超 AuditPersister 批写能力（~500/200ms）+ 本地 MySQL 写入速率 → 大量 session 被丢（设计内「可丢」）。需强审计的场景另议（该 metric 走 outbox / MQ）。
-- PUSH `/event` 路径与背压、native 镜像对比、SLO 验收：本轮非目标，留二期。
+- **PUSH 单消费者并行化、native 镜像对比、SLO 验收**：本轮非目标，留二期。
