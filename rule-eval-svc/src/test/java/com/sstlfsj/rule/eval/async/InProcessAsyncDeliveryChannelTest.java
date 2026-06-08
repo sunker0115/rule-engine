@@ -2,7 +2,7 @@ package com.sstlfsj.rule.eval.async;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.async.InProcessAsyncDeliveryChannel;
-import com.sstlfsj.rule.eval.internal.async.ActionRequested;
+import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,7 +20,7 @@ class InProcessAsyncDeliveryChannelTest {
         InProcessAsyncDeliveryChannel channel = new InProcessAsyncDeliveryChannel(2000, 200, 50, svc);
         channel.afterPropertiesSet();
 
-        channel.deliver(new ActionRequested(7L, 1L, "e1", "s", List.of()));
+        channel.deliver(new DispatchActionsCommand(7L, 1L, "e1", "s", List.of()));
 
         Thread.sleep(300);   // 等后台消费
         channel.destroy();

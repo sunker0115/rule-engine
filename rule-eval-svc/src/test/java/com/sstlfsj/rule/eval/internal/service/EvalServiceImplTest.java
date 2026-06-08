@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
-import com.sstlfsj.rule.eval.internal.async.ActionRequested;
+import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecorded;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
@@ -186,7 +186,7 @@ class EvalServiceImplTest {
         impl.evaluate(event());
 
         verify(actionDelivery).deliver(argThat(o ->
-                o instanceof ActionRequested ar
+                o instanceof DispatchActionsCommand ar
                         && ar.tenantId() == 1L
                         && ar.eventId().equals("evt-001")));
     }

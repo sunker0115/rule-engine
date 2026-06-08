@@ -32,7 +32,7 @@ EvalServiceImpl.doEvaluate（请求线程，纯内存）
   → sessionId = snowflake（本地生成，不依赖 DB 自增）
   → 发布出站事件（无候选短路 miss 直接 return，不发任何事件，保留现状）：
        ① AuditRecorded                          —— 内存异步，best-effort，可丢
-       ② ActionRequested（仅命中且有 action 绑定）—— 经 Delivery 抽象，持久 at-least-once，不可丢
+       ② DispatchActionsCommand（仅命中且有 action 绑定）—— 经 Delivery 抽象，持久 at-least-once，不可丢
   → 同步 return EvalResult ✅（不等落库、不等 action）
 
       ①─▶ AuditPersister（@Async，有界队列+批量）
@@ -45,12 +45,12 @@ EvalServiceImpl.doEvaluate（请求线程，纯内存）
 
 ## 4. Delivery 抽象（MQ 的预留缝）
 
-`ActionRequested` 不直接耦合 Modulith，经唯一投递契约：
+`DispatchActionsCommand` 不直接耦合 Modulith，经唯一投递契约：
 
 ```java
 /** action 派发事件的可靠投递契约：保证 at-least-once 投递到 ActionDispatcher。 */
 public interface ActionDeliveryChannel {
-    void deliver(ActionRequested event);
+    void deliver(DispatchActionsCommand event);
 }
 ```
 
@@ -60,17 +60,17 @@ public interface ActionDeliveryChannel {
 
 ## 5. 幂等 + 持久性语义
 
-- **action**：`ActionRequested` 携带 `eventId`+`actionId`；at-least-once 投递，崩溃重投时 **handler 按此自去重**，不产生重复副作用。
+- **action**：`DispatchActionsCommand` 携带 `eventId`+`actionId`；at-least-once 投递，崩溃重投时 **handler 按此自去重**，不产生重复副作用。
 - **审计**：`AuditPersister` 有界队列 + 批量；溢出/崩溃丢最近未落库的审计（**已接受**）；`evaluation_session` 唯一键 `uk_tenant_event` 防重复行。
 - **重复业务事件**（同 eventId 提交两次）：action 由 handler 幂等兜住；审计可能多一条或被唯一键挡掉，可丢不纠结。
-- **关机**：`AuditPersister` 关机尽力 flush；`ActionRequested` 的 outbox 未完成项重启后由 registry 重投（不丢）。
+- **关机**：`AuditPersister` 关机尽力 flush；`DispatchActionsCommand` 的 outbox 未完成项重启后由 registry 重投（不丢）。
 - **session 两写合一**：消费侧不再 PENDING→UPDATE，直接 INSERT 终态（status=HIT/MISS/ERROR）一次写入；sessionId 由请求线程 snowflake 生成，node_trace/action_execution 据此关联。
 
 ## 6. 组件与边界
 
 **新增（rule-eval-svc 内，单一职责）：**
 - `EvaluationEventPublisher`：评估完按"命中且有 action"决定发 ①/②。
-- `AuditRecorded` / `ActionRequested`：领域事件 record。
+- `AuditRecorded` / `DispatchActionsCommand`：领域事件 record。
 - `AuditPersister`：消费 ①，有界队列+批量落库（复用/参照 `TraceWriterDbImpl` 模式）。
 - `ActionDispatcher`：消费 ②，复用现 `ActionDispatchService` 的派发逻辑（移到异步、加幂等）。
 - `ActionDeliveryChannel` + `ModulithOutboxDeliveryChannel`。
@@ -83,7 +83,7 @@ public interface ActionDeliveryChannel {
 
 ## 7. 测试 + 验收
 
-- 发布点单测：**无候选短路 miss → 不发任何事件（保留现状 miss 不落库）**；评估后 MISS（有候选未命中）→ 发 `AuditRecorded`（落 session status=MISS）；命中无 action → 只发 `AuditRecorded`；命中有 action → 发 `AuditRecorded` + `ActionRequested`。
+- 发布点单测：**无候选短路 miss → 不发任何事件（保留现状 miss 不落库）**；评估后 MISS（有候选未命中）→ 发 `AuditRecorded`（落 session status=MISS）；命中无 action → 只发 `AuditRecorded`；命中有 action → 发 `AuditRecorded` + `DispatchActionsCommand`。
 - `AuditPersister` 批量落库单测（session 单次 INSERT 终态 + trace + 审计行）。
 - `ActionDispatcher` 幂等重投单测（同 eventId/actionId 重投 → handler 只产生一次副作用）。
 - `ModulithOutboxDeliveryChannel` at-least-once 单测（消费抛异常 → 重投；重启 → 未完成项重投）。

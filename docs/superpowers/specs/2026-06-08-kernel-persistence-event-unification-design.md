@@ -43,7 +43,7 @@ public interface DomainEventPublisher {
 - 现有 `AuditRecorded`(record)沿用,实现 `DomainEvent` 返回 `BEST_EFFORT`。
 - `ActionExecuted`:新 record,携带 sessionId/tenantId/eventId/actionId(=actionType,确定化)/actionType/decisionCode/ActionResult,`AT_LEAST_ONCE`。
 - `DryRunRecorded`:新 record,携带 dry-run sessionId/event/ruleVersionId/EvalResult/EvalContext,`BEST_EFFORT`。
-- `ActionRequested`(现有)**保留且语义不变**:它触发「去执行 action」(驱动 dispatch),与「落库事件」正交,不并入本契约;它仍走 `ActionDeliveryChannel`(action 触发缝)。
+- `DispatchActionsCommand`(现有)**保留且语义不变**:它触发「去执行 action」(驱动 dispatch),与「落库事件」正交,不并入本契约;它仍走 `ActionDeliveryChannel`(action 触发缝)。
 
 ## 4. Persister(3 个,transport 无关)
 
@@ -55,10 +55,10 @@ public interface DomainEventPublisher {
 
 ## 5. 生产方改造(只发布,不内联落库)
 
-- `EvalServiceImpl.doEvaluate` 主路径:沿用 `publisher.publish(AuditRecorded)`(现 publishAudit 收敛到统一 publish);命中有决策仍发 `ActionRequested` 触发派发。
+- `EvalServiceImpl.doEvaluate` 主路径:沿用 `publisher.publish(AuditRecorded)`(现 publishAudit 收敛到统一 publish);命中有决策仍发 `DispatchActionsCommand` 触发派发。
 - `ActionDispatchService.dispatch`:claim → `executeHandler` → **`publisher.publish(new ActionExecuted(result...))`**(替掉内联 `insertExecution`)→ `FAILED` 时 `guard.release`。记录与执行解耦;`insertExecution`/`ActionExecutionMapper` 注入移到 `ActionExecutionPersister`。
 - dry-run 路径:计算后 `publisher.publish(new DryRunRecorded(...))`,**同步返回 EvalResult(含 nodeTrace)给调用方**;dry_run_session 落库转异步(调用方结果在响应里,不依赖查表)。删除 `EvalSessionWriter` 及其同步两阶段 + `insertDryRunPending/updateDryRunFinal` 调用。
-- `EvaluationEventPublisher`(现 publishAudit/publishActions 两方法):**删除**;`EvalServiceImpl` 改注入 `DomainEventPublisher`,直接 `publish(...)`(audit 事件)。`ActionRequested` 仍经现有 `ActionDeliveryChannel` 发(触发缝,见 §3),不走 DomainEventPublisher。
+- `EvaluationEventPublisher`(现 publishAudit/publishActions 两方法):**删除**;`EvalServiceImpl` 改注入 `DomainEventPublisher`,直接 `publish(...)`(audit 事件)。`DispatchActionsCommand` 仍经现有 `ActionDeliveryChannel` 发(触发缝,见 §3),不走 DomainEventPublisher。
 - `DryRunTraceWriter`:dry-run trace 写入移入 `DryRunPersister`(由其调用)。
 
 ## 6. 进程内投递实现 + MQ 就绪

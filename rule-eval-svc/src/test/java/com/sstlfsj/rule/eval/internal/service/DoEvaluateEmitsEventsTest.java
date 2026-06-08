@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
-import com.sstlfsj.rule.eval.internal.async.ActionRequested;
+import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
@@ -65,7 +65,7 @@ class DoEvaluateEmitsEventsTest {
                         && a.result() == hit
                         && a.blockedBy() == null));
         verify(actionDelivery).deliver(argThat(o ->
-                o instanceof ActionRequested ar
+                o instanceof DispatchActionsCommand ar
                         && ar.tenantId() == 1L
                         && ar.eventId().equals("e1")
                         && ar.sceneCode().equals("s")

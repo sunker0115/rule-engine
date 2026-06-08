@@ -547,7 +547,7 @@ git commit -m "feat(eval): DryRunRecorded + DryRunPersister(单次终态,吸收 
                   sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy()));
           Long tid = parseTenantId(event.tenantId());
           if (tid != null && result.ruleHit() && !result.hitDecisions().isEmpty()) {
-              actionDelivery.deliver(new com.sstlfsj.rule.eval.internal.async.ActionRequested(
+              actionDelivery.deliver(new com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand(
                       sessionId, tid, event.eventId(), event.sceneCode(), result.hitDecisions()));
           }
           return result;
@@ -568,7 +568,7 @@ git rm rule-eval-svc/src/main/java/com/sstlfsj/rule/eval/internal/session/EvalSe
 
 - [ ] **Step 4: 改 `EvalServiceImplTest` + `DoEvaluateEmitsEventsTest`** —— 把对 `EvaluationEventPublisher`/`EvalSessionWriter` 的 mock/verify 改为 `DomainEventPublisher` + `ActionDeliveryChannel`:
   - 构造 `EvalServiceImpl` 改为 4 参 `(engine, snapshotLoader, mock(DomainEventPublisher), mock(ActionDeliveryChannel))`。
-  - 主路径命中:`verify(eventPublisher).publish(argThat(o -> o instanceof AuditRecorded))` + `verify(actionDelivery).deliver(argThat(o -> o instanceof ActionRequested ar && ar.eventId().equals("e1")))`。
+  - 主路径命中:`verify(eventPublisher).publish(argThat(o -> o instanceof AuditRecorded))` + `verify(actionDelivery).deliver(argThat(o -> o instanceof DispatchActionsCommand ar && ar.eventId().equals("e1")))`。
   - 评估 MISS(有候选):`verify(eventPublisher).publish(any(AuditRecorded.class))` + `verify(actionDelivery, never()).deliver(any())`。
   - BLOCKED:publish 的 AuditRecorded.blockedBy() == "ROLLOUT"。
   - 无候选:`verifyNoInteractions(eventPublisher, actionDelivery)`。

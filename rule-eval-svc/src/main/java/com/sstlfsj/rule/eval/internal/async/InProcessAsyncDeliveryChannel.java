@@ -26,7 +26,7 @@ public class InProcessAsyncDeliveryChannel
     private final long flushIntervalMs;
     private final ActionDispatchService dispatchService;
 
-    private LinkedBlockingQueue<ActionRequested> queue;
+    private LinkedBlockingQueue<DispatchActionsCommand> queue;
     private volatile boolean running = false;
     private Thread consumerThread;
 
@@ -51,7 +51,7 @@ public class InProcessAsyncDeliveryChannel
     }
 
     @Override
-    public void deliver(ActionRequested event) {
+    public void deliver(DispatchActionsCommand event) {
         queue.offer(event);   // 非阻塞入队，best-effort
     }
 
@@ -68,9 +68,9 @@ public class InProcessAsyncDeliveryChannel
     }
 
     private void flushBatch() {
-        List<ActionRequested> batch = new ArrayList<>(batchSize);
+        List<DispatchActionsCommand> batch = new ArrayList<>(batchSize);
         queue.drainTo(batch, batchSize);
-        for (ActionRequested e : batch) {
+        for (DispatchActionsCommand e : batch) {
             try {
                 dispatchService.dispatch(e.sessionId(), e.tenantId(), e.eventId(),
                         e.sceneCode(), e.hitDecisions());

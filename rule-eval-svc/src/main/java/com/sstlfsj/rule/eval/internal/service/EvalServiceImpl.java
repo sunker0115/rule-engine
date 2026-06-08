@@ -3,7 +3,7 @@ package com.sstlfsj.rule.eval.internal.service;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
-import com.sstlfsj.rule.eval.internal.async.ActionRequested;
+import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecorded;
 import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
@@ -92,7 +92,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy()));
         Long tid = parseTenantId(event.tenantId());
         if (tid != null && result.ruleHit() && !result.hitDecisions().isEmpty()) {
-            actionDelivery.deliver(new ActionRequested(
+            actionDelivery.deliver(new DispatchActionsCommand(
                     sessionId, tid, event.eventId(), event.sceneCode(), result.hitDecisions()));
         }
         return result;
