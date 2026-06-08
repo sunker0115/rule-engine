@@ -15,9 +15,9 @@ class ComparisonStrategyFactoryTest {
     }
 
     @Test
-    void forType_double_returnsNumeric() {
+    void forType_double_returnsDouble() {
         assertThat(ComparisonStrategyFactory.forType("DOUBLE"))
-                .isInstanceOf(DecimalComparisonStrategy.class);
+                .isInstanceOf(DoubleComparisonStrategy.class);
     }
 
     @Test

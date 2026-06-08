@@ -2,12 +2,13 @@ package com.sstlfsj.rule.kernel.internal.condition.strategy;
 
 /**
  * 比较策略工厂：按 dataType 返回缓存单例，零额外分配。
- * LONG/DOUBLE -> Numeric；STRING -> String；BOOLEAN -> Boolean；DATE -> Date；DATETIME -> DateTime；
- * null/LIST/UNKNOWN/其他未知 -> Default。
+ * LONG -> Long（整型原始比较）；DOUBLE -> Double（浮点原始比较，NaN/∞ 不命中）；DECIMAL -> Decimal（BigDecimal 精确）；
+ * STRING -> String；BOOLEAN -> Boolean；DATE -> Date；DATETIME -> DateTime；null/LIST/UNKNOWN/其他未知 -> Default。
  */
 public final class ComparisonStrategyFactory {
 
     private static final LongComparisonStrategy     LONG      = new LongComparisonStrategy();
+    private static final DoubleComparisonStrategy   DOUBLE    = new DoubleComparisonStrategy();
     private static final DecimalComparisonStrategy  NUMERIC   = new DecimalComparisonStrategy();
     private static final StringComparisonStrategy   STRING    = new StringComparisonStrategy();
     private static final BooleanComparisonStrategy  BOOLEAN   = new BooleanComparisonStrategy();
@@ -27,7 +28,8 @@ public final class ComparisonStrategyFactory {
         if (dataType == null) return DEFAULT;
         return switch (dataType) {
             case "LONG"            -> LONG;
-            case "DOUBLE", "DECIMAL" -> NUMERIC;
+            case "DOUBLE"          -> DOUBLE;
+            case "DECIMAL"         -> NUMERIC;
             case "STRING"          -> STRING;
             case "BOOLEAN"         -> BOOLEAN;
             case "DATE"            -> DATE;
