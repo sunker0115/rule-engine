@@ -96,19 +96,22 @@ public class EvalContextAssembler {
                                 List<RuleVersionSnapshot> candidates,
                                 Instant now) {
         Subject subject = loadSubject(event);
-        Map<String, MetricValue> metrics = new HashMap<>();
 
-        // 无解析器：退化为历史行为——所有 providedMetrics 直接进 context
+        // 无解析器：退化为历史行为——所有 providedMetrics 直接进 context（size 精确已知，预设免扩容）
         if (definitionResolver == null) {
+            Map<String, MetricValue> provided = HashMap.newHashMap(event.providedMetrics().size());
             for (Map.Entry<String, Object> e : event.providedMetrics().entrySet()) {
-                metrics.put(e.getKey(), new MetricValue(e.getValue(), "UNKNOWN", "PROVIDED"));
+                provided.put(e.getKey(), new MetricValue(e.getValue(), "UNKNOWN", "PROVIDED"));
             }
-            return new EvalContext(event.tenantId(), event, subject, metrics, now);
+            return new EvalContext(event.tenantId(), event, subject, provided, now);
         }
 
         // 按绑定版本解析：同 code 多版本取最高版本（过渡期确定性策略）
         Map<String, Integer> chosenVersions = collectChosenVersions(candidates);
-        Map<String, MetricDescriptor> descriptors = new HashMap<>();
+        // metrics 上界 = 选定版本指标数 + 候选未引用但仍推送的 provided 指标；descriptors 至多选定版本数。预设免 resize/rehash
+        Map<String, MetricValue> metrics =
+                HashMap.newHashMap(chosenVersions.size() + event.providedMetrics().size());
+        Map<String, MetricDescriptor> descriptors = HashMap.newHashMap(chosenVersions.size());
         Set<String> needFetch = new LinkedHashSet<>();
 
         for (Map.Entry<String, Integer> entry : chosenVersions.entrySet()) {
@@ -171,7 +174,7 @@ public class EvalContextAssembler {
                                    Map<String, MetricDescriptor> descriptors,
                                    Map<String, MetricValue> metrics) {
         Executor exec = fetchExecutor != null ? fetchExecutor : ForkJoinPool.commonPool();
-        Map<String, CompletableFuture<MetricValue>> futures = new HashMap<>();
+        Map<String, CompletableFuture<MetricValue>> futures = HashMap.newHashMap(codes.size());
         for (String code : codes) {
             MetricDescriptor def = descriptors.get(code);
             MetricQuery query = new MetricQuery(code, event.tenantId(), event.subjectId(),
