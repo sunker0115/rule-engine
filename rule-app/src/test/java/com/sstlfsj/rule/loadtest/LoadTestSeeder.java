@@ -38,7 +38,8 @@ import java.util.Map;
 @Tag("loadtest")
 class LoadTestSeeder {
 
-    static final String TENANT = "9001";          // 专用压测租户，清理按此 DELETE
+    static final String TENANT = "9001";          // 专用压测租户内部 id，清理/外键按此
+    static final String TENANT_CODE = "loadtest";  // 租户业务标识，k6 以此寻址（边界解析为 id 9001）
     static final String SCENE = "loadtest";
     static final String EVENT_TYPE = "login";
     static final String METRIC = "demo.score";
@@ -65,6 +66,9 @@ class LoadTestSeeder {
             st.executeUpdate("DELETE FROM rule_definition WHERE tenant_id=" + TENANT);
             st.executeUpdate("DELETE FROM metric_definition WHERE tenant_id=" + TENANT);
             st.executeUpdate("DELETE FROM scene WHERE tenant_id=" + TENANT);
+            // 租户行供运行时 code→id 解析（k6 发 tenantCode=loadtest）；幂等 INSERT IGNORE，不随数据清理删
+            st.executeUpdate("INSERT IGNORE INTO tenant (id, code, name, is_default, status) VALUES ("
+                    + TENANT + ", '" + TENANT_CODE + "', 'Load Test Tenant', 0, 'ACTIVE')");
         } catch (SQLException e) {
             throw new RuntimeException("压测数据清理失败", e);
         }

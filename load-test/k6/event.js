@@ -29,7 +29,7 @@ export default function () {
   const url = `${BASE}/api/v1/rule/event`;
   const eventId = `${__VU}-${__ITER}-${Date.now()}`;
   const body = JSON.stringify({
-    tenantId: '9001',
+    tenantCode: 'loadtest',
     sceneCode: 'loadtest',
     eventType: 'login',
     subjectId: `s-${__VU}`,

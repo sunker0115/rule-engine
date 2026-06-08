@@ -92,7 +92,8 @@ class GlobalExceptionHandlerTest {
     @Test
     void malformedBody_returns400_notReadable() throws Exception {
         MockMvc evalMvc = MockMvcBuilders
-                .standaloneSetup(new EvalController(mock(EvalService.class)))
+                .standaloneSetup(new EvalController(mock(EvalService.class),
+                        mock(com.sstlfsj.rule.config.api.service.TenantQueryService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         String badJson = "{\"tenantId\":\"1\",\"occurredAt\":\"not-a-timestamp\"}";

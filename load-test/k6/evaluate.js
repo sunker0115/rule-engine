@@ -32,7 +32,7 @@ export default function () {
   // eventId 每次唯一 → 走真实写路径，不触发幂等去重
   const eventId = `${__VU}-${__ITER}-${Date.now()}`;
   const body = JSON.stringify({
-    tenantId: '9001',
+    tenantCode: 'loadtest',
     sceneCode: 'loadtest',
     eventType: 'login',
     subjectId: `s-${__VU}`,

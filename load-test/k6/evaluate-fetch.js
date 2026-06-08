@@ -34,7 +34,7 @@ export default function () {
     ? `s-${__VU}-${__ITER}-${Date.now()}`   // 唯一 → 缓存穿透
     : `s-${__VU}`;                           // 有界 → 预热后命中
   const body = JSON.stringify({
-    tenantId: '9001',
+    tenantCode: 'loadtest',
     sceneCode: 'loadtest',
     eventType: 'login',
     subjectId: subjectId,

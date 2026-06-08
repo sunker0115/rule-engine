@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.web.api;
 
+import com.sstlfsj.rule.config.api.service.TenantQueryService;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 public class EvalController {
 
     private final EvalService evalService;
+    private final TenantQueryService tenantQueryService;
 
     /** POST /api/v1/rule/event — PUSH 评估（异步，返回 202）
      * @param req 待评估的事件请求体
@@ -50,10 +52,17 @@ public class EvalController {
         return ApiResponse.ok(evalService.dryRun(toEvent(req), ruleVersionId));
     }
 
-    /** 将 HTTP 请求体转为 RuleEvent，渠道由入口权威设为 HTTP。 */
+    /**
+     * 将 HTTP 请求体转为 RuleEvent：边界把租户 code 解析为内部 id（surrogate 不外泄），
+     * 渠道由入口权威设为 HTTP。
+     */
     private RuleEvent toEvent(EvalEventRequest r) {
+        Long tenantId = tenantQueryService.resolveIdByCode(r.tenantCode());
+        if (tenantId == null) {
+            throw new IllegalArgumentException("未知或缺失的租户 code: " + r.tenantCode());
+        }
         return RuleEvent.builder()
-                .tenantId(r.tenantId())
+                .tenantId(String.valueOf(tenantId))
                 .sceneCode(r.sceneCode())
                 .eventType(r.eventType())
                 .subjectId(r.subjectId())
