@@ -127,15 +127,18 @@ PULL `/evaluate` 同步返回 EvalResult；PUSH `/event` 入队即返 **202**，
 3. **miss 路径减分配 + 跳过 trace 收集 —— 平滑尾延迟**。`EvalEngine.evaluateAllCandidates` 每次 `new ArrayList×2 + List.copyOf×2`，且 trace 用不到仍 `allTraces.addAll`。24–34k/s 下这些分配让年轻代 GC 频繁、抬 p99。miss 短路不建 list、非 trace 模式跳过 `nodeTrace`。
 4. **索引层候选预过滤 —— 减评估 AST 数（线性提吞吐）**。现 index 仅按 `(tenant,scene,eventType)`；再按「规则所需 metric 是否在 event 提供」预过滤，跳过必然 miss 的候选（现仍走完整 switch 才 `return false`）。收益取决于规则数据形状。
 5. **AST → 字节码/MethodHandle 编译 —— 最大杠杆但大改**。真 Aviator 路线，per-eval 5–10×；工作量大且 GraalVM native 对运行时字节码生成不友好，**留终极**。
-6. **审计/action 消费侧 keep-up —— 仅当需强审计**。24k/s 远超 `AuditPersister` 批写 → 大量丢（设计内可丢）；要落库完整需消费侧并行 + 更大批 + MQ（见下「已知未覆盖」）。
+6. ~~审计/action 消费侧 keep-up~~ **✅ 已做(见 Track E)**：批量 INSERT 落地,action 落库 **0.13%→2.96%(~18×)**。剩余地板=本机 MySQL 单行写吞吐(~64/s 基准,稳态 ~731/s);线程转储归因证实瓶颈在 **DB 写(persister 侧)**,非 delivery 消费者 → **并行 delivery 消费者否决**。进一步靠降 `node_trace` 写量 / action 独立写路径 / MQ,但 731/s 已远超现实 action 量,**YAGNI**。
 
-**数据否决、不要碰**：Hikari 池（3/10、pending 0）、Disruptor（无队列/锁交接瓶颈）、trace 开关（开/关零差异）。
-**落地顺序**：1 + 3（小改立竿见影）→ 2（候选密集主战场）→ 4（视规则数据）→ 5（终极）。
+**数据否决、不要碰**：Hikari 池（3/10、pending 0）、Disruptor（无队列/锁交接瓶颈）、trace 开关（开/关零差异）、**并行 delivery 消费者（瓶颈在 DB 写,Track E 归因否决）**。
+**落地顺序(eval-CPU 轴,#6 已完成)**：1 + 3（小改立竿见影）→ 2（候选密集主战场）→ 4（视规则数据）→ 5（终极）。**未启动,留待真实吞吐 SLO 驱动。**
 
 ## 已知未覆盖
-- **action_execution 写（压测层面无需补）**：right-size 后 action 派发已**异步、离开请求线程**——压测场景无 scene_action_binding（config-svc 无写服务），但即便有，请求路径也只入队即返、**不影响吞吐**；后台消费侧在 24k/s 下本就被本地 DB 限速（审计已大量丢，best-effort 预期内）。该写路径由单测覆盖委托 + 一次功能冒烟（seed binding → evaluate → 异步落 `action_execution`）确认端到端，非压测目标。
-- **审计落库 keep-up**：24k req/s 远超 AuditPersister 批写能力（~500/200ms）+ 本地 MySQL 写入速率 → 大量 session 被丢（设计内「可丢」）。需强审计的场景另议（该 metric 走 outbox / MQ）。
-- **PUSH 单消费者并行化、native 镜像对比、SLO 验收**：本轮非目标，留二期。
+- ~~action_execution 写~~ / ~~审计落库 keep-up~~ **已覆盖**：见 Track A/D/E。action 派发对请求线程零成本(offer 丢弃 + dispatch 离线程);批量 INSERT 后 action keep-up 0.13%→2.96%、审计同批量化;高 QPS 下仍丢的部分是 best-effort 设计内(地板=本机 MySQL 单行写)。强一致完整落库留 MQ(经 `DomainEventPublisher` 缝)。
+- **native 镜像对比**：已覆盖(见「Native 镜像 vs JVM」节)。
+- **SLO 验收**：仍未做——全程为探顶,无生产目标。需要时另起一轮按 SLO 组织(而非漫无目的探顶)。
+- **eval-CPU 二期 #1-5**：未启动,留待真实吞吐 SLO 驱动。
+
+> **压测线状态(2026-06-08 封板)**：诊断使命完成——DB 池→right-size→eval-CPU 线性模型(`26µs + 0.26µs/候选`)→持久化 DB 写地板,瓶颈链全部定位;唯一明确代码胜利(批量 INSERT,~18×)已落地。后续优化均为"无目标提速",待 SLO 或新瓶颈驱动再开。
 
 ## 内核落库事件化重构后复测（PULL · 候选50 · 池10 · JVM zulu-25 · 2026-06-08）
 
