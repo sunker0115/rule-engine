@@ -54,6 +54,20 @@
 - 请求线程退化成纯 CPU（index 命中 + AST 解释 + 入队），不再被 DB 绑定 → 进入"内存级引擎"量级（对标无IO 基准 Aviator/Grule/EasyRules 的几万~十万 QPS），且这是 k6 争核的笔记本。
 - **设计教训**：审计「可丢」→ 内存异步是 80/20 收益；action 的 DB outbox 在 stub handler 阶段既过度设计又恰是瓶颈。durable 留到真 handler，经 `ActionDeliveryChannel` 缝换 MQ。
 
+## 候选规则数 → 吞吐 曲线（right-size 异步后，2026-06-08）
+
+DB 出热路径后系统转为 eval-CPU 绑定，候选规则数（每请求评估的 AST 数）成主导成本。池=10、同 async 配置实测：
+
+| 候选规则数 | 吞吐 | p50/p95 | 每请求成本 | Hikari |
+|---|---|---|---|---|
+| 10 | **34,340 req/s** | 2.0 / 8.65ms | ~29µs | 3/10 · pending 0 |
+| 50 | **25,830 req/s** | 2.49 / 11.72ms | ~39µs | 3/10 · pending 0 |
+| 200 | **12,846 req/s** | 3.78 / 23.15ms | ~78µs | 3/10 · pending 0 |
+
+- **线性成本模型**：每请求 ≈ **26µs 固定 + 0.26µs × 候选规则数**（10→50 +40 条加 10µs、50→200 +150 条加 39µs，均约 0.26µs/条）。固定开销 = HTTP+Jackson+index 命中+2 次事件入队；每候选 ~0.26µs = 简单条件 AST 解释。
+- **全程 Hikari 3/10、pending 0** → 瓶颈彻底从 DB 转到 eval-CPU；DB 不再是墙。
+- 容量规划：本机单实例 200 条候选规则 ≈ 1.3 万 QPS（笔记本 + k6 争核，服务器上更高）。
+
 ## 已知未覆盖
 - **action_execution 写（压测层面无需补）**：right-size 后 action 派发已**异步、离开请求线程**——压测场景无 scene_action_binding（config-svc 无写服务），但即便有，请求路径也只入队即返、**不影响吞吐**；后台消费侧在 24k/s 下本就被本地 DB 限速（审计已大量丢，best-effort 预期内）。该写路径由单测覆盖委托 + 一次功能冒烟（seed binding → evaluate → 异步落 `action_execution`）确认端到端，非压测目标。
 - **审计落库 keep-up**：24k req/s 远超 AuditPersister 批写能力（~500/200ms）+ 本地 MySQL 写入速率 → 大量 session 被丢（设计内「可丢」）。需强审计的场景另议（该 metric 走 outbox / MQ）。
