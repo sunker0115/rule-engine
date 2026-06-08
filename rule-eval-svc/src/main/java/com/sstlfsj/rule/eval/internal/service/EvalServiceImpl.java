@@ -1,12 +1,15 @@
 package com.sstlfsj.rule.eval.internal.service;
 
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
-import com.sstlfsj.rule.eval.internal.async.EvaluationEventPublisher;
+import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
+import com.sstlfsj.rule.eval.internal.async.ActionRequested;
+import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
+import com.sstlfsj.rule.eval.internal.async.DryRunRecorded;
 import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
-import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
-import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
@@ -15,27 +18,23 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.List;
 
-/** EvalService 实现：委托 EvalEngine 做纯计算，负责 session 写入和 Action 派发副作用。 */
+/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件、经 ActionDeliveryChannel 投递 action，自身不做内联持久化。 */
 @Service
 class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     private final EvalEngine evalEngine;
     private final SceneSnapshotLoader snapshotLoader;
-    private final EvalSessionWriter sessionWriter;          // 仅 dry-run 路径同步写
-    private final DryRunTraceWriter dryRunTraceWriter;      // 仅 dry-run trace
-    private final EvaluationEventPublisher eventPublisher;  // 主路径副作用事件化
+    private final DomainEventPublisher eventPublisher;
+    private final ActionDeliveryChannel actionDelivery;
     private final EvalActionDispatcher dispatcher;
 
-    EvalServiceImpl(EvalEngine evalEngine,
-                    SceneSnapshotLoader snapshotLoader,
-                    EvalSessionWriter sessionWriter,
-                    DryRunTraceWriter dryRunTraceWriter,
-                    EvaluationEventPublisher eventPublisher) {
+    EvalServiceImpl(EvalEngine evalEngine, SceneSnapshotLoader snapshotLoader,
+                    DomainEventPublisher eventPublisher,
+                    ActionDeliveryChannel actionDelivery) {
         this.evalEngine = evalEngine;
         this.snapshotLoader = snapshotLoader;
-        this.sessionWriter = sessionWriter;
-        this.dryRunTraceWriter = dryRunTraceWriter;
         this.eventPublisher = eventPublisher;
+        this.actionDelivery = actionDelivery;
         // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
         this.dispatcher = new EvalActionDispatcher(10000, e -> doEvaluate(e, "PUSH", false, null));
     }
@@ -73,10 +72,10 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             if (snap == null) return EvalResult.miss();
             EvalOutcome outcome = evalEngine.evaluateWithContext(
                     event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow);
-            Long sessionId = sessionWriter.insertDryRunPending(event, specificVersionId);
-            sessionWriter.updateDryRunFinal(sessionId, outcome.result(), outcome.context());
-            dryRunTraceWriter.write(event.tenantId(), sessionId.toString(),
-                    outcome.result().nodeTrace());
+            // dry-run 终态事件化：请求线程生成 id（snowflake，INPUT），异步 persister 落 dry_run_session + trace
+            long dryRunId = IdWorker.getId();
+            eventPublisher.publish(new DryRunRecorded(
+                    dryRunId, event, specificVersionId, outcome.result(), outcome.context()));
             return outcome.result();
         }
 
@@ -84,17 +83,17 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         if (candidates.isEmpty()) return EvalResult.miss();   // 无候选短路：不发事件（现状保留）
 
         // 异步落库需提前确定 id，供 node_trace/action 关联（snowflake，请求线程生成）
-        long sessionId = com.baomidou.mybatisplus.core.toolkit.IdWorker.getId();
+        long sessionId = IdWorker.getId();
         EvalOutcome outcome = evalEngine.evaluateWithContext(event, candidates, evalNow);
         EvalResult result = outcome.result();
 
-        // 副作用事件化异步：审计内存 best-effort（可丢）；action 命中有决策时持久投递（at-least-once，不丢）
-        eventPublisher.publishAudit(sessionId, event, mode, candidates.size(),
-                result, outcome.context(), outcome.blockedBy());
+        // 副作用事件化：审计内存 best-effort（可丢）；action 命中有决策时持久投递（at-least-once，不丢）
+        eventPublisher.publish(new AuditRecorded(
+                sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy()));
         Long tid = parseTenantId(event.tenantId());
         if (tid != null && result.ruleHit() && !result.hitDecisions().isEmpty()) {
-            eventPublisher.publishActions(sessionId, tid, event.eventId(),
-                    event.sceneCode(), result.hitDecisions());
+            actionDelivery.deliver(new ActionRequested(
+                    sessionId, tid, event.eventId(), event.sceneCode(), result.hitDecisions()));
         }
         return result;
     }

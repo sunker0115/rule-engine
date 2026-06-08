@@ -261,16 +261,13 @@ class EvalIntegrationTest {
      * 使用 ruleVersionId=1（与 setUp 插入的版本一致）。
      */
     @Test
-    void dryRun_writesToDryRunSession_notProdSession() {
+    void dryRun_writesToDryRunSession_notProdSession() throws InterruptedException {
         RuleEvent event = makeEvent("dry-001", "fraud_check");
         // ruleVersionId=1 指定已存在的版本
         EvalResult result = evalService.dryRun(event, 1L);
 
-        // dry_run_session 应有记录
-        List<DryRunSession> dryRuns = dryRunMapper.selectList(
-                new LambdaQueryWrapper<DryRunSession>()
-                        .eq(DryRunSession::getEventId, "dry-001")
-                        .eq(DryRunSession::getTenantId, 1L));
+        // dry-run 改事件驱动后异步落库，轮询等待 dry_run_session 出现
+        List<DryRunSession> dryRuns = awaitDryRuns("dry-001");
         assertThat(dryRuns).hasSize(1);
         assertThat(dryRuns.get(0).getStatus()).isIn("HIT", "MISS");
 
@@ -299,6 +296,21 @@ class EvalIntegrationTest {
                         .eq(EvaluationSession::getEventId, "no-rule-001")
                         .eq(EvaluationSession::getTenantId, 1L));
         assertThat(count).isEqualTo(0);
+    }
+
+    /** 轮询最多 3 秒，等指定 eventId 的 dry_run_session 异步落库出现，返回查到的行。 */
+    private List<DryRunSession> awaitDryRuns(String eventId) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 3_000;
+        List<DryRunSession> dryRuns = List.of();
+        while (System.currentTimeMillis() < deadline) {
+            dryRuns = dryRunMapper.selectList(
+                    new LambdaQueryWrapper<DryRunSession>()
+                            .eq(DryRunSession::getEventId, eventId)
+                            .eq(DryRunSession::getTenantId, 1L));
+            if (!dryRuns.isEmpty()) break;
+            Thread.sleep(100);
+        }
+        return dryRuns;
     }
 
     /** 轮询最多 3 秒，等指定 eventId 的 evaluation_session 异步落库出现，返回查到的行。 */

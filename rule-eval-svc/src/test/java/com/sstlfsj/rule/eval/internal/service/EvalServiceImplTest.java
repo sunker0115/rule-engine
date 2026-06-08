@@ -1,11 +1,13 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.async.EvaluationEventPublisher;
-import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
+import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
+import com.sstlfsj.rule.eval.internal.async.ActionRequested;
+import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
+import com.sstlfsj.rule.eval.internal.async.DryRunRecorded;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
-import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,22 +23,20 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** doEvaluate 事件驱动后的单测：PULL 主路径发审计/action 事件，dry-run 路径仍同步写。 */
+/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计、经 ActionDeliveryChannel 投递 action；dry-run 发 DryRunRecorded 事件。 */
 @ExtendWith(MockitoExtension.class)
 class EvalServiceImplTest {
 
     @Mock EvalEngine evalEngine;
     @Mock SceneSnapshotLoader snapshotLoader;
-    @Mock EvalSessionWriter sessionWriter;
-    @Mock DryRunTraceWriter dryRunTraceWriter;
-    @Mock EvaluationEventPublisher eventPublisher;
+    @Mock DomainEventPublisher eventPublisher;
+    @Mock ActionDeliveryChannel actionDelivery;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader,
-                sessionWriter, dryRunTraceWriter, eventPublisher);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery);
     }
 
     private RuleEvent event() {
@@ -78,7 +78,11 @@ class EvalServiceImplTest {
         impl.evaluate(event());
 
         // 复用引擎组装的上下文发审计事件（异步落 session 快照），不再同步 updateFinal
-        verify(eventPublisher).publishAudit(anyLong(), any(), eq("PULL"), eq(1), any(), eq(engineCtx), any());
+        verify(eventPublisher).publish(argThat(o ->
+                o instanceof AuditRecorded a
+                        && a.mode().equals("PULL")
+                        && a.candidateCount() == 1
+                        && a.context() == engineCtx));
     }
 
     @Test
@@ -89,6 +93,7 @@ class EvalServiceImplTest {
 
         assertFalse(result.ruleHit());
         verifyNoInteractions(eventPublisher);
+        verifyNoInteractions(actionDelivery);
         verify(evalEngine, never()).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
     }
 
@@ -101,7 +106,7 @@ class EvalServiceImplTest {
         assertTrue(result.ruleHit());
         assertFalse(result.hitDecisions().isEmpty());
         assertEquals("REJECT", result.hitDecisions().get(0).code());
-        verify(eventPublisher).publishAudit(anyLong(), any(), eq("PULL"), anyInt(), any(), any(), any());
+        verify(eventPublisher).publish(any(AuditRecorded.class));
     }
 
     @Test
@@ -142,80 +147,70 @@ class EvalServiceImplTest {
     }
 
     @Test
-    void dryRun_reusesEngineOutcome() {
+    void dryRun_publishesDryRunRecorded() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         EvalContext engineCtx = ctx();
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
         when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
                 any(SceneExecutionStrategy.class), any(Instant.class)))
                 .thenReturn(new EvalOutcome(EvalResult.miss(), engineCtx));
-        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         impl.dryRun(event(), 42L);
 
-        verify(sessionWriter).updateDryRunFinal(eq(1L), any(), eq(engineCtx));
+        // dry-run 改事件驱动：发 DryRunRecorded 事件由异步 persister 落 dry_run_session
+        verify(eventPublisher).publish(argThat(o ->
+                o instanceof DryRunRecorded d
+                        && d.ruleVersionId().equals(42L)
+                        && d.context() == engineCtx));
     }
 
     @Test
-    void dryRun_writesToDryRunSessionNotProd_noEvents() {
+    void dryRun_doesNotDeliverActions() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
         when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
                 any(SceneExecutionStrategy.class), any(Instant.class)))
                 .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
-        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         EvalResult result = impl.dryRun(event(), 42L);
 
         assertFalse(result.ruleHit());
-        verify(sessionWriter).insertDryRunPending(any(), eq(42L));
-        verifyNoInteractions(eventPublisher);
+        verify(eventPublisher).publish(any(DryRunRecorded.class));
+        verifyNoInteractions(actionDelivery);
     }
 
     @Test
-    void dryRun_writesDryRunTraceWriter() {
-        RuleVersionSnapshot snap = snapshot(42L, "PASS");
-        when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
-                any(SceneExecutionStrategy.class), any(Instant.class)))
-                .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
-        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
-
-        impl.dryRun(event(), 42L);
-
-        verify(dryRunTraceWriter).write(anyString(), anyString(), anyList());
-    }
-
-    @Test
-    void evaluate_ruleHit_publishesActions() {
+    void evaluate_ruleHit_deliversActions() {
         stubPull(snapshot(1L, "REJECT"), new EvalOutcome(hitResult("REJECT", 10, 1L), ctx()));
 
         impl.evaluate(event());
 
-        verify(eventPublisher).publishActions(anyLong(), eq(1L), anyString(), anyString(), anyList());
+        verify(actionDelivery).deliver(argThat(o ->
+                o instanceof ActionRequested ar
+                        && ar.tenantId() == 1L
+                        && ar.eventId().equals("evt-001")));
     }
 
     @Test
-    void evaluate_ruleMiss_doesNotPublishActions() {
+    void evaluate_ruleMiss_doesNotDeliverActions() {
         stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
 
         impl.evaluate(event());
 
-        verify(eventPublisher, never()).publishActions(anyLong(), anyLong(), anyString(), anyString(), anyList());
+        verify(actionDelivery, never()).deliver(any());
     }
 
     @Test
-    void dryRun_doesNotPublishActions() {
+    void dryRun_hit_doesNotDeliverActions() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
         when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
                 any(SceneExecutionStrategy.class), any(Instant.class)))
                 .thenReturn(new EvalOutcome(hitResult("PASS", 10, 42L), ctx()));
-        when(sessionWriter.insertDryRunPending(any(), anyLong())).thenReturn(1L);
 
         impl.dryRun(event(), 42L);
 
-        verifyNoInteractions(eventPublisher);
+        verifyNoInteractions(actionDelivery);
     }
 
     @Test

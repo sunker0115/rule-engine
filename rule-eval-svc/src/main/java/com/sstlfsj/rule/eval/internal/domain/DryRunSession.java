@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @TableName("dry_run_session")
 public class DryRunSession {
 
-    @TableId(type = IdType.AUTO)
+    @TableId(type = IdType.INPUT)
     private Long id;
     private Long tenantId;
     private String eventId;

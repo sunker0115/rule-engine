@@ -1,10 +1,9 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.async.EvaluationEventPublisher;
-import com.sstlfsj.rule.eval.internal.session.EvalSessionWriter;
+import com.sstlfsj.rule.eval.internal.async.ActionDeliveryChannel;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
-import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,16 +28,14 @@ class EvalServiceImplScorecardTest {
 
     @Mock EvalEngine evalEngine;
     @Mock SceneSnapshotLoader snapshotLoader;
-    @Mock EvalSessionWriter sessionWriter;
-    @Mock DryRunTraceWriter dryRunTraceWriter;
-    @Mock EvaluationEventPublisher eventPublisher;
+    @Mock DomainEventPublisher eventPublisher;
+    @Mock ActionDeliveryChannel actionDelivery;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader,
-                sessionWriter, dryRunTraceWriter, eventPublisher);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery);
     }
 
     private RuleEvent event() {

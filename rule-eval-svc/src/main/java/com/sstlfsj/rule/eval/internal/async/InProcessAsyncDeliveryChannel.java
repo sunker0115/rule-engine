@@ -15,7 +15,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  *
  * <p>请求线程仅非阻塞入队，派发在后台执行，不阻塞评估、不占 DB 连接。队列满/进程崩溃则丢弃——
  * 本期 ActionHandler 为 stub，副作用可丢；待接入真实「不可丢」handler 时，换 Kafka/AMQP 实现本接口即可，
- * 发布方（{@link EvaluationEventPublisher}）不动。这是预留的 MQ 缝。
+ * 发布方（评估服务）不动。这是预留的 MQ 缝。
  */
 @Component
 public class InProcessAsyncDeliveryChannel
