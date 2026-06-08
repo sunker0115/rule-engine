@@ -32,6 +32,14 @@ class EvaluationSessionTest {
     }
 
     @Test
+    void score_setAndGet() {
+        EvaluationSession s = new EvaluationSession();
+        assertNull(s.getScore());          // 默认 null（AST_BOOLEAN 等无分场景）
+        s.setScore(87.5);
+        assertEquals(87.5, s.getScore());
+    }
+
+    @Test
     void contextSnapshot_defaultsToNull() {
         EvaluationSession s = new EvaluationSession();
         assertNull(s.getContextSnapshot());

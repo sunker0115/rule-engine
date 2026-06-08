@@ -34,6 +34,8 @@ public class EvaluationSession {
     private String errorCode;
     private Integer candidateRuleCount;
     private Integer hitRuleCount;
+    /** SCORECARD 累计分；AST_BOOLEAN 等无分场景为 null。 */
+    private Double score;
     private LocalDateTime occurredAt;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;

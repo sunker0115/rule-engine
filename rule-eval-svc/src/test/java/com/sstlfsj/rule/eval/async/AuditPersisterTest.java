@@ -67,4 +67,26 @@ class AuditPersisterTest {
         assertThat(s.getStatus()).isEqualTo("BLOCKED");
         assertThat(s.getBlockedBy()).isEqualTo("ROLLOUT");
     }
+
+    @Test
+    void scorecardResult_persistsScore() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter);
+        persister.afterPropertiesSet();
+
+        RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                .subjectId("u1").eventId("e3").source(EventSource.HTTP).occurredAt(Instant.now()).build();
+        // SCORECARD 命中：result.score 非 null → 落审计 score 列
+        EvalResult scored = new EvalResult(true, null, java.util.List.of(), java.util.List.of(),
+                null, java.util.List.of(), 87.5, null, null);
+        persister.onAudit(new AuditRecorded(44L, event, "PULL", 1, scored, null, null));
+
+        Thread.sleep(300);
+        persister.destroy();
+
+        ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
+        verify(mapper, times(1)).insert(captor.capture());
+        assertThat(captor.getValue().getScore()).isEqualTo(87.5);
+    }
 }

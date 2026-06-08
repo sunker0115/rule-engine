@@ -121,6 +121,7 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setErrorCode(r.errorCode());
         s.setCandidateRuleCount(e.candidateCount());
         s.setHitRuleCount(r.hitDecisions().size());
+        s.setScore(r.score());   // SCORECARD 累计分；其他 kind 为 null
         if (ev.occurredAt() != null) {
             s.setOccurredAt(LocalDateTime.ofInstant(ev.occurredAt(), ZoneId.systemDefault()));
         }
