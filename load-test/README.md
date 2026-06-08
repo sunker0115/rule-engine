@@ -14,7 +14,8 @@
 | 基线 | 50 | 10 | on | **246** | 272 / **1520** | 0 | 10/10 · **107** |
 | 池-100 | 50 | 100 | on | **583** | 137 / **520** | 0 | 100/100 · 17 |
 | trace-off | 50 | 100 | off | **589** | 128 / **526** | 0 | 100/100 · 16 |
-| 事件化异步后 | 50 | 10 | on | **215** | 329 / **1750** | 0 | 10/10 · **116** |
+| 事件化异步(outbox) | 50 | 10 | on | **215** | 329 / **1750** | 0 | 10/10 · **116** |
+| **right-size 异步(纯内存)** | 50 | 10 | on | **24434** | 2.6 / **11.8** | 0 | **3/10 · 0** |
 
 > 注：所有请求 100% 命中（rule_hits = http_reqs）；同机压测（k6 与 app 争 CPU），绝对值偏保守，**臂间相对差**是结论依据。
 
@@ -37,7 +38,21 @@
 
 **根因（spec↔实现偏差）**：spec §3 说"命中**且有 action 绑定**才发持久事件"，实现成了"命中**且有决策**"。压测场景命中、有决策、**无 action 绑定** → 按 spec 本不该发 outbox，实现却发了。
 
-**结论**：架构正确（审计已脱离请求线程），但**真正的吞吐收益（无 action 评估请求线程 0 DB 写）要靠"无绑定时跳过 outbox"** —— 需一个内存 action-binding 索引（即"缓存 scene_action_binding"优化）让请求线程廉价判断有无绑定。这是事件化设计的**必要后续一步**，单独决策（binding 缓存落点/更新机制）。
+**结论**：架构正确（审计已脱离请求线程），但 outbox 的 @Transactional 持久写顶替了 session 写，没拿到收益。
+
+## right-size 复测（2026-06-08，决定性收益）
+
+砍掉 DB outbox、action 改进程内异步 best-effort 后（请求线程 0 DB 写），池=10 复测：
+
+| | 吞吐 | p50/p95 | Hikari |
+|---|---|---|---|
+| 原基线（同步） | 246 req/s | 272 / 1520ms | 10/10 · pending 107 |
+| outbox 版 | 215 req/s | 329 / 1750ms | 10/10 · pending 116 |
+| **right-size 异步** | **24,434 req/s** | **2.6 / 11.8ms** | **3/10 · pending 0** |
+
+- **~100× 吞吐（246 → 24,434）、p95 1.52s → 12ms、池只用 3/10 零排队**，366 万请求 0 失败。
+- 请求线程退化成纯 CPU（index 命中 + AST 解释 + 入队），不再被 DB 绑定 → 进入"内存级引擎"量级（对标无IO 基准 Aviator/Grule/EasyRules 的几万~十万 QPS），且这是 k6 争核的笔记本。
+- **设计教训**：审计「可丢」→ 内存异步是 80/20 收益；action 的 DB outbox 在 stub handler 阶段既过度设计又恰是瓶颈。durable 留到真 handler，经 `ActionDeliveryChannel` 缝换 MQ。
 
 ## 已知未覆盖
 - **action_execution 写**：本轮 scene_action_binding 无写入路径（config-svc 无该写服务），`dispatch` 因 bindings 空提前 return，action 写**未压到**；session+trace 写已覆盖（命中触发 `updateFinal`+trace）。二期补 action 写路径后再测。
