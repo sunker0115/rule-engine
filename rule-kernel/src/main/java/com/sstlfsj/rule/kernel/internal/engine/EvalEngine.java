@@ -162,15 +162,16 @@ public class EvalEngine {
             }
         }
 
-        Decision finalDecision = hitDecisions.stream()
-                .max(DECISION_PRECEDENCE)
-                .orElse(null);
+        // 免 stream 管道分配：非空时取最大,空则 null（与原 orElse(null) 等价）
+        Decision finalDecision = hitDecisions.isEmpty() ? null
+                : Collections.max(hitDecisions, DECISION_PRECEDENCE);
 
+        // 局部 list 出方法即无其它引用,用不可变视图免去 List.copyOf 的数组拷贝（allTraces 在高候选数下是热点分配）
         return new EvalResult(
                 !hitDecisions.isEmpty(),
                 finalDecision,
-                List.copyOf(hitDecisions),
-                List.copyOf(allTraces),
+                Collections.unmodifiableList(hitDecisions),
+                Collections.unmodifiableList(allTraces),
                 errorCode,
                 List.of(),
                 aggregatedScore,
