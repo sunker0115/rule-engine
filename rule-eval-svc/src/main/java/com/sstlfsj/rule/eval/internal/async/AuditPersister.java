@@ -2,10 +2,10 @@ package com.sstlfsj.rule.eval.internal.async;
 
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
-import com.sstlfsj.rule.kernel.api.model.Decision;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.event.EventListener;
@@ -17,7 +17,6 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.stream.Collectors;
 
 /**
  * 异步批量落审计：消费 {@link AuditRecorded}，单次终态 INSERT evaluation_session + 旁路写 node_trace。
@@ -33,23 +32,27 @@ public class AuditPersister implements InitializingBean, DisposableBean {
     private final long flushIntervalMs;
     private final EvaluationSessionMapper sessionMapper;
     private final TraceWriter traceWriter;
+    private final ObjectMapper objectMapper;
 
     private LinkedBlockingQueue<AuditRecorded> queue;
     private volatile boolean running = false;
     private Thread consumerThread;
 
     public AuditPersister(int queueCapacity, int batchSize, long flushIntervalMs,
-                          EvaluationSessionMapper sessionMapper, TraceWriter traceWriter) {
+                          EvaluationSessionMapper sessionMapper, TraceWriter traceWriter,
+                          ObjectMapper objectMapper) {
         this.queueCapacity = queueCapacity;
         this.batchSize = batchSize;
         this.flushIntervalMs = flushIntervalMs;
         this.sessionMapper = sessionMapper;
         this.traceWriter = traceWriter;
+        this.objectMapper = objectMapper;
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    public AuditPersister(EvaluationSessionMapper sessionMapper, TraceWriter traceWriter) {
-        this(10000, 500, 200, sessionMapper, traceWriter);
+    public AuditPersister(EvaluationSessionMapper sessionMapper, TraceWriter traceWriter,
+                          ObjectMapper objectMapper) {
+        this(10000, 500, 200, sessionMapper, traceWriter, objectMapper);
     }
 
     @Override
@@ -115,13 +118,15 @@ public class AuditPersister implements InitializingBean, DisposableBean {
                 : (r.ruleHit() ? "HIT" : "MISS"));
         s.setBlockedBy(e.blockedBy());
         s.setFinalDecision(r.finalDecision() != null ? r.finalDecision().code() : null);
-        s.setHitDecisions(r.hitDecisions().isEmpty() ? "[]"
-                : r.hitDecisions().stream().map(Decision::code)
-                    .collect(Collectors.joining("\",\"", "[\"", "\"]")));
         s.setErrorCode(r.errorCode());
         s.setCandidateRuleCount(e.candidateCount());
         s.setHitRuleCount(r.hitDecisions().size());
         s.setScore(r.score());   // SCORECARD 累计分；其他 kind 为 null
+        s.setCategory(r.finalDecision() != null ? r.finalDecision().category() : null);
+        s.setHitDecisions(objectMapper.writeValueAsString(
+                r.hitDecisions().stream()
+                        .map(d -> new HitDecisionView(d.code(), d.category(), d.fromRuleVersionId()))
+                        .toList()));
         if (ev.occurredAt() != null) {
             s.setOccurredAt(LocalDateTime.ofInstant(ev.occurredAt(), ZoneId.systemDefault()));
         }
@@ -130,6 +135,9 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setFinishedAt(now);
         return s;
     }
+
+    /** hit_decisions JSON 元素：每条命中决策的码 + 分类 + 来源规则版本。 */
+    private record HitDecisionView(String code, String category, Long ruleVersionId) {}
 
     @Override
     public void destroy() {

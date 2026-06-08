@@ -4,6 +4,7 @@ import com.sstlfsj.rule.eval.internal.async.AuditPersister;
 import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
+import com.sstlfsj.rule.kernel.api.model.Decision;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
@@ -25,7 +26,8 @@ class AuditPersisterTest {
     void insertsTerminalSessionOnceAndWritesTrace() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -50,7 +52,8 @@ class AuditPersisterTest {
     void blockedBy_nonNull_persistsBlockedStatusAndBlockedBy() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -72,7 +75,8 @@ class AuditPersisterTest {
     void scorecardResult_persistsScore() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -88,5 +92,32 @@ class AuditPersisterTest {
         ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
         verify(mapper, times(1)).insert(captor.capture());
         assertThat(captor.getValue().getScore()).isEqualTo(87.5);
+    }
+
+    @Test
+    void hitDecisions_serializedAsObjectsWithCategory_andSessionCategoryFromFinal() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
+        persister.afterPropertiesSet();
+
+        RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                .subjectId("u1").eventId("e9").source(EventSource.HTTP).occurredAt(Instant.now()).build();
+        Decision dev = new Decision("REVIEW", "", 20, 11L, "中危");
+        Decision amt = new Decision("REVIEW", "", 10, 22L, "大额");
+        EvalResult r = new EvalResult(true, dev, java.util.List.of(dev, amt), java.util.List.of(),
+                null, java.util.List.of(), null, "中危", null);
+        persister.onAudit(new AuditRecorded(91L, event, "PULL", 2, r, null, null));
+
+        Thread.sleep(300);
+        persister.destroy();
+
+        ArgumentCaptor<EvaluationSession> captor = ArgumentCaptor.forClass(EvaluationSession.class);
+        verify(mapper, times(1)).insert(captor.capture());
+        EvaluationSession s = captor.getValue();
+        assertThat(s.getCategory()).isEqualTo("中危");
+        assertThat(s.getHitDecisions()).contains("\"category\":\"中危\"")
+                .contains("\"category\":\"大额\"").contains("\"ruleVersionId\":11");
     }
 }
