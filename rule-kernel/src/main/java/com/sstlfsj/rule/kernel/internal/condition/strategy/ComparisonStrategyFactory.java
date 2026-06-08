@@ -7,6 +7,7 @@ package com.sstlfsj.rule.kernel.internal.condition.strategy;
  */
 public final class ComparisonStrategyFactory {
 
+    private static final LongComparisonStrategy     LONG      = new LongComparisonStrategy();
     private static final DecimalComparisonStrategy  NUMERIC   = new DecimalComparisonStrategy();
     private static final StringComparisonStrategy   STRING    = new StringComparisonStrategy();
     private static final BooleanComparisonStrategy  BOOLEAN   = new BooleanComparisonStrategy();
@@ -25,7 +26,8 @@ public final class ComparisonStrategyFactory {
     public static ComparisonStrategy forType(String dataType) {
         if (dataType == null) return DEFAULT;
         return switch (dataType) {
-            case "LONG", "DOUBLE", "DECIMAL" -> NUMERIC;
+            case "LONG"            -> LONG;
+            case "DOUBLE", "DECIMAL" -> NUMERIC;
             case "STRING"          -> STRING;
             case "BOOLEAN"         -> BOOLEAN;
             case "DATE"            -> DATE;

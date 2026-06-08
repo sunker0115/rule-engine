@@ -9,9 +9,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ComparisonStrategyFactoryTest {
 
     @Test
-    void forType_long_returnsNumeric() {
+    void forType_long_returnsLong() {
         assertThat(ComparisonStrategyFactory.forType("LONG"))
-                .isInstanceOf(DecimalComparisonStrategy.class);
+                .isInstanceOf(LongComparisonStrategy.class);
     }
 
     @Test
