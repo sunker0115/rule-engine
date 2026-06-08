@@ -40,6 +40,14 @@ class EvaluationSessionTest {
     }
 
     @Test
+    void category_setAndGet() {
+        EvaluationSession s = new EvaluationSession();
+        assertNull(s.getCategory());
+        s.setCategory("中危");
+        assertEquals("中危", s.getCategory());
+    }
+
+    @Test
     void contextSnapshot_defaultsToNull() {
         EvaluationSession s = new EvaluationSession();
         assertNull(s.getContextSnapshot());

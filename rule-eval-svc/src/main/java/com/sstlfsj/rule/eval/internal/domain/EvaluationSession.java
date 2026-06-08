@@ -36,6 +36,8 @@ public class EvaluationSession {
     private Integer hitRuleCount;
     /** SCORECARD 累计分；AST_BOOLEAN 等无分场景为 null。 */
     private Double score;
+    /** DECISION_TREE 主分类（finalDecision 同源）；其他 kind 为 null。 */
+    private String category;
     private LocalDateTime occurredAt;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
