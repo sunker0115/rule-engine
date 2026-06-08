@@ -101,6 +101,21 @@ PULL `/evaluate` 同步返回 EvalResult；PUSH `/event` 入队即返 **202**，
 
 **选型结论**：高吞吐持续负载 → JVM；快扩容 / 低内存 / serverless → native（吞吐可用 `--pgo` 补）。本引擎 eval 热路径属前者,生产默认 JVM,native 作弹性/边缘部署备选。
 
+## Metric fetch（SQL_AGGREGATE）取数路径压测 + 正确性（2026-06-08）
+
+前述所有 PULL/PUSH 压测都走 `providedMetrics`（指标由请求携带，请求线程 0 取数）。真实规则常依赖**非 provided** 指标，需 `EvalContextAssembler` 在**请求线程内同步取数**（并发 fetch + 缓存 + 800ms 超时 + 失败降级）。本轮 seed 一条依赖 `demo.agg`（`SQL_AGGREGATE`、`allow_provided=false`、`cache_ttl=60s`、只读源 `loadtest_ro`、SQL `SELECT 100` 以隔离往返成本）的规则，请求不传该指标 → 强制走 fetch。脚本 `k6/evaluate-fetch.js`（`SUBJECT_MODE=warm|cold`），seed `LoadTestSeeder#seedFetch`。
+
+| 场景 | 吞吐 | p50/p95 | 正确性(rule_hits) | 主池 HikariPool-1 |
+|---|---|---|---|---|
+| **warm**（`s-${VU}` 有界 → 预热后缓存命中） | **30,701 req/s** | 2.34 / **9.15ms** | == http_reqs ✓ | 3/10 · pending 0 |
+| **cold**（subjectId 每请求唯一 → 缓存恒穿透） | **2,840 req/s** | 23.23 / **122.57ms** | == http_reqs ✓ | 3/10 · pending 0 |
+
+- **缓存是分水岭**：`MetricCache` 键含 `subjectId`。warm 下同 subject 命中 Caffeine（内存）→ 取数近乎免费、系统**仍 eval-CPU 绑定**（1 候选规则，吞吐落在候选曲线单规则档 ~30k）；cold 下每请求一次 `SELECT` 往返、请求线程阻塞在 `allOf.get`，**吞吐塌 10.8×（30.7k→2.84k）、p95 涨 13×（9→122ms）**。
+- **新瓶颈 = 只读取数池**：cold 时主池仍 3/10 闲（DB 写不是墙），瓶颈是 `MetricDataSourceRegistry` 里**硬编码 maximumPoolSize=8** 的 `metric-ro-loadtest_ro` 池 + 请求线程同步等取数。400 VU 抢 8 条只读连接 → 吞吐封顶。**该池大小当前不可配，是 cold 取数场景的直接调优旋钮（建议提为配置项）。**
+- **取数正确性端到端验证**：warm/cold 的 `rule_hits == http_reqs`（`SELECT 100` → `demo.agg=100 ≥ 0` → HIT）证明 resolver→datasource→bind→coerce→condition 全链路对；**降级**（不配数据源启动）单请求返回 `ruleHit=false`、nodeTrace `errorCode=METRIC_FETCH_FAIL`、**HTTP 200 无 500** → 取数失败优雅降级为 MISS、不崩。
+- **设计含义**：right-size 的「请求线程 0 同步 I/O」**仅在 provided 或缓存热时成立**。需新鲜取数的规则付约 10× 吞吐代价；缓解靠（a）缓存 TTL + 业务时间局部性（风控 per-user 指标天然命中率高）、（b）调大只读池、（c）能 provided 就 provided。
+- **附带瑕疵（记一笔）**：取数命中时 nodeTrace 的 `actualValue=null`（取到的值未回填 trace），不影响决策，但排障时看不到实际取数值。
+
 ## 二期优化 backlog（按 ROI 排序，right-size 后 eval-CPU 绑定下的提速点，2026-06-08）
 
 > 前提：DB 已出热路径（Hikari 3/10、pending 0），瓶颈在 eval-CPU；线性成本 `26µs 固定 + 0.26µs/候选`。下列点按收益/改动比排序。`forType` 已是 String-switch 返回缓存单例、**非热点**（已排除）。
