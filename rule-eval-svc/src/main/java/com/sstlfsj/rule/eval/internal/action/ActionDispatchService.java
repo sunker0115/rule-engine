@@ -15,8 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 规则命中后同步派发 ActionHandler，结果写 action_execution。
- * v1 handler 均为 stub，同步调用无性能影响；v1.5 接真实 handler 时在此提取异步层。
+ * 规则命中后同步派发 ActionHandler，逐条发布 {@link com.sstlfsj.rule.eval.internal.async.ActionExecuted}
+ * 事件；action_execution 落库由 ActionExecutionPersister 异步消费。
  */
 public class ActionDispatchService {
 
