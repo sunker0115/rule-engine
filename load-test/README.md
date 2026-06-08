@@ -118,19 +118,50 @@ PULL `/evaluate` 同步返回 EvalResult；PUSH `/event` 入队即返 **202**，
 - **设计含义**：right-size 的「请求线程 0 同步 I/O」**仅在 provided 或缓存热时成立**。需新鲜取数的规则付约 10× 吞吐代价；缓解靠（a）缓存 TTL + 业务时间局部性（风控 per-user 指标天然命中率高）、（b）调大只读池、（c）能 provided 就 provided。
 - **附带瑕疵（记一笔）**：取数命中时 nodeTrace 的 `actualValue=null`（取到的值未回填 trace），不影响决策，但排障时看不到实际取数值。
 
-## 二期优化 backlog（按 ROI 排序，right-size 后 eval-CPU 绑定下的提速点，2026-06-08）
+## async-profiler 摸排（2026-06-08，证据替代直觉,**推翻 backlog 前提**）
 
-> 前提：DB 已出热路径（Hikari 3/10、pending 0），瓶颈在 eval-CPU；线性成本 `26µs 固定 + 0.26µs/候选`。下列点按收益/改动比排序。`forType` 已是 String-switch 返回缓存单例、**非热点**（已排除）。
+trace.enabled=false(生产默认)、~19.5k req/s 稳态、候选50,asprof 采 CPU+alloc 各 30s + jstat 130s。
+
+**CPU(总 10583 样本)——引擎不是瓶颈:**
+| 占比 | 来源 |
+|---|---|
+| ~58% | syscall/IO/线程等待:`__psynch_cvwait` 22%、`kevent` 17%、`write` 10%、`read` 6%… |
+| ~3% | 框架:Spring ResolvableType、Jackson、Micrometer/OTel |
+| ~1.5% | GC 线程 |
+| **~1%** | `InterpretedExecutor.execute`(AST 评估本体);`EvalEngine` ~0.3% |
+
+→ **eval 计算仅 ~1% CPU**,成本在 HTTP I/O + Tomcat NIO + 框架 + 线程协调。**eval-CPU 优化(原 #2 快照预编译 / #5 字节码)被数据否决**——优化 1% 的东西没意义。
+
+**分配(~55KB/请求,~1.08 GB/s)——你关心的对象创建:**
+| 源 | 占比 | 可减? |
+|---|---|---|
+| Object[]/byte[]/char[]/String | ~28% | 多为框架 HTTP/Jackson 缓冲,难 |
+| **BigDecimal** | **7.4%** | **引擎侧最大**:数值条件每比较 coerce × 50 候选 → 改原始类型比较 |
+| **Stream 管道**(Head/ReduceOps/Comparator lambda×3/Collections$2/BinaryOperator) | **~10%** | `resolveRuleDecisions.stream().max()`、`evaluateFirstHit.stream().sorted()` 改循环 |
+| EvalResult + Decision | 7.6% | 每候选一份,固有,低 ROI |
+| HashMap/Node、Micrometer/OTel/Spring | ~11% | 部分框架 |
+
+→ 引擎侧可减 ~25%(~14KB/req);**其余 ~75% 是框架开销**。
+
+**GC/JVM 健康:** FGC=0、old 稳定 ~54%(朝生夕死,**无泄漏/无晋升压力**);YGC ~1.6/s×~12ms(churn 偏高但不病态);Metaspace 98.8% 接近满但**稳定不增长**(sized 紧,非泄漏)。无异常。
+
+> 注:同机 k6 争核放大 syscall 占比;但"eval ~1% CPU、分配以框架+BigDecimal+stream 为主"的相对结论与压测端位置无关,稳健。
+
+## 二期优化 backlog（**已按 2026-06-08 摸排证据重排**）
+
+> 前提修正:DB 已出热路径,但**瓶颈不在 eval-CPU(实测仅 ~1%)**,而在 HTTP/框架 + 分配 churn。原"eval-CPU 绑定 + `26µs+0.26µs/候选`"的直觉前提被 profiler 否决——优化重心从"算得快"转向"少分配"(平 p99/GC)与"框架开销"。
 
 1. **PUSH 并行消费 —— 最小改动，直接解 PUSH drain 瓶颈**。`EvalServiceImpl.java:40` `new EvalActionDispatcher(10000, ...)` 是单虚拟线程 drain；eval 无状态 CPU，改 N 消费者并行 → 候选 200 的 PUSH 从 10.2k/s 拉到接近 PULL。无共享状态、安全。**首选。**
-2. **快照预编译 —— 削 `0.26µs/候选` 主导构成**。`InterpretedExecutor` 每次 evaluate 都 tree-walk AST + `node.params().get("threshold")`（Map 查找）+ 阈值/指标装箱。候选 200 时评估占 52µs > 26µs 固定。在快照加载时把 `ConditionNode` 预解析成「已绑定 strategy + 已拆箱 threshold」的扁平结构，evaluate 直接算（Aviator「编译」轻量版，不引字节码生成）→ 密集场景评估可能砍半。
-3. **miss 路径减分配 + 跳过 trace 收集 —— 平滑尾延迟**。`EvalEngine.evaluateAllCandidates` 每次 `new ArrayList×2 + List.copyOf×2`，且 trace 用不到仍 `allTraces.addAll`。24–34k/s 下这些分配让年轻代 GC 频繁、抬 p99。miss 短路不建 list、非 trace 模式跳过 `nodeTrace`。
-4. **索引层候选预过滤 —— 减评估 AST 数（线性提吞吐）**。现 index 仅按 `(tenant,scene,eventType)`；再按「规则所需 metric 是否在 event 提供」预过滤，跳过必然 miss 的候选（现仍走完整 switch 才 `return false`）。收益取决于规则数据形状。
-5. **AST → 字节码/MethodHandle 编译 —— 最大杠杆但大改**。真 Aviator 路线，per-eval 5–10×；工作量大且 GraalVM native 对运行时字节码生成不友好，**留终极**。
-6. ~~审计/action 消费侧 keep-up~~ **✅ 已做(见 Track E)**：批量 INSERT 落地,action 落库 **0.13%→2.96%(~18×)**。剩余地板=本机 MySQL 单行写吞吐(~64/s 基准,稳态 ~731/s);线程转储归因证实瓶颈在 **DB 写(persister 侧)**,非 delivery 消费者 → **并行 delivery 消费者否决**。进一步靠降 `node_trace` 写量 / action 独立写路径 / MQ,但 731/s 已远超现实 action 量,**YAGNI**。
+1. **降分配·BigDecimal(摸排证据,引擎侧最大单一分配 7.4%)**。数值条件每次比较把 metric coerce 成 `BigDecimal` × 50 候选/请求。能用 primitive(double/long)比较时走原始类型,避免 BigDecimal 创建。平 p99/降 young GC,改动局部(ConditionEvaluation/数值算子)。**首选(有数据)。**
+2. **降分配·eval 路径 stream 改循环(摸排证据 ~10%)**。`resolveRuleDecisions` 的 `.stream().max()`、`evaluateFirstHit` 的 `.stream().sorted()`、残留 `.stream().map().toList()` 制造 ReferencePipeline/ReduceOps/Comparator-lambda/Collections$2/BinaryOperator 大量临时对象。改手写循环可消。(part:`evaluateAllCandidates` 的 copyOf/stream 已在 `ed017f2` 减过。)
+3. **PUSH 并行消费 —— 仅当用 PUSH `/event` 且需高 eval 吞吐**。`EvalActionDispatcher` 单虚拟线程 drain → N 消费者并行。无共享状态、安全。但 PUSH 摄入吞吐与候选数无关、eval 本身 ~1% CPU,优先级随实际 PUSH 用量。
+4. ~~快照预编译(原 #2)~~ **数据降级**:摸排实测 `InterpretedExecutor.execute` 仅 ~1% CPU,"削 0.26µs/候选"的前提不成立——优化它收益 <0.5% CPU。除非出现 eval-CPU 真瓶颈(超大 AST / 超高候选),不做。
+5. ~~AST→字节码(原 #5)~~ / ~~索引候选预过滤(原 #4)~~ **数据降级**:同上,eval 非 CPU 瓶颈;字节码方案还与 GraalVM native 冲突。留终极/搁置。
+6. ~~审计/action 消费侧 keep-up~~ **✅ 已做(见 Track E)**:批量 INSERT,action 落库 0.13%→2.96%(~18×);瓶颈=本机 MySQL 单行写(归因否决并行 delivery)。进一步靠降 node_trace 写量 / MQ,**YAGNI**。
+7. **trace 收集跳过 ✅ 已做**:见 spec/plan `2026-06-08-eval-trace-skip`;trace.enabled=false 时 eval 不建 NodeTrace(摸排已确认 alloc 里无 NodeTrace)。
 
-**数据否决、不要碰**：Hikari 池（3/10、pending 0）、Disruptor（无队列/锁交接瓶颈）、trace 开关（开/关零差异）、**并行 delivery 消费者（瓶颈在 DB 写,Track E 归因否决）**。
-**落地顺序(eval-CPU 轴,#6 已完成)**：1 + 3（小改立竿见影）→ 2（候选密集主战场）→ 4（视规则数据）→ 5（终极）。**未启动,留待真实吞吐 SLO 驱动。**
+**数据否决、不要碰**:Hikari 池(3/10)、Disruptor、trace 开关吞吐(开/关零差异)、并行 delivery 消费者(瓶颈在 DB 写)、**eval-CPU 计算优化(摸排实测仅 ~1% CPU)**。
+**前提**:~75% 分配是框架(HTTP/Jackson/Micrometer/OTel),引擎侧降分配天花板 ~25%;要再降需碰框架配置(裁 OTel attr / Micrometer tag)。**未启动,留待真实 p99/吞吐 SLO 驱动。**
 
 ## 已知未覆盖
 - ~~action_execution 写~~ / ~~审计落库 keep-up~~ **已覆盖**：见 Track A/D/E。action 派发对请求线程零成本(offer 丢弃 + dispatch 离线程);批量 INSERT 后 action keep-up 0.13%→2.96%、审计同批量化;高 QPS 下仍丢的部分是 best-effort 设计内(地板=本机 MySQL 单行写)。强一致完整落库留 MQ(经 `DomainEventPublisher` 缝)。
