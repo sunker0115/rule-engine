@@ -2,6 +2,8 @@
 
 设计见 `docs/superpowers/specs/2026-06-08-load-test-design.md`，计划见 `docs/superpowers/plans/2026-06-08-load-test.md`。
 
+> 租户寻址：API 外部契约用 `tenantCode`（业务标识），seeder 建 `tenant(id=9001, code='loadtest')` 行，k6 发 `tenantCode='loadtest'`，入口边界解析为内部 id 9001。下文「租户 9001」均指内部 id。
+
 ## 跑法
 1. seed：`$MVN -pl rule-app -Dtest=LoadTestSeeder#seed50 -Dgroups=loadtest -DfailIfNoTests=false test`（写专用租户 9001，自清理）
 2. 启动 app（带臂参数，见 `runbook.md`）→ `k6 run k6/evaluate.js` → `scripts/capture-prometheus.sh` 抓 Hikari 帧
