@@ -29,7 +29,7 @@
 - greenfield:直接改 `V1_0__init_schema.sql` 建表为 VARCHAR(无数据,无需独立 ALTER 迁移)。
 - **不加 CHECK 约束**(否则"加类型要 ALTER"又回来了);靠 app 校验 + app 为唯一写入方。
 - 收益:本次加 DECIMAL、及将来任何数值/类型新增 = **纯代码改动,零 DB 迁移**。
-- (注:同表 `source_type`/`status` 仍 ENUM,本期不动,独立清理。)
+- **一并改同表另两个 ENUM**(一致性,本期顺带):`source_type ENUM('ATTRIBUTE','SQL_AGGREGATE','EXTERNAL_HTTP','STREAM')` → `VARCHAR(32)`;`status ENUM('ACTIVE','DISABLED')` → `VARCHAR(16)`。允许值同样上移到 app 校验。范围限 `metric_definition` 本表(不做全库 ENUM 清扫)。
 
 ### 4.2 config-svc 校验:应用层枚举为单一真相源
 - metric 创建/更新校验 `data_type ∈ 允许集`;允许集由一处 Java 定义(与 kernel `AstDataTypeResolver` 算子→类型表同源,加 `DECIMAL`)。若已有 DataType 枚举/常量则加 DECIMAL,否则建一个集中常量。非法值 → 校验拒绝(原 ENUM 的约束职责上移到 app)。
