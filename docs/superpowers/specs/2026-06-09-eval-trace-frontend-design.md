@@ -31,17 +31,24 @@ executor.execute()  [collect=TraceScope.COLLECT]
   └ 常规 trace.enabled=false → collect=false → 无 trace(省分配)
 ```
 
-## 5. 范围决策（**明天要拍的关键 call**）
-tree/table「补 trace」与审计 #1「trace 内容接线」是**同一个前端目标的两半**,有两种做法:
+## 5. 范围：选项 Y（已定 2026-06-09）
+tree/table「补 trace」(#5)与审计 #1「trace 内容接线」是**同一个前端目标的两半**,**已决定合并为一份设计(选项 Y),分 3 个增量执行**。审计 #2(eval_duration_ms)/#3(规范化表冗余)/#4(context_snapshot)各自独立,不并入本设计。
 
-- **选项 X — 最小覆盖**：tree/table 只产出与今天 Interpreted **同形态**的 trace(含同样的 `actual_value/value_source=null`、无期望值)。前端能立刻渲染 4 kind 的「结构 + ✓/✗ + 走向」,但「实际 17 / 要求 ≥18 / 来自 provided」拿不到,需后续补。
-- **选项 Y(推荐)— 面向前端的完整 trace**：在 X 基础上一次性接线内容(审计 #1):
-  - `ConditionOutcome` 从 `(status,errorCode)` 扩成携带 `resolvedValue + valueSource`(求值器返回它本就算出的数据,**非补丁**——反面是 executor 为 trace 重新解析);
-  - executor 把 `actualValue/valueSource` 写入 NodeTrace;
-  - NodeTrace 加 `expectedValue`(阈值/values)+ 可选 `displayLabel`;
-  - **4 个 kind 统一填**,保证前端跨 kind 一致渲染。
+**选项 Y — 面向前端的完整 trace（本期范围）:**
+- tree/table 产出 NodeTrace(§3 形态),与 Interpreted/Scorecard 一致读 `TraceScope.COLLECT`;
+- `ConditionOutcome` 从 `(status,errorCode)` 扩成携带 `resolvedValue + valueSource`(求值器返回它本就算出的数据,**非补丁**——反面是 executor 为 trace 重新解析);
+- 4 个 executor 把 `actualValue/valueSource` 写入 NodeTrace;
+- NodeTrace 加 `expectedValue`(阈值/values)+ 可选 `displayLabel`,落库(entity/flatten/列迁移);
+- **4 个 kind 统一填**,保证前端跨 kind 一致渲染。
 
-**推荐选项 Y。** 理由(对齐你「不打补丁、要有理由」):① 前端近期就做且是本需求的驱动方,X 会让前端立刻撞上 null actual_value,逼我们马上补——正是要避免的打补丁;② 审计证明这些字段是「设计已考虑、接线缺失」,Y 是**补全既定契约**而非新增;③ 在求值源头(ConditionOutcome)一次接对,全 kind 一致,结构最干净。代价:Y 更大,动求值核心 `ConditionOutcome`(跨切面,但有 kernel 全量测试守门)。
+**定 Y 的理由(对齐「不打补丁、要有理由」):** ① 前端近期就做且是驱动方,只做覆盖(原选项 X)会让前端立刻撞上 null actual_value、逼着马上补——正是要避免的打补丁;② 审计证明这些字段是「设计已考虑、接线缺失」,Y 是**补全既定契约**而非新增;③ 在求值源头(`ConditionOutcome`)一次接对,全 kind 一致,结构最干净。
+
+**为何合并优于分开(已论证):** 分开的优势(覆盖更快更小上、核心变更延后)在「合并+分阶段执行」里基本都能拿到;而合并独有的「不双次改 executor、不上半成品、契约一次定全」是分开拿不到的,且正中红线。
+
+**执行分 3 增量(降风险,详见实现计划):**
+- **增量 1**：`ConditionOutcome` 扩 `resolvedValue+valueSource` + 接进现有 Interpreted/Scorecard trace → kernel 全量回归(隔离核心变更)。
+- **增量 2**：tree/table 用已接好的字段建 trace。
+- **增量 3**：NodeTrace 加 `expectedValue/displayLabel` + 落库(entity/flatten/Flyway 列)。
 
 ## 6. 非目标
 - 统一二值/三值条件求值模型 / 抽共享 walker(信号驱动的独立项)。
