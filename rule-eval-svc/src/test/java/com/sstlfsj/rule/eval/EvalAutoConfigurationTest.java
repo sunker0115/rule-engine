@@ -5,7 +5,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.action.ActionIdempotencyGuard;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
-import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
+import com.sstlfsj.rule.eval.internal.action.SceneActionBindingIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
@@ -144,7 +144,7 @@ class EvalAutoConfigurationTest {
     void actionDispatchService_nullHandlers_returnsInstance() {
         ActionDispatchService svc = config.actionDispatchService(
                 null,
-                mock(SceneActionBindingReadMapper.class),
+                mock(SceneActionBindingIndex.class),
                 mock(DomainEventPublisher.class),
                 mock(ActionIdempotencyGuard.class));
         assertNotNull(svc);
@@ -155,7 +155,7 @@ class EvalAutoConfigurationTest {
         ActionHandler handler = new BlockTxStub();
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(handler),
-                mock(SceneActionBindingReadMapper.class),
+                mock(SceneActionBindingIndex.class),
                 mock(DomainEventPublisher.class),
                 mock(ActionIdempotencyGuard.class));
         assertNotNull(svc);
@@ -166,7 +166,7 @@ class EvalAutoConfigurationTest {
         ActionHandler noAnnotation = ctx -> ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(noAnnotation),
-                mock(SceneActionBindingReadMapper.class),
+                mock(SceneActionBindingIndex.class),
                 mock(DomainEventPublisher.class),
                 mock(ActionIdempotencyGuard.class));
         assertNotNull(svc);

@@ -3,7 +3,6 @@ package com.sstlfsj.rule.eval.internal.action;
 import com.sstlfsj.rule.eval.internal.async.ActionExecuted;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
-import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
 import com.sstlfsj.rule.kernel.api.model.Decision;
@@ -20,7 +19,7 @@ import static org.mockito.Mockito.*;
 /** ActionDispatchService 单元测试：验证 handler 派发、空绑定、handler 缺失、幂等与失败释放五个场景。 */
 class ActionDispatchServiceTest {
 
-    private SceneActionBindingReadMapper bindingMapper;
+    private SceneActionBindingIndex bindingIndex;
     private DomainEventPublisher eventPublisher;
     private ActionHandler stubHandler;
     private ActionIdempotencyGuard guard;
@@ -28,7 +27,7 @@ class ActionDispatchServiceTest {
 
     @BeforeEach
     void setUp() {
-        bindingMapper = mock(SceneActionBindingReadMapper.class);
+        bindingIndex = mock(SceneActionBindingIndex.class);
         eventPublisher = mock(DomainEventPublisher.class);
         stubHandler = mock(ActionHandler.class);
         when(stubHandler.execute(any())).thenReturn(ActionResult.success("aid", "BLOCK_TRANSACTION"));
@@ -37,14 +36,14 @@ class ActionDispatchServiceTest {
 
         service = new ActionDispatchService(
                 Map.of("BLOCK_TRANSACTION", stubHandler),
-                bindingMapper,
+                bindingIndex,
                 eventPublisher,
                 guard);
     }
 
     @Test
     void dispatch_withBinding_callsHandlerAndPublishesEvent() {
-        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
+        when(bindingIndex.get(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
 
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
@@ -58,7 +57,7 @@ class ActionDispatchServiceTest {
 
     @Test
     void dispatch_emptyBindings_doesNothing() {
-        when(bindingMapper.findBySceneCode(1L, "fraud_check")).thenReturn(List.of());
+        when(bindingIndex.get(1L, "fraud_check")).thenReturn(List.of());
 
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
                 List.of(new Decision("REJECT", "", 10, 1L)));
@@ -69,7 +68,7 @@ class ActionDispatchServiceTest {
 
     @Test
     void dispatch_handlerNotRegistered_publishesSkippedEvent() {
-        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
+        when(bindingIndex.get(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("UNKNOWN_ACTION", null)));
 
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
@@ -83,7 +82,7 @@ class ActionDispatchServiceTest {
 
     @Test
     void dispatch_actionId_isDeterministicActionType() {
-        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
+        when(bindingIndex.get(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
 
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
@@ -95,7 +94,7 @@ class ActionDispatchServiceTest {
 
     @Test
     void dispatch_claimRejected_skipsHandlerAndPublish() {
-        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
+        when(bindingIndex.get(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
         when(guard.claim(any())).thenReturn(false);   // 已被占坑（重复 eventId）
 
@@ -108,7 +107,7 @@ class ActionDispatchServiceTest {
 
     @Test
     void dispatch_handlerFailed_releasesClaimForRetry() {
-        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
+        when(bindingIndex.get(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
         when(stubHandler.execute(any()))
                 .thenReturn(ActionResult.failed("BLOCK_TRANSACTION", "BLOCK_TRANSACTION", "ERR", true));

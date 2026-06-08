@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.repository;
 
+import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingFullRow;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -10,6 +11,20 @@ import java.util.List;
 /** scene_action_binding 只读 Mapper，按 sceneCode 查询该场景下所有 ActionHandler 绑定。 */
 @Mapper
 public interface SceneActionBindingReadMapper {
+
+    /**
+     * 全量查询所有场景的 Action 绑定，携带 tenant + sceneCode 分组键。
+     * 供 {@link com.sstlfsj.rule.eval.internal.action.SceneActionBindingIndex} 启动期一次性载入内存。
+     *
+     * @return 全量绑定行（含归组键）
+     */
+    @Select("""
+            SELECT s.tenant_id AS tenantId, s.code AS sceneCode,
+                   sab.action_type AS actionType, sab.default_params AS defaultParamsJson
+            FROM scene_action_binding sab
+            JOIN scene s ON sab.scene_id = s.id
+            """)
+    List<SceneActionBindingFullRow> findAll();
 
     /**
      * 查询指定租户和场景下的所有 Action 绑定。

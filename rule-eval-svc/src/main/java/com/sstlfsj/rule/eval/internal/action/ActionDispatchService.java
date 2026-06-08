@@ -3,7 +3,6 @@ package com.sstlfsj.rule.eval.internal.action;
 import com.sstlfsj.rule.eval.internal.async.ActionExecuted;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
-import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
 import com.sstlfsj.rule.kernel.api.model.Decision;
@@ -23,16 +22,16 @@ public class ActionDispatchService {
     private static final Logger log = LoggerFactory.getLogger(ActionDispatchService.class);
 
     private final Map<String, ActionHandler> handlers;
-    private final SceneActionBindingReadMapper bindingMapper;
+    private final SceneActionBindingIndex bindingIndex;
     private final DomainEventPublisher eventPublisher;
     private final ActionIdempotencyGuard idempotencyGuard;
 
     public ActionDispatchService(Map<String, ActionHandler> handlers,
-                                 SceneActionBindingReadMapper bindingMapper,
+                                 SceneActionBindingIndex bindingIndex,
                                  DomainEventPublisher eventPublisher,
                                  ActionIdempotencyGuard idempotencyGuard) {
         this.handlers = handlers;
-        this.bindingMapper = bindingMapper;
+        this.bindingIndex = bindingIndex;
         this.eventPublisher = eventPublisher;
         this.idempotencyGuard = idempotencyGuard;
     }
@@ -49,7 +48,7 @@ public class ActionDispatchService {
      */
     public void dispatch(Long sessionId, Long tenantId, String eventId,
                          String sceneCode, List<Decision> hitDecisions) {
-        List<SceneActionBindingRow> bindings = bindingMapper.findBySceneCode(tenantId, sceneCode);
+        List<SceneActionBindingRow> bindings = bindingIndex.get(tenantId, sceneCode);
         if (bindings.isEmpty()) {
             return;
         }
