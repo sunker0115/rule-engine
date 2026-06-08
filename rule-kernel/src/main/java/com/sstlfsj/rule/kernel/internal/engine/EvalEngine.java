@@ -125,10 +125,11 @@ public class EvalEngine {
                     Decision winner = resolveRuleDecisions(snap, r).stream()
                             .max(DECISION_PRECEDENCE)
                             .orElse(null);
-                    return new EvalResult(true, winner,
-                            winner == null ? List.of() : List.of(winner),
+                    // winner==null（命中但无决策/无 binding）不计 FIRST_HIT，与 evaluateAllCandidates 的「无决策即非命中」一致
+                    if (winner == null) continue;
+                    return new EvalResult(true, winner, List.of(winner),
                             r.nodeTrace(), r.errorCode(), List.of(), r.score(),
-                            winner == null ? null : winner.category(), null);
+                            winner.category(), null);
                 }
             } catch (Exception ignored) {
             }

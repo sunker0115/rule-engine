@@ -227,4 +227,18 @@ class EvalEngineStrategyTest {
         assertEquals("PASS", r.finalDecision().code());
         assertNull(r.finalDecision().category());
     }
+
+    @Test
+    void firstHit_hitButNoDecisionBinding_isMissNotHit() {
+        // 命中但无决策且无 binding：FIRST_HIT 不计命中，与 evaluateAllCandidates「无决策即非命中」对齐
+        RuleVersionExecutor boolExec = (s, c) -> EvalResult.hit();
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L,"fraud","t1",EMPTY_AND,List.of(),
+                List.of(),List.of(),"AST_BOOLEAN");
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.setStrategy("t1","fraud",SceneExecutionStrategy.FIRST_HIT);
+        index.update("t1","fraud","*",List.of(snap));
+        EvalEngine engine = new EvalEngine(index,new EvalContextAssembler(List.of(),List.of()),
+                Map.of(),Map.of("AST_BOOLEAN",boolExec));
+        assertFalse(engine.evaluate(event("t1","fraud")).ruleHit());
+    }
 }
