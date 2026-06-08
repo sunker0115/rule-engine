@@ -119,6 +119,20 @@ class DecisionTreeExecutorTest {
     }
 
     @Test
+    void hitLeaf_decisionCarriesLeafCategory() {
+        // 单层决策树:if(GT) then leaf(decisionCode=REVIEW, category=中危),命中后 category 焊到 Decision
+        ConditionNode cond = new ConditionNode(GT, "flag", null, Map.of(), 0.0);
+        DecisionLeafNode then = new DecisionLeafNode("REVIEW", "中危");
+        IfNode tree = new IfNode(cond, then, null);
+
+        EvalResult result = executor(alwaysTrue).execute(snapshot(tree, "REVIEW"), ctx());
+
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.finalDecision().code()).isEqualTo("REVIEW");
+        assertThat(result.finalDecision().category()).isEqualTo("中危");
+    }
+
+    @Test
     void wrongAstType_returnsErrorCode() {
         AndNode wrongAst = new AndNode(List.of(), null, null);
         EvalResult result = executor(alwaysTrue)

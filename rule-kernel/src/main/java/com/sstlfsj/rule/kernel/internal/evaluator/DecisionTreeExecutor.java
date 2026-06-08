@@ -89,8 +89,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         Decision decision = snapshot.decisionBindings().stream()
                 .filter(b -> b.decisionCode().equals(leaf.decisionCode()))
                 .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                .map(b -> new Decision(b.decisionCode(), "", b.priority(), snapshot.ruleVersionId()))
-                .orElseGet(() -> new Decision(leaf.decisionCode(), "", 0, snapshot.ruleVersionId()));
+                .map(b -> new Decision(b.decisionCode(), "", b.priority(), snapshot.ruleVersionId(), leaf.category()))
+                .orElseGet(() -> new Decision(leaf.decisionCode(), "", 0, snapshot.ruleVersionId(), leaf.category()));
         return new EvalResult(true, decision, List.of(decision),
                 List.of(), null, List.of(), null, leaf.category(), null);
     }
