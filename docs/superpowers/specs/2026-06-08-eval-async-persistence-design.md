@@ -1,6 +1,8 @@
 # 评估结果事件化异步持久化 + action 异步派发架构设计
 
-> Status: Draft（2026-06-08）。把评估后的副作用（审计落库 + action 派发）从请求线程搬到**事件驱动异步**，请求线程只做纯计算并同步返回 EvalResult。压测（2026-06-08-load-test）已证明：同步 `session` 两写是吞吐墙（池绑定，本机 ~600 req/s 封顶），trace 已异步则零成本。
+> Status: 已实施并 right-size（2026-06-08）。把评估后的副作用（审计落库 + action 派发）从请求线程搬到**事件驱动异步**，请求线程只做纯计算并同步返回 EvalResult。压测（2026-06-08-load-test）已证明：同步 `session` 两写是吞吐墙（池绑定，本机 ~600 req/s 封顶），trace 已异步则零成本。
+
+> **实施调整（right-size，2026-06-08）**：§2/§4/§5 的"action 持久 outbox（Modulith events-jdbc + EVENT_PUBLICATION + at-least-once）"在实施后**降级为本期内存 best-effort 异步**（`InProcessAsyncDeliveryChannel`）。原因：v1 ActionHandler 为 stub、无真实不可丢副作用，DB outbox 既过度设计（YAGNI）又在压测中成为新瓶颈（@Transactional 持久写顶替 session 写、吞吐无提升）。**保留 `ActionDeliveryChannel` 抽象作 MQ 缝**——待真实「不可丢」handler 落地，经此缝换 Kafka/AMQP 实现 durable，发布方不动。审计内存异步（可丢）维持原设计。right-size 后压测：池=10 吞吐 246→**24,434 req/s（~100×）**，p95 1.52s→12ms。详见 `load-test/README.md`。
 
 ## 1. 动机（压测实证）
 
