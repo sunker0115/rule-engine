@@ -257,3 +257,20 @@ seed 一条 `scene_action_binding`(scene17, SEND_ALERT)，PULL 候选50 复跑�
 - **真瓶颈 = JDBC INSERT 的 DB 写容量（persister 侧），不是 delivery 消费者**。delivery 大部分时间在 200ms 节拍里睡，能出 ~2500/s，但下游 persister 吃不下、多发的被 persister 队列 offer 丢弃。
 - `audit-persister` 100% 钉死 → 审计每请求一条、直连请求线程无漏斗，把共享 MySQL 写预算占了大头；`action_execution` 的 ~731/s 是抢剩的。
 - **⇒ 并行 delivery 消费者无用**（它本就闲）。要再抬 action keep-up 的杠杆在 DB 写侧：降写量（`node_trace` 每请求 50 行是写大户）、更大/更少 INSERT、放宽 fsync / 换更快 DB、强一致走 MQ + 批量 loader，或给 action 独立写路径别跟 audit 抢。
+
+## 降分配复测：去 BigDecimal + stream→loop（PULL · 候选50 · 池10 · trace off · JVM zulu-25 · 2026-06-08）
+
+backlog #1（数值类型分派，LONG/DOUBLE 走原始比较，去 BigDecimal）+ #2（`EvalEngine` 裁决/排序 stream 改手写循环）落地后复测。seed 规则 `demo.score GTE 0`（`dataType=LONG`，请求传 100）正是 LONG 比较路径——直接命中 fast-path。
+
+| 指标 | 摸排基线（去优化前） | 本轮（去 BigDecimal + stream） | 说明 |
+|---|---|---|---|
+| 吞吐 | ~19.5k req/s 稳态 | **33,131 req/s** | 同机散点，不单归因（eval 仅 ~1% CPU）；至少无回退 |
+| p50/p95 | — / — | **1.87 / 9.09ms** | 优于历史 right-size 臂（2.49/11.72） |
+| **BigDecimal 分配占比** | **7.4%（引擎侧最大）** | **0%（profile 中完全消失）** | LONG→`Long.compare`，零 BigDecimal ✅ |
+| **EvalEngine stream/lambda** | 属 ~10% stream 管道 | **~0.08% 残留** | `.stream().max()/.sorted()`→循环，比较器提 static final ✅ |
+| YGC | ~1.6/s × ~12ms | **~1.5/s × ~12.7ms** | 频率持平但吞吐 ↑70% → **每请求 churn 明显下降** |
+| FGC / old | 0 / 稳定 54% | **0 / 稳定 60-69%** | 朝生夕死，无晋升/泄漏 |
+
+- **直接证据（profile）**：BigDecimal 从引擎侧最大单一分配（7.4%）降到 **0**；EvalEngine 的 stream 帧从 ~10% 的组成项降到 0.08% 残留。两处可减分配按预期清除。
+- **EvalResult(7.01%) + Decision(4.69%)** 现成为引擎侧最大分配——这是每候选必产的结果对象（50/req，固有，README 已标低 ROI），噪声被清掉后自然冒头。
+- GC 频率持平而吞吐 ↑ → 归一化看每请求分配下降；系统仍非 GC-bound（FGC=0），符合摸排"瓶颈在 HTTP/框架"定性。引擎侧降分配天花板（~25%）的两块大头（BigDecimal + stream）已兑现。
