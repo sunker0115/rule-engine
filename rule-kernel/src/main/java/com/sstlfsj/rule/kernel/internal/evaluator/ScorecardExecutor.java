@@ -37,7 +37,8 @@ public class ScorecardExecutor implements RuleVersionExecutor {
 
         // collect=false 时跳过 NodeTrace 构建（traces 保持空），score/decision/hit 不受影响
         boolean collect = TraceScope.COLLECT.orElse(true);
-        List<NodeTrace> factorTraces = new ArrayList<>();
+        // collect=false 时不分配，遵循「trace 关闭即零分配」契约
+        List<NodeTrace> factorTraces = collect ? new ArrayList<>() : null;
         double score = 0.0;
         Long rvId = snapshot.ruleVersionId();
 
