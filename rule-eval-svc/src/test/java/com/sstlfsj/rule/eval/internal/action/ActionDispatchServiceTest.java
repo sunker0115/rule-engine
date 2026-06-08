@@ -1,8 +1,8 @@
 package com.sstlfsj.rule.eval.internal.action;
 
-import com.sstlfsj.rule.eval.internal.domain.ActionExecutionEntity;
+import com.sstlfsj.rule.eval.internal.async.ActionExecuted;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
@@ -17,11 +17,11 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** ActionDispatchService 单元测试：验证 handler 派发、空绑定、handler 缺失、异常隔离四个场景。 */
+/** ActionDispatchService 单元测试：验证 handler 派发、空绑定、handler 缺失、幂等与失败释放五个场景。 */
 class ActionDispatchServiceTest {
 
     private SceneActionBindingReadMapper bindingMapper;
-    private ActionExecutionMapper executionMapper;
+    private DomainEventPublisher eventPublisher;
     private ActionHandler stubHandler;
     private ActionIdempotencyGuard guard;
     private ActionDispatchService service;
@@ -29,7 +29,7 @@ class ActionDispatchServiceTest {
     @BeforeEach
     void setUp() {
         bindingMapper = mock(SceneActionBindingReadMapper.class);
-        executionMapper = mock(ActionExecutionMapper.class);
+        eventPublisher = mock(DomainEventPublisher.class);
         stubHandler = mock(ActionHandler.class);
         when(stubHandler.execute(any())).thenReturn(ActionResult.success("aid", "BLOCK_TRANSACTION"));
         guard = mock(ActionIdempotencyGuard.class);
@@ -38,12 +38,12 @@ class ActionDispatchServiceTest {
         service = new ActionDispatchService(
                 Map.of("BLOCK_TRANSACTION", stubHandler),
                 bindingMapper,
-                executionMapper,
+                eventPublisher,
                 guard);
     }
 
     @Test
-    void dispatch_withBinding_callsHandlerAndInsertsExecution() {
+    void dispatch_withBinding_callsHandlerAndPublishesEvent() {
         when(bindingMapper.findBySceneCode(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
 
@@ -51,11 +51,9 @@ class ActionDispatchServiceTest {
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
         verify(stubHandler).execute(any(ActionContext.class));
-        verify(executionMapper).insert(argThat((ActionExecutionEntity entity) ->
-                "BLOCK_TRANSACTION".equals(entity.getActionType())
-                && "SUCCESS".equals(entity.getStatus())
-                && Long.valueOf(42L).equals(entity.getEvaluationSessionId())
-                && "evt-001".equals(entity.getEventId())));
+        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
+                && "BLOCK_TRANSACTION".equals(ae.actionId())
+                && "SUCCESS".equals(ae.result().status().name())));
     }
 
     @Test
@@ -66,11 +64,11 @@ class ActionDispatchServiceTest {
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
         verifyNoInteractions(stubHandler);
-        verifyNoInteractions(executionMapper);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
-    void dispatch_handlerNotRegistered_insertsSkippedRecord() {
+    void dispatch_handlerNotRegistered_publishesSkippedEvent() {
         when(bindingMapper.findBySceneCode(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("UNKNOWN_ACTION", null)));
 
@@ -78,21 +76,9 @@ class ActionDispatchServiceTest {
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
         verifyNoInteractions(stubHandler);
-        verify(executionMapper).insert(argThat((ActionExecutionEntity entity) ->
-                "UNKNOWN_ACTION".equals(entity.getActionType())
-                && "SKIPPED".equals(entity.getStatus())
-                && "NO_HANDLER".equals(entity.getErrorCode())));
-    }
-
-    @Test
-    void dispatch_insertException_doesNotPropagate() {
-        when(bindingMapper.findBySceneCode(1L, "fraud_check"))
-                .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
-        doThrow(new RuntimeException("DB 写入失败")).when(executionMapper).insert(any(ActionExecutionEntity.class));
-
-        // 插入异常不应向上传播，不影响 EvalResult
-        service.dispatch(42L, 1L, "evt-001", "fraud_check",
-                List.of(new Decision("REJECT", "", 10, 1L)));
+        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
+                && "UNKNOWN_ACTION".equals(ae.actionType())
+                && ae.result().status() == ActionResult.ActionStatus.SKIPPED));
     }
 
     @Test
@@ -103,12 +89,12 @@ class ActionDispatchServiceTest {
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
-        verify(executionMapper).insert(argThat((ActionExecutionEntity e) ->
-                "BLOCK_TRANSACTION".equals(e.getActionId())));
+        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
+                && "BLOCK_TRANSACTION".equals(ae.actionId())));
     }
 
     @Test
-    void dispatch_claimRejected_skipsHandlerAndInsert() {
+    void dispatch_claimRejected_skipsHandlerAndPublish() {
         when(bindingMapper.findBySceneCode(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
         when(guard.claim(any())).thenReturn(false);   // 已被占坑（重复 eventId）
@@ -117,7 +103,7 @@ class ActionDispatchServiceTest {
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
         verifyNoInteractions(stubHandler);
-        verify(executionMapper, never()).insert(any(ActionExecutionEntity.class));
+        verify(eventPublisher, never()).publish(any());
     }
 
     @Test
@@ -131,7 +117,7 @@ class ActionDispatchServiceTest {
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
         verify(guard).release(anyString());
-        verify(executionMapper).insert(argThat((ActionExecutionEntity e) ->
-                "FAILED".equals(e.getStatus())));
+        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
+                && "FAILED".equals(ae.result().status().name())));
     }
 }

@@ -2,7 +2,7 @@ package com.sstlfsj.rule.eval;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.action.ActionIdempotencyGuard;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
@@ -195,14 +195,14 @@ public class EvalAutoConfiguration {
      *
      * @param actionHandlers  Spring 容器中所有 ActionHandler bean（可为空）
      * @param bindingMapper   scene_action_binding 只读 Mapper
-     * @param executionMapper action_execution 写 Mapper
+     * @param eventPublisher  领域事件发布缝（ActionExecuted 由 persister 异步落库）
      * @return ActionDispatchService 实例
      */
     @Bean
     public ActionDispatchService actionDispatchService(
             @Autowired(required = false) List<ActionHandler> actionHandlers,
             SceneActionBindingReadMapper bindingMapper,
-            ActionExecutionMapper executionMapper,
+            DomainEventPublisher eventPublisher,
             ActionIdempotencyGuard idempotencyGuard) {
         Map<String, ActionHandler> handlerMap = new HashMap<>();
         if (actionHandlers != null) {
@@ -213,6 +213,6 @@ public class EvalAutoConfiguration {
                 }
             }
         }
-        return new ActionDispatchService(handlerMap, bindingMapper, executionMapper, idempotencyGuard);
+        return new ActionDispatchService(handlerMap, bindingMapper, eventPublisher, idempotencyGuard);
     }
 }

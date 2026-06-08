@@ -4,7 +4,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.action.ActionIdempotencyGuard;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
@@ -145,7 +145,7 @@ class EvalAutoConfigurationTest {
         ActionDispatchService svc = config.actionDispatchService(
                 null,
                 mock(SceneActionBindingReadMapper.class),
-                mock(ActionExecutionMapper.class),
+                mock(DomainEventPublisher.class),
                 mock(ActionIdempotencyGuard.class));
         assertNotNull(svc);
     }
@@ -156,7 +156,7 @@ class EvalAutoConfigurationTest {
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(handler),
                 mock(SceneActionBindingReadMapper.class),
-                mock(ActionExecutionMapper.class),
+                mock(DomainEventPublisher.class),
                 mock(ActionIdempotencyGuard.class));
         assertNotNull(svc);
     }
@@ -167,7 +167,7 @@ class EvalAutoConfigurationTest {
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(noAnnotation),
                 mock(SceneActionBindingReadMapper.class),
-                mock(ActionExecutionMapper.class),
+                mock(DomainEventPublisher.class),
                 mock(ActionIdempotencyGuard.class));
         assertNotNull(svc);
     }

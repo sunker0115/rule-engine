@@ -1,8 +1,8 @@
 package com.sstlfsj.rule.eval.internal.action;
 
-import com.sstlfsj.rule.eval.internal.domain.ActionExecutionEntity;
+import com.sstlfsj.rule.eval.internal.async.ActionExecuted;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
@@ -11,7 +11,6 @@ import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -25,22 +24,22 @@ public class ActionDispatchService {
 
     private final Map<String, ActionHandler> handlers;
     private final SceneActionBindingReadMapper bindingMapper;
-    private final ActionExecutionMapper executionMapper;
+    private final DomainEventPublisher eventPublisher;
     private final ActionIdempotencyGuard idempotencyGuard;
 
     public ActionDispatchService(Map<String, ActionHandler> handlers,
                                  SceneActionBindingReadMapper bindingMapper,
-                                 ActionExecutionMapper executionMapper,
+                                 DomainEventPublisher eventPublisher,
                                  ActionIdempotencyGuard idempotencyGuard) {
         this.handlers = handlers;
         this.bindingMapper = bindingMapper;
-        this.executionMapper = executionMapper;
+        this.eventPublisher = eventPublisher;
         this.idempotencyGuard = idempotencyGuard;
     }
 
     /**
-     * 派发本次命中的所有 Decision 对应的 Action，逐条插入 action_execution。
-     * insert 异常静默记录 warn 日志，不向上传播（审计失败不影响 EvalResult）。
+     * 派发本次命中的所有 Decision 对应的 Action，逐条发布 ActionExecuted 事件。
+     * 落库由 ActionExecutionPersister 异步消费，dispatch 只负责执行与发布。
      *
      * @param sessionId    评估会话 ID
      * @param tenantId     租户 ID
@@ -67,8 +66,9 @@ public class ActionDispatchService {
                 if (result.status() == ActionResult.ActionStatus.FAILED) {
                     idempotencyGuard.release(key);   // 失败释放，让后续重发能重试
                 }
-                insertExecution(sessionId, tenantId, eventId, actionId,
-                        binding.actionType(), decision.code(), result);
+                eventPublisher.publish(new ActionExecuted(
+                        sessionId, tenantId, eventId, actionId, binding.actionType(),
+                        decision.code(), result));
             }
         }
     }
@@ -82,33 +82,5 @@ public class ActionDispatchService {
         ActionContext ctx = new ActionContext(actionId, binding.actionType(),
                 Map.of(), null, null, decision.code());
         return handler.execute(ctx);
-    }
-
-    private void insertExecution(Long sessionId, Long tenantId, String eventId,
-                                 String actionId, String actionType, String decisionCode,
-                                 ActionResult result) {
-        ActionExecutionEntity entity = new ActionExecutionEntity();
-        entity.setEvaluationSessionId(sessionId);
-        entity.setTenantId(tenantId);
-        entity.setEventId(eventId);
-        entity.setActionId(actionId);
-        entity.setActionType(actionType);
-        entity.setDecisionCode(decisionCode);
-        entity.setStatus(result.status().name());
-        entity.setErrorCode(result.errorCode());
-        entity.setRetryable(result.retryable());
-        entity.setRetryCount(0);
-        entity.setCompensated(false);
-        entity.setExecutedAt(LocalDateTime.now());
-        entity.setCreatedAt(LocalDateTime.now());
-        try {
-            executionMapper.insert(entity);
-        } catch (org.springframework.dao.DuplicateKeyException e) {
-            // 行级 backstop：缓存漏掉的重复（重启/多实例）在此撞 uk_idempotency，预期内
-            log.debug("action_execution 幂等行已存在(uk backstop)，actionId={}, eventId={}", actionId, eventId);
-        } catch (Exception e) {
-            log.warn("action_execution 写库失败，actionId={}, actionType={}: {}",
-                    actionId, actionType, e.getMessage());
-        }
     }
 }
