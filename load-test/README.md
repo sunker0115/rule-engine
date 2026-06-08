@@ -159,9 +159,9 @@ seed 一条 `scene_action_binding`(scene17, SEND_ALERT)，PULL 候选50 复跑�
 | action_execution | **4,500 (~30/s)** | **0.13%** | ActionExecutionPersister：**同步内联 insert**（无自有队列/批） |
 
 - **active action 派发对请求线程吞吐零影响**：带 binding **23,371 req/s**（≈ 无 binding 21,374，差值噪声），p95 12.3ms，0 err，Hikari 3/10·pending 0。因 `InProcessAsyncDeliveryChannel.deliver()` 是 `offer()`（满即丢、不阻塞），`dispatch`+claim+handler+insert 全在单条异步消费线程上，离开请求线程。
-- **action 落库高 QPS 下 99.87% best-effort 丢弃**，比审计低 15×。根因：`ActionExecutionPersister.accept` 是同步内联 insert（Spring 默认同步多播），串在单条 action-delivery 消费线程上 → 单连接串行 insert ≈ 30/s 是地板。0 写库错误 → 丢弃静默，符合设计。
+- **action 落库高 QPS 下 99.87% best-effort 丢弃**（4,500/3.5M），比审计低 15×。0 写库错误 → 丢弃静默，符合设计。
 - **请求内幂等去重生效**：50 个 PASS 决策同键 → 1 行（Caffeine claim）。
-- **结论（→ 二期）**：action persister 缺自有异步批量消费者，是 action keep-up 瓶颈；改成与 AuditPersister 同构的异步批量消费（解耦 insert 出 delivery 线程）。
+- **初判（后被 Track D 推翻）**：当时归因为 `ActionExecutionPersister.accept` 同步内联 insert 串在单条 action-delivery 线程上。Track D 实测推翻——见下。
 
 ### Track B：幂等去重（Caffeine claim-before-execute）
 
@@ -173,3 +173,27 @@ seed 一条 `scene_action_binding`(scene17, SEND_ALERT)，PULL 候选50 复跑�
 
 - ~40k 并发重复事件 → 恰好 200 行、**每键 1 行、零重复**，去重比 200:1。
 - **0 uk backstop 命中** → Caffeine claim 在 insert 之前完成 100% 去重，uk_idempotency 兜底未触发。claim-before-execute 在并发下完全可靠。
+
+### Track D：`ActionExecutionPersister` 改异步后的验证（**负面结果**，推翻 Track A 初判）
+
+把 `ActionExecutionPersister` 从同步内联 insert 改成与 `AuditPersister` 同构的异步批量消费（commit `52f7e65`）后，同 23k QPS 复跑：
+
+| | action 落库 / 3.5M 请求 | 落库率 | 吞吐 |
+|---|---|---|---|
+| 改前（同步内联） | 4,500 | 0.13% | 23,371 |
+| **改后（异步批量）** | **4,443** | **0.13%** | 22,907 |
+
+- **改异步没有提升 keep-up**（4,443 ≈ 4,500）。请求线程吞吐照旧不受影响（offer 丢弃 + dispatch 离线程）。
+
+接着加 `SceneActionBindingIndex` 内存索引（commit `9939998`，去掉每 dispatch 的 `findBySceneCode` SELECT），同 23k QPS 三测：
+
+| | action 落库 | 落库率 | 空载纯 drain |
+|---|---|---|---|
+| 原始（同步内联 insert） | 4,500 / 3.5M | 0.13% | — |
+| `52f7e65`（异步 persister） | 4,443 / 3.5M | 0.13% | **~63/s** |
+| `9939998`（+binding 缓存） | 7,106 / 2.7M | 0.26% | **~64.6/s** |
+
+- **缓存 binding 同样没提升消费者**：空载纯 drain `64.6/s` 与缓存前 `~63/s` 一致 → binding SELECT 也不是地板。
+- **真正的地板 = 本机 MySQL 单行 INSERT 吞吐（~64/s，fsync 绑定的笔记本）**。`ActionExecutionPersister`/`AuditPersister` 的"批量"只批量 drain，**SQL 仍是逐行 `mapper.insert`**（每行一次 autocommit + fsync），所以 ~64/s 封顶。`52f7e65`（搬 insert 离 dispatcher 线程）与 `9939998`（去 SELECT）都砍在了非瓶颈层 → 本机测不出收益。
+- **两改动仍保留（superpowers 审核结论）**：均消除热路径上的真实每请求 I/O（dispatcher 内联写库 / 每 dispatch 一次 SELECT），**生产快 DB / 批量 INSERT / MQ 落地后才显形**；且与既有 `AuditPersister` / `SceneRuleIndex` 模式统一，非 YAGNI 投机。
+- **真正提速杠杆（二期，按 ROI）**：(1) **批量/多行 INSERT**（`INSERT ... VALUES (...),(...)` 或 MyBatis batch executor）—— 直接抬 INSERT 地板，是当前唯一能动 keep-up 的点；(2) action-delivery 并行消费；(3) 强一致走 MQ（经 `DomainEventPublisher` 缝）。in-process action 落库本就 best-effort（设计内可丢）。
