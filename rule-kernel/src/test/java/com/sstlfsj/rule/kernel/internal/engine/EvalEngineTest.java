@@ -2,15 +2,21 @@ package com.sstlfsj.rule.kernel.internal.engine;
 
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
+import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
+import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.Test;
 
 // 策略分支（switch: FIRST_HIT / HIGHEST_PRIORITY / ALL_HITS）测试见 EvalEngineStrategyTest
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -234,5 +240,39 @@ class EvalEngineTest {
         EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"));
         assertTrue(result.ruleHit());
         assertEquals("REJECT", result.finalDecision().code());
+    }
+
+    private static final String ALWAYS_TRUE = "ALWAYS_TRUE";
+    // 恒真条件：无指标依赖，命中布尔在收集/不收集 trace 两种模式下完全一致
+    private static final AstNode ALWAYS_TRUE_AST =
+            new ConditionNode(ALWAYS_TRUE, null, null, Map.of(), 0.0);
+
+    /** 用真实 InterpretedExecutor（读 TraceScope.COLLECT）+ 恒真算子构建引擎，以验证 collectTrace 开关。 */
+    private static EvalEngine interpretedEngine() {
+        Map<String, ConditionEvaluator> evaluators = new HashMap<>(KernelEvaluators.defaults());
+        evaluators.put(ALWAYS_TRUE, (node, ctx) -> true);
+        return new EvalEngine(new SceneRuleIndex(),
+                new EvalContextAssembler(List.of(), List.of()),
+                Map.of(), Map.of("AST_BOOLEAN", new InterpretedExecutor(evaluators)), true);
+    }
+
+    @Test
+    void collectTraceParam_togglesNodeTrace_butKeepsSameRuleHit() {
+        EvalEngine engine = interpretedEngine();
+        RuleEvent ev = event("t1", "scene", "ORDER");
+        List<RuleVersionSnapshot> candidates = List.of(new RuleVersionSnapshot(
+                1L, "scene", "t1", ALWAYS_TRUE_AST, List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("BLOCK", 10)),
+                List.of(), "AST_BOOLEAN"));
+        Instant now = Instant.now();
+
+        EvalOutcome off = engine.evaluateWithContext(ev, candidates,
+                SceneExecutionStrategy.HIGHEST_PRIORITY, now, false);
+        EvalOutcome on = engine.evaluateWithContext(ev, candidates,
+                SceneExecutionStrategy.HIGHEST_PRIORITY, now, true);
+
+        assertTrue(off.result().nodeTrace().isEmpty());
+        assertFalse(on.result().nodeTrace().isEmpty());
+        assertEquals(on.result().ruleHit(), off.result().ruleHit());
     }
 }
