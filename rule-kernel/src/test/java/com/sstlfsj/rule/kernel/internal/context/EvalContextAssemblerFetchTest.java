@@ -141,4 +141,43 @@ class EvalContextAssemblerFetchTest {
 
         assertThat(seen[0]).isEqualTo(NOW);
     }
+
+    @Test
+    void fetchTimeout_degradesToError() {
+        // handler 睡 500ms 超过 50ms 超时 → invokeAll 中断该子任务 → 降级 error，且不挂满 500ms
+        MetricSourceHandler slow = q -> {
+            try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return new MetricValue(1L, "LONG", "FETCHED");
+        };
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
+        EvalContextAssembler asm = new EvalContextAssembler(
+                List.of(), Map.of("SQL_AGGREGATE", slow), resolver, null, EXEC, 50L);
+
+        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
+
+        MetricValue mv = ctx.getMetric("balance");
+        assertThat(mv.isError()).isTrue();
+        assertThat(mv.errorCode()).isEqualTo("METRIC_FETCH_FAIL");
+    }
+
+    @Test
+    void partialTimeout_fastSucceedsSlowDegrades() {
+        // fast 瞬时、slow 睡 500ms；50ms 超时 → fast 得值、slow 降级，证明慢指标不拖挂整批、不毒化快指标
+        MetricSourceHandler handler = q -> {
+            if ("slow".equals(q.metricCode())) {
+                try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }
+            return new MetricValue("slow".equals(q.metricCode()) ? 2L : 1L, "LONG", "FETCHED");
+        };
+        MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
+        EvalContextAssembler asm = new EvalContextAssembler(
+                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC, 50L);
+
+        EvalContext ctx = asm.assemble(event(Map.of()),
+                List.of(snapWithDep("fast"), snapWithDep("slow")), NOW);
+
+        assertThat(ctx.getMetric("fast").value()).isEqualTo(1L);
+        assertThat(ctx.getMetric("fast").isError()).isFalse();
+        assertThat(ctx.getMetric("slow").isError()).isTrue();
+    }
 }
