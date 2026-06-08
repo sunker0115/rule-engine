@@ -24,11 +24,15 @@
 
 ## 4. 组件改造
 
-### 4.1 DB 迁移(rule-config-svc)
-- 新 Flyway 迁移:`ALTER TABLE metric_definition MODIFY data_type ENUM('LONG','DOUBLE','STRING','BOOLEAN','LIST','DECIMAL') NOT NULL;`(greenfield 在建库期生效)。
+### 4.1 DB:`data_type` 由 ENUM 改 VARCHAR(rule-config-svc)
+- `data_type` 现为 `ENUM('LONG','DOUBLE','STRING','BOOLEAN','LIST')` —— 每加类型要 ALTER + 值在 schema/app 双重定义,不友好。改为 **`VARCHAR(32) NOT NULL`**:允许值改由**应用层单一定义**,DB 不约束。
+- greenfield:直接改 `V1_0__init_schema.sql` 建表为 VARCHAR(无数据,无需独立 ALTER 迁移)。
+- **不加 CHECK 约束**(否则"加类型要 ALTER"又回来了);靠 app 校验 + app 为唯一写入方。
+- 收益:本次加 DECIMAL、及将来任何数值/类型新增 = **纯代码改动,零 DB 迁移**。
+- (注:同表 `source_type`/`status` 仍 ENUM,本期不动,独立清理。)
 
-### 4.2 config-svc 校验 + API 枚举
-- metric 创建/更新处校验 `data_type` 的允许集加 `DECIMAL`;若 config-svc / rule-api DTO 有 DataType 枚举/常量,加 DECIMAL。
+### 4.2 config-svc 校验:应用层枚举为单一真相源
+- metric 创建/更新校验 `data_type ∈ 允许集`;允许集由一处 Java 定义(与 kernel `AstDataTypeResolver` 算子→类型表同源,加 `DECIMAL`)。若已有 DataType 枚举/常量则加 DECIMAL,否则建一个集中常量。非法值 → 校验拒绝(原 ENUM 的约束职责上移到 app)。
 
 ### 4.3 `AstDataTypeResolver`(kernel)
 - 算子→允许 dataType 表:给 `GT/GTE/LT/LTE/BETWEEN/NOT_BETWEEN/EQ/NEQ` 的集合加 `"DECIMAL"`。`IN/NOT_IN` 维持(LONG/STRING)。
@@ -84,5 +88,5 @@
 - 金额误标 DOUBLE 的强制拦截(显式类型语义 + 文档,不在本期加校验)。
 
 ## 8. native / 风险
-- 纯 kernel + config-svc,无新反射;ENUM 迁移是 SQL。
+- 纯 kernel + config-svc,无新反射;`data_type` 改 VARCHAR 是建表脚本调整(greenfield 无数据迁移),允许值校验在 app。
 - 主要风险:fast-path 改变现存数值规则比较结果 → §6 精度回归(现有算子测试全绿)兜底;边界(类型不匹配/NaN/String/null)逐一测试对齐现状哨兵语义。
