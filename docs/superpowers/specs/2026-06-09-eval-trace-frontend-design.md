@@ -32,7 +32,12 @@ executor.execute()  [collect=TraceScope.COLLECT]
 ```
 
 ## 5. 范围：选项 Y（已定 2026-06-09）
-tree/table「补 trace」(#5)与审计 #1「trace 内容接线」是**同一个前端目标的两半**,**已决定合并为一份设计(选项 Y),分 3 个增量执行**。审计 #2(eval_duration_ms)/#3(规范化表冗余)/#4(context_snapshot)各自独立,不并入本设计。
+tree/table「补 trace」(#5)与审计 #1「trace 内容接线」是**同一个前端目标的两半**,**已决定合并为一份设计(选项 Y),分增量执行**。审计 **#2(eval_duration_ms)并入本批**(同在 persister 一带,顺手);#3(规范化表冗余)/#4(context_snapshot)各自独立,不并入。
+
+**落库决策(2026-06-09 已定):**
+- **期望值** → 复用 `node_trace` 现有未用的 `params` 列(注释本就是「节点参数快照」),零新增列,顺手把审计里的死列按设计扶正。
+- **displayLabel** → **落库**:正式环境也有 `trace.enabled=true` 场景,持久化的 node_trace 也要带它供回看;→ 新增 `node_trace.display_label` 列(Flyway + entity + flatten)。
+- `actual_value`/`value_source` 用现有列(注意核对 `MetricValue.valueSource` 取值域 vs 列 enum,必要时扩 enum 或映射)。
 
 **选项 Y — 面向前端的完整 trace（本期范围）:**
 - tree/table 产出 NodeTrace(§3 形态),与 Interpreted/Scorecard 一致读 `TraceScope.COLLECT`;
@@ -45,10 +50,11 @@ tree/table「补 trace」(#5)与审计 #1「trace 内容接线」是**同一个�
 
 **为何合并优于分开(已论证):** 分开的优势(覆盖更快更小上、核心变更延后)在「合并+分阶段执行」里基本都能拿到;而合并独有的「不双次改 executor、不上半成品、契约一次定全」是分开拿不到的,且正中红线。
 
-**执行分 3 增量(降风险,详见实现计划):**
+**执行分增量(降风险,详见实现计划):**
 - **增量 1**：`ConditionOutcome` 扩 `resolvedValue+valueSource` + 接进现有 Interpreted/Scorecard trace → kernel 全量回归(隔离核心变更)。
 - **增量 2**：tree/table 用已接好的字段建 trace。
-- **增量 3**：NodeTrace 加 `expectedValue/displayLabel` + 落库(entity/flatten/Flyway 列)。
+- **增量 3**：NodeTrace 加 `expectedValue`(→ 现有 params 列)+ `displayLabel`(→ 新增 display_label 列)+ 落库(entity/flatten/Flyway);核对 value_source enum 取值域。
+- **增量 4**：eval_duration_ms 在 persister 算 `finishedAt-startedAt` 写入(审计 #2,并入本批)。
 
 ## 6. 非目标
 - 统一二值/三值条件求值模型 / 抽共享 walker(信号驱动的独立项)。
