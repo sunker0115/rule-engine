@@ -126,6 +126,32 @@ class RuleImportServiceTest {
     }
 
     @Test
+    void import_invalidDataType_flaggedForReviewNotCreated() {
+        when(sceneMapper.findByCode(any(), any())).thenReturn(null);
+        when(metricDefinitionMapper.findAnyByCode(any(), any())).thenReturn(null);
+        when(decisionDefinitionMapper.findByCode(any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        stubInserts(5L, 10L, new AtomicLong(100));
+
+        // data_type=FLOAT 非法(ENUM→VARCHAR 后 DB 不再约束,导入侧校验堵口)→ 不创建,交人工 review
+        RuleBundle bad = new RuleBundle(1, "2026-06-06T10:00:00Z", "1",
+                List.of(ruleEntry("rule.a")),
+                List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", "d", "USER",
+                        "PUSH", "HIGHEST_PRIORITY", "[\"transfer\"]", "{}", "{}", 1)),
+                List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
+                        "ATTRIBUTE", "FLOAT", "{}", 3600, true)),
+                List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
+                        "[{\"actionType\":\"BLOCK_TRANSACTION\"}]")),
+                List.of("BLOCK_TRANSACTION"));
+
+        RuleImportResult r = sut.importBundle("1", bad, "dev");
+
+        assertThat(r.metricsRequiringReview()).containsExactly("account.age");
+        assertThat(r.metricsCreated()).isEmpty();
+        verify(metricDefinitionMapper, never()).insert(any(MetricDefinition.class));
+    }
+
+    @Test
     void import_existingRule_appendsDraftVersionWithoutTouchingDefinition() {
         SceneDef existingScene = new SceneDef();
         existingScene.setId(5L); existingScene.setTenantId(1L); existingScene.setCode("risk.transfer");

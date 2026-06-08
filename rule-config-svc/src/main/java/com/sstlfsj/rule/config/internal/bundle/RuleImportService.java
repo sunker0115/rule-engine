@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricEnums;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -91,6 +92,12 @@ public class RuleImportService {
                 MetricDefinition existing = metricDefinitionMapper.findAnyByCode(tenantId, me.metricCode());
                 if (existing != null) {
                     metricsSkipped.add(me.metricCode());
+                    continue;
+                }
+                // 非法 data_type/source_type 不自动创建(ENUM→VARCHAR 后 DB 不再约束,导入侧由此堵口),交人工 review
+                if (!MetricEnums.DATA_TYPES.contains(me.dataType())
+                        || !MetricEnums.SOURCE_TYPES.contains(me.sourceType())) {
+                    metricsReview.add(me.metricCode());
                     continue;
                 }
                 if ("SQL_AGGREGATE".equals(me.sourceType())) {

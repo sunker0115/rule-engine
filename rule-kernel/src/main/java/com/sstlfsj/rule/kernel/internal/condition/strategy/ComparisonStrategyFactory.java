@@ -21,7 +21,7 @@ public final class ComparisonStrategyFactory {
     /**
      * 根据 metric 的 dataType 返回对应策略单例。
      *
-     * @param dataType metric_definition.data_type 的值（LONG/DOUBLE/STRING/BOOLEAN/LIST/null）
+     * @param dataType metric_definition.data_type 的值（LONG/DOUBLE/DECIMAL/STRING/BOOLEAN/LIST/DATE/DATETIME/null）
      * @return 对应的 ComparisonStrategy 单例
      */
     public static ComparisonStrategy forType(String dataType) {
