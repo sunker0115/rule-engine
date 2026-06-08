@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.eval.internal.async;
 
+import com.sstlfsj.rule.eval.internal.event.DomainEvent;
+import com.sstlfsj.rule.eval.internal.event.Durability;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
@@ -17,4 +19,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
  */
 public record AuditRecorded(long sessionId, RuleEvent event, String mode,
                             int candidateCount, EvalResult result, EvalContext context,
-                            String blockedBy) {}
+                            String blockedBy) implements DomainEvent {
+    @Override
+    public Durability durability() { return Durability.BEST_EFFORT; }
+}
