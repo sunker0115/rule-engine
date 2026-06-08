@@ -35,6 +35,8 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                     "SCORECARD_AST_TYPE_MISMATCH", List.of(), null, null, null);
         }
 
+        // collect=false 时跳过 NodeTrace 构建（traces 保持空），score/decision/hit 不受影响
+        boolean collect = TraceScope.COLLECT.orElse(true);
         List<NodeTrace> traces = new ArrayList<>();
         double score = 0.0;
         Long rvId = snapshot.ruleVersionId();
@@ -43,8 +45,10 @@ public class ScorecardExecutor implements RuleVersionExecutor {
             ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
             if (outcome.isError()) {
                 // 风控保守：任一条件取数失败/无算子 → 整卡置 ERROR 不出分，避免漏分误判
-                traces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                        false, null, null, outcome.errorCode(), List.of(), rvId));
+                if (collect) {
+                    traces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+                            false, null, null, outcome.errorCode(), List.of(), rvId));
+                }
                 return new EvalResult(false, null, List.of(), traces,
                         outcome.errorCode(), List.of(), null, null, null);
             }
@@ -52,8 +56,10 @@ public class ScorecardExecutor implements RuleVersionExecutor {
             if (met && node.weight() != null) {
                 score += node.weight();
             }
-            traces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                    met, null, null, null, List.of(), rvId));
+            if (collect) {
+                traces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+                        met, null, null, null, List.of(), rvId));
+            }
         }
 
         boolean hit = score >= root.threshold();
