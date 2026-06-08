@@ -81,6 +81,20 @@ PULL `/evaluate` 同步返回 EvalResult；PUSH `/event` 入队即返 **202**，
 - **PUSH vs PULL 取舍**：PUSH 把 eval 移出请求线程，摄入吞吐只受 HTTP+入队限制（候选 50/200 摄入都 ~28k/s，**与候选数无关**）；代价是单消费者 drain 成新瓶颈（候选 200 仅 10.2k/s 真正被评估）。需要高 eval 吞吐应**多消费者并行 drain**（当前单线程是有意的最简实现），或继续用 PULL（请求线程并行评估，candidate 曲线见上）。
 - **结论**：背压设计正确且可观测（rejected 计数 = 队列保护生效）。单消费者是当前刻意的下限，**并行消费**留二期（与审计/​action 异步消费侧同一优化方向）。
 
+## 二期优化 backlog（按 ROI 排序，right-size 后 eval-CPU 绑定下的提速点，2026-06-08）
+
+> 前提：DB 已出热路径（Hikari 3/10、pending 0），瓶颈在 eval-CPU；线性成本 `26µs 固定 + 0.26µs/候选`。下列点按收益/改动比排序。`forType` 已是 String-switch 返回缓存单例、**非热点**（已排除）。
+
+1. **PUSH 并行消费 —— 最小改动，直接解 PUSH drain 瓶颈**。`EvalServiceImpl.java:40` `new EvalActionDispatcher(10000, ...)` 是单虚拟线程 drain；eval 无状态 CPU，改 N 消费者并行 → 候选 200 的 PUSH 从 10.2k/s 拉到接近 PULL。无共享状态、安全。**首选。**
+2. **快照预编译 —— 削 `0.26µs/候选` 主导构成**。`InterpretedExecutor` 每次 evaluate 都 tree-walk AST + `node.params().get("threshold")`（Map 查找）+ 阈值/指标装箱。候选 200 时评估占 52µs > 26µs 固定。在快照加载时把 `ConditionNode` 预解析成「已绑定 strategy + 已拆箱 threshold」的扁平结构，evaluate 直接算（Aviator「编译」轻量版，不引字节码生成）→ 密集场景评估可能砍半。
+3. **miss 路径减分配 + 跳过 trace 收集 —— 平滑尾延迟**。`EvalEngine.evaluateAllCandidates` 每次 `new ArrayList×2 + List.copyOf×2`，且 trace 用不到仍 `allTraces.addAll`。24–34k/s 下这些分配让年轻代 GC 频繁、抬 p99。miss 短路不建 list、非 trace 模式跳过 `nodeTrace`。
+4. **索引层候选预过滤 —— 减评估 AST 数（线性提吞吐）**。现 index 仅按 `(tenant,scene,eventType)`；再按「规则所需 metric 是否在 event 提供」预过滤，跳过必然 miss 的候选（现仍走完整 switch 才 `return false`）。收益取决于规则数据形状。
+5. **AST → 字节码/MethodHandle 编译 —— 最大杠杆但大改**。真 Aviator 路线，per-eval 5–10×；工作量大且 GraalVM native 对运行时字节码生成不友好，**留终极**。
+6. **审计/action 消费侧 keep-up —— 仅当需强审计**。24k/s 远超 `AuditPersister` 批写 → 大量丢（设计内可丢）；要落库完整需消费侧并行 + 更大批 + MQ（见下「已知未覆盖」）。
+
+**数据否决、不要碰**：Hikari 池（3/10、pending 0）、Disruptor（无队列/锁交接瓶颈）、trace 开关（开/关零差异）。
+**落地顺序**：1 + 3（小改立竿见影）→ 2（候选密集主战场）→ 4（视规则数据）→ 5（终极）。
+
 ## 已知未覆盖
 - **action_execution 写（压测层面无需补）**：right-size 后 action 派发已**异步、离开请求线程**——压测场景无 scene_action_binding（config-svc 无写服务），但即便有，请求路径也只入队即返、**不影响吞吐**；后台消费侧在 24k/s 下本就被本地 DB 限速（审计已大量丢，best-effort 预期内）。该写路径由单测覆盖委托 + 一次功能冒烟（seed binding → evaluate → 异步落 `action_execution`）确认端到端，非压测目标。
 - **审计落库 keep-up**：24k req/s 远超 AuditPersister 批写能力（~500/200ms）+ 本地 MySQL 写入速率 → 大量 session 被丢（设计内「可丢」）。需强审计的场景另议（该 metric 走 outbox / MQ）。
