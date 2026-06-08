@@ -116,6 +116,61 @@ class MetricWriteServiceImplTest {
         verify(auditLogMapper, times(1)).insert(any(AuditLog.class));
     }
 
+    // ── 枚举列 app 校验（DB ENUM 去除后由 app 兜底）─────────────────────────────
+
+    @Test
+    void create_dataTypeDecimal_succeeds() {
+        // DECIMAL 为新增合法 data_type，应通过校验并正常插入
+        doAnswer(inv -> {
+            MetricDefinition m = inv.getArgument(0);
+            m.setId(400L);
+            return 1;
+        }).when(metricDefinitionMapper).insert(any(MetricDefinition.class));
+
+        MetricWriteCommand decimalCmd =
+                new MetricWriteCommand("金额", "ATTRIBUTE", "DECIMAL", Map.of(), 60, false);
+        Long id = sut.create(TENANT, CODE, decimalCmd, ACTOR);
+
+        assertThat(id).isEqualTo(400L);
+        ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
+        verify(metricDefinitionMapper, times(1)).insert(captor.capture());
+        assertThat(captor.getValue().getDataType()).isEqualTo("DECIMAL");
+    }
+
+    @Test
+    void create_invalidDataType_throwsIllegalArgumentException() {
+        MetricWriteCommand badCmd =
+                new MetricWriteCommand("x", "ATTRIBUTE", "FOO", Map.of(), 60, false);
+
+        assertThatThrownBy(() -> sut.create(TENANT, CODE, badCmd, ACTOR))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("data_type");
+        verifyNoInteractions(metricDefinitionMapper);
+    }
+
+    @Test
+    void create_invalidSourceType_throwsIllegalArgumentException() {
+        MetricWriteCommand badCmd =
+                new MetricWriteCommand("x", "BOGUS", "LONG", Map.of(), 60, false);
+
+        assertThatThrownBy(() -> sut.create(TENANT, CODE, badCmd, ACTOR))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("source_type");
+        verifyNoInteractions(metricDefinitionMapper);
+    }
+
+    @Test
+    void update_invalidDataType_throwsBeforeLookup() {
+        // update 也校验：非法值在查 ACTIVE 行之前就抛出
+        MetricWriteCommand badCmd =
+                new MetricWriteCommand("x", "ATTRIBUTE", "FOO", Map.of(), 60, false);
+
+        assertThatThrownBy(() -> sut.update(TENANT, CODE, badCmd, false, ACTOR))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("data_type");
+        verifyNoInteractions(metricDefinitionMapper);
+    }
+
     // ── update breakingChange=false ───────────────────────────────────────────
 
     @Test
@@ -178,8 +233,8 @@ class MetricWriteServiceImplTest {
             return 1;
         }).when(metricDefinitionMapper).insert(any(MetricDefinition.class));
 
-        // cmd 将 sourceType 改为 EVENT_PAYLOAD，即使 breakingChange=false
-        MetricWriteCommand changedCmd = new MetricWriteCommand("用户年龄", "EVENT_PAYLOAD", "LONG", Map.of(), 60, false);
+        // cmd 将 sourceType 改为 SQL_AGGREGATE（合法值），即使 breakingChange=false
+        MetricWriteCommand changedCmd = new MetricWriteCommand("用户年龄", "SQL_AGGREGATE", "LONG", Map.of(), 60, false);
         int version = sut.update(TENANT, CODE, changedCmd, false, ACTOR);
 
         // 应走升版路径：version=2，旧行 SUPERSEDED
@@ -189,7 +244,7 @@ class MetricWriteServiceImplTest {
         verify(metricDefinitionMapper, times(1)).insert(captor.capture());
         assertThat(captor.getValue().getVersion()).isEqualTo(2);
         assertThat(captor.getValue().getStatus()).isEqualTo("ACTIVE");
-        assertThat(captor.getValue().getSourceType()).isEqualTo("EVENT_PAYLOAD");
+        assertThat(captor.getValue().getSourceType()).isEqualTo("SQL_AGGREGATE");
     }
 
     @Test

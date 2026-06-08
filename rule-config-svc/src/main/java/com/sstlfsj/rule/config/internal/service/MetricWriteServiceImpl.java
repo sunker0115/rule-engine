@@ -6,6 +6,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricEnums;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -45,6 +46,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
 
     @Override
     public Long create(Long tenantId, String metricCode, MetricWriteCommand cmd, String actorId) {
+        validateEnums(cmd);
         MetricDefinition m = new MetricDefinition();
         m.setTenantId(tenantId);
         m.setMetricCode(metricCode);
@@ -63,6 +65,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     @Override
     public int update(Long tenantId, String metricCode, MetricWriteCommand cmd,
                       boolean breakingChange, String actorId) {
+        validateEnums(cmd);
         MetricDefinition active = metricDefinitionMapper.findActiveByCode(tenantId, metricCode);
         if (active == null) {
             throw new IllegalArgumentException("metric 不存在或无 ACTIVE 版本: " + metricCode);
@@ -157,6 +160,19 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         }
         return deps.stream().anyMatch(
                 d -> metricCode.equals(d.metricCode()) && d.metricVersion() == metricVersion);
+    }
+
+    /**
+     * 校验 cmd 的枚举列取值（DB ENUM 去除后由 app 兜底，单一真相源 {@link MetricEnums}）。
+     * status 不校验：写路径恒由服务端内部置为 ACTIVE/SUPERSEDED，从不取自 cmd。
+     */
+    private void validateEnums(MetricWriteCommand cmd) {
+        if (!MetricEnums.DATA_TYPES.contains(cmd.dataType())) {
+            throw new IllegalArgumentException("非法 data_type: " + cmd.dataType());
+        }
+        if (!MetricEnums.SOURCE_TYPES.contains(cmd.sourceType())) {
+            throw new IllegalArgumentException("非法 source_type: " + cmd.sourceType());
+        }
     }
 
     /** 将 MetricWriteCommand 字段批量 set 到 MetricDefinition，含 null 默认值处理。 */
