@@ -6,6 +6,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.event.EventListener;
@@ -25,6 +26,8 @@ import java.util.concurrent.LinkedBlockingQueue;
  * 审计可丢——溢出/崩溃丢最近未落库审计，{@code uk_tenant_event} 防重复行。
  */
 @Component
+// native：HitDecisionView 经 Jackson 序列化 hit_decisions，需注册其 record 组件反射(否则 native 下 writeValueAsString 抛 UnsupportedFeatureError)
+@RegisterReflectionForBinding(AuditPersister.HitDecisionView.class)
 public class AuditPersister implements InitializingBean, DisposableBean {
 
     private final int queueCapacity;
@@ -137,7 +140,8 @@ public class AuditPersister implements InitializingBean, DisposableBean {
     }
 
     /** hit_decisions JSON 元素：每条命中决策的码 + 分类 + 来源规则版本。 */
-    private record HitDecisionView(String code, String category, Long ruleVersionId) {}
+    /** hit_decisions JSON 元素：码 + 分类 + 来源规则版本。包级可见以便 native 反射 hints 引用。 */
+    record HitDecisionView(String code, String category, Long ruleVersionId) {}
 
     @Override
     public void destroy() {
