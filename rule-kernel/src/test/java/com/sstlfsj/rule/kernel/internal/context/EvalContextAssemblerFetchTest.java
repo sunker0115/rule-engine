@@ -6,11 +6,14 @@ import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,6 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EvalContextAssemblerFetchTest {
 
     private static final Instant NOW = Instant.parse("2026-06-06T00:00:00Z");
+
+    private static final ExecutorService EXEC = Executors.newVirtualThreadPerTaskExecutor();
+
+    @AfterAll
+    static void closeExec() { EXEC.shutdown(); }
 
     private RuleEvent event(Map<String, Object> provided) {
         return new RuleEvent("1", "PAY", "transfer", "u1", "e1", NOW, Map.of("amt", 500), provided, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
@@ -39,7 +47,7 @@ class EvalContextAssemblerFetchTest {
         MetricSourceHandler handler = q -> new MetricValue(999L, "LONG", "FETCHED");
         MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
-                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
+                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
         EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
 
@@ -55,7 +63,7 @@ class EvalContextAssemblerFetchTest {
         MetricSourceHandler handler = q -> { calls.incrementAndGet(); return new MetricValue(1L, "LONG", "FETCHED"); };
         MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, true, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
-                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
+                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
         EvalContext ctx = asm.assemble(event(Map.of("balance", 7L)), List.of(snapWithDep("balance")), NOW);
 
@@ -69,7 +77,7 @@ class EvalContextAssemblerFetchTest {
         MetricSourceHandler handler = q -> new MetricValue(42L, "LONG", "FETCHED");
         MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
-                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
+                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
         EvalContext ctx = asm.assemble(event(Map.of("balance", 7L)), List.of(snapWithDep("balance")), NOW);
 
@@ -82,7 +90,7 @@ class EvalContextAssemblerFetchTest {
         MetricSourceHandler handler = q -> { throw new RuntimeException("db down"); };
         MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
-                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
+                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
         EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
 
@@ -95,7 +103,7 @@ class EvalContextAssemblerFetchTest {
     void missingHandlerForSourceType_degradesToError() {
         MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
-                List.of(), Map.of(), resolver, null, Runnable::run, 1000L);
+                List.of(), Map.of(), resolver, null, EXEC,1000L);
 
         EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
 
@@ -113,7 +121,7 @@ class EvalContextAssemblerFetchTest {
             public void put(String key, MetricValue value, int ttlSeconds) { }
         };
         EvalContextAssembler asm = new EvalContextAssembler(
-                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, cache, Runnable::run, 1000L);
+                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, cache, EXEC,1000L);
 
         EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
 
@@ -127,7 +135,7 @@ class EvalContextAssemblerFetchTest {
         MetricSourceHandler handler = q -> { seen[0] = q.now(); return new MetricValue(1L, "LONG", "FETCHED"); };
         MetricDefinitionResolver resolver = (t, c, v) -> sqlDef(c, false, 0);
         EvalContextAssembler asm = new EvalContextAssembler(
-                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, Runnable::run, 1000L);
+                List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
         asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
 

@@ -28,7 +28,7 @@ public class EvalContextAssembler {
     private final Map<String, MetricSourceHandler> handlersBySourceType;
     private final MetricDefinitionResolver definitionResolver;
     private final MetricCache cache;
-    private final Executor fetchExecutor;
+    private final ExecutorService fetchExecutor;
     private final long fetchTimeoutMs;
 
     /**
@@ -49,14 +49,14 @@ public class EvalContextAssembler {
      * @param handlersBySourceType sourceType → handler 映射
      * @param definitionResolver   metric 定义解析器（null 时禁用 fetch）
      * @param cache                取数缓存（null 时不缓存）
-     * @param fetchExecutor        并发取数线程池（null 时用 ForkJoinPool.commonPool）
+     * @param fetchExecutor        并发取数 ExecutorService（null 时用 ForkJoinPool.commonPool）
      * @param fetchTimeoutMs       全局取数超时毫秒（&le;0 表示不限）
      */
     public EvalContextAssembler(List<SubjectLoader> subjectLoaders,
                                 Map<String, MetricSourceHandler> handlersBySourceType,
                                 MetricDefinitionResolver definitionResolver,
                                 MetricCache cache,
-                                Executor fetchExecutor,
+                                ExecutorService fetchExecutor,
                                 long fetchTimeoutMs) {
         this.subjectLoader = pickUserLoader(subjectLoaders);
         this.handlersBySourceType =
@@ -173,36 +173,47 @@ public class EvalContextAssembler {
     private void fetchConcurrently(RuleEvent event, Instant now, Set<String> codes,
                                    Map<String, MetricDescriptor> descriptors,
                                    Map<String, MetricValue> metrics) {
-        Executor exec = fetchExecutor != null ? fetchExecutor : ForkJoinPool.commonPool();
-        Map<String, CompletableFuture<MetricValue>> futures = HashMap.newHashMap(codes.size());
-        for (String code : codes) {
+        ExecutorService exec = fetchExecutor != null ? fetchExecutor : ForkJoinPool.commonPool();
+        long timeoutMs = fetchTimeoutMs > 0 ? fetchTimeoutMs : Long.MAX_VALUE;
+
+        List<String> orderedCodes = new ArrayList<>(codes);
+        List<Callable<MetricValue>> tasks = new ArrayList<>(orderedCodes.size());
+        for (String code : orderedCodes) {
             MetricDescriptor def = descriptors.get(code);
             MetricQuery query = new MetricQuery(code, event.tenantId(), event.subjectId(),
                     def.params(), event.payload(), now);
             MetricSourceHandler handler = handlersBySourceType.get(def.sourceType());
-            futures.put(code, CompletableFuture
-                    .supplyAsync(() -> {
-                        if (handler == null) return MetricValue.error(METRIC_FETCH_FAIL);
-                        MetricValue v = handler.fetch(query);
-                        return v != null ? v : MetricValue.error(METRIC_FETCH_FAIL);
-                    }, exec)
-                    .exceptionally(ex -> MetricValue.error(METRIC_FETCH_FAIL)));
+            tasks.add(() -> {
+                if (handler == null) return MetricValue.error(METRIC_FETCH_FAIL);
+                try {
+                    MetricValue v = handler.fetch(query);
+                    return v != null ? v : MetricValue.error(METRIC_FETCH_FAIL);
+                } catch (Exception e) {
+                    // 子任务内吞异常→降级（替代旧 .exceptionally）
+                    return MetricValue.error(METRIC_FETCH_FAIL);
+                }
+            });
         }
+
+        List<Future<MetricValue>> results;
         try {
-            CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0]))
-                    .get(fetchTimeoutMs > 0 ? fetchTimeoutMs : Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-        } catch (Exception ignored) {
-            // 超时/中断：已完成 future 仍取其值，未完成的下方按 ERROR 处理
+            results = exec.invokeAll(tasks, timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            // 调用线程被中断：恢复中断位并全部降级
+            Thread.currentThread().interrupt();
+            for (String code : orderedCodes) metrics.put(code, MetricValue.error(METRIC_FETCH_FAIL));
+            return;
         }
-        for (Map.Entry<String, CompletableFuture<MetricValue>> e : futures.entrySet()) {
-            String code = e.getKey();
-            CompletableFuture<MetricValue> f = e.getValue();
+
+        for (int i = 0; i < orderedCodes.size(); i++) {
+            String code = orderedCodes.get(i);
+            Future<MetricValue> f = results.get(i);
             MetricValue v;
-            if (f.isDone() && !f.isCompletedExceptionally()) {
-                v = f.getNow(MetricValue.error(METRIC_FETCH_FAIL));
-            } else {
+            if (f.isCancelled()) {
+                // 超时未完成：invokeAll 已中断该子任务
                 v = MetricValue.error(METRIC_FETCH_FAIL);
-                f.cancel(true);
+            } else {
+                try { v = f.get(); } catch (Exception e) { v = MetricValue.error(METRIC_FETCH_FAIL); }
             }
             metrics.put(code, v);
             if (cache != null && !v.isError()) {

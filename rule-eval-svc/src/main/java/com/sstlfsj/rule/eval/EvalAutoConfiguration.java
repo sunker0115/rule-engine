@@ -27,7 +27,6 @@ import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -36,7 +35,8 @@ import org.springframework.context.annotation.Primary;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /** 自动装配规则评估模块。 */
 @AutoConfiguration
@@ -115,14 +115,9 @@ public class EvalAutoConfiguration {
      * @return 命名为 metricFetchExecutor 的线程池
      */
     @Bean(name = "metricFetchExecutor")
-    public Executor metricFetchExecutor() {
-        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
-        ex.setCorePoolSize(8);
-        ex.setMaxPoolSize(32);
-        ex.setQueueCapacity(256);
-        ex.setThreadNamePrefix("metric-fetch-");
-        ex.initialize();
-        return ex;
+    public ExecutorService metricFetchExecutor() {
+        // 虚拟线程-per-task：无固定上限，取数并发由下游连接池兜底；ExecutorService 自带 AutoCloseable，Spring 关闭时 close
+        return Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
@@ -143,7 +138,7 @@ public class EvalAutoConfiguration {
             @Autowired(required = false) List<MetricSourceHandler> metricHandlers,
             @Autowired(required = false) MetricDefinitionResolver definitionResolver,
             @Autowired(required = false) MetricCache metricCache,
-            @Qualifier("metricFetchExecutor") Executor fetchExecutor,
+            @Qualifier("metricFetchExecutor") ExecutorService fetchExecutor,
             FetchResourceProperties fetchProps) {
         Map<String, MetricSourceHandler> bySource = new HashMap<>();
         if (metricHandlers != null) {

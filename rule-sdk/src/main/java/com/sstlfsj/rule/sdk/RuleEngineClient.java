@@ -34,7 +34,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 
 /**
  * 嵌入式规则评估门面。
@@ -161,7 +161,7 @@ public class RuleEngineClient implements AutoCloseable {
         private final List<MetricSourceHandler> metricHandlers = new ArrayList<>();
         private MetricDefinitionResolver metricDefinitionResolver;
         private MetricCache metricCache;
-        private Executor fetchExecutor;
+        private ExecutorService fetchExecutor;
         private final List<MetricDefinitionSource> metricDefinitionSources = new ArrayList<>();
         private final Map<String, List<MetricDescriptor>> localMetrics = new LinkedHashMap<>();
 
@@ -241,9 +241,9 @@ public class RuleEngineClient implements AutoCloseable {
         /**
          * 注入并发取数线程池（可选，默认 ForkJoinPool.commonPool）。
          *
-         * @param v Executor
+         * @param v ExecutorService
          */
-        public Builder fetchExecutor(Executor v) { this.fetchExecutor = v; return this; }
+        public Builder fetchExecutor(ExecutorService v) { this.fetchExecutor = v; return this; }
 
         /**
          * 添加 metric 定义来源（HTTP/文件/DSL），写入本地定义注册表。
