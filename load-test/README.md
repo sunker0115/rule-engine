@@ -81,6 +81,26 @@ PULL `/evaluate` 同步返回 EvalResult；PUSH `/event` 入队即返 **202**，
 - **PUSH vs PULL 取舍**：PUSH 把 eval 移出请求线程，摄入吞吐只受 HTTP+入队限制（候选 50/200 摄入都 ~28k/s，**与候选数无关**）；代价是单消费者 drain 成新瓶颈（候选 200 仅 10.2k/s 真正被评估）。需要高 eval 吞吐应**多消费者并行 drain**（当前单线程是有意的最简实现），或继续用 PULL（请求线程并行评估，candidate 曲线见上）。
 - **结论**：背压设计正确且可观测（rejected 计数 = 队列保护生效）。单消费者是当前刻意的下限，**并行消费**留二期（与审计/​action 异步消费侧同一优化方向）。
 
+## Native 镜像 vs JVM 对比（PULL · 候选50 · 池=10 · 2026-06-08）
+
+同机背对背重跑（同 seed、同 k6 阶梯至 400 VU），消除机器状态差异：
+
+| | JVM (zulu-25) | Native (GraalVM 25) |
+|---|---|---|
+| 吞吐 | **22,014 req/s** | **12,120 req/s**（≈0.55×） |
+| p50/p95 | 2.62 / **13.06ms** | 4.93 / **26.56ms** |
+| RSS（稳态） | 500MB | **167MB**（≈0.33×） |
+| 启动到 health UP | ~4s | ~4s |
+| err% / Hikari | 0 · 3/10·pending 0 | 0 · 3/10·pending 0 |
+
+- **吞吐 JVM 胜（native ≈ 0.55×）**：这是持续高 QPS、eval-CPU 绑定负载的预期——HotSpot C2 JIT 在 150s 持续压测中充分热身、峰值优于 AOT；native 无 JIT 峰值。**内存 native 胜（RSS ≈ 1/3）**，是其核心卖点（快扩容 / serverless / 低内存部署）。
+- **启动两者都 ~4s**：此处 4s 被 DB 连接 + Flyway 校验 + 索引载入(50 规则)主导，掩盖了 native 的进程冷启动优势；native 真正的冷启边际要在无 DB 场景才显现（轮询粒度 0.5s，4s 偏粗）。
+- **两者 Hikari 均 3/10、pending 0** → 再次印证 right-size 后 eval-CPU 绑定，DB 不是墙，与 PULL 候选曲线一致。
+- **构建期提示**：native build 推荐 `--pgo`（Profile-Guided Optimization，先采集 profile 再重建）可提吞吐、缩小与 JVM 的差距——本轮未启用，留二期若要 native 高吞吐再做。
+- **踩坑（已修）**：早先 native 启动验证未 seed ACTIVE 规则 → `IndexStartupLoader` 不载 AST → 多态反序列化路径从未触发，漏注册的 binding hints 被掩盖；seed50 后启动即崩。修复见 commit `fix(native): 注册 AST 多态反序列化反射 hints`（`AstNativeHints` + `@ImportRuntimeHints` 挂 `SceneSnapshotLoader`）。**教训：native reachability 验证必须覆盖有数据的真实启动路径,空库启动会漏掉数据驱动的反射点。**
+
+**选型结论**：高吞吐持续负载 → JVM；快扩容 / 低内存 / serverless → native（吞吐可用 `--pgo` 补）。本引擎 eval 热路径属前者,生产默认 JVM,native 作弹性/边缘部署备选。
+
 ## 二期优化 backlog（按 ROI 排序，right-size 后 eval-CPU 绑定下的提速点，2026-06-08）
 
 > 前提：DB 已出热路径（Hikari 3/10、pending 0），瓶颈在 eval-CPU；线性成本 `26µs 固定 + 0.26µs/候选`。下列点按收益/改动比排序。`forType` 已是 String-switch 返回缓存单例、**非热点**（已排除）。
