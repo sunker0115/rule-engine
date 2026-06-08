@@ -208,5 +208,18 @@ seed 一条 `scene_action_binding`(scene17, SEND_ALERT)，PULL 候选50 复跑�
 | **多行批量 insert** | **80,568 / 2.7M** | **2.96%** |
 
 - **action 落库 ~18×（0.13%→2.96%）**，证实瓶颈就是逐行 insert 的 per-commit fsync。审计同窗口落 ~113k session。请求线程吞吐不受影响。
-- **新瓶颈左移到单条 action-delivery 消费者**：现 ~537/s（`batchSize 500 / flushInterval 200ms` 节流 + 单虚拟线程），不再是 insert。下一步要更高 keep-up → action-delivery 并行消费 / 调 batch 参数 / MQ。
 - **node_trace 早已是批量 insert**（trace-writer），故 trace 从来不是瓶颈。
+
+#### Track E 续：稳态天花板 ~731/s + 线程转储归因（delivery vs persister）
+
+8000/s 持续灌满队列，取中段 56s 窗口：action 落库稳态 **~731/s**（40,998 行 / 56s）。饱和期连抓 4 次 `jcmd Thread.dump`（含虚拟线程）归因：
+
+| 线程 | 采样状态 | 结论 |
+|---|---|---|
+| `action-delivery`（投递消费者） | 3/4 在 `Thread.sleep`（200ms 节拍） | **基本空闲，非瓶颈** |
+| `action-execution-persister` | 2/4 `NioSocketImpl.park`（等 MySQL INSERT） | 半忙插库 |
+| `audit-persister` | **4/4 `NioSocketImpl.park`** | **100% 钉死在插库** |
+
+- **真瓶颈 = JDBC INSERT 的 DB 写容量（persister 侧），不是 delivery 消费者**。delivery 大部分时间在 200ms 节拍里睡，能出 ~2500/s，但下游 persister 吃不下、多发的被 persister 队列 offer 丢弃。
+- `audit-persister` 100% 钉死 → 审计每请求一条、直连请求线程无漏斗，把共享 MySQL 写预算占了大头；`action_execution` 的 ~731/s 是抢剩的。
+- **⇒ 并行 delivery 消费者无用**（它本就闲）。要再抬 action keep-up 的杠杆在 DB 写侧：降写量（`node_trace` 每请求 50 行是写大户）、更大/更少 INSERT、放宽 fsync / 换更快 DB、强一致走 MQ + 批量 loader，或给 action 独立写路径别跟 audit 抢。
