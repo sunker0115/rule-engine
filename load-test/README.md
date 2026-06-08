@@ -196,4 +196,17 @@ seed 一条 `scene_action_binding`(scene17, SEND_ALERT)，PULL 候选50 复跑�
 - **缓存 binding 同样没提升消费者**：空载纯 drain `64.6/s` 与缓存前 `~63/s` 一致 → binding SELECT 也不是地板。
 - **真正的地板 = 本机 MySQL 单行 INSERT 吞吐（~64/s，fsync 绑定的笔记本）**。`ActionExecutionPersister`/`AuditPersister` 的"批量"只批量 drain，**SQL 仍是逐行 `mapper.insert`**（每行一次 autocommit + fsync），所以 ~64/s 封顶。`52f7e65`（搬 insert 离 dispatcher 线程）与 `9939998`（去 SELECT）都砍在了非瓶颈层 → 本机测不出收益。
 - **两改动仍保留（superpowers 审核结论）**：均消除热路径上的真实每请求 I/O（dispatcher 内联写库 / 每 dispatch 一次 SELECT），**生产快 DB / 批量 INSERT / MQ 落地后才显形**；且与既有 `AuditPersister` / `SceneRuleIndex` 模式统一，非 YAGNI 投机。
-- **真正提速杠杆（二期，按 ROI）**：(1) **批量/多行 INSERT**（`INSERT ... VALUES (...),(...)` 或 MyBatis batch executor）—— 直接抬 INSERT 地板，是当前唯一能动 keep-up 的点；(2) action-delivery 并行消费；(3) 强一致走 MQ（经 `DomainEventPublisher` 缝）。in-process action 落库本就 best-effort（设计内可丢）。
+- **真正提速杠杆（二期，按 ROI）**：(1) **批量/多行 INSERT**（`INSERT ... VALUES (...),(...)`）—— 直接抬 INSERT 地板，是当前唯一能动 keep-up 的点；(2) action-delivery 并行消费；(3) 强一致走 MQ（经 `DomainEventPublisher` 缝）。in-process action 落库本就 best-effort（设计内可丢）。
+
+### Track E：多行批量 INSERT（commit `0fc4904`，**终于动了 keep-up**）
+
+把 `ActionExecutionPersister` / `AuditPersister` 的逐行 `mapper.insert` 改成单次多行 `insertBatch`（`INSERT ... VALUES (...),(...) ON DUPLICATE KEY UPDATE id=id` 容忍 uk 重复），每批 500 行从 500 次 autocommit+fsync 降到 1 次：
+
+| | action 落库 / 请求 | 落库率 |
+|---|---|---|
+| 逐行 insert（Track A/D） | 4,443 / 3.4M | 0.13% |
+| **多行批量 insert** | **80,568 / 2.7M** | **2.96%** |
+
+- **action 落库 ~18×（0.13%→2.96%）**，证实瓶颈就是逐行 insert 的 per-commit fsync。审计同窗口落 ~113k session。请求线程吞吐不受影响。
+- **新瓶颈左移到单条 action-delivery 消费者**：现 ~537/s（`batchSize 500 / flushInterval 200ms` 节流 + 单虚拟线程），不再是 insert。下一步要更高 keep-up → action-delivery 并行消费 / 调 batch 参数 / MQ。
+- **node_trace 早已是批量 insert**（trace-writer），故 trace 从来不是瓶颈。
