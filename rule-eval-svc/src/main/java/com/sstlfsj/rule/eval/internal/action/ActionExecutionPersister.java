@@ -5,32 +5,96 @@ import com.sstlfsj.rule.eval.internal.domain.ActionExecutionEntity;
 import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 
-/** 消费 ActionExecuted，落 action_execution（uk_idempotency 行级 backstop）。 */
+/**
+ * 异步批量落 action_execution：消费 {@link ActionExecuted}，虚拟线程批量 INSERT（uk_idempotency 行级 backstop）。
+ *
+ * <p>best-effort：入队非阻塞，队列满丢弃；批量在虚拟线程消费，不阻塞 action 派发线程。
+ * 与 {@link com.sstlfsj.rule.eval.internal.async.AuditPersister} 同构——把 insert 解耦出单条
+ * action-delivery 消费线程，避免同步内联写库成为 action keep-up 地板。
+ */
 @Component
-public class ActionExecutionPersister {
+public class ActionExecutionPersister implements InitializingBean, DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(ActionExecutionPersister.class);
 
+    private final int queueCapacity;
+    private final int batchSize;
+    private final long flushIntervalMs;
     private final ActionExecutionMapper executionMapper;
 
-    public ActionExecutionPersister(ActionExecutionMapper executionMapper) {
+    private LinkedBlockingQueue<ActionExecuted> queue;
+    private volatile boolean running = false;
+    private Thread consumerThread;
+
+    public ActionExecutionPersister(int queueCapacity, int batchSize, long flushIntervalMs,
+                                    ActionExecutionMapper executionMapper) {
+        this.queueCapacity = queueCapacity;
+        this.batchSize = batchSize;
+        this.flushIntervalMs = flushIntervalMs;
         this.executionMapper = executionMapper;
     }
 
-    /**
-     * 消费 action 执行完成事件，写一行 action_execution 审计。
-     * 写库异常静默吞掉（DuplicateKeyException 为预期内的幂等 backstop），不向上传播。
-     *
-     * @param e action 执行完成事件
-     */
+    @Autowired
+    public ActionExecutionPersister(ActionExecutionMapper executionMapper) {
+        this(10000, 500, 200, executionMapper);
+    }
+
+    @Override
+    public void afterPropertiesSet() {
+        queue = new LinkedBlockingQueue<>(queueCapacity);
+        running = true;
+        consumerThread = Thread.ofVirtual().name("action-execution-persister").start(this::consumeLoop);
+    }
+
+    /** 接 action 执行完成事件，非阻塞入队（队列满丢弃，best-effort）。@EventListener 在发布线程同步入队，开销=一次 offer。 */
     @EventListener
-    public void accept(ActionExecuted e) {
+    public void onActionExecuted(ActionExecuted e) {
+        queue.offer(e);
+    }
+
+    private void consumeLoop() {
+        while (running || !queue.isEmpty()) {
+            try {
+                Thread.sleep(flushIntervalMs);
+                flushBatch();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+    }
+
+    private void flushBatch() {
+        List<ActionExecuted> batch = new ArrayList<>(batchSize);
+        queue.drainTo(batch, batchSize);
+        for (ActionExecuted e : batch) {
+            try {
+                executionMapper.insert(toEntity(e));
+            } catch (DuplicateKeyException ex) {
+                // 行级 backstop：缓存漏掉的重复（重启/多实例）在此撞 uk_idempotency，预期内
+                log.debug("action_execution 幂等行已存在(uk backstop)，actionId={}, eventId={}",
+                        e.actionId(), e.eventId());
+            } catch (RuntimeException ex) {
+                // best-effort：写库失败丢弃，不影响其余批次与消费线程
+                log.warn("action_execution 写库失败，actionId={}, actionType={}: {}",
+                        e.actionId(), e.actionType(), ex.getMessage());
+            }
+        }
+    }
+
+    private ActionExecutionEntity toEntity(ActionExecuted e) {
         ActionExecutionEntity entity = new ActionExecutionEntity();
         entity.setEvaluationSessionId(e.sessionId());
         entity.setTenantId(e.tenantId());
@@ -43,17 +107,18 @@ public class ActionExecutionPersister {
         entity.setRetryable(e.result().retryable());
         entity.setRetryCount(0);
         entity.setCompensated(false);
-        entity.setExecutedAt(LocalDateTime.now());
-        entity.setCreatedAt(LocalDateTime.now());
-        try {
-            executionMapper.insert(entity);
-        } catch (DuplicateKeyException ex) {
-            // 行级 backstop：缓存漏掉的重复（重启/多实例）在此撞 uk_idempotency，预期内
-            log.debug("action_execution 幂等行已存在(uk backstop)，actionId={}, eventId={}",
-                    e.actionId(), e.eventId());
-        } catch (Exception ex) {
-            log.warn("action_execution 写库失败，actionId={}, actionType={}: {}",
-                    e.actionId(), e.actionType(), ex.getMessage());
+        LocalDateTime now = LocalDateTime.now();
+        entity.setExecutedAt(now);
+        entity.setCreatedAt(now);
+        return entity;
+    }
+
+    @Override
+    public void destroy() {
+        running = false;
+        flushBatch();
+        if (consumerThread != null) {
+            consumerThread.interrupt();
         }
     }
 }
