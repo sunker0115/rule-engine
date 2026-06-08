@@ -105,6 +105,29 @@ class EvalEngineStrategyTest {
     }
 
     @Test
+    void highestPriority_tie_isDeterministic_newerRuleVersionWins() {
+        // 两条规则同 priority=10、不同决策码：确定化后恒选 fromRuleVersionId 较大者（规则 2），
+        // 且与候选插入顺序无关（反转顺序结果不变 → 证明不随遍历顺序漂移）
+        EvalResult forward = evalHighestPriority(
+                snapshot(1L, "t1", "fraud", "DECISION_A", 10),
+                snapshot(2L, "t1", "fraud", "DECISION_B", 10));
+        EvalResult reversed = evalHighestPriority(
+                snapshot(2L, "t1", "fraud", "DECISION_B", 10),
+                snapshot(1L, "t1", "fraud", "DECISION_A", 10));
+
+        assertEquals("DECISION_B", forward.finalDecision().code());
+        assertEquals("DECISION_B", reversed.finalDecision().code());
+    }
+
+    private static EvalResult evalHighestPriority(RuleVersionSnapshot... snaps) {
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.update("t1", "fraud", "*", List.of(snaps));
+        EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
+                Map.of(), Map.of("AST_BOOLEAN", hitExecutor()));
+        return engine.evaluate(event("t1", "fraud"));
+    }
+
+    @Test
     void firstHit_noMatch_returnsMiss() {
         RuleVersionExecutor missExec = (snap, ctx) ->
                 new EvalResult(false, null, List.of(), List.of(), null, List.of(), null, null, null);

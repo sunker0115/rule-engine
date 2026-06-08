@@ -17,6 +17,15 @@ public class EvalEngine {
 
     private static final String DEFAULT_EXECUTOR_KEY = "AST_BOOLEAN";
 
+    /**
+     * 决策优先级裁决：priority 越大越优先；priority 相同时按 fromRuleVersionId 较大（较新规则版本）胜。
+     * 二级键保证平局结果确定可复现，不随候选遍历顺序（索引/DB 返回序）漂移。
+     */
+    private static final Comparator<Decision> DECISION_PRECEDENCE =
+            Comparator.comparingInt(Decision::priority)
+                    .thenComparing(Decision::fromRuleVersionId,
+                            Comparator.nullsFirst(Comparator.naturalOrder()));
+
     private final SceneRuleIndex index;
     private final EvalContextAssembler contextAssembler;
     private final Map<String, PreGate> preGates;
@@ -99,12 +108,10 @@ public class EvalEngine {
     /** FIRST_HIT：按快照最高 decisionBinding priority 倒序，第一条命中即返回。 */
     private EvalResult evaluateFirstHit(RuleEvent event,
                                         List<RuleVersionSnapshot> passed, EvalContext ctx) {
+        // 平局确定化：最高 binding priority 相同时按 ruleVersionId 升序，保证 FIRST_HIT 选取稳定可复现
         List<RuleVersionSnapshot> sorted = passed.stream()
-                .sorted(Comparator.comparingInt(
-                        (RuleVersionSnapshot s) -> s.decisionBindings().stream()
-                                .mapToInt(RuleVersionSnapshot.DecisionBinding::priority)
-                                .max().orElse(0))
-                        .reversed())
+                .sorted(Comparator.comparingInt(EvalEngine::maxBindingPriority).reversed()
+                        .thenComparingLong(RuleVersionSnapshot::ruleVersionId))
                 .toList();
 
         for (RuleVersionSnapshot snap : sorted) {
@@ -112,7 +119,7 @@ public class EvalEngine {
                 EvalResult r = selectExecutor(snap).execute(snap, ctx);
                 if (r.ruleHit()) {
                     Decision winner = r.hitDecisions().stream()
-                            .max(Comparator.comparingInt(Decision::priority))
+                            .max(DECISION_PRECEDENCE)
                             .orElse(r.finalDecision());
                     return new EvalResult(true, winner, List.of(winner),
                             r.nodeTrace(), r.errorCode(), List.of(), r.score(), null, null);
@@ -136,8 +143,10 @@ public class EvalEngine {
                 EvalResult r = exec.execute(snap, ctx);
                 allTraces.addAll(r.nodeTrace());
                 if (r.ruleHit()) {
+                    // 同一规则内 binding 平局确定化：priority 相同时按 decisionCode 字典序，避免取值随集合序漂移
                     snap.decisionBindings().stream()
-                            .max(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
+                            .max(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority)
+                                    .thenComparing(RuleVersionSnapshot.DecisionBinding::decisionCode))
                             .ifPresent(b -> hitDecisions.add(
                                     new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId())));
                 }
@@ -152,7 +161,7 @@ public class EvalEngine {
         }
 
         Decision finalDecision = hitDecisions.stream()
-                .max(Comparator.comparingInt(Decision::priority))
+                .max(DECISION_PRECEDENCE)
                 .orElse(null);
 
         return new EvalResult(
@@ -166,6 +175,13 @@ public class EvalEngine {
                 null,
                 null
         );
+    }
+
+    /** 快照 decisionBindings 的最高 priority；无 binding 时返回 0。供 FIRST_HIT 排序用。 */
+    private static int maxBindingPriority(RuleVersionSnapshot snap) {
+        return snap.decisionBindings().stream()
+                .mapToInt(RuleVersionSnapshot.DecisionBinding::priority)
+                .max().orElse(0);
     }
 
     /** 按快照 kind 选择 executor；找不到时回退到 AST_BOOLEAN。 */
