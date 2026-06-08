@@ -28,13 +28,11 @@ class DecisionTest {
         assertNull(d.fromRuleVersionId());
     }
 
-    @org.junit.jupiter.api.Test
+    @Test
     void category_carriedByFiveArgCtor_nullByFourArgCtor() {
-        com.sstlfsj.rule.kernel.api.model.Decision withCat =
-                new com.sstlfsj.rule.kernel.api.model.Decision("REVIEW", "", 20, 9L, "中危");
-        com.sstlfsj.rule.kernel.api.model.Decision noCat =
-                new com.sstlfsj.rule.kernel.api.model.Decision("PASS", "", 10, 9L);
-        org.junit.jupiter.api.Assertions.assertEquals("中危", withCat.category());
-        org.junit.jupiter.api.Assertions.assertNull(noCat.category());
+        Decision withCat = new Decision("REVIEW", "", 20, 9L, "中危");
+        Decision noCat = new Decision("PASS", "", 10, 9L);
+        assertEquals("中危", withCat.category());
+        assertNull(noCat.category());
     }
 }
