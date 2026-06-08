@@ -18,7 +18,7 @@ import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
-import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -55,10 +55,10 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
-    void ruleVersionExecutor_returnsTracingInterpretedExecutor() {
+    void ruleVersionExecutor_returnsInterpretedExecutor() {
         RuleVersionExecutor executor = config.ruleVersionExecutor();
         assertNotNull(executor);
-        assertInstanceOf(TracingInterpretedExecutor.class, executor);
+        assertInstanceOf(InterpretedExecutor.class, executor);
     }
 
     @Test
@@ -123,7 +123,8 @@ class EvalAutoConfigurationTest {
                 config.ruleVersionExecutor(),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
-                config.decisionTableExecutor());
+                config.decisionTableExecutor(),
+                true);
         assertNotNull(engine);
     }
 
@@ -136,7 +137,8 @@ class EvalAutoConfigurationTest {
                 config.ruleVersionExecutor(),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
-                config.decisionTableExecutor());
+                config.decisionTableExecutor(),
+                true);
         assertNotNull(engine);
     }
 

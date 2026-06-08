@@ -182,7 +182,7 @@ class EvalIntegrationTest {
 
     /**
      * PULL 模式调用 evaluate() 后，evaluation_session 应有一条 status=HIT 的记录。
-     * 空 AndNode 条件在 TracingInterpretedExecutor 中返回 true，故规则命中。
+     * 空 AndNode 条件在 InterpretedExecutor 中返回 true，故规则命中。
      */
     @Test
     void pull_evaluate_writesSessionToDb() throws InterruptedException {

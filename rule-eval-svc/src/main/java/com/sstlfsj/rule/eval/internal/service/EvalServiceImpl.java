@@ -70,8 +70,9 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         if (isDryRun && specificVersionId != null) {
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);
             if (snap == null) return EvalResult.miss();
+            // dry-run 始终强制收集 NodeTrace（需回传 nodeTrace），不受全局 trace 开关影响
             EvalOutcome outcome = evalEngine.evaluateWithContext(
-                    event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow);
+                    event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow, true);
             // dry-run 终态事件化：请求线程生成 id（snowflake，INPUT），异步 persister 落 dry_run_session + trace
             long dryRunId = IdWorker.getId();
             eventPublisher.publish(new DryRunRecorded(

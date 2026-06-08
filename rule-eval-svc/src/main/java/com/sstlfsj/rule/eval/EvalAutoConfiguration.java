@@ -22,7 +22,7 @@ import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
-import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,15 +47,15 @@ import java.util.concurrent.Executor;
 public class EvalAutoConfiguration {
 
     /**
-     * 默认使用 TracingInterpretedExecutor（AST 树形解释执行，附带 NodeTrace 收集）。
+     * 默认使用 InterpretedExecutor（AST 树形解释执行，按 TraceScope.COLLECT 守卫收集 NodeTrace）。
      * 外部可注册自定义 RuleVersionExecutor Bean 覆盖此默认值。
      *
-     * @return TracingInterpretedExecutor 实例
+     * @return InterpretedExecutor 实例
      */
     @Bean
     @Primary
     public RuleVersionExecutor ruleVersionExecutor() {
-        return new TracingInterpretedExecutor(KernelEvaluators.defaults());
+        return new InterpretedExecutor(KernelEvaluators.defaults());
     }
 
     /**
@@ -168,6 +168,7 @@ public class EvalAutoConfiguration {
      * @param scorecardExecutor     SCORECARD executor
      * @param decisionTreeExecutor  DECISION_TREE executor
      * @param decisionTableExecutor DECISION_TABLE executor
+     * @param traceEnabled          全局 NodeTrace 收集开关（engine.rule.trace.enabled，默认 true）
      * @return EvalEngine 实例
      */
     @Bean
@@ -178,7 +179,8 @@ public class EvalAutoConfiguration {
             RuleVersionExecutor ruleVersionExecutor,
             ScorecardExecutor scorecardExecutor,
             DecisionTreeExecutor decisionTreeExecutor,
-            DecisionTableExecutor decisionTableExecutor) {
+            DecisionTableExecutor decisionTableExecutor,
+            @org.springframework.beans.factory.annotation.Value("${engine.rule.trace.enabled:true}") boolean traceEnabled) {
         Map<String, PreGate> gateMap = new HashMap<>();
         if (preGates != null) {
             preGates.forEach(g -> gateMap.put(g.gateType(), g));
@@ -187,7 +189,8 @@ public class EvalAutoConfiguration {
                 Map.of("AST_BOOLEAN",     ruleVersionExecutor,
                        "SCORECARD",       scorecardExecutor,
                        "DECISION_TREE",   decisionTreeExecutor,
-                       "DECISION_TABLE",  decisionTableExecutor));
+                       "DECISION_TABLE",  decisionTableExecutor),
+                traceEnabled);
     }
 
     /**

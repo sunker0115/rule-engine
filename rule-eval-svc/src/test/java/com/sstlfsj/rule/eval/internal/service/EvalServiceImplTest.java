@@ -152,7 +152,7 @@ class EvalServiceImplTest {
         EvalContext engineCtx = ctx();
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
         when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
-                any(SceneExecutionStrategy.class), any(Instant.class)))
+                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
                 .thenReturn(new EvalOutcome(EvalResult.miss(), engineCtx));
 
         impl.dryRun(event(), 42L);
@@ -162,6 +162,9 @@ class EvalServiceImplTest {
                 o instanceof DryRunRecorded d
                         && d.ruleVersionId().equals(42L)
                         && d.context() == engineCtx));
+        // dry-run 始终强制收集 trace：必须以 collectTrace=true 调用引擎
+        verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(),
+                any(SceneExecutionStrategy.class), any(Instant.class), eq(true));
     }
 
     @Test
@@ -169,7 +172,7 @@ class EvalServiceImplTest {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
         when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
-                any(SceneExecutionStrategy.class), any(Instant.class)))
+                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
                 .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
 
         EvalResult result = impl.dryRun(event(), 42L);
@@ -205,7 +208,7 @@ class EvalServiceImplTest {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
         when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
-                any(SceneExecutionStrategy.class), any(Instant.class)))
+                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
                 .thenReturn(new EvalOutcome(hitResult("PASS", 10, 42L), ctx()));
 
         impl.dryRun(event(), 42L);
