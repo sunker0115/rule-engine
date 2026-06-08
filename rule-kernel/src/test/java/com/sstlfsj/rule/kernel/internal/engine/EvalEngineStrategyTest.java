@@ -169,4 +169,62 @@ class EvalEngineStrategyTest {
 
         assertFalse(engine.evaluate(event("t1", "fraud")).ruleHit());
     }
+
+    @Test
+    void allHits_decisionTree_usesLeafDecisionNotMaxBinding() {
+        RuleVersionExecutor treeExec = (s, c) -> {
+            Decision pass = new Decision("PASS", "", 10, s.ruleVersionId(), "低危");
+            return new EvalResult(true, pass, List.of(pass), List.of(), null, List.of(), null, "低危", null);
+        };
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "fraud", "t1", EMPTY_AND, List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("BLOCK", 30),
+                        new RuleVersionSnapshot.DecisionBinding("PASS", 10)),
+                List.of(), "DECISION_TREE");
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.update("t1", "fraud", "*", List.of(snap));
+        EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
+                Map.of(), Map.of("DECISION_TREE", treeExec));
+        EvalResult r = engine.evaluate(event("t1", "fraud"));
+        assertEquals("PASS", r.finalDecision().code());
+        assertEquals("低危", r.finalDecision().category());
+        assertEquals("低危", r.category());
+    }
+
+    @Test
+    void allHits_multipleTrees_eachCategoryPreserved() {
+        RuleVersionExecutor dev = (s, c) -> { Decision d = new Decision("REVIEW","",20,s.ruleVersionId(),"中危");
+            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, "中危", null); };
+        RuleVersionExecutor amt = (s, c) -> { Decision d = new Decision("REVIEW","",10,s.ruleVersionId(),"大额");
+            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, "大额", null); };
+        RuleVersionSnapshot s1 = new RuleVersionSnapshot(1L,"fraud","t1",EMPTY_AND,List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("REVIEW",20)),List.of(),"DEV");
+        RuleVersionSnapshot s2 = new RuleVersionSnapshot(2L,"fraud","t1",EMPTY_AND,List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("REVIEW",10)),List.of(),"AMT");
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.setStrategy("t1","fraud",SceneExecutionStrategy.ALL_HITS);
+        index.update("t1","fraud","*",List.of(s1,s2));
+        EvalEngine engine = new EvalEngine(index,new EvalContextAssembler(List.of(),List.of()),
+                Map.of(),Map.of("DEV",dev,"AMT",amt));
+        EvalResult r = engine.evaluate(event("t1","fraud"));
+        List<String> cats = r.hitDecisions().stream().map(Decision::category).sorted().toList();
+        assertEquals(List.of("中危","大额"), cats);
+        assertEquals("中危", r.finalDecision().category());
+    }
+
+    @Test
+    void firstHit_booleanRule_winnerFromBindingNotNull() {
+        RuleVersionExecutor boolExec = (s, c) -> EvalResult.hit();
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L,"fraud","t1",EMPTY_AND,List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("PASS",5)),List.of(),"AST_BOOLEAN");
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.setStrategy("t1","fraud",SceneExecutionStrategy.FIRST_HIT);
+        index.update("t1","fraud","*",List.of(snap));
+        EvalEngine engine = new EvalEngine(index,new EvalContextAssembler(List.of(),List.of()),
+                Map.of(),Map.of("AST_BOOLEAN",boolExec));
+        EvalResult r = engine.evaluate(event("t1","fraud"));
+        assertTrue(r.ruleHit());
+        assertNotNull(r.finalDecision());
+        assertEquals("PASS", r.finalDecision().code());
+        assertNull(r.finalDecision().category());
+    }
 }

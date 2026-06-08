@@ -122,11 +122,13 @@ public class EvalEngine {
             try {
                 EvalResult r = selectExecutor(snap).execute(snap, ctx);
                 if (r.ruleHit()) {
-                    Decision winner = r.hitDecisions().stream()
+                    Decision winner = resolveRuleDecisions(snap, r).stream()
                             .max(DECISION_PRECEDENCE)
-                            .orElse(r.finalDecision());
-                    return new EvalResult(true, winner, List.of(winner),
-                            r.nodeTrace(), r.errorCode(), List.of(), r.score(), null, null);
+                            .orElse(null);
+                    return new EvalResult(true, winner,
+                            winner == null ? List.of() : List.of(winner),
+                            r.nodeTrace(), r.errorCode(), List.of(), r.score(),
+                            winner == null ? null : winner.category(), null);
                 }
             } catch (Exception ignored) {
             }
@@ -147,12 +149,7 @@ public class EvalEngine {
                 EvalResult r = exec.execute(snap, ctx);
                 allTraces.addAll(r.nodeTrace());
                 if (r.ruleHit()) {
-                    // 同一规则内 binding 平局确定化：priority 相同时按 decisionCode 字典序，避免取值随集合序漂移
-                    snap.decisionBindings().stream()
-                            .max(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority)
-                                    .thenComparing(RuleVersionSnapshot.DecisionBinding::decisionCode))
-                            .ifPresent(b -> hitDecisions.add(
-                                    new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId())));
+                    hitDecisions.addAll(resolveRuleDecisions(snap, r));
                 }
                 if (r.errorCode() != null && errorCode == null) errorCode = r.errorCode();
                 if (r.score() != null) {
@@ -176,9 +173,23 @@ public class EvalEngine {
                 errorCode,
                 List.of(),
                 aggregatedScore,
-                null,
+                finalDecision != null ? finalDecision.category() : null,
                 null
         );
+    }
+
+    /**
+     * 一条命中规则贡献的决策：executor 自选了决策（tree/table，hitDecisions 非空）就用它（带 category）；
+     * 否则（boolean/scorecard）回退按最高优先级 binding 赋决策（category=null）。
+     */
+    private static List<Decision> resolveRuleDecisions(RuleVersionSnapshot snap, EvalResult r) {
+        if (!r.hitDecisions().isEmpty()) return r.hitDecisions();
+        return snap.decisionBindings().stream()
+                .max(Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority)
+                        .thenComparing(RuleVersionSnapshot.DecisionBinding::decisionCode))
+                .map(b -> List.<Decision>of(
+                        new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId())))
+                .orElse(List.of());
     }
 
     /** 快照 decisionBindings 的最高 priority；无 binding 时返回 0。供 FIRST_HIT 排序用。 */
