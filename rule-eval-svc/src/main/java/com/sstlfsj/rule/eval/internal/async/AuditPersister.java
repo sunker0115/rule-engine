@@ -109,7 +109,11 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setSubjectId(ev.subjectId());
         s.setSource(ev.source().name());
         s.setMode(e.mode());
-        s.setStatus(r.errorCode() != null ? "ERROR" : (r.ruleHit() ? "HIT" : "MISS"));
+        // BLOCKED（D22 第四态）优先于 MISS：候选被 Pre-Gate 全拦截，blockedBy 记首个阻断 gate
+        s.setStatus(r.errorCode() != null ? "ERROR"
+                : e.blockedBy() != null ? "BLOCKED"
+                : (r.ruleHit() ? "HIT" : "MISS"));
+        s.setBlockedBy(e.blockedBy());
         s.setFinalDecision(r.finalDecision() != null ? r.finalDecision().code() : null);
         s.setHitDecisions(r.hitDecisions().isEmpty() ? "[]"
                 : r.hitDecisions().stream().map(Decision::code)

@@ -89,7 +89,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         EvalResult result = outcome.result();
 
         // 副作用事件化异步：审计内存 best-effort（可丢）；action 命中有决策时持久投递（at-least-once，不丢）
-        eventPublisher.publishAudit(sessionId, event, mode, candidates.size(), result, outcome.context());
+        eventPublisher.publishAudit(sessionId, event, mode, candidates.size(),
+                result, outcome.context(), outcome.blockedBy());
         Long tid = parseTenantId(event.tenantId());
         if (tid != null && result.ruleHit() && !result.hitDecisions().isEmpty()) {
             eventPublisher.publishActions(sessionId, tid, event.eventId(),

@@ -78,7 +78,7 @@ class EvalServiceImplTest {
         impl.evaluate(event());
 
         // 复用引擎组装的上下文发审计事件（异步落 session 快照），不再同步 updateFinal
-        verify(eventPublisher).publishAudit(anyLong(), any(), eq("PULL"), eq(1), any(), eq(engineCtx));
+        verify(eventPublisher).publishAudit(anyLong(), any(), eq("PULL"), eq(1), any(), eq(engineCtx), any());
     }
 
     @Test
@@ -101,7 +101,7 @@ class EvalServiceImplTest {
         assertTrue(result.ruleHit());
         assertFalse(result.hitDecisions().isEmpty());
         assertEquals("REJECT", result.hitDecisions().get(0).code());
-        verify(eventPublisher).publishAudit(anyLong(), any(), eq("PULL"), anyInt(), any(), any());
+        verify(eventPublisher).publishAudit(anyLong(), any(), eq("PULL"), anyInt(), any(), any(), any());
     }
 
     @Test

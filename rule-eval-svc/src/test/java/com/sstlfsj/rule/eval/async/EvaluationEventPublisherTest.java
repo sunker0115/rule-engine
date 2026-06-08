@@ -34,13 +34,14 @@ class EvaluationEventPublisherTest {
         ActionDeliveryChannel delivery = mock(ActionDeliveryChannel.class);
         EvaluationEventPublisher pub = new EvaluationEventPublisher(spring, delivery);
 
-        pub.publishAudit(99L, event(), "PULL", 3, EvalResult.miss(), null);
+        pub.publishAudit(99L, event(), "PULL", 3, EvalResult.miss(), null, "ROLLOUT");
 
         ArgumentCaptor<AuditRecorded> captor = ArgumentCaptor.forClass(AuditRecorded.class);
         verify(spring).publishEvent(captor.capture());
         assertThat(captor.getValue().sessionId()).isEqualTo(99L);
         assertThat(captor.getValue().mode()).isEqualTo("PULL");
         assertThat(captor.getValue().candidateCount()).isEqualTo(3);
+        assertThat(captor.getValue().blockedBy()).isEqualTo("ROLLOUT");
     }
 
     @Test

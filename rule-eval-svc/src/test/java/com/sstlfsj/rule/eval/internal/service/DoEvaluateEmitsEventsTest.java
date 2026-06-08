@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,7 +58,7 @@ class DoEvaluateEmitsEventsTest {
         EvalResult result = service(engine, publisher).evaluate(event);
 
         assertThat(result.ruleHit()).isTrue();
-        verify(publisher).publishAudit(anyLong(), eq(event), eq("PULL"), eq(1), eq(hit), any());
+        verify(publisher).publishAudit(anyLong(), eq(event), eq("PULL"), eq(1), eq(hit), any(), isNull());
         verify(publisher).publishActions(anyLong(), eq(1L), eq("e1"), eq("s"), eq(List.of(pass)));
     }
 
@@ -76,7 +77,27 @@ class DoEvaluateEmitsEventsTest {
         EvalResult result = service(engine, publisher).evaluate(event);
 
         assertThat(result.ruleHit()).isFalse();
-        verify(publisher).publishAudit(anyLong(), eq(event), eq("PULL"), eq(1), eq(miss), any());
+        verify(publisher).publishAudit(anyLong(), eq(event), eq("PULL"), eq(1), eq(miss), any(), isNull());
+        verify(publisher, never())
+                .publishActions(anyLong(), anyLong(), anyString(), anyString(), anyList());
+    }
+
+    @Test
+    void allCandidatesPreGateBlocked_publishesAuditWithBlockedBy_noActions() {
+        // 候选被 Pre-Gate 全拦截：审计带 blockedBy(落 status=BLOCKED)，action 不发
+        EvalEngine engine = mock(EvalEngine.class);
+        EvaluationEventPublisher publisher = mock(EvaluationEventPublisher.class);
+        RuleEvent event = event("e4");
+        when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
+        EvalResult miss = new EvalResult(false, null, List.of(), List.of(),
+                null, List.of(), null, null, null);
+        when(engine.evaluateWithContext(eq(event), anyList(), any()))
+                .thenReturn(new EvalOutcome(miss, null, "ROLLOUT"));
+
+        EvalResult result = service(engine, publisher).evaluate(event);
+
+        assertThat(result.ruleHit()).isFalse();
+        verify(publisher).publishAudit(anyLong(), eq(event), eq("PULL"), eq(1), eq(miss), any(), eq("ROLLOUT"));
         verify(publisher, never())
                 .publishActions(anyLong(), anyLong(), anyString(), anyString(), anyList());
     }

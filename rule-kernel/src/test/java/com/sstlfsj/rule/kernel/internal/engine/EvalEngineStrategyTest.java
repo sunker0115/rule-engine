@@ -128,6 +128,33 @@ class EvalEngineStrategyTest {
     }
 
     @Test
+    void allCandidatesBlockedByPreGate_outcomeCarriesBlockedBy_resultMiss() {
+        // 候选带 ROLLOUT pre-gate 且被拦截 → passed 空 → outcome.blockedBy=首个阻断 gate，result=miss
+        com.sstlfsj.rule.kernel.api.spi.pregate.PreGate gate =
+                new com.sstlfsj.rule.kernel.api.spi.pregate.PreGate() {
+                    public String gateType() { return "ROLLOUT"; }
+                    public com.sstlfsj.rule.kernel.api.model.PreGateResult evaluate(
+                            com.sstlfsj.rule.kernel.api.model.PreGateContext ctx) {
+                        return com.sstlfsj.rule.kernel.api.model.PreGateResult.blocked("ROLLOUT");
+                    }
+                };
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "fraud", "t1", EMPTY_AND,
+                List.of(new RuleVersionSnapshot.PreGateConfig("ROLLOUT", Map.of())),
+                List.of(new RuleVersionSnapshot.DecisionBinding("PASS", 1)),
+                List.of(), "AST_BOOLEAN");
+        SceneRuleIndex index = new SceneRuleIndex();
+        index.update("t1", "fraud", "*", List.of(snap));
+        EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
+                Map.of("ROLLOUT", gate), Map.of("AST_BOOLEAN", hitExecutor()));
+
+        RuleEvent evt = event("t1", "fraud");
+        EvalOutcome outcome = engine.evaluateWithContext(evt, engine.match(evt), Instant.now());
+
+        assertEquals("ROLLOUT", outcome.blockedBy());
+        assertFalse(outcome.result().ruleHit());
+    }
+
+    @Test
     void firstHit_noMatch_returnsMiss() {
         RuleVersionExecutor missExec = (snap, ctx) ->
                 new EvalResult(false, null, List.of(), List.of(), null, List.of(), null, null, null);

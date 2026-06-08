@@ -36,10 +36,13 @@ public class EvaluationEventPublisher {
      * @param candidateCount 候选规则数
      * @param result         评估结果
      * @param context        评估上下文（可为 null）
+     * @param blockedBy      Pre-Gate 拦截原因（非 null 时落 BLOCKED）；未拦截传 null
      */
     public void publishAudit(long sessionId, RuleEvent event, String mode,
-                             int candidateCount, EvalResult result, EvalContext context) {
-        publisher.publishEvent(new AuditRecorded(sessionId, event, mode, candidateCount, result, context));
+                             int candidateCount, EvalResult result, EvalContext context,
+                             String blockedBy) {
+        publisher.publishEvent(
+                new AuditRecorded(sessionId, event, mode, candidateCount, result, context, blockedBy));
     }
 
     /**

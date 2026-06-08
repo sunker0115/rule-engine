@@ -13,6 +13,8 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
  * @param candidateCount 候选规则数
  * @param result         评估结果
  * @param context        评估上下文（用于 context_snapshot；可为 null）
+ * @param blockedBy      Pre-Gate 拦截原因（首个阻断 gateType）；非 null 时落 status=BLOCKED，否则 null
  */
 public record AuditRecorded(long sessionId, RuleEvent event, String mode,
-                            int candidateCount, EvalResult result, EvalContext context) {}
+                            int candidateCount, EvalResult result, EvalContext context,
+                            String blockedBy) {}

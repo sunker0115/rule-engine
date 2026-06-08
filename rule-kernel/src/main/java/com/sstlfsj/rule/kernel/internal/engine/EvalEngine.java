@@ -90,10 +90,14 @@ public class EvalEngine {
         if (candidates.isEmpty()) return new EvalOutcome(EvalResult.miss(), null);
 
         List<RuleVersionSnapshot> passed = new ArrayList<>();
+        String firstBlockedBy = null;
         for (RuleVersionSnapshot snap : candidates) {
-            if (applyPreGates(event, snap) == null) passed.add(snap);
+            String blockedBy = applyPreGates(event, snap);
+            if (blockedBy == null) passed.add(snap);
+            else if (firstBlockedBy == null) firstBlockedBy = blockedBy;
         }
-        if (passed.isEmpty()) return new EvalOutcome(EvalResult.miss(), null);
+        // 候选全被 Pre-Gate 拦截：BLOCKED 第四态（D22），blockedBy 记首个阻断 gate；区别于评估后 MISS
+        if (passed.isEmpty()) return new EvalOutcome(EvalResult.miss(), null, firstBlockedBy);
 
         EvalContext ctx = contextAssembler.assemble(event, passed, now);
 
