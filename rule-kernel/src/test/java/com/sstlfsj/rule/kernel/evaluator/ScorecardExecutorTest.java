@@ -90,7 +90,10 @@ class ScorecardExecutorTest {
         EvalResult result = new ScorecardExecutor(
                 Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse))
                 .execute(snapshot(root), ctx());
-        assertThat(result.nodeTrace()).hasSize(2);
+        // 顶层是单一 ScorecardRoot，各因子在其 children 中（不短路，全量遍历）
+        assertThat(result.nodeTrace()).hasSize(1);
+        assertThat(result.nodeTrace().getFirst().nodeType()).isEqualTo("ScorecardRoot");
+        assertThat(result.nodeTrace().getFirst().children()).hasSize(2);
     }
 
     @Test

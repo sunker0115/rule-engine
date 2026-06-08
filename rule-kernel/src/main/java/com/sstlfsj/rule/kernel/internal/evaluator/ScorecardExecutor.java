@@ -37,7 +37,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
 
         // collect=false 时跳过 NodeTrace 构建（traces 保持空），score/decision/hit 不受影响
         boolean collect = TraceScope.COLLECT.orElse(true);
-        List<NodeTrace> traces = new ArrayList<>();
+        List<NodeTrace> factorTraces = new ArrayList<>();
         double score = 0.0;
         Long rvId = snapshot.ruleVersionId();
 
@@ -46,10 +46,11 @@ public class ScorecardExecutor implements RuleVersionExecutor {
             if (outcome.isError()) {
                 // 风控保守：任一条件取数失败/无算子 → 整卡置 ERROR 不出分，避免漏分误判
                 if (collect) {
-                    traces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                            false, null, null, outcome.errorCode(), List.of(), rvId));
+                    factorTraces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+                            false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), rvId));
                 }
-                return new EvalResult(false, null, List.of(), traces,
+                return new EvalResult(false, null, List.of(),
+                        scorecardRoot(collect, false, factorTraces, rvId),
                         outcome.errorCode(), List.of(), null, null, null);
             }
             boolean met = outcome.satisfied();
@@ -57,12 +58,28 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                 score += node.weight();
             }
             if (collect) {
-                traces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                        met, null, null, null, List.of(), rvId));
+                factorTraces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+                        met, outcome.resolvedValue(), outcome.valueSource(), null, List.of(), rvId));
             }
         }
 
         boolean hit = score >= root.threshold();
-        return new EvalResult(hit, null, List.of(), traces, null, List.of(), score, null, null);
+        return new EvalResult(hit, null, List.of(),
+                scorecardRoot(collect, hit, factorTraces, rvId),
+                null, List.of(), score, null, null);
+    }
+
+    /**
+     * 将各因子 trace 包进单一 ScorecardRoot 根节点；非收集模式返回空列表。
+     *
+     * @param collect 是否收集 trace
+     * @param result  评分卡整体命中结果
+     * @param factors 各因子（ConditionNode）trace
+     * @param rvId    规则版本 ID
+     * @return 含单个 ScorecardRoot 的列表，或空列表
+     */
+    private static List<NodeTrace> scorecardRoot(boolean collect, boolean result, List<NodeTrace> factors, Long rvId) {
+        if (!collect) return List.of();
+        return List.of(new NodeTrace("ScorecardRoot", null, null, result, null, null, null, factors, rvId));
     }
 }

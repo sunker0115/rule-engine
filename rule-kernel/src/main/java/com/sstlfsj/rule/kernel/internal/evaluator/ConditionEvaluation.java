@@ -32,15 +32,19 @@ final class ConditionEvaluation {
     static ConditionOutcome evaluate(ConditionNode node, EvalContext ctx,
                                      Map<String, ConditionEvaluator> evaluators) {
         String mc = node.metricCode();
+        Object actual = null;
+        String source = null;
         if (mc != null) {
             MetricValue mv = ctx.getMetric(mc);
+            // 先捕获实际值/来源，再判断取数是否失败，保证 ERROR 也带出来源
+            if (mv != null) { actual = mv.value(); source = mv.valueSource(); }
             if (mv != null && mv.isError()) {
                 return ConditionOutcome.error(
-                        mv.errorCode() != null ? mv.errorCode() : METRIC_FETCH_FAIL);
+                        mv.errorCode() != null ? mv.errorCode() : METRIC_FETCH_FAIL, actual, source);
             }
         }
         ConditionEvaluator evaluator = evaluators.get(node.conditionType());
-        if (evaluator == null) return ConditionOutcome.error(NO_EVALUATOR);
-        return ConditionOutcome.of(evaluator.evaluate(node, ctx));
+        if (evaluator == null) return ConditionOutcome.error(NO_EVALUATOR, actual, source);
+        return ConditionOutcome.leaf(evaluator.evaluate(node, ctx), actual, source);
     }
 }

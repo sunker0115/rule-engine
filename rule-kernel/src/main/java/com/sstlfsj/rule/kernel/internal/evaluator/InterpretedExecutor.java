@@ -183,13 +183,13 @@ public class InterpretedExecutor implements RuleVersionExecutor {
             // ERROR(取数失败/无算子)：节点不命中，trace 标错码，整树继续(D15)
             if (sink != null) {
                 sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                        false, null, null, outcome.errorCode(), List.of(), null));
+                        false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), null));
             }
             return false;
         }
         if (sink != null) {
             sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                    outcome.satisfied(), null, null, null, List.of(), null));
+                    outcome.satisfied(), outcome.resolvedValue(), outcome.valueSource(), null, List.of(), null));
         }
         return outcome.satisfied();
     }

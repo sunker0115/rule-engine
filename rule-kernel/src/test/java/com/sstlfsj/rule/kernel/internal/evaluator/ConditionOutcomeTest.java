@@ -26,4 +26,28 @@ class ConditionOutcomeTest {
         assertTrue(o.isError());
         assertEquals("X", o.errorCode());
     }
+
+    @Test
+    void leaf_carriesResolvedValueAndSource() {
+        ConditionOutcome o = ConditionOutcome.leaf(true, 100L, "PROVIDED");
+        assertTrue(o.satisfied());
+        assertFalse(o.isError());
+        assertEquals(100L, o.resolvedValue());
+        assertEquals("PROVIDED", o.valueSource());
+    }
+
+    @Test
+    void leafError_carriesCodeValueAndSource() {
+        ConditionOutcome o = ConditionOutcome.error("METRIC_FETCH_FAIL", null, "FETCHED");
+        assertTrue(o.isError());
+        assertEquals("METRIC_FETCH_FAIL", o.errorCode());
+        assertEquals("FETCHED", o.valueSource());
+    }
+
+    @Test
+    void containerOutcomes_haveNoLeafValue() {
+        assertNull(ConditionOutcome.of(true).resolvedValue());
+        assertNull(ConditionOutcome.of(true).valueSource());
+        assertNull(ConditionOutcome.error("X").resolvedValue());
+    }
 }
