@@ -51,7 +51,7 @@ class EvalEngineStrategyTest {
         // 默认策略 HIGHEST_PRIORITY
 
         EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
-                Map.of(), Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of(), Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         EvalResult result = engine.evaluate(event("t1", "fraud"));
         assertTrue(result.ruleHit());
@@ -68,7 +68,7 @@ class EvalEngineStrategyTest {
                 snapshot(2L, "t1", "fraud", "HIGH_RISK", 20)));
 
         EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
-                Map.of(), Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of(), Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         EvalResult result = engine.evaluate(event("t1", "fraud"));
         assertTrue(result.ruleHit());
@@ -94,7 +94,7 @@ class EvalEngineStrategyTest {
                 snapshot(2L, "t1", "fraud", "HIGH_RISK", 20)));
 
         EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
-                Map.of(), Map.of("AST_BOOLEAN", countingHit));
+                Map.of(), Map.of("AST_BOOLEAN", countingHit), true);
 
         EvalResult result = engine.evaluate(event("t1", "fraud"));
         assertTrue(result.ruleHit());
@@ -123,7 +123,7 @@ class EvalEngineStrategyTest {
         SceneRuleIndex index = new SceneRuleIndex();
         index.update("t1", "fraud", "*", List.of(snaps));
         EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
-                Map.of(), Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of(), Map.of("AST_BOOLEAN", hitExecutor()), true);
         return engine.evaluate(event("t1", "fraud"));
     }
 
@@ -145,7 +145,7 @@ class EvalEngineStrategyTest {
         SceneRuleIndex index = new SceneRuleIndex();
         index.update("t1", "fraud", "*", List.of(snap));
         EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
-                Map.of("ROLLOUT", gate), Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("ROLLOUT", gate), Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         RuleEvent evt = event("t1", "fraud");
         EvalOutcome outcome = engine.evaluateWithContext(evt, engine.match(evt), Instant.now());
@@ -165,7 +165,7 @@ class EvalEngineStrategyTest {
                 snapshot(1L, "t1", "fraud", "BLOCK", 10)));
 
         EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
-                Map.of(), Map.of("AST_BOOLEAN", missExec));
+                Map.of(), Map.of("AST_BOOLEAN", missExec), true);
 
         assertFalse(engine.evaluate(event("t1", "fraud")).ruleHit());
     }
@@ -183,7 +183,7 @@ class EvalEngineStrategyTest {
         SceneRuleIndex index = new SceneRuleIndex();
         index.update("t1", "fraud", "*", List.of(snap));
         EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
-                Map.of(), Map.of("DECISION_TREE", treeExec));
+                Map.of(), Map.of("DECISION_TREE", treeExec), true);
         EvalResult r = engine.evaluate(event("t1", "fraud"));
         assertEquals("PASS", r.finalDecision().code());
         assertEquals("低危", r.finalDecision().category());
@@ -204,7 +204,7 @@ class EvalEngineStrategyTest {
         index.setStrategy("t1","fraud",SceneExecutionStrategy.ALL_HITS);
         index.update("t1","fraud","*",List.of(s1,s2));
         EvalEngine engine = new EvalEngine(index,new EvalContextAssembler(List.of(),List.of()),
-                Map.of(),Map.of("DEV",dev,"AMT",amt));
+                Map.of(),Map.of("DEV",dev,"AMT",amt), true);
         EvalResult r = engine.evaluate(event("t1","fraud"));
         List<String> cats = r.hitDecisions().stream().map(Decision::category).sorted().toList();
         assertEquals(List.of("中危","大额"), cats);
@@ -220,7 +220,7 @@ class EvalEngineStrategyTest {
         index.setStrategy("t1","fraud",SceneExecutionStrategy.FIRST_HIT);
         index.update("t1","fraud","*",List.of(snap));
         EvalEngine engine = new EvalEngine(index,new EvalContextAssembler(List.of(),List.of()),
-                Map.of(),Map.of("AST_BOOLEAN",boolExec));
+                Map.of(),Map.of("AST_BOOLEAN",boolExec), true);
         EvalResult r = engine.evaluate(event("t1","fraud"));
         assertTrue(r.ruleHit());
         assertNotNull(r.finalDecision());
@@ -238,7 +238,7 @@ class EvalEngineStrategyTest {
         index.setStrategy("t1","fraud",SceneExecutionStrategy.FIRST_HIT);
         index.update("t1","fraud","*",List.of(snap));
         EvalEngine engine = new EvalEngine(index,new EvalContextAssembler(List.of(),List.of()),
-                Map.of(),Map.of("AST_BOOLEAN",boolExec));
+                Map.of(),Map.of("AST_BOOLEAN",boolExec), true);
         assertFalse(engine.evaluate(event("t1","fraud")).ruleHit());
     }
 }

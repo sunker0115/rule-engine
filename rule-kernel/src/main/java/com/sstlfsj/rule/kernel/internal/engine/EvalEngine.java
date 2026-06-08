@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
+import com.sstlfsj.rule.kernel.internal.evaluator.TraceScope;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 
 import java.time.Instant;
@@ -30,21 +31,25 @@ public class EvalEngine {
     private final EvalContextAssembler contextAssembler;
     private final Map<String, PreGate> preGates;
     private final Map<String, RuleVersionExecutor> executors;
+    private final boolean traceEnabled;
 
     /**
      * @param index            倒排索引，供 matcher 阶段查询候选快照
      * @param contextAssembler 装配 EvalContext（主体、指标）
      * @param preGates         Pre-Gate 映射，key = gateType
      * @param executors        executor 映射，key = kind（如 "AST_BOOLEAN"）
+     * @param traceEnabled     常规评估是否收集 NodeTrace 的全局默认（dry-run 走显式形参强制 true）
      */
     public EvalEngine(SceneRuleIndex index,
                       EvalContextAssembler contextAssembler,
                       Map<String, PreGate> preGates,
-                      Map<String, RuleVersionExecutor> executors) {
+                      Map<String, RuleVersionExecutor> executors,
+                      boolean traceEnabled) {
         this.index = index;
         this.contextAssembler = contextAssembler;
         this.preGates = Map.copyOf(preGates);
         this.executors = Map.copyOf(executors);
+        this.traceEnabled = traceEnabled;
     }
 
     /** 标准入口：match → 评估，注入一次评估时刻 now，整棵 AST 共用。 */
@@ -77,7 +82,7 @@ public class EvalEngine {
     }
 
     /**
-     * 用显式策略评估给定候选，返回结果 + 组装好的上下文（dry-run 传 HIGHEST_PRIORITY）。
+     * 用显式策略评估给定候选，trace 收集走全局 {@code traceEnabled} 默认。
      *
      * @param event      触发事件
      * @param candidates 候选快照
@@ -87,6 +92,25 @@ public class EvalEngine {
      */
     public EvalOutcome evaluateWithContext(RuleEvent event, List<RuleVersionSnapshot> candidates,
                                            SceneExecutionStrategy strategy, Instant now) {
+        return evaluateWithContext(event, candidates, strategy, now, traceEnabled);
+    }
+
+    /**
+     * 用显式策略评估给定候选，并以 {@code collectTrace} 显式控制本次评估是否收集 NodeTrace
+     * （dry-run 传 true 强制收集，常规链路传 {@code traceEnabled}）。
+     * 仅在真正调用执行器的策略 switch 外层绑定 {@link TraceScope#COLLECT}；早返回 miss / blockedBy
+     * 不执行执行器，故不在绑定范围内。
+     *
+     * @param event        触发事件
+     * @param candidates   候选快照
+     * @param strategy     执行策略
+     * @param now          本次评估统一时刻
+     * @param collectTrace 本次评估是否收集 NodeTrace
+     * @return 结果与上下文的聚合；早返回 miss 时 context 为 null
+     */
+    public EvalOutcome evaluateWithContext(RuleEvent event, List<RuleVersionSnapshot> candidates,
+                                           SceneExecutionStrategy strategy, Instant now,
+                                           boolean collectTrace) {
         if (candidates.isEmpty()) return new EvalOutcome(EvalResult.miss(), null);
 
         List<RuleVersionSnapshot> passed = new ArrayList<>();
@@ -101,11 +125,20 @@ public class EvalEngine {
 
         EvalContext ctx = contextAssembler.assemble(event, passed, now);
 
-        EvalResult result = switch (strategy) {
-            case FIRST_HIT -> evaluateFirstHit(event, passed, ctx);
-            // HIGHEST_PRIORITY / ALL_HITS：语义相同，均全量评估收集所有命中决策
-            case HIGHEST_PRIORITY, ALL_HITS -> evaluateAllCandidates(passed, ctx);
-        };
+        // 仅执行器调用绑定 COLLECT：执行器读 TraceScope.COLLECT 决定是否构建 trace
+        EvalResult result;
+        try {
+            result = ScopedValue.where(TraceScope.COLLECT, collectTrace).call(() -> switch (strategy) {
+                case FIRST_HIT -> evaluateFirstHit(event, passed, ctx);
+                // HIGHEST_PRIORITY / ALL_HITS：语义相同，均全量评估收集所有命中决策
+                case HIGHEST_PRIORITY, ALL_HITS -> evaluateAllCandidates(passed, ctx);
+            });
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            // switch 分支无受检异常，CallableOp 声明的 Exception 不会真正发生
+            throw new IllegalStateException(e);
+        }
         return new EvalOutcome(result, ctx);
     }
 

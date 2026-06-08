@@ -56,7 +56,7 @@ class EvalEngineTest {
     void evaluate_noMatchInIndex_returnsMiss() {
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(new SceneRuleIndex(), asm, Map.of(),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
         assertFalse(engine.evaluate(event("t1", "scene", "ORDER")).ruleHit());
     }
 
@@ -67,7 +67,7 @@ class EvalEngineTest {
 
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(index, asm, Map.of(),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"));
         assertTrue(result.ruleHit());
@@ -82,7 +82,7 @@ class EvalEngineTest {
 
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(index, asm, Map.of(),
-                Map.of("AST_BOOLEAN", missExecutor()));
+                Map.of("AST_BOOLEAN", missExecutor()), true);
         assertFalse(engine.evaluate(event("t1", "scene", "ORDER")).ruleHit());
     }
 
@@ -99,7 +99,7 @@ class EvalEngineTest {
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(index, asm,
                 Map.of("ROLLOUT", blockingGate("ROLLOUT")),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
         assertFalse(engine.evaluate(event("t1", "scene", "EVT")).ruleHit());
     }
 
@@ -107,7 +107,7 @@ class EvalEngineTest {
     void evaluateWithContext_directCandidates_skipsIndexLookup() {
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(new SceneRuleIndex(), asm, Map.of(),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         EvalOutcome outcome = engine.evaluateWithContext(event("t1", "scene", "ORDER"),
                 List.of(snapshot(2L, "t1", "scene")),
@@ -122,7 +122,7 @@ class EvalEngineTest {
         index.update("t1", "scene", "*", List.of(snapshot(1L, "t1", "scene")));
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(index, asm, Map.of(),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         assertEquals(1, engine.match(event("t1", "scene", "ORDER")).size());
     }
@@ -133,7 +133,7 @@ class EvalEngineTest {
         index.update("t1", "scene", "*", List.of(snapshot(1L, "t1", "scene")));
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(index, asm, Map.of(),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         RuleEvent ev = event("t1", "scene", "ORDER");
         EvalOutcome outcome = engine.evaluateWithContext(ev, engine.match(ev), Instant.now());
@@ -145,7 +145,7 @@ class EvalEngineTest {
     void evaluateWithContext_emptyCandidates_missWithNullContext() {
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(new SceneRuleIndex(), asm, Map.of(),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         EvalOutcome outcome = engine.evaluateWithContext(event("t1", "scene", "ORDER"),
                 List.of(), SceneExecutionStrategy.HIGHEST_PRIORITY, Instant.now());
@@ -163,7 +163,7 @@ class EvalEngineTest {
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(new SceneRuleIndex(), asm,
                 Map.of("ROLLOUT", blockingGate("ROLLOUT")),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         EvalOutcome outcome = engine.evaluateWithContext(event("t1", "scene", "EVT"),
                 List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, Instant.now());
@@ -178,7 +178,7 @@ class EvalEngineTest {
 
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(index, asm, Map.of(),
-                Map.of("AST_BOOLEAN", hitExecutor()));
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
 
         EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"));
         assertNull(result.category());
@@ -201,7 +201,7 @@ class EvalEngineTest {
         };
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(index, asm, Map.of(),
-                Map.of("AST_BOOLEAN", checkingExec));
+                Map.of("AST_BOOLEAN", checkingExec), true);
 
         RuleEvent ev = event("t1", "scene", "ORDER");
         EvalResult result = engine.evaluateWithContext(ev, engine.match(ev), fixedNow).result();
@@ -229,7 +229,7 @@ class EvalEngineTest {
                 List.of(new Decision(snap.decisionBindings().get(0).decisionCode(), "",
                         snap.decisionBindings().get(0).priority(), snap.ruleVersionId())),
                 List.of(), null, List.of(), null, null, null);
-        EvalEngine engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", exec));
+        EvalEngine engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", exec), true);
 
         EvalResult result = engine.evaluate(event("t1", "scene", "ORDER"));
         assertTrue(result.ruleHit());
