@@ -53,16 +53,17 @@ tree/table「补 trace」(#5)与审计 #1「trace 内容接线」是**同一个�
 **落库形态：选 A「trace 自包含」(2026-06-09 已定)。** trace 行带齐 label/expected/actual,前端/审计单看一行即可渲染,无需 join AST。理由:① trace/可观测数据自包含是惯例(OTel span 冗余 attributes);② 与现有 node_trace 设计一致(已冗余 conditionType/metricCode/params 列);③ 点对点审计自解释(评估时刻快照定义,规则版本后续变更不影响回看)。
 **可逆性(为何 A 低后悔):** A→B(改回运行时-only + 前端叠 AST)成本极低——停写 + 删列 + 前端叠加逻辑(后者是 B 固有成本),历史行零迁移。反之 B→A 要回填、且 AST 变了填不回。A 是信息保全方,保留两种渲染的选择权。
 
-**kind 可辨识(2026-06-09 加入):** 前端要按 kind 切换渲染(树/网格/因子列表),不能靠猜。
-- dry-run **响应每条规则的 trace 带 `kind`**(权威来源 = rule_version.kind),前端不 join 即知渲染模式;
+**kind 可辨识(2026-06-09 加入,由 ScorecardRoot 单独承担):** 前端要按 kind 切换渲染(树/网格/因子列表)。
 - `ScorecardExecutor` 补 `nodeType="ScorecardRoot"` 根节点包住因子 → 四类 root nodeType 互不相同(ScorecardRoot→card / IfNode→tree / DecisionTableRow→table / 其余→boolean),trace **root 自描述 kind**,符合 A 自包含。
+- dry-run 返回 `EvalResult`,其 `nodeTrace` 是「每规则一棵树」的列表;前端遍历读各树 **root nodeType 即得 kind**——**无需改 `EvalResult`/API 契约**(原拟的「响应显式带 kind」因此**取消**,合并进 ScorecardRoot)。
 
 **执行分增量(降风险,详见实现计划):**
 - **增量 1**：`ConditionOutcome` 扩 `resolvedValue+valueSource` + 接进现有 Interpreted/Scorecard trace(actualValue/valueSource 填实)+ Scorecard 补 `ScorecardRoot` 根节点 → kernel 全量回归(隔离核心变更)。
 - **增量 2**：tree/table 用已接好的字段建 trace。
-- **增量 3**：NodeTrace 加 `expectedValue`(→ 现有 params 列)+ `displayLabel`(→ 新增 display_label 列)+ 落库(entity/flatten/Flyway);核对 value_source enum 取值域(实测域 = PROVIDED/FETCHED,无需扩)。
-- **增量 4**：eval_duration_ms 在 persister 算 `finishedAt-startedAt` 写入(审计 #2,并入本批)。
-- **增量 5**：dry-run 响应每规则 trace 带 `kind`(eval-svc / api 契约)。
+- **增量 3**：NodeTrace 加 `expectedValue`(→ 现有 params 列)+ `displayLabel`(→ 新增 display_label 列);**两条 trace 链一起改**——`NodeTraceEntity`+`DryRunNodeTraceEntity` 加字段、两处 `flattenToList` 映射、Flyway 给 `node_trace` 和 `dry_run_node_trace` 两表加列。value_source enum 实测域=PROVIDED/FETCHED,无需扩。
+- **增量 4**：eval_duration_ms——`started_at` 用 `context.now()`(已随事件携带),`EvalServiceImpl` 用已有 `evalNow` 算 `durationMs`,加一个 `durationMs` 字段到 `AuditRecorded`/`DryRunRecorded`,persister 写 started/finished/duration(审计 #2,并入)。
+
+> 原增量 5(响应显式带 kind)已取消:ScorecardRoot 让 trace root 自描述 kind,前端读 root nodeType 即可,无需动 EvalResult/API。
 
 ## 6. 非目标
 - 统一二值/三值条件求值模型 / 抽共享 walker(信号驱动的独立项)。
