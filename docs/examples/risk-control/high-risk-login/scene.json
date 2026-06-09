@@ -1,0 +1,14 @@
+{
+  "tenantId": "9001",
+  "sceneCode": "demo.login",
+  "name": "演示登录风控",
+  "description": "端到端 API 冒烟场景:高风险登录拦截(PULL 同步评估)",
+  "dominantMode": "PULL",
+  "subjectType": "USER",
+  "eventTypes": ["login"],
+  "payloadSchema": [
+    { "name": "amount",  "type": "number", "required": true },
+    { "name": "country", "type": "string", "required": true }
+  ],
+  "defaultParams": { "timezone": "Asia/Shanghai" }
+}

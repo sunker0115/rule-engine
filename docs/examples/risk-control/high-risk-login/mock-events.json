@@ -1,0 +1,38 @@
+[
+  {
+    "_scenario": "命中 REJECT — amount>1000 且 risk>=80",
+    "_endpoint": "POST /api/v1/rule/evaluate",
+    "tenantCode": "loadtest",
+    "sceneCode": "demo.login",
+    "eventType": "login",
+    "subjectId": "user-001",
+    "eventId": "evt-hit-001",
+    "occurredAt": "2026-06-09T22:00:00+08:00",
+    "payload": { "amount": 5000, "country": "CN" },
+    "providedMetrics": { "amount": 5000, "user.risk.score": 90 }
+  },
+  {
+    "_scenario": "未命中 MISS — amount=500 < 1000,AndNode 短路为 false",
+    "_endpoint": "POST /api/v1/rule/evaluate",
+    "tenantCode": "loadtest",
+    "sceneCode": "demo.login",
+    "eventType": "login",
+    "subjectId": "user-002",
+    "eventId": "evt-miss-001",
+    "occurredAt": "2026-06-09T22:01:00+08:00",
+    "payload": { "amount": 500, "country": "CN" },
+    "providedMetrics": { "amount": 500, "user.risk.score": 90 }
+  },
+  {
+    "_scenario": "dry-run — 命中,返回完整 nodeTrace,不实际派发 action",
+    "_endpoint": "POST /api/v1/rule/dry-run",
+    "tenantCode": "loadtest",
+    "sceneCode": "demo.login",
+    "eventType": "login",
+    "subjectId": "user-003",
+    "eventId": "evt-dry-001",
+    "occurredAt": "2026-06-09T22:02:00+08:00",
+    "payload": { "amount": 8000, "country": "US" },
+    "providedMetrics": { "amount": 8000, "user.risk.score": 85 }
+  }
+]

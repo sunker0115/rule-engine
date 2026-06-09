@@ -1,0 +1,43 @@
+[
+  {
+    "eventId": "evt-hit-001",
+    "expected": {
+      "ruleHit": true,
+      "finalDecision": { "code": "REJECT", "name": "", "priority": 0 },
+      "nodeTrace": {
+        "nodeType": "AndNode",
+        "result": true,
+        "children": [
+          { "conditionType": "GT",  "metricCode": "amount",          "actualValue": 5000, "valueSource": "PROVIDED", "result": true },
+          { "conditionType": "GTE", "metricCode": "user.risk.score", "actualValue": 90,   "valueSource": "PROVIDED", "result": true }
+        ]
+      }
+    },
+    "_note": "finalDecision.name 为空、priority 为 0,因为 REJECT 未在 decision_definition 注册(当前无 decision 写 HTTP API)。要补全 name/priority,走 import bundle 把 decision 一并建入。"
+  },
+  {
+    "eventId": "evt-miss-001",
+    "expected": {
+      "ruleHit": false,
+      "finalDecision": null,
+      "nodeTrace": { "nodeType": "AndNode", "result": false }
+    },
+    "_note": "amount=500 不满足 GT 1000,AndNode 整体 false → evaluation_session.status=MISS(已落库)。"
+  },
+  {
+    "eventId": "evt-dry-001",
+    "expected": {
+      "ruleHit": true,
+      "finalDecision": { "code": "REJECT", "name": "", "priority": 0 },
+      "nodeTrace": {
+        "nodeType": "AndNode",
+        "result": true,
+        "children": [
+          { "conditionType": "GT",  "metricCode": "amount",          "actualValue": 8000, "valueSource": "PROVIDED", "result": true },
+          { "conditionType": "GTE", "metricCode": "user.risk.score", "actualValue": 85,   "valueSource": "PROVIDED", "result": true }
+        ]
+      }
+    },
+    "_note": "dry-run 同样会落 evaluation_session(记为 HIT);nodeTrace 与 evaluate 一致填充。"
+  }
+]

@@ -1,5 +1,8 @@
 # 案例：时间条件三种写法
 
+> 🛑 **已过期（2026-06-09）· 当前实现下跑不通** — 使用了废弃形态（`scene.json` 内嵌 `metricBindings`/`decisions`、条件用 `METRIC_COMPARE`/`PAYLOAD_COMPARE`、mock 用 `_mockMetrics` 等），与当前 API 不符，待按新范式重写。
+> 👉 可跑通的当前样板：[`../../risk-control/high-risk-login/`](../../risk-control/high-risk-login/)（过期点逐项对照见其 README §五）。
+
 ## 业务背景
 
 同一个营销 Scene（`ops.promotion`）内，三条规则分别演示时间条件的三种写法：

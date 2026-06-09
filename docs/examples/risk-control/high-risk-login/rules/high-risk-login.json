@@ -1,0 +1,30 @@
+{
+  "tenantId": "9001",
+  "sceneCode": "demo.login",
+  "code": "demo-high-risk-login",
+  "name": "高风险登录拦截",
+  "kind": "AST_BOOLEAN",
+  "conditionAst": {
+    "type": "AndNode",
+    "displayLabel": "全部满足",
+    "children": [
+      {
+        "type": "ConditionNode",
+        "displayLabel": "金额>1000",
+        "conditionType": "GT",
+        "metricCode": "amount",
+        "params": { "threshold": 1000 }
+      },
+      {
+        "type": "ConditionNode",
+        "displayLabel": "风险分>=80",
+        "conditionType": "GTE",
+        "metricCode": "user.risk.score",
+        "params": { "threshold": 80 }
+      }
+    ]
+  },
+  "decisionBindings": [{ "decisionCode": "REJECT" }],
+  "preGates": [{ "gateType": "ROLLOUT", "params": { "percentage": 100 } }],
+  "triggerEventTypes": ["login"]
+}
