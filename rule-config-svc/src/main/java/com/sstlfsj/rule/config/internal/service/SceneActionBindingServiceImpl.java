@@ -9,9 +9,13 @@ import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneActionBindingMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -25,19 +29,22 @@ import java.util.Set;
 @RequiredArgsConstructor
 class SceneActionBindingServiceImpl implements SceneActionBindingService {
 
+    private static final Logger log = LoggerFactory.getLogger(SceneActionBindingServiceImpl.class);
     private static final String ACTIVE = "ACTIVE";
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final SceneMapper sceneMapper;
     private final SceneActionBindingMapper bindingMapper;
     private final AuditLogMapper auditLogMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
     @Override
     public List<SceneActionBindingItem> list(String tenantId, String sceneCode) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
         return bindingMapper.findBySceneId(scene.getId()).stream()
                 .map(b -> new SceneActionBindingItem(
-                        b.getActionType(), b.getDefaultParams(), b.getRateLimitOverride()))
+                        b.getActionType(), parse(b.getDefaultParams()), parse(b.getRateLimitOverride())))
                 .toList();
     }
 
@@ -73,13 +80,13 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
                 SceneActionBindingDef fresh = new SceneActionBindingDef();
                 fresh.setSceneId(scene.getId());
                 fresh.setActionType(item.actionType());
-                fresh.setDefaultParams(item.defaultParamsJson());
-                fresh.setRateLimitOverride(item.rateLimitOverrideJson());
+                fresh.setDefaultParams(write(item.defaultParams()));
+                fresh.setRateLimitOverride(write(item.rateLimitOverride()));
                 fresh.setCreatedBy(actorId);
                 bindingMapper.insert(fresh);
             } else {
-                def.setDefaultParams(item.defaultParamsJson());
-                def.setRateLimitOverride(item.rateLimitOverrideJson());
+                def.setDefaultParams(write(item.defaultParams()));
+                def.setRateLimitOverride(write(item.rateLimitOverride()));
                 def.setUpdatedBy(actorId);
                 def.setUpdatedAt(LocalDateTime.now());
                 bindingMapper.updateById(def);
@@ -91,6 +98,24 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
         // active 取场景真实状态：禁用场景改 binding 不得复活其索引（发 false → 索引移除/no-op）
         eventPublisher.publishEvent(new SceneChangedEvent(
                 tenantId, sceneCode, ACTIVE.equals(scene.getStatus())));
+    }
+
+    /** JSON 对象 → 存库 JSON 串；null 返回 null。 */
+    private String write(Map<String, Object> obj) {
+        return obj == null ? null : objectMapper.writeValueAsString(obj);
+    }
+
+    /** 存库 JSON 串 → JSON 对象；null/空返回 null，解析失败记 warn 返回 null（不阻塞列表）。 */
+    private Map<String, Object> parse(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, MAP_TYPE);
+        } catch (RuntimeException e) {
+            log.warn("scene_action_binding JSON 解析失败,返回 null: {}", json, e);
+            return null;
+        }
     }
 
     private SceneDef findScene(Long tenantId, String sceneCode) {

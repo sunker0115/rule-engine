@@ -23,7 +23,7 @@ class ActionBindingItemDtoTest {
 
     @Test
     void valid_request_passesValidation() {
-        var dto = new ActionBindingItemDto("BLOCK_TX", Map.of("reason", "risk"), null);
+        var dto = new ActionBindingItemDto("BLOCK_TX", Map.<String, Object>of("reason", "risk"), null);
         Set<ConstraintViolation<ActionBindingItemDto>> violations = validator.validate(dto);
         assertThat(violations).isEmpty();
     }

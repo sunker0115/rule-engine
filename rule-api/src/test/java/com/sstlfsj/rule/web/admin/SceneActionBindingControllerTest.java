@@ -10,9 +10,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** SceneActionBindingController 单元测试（Object↔JSON 透传 + 整组覆盖）。 */
+/** SceneActionBindingController 单元测试（类型化对象透传 + 整组覆盖）。 */
 class SceneActionBindingControllerTest {
 
     private MockMvc mockMvc;
@@ -33,7 +33,7 @@ class SceneActionBindingControllerTest {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new SceneActionBindingController(bindingService, JsonMapper.builder().build()))
+                .standaloneSetup(new SceneActionBindingController(bindingService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -42,7 +42,7 @@ class SceneActionBindingControllerTest {
     @Test
     void list_returns200_withParsedObjects() throws Exception {
         when(bindingService.list("1", "PAY")).thenReturn(List.of(
-                new SceneActionBindingItem("BLOCK_TX", "{\"reason\":\"risk\"}", null)));
+                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("reason", "risk"), null)));
 
         mockMvc.perform(get("/admin/v1/scenes/PAY/action-bindings").param("tenantId", "1"))
                 .andExpect(status().isOk())
@@ -55,7 +55,7 @@ class SceneActionBindingControllerTest {
     }
 
     @Test
-    void replace_returns200_serializesObjectsToJson() throws Exception {
+    void replace_returns200_passesTypedObjects() throws Exception {
         mockMvc.perform(put("/admin/v1/scenes/PAY/action-bindings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Actor-Id", "alice")
@@ -77,9 +77,9 @@ class SceneActionBindingControllerTest {
         List<SceneActionBindingItem> items = captor.getValue();
         assertThat(items).hasSize(2);
         assertThat(items.get(0).actionType()).isEqualTo("BLOCK_TX");
-        assertThat(items.get(0).defaultParamsJson()).contains("risk");
+        assertThat(items.get(0).defaultParams()).isEqualTo(Map.of("reason", "risk"));
         assertThat(items.get(1).actionType()).isEqualTo("SEND_ALERT");
-        assertThat(items.get(1).defaultParamsJson()).isNull();
+        assertThat(items.get(1).defaultParams()).isNull();
     }
 
     @Test

@@ -12,8 +12,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,7 +42,7 @@ class SceneActionBindingServiceImplTest {
         auditLogMapper = mock(AuditLogMapper.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new SceneActionBindingServiceImpl(
-                sceneMapper, bindingMapper, auditLogMapper, eventPublisher);
+                sceneMapper, bindingMapper, auditLogMapper, eventPublisher, JsonMapper.builder().build());
     }
 
     private SceneDef scene(Long id, String status) {
@@ -66,7 +68,7 @@ class SceneActionBindingServiceImplTest {
         when(bindingMapper.findBySceneId(10L)).thenReturn(List.of());
 
         service.replace("1", "PAY", List.of(
-                new SceneActionBindingItem("BLOCK_TX", "{\"a\":1}", null),
+                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("a", 1), null),
                 new SceneActionBindingItem("SEND_ALERT", null, null)), "alice");
 
         verify(bindingMapper, times(2)).insert(any(SceneActionBindingDef.class));
@@ -89,7 +91,7 @@ class SceneActionBindingServiceImplTest {
                 existing(100L, "BLOCK_TX"), existing(101L, "OLD")));
 
         service.replace("1", "PAY", List.of(
-                new SceneActionBindingItem("BLOCK_TX", "{\"x\":1}", null),
+                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("x", 1), null),
                 new SceneActionBindingItem("NEW", null, null)), "bob");
 
         verify(bindingMapper).deleteById(101L);                              // OLD 被删
@@ -141,6 +143,7 @@ class SceneActionBindingServiceImplTest {
 
         assertThat(items).hasSize(1);
         assertThat(items.getFirst().actionType()).isEqualTo("BLOCK_TX");
-        assertThat(items.getFirst().defaultParamsJson()).isEqualTo("{\"a\":1}");
+        // 存库 JSON 串反序列化为类型化 Map 对外暴露
+        assertThat(items.getFirst().defaultParams()).isEqualTo(Map.of("a", 1));
     }
 }

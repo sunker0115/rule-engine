@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.api.service;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Scene action 绑定（白名单）写服务（10-api-contract /admin/v1/scenes/{sceneCode}/action-bindings）。
@@ -32,11 +33,14 @@ public interface SceneActionBindingService {
     void replace(String tenantId, String sceneCode, List<SceneActionBindingItem> items, String actorId);
 
     /**
-     * action 绑定项。defaultParamsJson / rateLimitOverrideJson 为 JSON 对象字符串，可空。
+     * action 绑定项。defaultParams / rateLimitOverride 为 JSON 对象（{@code Map<String,Object>}），可空；
+     * 与实体间的 JSON 串序列化由 service 实现承担，对外只暴露类型化对象。
      *
-     * @param actionType            actionType 路由键
-     * @param defaultParamsJson     Scene 级默认参数 JSON，可空
-     * @param rateLimitOverrideJson Scene 级频控覆盖 JSON，可空
+     * @param actionType        actionType 路由键
+     * @param defaultParams     Scene 级默认参数（依 actionType 异构，故为开放 Map），可空
+     * @param rateLimitOverride Scene 级频控覆盖（频控功能未实装，暂为开放 Map），可空
      */
-    record SceneActionBindingItem(String actionType, String defaultParamsJson, String rateLimitOverrideJson) {}
+    record SceneActionBindingItem(String actionType,
+                                  Map<String, Object> defaultParams,
+                                  Map<String, Object> rateLimitOverride) {}
 }
