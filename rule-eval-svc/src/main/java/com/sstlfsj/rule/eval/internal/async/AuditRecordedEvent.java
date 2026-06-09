@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.async;
 
+import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.event.DomainEvent;
 import com.sstlfsj.rule.eval.internal.event.Durability;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
@@ -18,7 +19,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
  * @param blockedBy      Pre-Gate 拦截原因（首个阻断 gateType）；非 null 时落 status=BLOCKED，否则 null
  * @param durationMs     评估耗时（毫秒），评估完成时测量并随事件携带，供持久化 eval_duration_ms
  */
-public record AuditRecordedEvent(long sessionId, RuleEvent event, String mode,
+public record AuditRecordedEvent(long sessionId, RuleEvent event, EvalMode mode,
                             int candidateCount, EvalResult result, EvalContext context,
                             String blockedBy, int durationMs) implements DomainEvent {
     @Override

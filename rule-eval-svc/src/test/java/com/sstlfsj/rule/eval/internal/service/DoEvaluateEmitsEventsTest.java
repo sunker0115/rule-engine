@@ -60,7 +60,7 @@ class DoEvaluateEmitsEventsTest {
         assertThat(result.ruleHit()).isTrue();
         verify(publisher).publish(argThat(o ->
                 o instanceof AuditRecordedEvent a
-                        && a.mode().equals("PULL")
+                        && a.mode() == com.sstlfsj.rule.eval.internal.domain.EvalMode.PULL
                         && a.candidateCount() == 1
                         && a.result() == hit
                         && a.blockedBy() == null));

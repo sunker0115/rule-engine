@@ -3,6 +3,7 @@ package com.sstlfsj.rule.eval.internal.domain;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -23,11 +24,11 @@ public class EvaluationSession {
     private String eventType;
     private String subjectId;
     /** 事件渠道：HTTP / MQ / JOB / SDK / REPLAY（取自 RuleEvent.source）。 */
-    private String source;
+    private EventSource source;
     /** 评估模式：PUSH（异步）/ PULL（同步），由 EvalService 入口判定。 */
-    private String mode;
+    private EvalMode mode;
     /** 状态：PENDING / HIT / MISS / BLOCKED / ERROR / FAILED。 */
-    private String status;
+    private SessionStatus status;
     private String finalDecision;
     private String hitDecisions;
     private String blockedBy;

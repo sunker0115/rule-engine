@@ -38,7 +38,7 @@ class ActionExecutionPersisterTest {
         verify(mapper, times(1)).insertBatch(captor.capture());
         ActionExecutionEntity e = captor.getValue().get(0);
         assertThat(e.getActionId()).isEqualTo("BLOCK_TRANSACTION");
-        assertThat(e.getStatus()).isEqualTo("SUCCESS");
+        assertThat(e.getStatus()).isEqualTo(ActionResult.ActionStatus.SUCCESS);
         assertThat(e.getEventId()).isEqualTo("evt-1");
         assertThat(e.getEvaluationSessionId()).isEqualTo(42L);
         assertThat(e.getTenantId()).isEqualTo(1L);

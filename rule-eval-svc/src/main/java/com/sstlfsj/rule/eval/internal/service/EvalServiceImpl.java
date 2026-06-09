@@ -7,6 +7,7 @@ import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
+import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
@@ -37,7 +38,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         this.eventPublisher = eventPublisher;
         this.actionDelivery = actionDelivery;
         // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
-        this.dispatcher = new EvalActionDispatcher(10000, e -> doEvaluate(e, "PUSH", false, null));
+        this.dispatcher = new EvalActionDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null));
     }
 
     @Override
@@ -58,15 +59,15 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     @Override
     public EvalResult evaluate(RuleEvent event) {
-        return doEvaluate(event, "PULL", false, null);
+        return doEvaluate(event, EvalMode.PULL, false, null);
     }
 
     @Override
     public EvalResult dryRun(RuleEvent event, Long ruleVersionId) {
-        return doEvaluate(event, "PULL", true, ruleVersionId);
+        return doEvaluate(event, EvalMode.PULL, true, ruleVersionId);
     }
 
-    private EvalResult doEvaluate(RuleEvent event, String mode, boolean isDryRun, Long specificVersionId) {
+    private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId) {
         Instant evalNow = Instant.now();
         if (isDryRun && specificVersionId != null) {
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval.internal.domain;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.sstlfsj.rule.kernel.api.model.ActionResult;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -27,7 +28,7 @@ class ActionExecutionEntityTest {
         e.setActionId("act-001");
         e.setActionType("SEND_ALERT");
         e.setDecisionCode("BLOCK");
-        e.setStatus("SUCCESS");
+        e.setStatus(ActionResult.ActionStatus.SUCCESS);
         e.setErrorCode(null);
         e.setRetryable(false);
         e.setRetryCount(0);
@@ -39,7 +40,7 @@ class ActionExecutionEntityTest {
         assertEquals("act-001", e.getActionId());
         assertEquals("SEND_ALERT", e.getActionType());
         assertEquals("BLOCK", e.getDecisionCode());
-        assertEquals("SUCCESS", e.getStatus());
+        assertEquals(ActionResult.ActionStatus.SUCCESS, e.getStatus());
         assertNull(e.getErrorCode());
         assertFalse(e.getRetryable());
         assertEquals(0, e.getRetryCount());

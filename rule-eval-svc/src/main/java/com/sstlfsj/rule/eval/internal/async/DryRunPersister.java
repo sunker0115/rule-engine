@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval.internal.async;
 
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
+import com.sstlfsj.rule.eval.internal.domain.SessionStatus;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
@@ -44,7 +45,8 @@ public class DryRunPersister {
         s.setEventType(ev.eventType());
         s.setSubjectId(ev.subjectId());
         s.setRuleVersionId(e.ruleVersionId());
-        s.setStatus(r.errorCode() != null ? "ERROR" : (r.ruleHit() ? "HIT" : "MISS"));
+        s.setStatus(r.errorCode() != null ? SessionStatus.ERROR
+                : (r.ruleHit() ? SessionStatus.HIT : SessionStatus.MISS));
         s.setFinalDecision(r.finalDecision() != null ? r.finalDecision().code() : null);
         s.setErrorCode(r.errorCode());
         if (ev.occurredAt() != null) {

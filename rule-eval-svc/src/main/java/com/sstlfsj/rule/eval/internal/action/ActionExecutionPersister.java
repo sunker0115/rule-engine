@@ -96,7 +96,7 @@ public class ActionExecutionPersister implements InitializingBean, DisposableBea
         entity.setActionId(e.actionId());
         entity.setActionType(e.actionType());
         entity.setDecisionCode(e.decisionCode());
-        entity.setStatus(e.result().status().name());
+        entity.setStatus(e.result().status());
         entity.setErrorCode(e.result().errorCode());
         entity.setRetryable(e.result().retryable());
         entity.setRetryCount(0);

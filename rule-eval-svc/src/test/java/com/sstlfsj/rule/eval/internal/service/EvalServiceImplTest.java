@@ -80,7 +80,7 @@ class EvalServiceImplTest {
         // 复用引擎组装的上下文发审计事件（异步落 session 快照），不再同步 updateFinal
         verify(eventPublisher).publish(argThat(o ->
                 o instanceof AuditRecordedEvent a
-                        && a.mode().equals("PULL")
+                        && a.mode() == com.sstlfsj.rule.eval.internal.domain.EvalMode.PULL
                         && a.candidateCount() == 1
                         && a.context() == engineCtx));
     }

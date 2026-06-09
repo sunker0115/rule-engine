@@ -2,6 +2,7 @@ package com.sstlfsj.rule.eval.internal.async;
 
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
+import com.sstlfsj.rule.eval.internal.domain.SessionStatus;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
@@ -37,7 +38,7 @@ class DryRunPersisterTest {
         verify(mapper).insert(captor.capture());
         DryRunSession s = captor.getValue();
         assertThat(s.getId()).isEqualTo(77L);
-        assertThat(s.getStatus()).isEqualTo("MISS");
+        assertThat(s.getStatus()).isEqualTo(SessionStatus.MISS);
         assertThat(s.getRuleVersionId()).isEqualTo(99L);
         verify(traceWriter).write(eq("1"), eq("77"), any());
     }

@@ -17,7 +17,7 @@ class DryRunSessionTest {
         d.setEventType("PAYMENT");
         d.setSubjectId("user-123");
         d.setRuleVersionId(99L);
-        d.setStatus("HIT");
+        d.setStatus(SessionStatus.HIT);
         d.setFinalDecision("BLOCK");
         d.setHitDecisions("[\"rule-1\"]");
         d.setBlockedBy("rule-1");
@@ -34,7 +34,7 @@ class DryRunSessionTest {
         assertEquals("PAYMENT", d.getEventType());
         assertEquals("user-123", d.getSubjectId());
         assertEquals(99L, d.getRuleVersionId());
-        assertEquals("HIT", d.getStatus());
+        assertEquals(SessionStatus.HIT, d.getStatus());
         assertEquals("BLOCK", d.getFinalDecision());
         assertEquals("[\"rule-1\"]", d.getHitDecisions());
         assertEquals("rule-1", d.getBlockedBy());

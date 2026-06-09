@@ -5,7 +5,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
+import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
+import com.sstlfsj.rule.eval.internal.domain.SessionStatus;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
@@ -195,10 +198,10 @@ class EvalIntegrationTest {
         // 数据库验证：审计异步落库，轮询等待 evaluation_session 出现 HIT 记录
         List<EvaluationSession> sessions = awaitSessions("pull-001");
         assertThat(sessions).hasSize(1);
-        assertThat(sessions.get(0).getStatus()).isEqualTo("HIT");
+        assertThat(sessions.get(0).getStatus()).isEqualTo(SessionStatus.HIT);
         // source 取自 event 渠道，mode 由 evaluate() 入口判定为 PULL
-        assertThat(sessions.get(0).getSource()).isEqualTo("HTTP");
-        assertThat(sessions.get(0).getMode()).isEqualTo("PULL");
+        assertThat(sessions.get(0).getSource()).isEqualTo(EventSource.HTTP);
+        assertThat(sessions.get(0).getMode()).isEqualTo(EvalMode.PULL);
     }
 
     // ===== 测试 2：相同 eventId 幂等，只写一条 session =====
@@ -250,8 +253,8 @@ class EvalIntegrationTest {
                 new LambdaQueryWrapper<EvaluationSession>()
                         .eq(EvaluationSession::getEventId, "push-001")
                         .eq(EvaluationSession::getTenantId, 1L));
-        assertThat(sessions.get(0).getSource()).isEqualTo("HTTP");
-        assertThat(sessions.get(0).getMode()).isEqualTo("PUSH");
+        assertThat(sessions.get(0).getSource()).isEqualTo(EventSource.HTTP);
+        assertThat(sessions.get(0).getMode()).isEqualTo(EvalMode.PUSH);
     }
 
     // ===== 测试 4：dry-run 写入 dry_run_session，不污染生产表 =====
@@ -269,7 +272,7 @@ class EvalIntegrationTest {
         // dry-run 改事件驱动后异步落库，轮询等待 dry_run_session 出现
         List<DryRunSession> dryRuns = awaitDryRuns("dry-001");
         assertThat(dryRuns).hasSize(1);
-        assertThat(dryRuns.get(0).getStatus()).isIn("HIT", "MISS");
+        assertThat(dryRuns.get(0).getStatus()).isIn(SessionStatus.HIT, SessionStatus.MISS);
 
         // evaluation_session 不应有记录（dry-run 不写生产表）
         long prodCount = sessionMapper.selectCount(

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval.internal.async;
 
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
+import com.sstlfsj.rule.eval.internal.domain.SessionStatus;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
@@ -115,12 +116,12 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setSceneCode(ev.sceneCode());
         s.setEventType(ev.eventType());
         s.setSubjectId(ev.subjectId());
-        s.setSource(ev.source().name());
+        s.setSource(ev.source());
         s.setMode(e.mode());
         // BLOCKED（D22 第四态）优先于 MISS：候选被 Pre-Gate 全拦截，blockedBy 记首个阻断 gate
-        s.setStatus(r.errorCode() != null ? "ERROR"
-                : e.blockedBy() != null ? "BLOCKED"
-                : (r.ruleHit() ? "HIT" : "MISS"));
+        s.setStatus(r.errorCode() != null ? SessionStatus.ERROR
+                : e.blockedBy() != null ? SessionStatus.BLOCKED
+                : (r.ruleHit() ? SessionStatus.HIT : SessionStatus.MISS));
         s.setBlockedBy(e.blockedBy());
         s.setFinalDecision(r.finalDecision() != null ? r.finalDecision().code() : null);
         s.setErrorCode(r.errorCode());
