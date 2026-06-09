@@ -68,7 +68,7 @@
 - payloadSchema `type` → `DataType` 映射。
 - SDK `payloadGt` 等构造 `valueRef=PAYLOAD`。
 
-## 六、待评审拍板的开放点
-1. 字段名 `valueRef`(备选 `source` / `ref`)。
-2. payloadSchema `number` 统一映射 `DECIMAL`(精确,BigDecimal)是否可接受,还是要区分 `integer→LONG`。
-3. SDK payload 工厂命名:`payloadGt(...)` 一组 vs `gt(...).onPayload()` 链式修饰。
+## 六、已定决策(评审通过 2026-06-09)
+1. `ConditionNode` 值来源字段名用 **`valueRef`**。
+2. payloadSchema 类型映射:**`number→DECIMAL`**、`integer→LONG`、`string→STRING`、`boolean→BOOLEAN`、其他→`UNKNOWN`(金额等数值默认走 BigDecimal 精确比较)。
+3. SDK DSL 用 **`payloadGt(...)` 一组对称工厂**(不用 `onPayload()` 链式修饰)。
