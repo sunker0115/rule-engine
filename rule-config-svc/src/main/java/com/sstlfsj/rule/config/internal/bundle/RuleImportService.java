@@ -7,9 +7,13 @@ import com.sstlfsj.rule.kernel.api.model.SourceType;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricEnums;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
@@ -76,7 +80,7 @@ public class RuleImportService {
                 s.setPayloadSchema(ss.payloadSchema());
                 s.setDefaultParams(ss.defaultParams());
                 s.setPayloadSchemaVersion(ss.payloadSchemaVersion() == null ? 1 : ss.payloadSchemaVersion());
-                s.setStatus("ACTIVE");
+                s.setStatus(SceneStatus.ACTIVE.name());
                 s.setCreatedBy(actorId);
                 s.setCreatedAt(LocalDateTime.now());
                 sceneMapper.insert(s);
@@ -117,7 +121,7 @@ public class RuleImportService {
                 m.setParams(me.params() != null ? me.params() : java.util.Map.of());
                 m.setCacheTtlSeconds(me.cacheTtlSeconds() == null ? 60 : me.cacheTtlSeconds());
                 m.setAllowProvided(Boolean.TRUE.equals(me.allowProvided()));
-                m.setStatus("ACTIVE");
+                m.setStatus(MetricStatus.ACTIVE.name());
                 m.setCreatedBy(actorId);
                 m.setCreatedAt(LocalDateTime.now());
                 metricDefinitionMapper.insert(m);
@@ -165,7 +169,7 @@ public class RuleImportService {
                 rd.setSceneId(sceneId);
                 rd.setCode(rule.code());
                 rd.setName(rule.name());
-                rd.setStatus("DRAFT");
+                rd.setStatus(RuleDefinitionStatus.DRAFT.name());
                 rd.setKind(kind);
                 rd.setCreatedBy(actorId);
                 rd.setCreatedAt(LocalDateTime.now());
@@ -186,7 +190,7 @@ public class RuleImportService {
             rv.setKind(kind);
             rv.setTriggerEventTypes(rule.triggerEventTypes() != null ? rule.triggerEventTypes() : java.util.List.of());
             rv.setMetricDependencies(rule.metricDependencies() != null ? rule.metricDependencies() : java.util.List.of());
-            rv.setStatus("DRAFT");
+            rv.setStatus(RuleVersionStatus.DRAFT.name());
             rv.setCreatedAt(LocalDateTime.now());
             ruleVersionMapper.insert(rv);
 

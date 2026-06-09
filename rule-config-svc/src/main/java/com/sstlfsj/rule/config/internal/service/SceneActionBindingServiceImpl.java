@@ -4,6 +4,7 @@ import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneActionBindingService;
 import com.sstlfsj.rule.config.internal.domain.SceneActionBindingDef;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneActionBindingMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
@@ -23,8 +24,6 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 class SceneActionBindingServiceImpl implements SceneActionBindingService {
-
-    private static final String ACTIVE = "ACTIVE";
 
     private final SceneMapper sceneMapper;
     private final SceneActionBindingMapper bindingMapper;
@@ -87,7 +86,7 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
                 null, null, LocalDateTime.now()));
         // active 取场景真实状态：禁用场景改 binding 不得复活其索引（发 false → 索引移除/no-op）
         eventPublisher.publishEvent(new SceneChangedEvent(
-                tenantId, sceneCode, ACTIVE.equals(scene.getStatus())));
+                tenantId, sceneCode, SceneStatus.ACTIVE.name().equals(scene.getStatus())));
     }
 
     private SceneDef findScene(Long tenantId, String sceneCode) {

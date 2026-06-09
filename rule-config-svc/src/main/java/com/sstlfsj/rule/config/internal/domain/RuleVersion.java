@@ -64,7 +64,7 @@ public class RuleVersion {
         rv.setKind(kind);
         rv.setTriggerEventTypes(triggerEventTypes != null ? triggerEventTypes : List.of());
         rv.setMetricDependencies(List.of());
-        rv.setStatus("DRAFT");
+        rv.setStatus(RuleVersionStatus.DRAFT.name());
         rv.setCreatedAt(java.time.LocalDateTime.now());
         return rv;
     }

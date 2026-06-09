@@ -59,7 +59,7 @@ public class PublishService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        if (!"DRAFT".equals(rule.getStatus())) {
+        if (!RuleDefinitionStatus.DRAFT.name().equals(rule.getStatus())) {
             throw new IllegalStateException("只有 DRAFT 状态的规则可以发布，当前状态: " + rule.getStatus());
         }
 
@@ -190,7 +190,7 @@ public class PublishService {
         newRv.setTriggerEventTypes(scene.getEventTypes() != null
                 ? scene.getEventTypes() : java.util.List.of());
         newRv.setMetricDependencies(metricDeps);
-        newRv.setStatus("ACTIVE");
+        newRv.setStatus(RuleVersionStatus.ACTIVE.name());
         newRv.setPublishedBy(actorId);
         newRv.setPublishedAt(LocalDateTime.now());
         ruleVersionMapper.insert(newRv);
@@ -201,7 +201,7 @@ public class PublishService {
         }
 
         // 8. UPDATE rule_definition：状态改为 PUBLISHED，记录 currentVersion
-        rule.setStatus("PUBLISHED");
+        rule.setStatus(RuleDefinitionStatus.PUBLISHED.name());
         rule.setCurrentVersion(newRv.getId());
         rule.setPublishedBy(actorId);
         rule.setPublishedAt(LocalDateTime.now());
@@ -292,7 +292,7 @@ public class PublishService {
                 "{\"ruleDefinitionId\":" + rd.getId() + ",\"ruleVersionId\":" + rv.getId() + "}",
                 LocalDateTime.now()));
 
-        return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, "DRAFT");
+        return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, RuleDefinitionStatus.DRAFT.name());
     }
 
     /**

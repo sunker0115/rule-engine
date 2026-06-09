@@ -46,7 +46,7 @@ public class RuleDefinition {
         rd.setSceneId(sceneId);
         rd.setCode(code);
         rd.setName(name);
-        rd.setStatus("DRAFT");
+        rd.setStatus(RuleDefinitionStatus.DRAFT.name());
         rd.setKind(kind);
         rd.setCreatedBy(createdBy);
         rd.setCreatedAt(java.time.LocalDateTime.now());

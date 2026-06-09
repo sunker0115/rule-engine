@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 
@@ -27,7 +28,7 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
     default RuleVersion findActiveVersion(Long ruleDefinitionId) {
         return selectOne(new LambdaQueryWrapper<RuleVersion>()
                 .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId)
-                .eq(RuleVersion::getStatus, "ACTIVE")
+                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE.name())
                 .orderByDesc(RuleVersion::getVersion)
                 .last("LIMIT 1"));
     }
@@ -36,7 +37,7 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
     default RuleVersion findLatestDraft(Long ruleDefinitionId) {
         return selectOne(new LambdaQueryWrapper<RuleVersion>()
                 .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId)
-                .eq(RuleVersion::getStatus, "DRAFT")
+                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT.name())
                 .orderByDesc(RuleVersion::getVersion)
                 .last("LIMIT 1"));
     }
@@ -50,7 +51,7 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
         if (ruleDefinitionIds == null || ruleDefinitionIds.isEmpty()) return List.of();
         return selectList(new LambdaQueryWrapper<RuleVersion>()
                 .in(RuleVersion::getRuleDefinitionId, ruleDefinitionIds)
-                .eq(RuleVersion::getStatus, "ACTIVE")
+                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE.name())
                 .select(RuleVersion::getId, RuleVersion::getRuleDefinitionId,
                         RuleVersion::getMetricDependencies));
     }
@@ -59,7 +60,7 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
     default int markSuperseded(Long ruleVersionId) {
         return update(null, new LambdaUpdateWrapper<RuleVersion>()
                 .eq(RuleVersion::getId, ruleVersionId)
-                .eq(RuleVersion::getStatus, "ACTIVE")
-                .set(RuleVersion::getStatus, "SUPERSEDED"));
+                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE.name())
+                .set(RuleVersion::getStatus, RuleVersionStatus.SUPERSEDED.name()));
     }
 }

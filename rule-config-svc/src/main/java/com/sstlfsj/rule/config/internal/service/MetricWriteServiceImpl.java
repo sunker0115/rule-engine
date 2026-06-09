@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.internal.MetricProperties;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricEnums;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -51,7 +52,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setMetricCode(metricCode);
         m.setVersion(1);
         applyCommandFields(m, cmd);
-        m.setStatus("ACTIVE");
+        m.setStatus(MetricStatus.ACTIVE.name());
         m.setCreatedBy(actorId);
         m.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(m);
@@ -91,7 +92,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
 
         // effectiveBreaking=true：旧行 SUPERSEDED + 插入新版本行
         int newVersion = active.getVersion() + 1;
-        active.setStatus("SUPERSEDED");
+        active.setStatus(MetricStatus.SUPERSEDED.name());
         active.setUpdatedBy(actorId);
         active.setUpdatedAt(LocalDateTime.now());
         metricDefinitionMapper.updateById(active);
@@ -101,7 +102,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         next.setMetricCode(metricCode);
         next.setVersion(newVersion);
         applyCommandFields(next, cmd);
-        next.setStatus("ACTIVE");
+        next.setStatus(MetricStatus.ACTIVE.name());
         next.setCreatedBy(actorId);
         next.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(next);

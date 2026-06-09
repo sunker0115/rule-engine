@@ -6,6 +6,7 @@ import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
@@ -46,7 +47,7 @@ class SceneServiceImpl implements SceneService {
         scene.setPayloadSchema(payloadSchema);
         scene.setDefaultParams(defaultParams);
         scene.setPayloadSchemaVersion(1);
-        scene.setStatus("ACTIVE");
+        scene.setStatus(SceneStatus.ACTIVE.name());
         scene.setCreatedBy(actorId);
         sceneMapper.insert(scene);
 
@@ -108,7 +109,7 @@ class SceneServiceImpl implements SceneService {
     @Transactional
     public void disableScene(String tenantId, String sceneCode, String actorId) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
-        scene.setStatus("DISABLED");
+        scene.setStatus(SceneStatus.DISABLED.name());
         scene.setUpdatedBy(actorId);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);

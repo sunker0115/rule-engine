@@ -6,6 +6,7 @@ import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
@@ -48,7 +49,7 @@ class ConfigServiceImpl implements ConfigService {
         if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        rule.setStatus("DISABLED");
+        rule.setStatus(RuleDefinitionStatus.DISABLED.name());
         ruleDefinitionMapper.updateById(rule);
 
         eventPublisher.publishEvent(new OperationAuditedEvent(
