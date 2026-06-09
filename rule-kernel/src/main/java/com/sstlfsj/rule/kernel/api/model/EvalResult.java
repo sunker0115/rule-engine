@@ -32,4 +32,35 @@ public record EvalResult(
     public static EvalResult miss() {
         return new EvalResult(false, null, List.of(), List.of(), null, List.of(), null, null, null);
     }
+
+    /**
+     * 未命中但携带已收集 trace（评估完整树后无命中，仍需回 trace）。
+     *
+     * @param nodeTrace 已收集的 NodeTrace 列表
+     * @return 不命中结果
+     */
+    public static EvalResult miss(List<NodeTrace> nodeTrace) {
+        return new EvalResult(false, null, List.of(), nodeTrace, null, List.of(), null, null, null);
+    }
+
+    /**
+     * 不命中 + 错误码，无 trace（AST 类型不符等早退场景）。
+     *
+     * @param errorCode 错误码
+     * @return 错误结果
+     */
+    public static EvalResult error(String errorCode) {
+        return new EvalResult(false, null, List.of(), List.of(), errorCode, List.of(), null, null, null);
+    }
+
+    /**
+     * 不命中 + 错误码，携带已收集 trace（条件求值出错中止）。
+     *
+     * @param errorCode 错误码
+     * @param nodeTrace 已收集的 NodeTrace 列表
+     * @return 错误结果
+     */
+    public static EvalResult error(String errorCode, List<NodeTrace> nodeTrace) {
+        return new EvalResult(false, null, List.of(), nodeTrace, errorCode, List.of(), null, null, null);
+    }
 }

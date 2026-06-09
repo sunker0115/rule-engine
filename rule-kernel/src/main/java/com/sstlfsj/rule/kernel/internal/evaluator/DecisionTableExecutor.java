@@ -32,8 +32,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
         if (!(snapshot.conditionAst() instanceof DecisionTableNode(
                 List<DecisionTableNode.Column> columns, List<DecisionTableNode.Row> rows
         ))) {
-            return new EvalResult(false, null, List.of(), List.of(),
-                    EvalErrorCode.DECISION_TABLE_AST_TYPE_MISMATCH, List.of(), null, null, null);
+            return EvalResult.error(EvalErrorCode.DECISION_TABLE_AST_TYPE_MISMATCH);
         }
 
         boolean collect = TraceScope.COLLECT.orElse(true);
@@ -48,25 +47,34 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
             if (rr.error() != null) {
                 // 取数失败：记录本行（带错码）后中止整表，整表置 ERROR + miss
                 if (sink != null) {
-                    sink.add(new NodeTrace(NodeType.DECISION_TABLE_ROW.tag(), null, null, false, null, null,
-                            rr.error(), columnTraces, rvId, null, null));
+                    sink.add(NodeTrace.container(NodeType.DECISION_TABLE_ROW, false, rr.error(), columnTraces, rvId));
                 }
-                return new EvalResult(false, null, List.of(), traces(sink),
-                        rr.error(), List.of(), null, null, null);
+                return EvalResult.error(rr.error(), traces(sink));
             }
             if (sink != null) {
-                sink.add(NodeTrace.container(NodeType.DECISION_TABLE_ROW, rr.matched(), columnTraces, rvId));
+                sink.add(NodeTrace.container(NodeType.DECISION_TABLE_ROW, rr.isMatch(), columnTraces, rvId));
             }
-            if (rr.matched()) {
+            if (rr.isMatch()) {
                 return hit(row.decisionCode(), snapshot, sink);
             }
         }
-        return new EvalResult(false, null, List.of(), traces(sink),
-                null, List.of(), null, null, null);
+        return EvalResult.miss(traces(sink));
     }
 
-    /** 行匹配结果：matched=该行是否全列满足；error 非 null 表示取数失败（中止整表）。 */
-    private record RowResult(boolean matched, String error) {}
+    /** 行匹配结果：isMatch=该行是否全列满足；error 非 null 表示取数失败（中止整表）。 */
+    private record RowResult(boolean isMatch, String error) {
+        static RowResult matched() {
+            return new RowResult(true, null);
+        }
+
+        static RowResult notMatched() {
+            return new RowResult(false, null);
+        }
+
+        static RowResult error(String code) {
+            return new RowResult(false, code);
+        }
+    }
 
     private RowResult rowMatches(DecisionTableNode.Row row,
                                  List<DecisionTableNode.Column> columns,
@@ -91,10 +99,10 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
                         o.isError() ? o.errorCode() : null, List.of(), rvId,
                         node.params(), node.displayLabel()));
             }
-            if (o.isError()) return new RowResult(false, o.errorCode());
-            if (!o.satisfied()) return new RowResult(false, null); // 本行不匹配
+            if (o.isError()) return RowResult.error(o.errorCode());
+            if (!o.satisfied()) return RowResult.notMatched(); // 本行不匹配
         }
-        return new RowResult(true, null);
+        return RowResult.matched();
     }
 
     /**

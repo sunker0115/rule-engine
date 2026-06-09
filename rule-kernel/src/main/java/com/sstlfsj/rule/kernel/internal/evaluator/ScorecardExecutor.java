@@ -33,8 +33,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         if (!(snapshot.conditionAst() instanceof ScorecardRootNode root)) {
-            return new EvalResult(false, null, List.of(), List.of(),
-                    EvalErrorCode.SCORECARD_AST_TYPE_MISMATCH, List.of(), null, null, null);
+            return EvalResult.error(EvalErrorCode.SCORECARD_AST_TYPE_MISMATCH);
         }
 
         // collect=false 时跳过 NodeTrace 构建（traces 保持空），score/decision/hit 不受影响
@@ -53,9 +52,8 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                             false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), rvId,
                             node.params(), node.displayLabel()));
                 }
-                return new EvalResult(false, null, List.of(),
-                        scorecardRoot(collect, false, factorTraces, rvId),
-                        outcome.errorCode(), List.of(), null, null, null);
+                return EvalResult.error(outcome.errorCode(),
+                        scorecardRoot(collect, false, factorTraces, rvId));
             }
             boolean met = outcome.satisfied();
             if (met && node.weight() != null) {

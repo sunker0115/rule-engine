@@ -76,6 +76,20 @@ class NodeTraceTest {
     }
 
     @Test
+    void containerFactory_withErrorCode_storesErrorCode_leafFieldsNull() {
+        // 带错误码的容器工厂：errorCode 落到 trace，metric/expected/label 仍为 null
+        NodeTrace trace = NodeTrace.container(NodeType.DECISION_TABLE_ROW, false,
+                "METRIC_FETCH_FAIL", List.of(), 7L);
+        assertEquals(NodeType.DECISION_TABLE_ROW.tag(), trace.nodeType());
+        assertFalse(trace.result());
+        assertEquals("METRIC_FETCH_FAIL", trace.errorCode());
+        assertEquals(7L, trace.ruleVersionId());
+        assertNull(trace.metricCode());
+        assertNull(trace.expectedValue());
+        assertNull(trace.displayLabel());
+    }
+
+    @Test
     void elevenArgConstructor_storesExpectedValueAndDisplayLabel() {
         NodeTrace trace = new NodeTrace("CONDITION", "GT", "score",
                 true, 100, "PROVIDED", null, null, 42L,

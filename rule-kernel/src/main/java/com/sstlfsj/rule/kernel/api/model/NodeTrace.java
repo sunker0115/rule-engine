@@ -30,4 +30,10 @@ public record NodeTrace(
     public static NodeTrace container(NodeType type, Boolean result, List<NodeTrace> children, Long ruleVersionId) {
         return new NodeTrace(type.tag(), null, null, result, null, null, null, children, ruleVersionId, null, null);
     }
+
+    /** 容器节点 + 错误码（取数失败中止时，容器仍记录 errorCode 与已收集子节点）。 */
+    public static NodeTrace container(NodeType type, Boolean result, String errorCode,
+                                      List<NodeTrace> children, Long ruleVersionId) {
+        return new NodeTrace(type.tag(), null, null, result, null, null, errorCode, children, ruleVersionId, null, null);
+    }
 }

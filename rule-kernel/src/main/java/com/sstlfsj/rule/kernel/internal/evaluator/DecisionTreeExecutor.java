@@ -28,8 +28,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         if (!(snapshot.conditionAst() instanceof IfNode root)) {
-            return new EvalResult(false, null, List.of(), List.of(),
-                    EvalErrorCode.DECISION_TREE_AST_TYPE_MISMATCH, List.of(), null, null, null);
+            return EvalResult.error(EvalErrorCode.DECISION_TREE_AST_TYPE_MISMATCH);
         }
         boolean collect = TraceScope.COLLECT.orElse(true);
         Long rvId = snapshot.ruleVersionId();
@@ -43,8 +42,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         return switch (node) {
             case IfNode ifNode -> evaluateIf(ifNode, snapshot, ctx, sink, rvId);
             case DecisionLeafNode leaf -> hit(leaf, snapshot, sink, rvId);
-            default -> new EvalResult(false, null, List.of(), List.of(),
-                    EvalErrorCode.DECISION_TREE_UNEXPECTED_NODE, List.of(), null, null, null);
+            default -> EvalResult.error(EvalErrorCode.DECISION_TREE_UNEXPECTED_NODE);
         };
     }
 
@@ -56,11 +54,9 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         if (cond.isError()) {
             // 取数失败：不静默走 else，整规则置 ERROR + miss（避免命中错误叶子）
             if (sink != null) {
-                sink.add(new NodeTrace(NodeType.IF.tag(), null, null, false, null, null,
-                        cond.errorCode(), children, rvId, null, null));
+                sink.add(NodeTrace.container(NodeType.IF, false, cond.errorCode(), children, rvId));
             }
-            return new EvalResult(false, null, List.of(), traces(sink),
-                    cond.errorCode(), List.of(), null, null, null);
+            return EvalResult.error(cond.errorCode(), traces(sink));
         }
         EvalResult branch;
         if (cond.satisfied()) {
@@ -92,8 +88,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                     if (!o.satisfied()) { result = ConditionOutcome.NOT_SATISFIED; break; } // 短路 false
                 }
                 if (sink != null) {
-                    sink.add(new NodeTrace(NodeType.AND.tag(), null, null, result.satisfied(), null, null,
-                            result.isError() ? result.errorCode() : null, childTraces, rvId, null, null));
+                    sink.add(NodeTrace.container(NodeType.AND, result.satisfied(),
+                            result.isError() ? result.errorCode() : null, childTraces, rvId));
                 }
                 yield result;
             }
@@ -111,8 +107,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                     result = errCode != null ? ConditionOutcome.error(errCode) : ConditionOutcome.NOT_SATISFIED;
                 }
                 if (sink != null) {
-                    sink.add(new NodeTrace(NodeType.OR.tag(), null, null, result.satisfied(), null, null,
-                            result.isError() ? result.errorCode() : null, childTraces, rvId, null, null));
+                    sink.add(NodeTrace.container(NodeType.OR, result.satisfied(),
+                            result.isError() ? result.errorCode() : null, childTraces, rvId));
                 }
                 yield result;
             }
@@ -121,8 +117,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                 ConditionOutcome o = evaluateCondition(not.child(), ctx, childTraces, rvId);
                 ConditionOutcome result = o.isError() ? o : ConditionOutcome.of(!o.satisfied());
                 if (sink != null) {
-                    sink.add(new NodeTrace(NodeType.NOT.tag(), null, null, result.satisfied(), null, null,
-                            result.isError() ? result.errorCode() : null, childTraces, rvId, null, null));
+                    sink.add(NodeTrace.container(NodeType.NOT, result.satisfied(),
+                            result.isError() ? result.errorCode() : null, childTraces, rvId));
                 }
                 yield result;
             }
