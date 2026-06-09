@@ -231,7 +231,6 @@ CREATE TABLE scene_action_binding (
   scene_id          BIGINT       NOT NULL COMMENT '关联 scene.id',
   action_type       VARCHAR(64)  NOT NULL COMMENT 'ActionHandler 注册的 actionType，如 ticket.create',
   default_params    JSON         COMMENT 'Scene 级默认参数，与 Decision.actions[n].params 合并（Decision 级优先）',
-  rate_limit_override JSON       COMMENT 'Scene 级频控覆盖，null=使用 ActionHandler 默认',
   created_by        VARCHAR(64)  COMMENT '创建人（D14）',
   created_at        TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by        VARCHAR(64)  COMMENT '最近修改人（D14）',

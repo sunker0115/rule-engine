@@ -1,6 +1,8 @@
 # Scene Action Binding 写 API 设计
 
-> 日期：2026-06-09。状态：设计待批准。源自 SceneActionBindingIndex 失效缺口：`scene_action_binding` 当前 seed-only（无写 API），index 仅靠启动全量 + `SceneChangedEvent` 刷新，binding 改动在进程重启前不生效。本设计补 binding 写 API（config-svc）+ 写后发 `SceneChangedEvent`（active=场景真实状态）闭合失效。
+> 日期：2026-06-09。状态：已实现（含下述修订）。源自 SceneActionBindingIndex 失效缺口：`scene_action_binding` 当前 seed-only（无写 API），index 仅靠启动全量 + `SceneChangedEvent` 刷新，binding 改动在进程重启前不生效。本设计补 binding 写 API（config-svc）+ 写后发 `SceneChangedEvent`（active=场景真实状态）闭合失效。
+
+> **实现修订（D50）**：① **移除 `rate_limit_override`**（V1_14 DROP COLUMN）——action 级频控无消费方且冗余，本文下方涉及该字段处作废。② **JSON 字段一律 `Map<String,Object>`**，不用 JSON String、不用裸 `Object`：`SceneActionBindingItem.defaultParams` / `ActionBindingItemDto.defaultParams` 均为 `Map<String,Object>`；JSON↔串序列化下沉 service 实现（注入 ObjectMapper），controller 不做转换。③ **DTO ↔ service 项转换走 MapStruct**（`web/admin/convert/SceneActionBindingConvert`），不在 controller 内联。④ 顺带**接入 `default_params` 到派发**：`SceneActionBindingIndex` 装载时解析 `default_params`→Map 缓存，`ActionDispatchService` 传入 `ActionContext.params`。
 
 ## 1. 背景与定位
 - `scene_action_binding` = Scene 可用 actionType 白名单（含 Scene 级 `default_params` / `rate_limit_override`，仅 PUSH/HYBRID），DDL 见 `V1_0`，uk = `(scene_id, action_type)`。
