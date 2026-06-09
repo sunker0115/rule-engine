@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.job.api.BeanMethodQuery;
 import com.sstlfsj.rule.job.api.dto.JobDefinitionDto;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
+import com.sstlfsj.rule.job.internal.domain.JobStatus;
 import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
 import com.sstlfsj.rule.job.internal.repository.JobExecutionMapper;
 import com.sstlfsj.rule.job.internal.runner.JobRunner;
@@ -51,7 +52,7 @@ class JobServiceImplTest {
                 List.of(), List.of(), Map.of(), 1, "ACTIVE");
     }
 
-    private JobDefinition job(String status) {
+    private JobDefinition job(JobStatus status) {
         JobDefinition d = new JobDefinition();
         d.setId(5L);
         d.setTenantId(1L);
@@ -62,19 +63,19 @@ class JobServiceImplTest {
 
     @Test
     void enableJobForPushSceneRegistersSchedule() {
-        JobDefinition d = job("DISABLED");
+        JobDefinition d = job(JobStatus.DISABLED);
         when(jobMapper.selectById(5L)).thenReturn(d);
         when(sceneService.getScene("1", "s1")).thenReturn(scene("PUSH"));
 
         service.enableJob("1", 5L);
 
-        assertEquals("ACTIVE", d.getStatus());
+        assertEquals(JobStatus.ACTIVE, d.getStatus());
         verify(scheduleManager).register(d);
     }
 
     @Test
     void rejectsEnableForPullScene() {
-        JobDefinition d = job("DISABLED");
+        JobDefinition d = job(JobStatus.DISABLED);
         when(jobMapper.selectById(5L)).thenReturn(d);
         when(sceneService.getScene("1", "s1")).thenReturn(scene("PULL"));
 
@@ -85,12 +86,12 @@ class JobServiceImplTest {
 
     @Test
     void disableJobUnregistersSchedule() {
-        JobDefinition d = job("ACTIVE");
+        JobDefinition d = job(JobStatus.ACTIVE);
         when(jobMapper.selectById(5L)).thenReturn(d);
 
         service.disableJob("1", 5L);
 
-        assertEquals("DISABLED", d.getStatus());
+        assertEquals(JobStatus.DISABLED, d.getStatus());
         verify(jobMapper).updateById(d);
         verify(scheduleManager).unregister(5L);
     }
@@ -114,7 +115,7 @@ class JobServiceImplTest {
 
     @Test
     void getJobParsesSubjectQueryToTypedUnion() {
-        JobDefinition d = job("ACTIVE");
+        JobDefinition d = job(JobStatus.ACTIVE);
         d.setSubjectQuery("{\"type\":\"BEAN_METHOD\",\"ref\":\"a#b\"}");
         when(jobMapper.selectById(5L)).thenReturn(d);
 

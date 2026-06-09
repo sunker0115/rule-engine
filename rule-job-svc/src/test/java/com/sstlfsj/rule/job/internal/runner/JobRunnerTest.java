@@ -4,6 +4,7 @@ import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.job.api.JobTarget;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.domain.JobExecution;
+import com.sstlfsj.rule.job.internal.domain.JobExecutionStatus;
 import com.sstlfsj.rule.job.internal.repository.JobExecutionMapper;
 import com.sstlfsj.rule.job.internal.subject.SubjectQueryRunner;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
@@ -79,7 +80,7 @@ class JobRunnerTest {
 
         JobExecution exec = runner.run(def());
 
-        assertEquals("SUCCESS", exec.getStatus());
+        assertEquals(JobExecutionStatus.SUCCESS, exec.getStatus());
         assertEquals(2, exec.getSubjectCount());
         assertEquals(2, exec.getSuccessCount());
         assertEquals(0, exec.getErrorCount());
@@ -95,7 +96,7 @@ class JobRunnerTest {
 
         JobExecution exec = runner.run(def());
 
-        assertEquals("SUCCESS", exec.getStatus());
+        assertEquals(JobExecutionStatus.SUCCESS, exec.getStatus());
         assertEquals(1, exec.getSubjectCount());
         assertEquals(1, exec.getSuccessCount());
         assertEquals(0, exec.getErrorCount());
@@ -108,7 +109,7 @@ class JobRunnerTest {
 
         JobExecution exec = runner.run(def());
 
-        assertEquals("FAILED", exec.getStatus());
+        assertEquals(JobExecutionStatus.FAILED, exec.getStatus());
         assertEquals(0, exec.getSuccessCount());
         assertEquals(1, exec.getErrorCount());
     }
@@ -121,7 +122,7 @@ class JobRunnerTest {
 
         JobExecution exec = runner.run(def());
 
-        assertEquals("PARTIAL_FAIL", exec.getStatus());
+        assertEquals(JobExecutionStatus.PARTIAL_FAIL, exec.getStatus());
         assertEquals(1, exec.getSuccessCount());
         assertEquals(1, exec.getErrorCount());
     }
@@ -133,7 +134,7 @@ class JobRunnerTest {
 
         JobExecution exec = runner.run(def());
 
-        assertEquals("FAILED", exec.getStatus());
+        assertEquals(JobExecutionStatus.FAILED, exec.getStatus());
         assertEquals(0, exec.getSubjectCount());
         verifyNoInteractions(evalService);
     }

@@ -2,6 +2,7 @@ package com.sstlfsj.rule.job.internal.service;
 
 import com.sstlfsj.rule.job.api.annotation.RuleJob;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
+import com.sstlfsj.rule.job.internal.domain.JobStatus;
 import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
 import com.sstlfsj.rule.job.internal.subject.BeanMethodRegistry;
 import lombok.RequiredArgsConstructor;
@@ -87,7 +88,7 @@ class RuleJobScanner implements SmartInitializingSingleton {
             def.setCronExpression(ann.cron());
             def.setSubjectQuery(subjectQuery);
             def.setEventType(ann.eventType());
-            def.setStatus("ACTIVE");
+            def.setStatus(JobStatus.ACTIVE);
             def.setCreatedBy("@RuleJob");
             jobMapper.insert(def);
         } else {
@@ -95,7 +96,7 @@ class RuleJobScanner implements SmartInitializingSingleton {
             existing.setCronExpression(ann.cron());
             existing.setSubjectQuery(subjectQuery);
             existing.setEventType(ann.eventType());
-            existing.setStatus("ACTIVE");
+            existing.setStatus(JobStatus.ACTIVE);
             existing.setUpdatedBy("@RuleJob");
             existing.setUpdatedAt(LocalDateTime.now());
             jobMapper.updateById(existing);

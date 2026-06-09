@@ -7,6 +7,7 @@ import com.sstlfsj.rule.job.api.dto.JobExecutionVO;
 import com.sstlfsj.rule.job.api.service.JobService;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.domain.JobExecution;
+import com.sstlfsj.rule.job.internal.domain.JobStatus;
 import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
 import com.sstlfsj.rule.job.internal.repository.JobExecutionMapper;
 import com.sstlfsj.rule.job.internal.runner.JobRunner;
@@ -35,7 +36,7 @@ class JobServiceImpl implements JobService {
     public void enableJob(String tenantId, Long jobId) {
         JobDefinition def = findJob(tenantId, jobId);
         rejectIfPullScene(tenantId, def.getSceneCode());
-        def.setStatus("ACTIVE");
+        def.setStatus(JobStatus.ACTIVE);
         def.setUpdatedAt(LocalDateTime.now());
         jobMapper.updateById(def);
         scheduleManager.register(def);
@@ -45,7 +46,7 @@ class JobServiceImpl implements JobService {
     @Transactional
     public void disableJob(String tenantId, Long jobId) {
         JobDefinition def = findJob(tenantId, jobId);
-        def.setStatus("DISABLED");
+        def.setStatus(JobStatus.DISABLED);
         def.setUpdatedAt(LocalDateTime.now());
         jobMapper.updateById(def);
         scheduleManager.unregister(jobId);
@@ -103,7 +104,7 @@ class JobServiceImpl implements JobService {
                 def.getCronExpression(),
                 objectMapper.readValue(def.getSubjectQuery(), com.sstlfsj.rule.job.api.SubjectQuery.class),
                 def.getEventType(),
-                def.getStatus());
+                def.getStatus().name());
     }
 
     private static JobExecutionVO toVO(JobExecution exec) {
@@ -112,7 +113,7 @@ class JobServiceImpl implements JobService {
                 exec.getJobDefinitionId(),
                 String.valueOf(exec.getTenantId()),
                 exec.getTriggerAt(),
-                exec.getStatus(),
+                exec.getStatus().name(),
                 exec.getSubjectCount() != null ? exec.getSubjectCount() : 0,
                 exec.getSuccessCount() != null ? exec.getSuccessCount() : 0,
                 exec.getErrorCount() != null ? exec.getErrorCount() : 0,

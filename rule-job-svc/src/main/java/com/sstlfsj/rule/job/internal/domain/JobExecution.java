@@ -18,7 +18,7 @@ public class JobExecution {
     private Long jobDefinitionId;
     private Long tenantId;
     private LocalDateTime triggerAt;
-    private String status;
+    private JobExecutionStatus status;
     private Integer subjectCount;
     private Integer successCount;
     private Integer errorCount;

@@ -5,6 +5,7 @@ import com.sstlfsj.rule.job.api.annotation.RuleJob;
 import com.sstlfsj.rule.job.api.dto.JobExecutionVO;
 import com.sstlfsj.rule.job.api.service.JobService;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
+import com.sstlfsj.rule.job.internal.domain.JobStatus;
 import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
@@ -134,7 +135,7 @@ class JobAnnotationIntegrationTest {
     void annotationJobUpsertedToDbAsBeanMethod() {
         JobDefinition def = jobMapper.findByTenantSceneCode(1L, "fraud_check", "test-anno-job");
         assertThat(def).isNotNull();
-        assertThat(def.getStatus()).isEqualTo("ACTIVE");
+        assertThat(def.getStatus()).isEqualTo(JobStatus.ACTIVE);
         assertThat(def.getEventType()).isEqualTo("login");
         assertThat(def.getSubjectQuery()).contains("BEAN_METHOD").contains("AnnotatedFraudJob#subjects");
     }

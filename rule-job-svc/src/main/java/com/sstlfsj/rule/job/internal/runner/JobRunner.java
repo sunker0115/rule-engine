@@ -4,6 +4,7 @@ import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.job.api.JobTarget;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.domain.JobExecution;
+import com.sstlfsj.rule.job.internal.domain.JobExecutionStatus;
 import com.sstlfsj.rule.job.internal.repository.JobExecutionMapper;
 import com.sstlfsj.rule.job.internal.subject.SubjectQueryRunner;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
@@ -53,7 +54,7 @@ public class JobRunner {
         exec.setJobDefinitionId(def.getId());
         exec.setTenantId(def.getTenantId());
         exec.setTriggerAt(LocalDateTime.now());
-        exec.setStatus("RUNNING");
+        exec.setStatus(JobExecutionStatus.RUNNING);
         exec.setSubjectCount(0);
         exec.setSuccessCount(0);
         exec.setErrorCount(0);
@@ -92,10 +93,11 @@ public class JobRunner {
                     log.warn("Job 主体注入失败 jobRunId={} subjectId={}", jobRunId, subjectId, e);
                 }
             });
-            exec.setStatus(counters[2] == 0 ? "SUCCESS" : (counters[1] > 0 ? "PARTIAL_FAIL" : "FAILED"));
+            exec.setStatus(counters[2] == 0 ? JobExecutionStatus.SUCCESS
+                    : (counters[1] > 0 ? JobExecutionStatus.PARTIAL_FAIL : JobExecutionStatus.FAILED));
         } catch (RuntimeException e) {
             // 主体查询阶段失败 → 整体 FAILED
-            exec.setStatus("FAILED");
+            exec.setStatus(JobExecutionStatus.FAILED);
             errors.add("主体查询失败: " + e.getMessage());
             log.error("Job 主体查询失败 jobRunId={} jobCode={}", jobRunId, def.getCode(), e);
         }
