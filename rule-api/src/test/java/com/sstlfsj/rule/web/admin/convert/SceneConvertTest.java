@@ -1,7 +1,10 @@
 package com.sstlfsj.rule.web.admin.convert;
 
+import com.sstlfsj.rule.config.internal.domain.DecisionStrategy;
+import com.sstlfsj.rule.config.internal.domain.DominantMode;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.SceneStatus;
+import com.sstlfsj.rule.kernel.api.model.SubjectType;
 import com.sstlfsj.rule.web.admin.dto.SceneResponse;
 import org.junit.jupiter.api.Test;
 
@@ -20,9 +23,9 @@ class SceneConvertTest {
         scene.setCode("PAYMENT");
         scene.setName("支付场景");
         scene.setDescription("处理支付事件");
-        scene.setDominantMode("PUSH");
-        scene.setDecisionStrategy("HIGHEST_PRIORITY");
-        scene.setSubjectType("USER");
+        scene.setDominantMode(DominantMode.PUSH);
+        scene.setDecisionStrategy(DecisionStrategy.HIGHEST_PRIORITY);
+        scene.setSubjectType(SubjectType.USER);
         scene.setStatus(SceneStatus.ACTIVE);
 
         SceneResponse resp = convert.toResponse(scene);
