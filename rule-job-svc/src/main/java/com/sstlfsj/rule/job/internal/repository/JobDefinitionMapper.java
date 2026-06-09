@@ -3,6 +3,7 @@ package com.sstlfsj.rule.job.internal.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
+import com.sstlfsj.rule.job.internal.domain.JobStatus;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
@@ -21,7 +22,7 @@ public interface JobDefinitionMapper extends BaseMapper<JobDefinition> {
     /** 查全部 ACTIVE Job（跨租户），供启动期注册到调度器。 */
     default List<JobDefinition> findAllActive() {
         return selectList(new LambdaQueryWrapper<JobDefinition>()
-                .eq(JobDefinition::getStatus, "ACTIVE"));
+                .eq(JobDefinition::getStatus, JobStatus.ACTIVE));
     }
 
     /** 按 (tenantId, sceneCode, code) 查 Job，不存在返回 null；供注解 Job upsert。 */

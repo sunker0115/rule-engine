@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.job.internal.service;
 
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
+import com.sstlfsj.rule.job.internal.domain.JobStatus;
 import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
 import com.sstlfsj.rule.job.internal.runner.JobRunner;
 import com.sstlfsj.rule.kernel.api.spi.scheduler.Scheduler;
@@ -32,7 +33,7 @@ class JobScheduleManager {
 
     private void runById(Long jobId) {
         JobDefinition latest = jobMapper.selectById(jobId);
-        if (latest != null && "ACTIVE".equals(latest.getStatus())) {
+        if (latest != null && latest.getStatus() == JobStatus.ACTIVE) {
             jobRunner.run(latest);
         }
     }
