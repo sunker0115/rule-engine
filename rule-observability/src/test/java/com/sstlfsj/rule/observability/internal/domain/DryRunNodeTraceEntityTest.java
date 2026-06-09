@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.observability.internal.domain;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -35,7 +36,7 @@ class DryRunNodeTraceEntityTest {
         entity.setActualValue("1500");
         entity.setResult(true);
         entity.setErrorCode(null);
-        entity.setValueSource("FETCHED");
+        entity.setValueSource(ValueSource.FETCHED);
         entity.setEvaluatedAt(now);
 
         assertEquals(1L, entity.getId());
@@ -51,7 +52,7 @@ class DryRunNodeTraceEntityTest {
         assertEquals("1500", entity.getActualValue());
         assertTrue(entity.getResult());
         assertNull(entity.getErrorCode());
-        assertEquals("FETCHED", entity.getValueSource());
+        assertEquals(ValueSource.FETCHED, entity.getValueSource());
         assertEquals(now, entity.getEvaluatedAt());
     }
 

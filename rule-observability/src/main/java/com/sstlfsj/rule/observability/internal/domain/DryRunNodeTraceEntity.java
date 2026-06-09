@@ -3,6 +3,7 @@ package com.sstlfsj.rule.observability.internal.domain;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -28,6 +29,6 @@ public class DryRunNodeTraceEntity {
     private String actualValue;
     private Boolean result;
     private String errorCode;
-    private String valueSource;
+    private ValueSource valueSource;
     private LocalDateTime evaluatedAt;
 }

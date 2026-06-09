@@ -28,7 +28,7 @@ class TraceWriterDbImplTest {
     @Test
     void write_throwsNpe_beforeInit() {
         TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class), objectMapper);
-        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
+        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
         // queue 未初始化时调用 write 抛 NPE，调用方须在 afterPropertiesSet 后使用
         assertThrows(NullPointerException.class, () -> writer.write("t1", "s1", List.of(trace)));
     }
@@ -39,7 +39,7 @@ class TraceWriterDbImplTest {
         writer.afterPropertiesSet();
         try {
             // 消费者线程应已启动
-            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
+            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
             assertDoesNotThrow(() -> writer.write("t1", "s1", List.of(trace)));
         } finally {
             writer.destroy();
@@ -63,7 +63,7 @@ class TraceWriterDbImplTest {
         TraceWriterDbImpl writer = new TraceWriterDbImpl(1, 10, 60_000, mock(NodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         try {
-            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
+            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
             assertDoesNotThrow(() -> {
                 writer.write("t1", "s1", List.of(trace));
                 writer.write("t1", "s2", List.of(trace)); // 队列满，静默丢弃
@@ -87,8 +87,8 @@ class TraceWriterDbImplTest {
         w.afterPropertiesSet();
 
         // root[0] → "0"；root[0].child[0] → "0.0"
-        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "DB", null, null, null, null, null);
-        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, List.of(child), 7L, null, null);
+        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, null);
+        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, List.of(child), 7L, null, null);
         w.write("1", "42", List.of(root));
         w.destroy();
 
@@ -105,7 +105,7 @@ class TraceWriterDbImplTest {
         TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, null, 42L, null, null);
+        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, null, 42L, null, null);
         w.write("1", "99", List.of(root));
         w.destroy();
 
@@ -120,14 +120,45 @@ class TraceWriterDbImplTest {
         TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "DB", null, null, null, null, null);
-        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, List.of(child), 7L, null, null);
+        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, null);
+        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, List.of(child), 7L, null, null);
         w.write("1", "42", List.of(root));
         w.destroy(); // destroy() 内先 flushBatch()
 
         // 批量写库：insertBatch 被调用，insert 不再被调用
         verify(mapper, atLeastOnce()).insertBatch(argThat(list -> list.size() == 2));
         verify(mapper, never()).insert(any(NodeTraceEntity.class));
+    }
+
+    @Test
+    void flushBatch_mapsValueSourceStringToEnum() throws Exception {
+        NodeTraceMapper mapper = mock(NodeTraceMapper.class);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
+        w.afterPropertiesSet();
+
+        // trace.valueSource() 是 String，落库实体字段是 kernel ValueSource 枚举
+        NodeTrace leaf = new NodeTrace("LEAF", "GTE", "score", true, 100, "FETCHED", null, null, 7L, null, null);
+        w.write("1", "42", List.of(leaf));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
+                list.size() == 1
+                && com.sstlfsj.rule.kernel.api.model.ValueSource.FETCHED.equals(list.get(0).getValueSource())));
+    }
+
+    @Test
+    void flushBatch_mapsNullValueSourceToNull() throws Exception {
+        NodeTraceMapper mapper = mock(NodeTraceMapper.class);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
+        w.afterPropertiesSet();
+
+        // valueSource 为 null 时不应抛异常，落库为 null
+        NodeTrace leaf = new NodeTrace("LEAF", "GTE", "score", true, 100, null, null, null, 7L, null, null);
+        w.write("1", "42", List.of(leaf));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
+                list.size() == 1 && list.get(0).getValueSource() == null));
     }
 
     @Test

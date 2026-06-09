@@ -31,7 +31,7 @@ class DryRunTraceWriterDbImplTest {
     void write_throwsNpe_beforeInit() {
         DryRunTraceWriterDbImpl writer = new DryRunTraceWriterDbImpl(100, 10, 50,
                 mock(DryRunNodeTraceMapper.class), objectMapper);
-        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
+        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
         assertThrows(NullPointerException.class, () -> writer.write("t1", "s1", List.of(trace)));
     }
 
@@ -41,7 +41,7 @@ class DryRunTraceWriterDbImplTest {
                 mock(DryRunNodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         try {
-            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
+            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
             assertDoesNotThrow(() -> writer.write("t1", "s1", List.of(trace)));
         } finally {
             writer.destroy();
@@ -54,7 +54,7 @@ class DryRunTraceWriterDbImplTest {
                 mock(DryRunNodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         try {
-            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
+            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
             assertDoesNotThrow(() -> {
                 writer.write("t1", "s1", List.of(trace));
                 writer.write("t1", "s2", List.of(trace));
@@ -70,8 +70,8 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "DB", null, null, null, null, null);
-        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, List.of(child), 7L, null, null);
+        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, null);
+        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, List.of(child), 7L, null, null);
         w.write("1", "42", List.of(root));
         w.destroy();
 
@@ -85,7 +85,7 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, null, 42L, null, null);
+        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, null, 42L, null, null);
         w.write("1", "99", List.of(root));
         w.destroy();
 
@@ -101,8 +101,8 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "DB", null, null, null, null, null);
-        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, List.of(child), 7L, null, null);
+        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, null);
+        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, List.of(child), 7L, null, null);
         w.write("1", "42", List.of(root));
         w.destroy();
 
@@ -121,7 +121,7 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, dryMapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace trace = new NodeTrace("LEAF", "EQ", "score", false, 50, "DB", null, null, null, null, null);
+        NodeTrace trace = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, null);
         w.write("1", "1", List.of(trace));
         w.destroy();
 
@@ -134,6 +134,37 @@ class DryRunTraceWriterDbImplTest {
                 mock(DryRunNodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         assertDoesNotThrow(writer::destroy);
+    }
+
+    @Test
+    void flushBatch_mapsValueSourceStringToEnum() throws Exception {
+        DryRunNodeTraceMapper mapper = mock(DryRunNodeTraceMapper.class);
+        DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
+        w.afterPropertiesSet();
+
+        // trace.valueSource() 是 String，落库实体字段是 kernel ValueSource 枚举
+        NodeTrace leaf = new NodeTrace("LEAF", "GTE", "score", true, 100, "FETCHED", null, null, 7L, null, null);
+        w.write("1", "42", List.of(leaf));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
+                list.size() == 1
+                && com.sstlfsj.rule.kernel.api.model.ValueSource.FETCHED.equals(list.get(0).getValueSource())));
+    }
+
+    @Test
+    void flushBatch_mapsNullValueSourceToNull() throws Exception {
+        DryRunNodeTraceMapper mapper = mock(DryRunNodeTraceMapper.class);
+        DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
+        w.afterPropertiesSet();
+
+        // valueSource 为 null 时不应抛异常，落库为 null
+        NodeTrace leaf = new NodeTrace("LEAF", "GTE", "score", true, 100, null, null, null, 7L, null, null);
+        w.write("1", "42", List.of(leaf));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
+                list.size() == 1 && list.get(0).getValueSource() == null));
     }
 
     @Test

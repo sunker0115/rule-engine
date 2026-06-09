@@ -117,7 +117,7 @@ public class DryRunTraceWriterDbImpl implements DryRunTraceWriter, InitializingB
             entity.setActualValue(trace.actualValue() == null ? null : trace.actualValue().toString());
             entity.setResult(trace.result());
             entity.setErrorCode(trace.errorCode());
-            entity.setValueSource(trace.valueSource());
+            entity.setValueSource(trace.valueSource() == null ? null : com.sstlfsj.rule.kernel.api.model.ValueSource.valueOf(trace.valueSource()));
             entity.setRuleVersionId(trace.ruleVersionId());
             entity.setEvaluatedAt(LocalDateTime.now());
             out.add(entity);
