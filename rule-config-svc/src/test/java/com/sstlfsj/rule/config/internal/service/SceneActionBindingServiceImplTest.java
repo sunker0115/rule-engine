@@ -12,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -42,7 +41,7 @@ class SceneActionBindingServiceImplTest {
         auditLogMapper = mock(AuditLogMapper.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new SceneActionBindingServiceImpl(
-                sceneMapper, bindingMapper, auditLogMapper, eventPublisher, JsonMapper.builder().build());
+                sceneMapper, bindingMapper, auditLogMapper, eventPublisher);
     }
 
     private SceneDef scene(Long id, String status) {
@@ -136,14 +135,14 @@ class SceneActionBindingServiceImplTest {
     void list_returnsMappedItems() {
         when(sceneMapper.findByCode(1L, "PAY")).thenReturn(scene(10L, "ACTIVE"));
         SceneActionBindingDef d = existing(100L, "BLOCK_TX");
-        d.setDefaultParams("{\"a\":1}");
+        d.setDefaultParams(Map.of("a", 1));
         when(bindingMapper.findBySceneId(10L)).thenReturn(List.of(d));
 
         List<SceneActionBindingItem> items = service.list("1", "PAY");
 
         assertThat(items).hasSize(1);
         assertThat(items.getFirst().actionType()).isEqualTo("BLOCK_TX");
-        // 存库 JSON 串反序列化为类型化 Map 对外暴露
+        // 实体 Map 字段(TypeHandler 转换)直传，对外类型化 Map
         assertThat(items.getFirst().defaultParams()).isEqualTo(Map.of("a", 1));
     }
 }
