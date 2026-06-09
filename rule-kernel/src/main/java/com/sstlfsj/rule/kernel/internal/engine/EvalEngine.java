@@ -199,7 +199,7 @@ public class EvalEngine {
                             : Math.max(aggregatedScore, r.score());
                 }
             } catch (Exception e) {
-                if (errorCode == null) errorCode = "CONDITION_EVAL_ERROR";
+                if (errorCode == null) errorCode = EvalErrorCode.CONDITION_EVAL_ERROR;
             }
         }
 

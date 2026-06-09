@@ -22,7 +22,6 @@ import java.util.concurrent.*;
 public class EvalContextAssembler {
 
     private static final Logger log = LoggerFactory.getLogger(EvalContextAssembler.class);
-    private static final String METRIC_FETCH_FAIL = "METRIC_FETCH_FAIL";
 
     private final SubjectLoader subjectLoader;
     private final Map<String, MetricSourceHandler> handlersBySourceType;
@@ -132,7 +131,7 @@ public class EvalContextAssembler {
                 log.warn("metric={} allowProvided=false，忽略 providedMetrics 传值", code);
             }
             if (def == null) {
-                metrics.put(code, MetricValue.error(METRIC_FETCH_FAIL));
+                metrics.put(code, MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL));
                 continue;
             }
             if (cache != null && def.cacheTtlSeconds() > 0) {
@@ -184,13 +183,13 @@ public class EvalContextAssembler {
                     def.params(), event.payload(), now);
             MetricSourceHandler handler = handlersBySourceType.get(def.sourceType());
             tasks.add(() -> {
-                if (handler == null) return MetricValue.error(METRIC_FETCH_FAIL);
+                if (handler == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
                 try {
                     MetricValue v = handler.fetch(query);
-                    return v != null ? v : MetricValue.error(METRIC_FETCH_FAIL);
+                    return v != null ? v : MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
                 } catch (Exception e) {
                     // 子任务内吞异常→降级（替代旧 .exceptionally）
-                    return MetricValue.error(METRIC_FETCH_FAIL);
+                    return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
                 }
             });
         }
@@ -201,7 +200,7 @@ public class EvalContextAssembler {
         } catch (InterruptedException e) {
             // 调用线程被中断：恢复中断位并全部降级
             Thread.currentThread().interrupt();
-            for (String code : orderedCodes) metrics.put(code, MetricValue.error(METRIC_FETCH_FAIL));
+            for (String code : orderedCodes) metrics.put(code, MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL));
             return;
         }
 
@@ -211,9 +210,9 @@ public class EvalContextAssembler {
             MetricValue v;
             if (f.isCancelled()) {
                 // 超时未完成：invokeAll 已中断该子任务
-                v = MetricValue.error(METRIC_FETCH_FAIL);
+                v = MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
             } else {
-                try { v = f.get(); } catch (Exception e) { v = MetricValue.error(METRIC_FETCH_FAIL); }
+                try { v = f.get(); } catch (Exception e) { v = MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL); }
             }
             metrics.put(code, v);
             if (cache != null && !v.isError()) {

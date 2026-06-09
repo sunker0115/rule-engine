@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.internal.evaluator;
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
@@ -13,11 +14,6 @@ import java.util.Map;
  * 未注册 evaluator 也归入 ERROR(NO_EVALUATOR)，由各执行器按语义决定动作。
  */
 final class ConditionEvaluation {
-
-    /** 取数失败错误码。 */
-    static final String METRIC_FETCH_FAIL = "METRIC_FETCH_FAIL";
-    /** 无注册算子错误码。 */
-    static final String NO_EVALUATOR = "NO_EVALUATOR";
 
     private ConditionEvaluation() {}
 
@@ -40,11 +36,11 @@ final class ConditionEvaluation {
             if (mv != null) { actual = mv.value(); source = mv.valueSource(); }
             if (mv != null && mv.isError()) {
                 return ConditionOutcome.error(
-                        mv.errorCode() != null ? mv.errorCode() : METRIC_FETCH_FAIL, actual, source);
+                        mv.errorCode() != null ? mv.errorCode() : EvalErrorCode.METRIC_FETCH_FAIL, actual, source);
             }
         }
         ConditionEvaluator evaluator = evaluators.get(node.conditionType());
-        if (evaluator == null) return ConditionOutcome.error(NO_EVALUATOR, actual, source);
+        if (evaluator == null) return ConditionOutcome.error(EvalErrorCode.NO_EVALUATOR, actual, source);
         return ConditionOutcome.leaf(evaluator.evaluate(node, ctx), actual, source);
     }
 }

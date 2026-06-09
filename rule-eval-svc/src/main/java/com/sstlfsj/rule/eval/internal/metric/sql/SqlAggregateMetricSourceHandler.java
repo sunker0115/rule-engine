@@ -2,6 +2,7 @@ package com.sstlfsj.rule.eval.internal.metric.sql;
 
 import com.sstlfsj.rule.eval.internal.metric.DataTypeCoercion;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
@@ -26,7 +27,6 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
 
     /** 占位符：:ns.field 或 :name（点号命名空间用于 payload./params.）。 */
     private static final Pattern PLACEHOLDER = Pattern.compile(":([a-zA-Z_][\\w.]*)");
-    private static final String METRIC_FETCH_FAIL = "METRIC_FETCH_FAIL";
 
     private final MetricDataSourceRegistry registry;
 
@@ -39,9 +39,9 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
         Object dsName = query.params().get("datasource");
         Object sqlText = query.params().get("sql");
         Object dataType = query.params().get("dataType"); // 由 resolver 注入到 params
-        if (dsName == null || sqlText == null) return MetricValue.error(METRIC_FETCH_FAIL);
+        if (dsName == null || sqlText == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
         NamedParameterJdbcTemplate tpl = registry.template(dsName.toString());
-        if (tpl == null) return MetricValue.error(METRIC_FETCH_FAIL);
+        if (tpl == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
         try {
             Bound bound = bind(sqlText.toString(), query.subjectId(), query.tenantId(),
                     query.now(), query.eventPayload(), castParams(query.params().get("params")));
@@ -51,7 +51,7 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
             String dt = dataType != null ? dataType.toString() : null;
             return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, "FETCHED");
         } catch (Exception e) {
-            return MetricValue.error(METRIC_FETCH_FAIL);
+            return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
         }
     }
 

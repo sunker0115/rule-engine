@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.internal.evaluator;
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.NodeType;
@@ -33,7 +34,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         if (!(snapshot.conditionAst() instanceof ScorecardRootNode root)) {
             return new EvalResult(false, null, List.of(), List.of(),
-                    "SCORECARD_AST_TYPE_MISMATCH", List.of(), null, null, null);
+                    EvalErrorCode.SCORECARD_AST_TYPE_MISMATCH, List.of(), null, null, null);
         }
 
         // collect=false 时跳过 NodeTrace 构建（traces 保持空），score/decision/hit 不受影响

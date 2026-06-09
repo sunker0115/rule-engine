@@ -29,7 +29,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         if (!(snapshot.conditionAst() instanceof IfNode root)) {
             return new EvalResult(false, null, List.of(), List.of(),
-                    "DECISION_TREE_AST_TYPE_MISMATCH", List.of(), null, null, null);
+                    EvalErrorCode.DECISION_TREE_AST_TYPE_MISMATCH, List.of(), null, null, null);
         }
         boolean collect = TraceScope.COLLECT.orElse(true);
         Long rvId = snapshot.ruleVersionId();
@@ -44,7 +44,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
             case IfNode ifNode -> evaluateIf(ifNode, snapshot, ctx, sink, rvId);
             case DecisionLeafNode leaf -> hit(leaf, snapshot, sink, rvId);
             default -> new EvalResult(false, null, List.of(), List.of(),
-                    "DECISION_TREE_UNEXPECTED_NODE", List.of(), null, null, null);
+                    EvalErrorCode.DECISION_TREE_UNEXPECTED_NODE, List.of(), null, null, null);
         };
     }
 
@@ -126,7 +126,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                 }
                 yield result;
             }
-            default -> ConditionOutcome.error(ConditionEvaluation.NO_EVALUATOR);
+            default -> ConditionOutcome.error(EvalErrorCode.NO_EVALUATOR);
         };
     }
 

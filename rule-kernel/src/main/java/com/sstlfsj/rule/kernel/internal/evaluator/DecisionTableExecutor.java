@@ -33,7 +33,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
                 List<DecisionTableNode.Column> columns, List<DecisionTableNode.Row> rows
         ))) {
             return new EvalResult(false, null, List.of(), List.of(),
-                    "DECISION_TABLE_AST_TYPE_MISMATCH", List.of(), null, null, null);
+                    EvalErrorCode.DECISION_TABLE_AST_TYPE_MISMATCH, List.of(), null, null, null);
         }
 
         boolean collect = TraceScope.COLLECT.orElse(true);
