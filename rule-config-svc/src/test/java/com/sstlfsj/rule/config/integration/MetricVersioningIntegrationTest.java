@@ -90,6 +90,11 @@ class MetricVersioningIntegrationTest {
                 .eq(AuditLog::getAction, "CREATE"));
         assertThat(logs).hasSize(1);
         assertThat(logs.get(0).getTargetId()).isEqualTo(id.toString());
+        // typed 快照经监听器序列化落库：CREATE 类 before/after 同值（容忍 : 后空格）
+        assertThat(logs.get(0).getAfterSnapshot())
+                .contains("\"metricCode\"", CODE)
+                .containsPattern("\"version\"\\s*:\\s*1");
+        assertThat(logs.get(0).getBeforeSnapshot()).isEqualTo(logs.get(0).getAfterSnapshot());
     }
 
     @Test

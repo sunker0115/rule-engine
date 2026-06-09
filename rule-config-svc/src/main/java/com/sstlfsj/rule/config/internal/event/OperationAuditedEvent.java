@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
  * @param action         操作类型（CREATE / UPDATE / PUBLISH / DISABLE / IMPORT / REPLACE_ACTION_BINDING 等）
  * @param targetType     变更对象类型（rule_definition / scene / metric_definition / scene_action_binding 等）
  * @param targetId       变更对象 id
- * @param beforeSnapshot 变更前快照（JSON），可空
- * @param afterSnapshot  变更后快照（JSON），可空
+ * @param beforeSnapshot 变更前快照（typed，由监听器序列化为 JSON 落库），可空
+ * @param afterSnapshot  变更后快照（typed，由监听器序列化为 JSON 落库），可空
  * @param operatedAt     操作发生时间
  */
 public record OperationAuditedEvent(
@@ -23,7 +23,7 @@ public record OperationAuditedEvent(
         String action,
         String targetType,
         String targetId,
-        String beforeSnapshot,
-        String afterSnapshot,
+        AuditSnapshot beforeSnapshot,
+        AuditSnapshot afterSnapshot,
         LocalDateTime operatedAt
 ) {}

@@ -15,6 +15,7 @@ import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
+import com.sstlfsj.rule.config.internal.event.RuleImportedSnapshot;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
@@ -197,8 +198,7 @@ public class RuleImportService {
             eventPublisher.publishEvent(new OperationAuditedEvent(
                     tenantId, actorId, "USER", "IMPORT", "rule_definition", rd.getId().toString(),
                     null,
-                    "{\"ruleVersionId\":" + rv.getId() + ",\"version\":" + newVersion
-                            + ",\"ruleExisted\":" + ruleExisted + "}",
+                    new RuleImportedSnapshot(rv.getId(), newVersion, ruleExisted),
                     LocalDateTime.now()));
 
             importedRules.add(new RuleImportResult.ImportedRule(

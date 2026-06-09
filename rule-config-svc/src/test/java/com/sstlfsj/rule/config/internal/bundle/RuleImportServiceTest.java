@@ -8,6 +8,8 @@ import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
+import com.sstlfsj.rule.config.internal.event.RuleImportedSnapshot;
+import org.mockito.ArgumentCaptor;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
@@ -109,7 +111,14 @@ class RuleImportServiceTest {
         assertThat(r.decisionsCreated()).containsExactly("BLOCK");
         verify(metricDefinitionMapper, times(1)).insert(any(MetricDefinition.class));
         verify(decisionDefinitionMapper, times(1)).insert(any(DecisionDefinition.class));
-        verify(eventPublisher, times(2)).publishEvent(any(OperationAuditedEvent.class));   // 每条规则一条审计
+        // 每条规则一条审计：IMPORT 非创建，before 为 null，after 为 typed RuleImportedSnapshot
+        ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher, times(2)).publishEvent(auditCaptor.capture());
+        assertThat(auditCaptor.getAllValues()).allSatisfy(audit -> {
+            assertThat(audit.action()).isEqualTo("IMPORT");
+            assertThat(audit.beforeSnapshot()).isNull();
+            assertThat(audit.afterSnapshot()).isInstanceOf(RuleImportedSnapshot.class);
+        });
     }
 
     @Test

@@ -5,7 +5,9 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
+import com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
+import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -127,6 +129,9 @@ class PublishServiceTest {
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
         assertThat(audit.action()).isEqualTo("PUBLISH");
+        // PUBLISH 为非创建发布点：before 仍为 null，after 为 typed RulePublishedSnapshot
+        assertThat(audit.beforeSnapshot()).isNull();
+        assertThat(audit.afterSnapshot()).isInstanceOf(RulePublishedSnapshot.class);
         RulePublishedEvent published = events.stream()
                 .filter(RulePublishedEvent.class::isInstance)
                 .map(RulePublishedEvent.class::cast)
@@ -270,6 +275,17 @@ class PublishServiceTest {
         // conditionAst 直传 typed 落库（无 JSON 串来回）
         assertThat(rvCaptor.getValue().getConditionAst())
                 .isInstanceOf(com.sstlfsj.rule.kernel.api.model.ast.AndNode.class);
+
+        // CREATE 类审计：before/after 为同一个 typed DraftCreatedSnapshot 实例
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        OperationAuditedEvent audit = eventCaptor.getAllValues().stream()
+                .filter(OperationAuditedEvent.class::isInstance)
+                .map(OperationAuditedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(audit.action()).isEqualTo("CREATE");
+        assertThat(audit.beforeSnapshot()).isSameAs(audit.afterSnapshot());
+        assertThat(audit.afterSnapshot()).isEqualTo(new DraftCreatedSnapshot(10L, 20L));
     }
 
     @Test

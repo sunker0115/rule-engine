@@ -11,6 +11,7 @@ import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.event.MetricChangedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
@@ -98,8 +99,13 @@ class MetricWriteServiceImplTest {
         assertThat(inserted.getDataType()).isEqualTo("LONG");
         assertThat(inserted.getCreatedBy()).isEqualTo(ACTOR);
 
-        // 断言 audit_log 写入一次
-        verify(eventPublisher, times(1)).publishEvent(any(OperationAuditedEvent.class));
+        // 断言 audit_log 写入一次，CREATE 类 before/after 为同一 typed 快照（breaking=null）
+        ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(auditCaptor.capture());
+        OperationAuditedEvent audit = auditCaptor.getValue();
+        assertThat(audit.action()).isEqualTo("CREATE");
+        assertThat(audit.beforeSnapshot()).isSameAs(audit.afterSnapshot());
+        assertThat(audit.afterSnapshot()).isEqualTo(new MetricChangedSnapshot(CODE, 1, null));
     }
 
     @Test
@@ -188,7 +194,13 @@ class MetricWriteServiceImplTest {
         verify(metricDefinitionMapper, times(1)).updateById(active);
         verify(metricDefinitionMapper, never()).insert((MetricDefinition) any());
         assertThat(active.getStatus()).isEqualTo("ACTIVE");
-        verify(eventPublisher, times(1)).publishEvent(any(OperationAuditedEvent.class));
+        // UPDATE 非创建：before 仍为 null，after 为 typed 快照（breaking=false）
+        ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(auditCaptor.capture());
+        OperationAuditedEvent audit = auditCaptor.getValue();
+        assertThat(audit.action()).isEqualTo("UPDATE");
+        assertThat(audit.beforeSnapshot()).isNull();
+        assertThat(audit.afterSnapshot()).isEqualTo(new MetricChangedSnapshot(CODE, 2, false));
     }
 
     // ── update breakingChange=true ────────────────────────────────────────────
@@ -219,7 +231,12 @@ class MetricWriteServiceImplTest {
         assertThat(newRow.getVersion()).isEqualTo(3);
         assertThat(newRow.getStatus()).isEqualTo("ACTIVE");
 
-        verify(eventPublisher, times(1)).publishEvent(any(OperationAuditedEvent.class));
+        // 升版 UPDATE：before 为 null，after 为 typed 快照（breaking=true，version=3）
+        ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(auditCaptor.capture());
+        OperationAuditedEvent audit = auditCaptor.getValue();
+        assertThat(audit.beforeSnapshot()).isNull();
+        assertThat(audit.afterSnapshot()).isEqualTo(new MetricChangedSnapshot(CODE, 3, true));
     }
 
     // ── update breakingChange=false 但 sourceType/dataType 变更 → 强制升版 ──────

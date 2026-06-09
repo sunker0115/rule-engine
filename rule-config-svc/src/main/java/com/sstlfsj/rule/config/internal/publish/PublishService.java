@@ -3,7 +3,9 @@ package com.sstlfsj.rule.config.internal.publish;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.domain.*;
+import com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
+import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -211,7 +213,7 @@ public class PublishService {
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
                 null,
-                "{\"ruleVersionId\":" + newRv.getId() + ",\"version\":" + newVersion + "}",
+                new RulePublishedSnapshot(newRv.getId(), newVersion),
                 LocalDateTime.now()));
 
         // 10. 生成 RuleVersionSnapshot 供返回和事件携带
@@ -286,10 +288,12 @@ public class PublishService {
         ruleVersionMapper.insert(rv);
 
         // 6. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 约定）
+        // CREATE 类 before/after 传同一快照实例，审计行始终 before/after 都有值，避免 null 特殊处理
+        DraftCreatedSnapshot draftSnapshot = new DraftCreatedSnapshot(rd.getId(), rv.getId());
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, "USER", "CREATE", "rule_definition", rd.getId().toString(),
-                null,
-                "{\"ruleDefinitionId\":" + rd.getId() + ",\"ruleVersionId\":" + rv.getId() + "}",
+                draftSnapshot,
+                draftSnapshot,
                 LocalDateTime.now()));
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, RuleDefinitionStatus.DRAFT.name());
