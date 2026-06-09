@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -47,9 +48,9 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
                     query.now(), query.eventPayload(), castParams(query.params().get("params")));
             List<Object> firstCol = tpl.query(bound.sql(), bound.params(),
                     (rs, rowNum) -> rs.getObject(1));
-            Object raw = firstCol.isEmpty() ? null : firstCol.get(0);
+            Object raw = firstCol.isEmpty() ? null : firstCol.getFirst();
             String dt = dataType != null ? dataType.toString() : null;
-            return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, "FETCHED");
+            return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, ValueSource.FETCHED.tag());
         } catch (Exception e) {
             return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
         }

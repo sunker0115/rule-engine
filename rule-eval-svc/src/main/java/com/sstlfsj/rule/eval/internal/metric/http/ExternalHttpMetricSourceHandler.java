@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -62,7 +63,7 @@ public class ExternalHttpMetricSourceHandler implements MetricSourceHandler {
             JsonNode root = objectMapper.readTree(resp.body());
             Object raw = extractJsonPath(root, jsonPath.toString());
             String dt = dataType != null ? dataType.toString() : null;
-            return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, "FETCHED");
+            return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, ValueSource.FETCHED.tag());
         } catch (Exception e) {
             return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
         }

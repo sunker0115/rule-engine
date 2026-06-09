@@ -29,7 +29,7 @@ public record MetricValue(
      * @return 标记 isError 的 MetricValue
      */
     public static MetricValue error(String errorCode) {
-        return new MetricValue(null, "UNKNOWN", "FETCHED", errorCode);
+        return new MetricValue(null, "UNKNOWN", ValueSource.FETCHED.tag(), errorCode);
     }
 
     /** @return 是否为取数失败的降级值。 */
