@@ -70,7 +70,7 @@ public class EvalEngineBenchmark {
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
             return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
         };
-        engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", exec));
+        engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", exec), false);
 
         Map<String, Object> provided = new HashMap<>();
         for (String c : METRIC_CODES) provided.put(c, 1L);
