@@ -41,9 +41,9 @@ public interface MetadataService {
     record ProvidedMetricsResponse(java.util.List<MetricMeta> metrics) {}
 
     record ConditionTypeMeta(String code, String displayName,
-                              Object paramsSchema, boolean requiresMetric) {}
+                              java.util.Map<String, Object> paramsSchema, boolean requiresMetric) {}
     record ActionTypeMeta(String code, String displayName,
-                          Object paramsSchema, boolean compensatable) {}
+                          java.util.Map<String, Object> paramsSchema, boolean compensatable) {}
     record MetricMeta(String metricCode, String name,
                       String dataType, String sourceType, boolean allowProvided) {}
 }

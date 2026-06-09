@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.api.service;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -11,8 +12,10 @@ class MetadataServiceTest {
 
     @Test
     void metadataResponse_recordAccessors() {
-        var condType = new MetadataService.ConditionTypeMeta("GT", "大于", null, true);
-        var actType = new MetadataService.ActionTypeMeta("BLOCK", "拦截", null, false);
+        Map<String, Object> condSchema = Map.of("type", "object");
+        Map<String, Object> actSchema = Map.of("type", "object", "required", List.of("reason"));
+        var condType = new MetadataService.ConditionTypeMeta("GT", "大于", condSchema, true);
+        var actType = new MetadataService.ActionTypeMeta("BLOCK", "拦截", actSchema, false);
         var metric = new MetadataService.MetricMeta("age", "年龄", "INTEGER", "DB", true);
         var response = new MetadataService.MetadataResponse(
                 List.of(condType), List.of(actType), List.of(metric));
@@ -20,10 +23,12 @@ class MetadataServiceTest {
         assertEquals(1, response.conditionTypes().size());
         assertEquals("GT", response.conditionTypes().get(0).code());
         assertTrue(response.conditionTypes().get(0).requiresMetric());
+        assertEquals(condSchema, response.conditionTypes().get(0).paramsSchema());
 
         assertEquals(1, response.actionTypes().size());
         assertEquals("BLOCK", response.actionTypes().get(0).code());
         assertFalse(response.actionTypes().get(0).compensatable());
+        assertEquals(actSchema, response.actionTypes().get(0).paramsSchema());
 
         assertEquals(1, response.availableMetrics().size());
         assertEquals("age", response.availableMetrics().get(0).metricCode());
