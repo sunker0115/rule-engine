@@ -12,18 +12,17 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -44,7 +43,6 @@ class RuleExportServiceTest {
     @Mock SceneMapper sceneMapper;
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock DecisionDefinitionMapper decisionDefinitionMapper;
-    @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks RuleExportService sut;
 
     private RuleDefinition rule(long id, String code) {
@@ -88,7 +86,7 @@ class RuleExportServiceTest {
     private DecisionDefinition decision() {
         DecisionDefinition d = new DecisionDefinition();
         d.setCode("BLOCK"); d.setName("拦截"); d.setPriority(100); d.setDescription("拦截交易");
-        d.setActions("[{\"actionId\":\"a1\",\"actionType\":\"BLOCK_TRANSACTION\",\"sortOrder\":0,\"params\":{}}]");
+        d.setActions(List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, Map.of())));
         return d;
     }
 

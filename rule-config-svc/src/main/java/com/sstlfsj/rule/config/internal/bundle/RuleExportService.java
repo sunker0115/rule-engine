@@ -13,12 +13,11 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,14 +36,11 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class RuleExportService {
 
-    private static final TypeReference<List<Map<String, Object>>> OBJ_LIST_TYPE = new TypeReference<>() {};
-
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final SceneMapper sceneMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
-    private final ObjectMapper objectMapper;
 
     /** 按条件批量导出规则当前 ACTIVE 版本为 Bundle。 */
     @Transactional(readOnly = true)
@@ -137,15 +133,9 @@ public class RuleExportService {
     private List<String> collectActionTypes(List<DecisionDefinition> decisions) {
         Set<String> types = new LinkedHashSet<>();
         for (DecisionDefinition d : decisions) {
-            if (d.getActions() == null || d.getActions().isBlank()) continue;
-            try {
-                List<Map<String, Object>> actions = objectMapper.readValue(d.getActions(), OBJ_LIST_TYPE);
-                for (Map<String, Object> a : actions) {
-                    Object t = a.get("actionType");
-                    if (t != null) types.add(String.valueOf(t));
-                }
-            } catch (Exception ignored) {
-                // actions JSON 异常容错跳过，不阻断导出
+            if (d.getActions() == null) continue;
+            for (DecisionAction a : d.getActions()) {
+                if (a.actionType() != null) types.add(a.actionType());
             }
         }
         return new ArrayList<>(types);

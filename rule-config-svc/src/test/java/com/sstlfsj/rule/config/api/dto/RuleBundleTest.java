@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.api.dto;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
@@ -41,7 +42,7 @@ class RuleBundleTest {
                         "account.age", 1, "账户年龄", "ATTRIBUTE", "LONG", Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry(
                         "BLOCK", "拦截", 100, "拦截交易",
-                        "[{\"actionId\":\"a1\",\"actionType\":\"BLOCK_TRANSACTION\",\"sortOrder\":0,\"params\":{}}]")),
+                        List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, Map.of())))),
                 List.of("BLOCK_TRANSACTION"));
 
         String json = mapper.writeValueAsString(bundle);

@@ -101,6 +101,34 @@ class RuleVersionSnapshotTest {
     }
 
     @Test
+    void decisionAction_fields_areRetained() {
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "BLOCK_TRANSACTION", 0, Map.of("k", "v"));
+        assertEquals("a1", action.actionId());
+        assertEquals("BLOCK_TRANSACTION", action.actionType());
+        assertEquals(0, action.sortOrder());
+        assertEquals(Map.of("k", "v"), action.params());
+    }
+
+    @Test
+    void decisionAction_params_areImmutable() {
+        Map<String, Object> mutable = new java.util.HashMap<>();
+        mutable.put("limit", 10);
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "BLOCK_TRANSACTION", 0, mutable);
+        mutable.put("extra", "x");
+        assertEquals(1, action.params().size(), "构造后修改原始 map 不应影响 DecisionAction.params");
+    }
+
+    @Test
+    void decisionAction_nullParams_defaultToEmpty() {
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "BLOCK_TRANSACTION", 0, null);
+        assertNotNull(action.params());
+        assertTrue(action.params().isEmpty());
+    }
+
+    @Test
     void builder_basicFields_roundtrip() {
         RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
                 .ruleVersionId(99L)

@@ -141,7 +141,7 @@ public class RuleImportService {
                 d.setName(de.name());
                 d.setPriority(de.priority());
                 d.setDescription(de.description());
-                d.setActions(de.actions() == null ? "[]" : de.actions());
+                d.setActions(de.actions() == null ? List.of() : de.actions());
                 d.setStatus("ACTIVE");
                 d.setCreatedBy(actorId);
                 d.setCreatedAt(LocalDateTime.now());

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.api.dto;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
@@ -74,12 +75,12 @@ public record RuleBundle(
             Boolean allowProvided
     ) {}
 
-    /** decision 定义快照，对应 decision_definition 表（actions 为原始 JSON）。 */
+    /** decision 定义快照，对应 decision_definition 表（actions 为 typed 列表）。 */
     public record DecisionEntry(
             String code,
             String name,
             Integer priority,
             String description,
-            String actions
+            List<DecisionAction> actions
     ) {}
 }

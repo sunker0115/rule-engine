@@ -58,6 +58,20 @@ public record RuleVersionSnapshot(
     /** Decision 绑定配置快照。 */
     public record DecisionBinding(String decisionCode, int priority) {}
 
+    /**
+     * Decision 内单个 action 项，对应 decision_definition.actions JSON 数组元素。
+     *
+     * @param actionId   action 实例标识
+     * @param actionType actionType 路由键
+     * @param sortOrder  执行顺序，升序
+     * @param params     依 actionType 异构的开放参数（结构无定义，故为 Map）
+     */
+    public record DecisionAction(String actionId, String actionType, int sortOrder, Map<String, Object> params) {
+        public DecisionAction {
+            params = params == null ? Map.of() : Map.copyOf(params);
+        }
+    }
+
     /** @return 链式构建器，用于本地模式代码定义规则快照 */
     public static Builder builder() { return new Builder(); }
 

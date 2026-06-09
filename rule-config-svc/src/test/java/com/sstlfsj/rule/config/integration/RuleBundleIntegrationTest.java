@@ -15,6 +15,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,7 +99,7 @@ class RuleBundleIntegrationTest {
         DecisionDefinition decision = new DecisionDefinition();
         decision.setTenantId(SRC_TENANT); decision.setCode("BLOCK"); decision.setName("拦截");
         decision.setPriority(100); decision.setDescription("拦截交易");
-        decision.setActions("[{\"actionId\":\"a1\",\"actionType\":\"BLOCK_TRANSACTION\",\"sortOrder\":0,\"params\":{}}]");
+        decision.setActions(java.util.List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())));
         decision.setStatus("ACTIVE"); decision.setCreatedBy("seed"); decision.setCreatedAt(LocalDateTime.now());
         decisionDefinitionMapper.insert(decision);
 

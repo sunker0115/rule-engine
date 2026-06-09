@@ -15,6 +15,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
@@ -68,7 +69,7 @@ class RuleImportServiceTest {
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
                         metricSourceType, "LONG", java.util.Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
-                        "[{\"actionType\":\"BLOCK_TRANSACTION\"}]")),
+                        List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())))),
                 List.of("BLOCK_TRANSACTION"));
     }
 
@@ -143,7 +144,7 @@ class RuleImportServiceTest {
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
                         "ATTRIBUTE", "FLOAT", java.util.Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
-                        "[{\"actionType\":\"BLOCK_TRANSACTION\"}]")),
+                        List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())))),
                 List.of("BLOCK_TRANSACTION"));
 
         RuleImportResult r = sut.importBundle("1", bad, "dev");
