@@ -8,13 +8,16 @@ import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.trace.DryRunTraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
+import com.sstlfsj.rule.observability.internal.trace.TraceWriterProperties;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import tools.jackson.databind.ObjectMapper;
 
 /** 自动装配规则可观测性模块（指标 + TraceWriter + DryRunTraceWriter）。 */
 @AutoConfiguration
+@EnableConfigurationProperties(TraceWriterProperties.class)
 public class ObservabilityAutoConfiguration {
 
     /**
@@ -23,8 +26,10 @@ public class ObservabilityAutoConfiguration {
      */
     @Bean
     @ConditionalOnProperty(name = "engine.rule.trace.enabled", havingValue = "true", matchIfMissing = true)
-    public TraceWriter traceWriterDb(NodeTraceMapper nodeTraceMapper, ObjectMapper objectMapper) {
-        return new TraceWriterDbImpl(10000, 500, 200, nodeTraceMapper, objectMapper);
+    public TraceWriter traceWriterDb(NodeTraceMapper nodeTraceMapper, ObjectMapper objectMapper,
+                                     TraceWriterProperties props) {
+        return new TraceWriterDbImpl(props.getQueueCapacity(), props.getBatchSize(),
+                props.getFlushIntervalMs(), nodeTraceMapper, objectMapper);
     }
 
     /** 当 engine.rule.trace.enabled=false 时注册空实现，用于测试或 SDK 嵌入模式。 */
@@ -41,8 +46,10 @@ public class ObservabilityAutoConfiguration {
     @Bean
     @ConditionalOnProperty(name = "engine.rule.trace.enabled", havingValue = "true", matchIfMissing = true)
     public DryRunTraceWriter dryRunTraceWriterDb(DryRunNodeTraceMapper dryRunNodeTraceMapper,
-                                                 ObjectMapper objectMapper) {
-        return new DryRunTraceWriterDbImpl(10000, 500, 200, dryRunNodeTraceMapper, objectMapper);
+                                                 ObjectMapper objectMapper,
+                                                 TraceWriterProperties props) {
+        return new DryRunTraceWriterDbImpl(props.getQueueCapacity(), props.getBatchSize(),
+                props.getFlushIntervalMs(), dryRunNodeTraceMapper, objectMapper);
     }
 
     /** 当 engine.rule.trace.enabled=false 时注册空实现，与 noopTraceWriter 对称。 */

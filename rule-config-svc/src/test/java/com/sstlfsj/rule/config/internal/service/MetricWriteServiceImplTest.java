@@ -58,6 +58,8 @@ class MetricWriteServiceImplTest {
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
     @Mock SceneMapper sceneMapper;
     @Spy  ObjectMapper objectMapper = JsonMapper.builder().build();
+    @Spy  com.sstlfsj.rule.config.internal.MetricProperties metricProperties =
+            new com.sstlfsj.rule.config.internal.MetricProperties();
     @InjectMocks MetricWriteServiceImpl sut;
 
     private static final Long TENANT = 1L;
@@ -114,6 +116,24 @@ class MetricWriteServiceImplTest {
 
         // 断言 audit_log 写入一次
         verify(auditLogMapper, times(1)).insert(any(AuditLog.class));
+    }
+
+    @Test
+    void create_nullCacheTtl_usesMetricPropertiesDefault() {
+        // cacheTtlSeconds 为 null 时回退到 MetricProperties.defaultCacheTtlSeconds（默认 60）
+        doAnswer(inv -> {
+            MetricDefinition m = inv.getArgument(0);
+            m.setId(200L);
+            return 1;
+        }).when(metricDefinitionMapper).insert(any(MetricDefinition.class));
+
+        MetricWriteCommand cmdNullTtl = new MetricWriteCommand(
+                "用户年龄", "ATTRIBUTE", "LONG", Map.of(), null, false);
+        sut.create(TENANT, CODE, cmdNullTtl, ACTOR);
+
+        ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
+        verify(metricDefinitionMapper, times(1)).insert(captor.capture());
+        assertThat(captor.getValue().getCacheTtlSeconds()).isEqualTo(60);
     }
 
     // ── 枚举列 app 校验（DB ENUM 去除后由 app 兜底）─────────────────────────────

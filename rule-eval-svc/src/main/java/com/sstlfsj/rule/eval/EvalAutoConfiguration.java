@@ -44,7 +44,9 @@ import java.util.concurrent.Executors;
 @ComponentScan("com.sstlfsj.rule.eval.internal")
 @org.springframework.boot.context.properties.EnableConfigurationProperties({
         com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
-        com.sstlfsj.rule.eval.internal.action.ActionIdempotencyProperties.class})
+        com.sstlfsj.rule.eval.internal.action.ActionIdempotencyProperties.class,
+        com.sstlfsj.rule.eval.internal.TraceProperties.class,
+        com.sstlfsj.rule.eval.internal.async.AuditProperties.class})
 public class EvalAutoConfiguration {
 
     /**
@@ -164,7 +166,7 @@ public class EvalAutoConfiguration {
      * @param scorecardExecutor     SCORECARD executor
      * @param decisionTreeExecutor  DECISION_TREE executor
      * @param decisionTableExecutor DECISION_TABLE executor
-     * @param traceEnabled          全局 NodeTrace 收集开关（engine.rule.trace.enabled，默认 true）
+     * @param traceProperties       全局 NodeTrace 收集开关配置（engine.rule.trace.enabled，默认 true）
      * @return EvalEngine 实例
      */
     @Bean
@@ -176,7 +178,7 @@ public class EvalAutoConfiguration {
             ScorecardExecutor scorecardExecutor,
             DecisionTreeExecutor decisionTreeExecutor,
             DecisionTableExecutor decisionTableExecutor,
-            @org.springframework.beans.factory.annotation.Value("${engine.rule.trace.enabled:true}") boolean traceEnabled) {
+            com.sstlfsj.rule.eval.internal.TraceProperties traceProperties) {
         Map<String, PreGate> gateMap = new HashMap<>();
         if (preGates != null) {
             preGates.forEach(g -> gateMap.put(g.gateType(), g));
@@ -186,7 +188,7 @@ public class EvalAutoConfiguration {
                        RuleKind.SCORECARD.tag(),      scorecardExecutor,
                        RuleKind.DECISION_TREE.tag(),  decisionTreeExecutor,
                        RuleKind.DECISION_TABLE.tag(), decisionTableExecutor),
-                traceEnabled);
+                traceProperties.isEnabled());
     }
 
     /**

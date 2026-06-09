@@ -50,28 +50,27 @@ management:
 
 engine:
   rule:
-    matcher:
-      cache-refresh-interval-seconds: 30
-    scene:
-      watch-interval-seconds: 60
-    idempotency:
-      redis-ttl-seconds: 86400
+    # matcher.cache-refresh-interval-seconds 已删：索引改事件驱动(SceneIndexEventListener)，无定时刷新
+    # scene.watch-interval-seconds 已删：同上，事件驱动
+    # idempotency.* 已删：幂等用 Caffeine，无 Redis；TTL 走 engine.rule.action.idempotency.*
     trace:
       enabled: true
       queue-capacity: 10000
       batch-size: 500
       flush-interval-ms: 200
-      consumer-threads: 2
+      # trace.consumer-threads 已删：TraceWriter 单虚拟线程，无多消费者
     metric:
       default-cache-ttl-seconds: 60
     action:
+      # 规划中：action 派发超时未实现
       default-timeout-ms: 3000
+    # 规划中：数据保留/清理 job 未实现
     retention:
       evaluation-session-days: 90
       node-trace-days: 30
       dry-run-session-days: 7
-    rollout:
-      hash-seed: 42
+    # rollout.hash-seed 已删：RolloutPreGate 用 murmur3_fixed + subjectId:experimentId/ruleVersionId 区分，无全局 seed
+    # 规划中：告警阈值逻辑未实现
     observability:
       eval-error-rate-threshold: 0.05
       trace-queue-full-threshold: 0.8

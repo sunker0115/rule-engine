@@ -55,10 +55,9 @@ public class AuditPersister implements InitializingBean, DisposableBean {
 
     @org.springframework.beans.factory.annotation.Autowired
     public AuditPersister(EvaluationSessionMapper sessionMapper, TraceWriter traceWriter,
-                          ObjectMapper objectMapper,
-                          @org.springframework.beans.factory.annotation.Value(
-                                  "${engine.rule.audit.context-snapshot.enabled:false}") boolean captureContextSnapshot) {
-        this(10000, 500, 200, sessionMapper, traceWriter, objectMapper, captureContextSnapshot);
+                          ObjectMapper objectMapper, AuditProperties auditProperties) {
+        this(10000, 500, 200, sessionMapper, traceWriter, objectMapper,
+                auditProperties.getContextSnapshot().isEnabled());
     }
 
     @Override

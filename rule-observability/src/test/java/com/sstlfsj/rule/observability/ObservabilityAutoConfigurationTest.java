@@ -8,6 +8,7 @@ import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.trace.DryRunTraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
+import com.sstlfsj.rule.observability.internal.trace.TraceWriterProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -94,5 +95,15 @@ class ObservabilityAutoConfigurationTest {
                     assertThat(ctx).hasSingleBean(DryRunTraceWriter.class);
                     assertThat(ctx.getBean(DryRunTraceWriter.class)).isInstanceOf(NoopDryRunTraceWriter.class);
                 });
+    }
+
+    @Test
+    void traceWriterProperties_registeredWithHardcodedDefaults() {
+        runnerWithMapper.run(ctx -> {
+            TraceWriterProperties props = ctx.getBean(TraceWriterProperties.class);
+            assertThat(props.getQueueCapacity()).isEqualTo(10000);
+            assertThat(props.getBatchSize()).isEqualTo(500);
+            assertThat(props.getFlushIntervalMs()).isEqualTo(200L);
+        });
     }
 }

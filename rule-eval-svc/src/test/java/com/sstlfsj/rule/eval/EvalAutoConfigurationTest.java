@@ -6,6 +6,7 @@ import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.action.ActionIdempotencyGuard;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.action.SceneActionBindingIndex;
+import com.sstlfsj.rule.eval.internal.TraceProperties;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
@@ -132,7 +133,7 @@ class EvalAutoConfigurationTest {
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
-                true);
+                new TraceProperties());
         assertNotNull(engine);
     }
 
@@ -146,7 +147,7 @@ class EvalAutoConfigurationTest {
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
-                true);
+                new TraceProperties());
         assertNotNull(engine);
     }
 

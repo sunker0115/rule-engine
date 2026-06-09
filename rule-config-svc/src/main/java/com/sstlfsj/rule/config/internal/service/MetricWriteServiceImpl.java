@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
+import com.sstlfsj.rule.config.internal.MetricProperties;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricEnums;
@@ -43,6 +44,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
     private final ObjectMapper objectMapper;
+    private final MetricProperties metricProperties;
 
     @Override
     public Long create(Long tenantId, String metricCode, MetricWriteCommand cmd, String actorId) {
@@ -187,7 +189,8 @@ public class MetricWriteServiceImpl implements MetricWriteService {
             // Object → JSON 序列化不应失败，属于内部错误
             throw new IllegalStateException("params 序列化失败", e);
         }
-        m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
+        m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null
+                ? metricProperties.getDefaultCacheTtlSeconds() : cmd.cacheTtlSeconds());
         m.setAllowProvided(cmd.allowProvided());
     }
 
