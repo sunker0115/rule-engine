@@ -80,7 +80,7 @@ class RuleExportServiceTest {
     private MetricDefinition metric() {
         MetricDefinition m = new MetricDefinition();
         m.setMetricCode("account.age"); m.setVersion(1); m.setName("账户年龄");
-        m.setSourceType("ATTRIBUTE"); m.setDataType("LONG"); m.setParams("{}");
+        m.setSourceType("ATTRIBUTE"); m.setDataType("LONG"); m.setParams(java.util.Map.of());
         m.setCacheTtlSeconds(3600); m.setAllowProvided(true);
         return m;
     }

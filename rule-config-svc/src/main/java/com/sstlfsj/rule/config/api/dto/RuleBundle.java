@@ -69,7 +69,7 @@ public record RuleBundle(
             String name,
             String sourceType,
             String dataType,
-            String params,
+            Map<String, Object> params,
             Integer cacheTtlSeconds,
             Boolean allowProvided
     ) {}

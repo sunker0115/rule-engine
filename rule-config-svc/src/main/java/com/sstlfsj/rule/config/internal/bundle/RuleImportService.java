@@ -114,7 +114,7 @@ public class RuleImportService {
                 m.setName(me.name());
                 m.setSourceType(me.sourceType());
                 m.setDataType(me.dataType());
-                m.setParams(me.params() == null ? "{}" : me.params());
+                m.setParams(me.params() != null ? me.params() : java.util.Map.of());
                 m.setCacheTtlSeconds(me.cacheTtlSeconds() == null ? 60 : me.cacheTtlSeconds());
                 m.setAllowProvided(Boolean.TRUE.equals(me.allowProvided()));
                 m.setStatus("ACTIVE");

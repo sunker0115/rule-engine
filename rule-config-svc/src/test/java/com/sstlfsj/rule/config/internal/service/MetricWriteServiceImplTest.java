@@ -70,22 +70,6 @@ class MetricWriteServiceImplTest {
         return new MetricWriteCommand("用户年龄", "ATTRIBUTE", "LONG", Map.of(), 60, false);
     }
 
-    // ── applyCommandFields 序列化异常包装 ────────────────────────────────────────
-
-    @Test
-    void create_paramsSerializationFails_throwsIllegalStateException() throws Exception {
-        // 模拟 objectMapper.writeValueAsString 抛 JacksonException，验证包装为 IllegalStateException
-        doThrow(new tools.jackson.core.exc.StreamWriteException(null, "模拟序列化失败"))
-                .when(objectMapper).writeValueAsString(any());
-
-        MetricWriteCommand cmdWithParams = new MetricWriteCommand(
-                "用户年龄", "ATTRIBUTE", "LONG", Map.of("k", "v"), 60, false);
-
-        assertThatThrownBy(() -> sut.create(TENANT, CODE, cmdWithParams, ACTOR))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("params 序列化失败");
-    }
-
     // ── create ────────────────────────────────────────────────────────────────
 
     @Test

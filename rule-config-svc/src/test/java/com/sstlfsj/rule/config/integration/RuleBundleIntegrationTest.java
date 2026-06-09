@@ -91,7 +91,7 @@ class RuleBundleIntegrationTest {
         MetricDefinition metric = new MetricDefinition();
         metric.setTenantId(SRC_TENANT); metric.setMetricCode("account.age"); metric.setVersion(1);
         metric.setName("账户年龄"); metric.setSourceType("ATTRIBUTE"); metric.setDataType("LONG");
-        metric.setParams("{}"); metric.setCacheTtlSeconds(3600); metric.setAllowProvided(true);
+        metric.setParams(java.util.Map.of()); metric.setCacheTtlSeconds(3600); metric.setAllowProvided(true);
         metric.setStatus("ACTIVE"); metric.setCreatedBy("seed"); metric.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(metric);
 

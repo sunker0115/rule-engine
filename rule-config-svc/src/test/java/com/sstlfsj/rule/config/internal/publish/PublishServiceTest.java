@@ -696,7 +696,7 @@ class PublishServiceTest {
         md.setMetricCode("balance");
         md.setDataType("LONG");
         md.setSourceType("SQL_AGGREGATE");
-        md.setParams("{\"datasource\":\"ro\",\"sql\":\"SELECT 1 WHERE t >= NOW() - INTERVAL 7 DAY\"}");
+        md.setParams(java.util.Map.of("datasource", "ro", "sql", "SELECT 1 WHERE t >= NOW() - INTERVAL 7 DAY"));
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
 
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))

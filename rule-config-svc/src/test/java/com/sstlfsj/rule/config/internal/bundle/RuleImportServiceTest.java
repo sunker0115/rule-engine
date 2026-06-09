@@ -66,7 +66,7 @@ class RuleImportServiceTest {
                         "PUSH", "HIGHEST_PRIORITY", java.util.List.of("transfer"),
                         java.util.List.of(), java.util.Map.of(), 1)),
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
-                        metricSourceType, "LONG", "{}", 3600, true)),
+                        metricSourceType, "LONG", java.util.Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
                         "[{\"actionType\":\"BLOCK_TRANSACTION\"}]")),
                 List.of("BLOCK_TRANSACTION"));
@@ -141,7 +141,7 @@ class RuleImportServiceTest {
                         "PUSH", "HIGHEST_PRIORITY", java.util.List.of("transfer"),
                         java.util.List.of(), java.util.Map.of(), 1)),
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
-                        "ATTRIBUTE", "FLOAT", "{}", 3600, true)),
+                        "ATTRIBUTE", "FLOAT", java.util.Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
                         "[{\"actionType\":\"BLOCK_TRANSACTION\"}]")),
                 List.of("BLOCK_TRANSACTION"));

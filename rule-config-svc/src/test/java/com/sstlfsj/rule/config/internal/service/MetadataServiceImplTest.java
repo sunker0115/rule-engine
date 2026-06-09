@@ -120,12 +120,11 @@ class MetadataServiceImplTest {
         row.setDataType("DECIMAL");
         row.setAllowProvided(false);
         row.setCacheTtlSeconds(60);
-        row.setParams("{\"window\":\"30d\"}");
+        row.setParams(java.util.Map.of("window", "30d"));
         when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(row));
 
         MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
-                new tools.jackson.databind.ObjectMapper());
+                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
 
         List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of());
 
@@ -151,8 +150,7 @@ class MetadataServiceImplTest {
         when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(row));
 
         MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
-                new tools.jackson.databind.ObjectMapper());
+                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
 
         List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of());
         assertThat(defs.get(0).cacheTtlSeconds()).isZero();
@@ -189,8 +187,7 @@ class MetadataServiceImplTest {
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(riskScore);
 
         MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
-                new tools.jackson.databind.ObjectMapper());
+                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
 
         List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of("fraud"));
 
@@ -217,8 +214,7 @@ class MetadataServiceImplTest {
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
         MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
-                new tools.jackson.databind.ObjectMapper());
+                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
 
         // scenes 给了但规则无 metric 依赖 → 空列表（收紧语义，区别于旧的全量返回）
         assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();
@@ -229,8 +225,7 @@ class MetadataServiceImplTest {
         when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of());   // scene code 不存在
 
         MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
-                new tools.jackson.databind.ObjectMapper());
+                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
 
         assertThat(service.listMetricDefinitions("1", List.of("nope"))).isEmpty();
     }
@@ -276,8 +271,7 @@ class MetadataServiceImplTest {
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(riskV1);
 
         MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
-                new tools.jackson.databind.ObjectMapper());
+                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
 
         List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of("fraud"));
 
@@ -316,8 +310,7 @@ class MetadataServiceImplTest {
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(null);
 
         MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper,
-                new tools.jackson.databind.ObjectMapper());
+                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
 
         // 容错：跳过缺失定义，不抛异常，返回空列表
         assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();

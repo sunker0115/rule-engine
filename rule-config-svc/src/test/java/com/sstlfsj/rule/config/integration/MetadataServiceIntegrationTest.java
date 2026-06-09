@@ -119,7 +119,7 @@ class MetadataServiceIntegrationTest {
         m.setName(code);
         m.setSourceType(sourceType);
         m.setDataType(dataType);
-        m.setParams("{}");
+        m.setParams(java.util.Map.of());
         m.setCacheTtlSeconds(60);
         m.setAllowProvided(false);
         m.setStatus("ACTIVE");

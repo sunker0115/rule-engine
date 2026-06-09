@@ -179,7 +179,7 @@ public class PublishService {
                     ? metricResourceCatalog.datasourceNames() : null;
             java.util.Set<String> epNames = metricResourceCatalog != null
                     ? metricResourceCatalog.endpointNames() : null;
-            new MetricSafetyValidator(objectMapper).validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
+            new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
         }
 
         // 5. 计算新版本号（max(version)+1）

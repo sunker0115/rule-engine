@@ -2,8 +2,6 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.kernel.api.model.SourceType;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -25,12 +23,6 @@ class MetricSafetyValidator {
             "(?i)\\b(NOW|SYSDATE)\\s*\\(|(?i)\\b(CURRENT_TIMESTAMP|CURRENT_DATE)\\b");
     private static final Pattern DOLLAR_BRACE = Pattern.compile("\\$\\{");
 
-    private final ObjectMapper objectMapper;
-
-    MetricSafetyValidator(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
-
     /**
      * 校验一批 metric 定义。
      *
@@ -41,7 +33,7 @@ class MetricSafetyValidator {
      */
     void validate(List<MetricDefinition> metrics, Set<String> datasourceNames, Set<String> endpointNames) {
         for (MetricDefinition m : metrics) {
-            Map<String, Object> params = parse(m.getParams());
+            Map<String, Object> params = m.getParams() != null ? m.getParams() : Map.of();
             switch (m.getSourceType() == null ? "" : m.getSourceType()) {
                 case SourceType.SQL_AGGREGATE -> validateSql(m, params, datasourceNames);
                 case SourceType.EXTERNAL_HTTP -> validateHttp(m, params, endpointNames);
@@ -79,15 +71,6 @@ class MetricSafetyValidator {
                 throw new IllegalArgumentException(
                         "metric=" + m.getMetricCode() + " 引用未注册的 endpoint: " + ep);
             }
-        }
-    }
-
-    private Map<String, Object> parse(String json) {
-        if (json == null || json.isBlank()) return Map.of();
-        try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            return Map.of();
         }
     }
 }

@@ -38,7 +38,7 @@ class RuleBundleTest {
                         List.of(new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null)),
                         Map.of(), 1)),
                 List.of(new RuleBundle.MetricEntry(
-                        "account.age", 1, "账户年龄", "ATTRIBUTE", "LONG", "{}", 3600, true)),
+                        "account.age", 1, "账户年龄", "ATTRIBUTE", "LONG", Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry(
                         "BLOCK", "拦截", 100, "拦截交易",
                         "[{\"actionId\":\"a1\",\"actionType\":\"BLOCK_TRANSACTION\",\"sortOrder\":0,\"params\":{}}]")),

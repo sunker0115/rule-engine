@@ -1,8 +1,6 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import lombok.RequiredArgsConstructor;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.internal.MetricProperties;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
@@ -43,7 +41,6 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     private final RuleVersionMapper ruleVersionMapper;
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
-    private final ObjectMapper objectMapper;
     private final MetricProperties metricProperties;
 
     @Override
@@ -182,13 +179,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setName(cmd.name());
         m.setSourceType(cmd.sourceType());
         m.setDataType(cmd.dataType());
-        try {
-            // params 为 Map 对象，序列化为 JSON 字符串存库；null 时存空对象
-            m.setParams(cmd.params() == null ? "{}" : objectMapper.writeValueAsString(cmd.params()));
-        } catch (JacksonException e) {
-            // Object → JSON 序列化不应失败，属于内部错误
-            throw new IllegalStateException("params 序列化失败", e);
-        }
+        m.setParams(cmd.params() != null ? cmd.params() : Map.of());
         m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null
                 ? metricProperties.getDefaultCacheTtlSeconds() : cmd.cacheTtlSeconds());
         m.setAllowProvided(cmd.allowProvided());

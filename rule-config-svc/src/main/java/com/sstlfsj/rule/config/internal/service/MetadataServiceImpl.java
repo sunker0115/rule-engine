@@ -15,8 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,7 +34,6 @@ class MetadataServiceImpl implements MetadataService {
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final RuleVersionMapper ruleVersionMapper;
-    private final ObjectMapper objectMapper;
 
     @Override
     public MetadataResponse getSceneMetadata(String tenantId, String sceneCode) {
@@ -119,7 +116,7 @@ class MetadataServiceImpl implements MetadataService {
 
     private MetricDescriptor toDescriptor(MetricDefinition m) {
         // 把 dataType 一并塞进 params，供宿主 handler 结果强转使用（镜像 DbMetricDefinitionResolver）
-        Map<String, Object> params = new HashMap<>(parseParams(m.getParams()));
+        Map<String, Object> params = new HashMap<>(m.getParams() != null ? m.getParams() : Map.of());
         params.put("dataType", m.getDataType());
         return new MetricDescriptor(
                 m.getMetricCode(),
@@ -130,12 +127,4 @@ class MetadataServiceImpl implements MetadataService {
                 params);
     }
 
-    private Map<String, Object> parseParams(String json) {
-        if (json == null || json.isBlank()) return Map.of();
-        try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            return Map.of();
-        }
-    }
 }
