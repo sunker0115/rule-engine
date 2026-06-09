@@ -14,6 +14,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
 import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import org.junit.jupiter.api.Test;
 
@@ -85,6 +86,23 @@ class DecisionTreeTraceTest {
         assertThat(leafTrace.nodeType()).isEqualTo("DecisionLeafNode");
         assertThat(leafTrace.result()).isTrue();
         assertThat(leafTrace.ruleVersionId()).isEqualTo(7L);
+    }
+
+    @Test
+    void treeTrace_xorCondition_unsupported_errorsNoEvaluator() {
+        // 决策树条件不支持 XOR：显式置 NO_EVALUATOR ERROR（设计决策），整规则 miss、不猜分支
+        ConditionNode a = new ConditionNode("GTE", "score", "score>=60",
+                Map.of("threshold", 60), null, "LONG");
+        XorNode xorCond = new XorNode(List.of(a), null);
+        IfNode root = new IfNode(xorCond, new DecisionLeafNode("APPROVE", "APPROVE"),
+                new DecisionLeafNode("REJECT", "REJECT"));
+        DecisionTreeExecutor exec = new DecisionTreeExecutor(Map.of("GTE", gte));
+        EvalContext ctx = ctxWith(Map.of("score", new MetricValue(100L, "LONG", "PROVIDED")));
+
+        EvalResult r = exec.execute(treeSnap(root), ctx);
+
+        assertThat(r.ruleHit()).isFalse();
+        assertThat(r.errorCode()).isEqualTo("NO_EVALUATOR");
     }
 
     @Test

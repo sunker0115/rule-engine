@@ -122,6 +122,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                 }
                 yield result;
             }
+            // 决策树条件显式不支持 XOR：置 NO_EVALUATOR ERROR（设计决策,非遗漏；XOR 仅 AST_BOOLEAN/InterpretedExecutor 支持）
+            case XorNode ignored -> ConditionOutcome.error(EvalErrorCode.NO_EVALUATOR);
             default -> ConditionOutcome.error(EvalErrorCode.NO_EVALUATOR);
         };
     }
