@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.kernel.api.model;
 
-/** 规则/执行器种类(契约值,== DB rule_definition.kind / rule_version.kind ENUM,作 executor map key)。 */
+/** 规则/执行器种类(契约值,== DB rule_definition.kind / rule_version.kind VARCHAR 列,作 executor map key)。 */
 public enum RuleKind {
     AST_BOOLEAN, SCORECARD, DECISION_TREE, DECISION_TABLE, EXPRESSION_SCRIPT;
 
