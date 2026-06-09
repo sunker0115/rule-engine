@@ -7,11 +7,11 @@
 | 目录 | 职责 | 修改原则 |
 |---|---|---|
 | `docs/` | 产品设计:`00-decisions` / `01-concepts` / ... / `10-api-contract` + `examples/` | 改前用 `doc-consistency-review` skill 扫文档自洽性 |
-| `src/`(待建) | 代码骨架,按 `docs/09-skeleton.md` 规划落地 | 改动审查派 `rule-engine-reviewer` agent |
+| `rule-*/`（Maven 多模块） | 代码实现。核心:`rule-kernel`(纯 Java SPI+模型+求值内核,无 Spring,GraalVM native 硬约束)、`rule-config-svc`(配置写:scene/rule/metric/binding CRUD + 发布)、`rule-eval-svc`(评估+取数+action 派发+异步落库)、`rule-api`(HTTP `/admin·api·sdk/v1`)、`rule-app`(装配 + Modulith 边界 + 启动);辅助:`rule-observability`/`rule-audit-svc`/`rule-job-svc`/`rule-job-xxl`/`rule-sdk(-spring-boot-starter)`/`rule-mybatis-native`/`rule-benchmark` | 改动审查派 `rule-engine-reviewer` agent |
 
 ## 专用 review agent(只读)
 
-- **改 `docs/**` 或将来的 `src/**`** → 显式调用 `rule-engine-reviewer` 审"代码 ↔ 文档对齐"。该 agent 仅在显式调用时启用,不要主动触发。
+- **改 `docs/**` 或 `rule-*/` 代码** → 显式调用 `rule-engine-reviewer` 审"代码 ↔ 文档对齐"。该 agent 仅在显式调用时启用,不要主动触发。
 
 ## 代码注释规范
 
@@ -32,6 +32,8 @@
 4. **请求参数同样适用**：controller 收 typed 请求 DTO，直传 service 的 typed 入参；不得 typed→String→typed 来回。
 5. **DTO ↔ service/实体 转换走 MapStruct**（`web/admin/convert/` 包），不在 controller/service 内联手写（字段极少的一次性映射可手写，见全局 §5）。
 6. **封闭取值用 enum，不用魔法字符串**：状态 / 生命周期 / 类型判别等**取值有限且封闭**的字段（如 rule/scene/metric 的 status `DRAFT`/`ACTIVE`/`PUBLISHED`/`DISABLED`/`SUPERSEDED`、`actorType`、`kind` 等），一律定义 enum（或既有常量集），**禁止散落字符串字面量**。仅当集合**开放可扩展**（如 conditionType / actionType 走 SPI）时才用常量类而非 enum。
+   - **DB 列用 VARCHAR，不用 MySQL `ENUM` 类型**（ENUM 加值要 ALTER + 与 app 双重定义；VARCHAR 后允许值校验上移 app，单一真相源在 enum，见 V1_11）。
+   - **实体字段用 Java enum**（枚举名 == varchar 值，MyBatis-Plus 默认按 name 转换）；**出 VO/DTO/API 契约边界 `.name()` 转 String**（对外契约保持 String 不变，代码内是 enum）。
 
 新增/改动相关代码时以本节为准；既有 String/Object/Map/魔法字符串违例在触及时顺手收敛。
 
@@ -55,6 +57,7 @@
 
 - 每个 Task 提交前必须运行该模块的所有测试，全部通过才能 commit。
 - 使用 `mvn-env` skill 设置环境后执行：`$MVN -pl <module> -am test`
+- **跨模块改动必须带 `-am`**：否则用 `~/.m2` 里的旧 jar，出 `NoSuchMethodError` / 编译假象。一轮改动最终用全量 `$MVN clean test`（无 `-pl`）兜底——只有 `clean` 才强制重编译所有 test 类，增量编译会漏掉过期 test。
 - 有测试失败不得用 `-DskipTests` 绕过，必须修复后再提交。
 
 ## 文档纪律
