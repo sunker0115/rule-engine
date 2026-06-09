@@ -94,7 +94,6 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
      * @param sessionId   评估会话 ID
      * @param tenantId    租户 ID
      * @param pathPrefix  父节点路径前缀（根节点传空串）
-     * @param indexOffset 当前层起始下标（通常为 0）
      * @param out         收集结果的输出列表
      */
     private void flattenToList(List<NodeTrace> traces, Long sessionId, Long tenantId,
