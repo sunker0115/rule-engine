@@ -27,4 +27,29 @@ public class RuleDefinition {
     private java.time.LocalDateTime createdAt;
     private String updatedBy;
     private java.time.LocalDateTime updatedAt;
+
+    /**
+     * 构造草稿态规则定义：status 固定为 DRAFT、createdAt 取当前时刻，其余业务字段由入参给定。
+     *
+     * @param tenantId  租户 id
+     * @param sceneId   场景 id
+     * @param code      规则编码
+     * @param name      规则名称
+     * @param kind      规则类型标签
+     * @param createdBy 创建人
+     * @return 草稿态 RuleDefinition（id 由插入时回填）
+     */
+    public static RuleDefinition draft(Long tenantId, Long sceneId, String code, String name,
+                                       String kind, String createdBy) {
+        RuleDefinition rd = new RuleDefinition();
+        rd.setTenantId(tenantId);
+        rd.setSceneId(sceneId);
+        rd.setCode(code);
+        rd.setName(name);
+        rd.setStatus("DRAFT");
+        rd.setKind(kind);
+        rd.setCreatedBy(createdBy);
+        rd.setCreatedAt(java.time.LocalDateTime.now());
+        return rd;
+    }
 }

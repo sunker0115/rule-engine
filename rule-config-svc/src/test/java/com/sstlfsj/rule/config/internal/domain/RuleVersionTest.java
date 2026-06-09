@@ -52,4 +52,41 @@ class RuleVersionTest {
         assertNull(ver.getPublishedAt());
         assertNull(ver.getCreatedAt());
     }
+
+    @Test
+    void draftV1_setsBusinessDefaults() {
+        AstNode ast = new AndNode(List.of(), null, null);
+        RuleVersion ver = RuleVersion.draftV1(
+                10L, ast,
+                List.of(new DecisionBinding("BLOCK", 100)),
+                List.of(new PreGateConfig("ROLLOUT", Map.of("percentage", 50))),
+                List.of("payment.initiated"), "AST_BOOLEAN");
+
+        assertEquals(10L, ver.getRuleDefinitionId());
+        assertSame(ast, ver.getConditionAst());
+        assertEquals("BLOCK", ver.getDecisionBindings().getFirst().decisionCode());
+        assertEquals("ROLLOUT", ver.getPreGates().getFirst().gateType());
+        assertEquals("AST_BOOLEAN", ver.getKind());
+        assertEquals(List.of("payment.initiated"), ver.getTriggerEventTypes());
+        // 草稿默认：version=1、status=DRAFT、metricDependencies 空、createdAt 已赋值
+        assertEquals(1L, ver.getVersion());
+        assertEquals("DRAFT", ver.getStatus());
+        assertTrue(ver.getMetricDependencies().isEmpty());
+        assertNotNull(ver.getCreatedAt());
+    }
+
+    @Test
+    void draftV1_nullArgsFallBackToEmpty() {
+        RuleVersion ver = RuleVersion.draftV1(10L, null, null, null, null, "AST_BOOLEAN");
+
+        // conditionAst null 兜底为空 AndNode，各 list null 兜底为空
+        assertInstanceOf(AndNode.class, ver.getConditionAst());
+        assertTrue(((AndNode) ver.getConditionAst()).children().isEmpty());
+        assertTrue(ver.getDecisionBindings().isEmpty());
+        assertTrue(ver.getPreGates().isEmpty());
+        assertTrue(ver.getTriggerEventTypes().isEmpty());
+        assertTrue(ver.getMetricDependencies().isEmpty());
+        assertEquals(1L, ver.getVersion());
+        assertEquals("DRAFT", ver.getStatus());
+    }
 }

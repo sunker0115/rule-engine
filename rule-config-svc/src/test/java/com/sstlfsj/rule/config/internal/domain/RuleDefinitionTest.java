@@ -45,4 +45,23 @@ class RuleDefinitionTest {
         assertNull(def.getPublishedAt());
         assertNull(def.getCreatedAt());
     }
+
+    @Test
+    void draft_setsBusinessDefaults() {
+        RuleDefinition def = RuleDefinition.draft(1L, 5L, "rule.demo", "测试规则", "AST_BOOLEAN", "operator1");
+
+        assertEquals(1L, def.getTenantId());
+        assertEquals(5L, def.getSceneId());
+        assertEquals("rule.demo", def.getCode());
+        assertEquals("测试规则", def.getName());
+        assertEquals("AST_BOOLEAN", def.getKind());
+        assertEquals("operator1", def.getCreatedBy());
+        // 草稿默认：status=DRAFT、createdAt 已赋值
+        assertEquals("DRAFT", def.getStatus());
+        assertNotNull(def.getCreatedAt());
+        // 未涉及字段保持 null
+        assertNull(def.getId());
+        assertNull(def.getCurrentVersion());
+        assertNull(def.getPublishedAt());
+    }
 }

@@ -277,30 +277,12 @@ public class PublishService {
         }
 
         // 4. INSERT rule_definition（status=DRAFT）
-        RuleDefinition rd = new RuleDefinition();
-        rd.setTenantId(tenantId);
-        rd.setSceneId(scene.getId());
-        rd.setCode(code);
-        rd.setName(name);
-        rd.setStatus("DRAFT");
-        rd.setKind(effectiveKind);
-        rd.setCreatedBy(actorId);
-        rd.setCreatedAt(LocalDateTime.now());
+        RuleDefinition rd = RuleDefinition.draft(tenantId, scene.getId(), code, name, effectiveKind, actorId);
         ruleDefinitionMapper.insert(rd);
 
         // 5. INSERT rule_version（version=1，status=DRAFT）
-        RuleVersion rv = new RuleVersion();
-        rv.setRuleDefinitionId(rd.getId());
-        rv.setVersion(1L);
-        rv.setConditionAst(conditionAst != null ? conditionAst
-                : new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null));
-        rv.setDecisionBindings(decisionBindings != null ? decisionBindings : java.util.List.of());
-        rv.setPreGates(preGates != null ? preGates : java.util.List.of());
-        rv.setKind(effectiveKind);
-        rv.setTriggerEventTypes(triggerEventTypes != null ? triggerEventTypes : java.util.List.of());
-        rv.setMetricDependencies(java.util.List.of());
-        rv.setStatus("DRAFT");
-        rv.setCreatedAt(LocalDateTime.now());
+        RuleVersion rv = RuleVersion.draftV1(rd.getId(), conditionAst, decisionBindings, preGates,
+                triggerEventTypes, effectiveKind);
         ruleVersionMapper.insert(rv);
 
         // 6. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 约定）
