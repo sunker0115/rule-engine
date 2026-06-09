@@ -31,7 +31,7 @@ class DryRunPersisterTest {
         RuleEvent ev = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
                 .subjectId("u1").eventId("e1").source(EventSource.HTTP).occurredAt(Instant.now()).build();
 
-        persister.accept(new DryRunRecorded(77L, ev, 99L, EvalResult.miss(), null, 0));
+        persister.accept(new DryRunRecordedEvent(77L, ev, 99L, EvalResult.miss(), null, 0));
 
         ArgumentCaptor<DryRunSession> captor = ArgumentCaptor.forClass(DryRunSession.class);
         verify(mapper).insert(captor.capture());
@@ -53,7 +53,7 @@ class DryRunPersisterTest {
         Instant evalNow = Instant.parse("2026-06-09T01:02:03Z");
         EvalContext ctx = new EvalContext("1", ev, null, Map.of(), evalNow);
 
-        persister.accept(new DryRunRecorded(78L, ev, 99L, EvalResult.miss(), ctx, 42));
+        persister.accept(new DryRunRecordedEvent(78L, ev, 99L, EvalResult.miss(), ctx, 42));
 
         ArgumentCaptor<DryRunSession> captor = ArgumentCaptor.forClass(DryRunSession.class);
         verify(mapper).insert(captor.capture());

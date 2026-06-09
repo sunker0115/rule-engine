@@ -4,8 +4,8 @@ import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
 import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
-import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
-import com.sstlfsj.rule.eval.internal.async.DryRunRecorded;
+import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
+import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
@@ -77,7 +77,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             // dry-run 终态事件化：请求线程生成 id（snowflake，INPUT），异步 persister 落 dry_run_session + trace
             long dryRunId = IdWorker.getId();
             int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
-            eventPublisher.publish(new DryRunRecorded(
+            eventPublisher.publish(new DryRunRecordedEvent(
                     dryRunId, event, specificVersionId, outcome.result(), outcome.context(), durationMs));
             return outcome.result();
         }
@@ -92,7 +92,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
         // 副作用事件化：审计内存 best-effort（可丢）；action 命中有决策时持久投递（at-least-once，不丢）
         int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
-        eventPublisher.publish(new AuditRecorded(
+        eventPublisher.publish(new AuditRecordedEvent(
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs));
         Long tid = parseTenantId(event.tenantId());
         if (tid != null && result.ruleHit() && !result.hitDecisions().isEmpty()) {

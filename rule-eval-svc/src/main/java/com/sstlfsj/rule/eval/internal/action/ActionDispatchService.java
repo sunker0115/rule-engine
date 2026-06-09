@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.action;
 
-import com.sstlfsj.rule.eval.internal.async.ActionExecuted;
+import com.sstlfsj.rule.eval.internal.async.ActionExecutedEvent;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 规则命中后同步派发 ActionHandler，逐条发布 {@link com.sstlfsj.rule.eval.internal.async.ActionExecuted}
+ * 规则命中后同步派发 ActionHandler，逐条发布 {@link com.sstlfsj.rule.eval.internal.async.ActionExecutedEvent}
  * 事件；action_execution 落库由 ActionExecutionPersister 异步消费。
  */
 public class ActionDispatchService {
@@ -37,7 +37,7 @@ public class ActionDispatchService {
     }
 
     /**
-     * 派发本次命中的所有 Decision 对应的 Action，逐条发布 ActionExecuted 事件。
+     * 派发本次命中的所有 Decision 对应的 Action，逐条发布 ActionExecutedEvent 事件。
      * 落库由 ActionExecutionPersister 异步消费，dispatch 只负责执行与发布。
      *
      * @param sessionId    评估会话 ID
@@ -65,7 +65,7 @@ public class ActionDispatchService {
                 if (result.status() == ActionResult.ActionStatus.FAILED) {
                     idempotencyGuard.release(key);   // 失败释放，让后续重发能重试
                 }
-                eventPublisher.publish(new ActionExecuted(
+                eventPublisher.publish(new ActionExecutedEvent(
                         sessionId, tenantId, eventId, actionId, binding.actionType(),
                         decision.code(), result));
             }

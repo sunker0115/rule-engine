@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.action;
 
-import com.sstlfsj.rule.eval.internal.async.ActionExecuted;
+import com.sstlfsj.rule.eval.internal.async.ActionExecutedEvent;
 import com.sstlfsj.rule.eval.internal.domain.ActionExecutionEntity;
 import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
-/** 验证 ActionExecuted 事件被异步多行批量落库；整批写库异常隔离，不影响消费线程。 */
+/** 验证 ActionExecutedEvent 事件被异步多行批量落库；整批写库异常隔离，不影响消费线程。 */
 class ActionExecutionPersisterTest {
 
     @SuppressWarnings("unchecked")
@@ -28,7 +28,7 @@ class ActionExecutionPersisterTest {
         persister.afterPropertiesSet();
 
         ActionResult result = ActionResult.success("BLOCK_TRANSACTION", "BLOCK_TRANSACTION");
-        persister.onActionExecuted(new ActionExecuted(42L, 1L, "evt-1",
+        persister.onActionExecuted(new ActionExecutedEvent(42L, 1L, "evt-1",
                 "BLOCK_TRANSACTION", "BLOCK_TRANSACTION", "REJECT", result));
 
         Thread.sleep(300);   // 等异步消费
@@ -52,11 +52,11 @@ class ActionExecutionPersisterTest {
         persister.afterPropertiesSet();
 
         // 整批写库异常被吞，消费线程存活，下个 flush 周期仍能处理后续事件
-        persister.onActionExecuted(new ActionExecuted(42L, 1L, "evt-1",
+        persister.onActionExecuted(new ActionExecutedEvent(42L, 1L, "evt-1",
                 "BLOCK_TRANSACTION", "BLOCK_TRANSACTION", "REJECT",
                 ActionResult.success("BLOCK_TRANSACTION", "BLOCK_TRANSACTION")));
         Thread.sleep(150);
-        persister.onActionExecuted(new ActionExecuted(43L, 1L, "evt-2",
+        persister.onActionExecuted(new ActionExecutedEvent(43L, 1L, "evt-2",
                 "BLOCK_TRANSACTION", "BLOCK_TRANSACTION", "REJECT",
                 ActionResult.success("BLOCK_TRANSACTION", "BLOCK_TRANSACTION")));
 

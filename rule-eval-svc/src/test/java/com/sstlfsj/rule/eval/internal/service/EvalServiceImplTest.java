@@ -2,8 +2,8 @@ package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
 import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
-import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
-import com.sstlfsj.rule.eval.internal.async.DryRunRecorded;
+import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
+import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计、经 ActionCommandChannel 投递 action；dry-run 发 DryRunRecorded 事件。 */
+/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计、经 ActionCommandChannel 投递 action；dry-run 发 DryRunRecordedEvent 事件。 */
 @ExtendWith(MockitoExtension.class)
 class EvalServiceImplTest {
 
@@ -79,7 +79,7 @@ class EvalServiceImplTest {
 
         // 复用引擎组装的上下文发审计事件（异步落 session 快照），不再同步 updateFinal
         verify(eventPublisher).publish(argThat(o ->
-                o instanceof AuditRecorded a
+                o instanceof AuditRecordedEvent a
                         && a.mode().equals("PULL")
                         && a.candidateCount() == 1
                         && a.context() == engineCtx));
@@ -106,7 +106,7 @@ class EvalServiceImplTest {
         assertTrue(result.ruleHit());
         assertFalse(result.hitDecisions().isEmpty());
         assertEquals("REJECT", result.hitDecisions().get(0).code());
-        verify(eventPublisher).publish(any(AuditRecorded.class));
+        verify(eventPublisher).publish(any(AuditRecordedEvent.class));
     }
 
     @Test
@@ -157,9 +157,9 @@ class EvalServiceImplTest {
 
         impl.dryRun(event(), 42L);
 
-        // dry-run 改事件驱动：发 DryRunRecorded 事件由异步 persister 落 dry_run_session
+        // dry-run 改事件驱动：发 DryRunRecordedEvent 事件由异步 persister 落 dry_run_session
         verify(eventPublisher).publish(argThat(o ->
-                o instanceof DryRunRecorded d
+                o instanceof DryRunRecordedEvent d
                         && d.ruleVersionId().equals(42L)
                         && d.context() == engineCtx));
         // dry-run 始终强制收集 trace：必须以 collectTrace=true 调用引擎
@@ -178,7 +178,7 @@ class EvalServiceImplTest {
         EvalResult result = impl.dryRun(event(), 42L);
 
         assertFalse(result.ruleHit());
-        verify(eventPublisher).publish(any(DryRunRecorded.class));
+        verify(eventPublisher).publish(any(DryRunRecordedEvent.class));
         verifyNoInteractions(actionDelivery);
     }
 

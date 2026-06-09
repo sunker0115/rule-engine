@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.action;
 
-import com.sstlfsj.rule.eval.internal.async.ActionExecuted;
+import com.sstlfsj.rule.eval.internal.async.ActionExecutedEvent;
 import com.sstlfsj.rule.eval.internal.domain.ActionExecutionEntity;
 import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import org.slf4j.Logger;
@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * 异步批量落 action_execution：消费 {@link ActionExecuted}，虚拟线程批量 INSERT（uk_idempotency 行级 backstop）。
+ * 异步批量落 action_execution：消费 {@link ActionExecutedEvent}，虚拟线程批量 INSERT（uk_idempotency 行级 backstop）。
  *
  * <p>best-effort：入队非阻塞，队列满丢弃；批量在虚拟线程消费，不阻塞 action 派发线程。
  * 与 {@link com.sstlfsj.rule.eval.internal.async.AuditPersister} 同构——把 insert 解耦出单条
@@ -33,7 +33,7 @@ public class ActionExecutionPersister implements InitializingBean, DisposableBea
     private final long flushIntervalMs;
     private final ActionExecutionMapper executionMapper;
 
-    private LinkedBlockingQueue<ActionExecuted> queue;
+    private LinkedBlockingQueue<ActionExecutedEvent> queue;
     private volatile boolean running = false;
     private Thread consumerThread;
 
@@ -59,7 +59,7 @@ public class ActionExecutionPersister implements InitializingBean, DisposableBea
 
     /** 接 action 执行完成事件，非阻塞入队（队列满丢弃，best-effort）。@EventListener 在发布线程同步入队，开销=一次 offer。 */
     @EventListener
-    public void onActionExecuted(ActionExecuted e) {
+    public void onActionExecuted(ActionExecutedEvent e) {
         queue.offer(e);
     }
 
@@ -76,7 +76,7 @@ public class ActionExecutionPersister implements InitializingBean, DisposableBea
     }
 
     private void flushBatch() {
-        List<ActionExecuted> batch = new ArrayList<>(batchSize);
+        List<ActionExecutedEvent> batch = new ArrayList<>(batchSize);
         queue.drainTo(batch, batchSize);
         if (batch.isEmpty()) return;
         try {
@@ -88,7 +88,7 @@ public class ActionExecutionPersister implements InitializingBean, DisposableBea
         }
     }
 
-    private ActionExecutionEntity toEntity(ActionExecuted e) {
+    private ActionExecutionEntity toEntity(ActionExecutedEvent e) {
         ActionExecutionEntity entity = new ActionExecutionEntity();
         entity.setEvaluationSessionId(e.sessionId());
         entity.setTenantId(e.tenantId());

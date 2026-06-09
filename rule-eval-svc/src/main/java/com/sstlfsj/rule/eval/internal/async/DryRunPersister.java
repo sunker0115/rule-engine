@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
-/** 消费 DryRunRecorded,单次终态 INSERT dry_run_session + dry-run trace。 */
+/** 消费 DryRunRecordedEvent,单次终态 INSERT dry_run_session + dry-run trace。 */
 @Component
 public class DryRunPersister {
 
@@ -33,7 +33,7 @@ public class DryRunPersister {
 
     /** 接 dry-run 完成事件,组装终态实体单次 INSERT,再旁路写 trace;落库失败丢弃(best-effort)。 */
     @EventListener
-    public void accept(DryRunRecorded e) {
+    public void accept(DryRunRecordedEvent e) {
         RuleEvent ev = e.event();
         EvalResult r = e.result();
         DryRunSession s = new DryRunSession();

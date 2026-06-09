@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.eval.internal.action;
 
-import com.sstlfsj.rule.eval.internal.async.ActionExecuted;
+import com.sstlfsj.rule.eval.internal.async.ActionExecutedEvent;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
@@ -52,7 +52,7 @@ class ActionDispatchServiceTest {
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
         verify(stubHandler).execute(any(ActionContext.class));
-        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
+        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
                 && "BLOCK_TRANSACTION".equals(ae.actionId())
                 && "SUCCESS".equals(ae.result().status().name())));
     }
@@ -91,7 +91,7 @@ class ActionDispatchServiceTest {
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
         verifyNoInteractions(stubHandler);
-        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
+        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
                 && "UNKNOWN_ACTION".equals(ae.actionType())
                 && ae.result().status() == ActionResult.ActionStatus.SKIPPED));
     }
@@ -104,7 +104,7 @@ class ActionDispatchServiceTest {
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
-        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
+        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
                 && "BLOCK_TRANSACTION".equals(ae.actionId())));
     }
 
@@ -132,7 +132,7 @@ class ActionDispatchServiceTest {
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
         verify(guard).release(anyString());
-        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
+        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
                 && "FAILED".equals(ae.result().status().name())));
     }
 }

@@ -2,7 +2,7 @@ package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
 import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
-import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
+import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.Decision;
@@ -59,7 +59,7 @@ class DoEvaluateEmitsEventsTest {
 
         assertThat(result.ruleHit()).isTrue();
         verify(publisher).publish(argThat(o ->
-                o instanceof AuditRecorded a
+                o instanceof AuditRecordedEvent a
                         && a.mode().equals("PULL")
                         && a.candidateCount() == 1
                         && a.result() == hit
@@ -88,7 +88,7 @@ class DoEvaluateEmitsEventsTest {
         EvalResult result = service(engine, publisher, actionDelivery).evaluate(event);
 
         assertThat(result.ruleHit()).isFalse();
-        verify(publisher).publish(any(AuditRecorded.class));
+        verify(publisher).publish(any(AuditRecordedEvent.class));
         verify(actionDelivery, never()).deliver(any());
     }
 
@@ -109,7 +109,7 @@ class DoEvaluateEmitsEventsTest {
 
         assertThat(result.ruleHit()).isFalse();
         verify(publisher).publish(argThat(o ->
-                o instanceof AuditRecorded a && "ROLLOUT".equals(a.blockedBy())));
+                o instanceof AuditRecordedEvent a && "ROLLOUT".equals(a.blockedBy())));
         verify(actionDelivery, never()).deliver(any());
     }
 

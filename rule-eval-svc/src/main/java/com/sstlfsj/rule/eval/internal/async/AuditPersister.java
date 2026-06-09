@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * 异步批量落审计：消费 {@link AuditRecorded}，单次终态 INSERT evaluation_session + 旁路写 node_trace。
+ * 异步批量落审计：消费 {@link AuditRecordedEvent}，单次终态 INSERT evaluation_session + 旁路写 node_trace。
  *
  * <p>best-effort：入队非阻塞，队列满丢弃；批量在虚拟线程消费，不阻塞评估热路径。
  * 审计可丢——溢出/崩溃丢最近未落库审计，{@code uk_tenant_event} 防重复行。
@@ -37,7 +37,7 @@ public class AuditPersister implements InitializingBean, DisposableBean {
     private final ObjectMapper objectMapper;
     private final boolean captureContextSnapshot;
 
-    private LinkedBlockingQueue<AuditRecorded> queue;
+    private LinkedBlockingQueue<AuditRecordedEvent> queue;
     private volatile boolean running = false;
     private Thread consumerThread;
 
@@ -69,7 +69,7 @@ public class AuditPersister implements InitializingBean, DisposableBean {
 
     /** 接审计事件，非阻塞入队（队列满丢弃，best-effort）。@EventListener 在发布线程同步入队，开销=一次 offer。 */
     @EventListener
-    public void onAudit(AuditRecorded e) {
+    public void onAudit(AuditRecordedEvent e) {
         queue.offer(e);
     }
 
@@ -86,7 +86,7 @@ public class AuditPersister implements InitializingBean, DisposableBean {
     }
 
     private void flushBatch() {
-        List<AuditRecorded> batch = new ArrayList<>(batchSize);
+        List<AuditRecordedEvent> batch = new ArrayList<>(batchSize);
         queue.drainTo(batch, batchSize);
         if (batch.isEmpty()) return;
         try {
@@ -95,7 +95,7 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         } catch (RuntimeException ignored) {
             // 审计可丢，整批写库失败不影响主流程
         }
-        for (AuditRecorded e : batch) {
+        for (AuditRecordedEvent e : batch) {
             try {
                 traceWriter.write(e.event().tenantId(), String.valueOf(e.sessionId()),
                         e.result().nodeTrace());
@@ -105,7 +105,7 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         }
     }
 
-    private EvaluationSession toSession(AuditRecorded e) {
+    private EvaluationSession toSession(AuditRecordedEvent e) {
         RuleEvent ev = e.event();
         EvalResult r = e.result();
         EvaluationSession s = new EvaluationSession();

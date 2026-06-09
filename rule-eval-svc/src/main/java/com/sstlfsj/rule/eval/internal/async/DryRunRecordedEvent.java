@@ -16,7 +16,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
  * @param context       评估上下文（用于 started_at + context_snapshot；可为 null）
  * @param durationMs    评估耗时（毫秒），评估完成时测量并随事件携带，供持久化 eval_duration_ms
  */
-public record DryRunRecorded(long sessionId, RuleEvent event, Long ruleVersionId,
+public record DryRunRecordedEvent(long sessionId, RuleEvent event, Long ruleVersionId,
                              EvalResult result, EvalContext context, int durationMs) implements DomainEvent {
     @Override
     public Durability durability() { return Durability.BEST_EFFORT; }

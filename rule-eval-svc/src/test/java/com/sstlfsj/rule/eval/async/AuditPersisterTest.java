@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.eval.async;
 
 import com.sstlfsj.rule.eval.internal.async.AuditPersister;
-import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
+import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.Decision;
@@ -41,7 +41,7 @@ class AuditPersisterTest {
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
                 .subjectId("u1").eventId("e1").source(EventSource.HTTP).occurredAt(Instant.now()).build();
-        persister.onAudit(new AuditRecorded(42L, event, "PULL", 1, EvalResult.miss(), null, null, 0));
+        persister.onAudit(new AuditRecordedEvent(42L, event, "PULL", 1, EvalResult.miss(), null, null, 0));
 
         Thread.sleep(300);   // 等异步消费
         persister.destroy();
@@ -69,7 +69,7 @@ class AuditPersisterTest {
         // 固定 evalNow：started_at 必须取 context.now()（真实评估起点），非落库时刻
         Instant evalNow = Instant.parse("2026-06-09T01:02:03Z");
         EvalContext ctx = new EvalContext("1", event, null, Map.of(), evalNow);
-        persister.onAudit(new AuditRecorded(45L, event, "PULL", 1, EvalResult.miss(), ctx, null, 42));
+        persister.onAudit(new AuditRecordedEvent(45L, event, "PULL", 1, EvalResult.miss(), ctx, null, 42));
 
         Thread.sleep(300);
         persister.destroy();
@@ -94,7 +94,7 @@ class AuditPersisterTest {
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
                 .subjectId("u1").eventId("e2").source(EventSource.HTTP).occurredAt(Instant.now()).build();
         // 候选被 Pre-Gate 全拦截：result 为 miss 但 blockedBy 非 null → 落 BLOCKED 而非 MISS
-        persister.onAudit(new AuditRecorded(43L, event, "PULL", 1, EvalResult.miss(), null, "ROLLOUT", 0));
+        persister.onAudit(new AuditRecordedEvent(43L, event, "PULL", 1, EvalResult.miss(), null, "ROLLOUT", 0));
 
         Thread.sleep(300);
         persister.destroy();
@@ -119,7 +119,7 @@ class AuditPersisterTest {
         // SCORECARD 命中：result.score 非 null → 落审计 score 列
         EvalResult scored = new EvalResult(true, null, java.util.List.of(), java.util.List.of(),
                 null, java.util.List.of(), 87.5, null, null);
-        persister.onAudit(new AuditRecorded(44L, event, "PULL", 1, scored, null, null, 0));
+        persister.onAudit(new AuditRecordedEvent(44L, event, "PULL", 1, scored, null, null, 0));
 
         Thread.sleep(300);
         persister.destroy();
@@ -143,7 +143,7 @@ class AuditPersisterTest {
         Decision amt = new Decision("REVIEW", "", 10, 22L, "大额");
         EvalResult r = new EvalResult(true, dev, java.util.List.of(dev, amt), java.util.List.of(),
                 null, java.util.List.of(), null, "中危", null);
-        persister.onAudit(new AuditRecorded(91L, event, "PULL", 2, r, null, null, 0));
+        persister.onAudit(new AuditRecordedEvent(91L, event, "PULL", 2, r, null, null, 0));
 
         Thread.sleep(300);
         persister.destroy();
@@ -170,7 +170,7 @@ class AuditPersisterTest {
         EvalContext ctx = new EvalContext("1", event, null,
                 Map.of("amount", new com.sstlfsj.rule.kernel.api.model.MetricValue(8888, "NUMBER", "PROVIDED")),
                 Instant.parse("2026-06-09T01:02:03Z"));
-        persister.onAudit(new AuditRecorded(46L, event, "PULL", 1, EvalResult.miss(), ctx, null, 0));
+        persister.onAudit(new AuditRecordedEvent(46L, event, "PULL", 1, EvalResult.miss(), ctx, null, 0));
 
         Thread.sleep(300);
         persister.destroy();
@@ -196,7 +196,7 @@ class AuditPersisterTest {
         EvalContext ctx = new EvalContext("1", event, null,
                 Map.of("amount", new com.sstlfsj.rule.kernel.api.model.MetricValue(8888, "NUMBER", "PROVIDED")),
                 Instant.parse("2026-06-09T01:02:03Z"));
-        persister.onAudit(new AuditRecorded(47L, event, "PULL", 1, EvalResult.miss(), ctx, null, 0));
+        persister.onAudit(new AuditRecordedEvent(47L, event, "PULL", 1, EvalResult.miss(), ctx, null, 0));
 
         Thread.sleep(300);
         persister.destroy();
