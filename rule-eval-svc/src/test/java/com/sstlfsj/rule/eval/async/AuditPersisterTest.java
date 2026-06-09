@@ -36,7 +36,7 @@ class AuditPersisterTest {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
         tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -61,7 +61,7 @@ class AuditPersisterTest {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
         tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -88,7 +88,7 @@ class AuditPersisterTest {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
         tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -111,7 +111,7 @@ class AuditPersisterTest {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
         tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -134,7 +134,7 @@ class AuditPersisterTest {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
         tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -154,5 +154,55 @@ class AuditPersisterTest {
         assertThat(s.getCategory()).isEqualTo("中危");
         assertThat(s.getHitDecisions()).contains("\"category\":\"中危\"")
                 .contains("\"category\":\"大额\"").contains("\"ruleVersionId\":11");
+    }
+
+    @Test
+    void contextSnapshotEnabled_backfillsMetricValues() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        // 开关 ON：终态 session 回填 context_snapshot
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, true);
+        persister.afterPropertiesSet();
+
+        RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                .subjectId("u1").eventId("e-snap-on").source(EventSource.HTTP).occurredAt(Instant.now()).build();
+        EvalContext ctx = new EvalContext("1", event, null,
+                Map.of("amount", new com.sstlfsj.rule.kernel.api.model.MetricValue(8888, "NUMBER", "PROVIDED")),
+                Instant.parse("2026-06-09T01:02:03Z"));
+        persister.onAudit(new AuditRecorded(46L, event, "PULL", 1, EvalResult.miss(), ctx, null, 0));
+
+        Thread.sleep(300);
+        persister.destroy();
+
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        EvaluationSession s = captor.getValue().get(0);
+        assertThat(s.getContextSnapshot()).isNotNull()
+                .contains("\"amount\":8888").contains("\"evalNow\":\"2026-06-09T01:02:03Z\"");
+    }
+
+    @Test
+    void contextSnapshotDisabled_leavesSnapshotNull() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        // 开关 OFF（默认）：即便事件携带 context 也不回填，快照保持 null
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        persister.afterPropertiesSet();
+
+        RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                .subjectId("u1").eventId("e-snap-off").source(EventSource.HTTP).occurredAt(Instant.now()).build();
+        EvalContext ctx = new EvalContext("1", event, null,
+                Map.of("amount", new com.sstlfsj.rule.kernel.api.model.MetricValue(8888, "NUMBER", "PROVIDED")),
+                Instant.parse("2026-06-09T01:02:03Z"));
+        persister.onAudit(new AuditRecorded(47L, event, "PULL", 1, EvalResult.miss(), ctx, null, 0));
+
+        Thread.sleep(300);
+        persister.destroy();
+
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        assertThat(captor.getValue().get(0).getContextSnapshot()).isNull();
     }
 }

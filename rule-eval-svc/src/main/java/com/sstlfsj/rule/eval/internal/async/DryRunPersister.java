@@ -2,11 +2,9 @@ package com.sstlfsj.rule.eval.internal.async;
 
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
-import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
-import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,9 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /** 消费 DryRunRecorded,单次终态 INSERT dry_run_session + dry-run trace。 */
 @Component
@@ -62,7 +57,7 @@ public class DryRunPersister {
         s.setStartedAt(start);
         s.setFinishedAt(start.plusNanos(e.durationMs() * 1_000_000L));
         s.setEvalDurationMs(e.durationMs());
-        s.setContextSnapshot(serializeSnapshot(e.context()));
+        s.setContextSnapshot(ContextSnapshotSerializer.serialize(objectMapper, e.context()));
         try {
             dryRunMapper.insert(s);
         } catch (Exception ex) {
@@ -70,22 +65,5 @@ public class DryRunPersister {
             return;
         }
         traceWriter.write(ev.tenantId(), String.valueOf(e.sessionId()), r.nodeTrace());
-    }
-
-    /** EvalContext → {"metrics":{code:rawValue},"evalNow":"<ISO>"} JSON;null/失败返回 null。 */
-    private String serializeSnapshot(EvalContext ctx) {
-        if (ctx == null) return null;
-        Map<String, Object> metrics = ctx.metrics().entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey,
-                        en -> en.getValue().value() != null ? en.getValue().value() : "null"));
-        Map<String, Object> snapshot = new HashMap<>();
-        snapshot.put("metrics", metrics);
-        snapshot.put("evalNow", ctx.now() != null ? ctx.now().toString() : null);
-        try {
-            return objectMapper.writeValueAsString(snapshot);
-        } catch (JacksonException ex) {
-            log.warn("dry-run context_snapshot 序列化失败,写 null", ex);
-            return null;
-        }
     }
 }

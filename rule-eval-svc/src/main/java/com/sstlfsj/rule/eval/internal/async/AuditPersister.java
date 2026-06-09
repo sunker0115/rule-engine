@@ -35,6 +35,7 @@ public class AuditPersister implements InitializingBean, DisposableBean {
     private final EvaluationSessionMapper sessionMapper;
     private final TraceWriter traceWriter;
     private final ObjectMapper objectMapper;
+    private final boolean captureContextSnapshot;
 
     private LinkedBlockingQueue<AuditRecorded> queue;
     private volatile boolean running = false;
@@ -42,19 +43,22 @@ public class AuditPersister implements InitializingBean, DisposableBean {
 
     public AuditPersister(int queueCapacity, int batchSize, long flushIntervalMs,
                           EvaluationSessionMapper sessionMapper, TraceWriter traceWriter,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper, boolean captureContextSnapshot) {
         this.queueCapacity = queueCapacity;
         this.batchSize = batchSize;
         this.flushIntervalMs = flushIntervalMs;
         this.sessionMapper = sessionMapper;
         this.traceWriter = traceWriter;
         this.objectMapper = objectMapper;
+        this.captureContextSnapshot = captureContextSnapshot;
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public AuditPersister(EvaluationSessionMapper sessionMapper, TraceWriter traceWriter,
-                          ObjectMapper objectMapper) {
-        this(10000, 500, 200, sessionMapper, traceWriter, objectMapper);
+                          ObjectMapper objectMapper,
+                          @org.springframework.beans.factory.annotation.Value(
+                                  "${engine.rule.audit.context-snapshot.enabled:false}") boolean captureContextSnapshot) {
+        this(10000, 500, 200, sessionMapper, traceWriter, objectMapper, captureContextSnapshot);
     }
 
     @Override
@@ -139,6 +143,10 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setStartedAt(start);
         s.setFinishedAt(start.plusNanos(e.durationMs() * 1_000_000L));
         s.setEvalDurationMs(e.durationMs());
+        // 开关开启才回填 context_snapshot（每会话多一次 JSON 写，默认关）；context 为 null 时 serializer 返回 null
+        if (captureContextSnapshot) {
+            s.setContextSnapshot(ContextSnapshotSerializer.serialize(objectMapper, e.context()));
+        }
         return s;
     }
 
