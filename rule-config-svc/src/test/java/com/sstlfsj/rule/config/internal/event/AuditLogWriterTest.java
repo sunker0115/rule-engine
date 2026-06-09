@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDateTime;
@@ -80,5 +81,37 @@ class AuditLogWriterTest {
         AuditLog log = captor.getValue();
         assertThat(log.getBeforeSnapshot()).isNull();
         assertThat(log.getAfterSnapshot()).isNull();
+    }
+
+    @Test
+    void onOperationAudited_capturesTraceIdFromMdc() {
+        MDC.put("traceId", "trace-abc-123");
+        try {
+            OperationAuditedEvent event = new OperationAuditedEvent(
+                    1L, "dave", "USER", "PUBLISH", "rule_definition", "11",
+                    null, new RulePublishedSnapshot(30L, 2L), LocalDateTime.now());
+
+            writer().onOperationAudited(event);
+
+            ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+            verify(auditLogMapper).insert(captor.capture());
+            assertThat(captor.getValue().getTraceId()).isEqualTo("trace-abc-123");
+        } finally {
+            MDC.clear();
+        }
+    }
+
+    @Test
+    void onOperationAudited_traceIdNullWhenNoMdc() {
+        MDC.remove("traceId");
+        OperationAuditedEvent event = new OperationAuditedEvent(
+                1L, "erin", "USER", "DISABLE", "rule_definition", "12",
+                null, null, LocalDateTime.now());
+
+        writer().onOperationAudited(event);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogMapper).insert(captor.capture());
+        assertThat(captor.getValue().getTraceId()).isNull();
     }
 }

@@ -24,13 +24,14 @@ public interface EvaluationSessionMapper extends BaseMapper<EvaluationSession> {
             INSERT INTO evaluation_session
               (id, tenant_id, event_id, scene_code, event_type, subject_id, source, mode, status,
                final_decision, hit_decisions, blocked_by, error_code, candidate_rule_count,
-               hit_rule_count, score, category, occurred_at, started_at, finished_at, context_snapshot)
+               hit_rule_count, score, category, occurred_at, started_at, finished_at, context_snapshot,
+               eval_duration_ms)
             VALUES
             <foreach collection="list" item="s" separator=",">
               (#{s.id}, #{s.tenantId}, #{s.eventId}, #{s.sceneCode}, #{s.eventType}, #{s.subjectId},
                #{s.source}, #{s.mode}, #{s.status}, #{s.finalDecision}, #{s.hitDecisions}, #{s.blockedBy},
                #{s.errorCode}, #{s.candidateRuleCount}, #{s.hitRuleCount}, #{s.score}, #{s.category},
-               #{s.occurredAt}, #{s.startedAt}, #{s.finishedAt}, #{s.contextSnapshot})
+               #{s.occurredAt}, #{s.startedAt}, #{s.finishedAt}, #{s.contextSnapshot}, #{s.evalDurationMs})
             </foreach>
             ON DUPLICATE KEY UPDATE id = id
             </script>

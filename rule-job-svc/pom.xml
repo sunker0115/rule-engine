@@ -48,7 +48,7 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
-        <!-- subjectQuery / payloadTemplate JSON 解析，版本由 Spring Boot BOM 管理 -->
+        <!-- subjectQuery JSON 解析，版本由 Spring Boot BOM 管理 -->
         <dependency>
             <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

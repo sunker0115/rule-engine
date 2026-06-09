@@ -24,8 +24,6 @@ public class JobDefinition {
     /** JSON：主体查询配置，如 {"type":"BEAN_METHOD","ref":"<bean>#<method>"}（D48）。 */
     private String subjectQuery;
     private String eventType;
-    /** D49 遗留列，已不再使用——payload 由 @RuleJob 方法返回的 JobTarget.payload 直接携带。 */
-    private String payloadTemplate;
     private JobStatus status;
     private String createdBy;
     private LocalDateTime createdAt;

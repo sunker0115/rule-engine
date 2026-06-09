@@ -6,6 +6,7 @@ import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -49,6 +50,8 @@ public class AuditLogWriter {
         log.setBeforeSnapshot(serialize(event.beforeSnapshot()));
         log.setAfterSnapshot(serialize(event.afterSnapshot()));
         log.setOperatedAt(event.operatedAt());
+        // traceId 取自当前请求线程 MDC（OTel 注入，与 ApiResponse 同源）；BEFORE_COMMIT 同步执行，线程内有值
+        log.setTraceId(MDC.get("traceId"));
         auditLogMapper.insert(log);
     }
 
