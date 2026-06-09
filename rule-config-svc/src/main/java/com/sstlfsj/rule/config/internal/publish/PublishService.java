@@ -1,23 +1,14 @@
 package com.sstlfsj.rule.config.internal.publish;
 
-import lombok.RequiredArgsConstructor;
-import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
-import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
+import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
-import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
-import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
-import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
-import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
-import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
-import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
-import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
-import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
-import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,10 +36,11 @@ public class PublishService {
     private final RuleVersionMapper ruleVersionMapper;
     private final AuditLogMapper auditLogMapper;
     private final ApplicationEventPublisher eventPublisher;
-    private final ObjectMapper objectMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
 
-    /** 已注册取数资源名目录（由 eval-svc 提供）；纯 config 部署时为 null，资源名校验跳过。 */
+    /**
+     * 已注册取数资源名目录（由 eval-svc 提供）；纯 config 部署时为 null，资源名校验跳过。
+     */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.sstlfsj.rule.config.api.spi.MetricResourceCatalog metricResourceCatalog;
 
@@ -139,7 +131,7 @@ public class PublishService {
                 if (row.conditions().size() != colCount) {
                     throw new IllegalArgumentException(
                             "DECISION_TABLE 第 " + i + " 行 conditions 数量（" + row.conditions().size()
-                            + "）与列数（" + colCount + "）不一致");
+                                    + "）与列数（" + colCount + "）不一致");
                 }
             }
         }
@@ -250,24 +242,24 @@ public class PublishService {
     /**
      * 创建规则草稿：INSERT rule_definition + rule_version（status=DRAFT）+ audit_log。
      *
-     * @param tenantId              租户 id
-     * @param sceneCode             场景编码
-     * @param code                  规则编码
-     * @param name                  规则名称
-     * @param conditionAst          条件 AST，null 视为空 AND
-     * @param decisionBindings      决策绑定列表，null 视为空
-     * @param preGates              前置门控列表，null 视为空
-     * @param triggerEventTypes     触发事件类型列表，null 视为空
-     * @param kind                  规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
-     * @param actorId               操作人
+     * @param tenantId          租户 id
+     * @param sceneCode         场景编码
+     * @param code              规则编码
+     * @param name              规则名称
+     * @param conditionAst      条件 AST，null 视为空 AND
+     * @param decisionBindings  决策绑定列表，null 视为空
+     * @param preGates          前置门控列表，null 视为空
+     * @param triggerEventTypes 触发事件类型列表，null 视为空
+     * @param kind              规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
+     * @param actorId           操作人
      * @return 新建草稿的 id 和版本信息
      */
     @Transactional
     public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
-            String code, String name,
-            AstNode conditionAst, java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
-            java.util.List<RuleVersionSnapshot.PreGateConfig> preGates, java.util.List<String> triggerEventTypes,
-            String kind, String actorId) {
+                                          String code, String name,
+                                          AstNode conditionAst, java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
+                                          java.util.List<RuleVersionSnapshot.PreGateConfig> preGates, java.util.List<String> triggerEventTypes,
+                                          String kind, String actorId) {
         // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
         SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
         if (scene == null) {
@@ -302,7 +294,6 @@ public class PublishService {
         ruleDefinitionMapper.insert(rd);
 
         // 5. INSERT rule_version（version=1，status=DRAFT）
-        // 入参已是 typed（边界对象化，无 JSON 串来回）；实体 JSON 列由 MyBatis TypeHandler 序列化
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(rd.getId());
         rv.setVersion(1L);
@@ -389,11 +380,6 @@ public class PublishService {
         }
     }
 
-    /** 判断字符串是否为 null 或空白。 */
-    private static boolean isBlank(String s) {
-        return s == null || s.isBlank();
-    }
-
     /**
      * 递归校验决策树结构：分支节点只能是 IfNode 或 DecisionLeafNode，每个 IfNode 的 thenBranch 非空、
      * 条件子树仅含决策树支持的节点（见 {@link #validateTreeCondition}）。
@@ -424,7 +410,8 @@ public class PublishService {
      */
     private static void validateTreeCondition(AstNode cond) {
         switch (cond) {
-            case ConditionNode ignored -> { }
+            case ConditionNode ignored -> {
+            }
             case AndNode and -> and.children().forEach(PublishService::validateTreeCondition);
             case OrNode or -> or.children().forEach(PublishService::validateTreeCondition);
             case NotNode not -> validateTreeCondition(not.child());
