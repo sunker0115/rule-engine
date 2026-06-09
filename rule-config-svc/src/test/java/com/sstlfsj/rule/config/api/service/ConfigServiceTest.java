@@ -5,7 +5,12 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -31,8 +36,8 @@ class ConfigServiceTest {
         @Override
         public DraftCreatedResult createDraft(String tenantId, String sceneCode,
                 String code, String name,
-                String conditionAstJson, String decisionBindingsJson,
-                String preGatesJson, String triggerEventTypesJson,
+                AstNode conditionAst, List<DecisionBinding> decisionBindings,
+                List<PreGateConfig> preGates, List<String> triggerEventTypes,
                 String kind, String actorId) {
             throw new UnsupportedOperationException("stub");
         }

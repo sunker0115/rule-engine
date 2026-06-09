@@ -245,7 +245,8 @@ class PublishServiceTest {
 
         DraftCreatedResult result = publishService.createDraft(
                 1L, "risk.transfer", "rule.test", "测试规则",
-                "{\"type\":\"AndNode\",\"children\":[]}", "[]", "[]", "[]", "SCORECARD", "actor1");
+                new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), "SCORECARD", "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(10L);
         assertThat(result.ruleVersionId()).isEqualTo(20L);
@@ -263,24 +264,9 @@ class PublishServiceTest {
         assertThat(rvCaptor.getValue().getVersion()).isEqualTo(1L);
         assertThat(rvCaptor.getValue().getStatus()).isEqualTo("DRAFT");
         assertThat(rvCaptor.getValue().getKind()).isEqualTo("SCORECARD");
-        // conditionAst 由 JSON parse 成 typed AstNode 落库
+        // conditionAst 直传 typed 落库（无 JSON 串来回）
         assertThat(rvCaptor.getValue().getConditionAst())
                 .isInstanceOf(com.sstlfsj.rule.kernel.api.model.ast.AndNode.class);
-    }
-
-    @Test
-    void createDraft_invalidConditionAstJson_throws() {
-        // 导入即校验：非法 conditionAst JSON 在 createDraft 边界 fail-fast
-        SceneDef draftScene = new SceneDef();
-        draftScene.setId(5L);
-        draftScene.setTenantId(1L);
-        draftScene.setCode("risk.transfer");
-        when(sceneMapper.findByCode(any(), any())).thenReturn(draftScene);
-
-        assertThatThrownBy(() -> publishService.createDraft(
-                1L, "risk.transfer", "rule.test", "测试规则",
-                "{not valid json", "[]", "[]", "[]", "AST_BOOLEAN", "actor1"))
-                .isInstanceOf(RuntimeException.class);
     }
 
     @Test
@@ -289,7 +275,7 @@ class PublishServiceTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 publishService.createDraft(1L, "nonexistent", "rule.test", "测试",
-                        "{}", "[]", "[]", "[]", null, "actor1"));
+                        null, null, null, null, null, "actor1"));
     }
 
     @Test
@@ -304,7 +290,7 @@ class PublishServiceTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 publishService.createDraft(1L, "risk.transfer", "rule.test", "测试",
-                        "{}", "[]", "[]", "[]", null, "actor1"));
+                        null, null, null, null, null, "actor1"));
 
         verify(ruleDefinitionMapper, never()).insert(any(RuleDefinition.class));
     }
@@ -319,7 +305,7 @@ class PublishServiceTest {
 
         assertThatThrownBy(() -> publishService.createDraft(
                 1L, "risk.transfer", "rule.test", "测试规则",
-                "{}", "[]", "[]", "[]", "EXPRESSION_SCRIPT", "actor1"))
+                null, null, null, null, "EXPRESSION_SCRIPT", "actor1"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("不支持的规则 kind");
     }
@@ -340,7 +326,8 @@ class PublishServiceTest {
         when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         publishService.createDraft(1L, "risk.transfer", "rule.test", "测试规则",
-                "{\"type\":\"AndNode\",\"children\":[]}", "[]", "[]", "[]", null, "actor1");
+                new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), null, "actor1");
 
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).insert(rdCaptor.capture());

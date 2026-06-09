@@ -256,10 +256,10 @@ public class PublishService {
      * @param sceneCode             场景编码
      * @param code                  规则编码
      * @param name                  规则名称
-     * @param conditionAstJson      条件 AST JSON，为空时默认 "{}"
-     * @param decisionBindingsJson  决策绑定 JSON，为空时默认 "[]"
-     * @param preGatesJson          前置门控 JSON，为空时默认 "[]"
-     * @param triggerEventTypesJson 触发事件类型 JSON，为空时默认 "[]"
+     * @param conditionAst          条件 AST，null 视为空 AND
+     * @param decisionBindings      决策绑定列表，null 视为空
+     * @param preGates              前置门控列表，null 视为空
+     * @param triggerEventTypes     触发事件类型列表，null 视为空
      * @param kind                  规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
      * @param actorId               操作人
      * @return 新建草稿的 id 和版本信息
@@ -267,8 +267,8 @@ public class PublishService {
     @Transactional
     public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
             String code, String name,
-            String conditionAstJson, String decisionBindingsJson,
-            String preGatesJson, String triggerEventTypesJson,
+            AstNode conditionAst, java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
+            java.util.List<RuleVersionSnapshot.PreGateConfig> preGates, java.util.List<String> triggerEventTypes,
             String kind, String actorId) {
         // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
         SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
@@ -304,23 +304,16 @@ public class PublishService {
         ruleDefinitionMapper.insert(rd);
 
         // 5. INSERT rule_version（version=1，status=DRAFT）
-        // 入参仍是 String JSON，方法内 parse 成 typed；非法 JSON 即视为非法输入，异常上抛 fail-fast
+        // 入参已是 typed（边界对象化，无 JSON 串来回）；实体 JSON 列由 MyBatis TypeHandler 序列化
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(rd.getId());
         rv.setVersion(1L);
-        rv.setConditionAst(isBlank(conditionAstJson)
-                ? new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null)
-                : objectMapper.readValue(conditionAstJson, AstNode.class));
-        rv.setDecisionBindings(isBlank(decisionBindingsJson) ? java.util.List.of()
-                : objectMapper.readValue(decisionBindingsJson,
-                    new tools.jackson.core.type.TypeReference<java.util.List<RuleVersionSnapshot.DecisionBinding>>() {}));
-        rv.setPreGates(isBlank(preGatesJson) ? java.util.List.of()
-                : objectMapper.readValue(preGatesJson,
-                    new tools.jackson.core.type.TypeReference<java.util.List<RuleVersionSnapshot.PreGateConfig>>() {}));
+        rv.setConditionAst(conditionAst != null ? conditionAst
+                : new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null));
+        rv.setDecisionBindings(decisionBindings != null ? decisionBindings : java.util.List.of());
+        rv.setPreGates(preGates != null ? preGates : java.util.List.of());
         rv.setKind(effectiveKind);
-        rv.setTriggerEventTypes(isBlank(triggerEventTypesJson) ? java.util.List.of()
-                : objectMapper.readValue(triggerEventTypesJson,
-                    new tools.jackson.core.type.TypeReference<java.util.List<String>>() {}));
+        rv.setTriggerEventTypes(triggerEventTypes != null ? triggerEventTypes : java.util.List.of());
         rv.setMetricDependencies(java.util.List.of());
         rv.setStatus("DRAFT");
         rv.setCreatedAt(LocalDateTime.now());

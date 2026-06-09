@@ -2,7 +2,6 @@ package com.sstlfsj.rule.web.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
-import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
@@ -10,10 +9,13 @@ import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.common.PageResponse;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.web.admin.dto.CreateRuleRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /** 规则版本生命周期管理入口：发布、禁用、查询。 */
 @RestController
@@ -22,7 +24,6 @@ import org.springframework.web.bind.annotation.*;
 public class RuleController {
 
     private final ConfigService configService;
-    private final ObjectMapper objectMapper;
 
     /**
      * POST /admin/v1/rules — 创建规则草稿。
@@ -36,14 +37,16 @@ public class RuleController {
     public ApiResponse<DraftCreatedResult> createDraft(
             @Valid @RequestBody CreateRuleRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
+        // DecisionBindingInput(仅 decisionCode) → DecisionBinding：priority 草稿期占位 0，发布时从 decision_definition 回填
+        List<DecisionBinding> bindings = req.decisionBindings() == null ? null
+                : req.decisionBindings().stream()
+                        .map(i -> new DecisionBinding(i.decisionCode(), 0))
+                        .toList();
         return ApiResponse.ok(configService.createDraft(
                 req.tenantId(), req.sceneCode(), req.code(), req.name(),
-                nodeToString(req.conditionAst(), "{}"),
-                nodeToString(req.decisionBindings(), "[]"),
-                nodeToString(req.preGates(), "[]"),
-                nodeToString(req.triggerEventTypes(), "[]"),
-                req.kind(),
-                actorId));
+                req.conditionAst(), bindings,
+                req.preGates(), req.triggerEventTypes(),
+                req.kind(), actorId));
     }
 
     /**
@@ -111,15 +114,5 @@ public class RuleController {
     public ApiResponse<RuleDetailVO> getDetail(@PathVariable Long ruleId,
                                                @RequestParam String tenantId) {
         return ApiResponse.ok(configService.getRuleDetail(tenantId, ruleId));
-    }
-
-    /** 将 Object 序列化为 JSON 字符串，值为 null 时返回 defaultVal。 */
-    private String nodeToString(Object value, String defaultVal) {
-        if (value == null) return defaultVal;
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception e) {
-            throw new IllegalStateException("JSON 序列化失败", e);
-        }
     }
 }

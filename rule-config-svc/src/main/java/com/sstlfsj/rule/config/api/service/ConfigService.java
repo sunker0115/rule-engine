@@ -5,6 +5,11 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+
+import java.util.List;
 
 /** 规则定义生命周期管理：发布、禁用、查询。 */
 public interface ConfigService {
@@ -56,17 +61,17 @@ public interface ConfigService {
      * @param sceneCode             场景编码
      * @param code                  规则编码
      * @param name                  规则名称
-     * @param conditionAstJson      条件 AST JSON 字符串
-     * @param decisionBindingsJson  决策绑定 JSON 字符串
-     * @param preGatesJson          前置门 JSON 字符串
-     * @param triggerEventTypesJson 触发事件类型 JSON 字符串
+     * @param conditionAst          条件 AST，null 视为空 AND
+     * @param decisionBindings      决策绑定列表（草稿期 priority 占位，发布时回填），null 视为空
+     * @param preGates              前置门列表，null 视为空
+     * @param triggerEventTypes     触发事件类型列表，null 视为空
      * @param kind                  规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
      * @param actorId               操作人 ID
      * @return 新建草稿的 ID 信息
      */
     DraftCreatedResult createDraft(String tenantId, String sceneCode,
             String code, String name,
-            String conditionAstJson, String decisionBindingsJson,
-            String preGatesJson, String triggerEventTypesJson,
+            AstNode conditionAst, List<DecisionBinding> decisionBindings,
+            List<PreGateConfig> preGates, List<String> triggerEventTypes,
             String kind, String actorId);
 }

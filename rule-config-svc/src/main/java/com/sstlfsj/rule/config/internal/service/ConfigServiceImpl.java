@@ -15,11 +15,15 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** ConfigService 实现，委托 PublishService 执行发布流程。 */
 @Service
@@ -102,13 +106,13 @@ class ConfigServiceImpl implements ConfigService {
     @Override
     public DraftCreatedResult createDraft(String tenantId, String sceneCode,
             String code, String name,
-            String conditionAstJson, String decisionBindingsJson,
-            String preGatesJson, String triggerEventTypesJson,
+            AstNode conditionAst, List<DecisionBinding> decisionBindings,
+            List<PreGateConfig> preGates, List<String> triggerEventTypes,
             String kind, String actorId) {
         return publishService.createDraft(Long.valueOf(tenantId), sceneCode,
                 code, name,
-                conditionAstJson, decisionBindingsJson,
-                preGatesJson, triggerEventTypesJson,
+                conditionAst, decisionBindings,
+                preGates, triggerEventTypes,
                 kind, actorId);
     }
 }

@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.web.admin;
 
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
@@ -15,6 +14,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -31,7 +31,7 @@ class RuleControllerTest {
         configService = mock(ConfigService.class);
         JsonMapper mapper = JsonMapper.builder().build();
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new RuleController(configService, mapper))
+                .standaloneSetup(new RuleController(configService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .build();
@@ -130,8 +130,8 @@ class RuleControllerTest {
     }
 
     @Test
-    void createDraft_nullJsonFields_useDefaults() throws Exception {
-        // conditionAst / decisionBindings 等 JsonNode 字段为 null 时，nodeToString 应返回默认值
+    void createDraft_nullJsonFields_passedAsNull() throws Exception {
+        // body 未带 conditionAst/decisionBindings 等字段时，typed 入参为 null，由 service 兜底默认
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
         when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(result);
@@ -145,9 +145,9 @@ class RuleControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.ruleDefinitionId").value(10));
 
-        // 验证 null JsonNode 字段传入了默认值字符串而非 null；kind 未传则为 null
+        // 未传的 typed 字段为 null（不再有 JSON 串默认值），kind 未传也为 null
         verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
-                eq("{}"), eq("[]"), eq("[]"), eq("[]"), eq(null), eq("user1"));
+                isNull(), isNull(), isNull(), isNull(), isNull(), eq("user1"));
     }
 
     @Test
