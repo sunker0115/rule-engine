@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.domain;
 
 import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.sstlfsj.rule.kernel.api.model.SourceType;
 
 import java.util.Arrays;
 import java.util.Set;
@@ -13,8 +14,8 @@ public final class MetricEnums {
             .filter(d -> d != DataType.UNKNOWN)
             .map(DataType::tag)
             .collect(Collectors.toUnmodifiableSet());
-    public static final Set<String> SOURCE_TYPES =
-            Set.of("ATTRIBUTE", "SQL_AGGREGATE", "EXTERNAL_HTTP", "STREAM");
+    // 由 SourceType.ALL 派生（单一真相源），与原字面集 {ATTRIBUTE,SQL_AGGREGATE,EXTERNAL_HTTP,STREAM} 逐元素相等
+    public static final Set<String> SOURCE_TYPES = SourceType.ALL;
     public static final Set<String> STATUSES = Set.of("ACTIVE", "DISABLED");
     private MetricEnums() {}
 }

@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.SourceType;
 import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -23,7 +24,7 @@ import java.util.regex.Pattern;
  * datasource/sql 来自 metric.params；handler 只跑只读命名数据源。
  */
 @Component
-@MetricSourceType("SQL_AGGREGATE")
+@MetricSourceType(SourceType.SQL_AGGREGATE)
 public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
 
     /** 占位符：:ns.field 或 :name（点号命名空间用于 payload./params.）。 */

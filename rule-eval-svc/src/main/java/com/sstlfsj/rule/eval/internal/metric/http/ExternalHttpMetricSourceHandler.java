@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.SourceType;
 import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import tools.jackson.databind.JsonNode;
@@ -26,7 +27,7 @@ import java.util.regex.Pattern;
  * 200+jsonPath 命中→FETCHED；200 无匹配→null；非 200/超时/连接失败→METRIC_FETCH_FAIL。
  */
 @Component
-@MetricSourceType("EXTERNAL_HTTP")
+@MetricSourceType(SourceType.EXTERNAL_HTTP)
 public class ExternalHttpMetricSourceHandler implements MetricSourceHandler {
 
     private static final Pattern PH = Pattern.compile("\\{([a-zA-Z_][\\w.]*)\\}");

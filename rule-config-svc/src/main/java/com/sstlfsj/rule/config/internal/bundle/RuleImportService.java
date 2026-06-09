@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.bundle;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.SourceType;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
@@ -101,7 +102,7 @@ public class RuleImportService {
                     metricsReview.add(me.metricCode());
                     continue;
                 }
-                if ("SQL_AGGREGATE".equals(me.sourceType())) {
+                if (SourceType.SQL_AGGREGATE.equals(me.sourceType())) {
                     // SQL 类参数含查询语句，需人工审核，不自动创建（发布期 metric 校验是安全网）
                     metricsReview.add(me.metricCode());
                     continue;

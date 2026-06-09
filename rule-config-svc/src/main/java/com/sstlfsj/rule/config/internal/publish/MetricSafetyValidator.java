@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.publish;
 
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.kernel.api.model.SourceType;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -42,8 +43,8 @@ class MetricSafetyValidator {
         for (MetricDefinition m : metrics) {
             Map<String, Object> params = parse(m.getParams());
             switch (m.getSourceType() == null ? "" : m.getSourceType()) {
-                case "SQL_AGGREGATE" -> validateSql(m, params, datasourceNames);
-                case "EXTERNAL_HTTP" -> validateHttp(m, params, endpointNames);
+                case SourceType.SQL_AGGREGATE -> validateSql(m, params, datasourceNames);
+                case SourceType.EXTERNAL_HTTP -> validateHttp(m, params, endpointNames);
                 default -> { /* ATTRIBUTE/STREAM：无需 SQL/资源校验 */ }
             }
         }
