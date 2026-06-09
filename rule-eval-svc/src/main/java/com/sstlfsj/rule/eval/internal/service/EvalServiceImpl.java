@@ -15,6 +15,7 @@ import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -75,8 +76,9 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                     event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow, true);
             // dry-run 终态事件化：请求线程生成 id（snowflake，INPUT），异步 persister 落 dry_run_session + trace
             long dryRunId = IdWorker.getId();
+            int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
             eventPublisher.publish(new DryRunRecorded(
-                    dryRunId, event, specificVersionId, outcome.result(), outcome.context()));
+                    dryRunId, event, specificVersionId, outcome.result(), outcome.context(), durationMs));
             return outcome.result();
         }
 
@@ -89,8 +91,9 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         EvalResult result = outcome.result();
 
         // 副作用事件化：审计内存 best-effort（可丢）；action 命中有决策时持久投递（at-least-once，不丢）
+        int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
         eventPublisher.publish(new AuditRecorded(
-                sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy()));
+                sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs));
         Long tid = parseTenantId(event.tenantId());
         if (tid != null && result.ruleHit() && !result.hitDecisions().isEmpty()) {
             actionDelivery.deliver(new DispatchActionsCommand(

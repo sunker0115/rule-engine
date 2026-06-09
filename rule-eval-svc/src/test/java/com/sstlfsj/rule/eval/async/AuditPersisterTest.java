@@ -5,6 +5,7 @@ import com.sstlfsj.rule.eval.internal.async.AuditRecorded;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.Decision;
+import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
@@ -13,7 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -37,7 +41,7 @@ class AuditPersisterTest {
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
                 .subjectId("u1").eventId("e1").source(EventSource.HTTP).occurredAt(Instant.now()).build();
-        persister.onAudit(new AuditRecorded(42L, event, "PULL", 1, EvalResult.miss(), null, null));
+        persister.onAudit(new AuditRecorded(42L, event, "PULL", 1, EvalResult.miss(), null, null, 0));
 
         Thread.sleep(300);   // 等异步消费
         persister.destroy();
@@ -53,6 +57,33 @@ class AuditPersisterTest {
     }
 
     @Test
+    void startedAtFromContextNow_andEvalDurationMsFromEvent() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om);
+        persister.afterPropertiesSet();
+
+        RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                .subjectId("u1").eventId("e-dur").source(EventSource.HTTP).occurredAt(Instant.now()).build();
+        // 固定 evalNow：started_at 必须取 context.now()（真实评估起点），非落库时刻
+        Instant evalNow = Instant.parse("2026-06-09T01:02:03Z");
+        EvalContext ctx = new EvalContext("1", event, null, Map.of(), evalNow);
+        persister.onAudit(new AuditRecorded(45L, event, "PULL", 1, EvalResult.miss(), ctx, null, 42));
+
+        Thread.sleep(300);
+        persister.destroy();
+
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        EvaluationSession s = captor.getValue().get(0);
+        LocalDateTime expectedStart = LocalDateTime.ofInstant(evalNow, ZoneId.systemDefault());
+        assertThat(s.getStartedAt()).isEqualTo(expectedStart);
+        assertThat(s.getEvalDurationMs()).isEqualTo(42);
+        assertThat(s.getFinishedAt()).isEqualTo(expectedStart.plusNanos(42L * 1_000_000L));
+    }
+
+    @Test
     void blockedBy_nonNull_persistsBlockedStatusAndBlockedBy() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
@@ -63,7 +94,7 @@ class AuditPersisterTest {
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
                 .subjectId("u1").eventId("e2").source(EventSource.HTTP).occurredAt(Instant.now()).build();
         // 候选被 Pre-Gate 全拦截：result 为 miss 但 blockedBy 非 null → 落 BLOCKED 而非 MISS
-        persister.onAudit(new AuditRecorded(43L, event, "PULL", 1, EvalResult.miss(), null, "ROLLOUT"));
+        persister.onAudit(new AuditRecorded(43L, event, "PULL", 1, EvalResult.miss(), null, "ROLLOUT", 0));
 
         Thread.sleep(300);
         persister.destroy();
@@ -88,7 +119,7 @@ class AuditPersisterTest {
         // SCORECARD 命中：result.score 非 null → 落审计 score 列
         EvalResult scored = new EvalResult(true, null, java.util.List.of(), java.util.List.of(),
                 null, java.util.List.of(), 87.5, null, null);
-        persister.onAudit(new AuditRecorded(44L, event, "PULL", 1, scored, null, null));
+        persister.onAudit(new AuditRecorded(44L, event, "PULL", 1, scored, null, null, 0));
 
         Thread.sleep(300);
         persister.destroy();
@@ -112,7 +143,7 @@ class AuditPersisterTest {
         Decision amt = new Decision("REVIEW", "", 10, 22L, "大额");
         EvalResult r = new EvalResult(true, dev, java.util.List.of(dev, amt), java.util.List.of(),
                 null, java.util.List.of(), null, "中危", null);
-        persister.onAudit(new AuditRecorded(91L, event, "PULL", 2, r, null, null));
+        persister.onAudit(new AuditRecorded(91L, event, "PULL", 2, r, null, null, 0));
 
         Thread.sleep(300);
         persister.destroy();

@@ -55,9 +55,13 @@ public class DryRunPersister {
         if (ev.occurredAt() != null) {
             s.setOccurredAt(LocalDateTime.ofInstant(ev.occurredAt(), ZoneId.systemDefault()));
         }
-        LocalDateTime now = LocalDateTime.now();
-        s.setStartedAt(now);
-        s.setFinishedAt(now);
+        // started_at 取真实评估起点 context.now()；context 为 null 退回落库时刻；finished = start + 评估耗时
+        LocalDateTime start = e.context() != null
+                ? LocalDateTime.ofInstant(e.context().now(), ZoneId.systemDefault())
+                : LocalDateTime.now();
+        s.setStartedAt(start);
+        s.setFinishedAt(start.plusNanos(e.durationMs() * 1_000_000L));
+        s.setEvalDurationMs(e.durationMs());
         s.setContextSnapshot(serializeSnapshot(e.context()));
         try {
             dryRunMapper.insert(s);

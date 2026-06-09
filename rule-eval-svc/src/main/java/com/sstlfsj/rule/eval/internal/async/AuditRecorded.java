@@ -16,10 +16,11 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
  * @param result         评估结果
  * @param context        评估上下文（用于 context_snapshot；可为 null）
  * @param blockedBy      Pre-Gate 拦截原因（首个阻断 gateType）；非 null 时落 status=BLOCKED，否则 null
+ * @param durationMs     评估耗时（毫秒），评估完成时测量并随事件携带，供持久化 eval_duration_ms
  */
 public record AuditRecorded(long sessionId, RuleEvent event, String mode,
                             int candidateCount, EvalResult result, EvalContext context,
-                            String blockedBy) implements DomainEvent {
+                            String blockedBy, int durationMs) implements DomainEvent {
     @Override
     public Durability durability() { return Durability.BEST_EFFORT; }
 }

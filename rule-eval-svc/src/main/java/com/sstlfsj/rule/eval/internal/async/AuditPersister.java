@@ -132,9 +132,13 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         if (ev.occurredAt() != null) {
             s.setOccurredAt(LocalDateTime.ofInstant(ev.occurredAt(), ZoneId.systemDefault()));
         }
-        LocalDateTime now = LocalDateTime.now();
-        s.setStartedAt(now);
-        s.setFinishedAt(now);
+        // started_at 取真实评估起点 context.now()（落库时刻晚于评估，不能代表评估窗口）；context 为 null 退回落库时刻
+        LocalDateTime start = e.context() != null
+                ? LocalDateTime.ofInstant(e.context().now(), ZoneId.systemDefault())
+                : LocalDateTime.now();
+        s.setStartedAt(start);
+        s.setFinishedAt(start.plusNanos(e.durationMs() * 1_000_000L));
+        s.setEvalDurationMs(e.durationMs());
         return s;
     }
 
