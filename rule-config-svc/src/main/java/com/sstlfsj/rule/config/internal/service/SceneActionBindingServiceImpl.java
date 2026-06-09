@@ -43,8 +43,7 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
     public List<SceneActionBindingItem> list(String tenantId, String sceneCode) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
         return bindingMapper.findBySceneId(scene.getId()).stream()
-                .map(b -> new SceneActionBindingItem(
-                        b.getActionType(), parse(b.getDefaultParams()), parse(b.getRateLimitOverride())))
+                .map(b -> new SceneActionBindingItem(b.getActionType(), parse(b.getDefaultParams())))
                 .toList();
     }
 
@@ -81,12 +80,10 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
                 fresh.setSceneId(scene.getId());
                 fresh.setActionType(item.actionType());
                 fresh.setDefaultParams(write(item.defaultParams()));
-                fresh.setRateLimitOverride(write(item.rateLimitOverride()));
                 fresh.setCreatedBy(actorId);
                 bindingMapper.insert(fresh);
             } else {
                 def.setDefaultParams(write(item.defaultParams()));
-                def.setRateLimitOverride(write(item.rateLimitOverride()));
                 def.setUpdatedBy(actorId);
                 def.setUpdatedAt(LocalDateTime.now());
                 bindingMapper.updateById(def);

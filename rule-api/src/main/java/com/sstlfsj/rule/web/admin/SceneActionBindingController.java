@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.config.api.service.SceneActionBindingService;
-import com.sstlfsj.rule.config.api.service.SceneActionBindingService.SceneActionBindingItem;
+import com.sstlfsj.rule.web.admin.convert.SceneActionBindingConvert;
 import com.sstlfsj.rule.web.admin.dto.ActionBindingItemDto;
 import com.sstlfsj.rule.web.admin.dto.ReplaceActionBindingsRequest;
 import com.sstlfsj.rule.web.common.ApiResponse;
@@ -18,19 +18,17 @@ import java.util.List;
 public class SceneActionBindingController {
 
     private final SceneActionBindingService bindingService;
+    private final SceneActionBindingConvert bindingConvert;
 
     /**
      * GET /admin/v1/scenes/{sceneCode}/action-bindings?tenantId=xxx — 列出场景当前 action 绑定。
-     * 存库的 JSON 串反序列化为对象返回，供前端编辑器渲染。
+     * 存库的 JSON 串由 service 反序列化为对象返回，供前端编辑器渲染。
      */
     @GetMapping
     public ApiResponse<List<ActionBindingItemDto>> list(
             @PathVariable String sceneCode,
             @RequestParam String tenantId) {
-        List<ActionBindingItemDto> items = bindingService.list(tenantId, sceneCode).stream()
-                .map(this::toDto)
-                .toList();
-        return ApiResponse.ok(items);
+        return ApiResponse.ok(bindingConvert.toDtos(bindingService.list(tenantId, sceneCode)));
     }
 
     /**
@@ -43,22 +41,7 @@ public class SceneActionBindingController {
             @Valid @RequestBody ReplaceActionBindingsRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
         List<ActionBindingItemDto> bindings = req.bindings() != null ? req.bindings() : List.of();
-        List<SceneActionBindingItem> items = bindings.stream()
-                .map(this::toItem)
-                .toList();
-        bindingService.replace(req.tenantId(), sceneCode, items, actorId);
+        bindingService.replace(req.tenantId(), sceneCode, bindingConvert.toItems(bindings), actorId);
         return ApiResponse.ok(null);
-    }
-
-    /** service 项 → 响应 DTO（同为类型化对象，字段直传）。 */
-    private ActionBindingItemDto toDto(SceneActionBindingItem item) {
-        return new ActionBindingItemDto(item.actionType(),
-                item.defaultParams(), item.rateLimitOverride());
-    }
-
-    /** 请求 DTO → service 项（同为类型化对象，字段直传）。 */
-    private SceneActionBindingItem toItem(ActionBindingItemDto dto) {
-        return new SceneActionBindingItem(dto.actionType(),
-                dto.defaultParams(), dto.rateLimitOverride());
     }
 }

@@ -17,8 +17,6 @@ public class SceneActionBindingDef {
     private String actionType;
     /** JSON 对象字符串，Scene 级默认参数；可空。 */
     private String defaultParams;
-    /** JSON 对象字符串，Scene 级频控覆盖；可空。 */
-    private String rateLimitOverride;
     private String createdBy;
     private java.time.LocalDateTime createdAt;
     private String updatedBy;

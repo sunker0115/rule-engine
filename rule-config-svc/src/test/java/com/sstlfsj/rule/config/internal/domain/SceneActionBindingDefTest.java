@@ -17,7 +17,6 @@ class SceneActionBindingDefTest {
         def.setSceneId(42L);
         def.setActionType("BLOCK_TX");
         def.setDefaultParams("{\"reason\":\"risk\"}");
-        def.setRateLimitOverride("{\"qps\":5}");
         def.setCreatedBy("alice");
         def.setCreatedAt(now);
         def.setUpdatedBy("bob");
@@ -27,7 +26,6 @@ class SceneActionBindingDefTest {
         assertThat(def.getSceneId()).isEqualTo(42L);
         assertThat(def.getActionType()).isEqualTo("BLOCK_TX");
         assertThat(def.getDefaultParams()).isEqualTo("{\"reason\":\"risk\"}");
-        assertThat(def.getRateLimitOverride()).isEqualTo("{\"qps\":5}");
         assertThat(def.getCreatedBy()).isEqualTo("alice");
         assertThat(def.getCreatedAt()).isEqualTo(now);
         assertThat(def.getUpdatedBy()).isEqualTo("bob");

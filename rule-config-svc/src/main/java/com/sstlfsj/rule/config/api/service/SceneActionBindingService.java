@@ -33,14 +33,11 @@ public interface SceneActionBindingService {
     void replace(String tenantId, String sceneCode, List<SceneActionBindingItem> items, String actorId);
 
     /**
-     * action 绑定项。defaultParams / rateLimitOverride 为 JSON 对象（{@code Map<String,Object>}），可空；
+     * action 绑定项。defaultParams 为 JSON 对象（{@code Map<String,Object>}，依 actionType 异构），可空；
      * 与实体间的 JSON 串序列化由 service 实现承担，对外只暴露类型化对象。
      *
-     * @param actionType        actionType 路由键
-     * @param defaultParams     Scene 级默认参数（依 actionType 异构，故为开放 Map），可空
-     * @param rateLimitOverride Scene 级频控覆盖（频控功能未实装，暂为开放 Map），可空
+     * @param actionType    actionType 路由键
+     * @param defaultParams Scene 级默认参数，可空
      */
-    record SceneActionBindingItem(String actionType,
-                                  Map<String, Object> defaultParams,
-                                  Map<String, Object> rateLimitOverride) {}
+    record SceneActionBindingItem(String actionType, Map<String, Object> defaultParams) {}
 }

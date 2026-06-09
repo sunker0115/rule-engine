@@ -68,8 +68,8 @@ class SceneActionBindingServiceImplTest {
         when(bindingMapper.findBySceneId(10L)).thenReturn(List.of());
 
         service.replace("1", "PAY", List.of(
-                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("a", 1), null),
-                new SceneActionBindingItem("SEND_ALERT", null, null)), "alice");
+                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("a", 1)),
+                new SceneActionBindingItem("SEND_ALERT", null)), "alice");
 
         verify(bindingMapper, times(2)).insert(any(SceneActionBindingDef.class));
         verify(bindingMapper, never()).updateById(any(SceneActionBindingDef.class));
@@ -91,8 +91,8 @@ class SceneActionBindingServiceImplTest {
                 existing(100L, "BLOCK_TX"), existing(101L, "OLD")));
 
         service.replace("1", "PAY", List.of(
-                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("x", 1), null),
-                new SceneActionBindingItem("NEW", null, null)), "bob");
+                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("x", 1)),
+                new SceneActionBindingItem("NEW", null)), "bob");
 
         verify(bindingMapper).deleteById(101L);                              // OLD 被删
         verify(bindingMapper).updateById(any(SceneActionBindingDef.class));  // BLOCK_TX 被更新
@@ -105,7 +105,7 @@ class SceneActionBindingServiceImplTest {
         when(bindingMapper.findBySceneId(10L)).thenReturn(List.of());
 
         service.replace("1", "PAY",
-                List.of(new SceneActionBindingItem("BLOCK_TX", null, null)), "bob");
+                List.of(new SceneActionBindingItem("BLOCK_TX", null)), "bob");
 
         ArgumentCaptor<SceneChangedEvent> ev = ArgumentCaptor.forClass(SceneChangedEvent.class);
         verify(eventPublisher).publishEvent(ev.capture());
@@ -127,8 +127,8 @@ class SceneActionBindingServiceImplTest {
         when(bindingMapper.findBySceneId(10L)).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.replace("1", "PAY", List.of(
-                new SceneActionBindingItem("BLOCK_TX", null, null),
-                new SceneActionBindingItem("BLOCK_TX", null, null)), "bob"))
+                new SceneActionBindingItem("BLOCK_TX", null),
+                new SceneActionBindingItem("BLOCK_TX", null)), "bob"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

@@ -24,7 +24,7 @@ class ReplaceActionBindingsRequestTest {
     @Test
     void valid_request_passesValidation() {
         var req = new ReplaceActionBindingsRequest("t1", List.of(
-                new ActionBindingItemDto("BLOCK_TX", null, null)));
+                new ActionBindingItemDto("BLOCK_TX", null)));
         Set<ConstraintViolation<ReplaceActionBindingsRequest>> violations = validator.validate(req);
         assertThat(violations).isEmpty();
     }
@@ -53,7 +53,7 @@ class ReplaceActionBindingsRequestTest {
     @Test
     void nested_blankActionType_failsValidation() {
         var req = new ReplaceActionBindingsRequest("t1", List.of(
-                new ActionBindingItemDto("  ", null, null)));
+                new ActionBindingItemDto("  ", null)));
         Set<ConstraintViolation<ReplaceActionBindingsRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().contains("actionType"));
     }

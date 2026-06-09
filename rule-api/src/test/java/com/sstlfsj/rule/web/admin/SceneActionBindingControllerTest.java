@@ -2,6 +2,7 @@ package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.config.api.service.SceneActionBindingService;
 import com.sstlfsj.rule.config.api.service.SceneActionBindingService.SceneActionBindingItem;
+import com.sstlfsj.rule.web.admin.convert.SceneActionBindingConvertImpl;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ class SceneActionBindingControllerTest {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new SceneActionBindingController(bindingService))
+                .standaloneSetup(new SceneActionBindingController(bindingService, new SceneActionBindingConvertImpl()))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -42,14 +43,13 @@ class SceneActionBindingControllerTest {
     @Test
     void list_returns200_withParsedObjects() throws Exception {
         when(bindingService.list("1", "PAY")).thenReturn(List.of(
-                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("reason", "risk"), null)));
+                new SceneActionBindingItem("BLOCK_TX", Map.<String, Object>of("reason", "risk"))));
 
         mockMvc.perform(get("/admin/v1/scenes/PAY/action-bindings").param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].actionType").value("BLOCK_TX"))
-                .andExpect(jsonPath("$.data[0].defaultParams.reason").value("risk"))
-                .andExpect(jsonPath("$.data[0].rateLimitOverride").doesNotExist());
+                .andExpect(jsonPath("$.data[0].defaultParams.reason").value("risk"));
 
         verify(bindingService).list("1", "PAY");
     }

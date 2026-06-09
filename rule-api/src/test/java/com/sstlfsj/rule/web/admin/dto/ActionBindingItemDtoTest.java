@@ -23,21 +23,21 @@ class ActionBindingItemDtoTest {
 
     @Test
     void valid_request_passesValidation() {
-        var dto = new ActionBindingItemDto("BLOCK_TX", Map.<String, Object>of("reason", "risk"), null);
+        var dto = new ActionBindingItemDto("BLOCK_TX", Map.<String, Object>of("reason", "risk"));
         Set<ConstraintViolation<ActionBindingItemDto>> violations = validator.validate(dto);
         assertThat(violations).isEmpty();
     }
 
     @Test
     void nullableParams_passesValidation() {
-        var dto = new ActionBindingItemDto("SEND_ALERT", null, null);
+        var dto = new ActionBindingItemDto("SEND_ALERT", null);
         Set<ConstraintViolation<ActionBindingItemDto>> violations = validator.validate(dto);
         assertThat(violations).isEmpty();
     }
 
     @Test
     void blank_actionType_failsValidation() {
-        var dto = new ActionBindingItemDto("  ", null, null);
+        var dto = new ActionBindingItemDto("  ", null);
         Set<ConstraintViolation<ActionBindingItemDto>> violations = validator.validate(dto);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("actionType"));
     }
