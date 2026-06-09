@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
@@ -179,7 +180,7 @@ class RuleImportServiceTest {
 
         RuleDefinition existingRule = new RuleDefinition();
         existingRule.setId(10L); existingRule.setTenantId(1L); existingRule.setSceneId(5L);
-        existingRule.setCode("rule.a"); existingRule.setStatus("PUBLISHED");
+        existingRule.setCode("rule.a"); existingRule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(existingRule);
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(3L);
         doAnswer(inv -> { ((RuleVersion) inv.getArgument(0)).setId(101L); return 1; })

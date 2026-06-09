@@ -12,7 +12,7 @@ class RuleVersionStatusTest {
     @Test
     void values_matchClosedSet() {
         assertThat(Arrays.stream(RuleVersionStatus.values()).map(Enum::name))
-                .containsExactlyInAnyOrder("DRAFT", "ACTIVE", "SUPERSEDED");
+                .containsExactlyInAnyOrder("DRAFT", "ACTIVE", "SUPERSEDED", "DISABLED");
     }
 
     @Test
@@ -20,5 +20,6 @@ class RuleVersionStatusTest {
         assertThat(RuleVersionStatus.DRAFT.name()).isEqualTo("DRAFT");
         assertThat(RuleVersionStatus.ACTIVE.name()).isEqualTo("ACTIVE");
         assertThat(RuleVersionStatus.SUPERSEDED.name()).isEqualTo("SUPERSEDED");
+        assertThat(RuleVersionStatus.DISABLED.name()).isEqualTo("DISABLED");
     }
 }

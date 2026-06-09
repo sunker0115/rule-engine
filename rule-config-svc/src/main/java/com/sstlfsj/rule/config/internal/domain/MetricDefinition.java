@@ -28,7 +28,7 @@ public class MetricDefinition {
     private Map<String, Object> params;
     private Integer cacheTtlSeconds;
     private Boolean allowProvided;
-    private String status;
+    private MetricStatus status;
     private String createdBy;
     private java.time.LocalDateTime createdAt;
     private String updatedBy;

@@ -28,7 +28,7 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
     default RuleVersion findActiveVersion(Long ruleDefinitionId) {
         return selectOne(new LambdaQueryWrapper<RuleVersion>()
                 .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId)
-                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE.name())
+                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE)
                 .orderByDesc(RuleVersion::getVersion)
                 .last("LIMIT 1"));
     }
@@ -37,7 +37,7 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
     default RuleVersion findLatestDraft(Long ruleDefinitionId) {
         return selectOne(new LambdaQueryWrapper<RuleVersion>()
                 .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId)
-                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT.name())
+                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT)
                 .orderByDesc(RuleVersion::getVersion)
                 .last("LIMIT 1"));
     }
@@ -51,7 +51,7 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
         if (ruleDefinitionIds == null || ruleDefinitionIds.isEmpty()) return List.of();
         return selectList(new LambdaQueryWrapper<RuleVersion>()
                 .in(RuleVersion::getRuleDefinitionId, ruleDefinitionIds)
-                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE.name())
+                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE)
                 .select(RuleVersion::getId, RuleVersion::getRuleDefinitionId,
                         RuleVersion::getMetricDependencies));
     }
@@ -60,7 +60,7 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
     default int markSuperseded(Long ruleVersionId) {
         return update(null, new LambdaUpdateWrapper<RuleVersion>()
                 .eq(RuleVersion::getId, ruleVersionId)
-                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE.name())
-                .set(RuleVersion::getStatus, RuleVersionStatus.SUPERSEDED.name()));
+                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE)
+                .set(RuleVersion::getStatus, RuleVersionStatus.SUPERSEDED));
     }
 }

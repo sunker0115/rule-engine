@@ -14,3 +14,5 @@ mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 实体 status 等 Java enum 字段按 name() 与 varchar 列往返（枚举名 == DB 值）
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler

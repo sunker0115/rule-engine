@@ -16,7 +16,7 @@ class RuleDefinitionTest {
         def.setCode("rule.demo");
         def.setName("测试规则");
         def.setDescription("规则描述");
-        def.setStatus("DRAFT");
+        def.setStatus(RuleDefinitionStatus.DRAFT);
         def.setKind("AST_BOOLEAN");
         def.setCurrentVersion(99L);
         def.setPublishedBy("operator1");
@@ -29,7 +29,7 @@ class RuleDefinitionTest {
         assertEquals("rule.demo", def.getCode());
         assertEquals("测试规则", def.getName());
         assertEquals("规则描述", def.getDescription());
-        assertEquals("DRAFT", def.getStatus());
+        assertEquals(RuleDefinitionStatus.DRAFT, def.getStatus());
         assertEquals("AST_BOOLEAN", def.getKind());
         assertEquals(99L, def.getCurrentVersion());
         assertEquals("operator1", def.getPublishedBy());
@@ -57,7 +57,7 @@ class RuleDefinitionTest {
         assertEquals("AST_BOOLEAN", def.getKind());
         assertEquals("operator1", def.getCreatedBy());
         // 草稿默认：status=DRAFT、createdAt 已赋值
-        assertEquals("DRAFT", def.getStatus());
+        assertEquals(RuleDefinitionStatus.DRAFT, def.getStatus());
         assertNotNull(def.getCreatedAt());
         // 未涉及字段保持 null
         assertNull(def.getId());

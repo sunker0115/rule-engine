@@ -8,8 +8,11 @@ import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.MetricChangedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
@@ -91,7 +94,7 @@ class MetricWriteServiceImplTest {
         verify(metricDefinitionMapper, times(1)).insert(captor.capture());
         MetricDefinition inserted = captor.getValue();
         assertThat(inserted.getVersion()).isEqualTo(1);
-        assertThat(inserted.getStatus()).isEqualTo("ACTIVE");
+        assertThat(inserted.getStatus()).isEqualTo(MetricStatus.ACTIVE);
         assertThat(inserted.getTenantId()).isEqualTo(TENANT);
         assertThat(inserted.getMetricCode()).isEqualTo(CODE);
         assertThat(inserted.getName()).isEqualTo("用户年龄");
@@ -193,7 +196,7 @@ class MetricWriteServiceImplTest {
         assertThat(version).isEqualTo(2);
         verify(metricDefinitionMapper, times(1)).updateById(active);
         verify(metricDefinitionMapper, never()).insert((MetricDefinition) any());
-        assertThat(active.getStatus()).isEqualTo("ACTIVE");
+        assertThat(active.getStatus()).isEqualTo(MetricStatus.ACTIVE);
         // UPDATE 非创建：before 仍为 null，after 为 typed 快照（breaking=false）
         ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
         verify(eventPublisher, times(1)).publishEvent(auditCaptor.capture());
@@ -222,14 +225,14 @@ class MetricWriteServiceImplTest {
 
         // 旧行改为 SUPERSEDED
         verify(metricDefinitionMapper, times(1)).updateById(active);
-        assertThat(active.getStatus()).isEqualTo("SUPERSEDED");
+        assertThat(active.getStatus()).isEqualTo(MetricStatus.SUPERSEDED);
 
         // 新行插入 version=3 ACTIVE
         ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
         verify(metricDefinitionMapper, times(1)).insert(captor.capture());
         MetricDefinition newRow = captor.getValue();
         assertThat(newRow.getVersion()).isEqualTo(3);
-        assertThat(newRow.getStatus()).isEqualTo("ACTIVE");
+        assertThat(newRow.getStatus()).isEqualTo(MetricStatus.ACTIVE);
 
         // 升版 UPDATE：before 为 null，after 为 typed 快照（breaking=true，version=3）
         ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
@@ -260,11 +263,11 @@ class MetricWriteServiceImplTest {
 
         // 应走升版路径：version=2，旧行 SUPERSEDED
         assertThat(version).isEqualTo(2);
-        assertThat(active.getStatus()).isEqualTo("SUPERSEDED");
+        assertThat(active.getStatus()).isEqualTo(MetricStatus.SUPERSEDED);
         ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
         verify(metricDefinitionMapper, times(1)).insert(captor.capture());
         assertThat(captor.getValue().getVersion()).isEqualTo(2);
-        assertThat(captor.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(captor.getValue().getStatus()).isEqualTo(MetricStatus.ACTIVE);
         assertThat(captor.getValue().getSourceType()).isEqualTo("SQL_AGGREGATE");
     }
 
@@ -286,12 +289,12 @@ class MetricWriteServiceImplTest {
         int version = sut.update(TENANT, CODE, changedCmd, false, ACTOR);
 
         assertThat(version).isEqualTo(2);
-        assertThat(active.getStatus()).isEqualTo("SUPERSEDED");
+        assertThat(active.getStatus()).isEqualTo(MetricStatus.SUPERSEDED);
         // 补：用 ArgumentCaptor 断言新行 dataType == "DOUBLE"（与 sourceType 用例对称）
         ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
         verify(metricDefinitionMapper, times(1)).insert(captor.capture());
         assertThat(captor.getValue().getVersion()).isEqualTo(2);
-        assertThat(captor.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(captor.getValue().getStatus()).isEqualTo(MetricStatus.ACTIVE);
         assertThat(captor.getValue().getDataType()).isEqualTo("DOUBLE");
     }
 
@@ -330,7 +333,7 @@ class MetricWriteServiceImplTest {
     @Test
     void findReferencingRules_returnsOnlyMatchingRules() {
         // rule_definition：两条属于 TENANT，分属不同 scene
-        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
+        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
         RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", 11L, "DISABLED");
 
         // scene：10 → transfer，11 → login
@@ -366,7 +369,7 @@ class MetricWriteServiceImplTest {
         assertThat(result).anySatisfy(ref -> {
             assertThat(ref.ruleCode()).isEqualTo("risk.transfer");
             assertThat(ref.sceneCode()).isEqualTo("risk.transfer");
-            assertThat(ref.status()).isEqualTo("ACTIVE");
+            assertThat(ref.status()).isEqualTo("PUBLISHED");
         });
         assertThat(result).anySatisfy(ref -> {
             assertThat(ref.ruleName()).isEqualTo("登录风控");
@@ -379,7 +382,7 @@ class MetricWriteServiceImplTest {
     @Test
     void findReferencingRules_differentMetricCode_notIncluded() {
         // 纯反例：规则只引用 {user.level,1}，查 account.age/1 时不应出现
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
         RuleVersion rv = ruleVersion(1001L, 101L, List.of(new MetricDependency("user.level", 1)));
 
         when(ruleDefinitionMapper.findByTenant(any()))
@@ -408,7 +411,7 @@ class MetricWriteServiceImplTest {
 
     @Test
     void findReferencingRules_nullDependencies_treatedAsNoMatch() {
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "ACTIVE");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
         // metric_dependencies 为 null（列空/未设置），containsDependency 视为不匹配，不抛异常
         RuleVersion rv = ruleVersion(1001L, 101L, null);
 
@@ -435,7 +438,7 @@ class MetricWriteServiceImplTest {
         m.setName("旧名称");
         m.setSourceType("ATTRIBUTE");
         m.setDataType("LONG");
-        m.setStatus("ACTIVE");
+        m.setStatus(MetricStatus.ACTIVE);
         return m;
     }
 
@@ -446,7 +449,7 @@ class MetricWriteServiceImplTest {
         rd.setCode(code);
         rd.setName(name);
         rd.setSceneId(sceneId);
-        rd.setStatus(status);
+        rd.setStatus(RuleDefinitionStatus.valueOf(status));
         return rd;
     }
 
@@ -461,7 +464,7 @@ class MetricWriteServiceImplTest {
         RuleVersion rv = new RuleVersion();
         rv.setId(id);
         rv.setRuleDefinitionId(ruleDefinitionId);
-        rv.setStatus("ACTIVE");
+        rv.setStatus(RuleVersionStatus.ACTIVE);
         rv.setMetricDependencies(metricDependencies);
         return rv;
     }

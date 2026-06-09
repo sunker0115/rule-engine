@@ -3,9 +3,13 @@ package com.sstlfsj.rule.config.integration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
@@ -108,7 +112,7 @@ class MetadataServiceIntegrationTest {
         s.setDecisionStrategy("HIGHEST_PRIORITY");
         s.setSubjectType("USER");
         s.setEventTypes(eventTypes);
-        s.setStatus("ACTIVE");
+        s.setStatus(SceneStatus.ACTIVE);
         return s;
     }
 
@@ -122,7 +126,7 @@ class MetadataServiceIntegrationTest {
         m.setParams(java.util.Map.of());
         m.setCacheTtlSeconds(60);
         m.setAllowProvided(false);
-        m.setStatus("ACTIVE");
+        m.setStatus(MetricStatus.ACTIVE);
         return m;
     }
 
@@ -132,7 +136,7 @@ class MetadataServiceIntegrationTest {
         r.setSceneId(sceneId);
         r.setCode(code);
         r.setName(code);
-        r.setStatus("PUBLISHED");
+        r.setStatus(RuleDefinitionStatus.PUBLISHED);
         r.setKind("AST_BOOLEAN");
         r.setCurrentVersion(1L);
         return r;
@@ -148,7 +152,7 @@ class MetadataServiceIntegrationTest {
         v.setKind("AST_BOOLEAN");
         v.setTriggerEventTypes(List.of("e"));
         v.setMetricDependencies(metricDeps);
-        v.setStatus("ACTIVE");
+        v.setStatus(RuleVersionStatus.ACTIVE);
         return v;
     }
 

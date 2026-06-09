@@ -28,7 +28,7 @@ class RuleVersionTest {
         ver.setKind("AST_BOOLEAN");
         ver.setTriggerEventTypes(List.of("payment.initiated"));
         ver.setMetricDependencies(List.of(new MetricDependency("user.age", 1)));
-        ver.setStatus("ACTIVE");
+        ver.setStatus(RuleVersionStatus.ACTIVE);
         ver.setPublishedBy("operator1");
 
         assertEquals(5L, ver.getId());
@@ -40,7 +40,7 @@ class RuleVersionTest {
         assertEquals("AST_BOOLEAN", ver.getKind());
         assertEquals(List.of("payment.initiated"), ver.getTriggerEventTypes());
         assertEquals("user.age", ver.getMetricDependencies().getFirst().metricCode());
-        assertEquals("ACTIVE", ver.getStatus());
+        assertEquals(RuleVersionStatus.ACTIVE, ver.getStatus());
         assertEquals("operator1", ver.getPublishedBy());
     }
 
@@ -70,7 +70,7 @@ class RuleVersionTest {
         assertEquals(List.of("payment.initiated"), ver.getTriggerEventTypes());
         // 草稿默认：version=1、status=DRAFT、metricDependencies 空、createdAt 已赋值
         assertEquals(1L, ver.getVersion());
-        assertEquals("DRAFT", ver.getStatus());
+        assertEquals(RuleVersionStatus.DRAFT, ver.getStatus());
         assertTrue(ver.getMetricDependencies().isEmpty());
         assertNotNull(ver.getCreatedAt());
     }
@@ -87,6 +87,6 @@ class RuleVersionTest {
         assertTrue(ver.getTriggerEventTypes().isEmpty());
         assertTrue(ver.getMetricDependencies().isEmpty());
         assertEquals(1L, ver.getVersion());
-        assertEquals("DRAFT", ver.getStatus());
+        assertEquals(RuleVersionStatus.DRAFT, ver.getStatus());
     }
 }

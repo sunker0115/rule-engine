@@ -2,8 +2,10 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
@@ -172,7 +174,7 @@ class MetadataServiceImplTest {
         when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
-        rv.setStatus("ACTIVE");
+        rv.setStatus(RuleVersionStatus.ACTIVE);
         rv.setMetricDependencies(List.of(new MetricDependency("risk.score", 1)));
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
@@ -183,7 +185,7 @@ class MetadataServiceImplTest {
         riskScore.setSourceType("SQL_AGGREGATE");
         riskScore.setDataType("LONG");
         riskScore.setAllowProvided(false);
-        riskScore.setStatus("ACTIVE");
+        riskScore.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(riskScore);
 
         MetadataServiceImpl service = new MetadataServiceImpl(
@@ -209,7 +211,7 @@ class MetadataServiceImplTest {
         when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
-        rv.setStatus("ACTIVE");
+        rv.setStatus(RuleVersionStatus.ACTIVE);
         rv.setMetricDependencies(List.of());   // 规则不引用任何 metric
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
@@ -245,7 +247,7 @@ class MetadataServiceImplTest {
         riskV1.setDataType("LONG");
         riskV1.setAllowProvided(false);
         riskV1.setCacheTtlSeconds(0);
-        riskV1.setStatus("SUPERSEDED");
+        riskV1.setStatus(MetricStatus.SUPERSEDED);
 
         // scenes=["fraud"] → scene id 5 → ruleDef id 11 → ACTIVE rule_version 绑对象数组 v1
         SceneDef scene = new SceneDef();
@@ -262,7 +264,7 @@ class MetadataServiceImplTest {
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
-        rv.setStatus("ACTIVE");
+        rv.setStatus(RuleVersionStatus.ACTIVE);
         // 对象数组格式：绑 risk.score v1
         rv.setMetricDependencies(List.of(new MetricDependency("risk.score", 1)));
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
@@ -302,7 +304,7 @@ class MetadataServiceImplTest {
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
-        rv.setStatus("ACTIVE");
+        rv.setStatus(RuleVersionStatus.ACTIVE);
         rv.setMetricDependencies(List.of(new MetricDependency("ghost.metric", 2)));
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 

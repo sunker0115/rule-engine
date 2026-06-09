@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.service;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
@@ -51,7 +52,7 @@ class SceneServiceImplTest {
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).insert(sceneCaptor.capture());
         assertThat(sceneCaptor.getValue().getCode()).isEqualTo("PAYMENT");
-        assertThat(sceneCaptor.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(sceneCaptor.getValue().getStatus()).isEqualTo(SceneStatus.ACTIVE);
         verify(eventPublisher).publishEvent(any(OperationAuditedEvent.class));
     }
 
@@ -104,7 +105,7 @@ class SceneServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("PAYMENT");
-        scene.setStatus("ACTIVE");
+        scene.setStatus(SceneStatus.ACTIVE);
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
 
@@ -112,7 +113,7 @@ class SceneServiceImplTest {
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).updateById(sceneCaptor.capture());
-        assertThat(sceneCaptor.getValue().getStatus()).isEqualTo("DISABLED");
+        assertThat(sceneCaptor.getValue().getStatus()).isEqualTo(SceneStatus.DISABLED);
 
         // disable 现在发两个事件：操作审计事件 + SceneChangedEvent
         verify(eventPublisher).publishEvent(any(OperationAuditedEvent.class));
@@ -192,7 +193,7 @@ class SceneServiceImplTest {
         scene.setPayloadSchema(List.of(field("amount")));
         scene.setDefaultParams(Map.of("timezone", "Asia/Shanghai"));
         scene.setPayloadSchemaVersion(2);
-        scene.setStatus("ACTIVE");
+        scene.setStatus(SceneStatus.ACTIVE);
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         com.sstlfsj.rule.config.api.dto.SceneDetailDto dto =
@@ -222,7 +223,7 @@ class SceneServiceImplTest {
         s.setName("支付场景");
         s.setDominantMode("PUSH");
         s.setSubjectType("USER");
-        s.setStatus("ACTIVE");
+        s.setStatus(SceneStatus.ACTIVE);
         when(sceneMapper.findByTenantId(1L)).thenReturn(List.of(s));
 
         var list = sceneService.listScenes("1");

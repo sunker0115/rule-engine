@@ -37,7 +37,7 @@ public class SceneDef {
     private Map<String, Object> defaultParams;
     /** payloadSchema 当前版本号，初始为 1，每次更新自增（D13 演进）。 */
     private Integer payloadSchemaVersion;
-    private String status;
+    private SceneStatus status;
     private String createdBy;
     private java.time.LocalDateTime createdAt;
     private String updatedBy;

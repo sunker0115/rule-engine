@@ -18,7 +18,7 @@ public class RuleDefinition {
     private String code;
     private String name;
     private String description;
-    private String status;
+    private RuleDefinitionStatus status;
     private String kind;
     private Long currentVersion;
     private String publishedBy;
@@ -46,7 +46,7 @@ public class RuleDefinition {
         rd.setSceneId(sceneId);
         rd.setCode(code);
         rd.setName(name);
-        rd.setStatus(RuleDefinitionStatus.DRAFT.name());
+        rd.setStatus(RuleDefinitionStatus.DRAFT);
         rd.setKind(kind);
         rd.setCreatedBy(createdBy);
         rd.setCreatedAt(java.time.LocalDateTime.now());

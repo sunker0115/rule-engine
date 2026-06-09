@@ -4,7 +4,9 @@ import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
@@ -49,13 +51,13 @@ class RuleExportServiceTest {
         RuleDefinition r = new RuleDefinition();
         r.setId(id); r.setTenantId(1L); r.setSceneId(5L);
         r.setCode(code); r.setName("规则" + code); r.setKind("AST_BOOLEAN");
-        r.setStatus("PUBLISHED");
+        r.setStatus(RuleDefinitionStatus.PUBLISHED);
         return r;
     }
 
     private RuleVersion activeVersion(long rdId) {
         RuleVersion v = new RuleVersion();
-        v.setId(100L + rdId); v.setRuleDefinitionId(rdId); v.setVersion(3L); v.setStatus("ACTIVE");
+        v.setId(100L + rdId); v.setRuleDefinitionId(rdId); v.setVersion(3L); v.setStatus(RuleVersionStatus.ACTIVE);
         v.setKind("AST_BOOLEAN");
         v.setConditionAst(new AndNode(List.of(), null, null));
         v.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));

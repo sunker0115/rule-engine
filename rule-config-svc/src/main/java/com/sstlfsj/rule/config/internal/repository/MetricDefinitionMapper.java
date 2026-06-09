@@ -33,7 +33,7 @@ public interface MetricDefinitionMapper extends BaseMapper<MetricDefinition> {
     default List<MetricDefinition> findActiveByTenant(Long tenantId) {
         return selectList(new LambdaQueryWrapper<MetricDefinition>()
                 .eq(MetricDefinition::getTenantId, tenantId)
-                .eq(MetricDefinition::getStatus, MetricStatus.ACTIVE.name()));
+                .eq(MetricDefinition::getStatus, MetricStatus.ACTIVE));
     }
 
     /** 按 (tenantId, metricCode) 查 ACTIVE 版本，不存在返回 null。 */
@@ -41,7 +41,7 @@ public interface MetricDefinitionMapper extends BaseMapper<MetricDefinition> {
         return selectOne(new LambdaQueryWrapper<MetricDefinition>()
                 .eq(MetricDefinition::getTenantId, tenantId)
                 .eq(MetricDefinition::getMetricCode, metricCode)
-                .eq(MetricDefinition::getStatus, MetricStatus.ACTIVE.name()));
+                .eq(MetricDefinition::getStatus, MetricStatus.ACTIVE));
     }
 
     /** 按 (tenantId) + code 集合查 ACTIVE metric；空集合返回空列表。 */
@@ -50,6 +50,6 @@ public interface MetricDefinitionMapper extends BaseMapper<MetricDefinition> {
         return selectList(new LambdaQueryWrapper<MetricDefinition>()
                 .eq(MetricDefinition::getTenantId, tenantId)
                 .in(MetricDefinition::getMetricCode, metricCodes)
-                .eq(MetricDefinition::getStatus, MetricStatus.ACTIVE.name()));
+                .eq(MetricDefinition::getStatus, MetricStatus.ACTIVE));
     }
 }

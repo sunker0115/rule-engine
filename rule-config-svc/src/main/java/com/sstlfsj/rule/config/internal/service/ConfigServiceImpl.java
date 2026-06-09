@@ -49,7 +49,7 @@ class ConfigServiceImpl implements ConfigService {
         if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        rule.setStatus(RuleDefinitionStatus.DISABLED.name());
+        rule.setStatus(RuleDefinitionStatus.DISABLED);
         ruleDefinitionMapper.updateById(rule);
 
         eventPublisher.publishEvent(new OperationAuditedEvent(
@@ -76,7 +76,7 @@ class ConfigServiceImpl implements ConfigService {
         voPage.setRecords(rdPage.getRecords().stream()
                 .map(rd -> new RuleListItemVO(
                         rd.getId(), rd.getCode(), rd.getName(),
-                        rd.getStatus(), rd.getCurrentVersion(), rd.getPublishedAt()
+                        rd.getStatus().name(), rd.getCurrentVersion(), rd.getPublishedAt()
                 ))
                 .toList());
         return voPage;
@@ -91,7 +91,7 @@ class ConfigServiceImpl implements ConfigService {
         SceneDef scene = sceneMapper.selectById(rule.getSceneId());
         RuleVersion active = ruleVersionMapper.findActiveVersion(ruleId);
         return new RuleDetailVO(
-                rule.getId(), rule.getCode(), rule.getName(), rule.getStatus(), rule.getKind(),
+                rule.getId(), rule.getCode(), rule.getName(), rule.getStatus().name(), rule.getKind(),
                 scene != null ? scene.getCode() : null,
                 active != null ? active.getConditionAst() : null,
                 active != null ? active.getDecisionBindings() : null,

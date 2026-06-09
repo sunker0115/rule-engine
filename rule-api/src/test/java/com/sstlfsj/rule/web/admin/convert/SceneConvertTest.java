@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.web.admin.convert;
 
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.web.admin.dto.SceneResponse;
 import org.junit.jupiter.api.Test;
 
@@ -22,7 +23,7 @@ class SceneConvertTest {
         scene.setDominantMode("PUSH");
         scene.setDecisionStrategy("HIGHEST_PRIORITY");
         scene.setSubjectType("USER");
-        scene.setStatus("ACTIVE");
+        scene.setStatus(SceneStatus.ACTIVE);
 
         SceneResponse resp = convert.toResponse(scene);
 

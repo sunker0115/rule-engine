@@ -86,7 +86,7 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
                 null, null, LocalDateTime.now()));
         // active 取场景真实状态：禁用场景改 binding 不得复活其索引（发 false → 索引移除/no-op）
         eventPublisher.publishEvent(new SceneChangedEvent(
-                tenantId, sceneCode, SceneStatus.ACTIVE.name().equals(scene.getStatus())));
+                tenantId, sceneCode, scene.getStatus() == SceneStatus.ACTIVE));
     }
 
     private SceneDef findScene(Long tenantId, String sceneCode) {

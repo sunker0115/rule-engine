@@ -81,7 +81,7 @@ public class RuleImportService {
                 s.setPayloadSchema(ss.payloadSchema());
                 s.setDefaultParams(ss.defaultParams());
                 s.setPayloadSchemaVersion(ss.payloadSchemaVersion() == null ? 1 : ss.payloadSchemaVersion());
-                s.setStatus(SceneStatus.ACTIVE.name());
+                s.setStatus(SceneStatus.ACTIVE);
                 s.setCreatedBy(actorId);
                 s.setCreatedAt(LocalDateTime.now());
                 sceneMapper.insert(s);
@@ -122,7 +122,7 @@ public class RuleImportService {
                 m.setParams(me.params() != null ? me.params() : java.util.Map.of());
                 m.setCacheTtlSeconds(me.cacheTtlSeconds() == null ? 60 : me.cacheTtlSeconds());
                 m.setAllowProvided(Boolean.TRUE.equals(me.allowProvided()));
-                m.setStatus(MetricStatus.ACTIVE.name());
+                m.setStatus(MetricStatus.ACTIVE);
                 m.setCreatedBy(actorId);
                 m.setCreatedAt(LocalDateTime.now());
                 metricDefinitionMapper.insert(m);
@@ -170,7 +170,7 @@ public class RuleImportService {
                 rd.setSceneId(sceneId);
                 rd.setCode(rule.code());
                 rd.setName(rule.name());
-                rd.setStatus(RuleDefinitionStatus.DRAFT.name());
+                rd.setStatus(RuleDefinitionStatus.DRAFT);
                 rd.setKind(kind);
                 rd.setCreatedBy(actorId);
                 rd.setCreatedAt(LocalDateTime.now());
@@ -191,7 +191,7 @@ public class RuleImportService {
             rv.setKind(kind);
             rv.setTriggerEventTypes(rule.triggerEventTypes() != null ? rule.triggerEventTypes() : java.util.List.of());
             rv.setMetricDependencies(rule.metricDependencies() != null ? rule.metricDependencies() : java.util.List.of());
-            rv.setStatus(RuleVersionStatus.DRAFT.name());
+            rv.setStatus(RuleVersionStatus.DRAFT);
             rv.setCreatedAt(LocalDateTime.now());
             ruleVersionMapper.insert(rv);
 

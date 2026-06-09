@@ -54,7 +54,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setMetricCode(metricCode);
         m.setVersion(1);
         applyCommandFields(m, cmd);
-        m.setStatus(MetricStatus.ACTIVE.name());
+        m.setStatus(MetricStatus.ACTIVE);
         m.setCreatedBy(actorId);
         m.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(m);
@@ -94,7 +94,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
 
         // effectiveBreaking=true：旧行 SUPERSEDED + 插入新版本行
         int newVersion = active.getVersion() + 1;
-        active.setStatus(MetricStatus.SUPERSEDED.name());
+        active.setStatus(MetricStatus.SUPERSEDED);
         active.setUpdatedBy(actorId);
         active.setUpdatedAt(LocalDateTime.now());
         metricDefinitionMapper.updateById(active);
@@ -104,7 +104,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         next.setMetricCode(metricCode);
         next.setVersion(newVersion);
         applyCommandFields(next, cmd);
-        next.setStatus(MetricStatus.ACTIVE.name());
+        next.setStatus(MetricStatus.ACTIVE);
         next.setCreatedBy(actorId);
         next.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(next);
@@ -147,7 +147,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
                 RuleDefinition def = defMap.get(rv.getRuleDefinitionId());
                 String sceneCode = sceneCodeMap.getOrDefault(def.getSceneId(), "");
                 result.add(new RuleRef(def.getId(), def.getCode(), def.getName(),
-                        sceneCode, def.getStatus()));
+                        sceneCode, def.getStatus().name()));
             }
         }
         return result;

@@ -34,7 +34,7 @@ public class RuleVersion {
     private List<String> triggerEventTypes;
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<MetricDependency> metricDependencies;
-    private String status;
+    private RuleVersionStatus status;
     private String publishedBy;
     private java.time.LocalDateTime publishedAt;
     private java.time.LocalDateTime createdAt;
@@ -64,7 +64,7 @@ public class RuleVersion {
         rv.setKind(kind);
         rv.setTriggerEventTypes(triggerEventTypes != null ? triggerEventTypes : List.of());
         rv.setMetricDependencies(List.of());
-        rv.setStatus(RuleVersionStatus.DRAFT.name());
+        rv.setStatus(RuleVersionStatus.DRAFT);
         rv.setCreatedAt(java.time.LocalDateTime.now());
         return rv;
     }

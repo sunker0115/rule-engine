@@ -26,7 +26,7 @@ class SceneDefTest {
         scene.setEventTypes(List.of("payment.initiated"));
         scene.setPayloadSchema(List.of(field));
         scene.setDefaultParams(Map.of("timezone", "Asia/Shanghai"));
-        scene.setStatus("ACTIVE");
+        scene.setStatus(SceneStatus.ACTIVE);
         scene.setCreatedBy("operator1");
         scene.setUpdatedBy("operator2");
 
@@ -41,7 +41,7 @@ class SceneDefTest {
         assertEquals(List.of("payment.initiated"), scene.getEventTypes());
         assertEquals(List.of(field), scene.getPayloadSchema());
         assertEquals(Map.of("timezone", "Asia/Shanghai"), scene.getDefaultParams());
-        assertEquals("ACTIVE", scene.getStatus());
+        assertEquals(SceneStatus.ACTIVE, scene.getStatus());
         assertEquals("operator1", scene.getCreatedBy());
         assertEquals("operator2", scene.getUpdatedBy());
     }

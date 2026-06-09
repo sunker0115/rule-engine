@@ -4,6 +4,7 @@ import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneActionBindingService.SceneActionBindingItem;
 import com.sstlfsj.rule.config.internal.domain.SceneActionBindingDef;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneActionBindingMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
@@ -46,7 +47,7 @@ class SceneActionBindingServiceImplTest {
         s.setId(id);
         s.setTenantId(1L);
         s.setCode("PAY");
-        s.setStatus(status);
+        s.setStatus(SceneStatus.valueOf(status));
         return s;
     }
 

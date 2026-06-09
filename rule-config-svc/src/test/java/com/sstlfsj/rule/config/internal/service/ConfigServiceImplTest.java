@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.service;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
@@ -58,7 +59,7 @@ class ConfigServiceImplTest {
         RuleDefinition rule = new RuleDefinition();
         rule.setId(10L);
         rule.setTenantId(1L);
-        rule.setStatus("PUBLISHED");
+        rule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
 
@@ -66,7 +67,7 @@ class ConfigServiceImplTest {
 
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
-        assertThat(rdCaptor.getValue().getStatus()).isEqualTo("DISABLED");
+        assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.DISABLED);
 
         ArgumentCaptor<OperationAuditedEvent> evCaptor =
                 ArgumentCaptor.forClass(OperationAuditedEvent.class);
@@ -90,7 +91,7 @@ class ConfigServiceImplTest {
         rd.setId(10L);
         rd.setCode("rule.a");
         rd.setName("规则A");
-        rd.setStatus("PUBLISHED");
+        rd.setStatus(RuleDefinitionStatus.PUBLISHED);
         rd.setCurrentVersion(42L);
         rd.setPublishedAt(java.time.LocalDateTime.of(2026, 6, 1, 0, 0));
 
@@ -162,7 +163,7 @@ class ConfigServiceImplTest {
         rule.setSceneId(5L);
         rule.setCode("rule.a");
         rule.setName("规则A");
-        rule.setStatus("PUBLISHED");
+        rule.setStatus(RuleDefinitionStatus.PUBLISHED);
         rule.setKind("AST_BOOLEAN");
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
 

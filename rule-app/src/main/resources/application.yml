@@ -21,6 +21,8 @@ mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
+    # 实体 status 等 Java enum 字段按 name() 与 varchar 列往返（枚举名 == DB 值）
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
 
 management:
   endpoints:

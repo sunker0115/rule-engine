@@ -64,14 +64,14 @@ class PublishServiceTest {
         draftRule.setSceneId(5L);
         draftRule.setCode("rule.demo");
         draftRule.setName("测试规则");
-        draftRule.setStatus("DRAFT");
+        draftRule.setStatus(RuleDefinitionStatus.DRAFT);
         draftRule.setKind("AST_BOOLEAN");
 
         scene = new SceneDef();
         scene.setId(5L);
         scene.setCode("PAYMENT");
         scene.setEventTypes(java.util.List.of("payment.initiated"));
-        scene.setStatus("ACTIVE");
+        scene.setStatus(SceneStatus.ACTIVE);
 
         draftVersion = new RuleVersion();
         draftVersion.setId(100L);
@@ -80,7 +80,7 @@ class PublishServiceTest {
         draftVersion.setConditionAst(new ConditionNode("c.type", "m.code", null, Map.of(), 0.0));
         draftVersion.setDecisionBindings(List.of());
         draftVersion.setPreGates(List.of());
-        draftVersion.setStatus("DRAFT");
+        draftVersion.setStatus(RuleVersionStatus.DRAFT);
     }
 
     @Test
@@ -97,7 +97,7 @@ class PublishServiceTest {
         MetricDefinition mdMCode = new MetricDefinition();
         mdMCode.setMetricCode("m.code");
         mdMCode.setDataType("STRING");
-        mdMCode.setStatus("ACTIVE");
+        mdMCode.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdMCode));
 
         RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "operator1");
@@ -115,11 +115,11 @@ class PublishServiceTest {
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());
         assertThat(rvCaptor.getValue().getVersion()).isEqualTo(1L);
-        assertThat(rvCaptor.getValue().getStatus()).isEqualTo("ACTIVE");
+        assertThat(rvCaptor.getValue().getStatus()).isEqualTo(RuleVersionStatus.ACTIVE);
         // 验证 rule_definition 状态更新为 PUBLISHED
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
-        assertThat(rdCaptor.getValue().getStatus()).isEqualTo("PUBLISHED");
+        assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.PUBLISHED);
         // 发布现在发两个事件：审计事件（PUBLISH）+ Modulith RulePublishedEvent
         ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
         verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
@@ -141,7 +141,7 @@ class PublishServiceTest {
 
     @Test
     void publish_nonDraftRule_throwsIllegalState() {
-        draftRule.setStatus("PUBLISHED");
+        draftRule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
 
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
@@ -263,14 +263,14 @@ class PublishServiceTest {
 
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).insert(rdCaptor.capture());
-        assertThat(rdCaptor.getValue().getStatus()).isEqualTo("DRAFT");
+        assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.DRAFT);
         assertThat(rdCaptor.getValue().getCode()).isEqualTo("rule.test");
         assertThat(rdCaptor.getValue().getKind()).isEqualTo("SCORECARD");
 
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());
         assertThat(rvCaptor.getValue().getVersion()).isEqualTo(1L);
-        assertThat(rvCaptor.getValue().getStatus()).isEqualTo("DRAFT");
+        assertThat(rvCaptor.getValue().getStatus()).isEqualTo(RuleVersionStatus.DRAFT);
         assertThat(rvCaptor.getValue().getKind()).isEqualTo("SCORECARD");
         // conditionAst 直传 typed 落库（无 JSON 串来回）
         assertThat(rvCaptor.getValue().getConditionAst())
@@ -379,7 +379,7 @@ class PublishServiceTest {
         MetricDefinition mdMetric1 = new MetricDefinition();
         mdMetric1.setMetricCode("metric1");
         mdMetric1.setDataType("LONG");
-        mdMetric1.setStatus("ACTIVE");
+        mdMetric1.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdMetric1));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
@@ -402,7 +402,7 @@ class PublishServiceTest {
         MetricDefinition mdM1a = new MetricDefinition();
         mdM1a.setMetricCode("m1");
         mdM1a.setDataType("LONG");
-        mdM1a.setStatus("ACTIVE");
+        mdM1a.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdM1a));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
@@ -426,7 +426,7 @@ class PublishServiceTest {
         MetricDefinition mdM1b = new MetricDefinition();
         mdM1b.setMetricCode("m1");
         mdM1b.setDataType("LONG");
-        mdM1b.setStatus("ACTIVE");
+        mdM1b.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdM1b));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
@@ -463,7 +463,7 @@ class PublishServiceTest {
         MetricDefinition mdAmount1 = new MetricDefinition();
         mdAmount1.setMetricCode("amount");
         mdAmount1.setDataType("LONG");
-        mdAmount1.setStatus("ACTIVE");
+        mdAmount1.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdAmount1));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
@@ -486,7 +486,7 @@ class PublishServiceTest {
         MetricDefinition mdAmount2 = new MetricDefinition();
         mdAmount2.setMetricCode("amount");
         mdAmount2.setDataType("LONG");
-        mdAmount2.setStatus("ACTIVE");
+        mdAmount2.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdAmount2));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
@@ -634,7 +634,7 @@ class PublishServiceTest {
         MetricDefinition mdRollout = new MetricDefinition();
         mdRollout.setMetricCode("m.code");
         mdRollout.setDataType("STRING");
-        mdRollout.setStatus("ACTIVE");
+        mdRollout.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdRollout));
         draftVersion.setTriggerEventTypes(List.of());
         draftVersion.setPreGates(List.of(
@@ -733,7 +733,7 @@ class PublishServiceTest {
         md.setMetricCode("account.age");
         md.setDataType("LONG");
         md.setVersion(3);
-        md.setStatus("ACTIVE");
+        md.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
 
         RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "op");
@@ -757,12 +757,12 @@ class PublishServiceTest {
         mdV2.setMetricCode("account.age");
         mdV2.setDataType("LONG");
         mdV2.setVersion(2);
-        mdV2.setStatus("ACTIVE");
+        mdV2.setStatus(MetricStatus.ACTIVE);
         MetricDefinition mdV3 = new MetricDefinition();
         mdV3.setMetricCode("account.age");
         mdV3.setDataType("LONG");
         mdV3.setVersion(3);
-        mdV3.setStatus("ACTIVE");
+        mdV3.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(mdV2, mdV3));
 
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))

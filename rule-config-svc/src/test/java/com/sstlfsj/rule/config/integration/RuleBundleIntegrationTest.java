@@ -6,9 +6,13 @@ import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
@@ -85,7 +89,7 @@ class RuleBundleIntegrationTest {
         scene.setSubjectType("USER"); scene.setDominantMode("PUSH"); scene.setDecisionStrategy("HIGHEST_PRIORITY");
         scene.setEventTypes(java.util.List.of("transfer")); scene.setPayloadSchema(java.util.List.of());
         scene.setDefaultParams(java.util.Map.of());
-        scene.setPayloadSchemaVersion(1); scene.setStatus("ACTIVE"); scene.setCreatedBy("seed");
+        scene.setPayloadSchemaVersion(1); scene.setStatus(SceneStatus.ACTIVE); scene.setCreatedBy("seed");
         scene.setCreatedAt(LocalDateTime.now());
         sceneMapper.insert(scene);
 
@@ -93,7 +97,7 @@ class RuleBundleIntegrationTest {
         metric.setTenantId(SRC_TENANT); metric.setMetricCode("account.age"); metric.setVersion(1);
         metric.setName("账户年龄"); metric.setSourceType("ATTRIBUTE"); metric.setDataType("LONG");
         metric.setParams(java.util.Map.of()); metric.setCacheTtlSeconds(3600); metric.setAllowProvided(true);
-        metric.setStatus("ACTIVE"); metric.setCreatedBy("seed"); metric.setCreatedAt(LocalDateTime.now());
+        metric.setStatus(MetricStatus.ACTIVE); metric.setCreatedBy("seed"); metric.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(metric);
 
         DecisionDefinition decision = new DecisionDefinition();
@@ -111,7 +115,7 @@ class RuleBundleIntegrationTest {
     private void seedRule(Long sceneId, String code, String name) {
         RuleDefinition rd = new RuleDefinition();
         rd.setTenantId(SRC_TENANT); rd.setSceneId(sceneId); rd.setCode(code);
-        rd.setName(name); rd.setStatus("PUBLISHED"); rd.setKind("AST_BOOLEAN");
+        rd.setName(name); rd.setStatus(RuleDefinitionStatus.PUBLISHED); rd.setKind("AST_BOOLEAN");
         rd.setCreatedBy("seed"); rd.setCreatedAt(LocalDateTime.now());
         ruleDefinitionMapper.insert(rd);
 
@@ -122,7 +126,7 @@ class RuleBundleIntegrationTest {
         rv.setPreGates(java.util.List.of()); rv.setKind("AST_BOOLEAN");
         rv.setTriggerEventTypes(java.util.List.of("transfer"));
         rv.setMetricDependencies(java.util.List.of(new MetricDependency("account.age", 1)));
-        rv.setStatus("ACTIVE"); rv.setPublishedBy("seed"); rv.setPublishedAt(LocalDateTime.now());
+        rv.setStatus(RuleVersionStatus.ACTIVE); rv.setPublishedBy("seed"); rv.setPublishedAt(LocalDateTime.now());
         rv.setCreatedAt(LocalDateTime.now());
         ruleVersionMapper.insert(rv);
 
@@ -154,7 +158,7 @@ class RuleBundleIntegrationTest {
                 .eq(SceneDef::getTenantId, DST_TENANT).eq(SceneDef::getCode, "risk.transfer"));
         assertThat(dstScene).isNotNull();
         long draftCount = ruleVersionMapper.selectCount(new LambdaQueryWrapper<RuleVersion>()
-                .eq(RuleVersion::getStatus, "DRAFT")
+                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT)
                 .in(RuleVersion::getRuleDefinitionId,
                         result.rules().stream().map(RuleImportResult.ImportedRule::ruleDefinitionId).toList()));
         assertThat(draftCount).isEqualTo(2);

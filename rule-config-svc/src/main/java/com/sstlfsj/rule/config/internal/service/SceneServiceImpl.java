@@ -47,7 +47,7 @@ class SceneServiceImpl implements SceneService {
         scene.setPayloadSchema(payloadSchema);
         scene.setDefaultParams(defaultParams);
         scene.setPayloadSchemaVersion(1);
-        scene.setStatus(SceneStatus.ACTIVE.name());
+        scene.setStatus(SceneStatus.ACTIVE);
         scene.setCreatedBy(actorId);
         sceneMapper.insert(scene);
 
@@ -101,7 +101,7 @@ class SceneServiceImpl implements SceneService {
     public List<SceneListItem> listScenes(String tenantId) {
         return sceneMapper.findByTenantId(Long.valueOf(tenantId)).stream()
                 .map(s -> new SceneListItem(s.getId(), s.getCode(), s.getName(),
-                        s.getDominantMode(), s.getSubjectType(), s.getStatus()))
+                        s.getDominantMode(), s.getSubjectType(), s.getStatus().name()))
                 .toList();
     }
 
@@ -109,7 +109,7 @@ class SceneServiceImpl implements SceneService {
     @Transactional
     public void disableScene(String tenantId, String sceneCode, String actorId) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
-        scene.setStatus(SceneStatus.DISABLED.name());
+        scene.setStatus(SceneStatus.DISABLED);
         scene.setUpdatedBy(actorId);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
@@ -154,7 +154,7 @@ class SceneServiceImpl implements SceneService {
                 payloadSchema,
                 defaultParams,
                 version,
-                scene.getStatus()
+                scene.getStatus().name()
         );
     }
 
