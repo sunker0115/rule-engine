@@ -17,7 +17,7 @@ class NoopDryRunTraceWriterTest {
     @Test
     void write_withValidArgs_doesNotThrow() {
         NoopDryRunTraceWriter writer = new NoopDryRunTraceWriter();
-        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null);
+        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
         assertDoesNotThrow(() -> writer.write("t1", "s1", List.of(trace)));
     }
 

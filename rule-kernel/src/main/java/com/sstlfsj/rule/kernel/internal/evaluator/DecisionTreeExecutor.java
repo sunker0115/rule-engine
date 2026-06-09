@@ -56,8 +56,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         if (cond.isError()) {
             // 取数失败：不静默走 else，整规则置 ERROR + miss（避免命中错误叶子）
             if (sink != null) {
-                sink.add(new NodeTrace("IfNode", null, null, false, null, null,
-                        cond.errorCode(), children, rvId));
+                sink.add(new NodeTrace(NodeType.IF.tag(), null, null, false, null, null,
+                        cond.errorCode(), children, rvId, null, null));
             }
             return new EvalResult(false, null, List.of(), traces(sink),
                     cond.errorCode(), List.of(), null, null, null);
@@ -71,8 +71,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
             branch = EvalResult.miss();
         }
         if (sink != null) {
-            sink.add(new NodeTrace("IfNode", null, null, cond.satisfied(), null, null,
-                    null, children, rvId));
+            sink.add(NodeTrace.container(NodeType.IF, cond.satisfied(), children, rvId));
         }
         // 顶层结果挂上含 IfNode 根的完整 trace；命中布尔/决策取自分支求值
         return new EvalResult(branch.ruleHit(), branch.finalDecision(), branch.hitDecisions(),
@@ -93,8 +92,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                     if (!o.satisfied()) { result = ConditionOutcome.NOT_SATISFIED; break; } // 短路 false
                 }
                 if (sink != null) {
-                    sink.add(new NodeTrace("AndNode", null, null, result.satisfied(), null, null,
-                            result.isError() ? result.errorCode() : null, childTraces, rvId));
+                    sink.add(new NodeTrace(NodeType.AND.tag(), null, null, result.satisfied(), null, null,
+                            result.isError() ? result.errorCode() : null, childTraces, rvId, null, null));
                 }
                 yield result;
             }
@@ -112,8 +111,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                     result = errCode != null ? ConditionOutcome.error(errCode) : ConditionOutcome.NOT_SATISFIED;
                 }
                 if (sink != null) {
-                    sink.add(new NodeTrace("OrNode", null, null, result.satisfied(), null, null,
-                            result.isError() ? result.errorCode() : null, childTraces, rvId));
+                    sink.add(new NodeTrace(NodeType.OR.tag(), null, null, result.satisfied(), null, null,
+                            result.isError() ? result.errorCode() : null, childTraces, rvId, null, null));
                 }
                 yield result;
             }
@@ -122,8 +121,8 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                 ConditionOutcome o = evaluateCondition(not.child(), ctx, childTraces, rvId);
                 ConditionOutcome result = o.isError() ? o : ConditionOutcome.of(!o.satisfied());
                 if (sink != null) {
-                    sink.add(new NodeTrace("NotNode", null, null, result.satisfied(), null, null,
-                            result.isError() ? result.errorCode() : null, childTraces, rvId));
+                    sink.add(new NodeTrace(NodeType.NOT.tag(), null, null, result.satisfied(), null, null,
+                            result.isError() ? result.errorCode() : null, childTraces, rvId, null, null));
                 }
                 yield result;
             }
@@ -136,7 +135,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                                                List<NodeTrace> sink, Long rvId) {
         ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
         if (sink != null) {
-            sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+            sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                     outcome.satisfied(), outcome.resolvedValue(), outcome.valueSource(),
                     outcome.isError() ? outcome.errorCode() : null, List.of(), rvId,
                     node.params(), node.displayLabel()));
@@ -147,8 +146,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
     private EvalResult hit(DecisionLeafNode leaf, RuleVersionSnapshot snapshot,
                            List<NodeTrace> sink, Long rvId) {
         if (sink != null) {
-            sink.add(new NodeTrace("DecisionLeafNode", null, null, true, null, null,
-                    null, List.of(), rvId));
+            sink.add(NodeTrace.container(NodeType.DECISION_LEAF, true, List.of(), rvId));
         }
         Decision decision = snapshot.decisionBindings().stream()
                 .filter(b -> b.decisionCode().equals(leaf.decisionCode()))

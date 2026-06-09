@@ -3,6 +3,7 @@ package com.sstlfsj.rule.kernel.internal.evaluator;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
+import com.sstlfsj.rule.kernel.api.model.NodeType;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
@@ -118,7 +119,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
             }
         }
         if (sink != null) {
-            sink.add(new NodeTrace("AndNode", null, null, result, null, null, null, childTraces, null));
+            sink.add(NodeTrace.container(NodeType.AND, result, childTraces, null));
         }
         return result;
     }
@@ -139,7 +140,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
             }
         }
         if (sink != null) {
-            sink.add(new NodeTrace("OrNode", null, null, result, null, null, null, childTraces, null));
+            sink.add(NodeTrace.container(NodeType.OR, result, childTraces, null));
         }
         return result;
     }
@@ -152,7 +153,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
         boolean childResult = eval(not.child(), ctx, childTraces);
         boolean result = !childResult;
         if (sink != null) {
-            sink.add(new NodeTrace("NotNode", null, null, result, null, null, null, childTraces, null));
+            sink.add(NodeTrace.container(NodeType.NOT, result, childTraces, null));
         }
         return result;
     }
@@ -170,7 +171,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
         }
         boolean result = satisfiedCount == 1;
         if (sink != null) {
-            sink.add(new NodeTrace("XorNode", null, null, result, null, null, null, childTraces, null));
+            sink.add(NodeTrace.container(NodeType.XOR, result, childTraces, null));
         }
         return result;
     }
@@ -183,14 +184,14 @@ public class InterpretedExecutor implements RuleVersionExecutor {
         if (outcome.isError()) {
             // ERROR(取数失败/无算子)：节点不命中，trace 标错码，整树继续(D15)
             if (sink != null) {
-                sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+                sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                         false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), null,
                         node.params(), node.displayLabel()));
             }
             return false;
         }
         if (sink != null) {
-            sink.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+            sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                     outcome.satisfied(), outcome.resolvedValue(), outcome.valueSource(), null, List.of(), null,
                     node.params(), node.displayLabel()));
         }

@@ -3,6 +3,7 @@ package com.sstlfsj.rule.kernel.internal.evaluator;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
+import com.sstlfsj.rule.kernel.api.model.NodeType;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
@@ -47,7 +48,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
             if (outcome.isError()) {
                 // 风控保守：任一条件取数失败/无算子 → 整卡置 ERROR 不出分，避免漏分误判
                 if (collect) {
-                    factorTraces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+                    factorTraces.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                             false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), rvId,
                             node.params(), node.displayLabel()));
                 }
@@ -60,7 +61,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                 score += node.weight();
             }
             if (collect) {
-                factorTraces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
+                factorTraces.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                         met, outcome.resolvedValue(), outcome.valueSource(), null, List.of(), rvId,
                         node.params(), node.displayLabel()));
             }
@@ -83,6 +84,6 @@ public class ScorecardExecutor implements RuleVersionExecutor {
      */
     private static List<NodeTrace> scorecardRoot(boolean collect, boolean result, List<NodeTrace> factors, Long rvId) {
         if (!collect) return List.of();
-        return List.of(new NodeTrace("ScorecardRoot", null, null, result, null, null, null, factors, rvId));
+        return List.of(NodeTrace.container(NodeType.SCORECARD_ROOT, result, factors, rvId));
     }
 }

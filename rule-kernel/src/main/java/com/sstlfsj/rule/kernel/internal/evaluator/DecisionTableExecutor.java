@@ -29,7 +29,9 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
 
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
-        if (!(snapshot.conditionAst() instanceof DecisionTableNode table)) {
+        if (!(snapshot.conditionAst() instanceof DecisionTableNode(
+                List<DecisionTableNode.Column> columns, List<DecisionTableNode.Row> rows
+        ))) {
             return new EvalResult(false, null, List.of(), List.of(),
                     "DECISION_TABLE_AST_TYPE_MISMATCH", List.of(), null, null, null);
         }
@@ -38,24 +40,22 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
         Long rvId = snapshot.ruleVersionId();
         // collect=false 时 sink 为 null，逐行跳过 trace 构建（零分配契约）
         List<NodeTrace> sink = collect ? new ArrayList<>() : null;
-        List<DecisionTableNode.Column> columns = table.columns();
 
-        for (DecisionTableNode.Row row : table.rows()) {
+        for (DecisionTableNode.Row row : rows) {
             // 每行的列条件 trace 收集到 columnTraces，再包进 DecisionTableRow
             List<NodeTrace> columnTraces = sink != null ? new ArrayList<>() : null;
             RowResult rr = rowMatches(row, columns, ctx, columnTraces, rvId);
             if (rr.error() != null) {
                 // 取数失败：记录本行（带错码）后中止整表，整表置 ERROR + miss
                 if (sink != null) {
-                    sink.add(new NodeTrace("DecisionTableRow", null, null, false, null, null,
-                            rr.error(), columnTraces, rvId));
+                    sink.add(new NodeTrace(NodeType.DECISION_TABLE_ROW.tag(), null, null, false, null, null,
+                            rr.error(), columnTraces, rvId, null, null));
                 }
                 return new EvalResult(false, null, List.of(), traces(sink),
                         rr.error(), List.of(), null, null, null);
             }
             if (sink != null) {
-                sink.add(new NodeTrace("DecisionTableRow", null, null, rr.matched(), null, null,
-                        null, columnTraces, rvId));
+                sink.add(NodeTrace.container(NodeType.DECISION_TABLE_ROW, rr.matched(), columnTraces, rvId));
             }
             if (rr.matched()) {
                 return hit(row.decisionCode(), snapshot, sink);
@@ -86,7 +86,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
             ConditionNode node = new ConditionNode(col.operator(), col.metricCode(), null, params, 0.0, col.dataType());
             ConditionOutcome o = ConditionEvaluation.evaluate(node, ctx, evaluators);
             if (columnTraces != null) {
-                columnTraces.add(new NodeTrace("ConditionNode", col.operator(), col.metricCode(),
+                columnTraces.add(new NodeTrace(NodeType.CONDITION.tag(), col.operator(), col.metricCode(),
                         o.satisfied(), o.resolvedValue(), o.valueSource(),
                         o.isError() ? o.errorCode() : null, List.of(), rvId,
                         node.params(), node.displayLabel()));

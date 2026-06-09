@@ -26,11 +26,8 @@ public record NodeTrace(
         children = children == null ? List.of() : List.copyOf(children);
     }
 
-    /** 兼容构造：不带 expectedValue/displayLabel 的旧 9 参形态（容器节点用）。 */
-    public NodeTrace(String nodeType, String conditionType, String metricCode,
-                     Boolean result, Object actualValue, String valueSource, String errorCode,
-                     List<NodeTrace> children, Long ruleVersionId) {
-        this(nodeType, conditionType, metricCode, result, actualValue, valueSource, errorCode,
-                children, ruleVersionId, null, null);
+    /** 容器/终点节点：无 conditionType/metric/actual/expected/label，只有类型+结果+子节点。 */
+    public static NodeTrace container(NodeType type, Boolean result, List<NodeTrace> children, Long ruleVersionId) {
+        return new NodeTrace(type.tag(), null, null, result, null, null, null, children, ruleVersionId, null, null);
     }
 }
