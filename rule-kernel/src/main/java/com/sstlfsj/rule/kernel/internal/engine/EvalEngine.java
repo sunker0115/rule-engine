@@ -16,7 +16,7 @@ import java.util.*;
  */
 public class EvalEngine {
 
-    private static final String DEFAULT_EXECUTOR_KEY = "AST_BOOLEAN";
+    private static final String DEFAULT_EXECUTOR_KEY = RuleKind.AST_BOOLEAN.tag();
 
     /**
      * 决策优先级裁决：priority 越大越优先；priority 相同时按 fromRuleVersionId 较大（较新规则版本）胜。
@@ -47,7 +47,7 @@ public class EvalEngine {
      * @param index            倒排索引，供 matcher 阶段查询候选快照
      * @param contextAssembler 装配 EvalContext（主体、指标）
      * @param preGates         Pre-Gate 映射，key = gateType
-     * @param executors        executor 映射，key = kind（如 "AST_BOOLEAN"）
+     * @param executors        executor 映射，key = kind（如 {@link RuleKind#AST_BOOLEAN} 的 tag）
      * @param traceEnabled     常规评估是否收集 NodeTrace 的全局默认（dry-run 走显式形参强制 true）
      */
     public EvalEngine(SceneRuleIndex index,

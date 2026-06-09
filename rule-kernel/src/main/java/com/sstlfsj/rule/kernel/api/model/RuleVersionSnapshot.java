@@ -25,7 +25,7 @@ public record RuleVersionSnapshot(
         preGates = preGates == null ? List.of() : List.copyOf(preGates);
         decisionBindings = decisionBindings == null ? List.of() : List.copyOf(decisionBindings);
         triggerEventTypes = triggerEventTypes == null ? List.of() : List.copyOf(triggerEventTypes);
-        kind = kind == null ? "AST_BOOLEAN" : kind;
+        kind = kind == null ? RuleKind.AST_BOOLEAN.tag() : kind;
         metricDependencies = metricDependencies == null ? List.of() : List.copyOf(metricDependencies);
     }
 
@@ -67,7 +67,7 @@ public record RuleVersionSnapshot(
         private String sceneCode;
         private String tenantId;
         private AstNode conditionAst;
-        private String kind = "AST_BOOLEAN";
+        private String kind = RuleKind.AST_BOOLEAN.tag();
         private final List<PreGateConfig> preGates = new ArrayList<>();
         private final List<DecisionBinding> decisionBindings = new ArrayList<>();
         private final List<String> triggerEventTypes = new ArrayList<>();

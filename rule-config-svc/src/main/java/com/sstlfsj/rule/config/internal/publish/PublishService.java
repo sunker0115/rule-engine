@@ -7,6 +7,7 @@ import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -88,14 +89,15 @@ public class PublishService {
         AstNode ast = draftVersion.getConditionAst();
         // kind 合法性校验：null/blank 视为 AST_BOOLEAN（兼容历史存量数据）
         String rawKind = rule.getKind();
-        String kind = (rawKind == null || rawKind.isBlank()) ? "AST_BOOLEAN" : rawKind;
+        String kind = (rawKind == null || rawKind.isBlank()) ? RuleKind.AST_BOOLEAN.tag() : rawKind;
         java.util.Set<String> validKinds = java.util.Set.of(
-                "AST_BOOLEAN", "SCORECARD", "DECISION_TREE", "DECISION_TABLE");
+                RuleKind.AST_BOOLEAN.tag(), RuleKind.SCORECARD.tag(),
+                RuleKind.DECISION_TREE.tag(), RuleKind.DECISION_TABLE.tag());
         if (!validKinds.contains(kind)) {
             throw new IllegalArgumentException("不支持的规则 kind: " + kind);
         }
         // SCORECARD kind 校验：根节点必须是 ScorecardRootNode，叶子 weight 必须 > 0
-        if ("SCORECARD".equals(kind)) {
+        if (RuleKind.SCORECARD.tag().equals(kind)) {
             if (!(ast instanceof ScorecardRootNode scorecardRoot)) {
                 throw new IllegalArgumentException(
                         "kind=SCORECARD 的规则 conditionAst 根节点必须是 ScorecardRootNode");
@@ -108,7 +110,7 @@ public class PublishService {
             }
         }
         // DECISION_TREE 校验：根节点必须是 IfNode，thenBranch 不得为 null
-        if ("DECISION_TREE".equals(kind)) {
+        if (RuleKind.DECISION_TREE.tag().equals(kind)) {
             if (!(ast instanceof IfNode ifRoot)) {
                 throw new IllegalArgumentException(
                         "kind=DECISION_TREE 的规则 conditionAst 根节点必须是 IfNode");
@@ -119,7 +121,7 @@ public class PublishService {
             }
         }
         // DECISION_TABLE 校验：根节点必须是 DecisionTableNode，columns/rows 非空，行列数一致
-        if ("DECISION_TABLE".equals(kind)) {
+        if (RuleKind.DECISION_TABLE.tag().equals(kind)) {
             if (!(ast instanceof DecisionTableNode tableRoot)) {
                 throw new IllegalArgumentException(
                         "kind=DECISION_TABLE 的规则 conditionAst 根节点必须是 DecisionTableNode");
@@ -191,7 +193,7 @@ public class PublishService {
                 ? draftVersion.getDecisionBindings() : java.util.List.of());
         newRv.setPreGates(draftVersion.getPreGates() != null
                 ? draftVersion.getPreGates() : java.util.List.of());
-        newRv.setKind(rule.getKind() != null ? rule.getKind() : "AST_BOOLEAN");
+        newRv.setKind(rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN.tag());
         // scene.eventTypes 仍是 String JSON（SceneDef 未 typed），反序列化后写入 typed 列
         newRv.setTriggerEventTypes(isBlank(scene.getEventTypes()) ? java.util.List.of()
                 : objectMapper.readValue(scene.getEventTypes(),
@@ -280,9 +282,10 @@ public class PublishService {
         }
 
         // 3. kind 合法性校验，null 时缺省 AST_BOOLEAN
-        String effectiveKind = (kind == null || kind.isBlank()) ? "AST_BOOLEAN" : kind;
+        String effectiveKind = (kind == null || kind.isBlank()) ? RuleKind.AST_BOOLEAN.tag() : kind;
         java.util.Set<String> validKinds = java.util.Set.of(
-                "AST_BOOLEAN", "SCORECARD", "DECISION_TREE", "DECISION_TABLE");
+                RuleKind.AST_BOOLEAN.tag(), RuleKind.SCORECARD.tag(),
+                RuleKind.DECISION_TREE.tag(), RuleKind.DECISION_TABLE.tag());
         if (!validKinds.contains(effectiveKind)) {
             throw new IllegalArgumentException("不支持的规则 kind: " + effectiveKind);
         }

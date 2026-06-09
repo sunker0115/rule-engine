@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
@@ -75,7 +76,7 @@ public class RuleEngineClient implements AutoCloseable {
                 : new InterpretedExecutor(evaluators);
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
-                Map.of("AST_BOOLEAN", executor),
+                Map.of(RuleKind.AST_BOOLEAN.tag(), executor),
                 false);
 
         // 规则来源：显式 ruleSource() + localSnapshot() 转 DslRuleSource + serverUrl 转 PollingRuleSource

@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.bundle;
 
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.dto.RuleImportResult;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
@@ -152,7 +153,7 @@ public class RuleImportService {
         List<RuleImportResult.ImportedRule> importedRules = new ArrayList<>();
         for (RuleBundle.RuleEntry rule : bundle.rules()) {
             Long sceneId = resolveSceneId(tenantId, rule.sceneCode(), sceneIdByCode);
-            String kind = (rule.kind() == null || rule.kind().isBlank()) ? "AST_BOOLEAN" : rule.kind();
+            String kind = (rule.kind() == null || rule.kind().isBlank()) ? RuleKind.AST_BOOLEAN.tag() : rule.kind();
 
             RuleDefinition rd = ruleDefinitionMapper.findBySceneAndCode(tenantId, sceneId, rule.code());
             boolean ruleExisted = rd != null;

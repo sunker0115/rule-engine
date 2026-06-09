@@ -5,6 +5,7 @@ import com.sstlfsj.rule.eval.internal.action.ActionIdempotencyGuard;
 import com.sstlfsj.rule.eval.internal.action.SceneActionBindingIndex;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
@@ -181,10 +182,10 @@ public class EvalAutoConfiguration {
             preGates.forEach(g -> gateMap.put(g.gateType(), g));
         }
         return new EvalEngine(sceneRuleIndex, evalContextAssembler, gateMap,
-                Map.of("AST_BOOLEAN",     ruleVersionExecutor,
-                       "SCORECARD",       scorecardExecutor,
-                       "DECISION_TREE",   decisionTreeExecutor,
-                       "DECISION_TABLE",  decisionTableExecutor),
+                Map.of(RuleKind.AST_BOOLEAN.tag(),    ruleVersionExecutor,
+                       RuleKind.SCORECARD.tag(),      scorecardExecutor,
+                       RuleKind.DECISION_TREE.tag(),  decisionTreeExecutor,
+                       RuleKind.DECISION_TABLE.tag(), decisionTableExecutor),
                 traceEnabled);
     }
 

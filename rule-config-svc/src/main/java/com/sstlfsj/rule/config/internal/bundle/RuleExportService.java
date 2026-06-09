@@ -12,6 +12,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -113,7 +114,7 @@ public class RuleExportService {
             SceneDef scene = sceneById.get(rd.getSceneId());
             rules.add(new RuleBundle.RuleEntry(
                     rd.getCode(), rd.getName(),
-                    rv.getKind() != null ? rv.getKind() : "AST_BOOLEAN",
+                    rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN.tag(),
                     scene != null ? scene.getCode() : null,
                     rv.getConditionAst(), rv.getDecisionBindings(),
                     rv.getPreGates(), rv.getTriggerEventTypes(),

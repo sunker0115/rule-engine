@@ -2,12 +2,14 @@ package com.sstlfsj.rule.kernel.internal.codec;
 
 import tools.jackson.core.JacksonException;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 将 RuleVersionRow（数据库 JOIN 结果）装配为不可变的 RuleVersionSnapshot。
@@ -53,7 +55,7 @@ public class SnapshotAssembler {
                 preGates,
                 decisionBindings,
                 triggerEventTypes,
-                row.kind() != null ? row.kind() : "AST_BOOLEAN",
+                row.kind() != null ? row.kind() : RuleKind.AST_BOOLEAN.tag(),
                 metricDependencies
         );
     }
@@ -75,7 +77,7 @@ public class SnapshotAssembler {
                         return null;
                     }
                 })
-                .filter(s -> s != null)
+                .filter(Objects::nonNull)
                 .toList();
     }
 }
