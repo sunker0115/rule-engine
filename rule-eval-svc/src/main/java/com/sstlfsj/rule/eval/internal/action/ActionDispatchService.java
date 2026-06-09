@@ -78,8 +78,10 @@ public class ActionDispatchService {
         if (handler == null) {
             return ActionResult.skipped(actionId, binding.actionType(), "NO_HANDLER");
         }
+        // params 以 scene_action_binding.default_params 为底（04-extension §3.4）；索引已解析为 Map
+        Map<String, Object> params = binding.defaultParams() != null ? binding.defaultParams() : Map.of();
         ActionContext ctx = new ActionContext(actionId, binding.actionType(),
-                Map.of(), null, null, decision.code());
+                params, null, null, decision.code());
         return handler.execute(ctx);
     }
 }

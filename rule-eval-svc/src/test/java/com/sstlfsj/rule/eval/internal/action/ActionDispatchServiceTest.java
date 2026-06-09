@@ -9,10 +9,12 @@ import com.sstlfsj.rule.kernel.api.model.Decision;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -53,6 +55,20 @@ class ActionDispatchServiceTest {
         verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecuted ae
                 && "BLOCK_TRANSACTION".equals(ae.actionId())
                 && "SUCCESS".equals(ae.result().status().name())));
+    }
+
+    @Test
+    void dispatch_passesDefaultParamsToActionContext() {
+        when(bindingIndex.get(1L, "fraud_check"))
+                .thenReturn(List.of(new SceneActionBindingRow(
+                        "BLOCK_TRANSACTION", Map.of("reason", "risk"))));
+
+        service.dispatch(42L, 1L, "evt-001", "fraud_check",
+                List.of(new Decision("REJECT", "", 10, 1L)));
+
+        ArgumentCaptor<ActionContext> ctx = ArgumentCaptor.forClass(ActionContext.class);
+        verify(stubHandler).execute(ctx.capture());
+        assertThat(ctx.getValue().params()).isEqualTo(Map.of("reason", "risk"));
     }
 
     @Test

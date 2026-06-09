@@ -4,10 +4,14 @@ import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingFullRow;
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
 import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -26,11 +30,16 @@ import java.util.stream.Collectors;
 @Component
 public class SceneActionBindingIndex {
 
+    private static final Logger log = LoggerFactory.getLogger(SceneActionBindingIndex.class);
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
     private final SceneActionBindingReadMapper mapper;
+    private final ObjectMapper objectMapper;
     private final Map<String, List<SceneActionBindingRow>> byScene = new ConcurrentHashMap<>();
 
-    public SceneActionBindingIndex(SceneActionBindingReadMapper mapper) {
+    public SceneActionBindingIndex(SceneActionBindingReadMapper mapper, ObjectMapper objectMapper) {
         this.mapper = mapper;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -51,9 +60,7 @@ public class SceneActionBindingIndex {
         Map<String, List<SceneActionBindingRow>> grouped = mapper.findAll().stream()
                 .collect(Collectors.groupingBy(
                         r -> key(r.tenantId(), r.sceneCode()),
-                        Collectors.mapping(
-                                r -> new SceneActionBindingRow(r.actionType(), r.defaultParamsJson()),
-                                Collectors.toList())));
+                        Collectors.mapping(this::toRow, Collectors.toList())));
         byScene.putAll(grouped);
     }
 
@@ -69,8 +76,27 @@ public class SceneActionBindingIndex {
             byScene.remove(key(tenantId, event.sceneCode()));
             return;
         }
-        byScene.put(key(tenantId, event.sceneCode()),
-                mapper.findBySceneCode(tenantId, event.sceneCode()));
+        List<SceneActionBindingRow> rows = mapper.findBySceneCode(tenantId, event.sceneCode())
+                .stream().map(this::toRow).toList();
+        byScene.put(key(tenantId, event.sceneCode()), rows);
+    }
+
+    /** 原始行 → 索引行：default_params JSON 串解析为 Map（装载时一次，派发热路径不再解析）。 */
+    private SceneActionBindingRow toRow(SceneActionBindingFullRow r) {
+        return new SceneActionBindingRow(r.actionType(), parse(r.defaultParamsJson()));
+    }
+
+    /** default_params JSON 串 → Map；null/空或解析失败返回空 Map（旁路，不阻塞索引装载）。 */
+    private Map<String, Object> parse(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, MAP_TYPE);
+        } catch (RuntimeException e) {
+            log.warn("scene_action_binding default_params 解析失败,按空处理: {}", json, e);
+            return Map.of();
+        }
     }
 
     private static String key(Long tenantId, String sceneCode) {

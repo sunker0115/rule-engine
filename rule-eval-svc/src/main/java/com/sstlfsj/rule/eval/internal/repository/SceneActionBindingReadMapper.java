@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.eval.internal.repository;
 
 import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingFullRow;
-import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -34,11 +33,12 @@ public interface SceneActionBindingReadMapper {
      * @return Action 绑定列表，场景无绑定时返回空列表
      */
     @Select("""
-            SELECT sab.action_type AS actionType, sab.default_params AS defaultParamsJson
+            SELECT s.tenant_id AS tenantId, s.code AS sceneCode,
+                   sab.action_type AS actionType, sab.default_params AS defaultParamsJson
             FROM scene_action_binding sab
             JOIN scene s ON sab.scene_id = s.id
             WHERE s.tenant_id = #{tenantId} AND s.code = #{sceneCode}
             """)
-    List<SceneActionBindingRow> findBySceneCode(@Param("tenantId") Long tenantId,
-                                                @Param("sceneCode") String sceneCode);
+    List<SceneActionBindingFullRow> findBySceneCode(@Param("tenantId") Long tenantId,
+                                                    @Param("sceneCode") String sceneCode);
 }
