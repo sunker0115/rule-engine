@@ -50,26 +50,27 @@ management:
 
 engine:
   rule:
-    # matcher.cache-refresh-interval-seconds 已删：索引改事件驱动(SceneIndexEventListener)，无定时刷新
-    # scene.watch-interval-seconds 已删：同上，事件驱动
-    # idempotency.* 已删：幂等用 Caffeine，无 Redis；TTL 走 engine.rule.action.idempotency.*
+    # SDK 模式快照轮询间隔走 rule.sdk.poll-interval（独立前缀，不在 engine.rule.* 下）；服务端索引为事件驱动，无定时刷新键
     trace:
       enabled: true
       queue-capacity: 10000
-      batch-size: 500
-      flush-interval-ms: 200
-      # trace.consumer-threads 已删：TraceWriter 单虚拟线程，无多消费者
+      batch-size: 500        # 每次 drain 最多落库条数
+      flush-interval-ms: 200 # 消费线程刷库间隔（毫秒）
+      # TraceWriter 单虚拟线程批量落库；提吞吐调 batch-size/flush-interval-ms（旁路通道满则丢，不阻塞热路径）
     metric:
       default-cache-ttl-seconds: 60
     action:
       # 规划中：action 派发超时未实现
       default-timeout-ms: 3000
+      idempotency:
+        # 幂等用进程内 Caffeine（无 Redis，best-effort：重启丢/多实例不共享，TTL 内去重）
+        ttl-seconds: 600
+        max-size: 100000
     # 规划中：数据保留/清理 job 未实现
     retention:
       evaluation-session-days: 90
       node-trace-days: 30
       dry-run-session-days: 7
-    # rollout.hash-seed 已删：RolloutPreGate 用 murmur3_fixed + subjectId:experimentId/ruleVersionId 区分，无全局 seed
     # 规划中：告警阈值逻辑未实现
     observability:
       eval-error-rate-threshold: 0.05
