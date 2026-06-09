@@ -5,8 +5,10 @@ import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import com.sstlfsj.rule.observability.internal.domain.NodeTraceEntity;
 import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,15 +17,17 @@ import static org.mockito.Mockito.*;
 
 class TraceWriterDbImplTest {
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Test
     void implementsTraceWriter() {
-        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class));
+        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class), objectMapper);
         assertInstanceOf(TraceWriter.class, writer);
     }
 
     @Test
     void write_throwsNpe_beforeInit() {
-        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class));
+        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class), objectMapper);
         NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null);
         // queue 未初始化时调用 write 抛 NPE，调用方须在 afterPropertiesSet 后使用
         assertThrows(NullPointerException.class, () -> writer.write("t1", "s1", List.of(trace)));
@@ -31,7 +35,7 @@ class TraceWriterDbImplTest {
 
     @Test
     void afterPropertiesSet_startsConsumerThread() throws Exception {
-        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class));
+        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         try {
             // 消费者线程应已启动
@@ -44,7 +48,7 @@ class TraceWriterDbImplTest {
 
     @Test
     void write_doesNotThrow_withEmptyList() throws Exception {
-        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class));
+        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         try {
             assertDoesNotThrow(() -> writer.write("t1", "s1", List.of()));
@@ -56,7 +60,7 @@ class TraceWriterDbImplTest {
     @Test
     void write_dropsEntriesWhenQueueFull() throws Exception {
         // 容量为 1，连续写入两次，第二次应静默丢弃而非阻塞或抛异常
-        TraceWriterDbImpl writer = new TraceWriterDbImpl(1, 10, 60_000, mock(NodeTraceMapper.class));
+        TraceWriterDbImpl writer = new TraceWriterDbImpl(1, 10, 60_000, mock(NodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         try {
             NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null);
@@ -71,7 +75,7 @@ class TraceWriterDbImplTest {
 
     @Test
     void destroy_doesNotThrow_whenConsumerRunning() throws Exception {
-        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class));
+        TraceWriterDbImpl writer = new TraceWriterDbImpl(100, 10, 50, mock(NodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         assertDoesNotThrow(writer::destroy);
     }
@@ -79,7 +83,7 @@ class TraceWriterDbImplTest {
     @Test
     void flushBatch_nodePath_rootUsesIndex_childAppendsDot() throws Exception {
         NodeTraceMapper mapper = mock(NodeTraceMapper.class);
-        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
         // root[0] → "0"；root[0].child[0] → "0.0"
@@ -98,7 +102,7 @@ class TraceWriterDbImplTest {
     @Test
     void flushBatch_setsRuleVersionId_onEntity() throws Exception {
         NodeTraceMapper mapper = mock(NodeTraceMapper.class);
-        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
         NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "DB", null, null, 42L);
@@ -113,7 +117,7 @@ class TraceWriterDbImplTest {
     void flushBatch_callsInsertBatch_notInsert() throws Exception {
         NodeTraceMapper mapper = mock(NodeTraceMapper.class);
         // flushIntervalMs 超大，手动触发 destroy() 来触发最后一次 flush
-        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
         NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "DB", null, null, null);
@@ -124,5 +128,23 @@ class TraceWriterDbImplTest {
         // 批量写库：insertBatch 被调用，insert 不再被调用
         verify(mapper, atLeastOnce()).insertBatch(argThat(list -> list.size() == 2));
         verify(mapper, never()).insert(any(NodeTraceEntity.class));
+    }
+
+    @Test
+    void flushBatch_setsDisplayLabelAndParamsJson_fromLeafTrace() throws Exception {
+        NodeTraceMapper mapper = mock(NodeTraceMapper.class);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
+        w.afterPropertiesSet();
+
+        // 叶子自携带 expectedValue（→params JSON）与 displayLabel（→display_label 列）
+        NodeTrace leaf = new NodeTrace("ConditionNode", "GTE", "score", true, 100, "PROVIDED",
+                null, null, 7L, Map.of("threshold", 0), "score>=0");
+        w.write("1", "42", List.of(leaf));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
+                list.size() == 1
+                && "score>=0".equals(list.get(0).getDisplayLabel())
+                && "{\"threshold\":0}".equals(list.get(0).getParams())));
     }
 }

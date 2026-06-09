@@ -20,12 +20,12 @@ public interface DryRunNodeTraceMapper extends BaseMapper<DryRunNodeTraceEntity>
             <script>
             INSERT INTO dry_run_node_trace
               (dry_run_session_id, tenant_id, rule_version_id, node_path, node_type,
-               condition_type, metric_code, params, actual_value, result,
+               condition_type, metric_code, display_label, params, actual_value, result,
                error_code, value_source, evaluated_at)
             VALUES
             <foreach collection="list" item="e" separator=",">
               (#{e.dryRunSessionId}, #{e.tenantId}, #{e.ruleVersionId}, #{e.nodePath}, #{e.nodeType},
-               #{e.conditionType}, #{e.metricCode}, #{e.params}, #{e.actualValue}, #{e.result},
+               #{e.conditionType}, #{e.metricCode}, #{e.displayLabel}, #{e.params}, #{e.actualValue}, #{e.result},
                #{e.errorCode}, #{e.valueSource}, #{e.evaluatedAt})
             </foreach>
             </script>

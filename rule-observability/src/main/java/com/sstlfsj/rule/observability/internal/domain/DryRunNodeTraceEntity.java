@@ -23,6 +23,7 @@ public class DryRunNodeTraceEntity {
     private String nodeType;
     private String conditionType;
     private String metricCode;
+    private String displayLabel;
     private String params;
     private String actualValue;
     private Boolean result;

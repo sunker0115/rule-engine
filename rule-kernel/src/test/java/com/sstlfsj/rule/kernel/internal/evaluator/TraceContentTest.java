@@ -50,6 +50,9 @@ class TraceContentTest {
         assertThat(leaf.result()).isTrue();
         assertThat(leaf.actualValue()).isEqualTo(100L);
         assertThat(leaf.valueSource()).isEqualTo("PROVIDED");
+        // 叶子自携带期望值（params）与可读标签（displayLabel），随 trace 落库（增量3）
+        assertThat(leaf.expectedValue()).isEqualTo(Map.of("threshold", 0));
+        assertThat(leaf.displayLabel()).isEqualTo("score>=0");
     }
 
     @Test

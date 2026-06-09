@@ -54,4 +54,13 @@ class DryRunNodeTraceMapperTest {
         assertTrue(sql.contains("params"), "INSERT 列列表须包含 params 列");
         assertTrue(sql.contains("#{e.params}"), "VALUES 绑定须包含 #{e.params}");
     }
+
+    @Test
+    void insertBatch_sql_containsDisplayLabelColumn() throws Exception {
+        Method method = DryRunNodeTraceMapper.class.getDeclaredMethod("insertBatch", List.class);
+        String sql = method.getAnnotation(Insert.class).value()[0];
+        // display_label 列与绑定均须存在，否则可读标签快照被静默丢弃
+        assertTrue(sql.contains("display_label"), "INSERT 列列表须包含 display_label 列");
+        assertTrue(sql.contains("#{e.displayLabel}"), "VALUES 绑定须包含 #{e.displayLabel}");
+    }
 }

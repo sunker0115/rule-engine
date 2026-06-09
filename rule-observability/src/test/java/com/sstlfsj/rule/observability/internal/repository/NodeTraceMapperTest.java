@@ -45,4 +45,15 @@ class NodeTraceMapperTest {
         assertNotNull(method, "insertBatch(List) 方法须存在");
         assertNotNull(method.getAnnotation(Insert.class), "insertBatch 须有 @Insert 注解");
     }
+
+    @Test
+    void insertBatch_sqlPersistsDisplayLabelAndParams() throws Exception {
+        Method method = NodeTraceMapper.class.getDeclaredMethod("insertBatch", List.class);
+        String sql = method.getAnnotation(Insert.class).value()[0];
+        // 列清单与占位符均须含 display_label / params，否则两字段被静默丢弃
+        assertTrue(sql.contains("display_label"), "INSERT 须包含 display_label 列");
+        assertTrue(sql.contains("params"), "INSERT 须包含 params 列");
+        assertTrue(sql.contains("#{e.displayLabel}"), "INSERT 须绑定 displayLabel");
+        assertTrue(sql.contains("#{e.params}"), "INSERT 须绑定 params");
+    }
 }

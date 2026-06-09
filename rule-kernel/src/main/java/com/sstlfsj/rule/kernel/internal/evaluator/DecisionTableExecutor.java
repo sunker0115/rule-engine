@@ -88,7 +88,8 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
             if (columnTraces != null) {
                 columnTraces.add(new NodeTrace("ConditionNode", col.operator(), col.metricCode(),
                         o.satisfied(), o.resolvedValue(), o.valueSource(),
-                        o.isError() ? o.errorCode() : null, List.of(), rvId));
+                        o.isError() ? o.errorCode() : null, List.of(), rvId,
+                        node.params(), node.displayLabel()));
             }
             if (o.isError()) return new RowResult(false, o.errorCode());
             if (!o.satisfied()) return new RowResult(false, null); // 本行不匹配

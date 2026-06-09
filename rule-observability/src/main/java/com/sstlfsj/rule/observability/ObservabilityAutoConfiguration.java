@@ -11,6 +11,7 @@ import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import tools.jackson.databind.ObjectMapper;
 
 /** 自动装配规则可观测性模块（指标 + TraceWriter + DryRunTraceWriter）。 */
 @AutoConfiguration
@@ -22,8 +23,8 @@ public class ObservabilityAutoConfiguration {
      */
     @Bean
     @ConditionalOnProperty(name = "engine.rule.trace.enabled", havingValue = "true", matchIfMissing = true)
-    public TraceWriter traceWriterDb(NodeTraceMapper nodeTraceMapper) {
-        return new TraceWriterDbImpl(10000, 500, 200, nodeTraceMapper);
+    public TraceWriter traceWriterDb(NodeTraceMapper nodeTraceMapper, ObjectMapper objectMapper) {
+        return new TraceWriterDbImpl(10000, 500, 200, nodeTraceMapper, objectMapper);
     }
 
     /** 当 engine.rule.trace.enabled=false 时注册空实现，用于测试或 SDK 嵌入模式。 */
@@ -39,8 +40,9 @@ public class ObservabilityAutoConfiguration {
      */
     @Bean
     @ConditionalOnProperty(name = "engine.rule.trace.enabled", havingValue = "true", matchIfMissing = true)
-    public DryRunTraceWriter dryRunTraceWriterDb(DryRunNodeTraceMapper dryRunNodeTraceMapper) {
-        return new DryRunTraceWriterDbImpl(10000, 500, 200, dryRunNodeTraceMapper);
+    public DryRunTraceWriter dryRunTraceWriterDb(DryRunNodeTraceMapper dryRunNodeTraceMapper,
+                                                 ObjectMapper objectMapper) {
+        return new DryRunTraceWriterDbImpl(10000, 500, 200, dryRunNodeTraceMapper, objectMapper);
     }
 
     /** 当 engine.rule.trace.enabled=false 时注册空实现，与 noopTraceWriter 对称。 */

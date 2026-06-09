@@ -48,7 +48,8 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                 // 风控保守：任一条件取数失败/无算子 → 整卡置 ERROR 不出分，避免漏分误判
                 if (collect) {
                     factorTraces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                            false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), rvId));
+                            false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), rvId,
+                            node.params(), node.displayLabel()));
                 }
                 return new EvalResult(false, null, List.of(),
                         scorecardRoot(collect, false, factorTraces, rvId),
@@ -60,7 +61,8 @@ public class ScorecardExecutor implements RuleVersionExecutor {
             }
             if (collect) {
                 factorTraces.add(new NodeTrace("ConditionNode", node.conditionType(), node.metricCode(),
-                        met, outcome.resolvedValue(), outcome.valueSource(), null, List.of(), rvId));
+                        met, outcome.resolvedValue(), outcome.valueSource(), null, List.of(), rvId,
+                        node.params(), node.displayLabel()));
             }
         }
 

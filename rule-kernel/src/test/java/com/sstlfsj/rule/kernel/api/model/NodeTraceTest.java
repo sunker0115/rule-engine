@@ -58,4 +58,21 @@ class NodeTraceTest {
                 true, 100, "PROVIDED", null, null, 42L);
         assertEquals(42L, trace.ruleVersionId());
     }
+
+    @Test
+    void legacyNineArgConstructor_leavesExpectedValueAndDisplayLabelNull() {
+        NodeTrace trace = new NodeTrace("CONDITION", "GT", "score",
+                true, 100, "PROVIDED", null, null, 42L);
+        assertNull(trace.expectedValue());
+        assertNull(trace.displayLabel());
+    }
+
+    @Test
+    void elevenArgConstructor_storesExpectedValueAndDisplayLabel() {
+        NodeTrace trace = new NodeTrace("CONDITION", "GT", "score",
+                true, 100, "PROVIDED", null, null, 42L,
+                List.of("threshold", 0), "score>=0");
+        assertEquals(List.of("threshold", 0), trace.expectedValue());
+        assertEquals("score>=0", trace.displayLabel());
+    }
 }

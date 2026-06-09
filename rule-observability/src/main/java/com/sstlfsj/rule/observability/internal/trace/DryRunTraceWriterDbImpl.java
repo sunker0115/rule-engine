@@ -4,8 +4,12 @@ import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.observability.internal.domain.DryRunNodeTraceEntity;
 import com.sstlfsj.rule.observability.internal.repository.DryRunNodeTraceMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -18,10 +22,13 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class DryRunTraceWriterDbImpl implements DryRunTraceWriter, InitializingBean, DisposableBean {
 
+    private static final Logger log = LoggerFactory.getLogger(DryRunTraceWriterDbImpl.class);
+
     private final int queueCapacity;
     private final int batchSize;
     private final long flushIntervalMs;
     private final DryRunNodeTraceMapper dryRunNodeTraceMapper;
+    private final ObjectMapper objectMapper;
 
     // 存 (tenantId, sessionId, traces) 三元组
     private record TraceEntry(String tenantId, String sessionId, List<NodeTrace> traces) {}
@@ -31,11 +38,12 @@ public class DryRunTraceWriterDbImpl implements DryRunTraceWriter, InitializingB
     private Thread consumerThread;
 
     public DryRunTraceWriterDbImpl(int queueCapacity, int batchSize, long flushIntervalMs,
-                                   DryRunNodeTraceMapper dryRunNodeTraceMapper) {
+                                   DryRunNodeTraceMapper dryRunNodeTraceMapper, ObjectMapper objectMapper) {
         this.queueCapacity = queueCapacity;
         this.batchSize = batchSize;
         this.flushIntervalMs = flushIntervalMs;
         this.dryRunNodeTraceMapper = dryRunNodeTraceMapper;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -104,19 +112,31 @@ public class DryRunTraceWriterDbImpl implements DryRunTraceWriter, InitializingB
             entity.setNodeType(trace.nodeType());
             entity.setConditionType(trace.conditionType());
             entity.setMetricCode(trace.metricCode());
+            entity.setDisplayLabel(trace.displayLabel());
+            entity.setParams(serializeExpected(trace.expectedValue()));
             entity.setActualValue(trace.actualValue() == null ? null : trace.actualValue().toString());
             entity.setResult(trace.result());
             entity.setErrorCode(trace.errorCode());
             entity.setValueSource(trace.valueSource());
             entity.setRuleVersionId(trace.ruleVersionId());
             entity.setEvaluatedAt(LocalDateTime.now());
-            // params 字段暂不填充：NodeTrace 未携带 ConditionNode 原始 params，v1.5 扩展模型时补全
             out.add(entity);
 
             // 递归处理子节点
             if (trace.children() != null && !trace.children().isEmpty()) {
                 flattenToList(trace.children(), sessionId, tenantId, nodePath, out);
             }
+        }
+    }
+
+    /** 将叶子条件的期望值（ConditionNode.params）序列化为 JSON 写入 params 列；null 或失败返回 null。 */
+    private String serializeExpected(Object expectedValue) {
+        if (expectedValue == null) return null;
+        try {
+            return objectMapper.writeValueAsString(expectedValue);
+        } catch (JacksonException ex) {
+            log.warn("dry_run_node_trace params 序列化失败,写 null", ex);
+            return null;
         }
     }
 
