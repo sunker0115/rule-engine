@@ -22,6 +22,18 @@
 - **record / 枚举**：类级别 Javadoc 说明用途，字段不需要单独注释（名字已自明）。
 - **禁止**：TODO/FIXME 注释不得出现在提交代码中；不写"added for X"/"used by Y"类追溯性注释。
 
+## 数据类型与边界规范（强制）
+
+承载结构化数据的字段——DTO、service 接口入参/出参、API 请求体、领域实体的 JSON 列——**一律用已定义的具体类型**，**禁止 JSON String，禁止裸 `Object`，禁止用 `Map` 当万能容器**。
+
+1. **优先具体类型**：能引用已定义的 record/类（如 `AstNode` / `List<DecisionBinding>` / `List<PreGateConfig>` / `RuleKind`）就用它，不要降级成 `Map`/`Object`/`String`。
+2. **`Map<String, Object>` 仅在「确实无定义」时用**：即结构开放/异构、没有也不该有固定类型的场景（如 action `default_params` 依 actionType 而异）。这是唯一例外，不是默认选项。
+3. **实体 JSON 列以 `RuleVersion` 为模板**：`@TableName(autoResultMap = true)` + 字段为 typed（`AstNode` / `List<...>`）+ `@TableField(typeHandler = Jackson3TypeHandler.class)`。JSON↔对象由 MyBatis TypeHandler 在持久层完成，**实体/service/controller 内一律不手写 ObjectMapper 序列化、不传 JSON String**。
+4. **请求参数同样适用**：controller 收 typed 请求 DTO，直传 service 的 typed 入参；不得 typed→String→typed 来回。
+5. **DTO ↔ service/实体 转换走 MapStruct**（`web/admin/convert/` 包），不在 controller/service 内联手写（字段极少的一次性映射可手写，见全局 §5）。
+
+新增/改动相关代码时以本节为准；既有 String/Object/Map 违例在触及时顺手收敛。
+
 ## 测试纪律
 
 - 每个 Task 提交前必须运行该模块的所有测试，全部通过才能 commit。
