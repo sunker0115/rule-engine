@@ -2,10 +2,9 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneActionBindingService;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneActionBindingDef;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneActionBindingMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +28,6 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
 
     private final SceneMapper sceneMapper;
     private final SceneActionBindingMapper bindingMapper;
-    private final AuditLogMapper auditLogMapper;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -83,8 +81,10 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
             }
         }
 
-        writeAudit(Long.valueOf(tenantId), actorId, "REPLACE_ACTION_BINDING",
-                "scene_action_binding", scene.getId().toString());
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                Long.valueOf(tenantId), actorId, "USER", "REPLACE_ACTION_BINDING",
+                "scene_action_binding", scene.getId().toString(),
+                null, null, LocalDateTime.now()));
         // active 取场景真实状态：禁用场景改 binding 不得复活其索引（发 false → 索引移除/no-op）
         eventPublisher.publishEvent(new SceneChangedEvent(
                 tenantId, sceneCode, ACTIVE.equals(scene.getStatus())));
@@ -96,18 +96,5 @@ class SceneActionBindingServiceImpl implements SceneActionBindingService {
             throw new IllegalArgumentException("Scene 不存在: " + sceneCode);
         }
         return scene;
-    }
-
-    private void writeAudit(Long tenantId, String actor, String action,
-                            String targetType, String targetId) {
-        AuditLog log = new AuditLog();
-        log.setTenantId(tenantId);
-        log.setActor(actor);
-        log.setActorType("USER");
-        log.setAction(action);
-        log.setTargetType(targetType);
-        log.setTargetId(targetId);
-        log.setOperatedAt(LocalDateTime.now());
-        auditLogMapper.insert(log);
     }
 }

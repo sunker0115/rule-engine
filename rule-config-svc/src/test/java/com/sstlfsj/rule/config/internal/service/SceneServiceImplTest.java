@@ -2,10 +2,9 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.repository.ScenePayloadSchemaHistoryMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +26,6 @@ import static org.mockito.Mockito.*;
 class SceneServiceImplTest {
 
     @Mock SceneMapper sceneMapper;
-    @Mock AuditLogMapper auditLogMapper;
     @Mock ScenePayloadSchemaHistoryMapper schemaHistoryMapper;
     @Mock ApplicationEventPublisher eventPublisher;
 
@@ -39,14 +37,13 @@ class SceneServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        sceneService = new SceneServiceImpl(sceneMapper, auditLogMapper,
+        sceneService = new SceneServiceImpl(sceneMapper,
                 schemaHistoryMapper, eventPublisher);
     }
 
     @Test
-    void createScene_insertsSceneAndWritesAuditLog() {
+    void createScene_insertsSceneAndPublishesAuditEvent() {
         when(sceneMapper.insert((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         sceneService.createScene("1", "PAYMENT", "支付场景",
                 null, null, null, null, null, null, "actor1");
@@ -55,7 +52,7 @@ class SceneServiceImplTest {
         verify(sceneMapper).insert(sceneCaptor.capture());
         assertThat(sceneCaptor.getValue().getCode()).isEqualTo("PAYMENT");
         assertThat(sceneCaptor.getValue().getStatus()).isEqualTo("ACTIVE");
-        verify(auditLogMapper).insert((AuditLog) any());
+        verify(eventPublisher).publishEvent(any(OperationAuditedEvent.class));
     }
 
     @Test
@@ -66,7 +63,6 @@ class SceneServiceImplTest {
             arg.setId(100L);
             return 1;
         }).when(sceneMapper).insert((SceneDef) any());
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         when(schemaHistoryMapper.insert((ScenePayloadSchemaHistory) any())).thenReturn(1);
 
         sceneService.createScene("1", "PAYMENT", "支付场景",
@@ -94,7 +90,6 @@ class SceneServiceImplTest {
     @Test
     void createScene_withoutPayloadSchema_不写历史快照() {
         when(sceneMapper.insert((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         sceneService.createScene("1", "PAYMENT", "支付场景",
                 null, null, null, null, null, null, "actor1");
@@ -112,7 +107,6 @@ class SceneServiceImplTest {
         scene.setStatus("ACTIVE");
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         sceneService.disableScene("1", "PAYMENT", "actor1");
 
@@ -120,10 +114,14 @@ class SceneServiceImplTest {
         verify(sceneMapper).updateById(sceneCaptor.capture());
         assertThat(sceneCaptor.getValue().getStatus()).isEqualTo("DISABLED");
 
+        // disable 现在发两个事件：操作审计事件 + SceneChangedEvent
+        verify(eventPublisher).publishEvent(any(OperationAuditedEvent.class));
         ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(eventPublisher).publishEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue()).isInstanceOf(SceneChangedEvent.class);
-        SceneChangedEvent event = (SceneChangedEvent) eventCaptor.getValue();
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        SceneChangedEvent event = eventCaptor.getAllValues().stream()
+                .filter(SceneChangedEvent.class::isInstance)
+                .map(SceneChangedEvent.class::cast)
+                .findFirst().orElseThrow();
         assertThat(event.sceneCode()).isEqualTo("PAYMENT");
         assertThat(event.active()).isFalse();
     }
@@ -139,7 +137,6 @@ class SceneServiceImplTest {
         existing.setEventTypes(List.of());
         when(sceneMapper.findByCode(any(), any())).thenReturn(existing);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         when(schemaHistoryMapper.insert((ScenePayloadSchemaHistory) any())).thenReturn(1);
 
         List<PayloadFieldSpec> newSchema = List.of(field("amount"), field("currency"));
@@ -170,7 +167,6 @@ class SceneServiceImplTest {
         existing.setEventTypes(List.of("payment.initiated"));
         when(sceneMapper.findByCode(any(), any())).thenReturn(existing);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         // 传入与现有相同的 payloadSchema
         sceneService.updateScene("1", "PAYMENT", "新名称", null,
@@ -239,7 +235,7 @@ class SceneServiceImplTest {
 
     @Test
     void constructor_springCanInstantiate() {
-        SceneServiceImpl svc = new SceneServiceImpl(sceneMapper, auditLogMapper,
+        SceneServiceImpl svc = new SceneServiceImpl(sceneMapper,
                 schemaHistoryMapper, eventPublisher);
         assertThat(svc).isNotNull();
     }

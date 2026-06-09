@@ -2,13 +2,12 @@ package com.sstlfsj.rule.config.internal.bundle;
 
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.dto.RuleImportResult;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
@@ -23,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -49,7 +49,7 @@ class RuleImportServiceTest {
     @Mock SceneMapper sceneMapper;
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock DecisionDefinitionMapper decisionDefinitionMapper;
-    @Mock AuditLogMapper auditLogMapper;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks RuleImportService sut;
 
     private RuleBundle.RuleEntry ruleEntry(String code) {
@@ -109,7 +109,7 @@ class RuleImportServiceTest {
         assertThat(r.decisionsCreated()).containsExactly("BLOCK");
         verify(metricDefinitionMapper, times(1)).insert(any(MetricDefinition.class));
         verify(decisionDefinitionMapper, times(1)).insert(any(DecisionDefinition.class));
-        verify(auditLogMapper, times(2)).insert(any(AuditLog.class));   // 每条规则一条审计
+        verify(eventPublisher, times(2)).publishEvent(any(OperationAuditedEvent.class));   // 每条规则一条审计
     }
 
     @Test

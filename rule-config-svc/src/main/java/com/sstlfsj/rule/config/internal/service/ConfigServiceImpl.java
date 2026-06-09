@@ -5,12 +5,11 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
@@ -19,6 +18,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,9 +32,9 @@ class ConfigServiceImpl implements ConfigService {
 
     private final PublishService publishService;
     private final RuleDefinitionMapper ruleDefinitionMapper;
-    private final AuditLogMapper auditLogMapper;
     private final SceneMapper sceneMapper;
     private final RuleVersionMapper ruleVersionMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public RuleVersionSnapshot publish(String tenantId, Long ruleDefinitionId, String actorId) {
@@ -51,15 +51,9 @@ class ConfigServiceImpl implements ConfigService {
         rule.setStatus("DISABLED");
         ruleDefinitionMapper.updateById(rule);
 
-        AuditLog log = new AuditLog();
-        log.setTenantId(Long.valueOf(tenantId));
-        log.setActor(actorId);
-        log.setActorType("USER");
-        log.setAction("DISABLE");
-        log.setTargetType("rule_definition");
-        log.setTargetId(ruleDefinitionId.toString());
-        log.setOperatedAt(LocalDateTime.now());
-        auditLogMapper.insert(log);
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                Long.valueOf(tenantId), actorId, "USER", "DISABLE", "rule_definition",
+                ruleDefinitionId.toString(), null, null, LocalDateTime.now()));
     }
 
     @Override

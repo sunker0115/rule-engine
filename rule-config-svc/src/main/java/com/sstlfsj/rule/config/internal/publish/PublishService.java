@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.publish;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.domain.*;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -34,7 +35,6 @@ public class PublishService {
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
     private final RuleVersionMapper ruleVersionMapper;
-    private final AuditLogMapper auditLogMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final MetricDefinitionMapper metricDefinitionMapper;
 
@@ -207,17 +207,12 @@ public class PublishService {
         rule.setPublishedAt(LocalDateTime.now());
         ruleDefinitionMapper.updateById(rule);
 
-        // 9. INSERT audit_log（D14 同步事务写）
-        AuditLog auditLog = new AuditLog();
-        auditLog.setTenantId(tenantId);
-        auditLog.setActor(actorId);
-        auditLog.setActorType("USER");
-        auditLog.setAction("PUBLISH");
-        auditLog.setTargetType("rule_definition");
-        auditLog.setTargetId(ruleDefinitionId.toString());
-        auditLog.setAfterSnapshot("{\"ruleVersionId\":" + newRv.getId() + ",\"version\":" + newVersion + "}");
-        auditLog.setOperatedAt(LocalDateTime.now());
-        auditLogMapper.insert(auditLog);
+        // 9. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 红线）
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
+                null,
+                "{\"ruleVersionId\":" + newRv.getId() + ",\"version\":" + newVersion + "}",
+                LocalDateTime.now()));
 
         // 10. 生成 RuleVersionSnapshot 供返回和事件携带
         RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
@@ -308,17 +303,12 @@ public class PublishService {
         rv.setCreatedAt(LocalDateTime.now());
         ruleVersionMapper.insert(rv);
 
-        // 6. INSERT audit_log（同事务写入，D14 约定）
-        AuditLog log = new AuditLog();
-        log.setTenantId(tenantId);
-        log.setActor(actorId);
-        log.setActorType("USER");
-        log.setAction("CREATE");
-        log.setTargetType("rule_definition");
-        log.setTargetId(rd.getId().toString());
-        log.setAfterSnapshot("{\"ruleDefinitionId\":" + rd.getId() + ",\"ruleVersionId\":" + rv.getId() + "}");
-        log.setOperatedAt(LocalDateTime.now());
-        auditLogMapper.insert(log);
+        // 6. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 约定）
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", "CREATE", "rule_definition", rd.getId().toString(),
+                null,
+                "{\"ruleDefinitionId\":" + rd.getId() + ",\"ruleVersionId\":" + rv.getId() + "}",
+                LocalDateTime.now()));
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, "DRAFT");
     }

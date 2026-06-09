@@ -5,10 +5,9 @@ import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneService;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.repository.ScenePayloadSchemaHistoryMapper;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,6 @@ import java.util.Map;
 class SceneServiceImpl implements SceneService {
 
     private final SceneMapper sceneMapper;
-    private final AuditLogMapper auditLogMapper;
     private final ScenePayloadSchemaHistoryMapper schemaHistoryMapper;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -57,7 +55,7 @@ class SceneServiceImpl implements SceneService {
             snapshotSchema(scene.getId(), 1, payloadSchema, actorId);
         }
 
-        writeAudit(Long.valueOf(tenantId), actorId, "CREATE", "scene",
+        publishAudit(Long.valueOf(tenantId), actorId, "CREATE", "scene",
                 scene.getId() != null ? scene.getId().toString() : sceneCode);
         return scene.getId();
     }
@@ -89,7 +87,7 @@ class SceneServiceImpl implements SceneService {
         scene.setUpdatedBy(actorId);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        writeAudit(Long.valueOf(tenantId), actorId, "UPDATE", "scene", scene.getId().toString());
+        publishAudit(Long.valueOf(tenantId), actorId, "UPDATE", "scene", scene.getId().toString());
     }
 
     @Override
@@ -114,7 +112,7 @@ class SceneServiceImpl implements SceneService {
         scene.setUpdatedBy(actorId);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        writeAudit(Long.valueOf(tenantId), actorId, "DISABLE", "scene", scene.getId().toString());
+        publishAudit(Long.valueOf(tenantId), actorId, "DISABLE", "scene", scene.getId().toString());
         eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, false));
     }
 
@@ -159,16 +157,10 @@ class SceneServiceImpl implements SceneService {
         );
     }
 
-    private void writeAudit(Long tenantId, String actor, String action,
-                             String targetType, String targetId) {
-        AuditLog log = new AuditLog();
-        log.setTenantId(tenantId);
-        log.setActor(actor);
-        log.setActorType("USER");
-        log.setAction(action);
-        log.setTargetType(targetType);
-        log.setTargetId(targetId);
-        log.setOperatedAt(LocalDateTime.now());
-        auditLogMapper.insert(log);
+    private void publishAudit(Long tenantId, String actor, String action,
+                              String targetType, String targetId) {
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actor, "USER", action, targetType, targetId,
+                null, null, LocalDateTime.now()));
     }
 }

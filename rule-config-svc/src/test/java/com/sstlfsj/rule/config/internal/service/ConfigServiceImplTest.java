@@ -2,12 +2,11 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Map;
@@ -33,9 +33,9 @@ class ConfigServiceImplTest {
 
     @Mock PublishService publishService;
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
-    @Mock AuditLogMapper auditLogMapper;
     @Mock SceneMapper sceneMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks ConfigServiceImpl configService;
 
     @Test
@@ -54,14 +54,13 @@ class ConfigServiceImplTest {
     }
 
     @Test
-    void disable_updatesStatusAndWritesAuditLog() {
+    void disable_updatesStatusAndPublishesAuditEvent() {
         RuleDefinition rule = new RuleDefinition();
         rule.setId(10L);
         rule.setTenantId(1L);
         rule.setStatus("PUBLISHED");
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         configService.disable("1", 10L, "actor1");
 
@@ -69,7 +68,14 @@ class ConfigServiceImplTest {
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
         assertThat(rdCaptor.getValue().getStatus()).isEqualTo("DISABLED");
 
-        verify(auditLogMapper).insert((AuditLog) any());
+        ArgumentCaptor<OperationAuditedEvent> evCaptor =
+                ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher).publishEvent(evCaptor.capture());
+        OperationAuditedEvent ev = evCaptor.getValue();
+        assertThat(ev.action()).isEqualTo("DISABLE");
+        assertThat(ev.targetType()).isEqualTo("rule_definition");
+        assertThat(ev.targetId()).isEqualTo("10");
+        assertThat(ev.actorType()).isEqualTo("USER");
     }
 
     @Test

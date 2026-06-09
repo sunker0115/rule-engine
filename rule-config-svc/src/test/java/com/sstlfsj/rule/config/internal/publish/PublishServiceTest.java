@@ -5,6 +5,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -43,7 +44,6 @@ class PublishServiceTest {
     @Mock SceneMapper sceneMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
     @Mock DecisionDefinitionMapper decisionDefinitionMapper;
-    @Mock AuditLogMapper auditLogMapper;
     @Mock ApplicationEventPublisher eventPublisher;
     @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
     @Mock MetricDefinitionMapper metricDefinitionMapper;
@@ -91,7 +91,6 @@ class PublishServiceTest {
         // MyBatis-Plus 重载：用 (RuleVersion) 显式类型消除歧义
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         // B6：metric ACTIVE 行（version=null 兜底为 1）
         MetricDefinition mdMCode = new MetricDefinition();
         mdMCode.setMetricCode("m.code");
@@ -119,15 +118,20 @@ class PublishServiceTest {
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
         assertThat(rdCaptor.getValue().getStatus()).isEqualTo("PUBLISHED");
-        // 验证审计日志写入
-        ArgumentCaptor<AuditLog> logCaptor = ArgumentCaptor.forClass(AuditLog.class);
-        verify(auditLogMapper).insert(logCaptor.capture());
-        assertThat(logCaptor.getValue().getAction()).isEqualTo("PUBLISH");
-        // 验证 Modulith 事件发布，sceneCode 匹配（用 Object 重载避免 ApplicationEvent 歧义）
+        // 发布现在发两个事件：审计事件（PUBLISH）+ Modulith RulePublishedEvent
         ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(eventPublisher).publishEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue()).isInstanceOf(RulePublishedEvent.class);
-        assertThat(((RulePublishedEvent) eventCaptor.getValue()).sceneCode()).isEqualTo("PAYMENT");
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        List<Object> events = eventCaptor.getAllValues();
+        OperationAuditedEvent audit = events.stream()
+                .filter(OperationAuditedEvent.class::isInstance)
+                .map(OperationAuditedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(audit.action()).isEqualTo("PUBLISH");
+        RulePublishedEvent published = events.stream()
+                .filter(RulePublishedEvent.class::isInstance)
+                .map(RulePublishedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(published.sceneCode()).isEqualTo("PAYMENT");
     }
 
     @Test
@@ -241,7 +245,6 @@ class PublishServiceTest {
             return 1;
         }).when(ruleVersionMapper).insert(any(RuleVersion.class));
 
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         DraftCreatedResult result = publishService.createDraft(
                 1L, "risk.transfer", "rule.test", "测试规则",
@@ -323,7 +326,6 @@ class PublishServiceTest {
                 .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
         doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
                 .when(ruleVersionMapper).insert(any(RuleVersion.class));
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         publishService.createDraft(1L, "risk.transfer", "rule.test", "测试规则",
                 new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
@@ -365,7 +367,6 @@ class PublishServiceTest {
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdMetric1));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         // 不应抛异常，发布成功
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
@@ -389,7 +390,6 @@ class PublishServiceTest {
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdM1a));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         // 空 triggerEventTypes 应跳过校验，正常发布
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
@@ -414,7 +414,6 @@ class PublishServiceTest {
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdM1b));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
                 () -> publishService.publish(1L, 10L, "actor"));
@@ -452,7 +451,6 @@ class PublishServiceTest {
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdAmount1));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
                 () -> publishService.publish(1L, 10L, "actor"));
@@ -476,7 +474,6 @@ class PublishServiceTest {
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(mdAmount2));
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
                 () -> publishService.publish(1L, 10L, "actor"));
@@ -618,7 +615,6 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         MetricDefinition mdRollout = new MetricDefinition();
         mdRollout.setMetricCode("m.code");
         mdRollout.setDataType("STRING");
@@ -639,7 +635,6 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         // AST: GT 算子，metricCode="amount"
         draftVersion.setConditionAst(new ConditionNode("GT", "amount", null,
@@ -713,7 +708,6 @@ class PublishServiceTest {
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
         when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         // AST 引用 account.age
         draftVersion.setConditionAst(new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0));

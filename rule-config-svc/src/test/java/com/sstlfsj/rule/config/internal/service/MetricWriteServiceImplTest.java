@@ -7,12 +7,11 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
@@ -24,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import tools.jackson.core.JacksonException;
 
@@ -53,10 +53,10 @@ class MetricWriteServiceImplTest {
     }
 
     @Mock MetricDefinitionMapper metricDefinitionMapper;
-    @Mock AuditLogMapper auditLogMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
     @Mock SceneMapper sceneMapper;
+    @Mock ApplicationEventPublisher eventPublisher;
     @Spy  ObjectMapper objectMapper = JsonMapper.builder().build();
     @Spy  com.sstlfsj.rule.config.internal.MetricProperties metricProperties =
             new com.sstlfsj.rule.config.internal.MetricProperties();
@@ -99,7 +99,7 @@ class MetricWriteServiceImplTest {
         assertThat(inserted.getCreatedBy()).isEqualTo(ACTOR);
 
         // 断言 audit_log 写入一次
-        verify(auditLogMapper, times(1)).insert(any(AuditLog.class));
+        verify(eventPublisher, times(1)).publishEvent(any(OperationAuditedEvent.class));
     }
 
     @Test
@@ -188,7 +188,7 @@ class MetricWriteServiceImplTest {
         verify(metricDefinitionMapper, times(1)).updateById(active);
         verify(metricDefinitionMapper, never()).insert((MetricDefinition) any());
         assertThat(active.getStatus()).isEqualTo("ACTIVE");
-        verify(auditLogMapper, times(1)).insert(any(AuditLog.class));
+        verify(eventPublisher, times(1)).publishEvent(any(OperationAuditedEvent.class));
     }
 
     // ── update breakingChange=true ────────────────────────────────────────────
@@ -219,7 +219,7 @@ class MetricWriteServiceImplTest {
         assertThat(newRow.getVersion()).isEqualTo(3);
         assertThat(newRow.getStatus()).isEqualTo("ACTIVE");
 
-        verify(auditLogMapper, times(1)).insert(any(AuditLog.class));
+        verify(eventPublisher, times(1)).publishEvent(any(OperationAuditedEvent.class));
     }
 
     // ── update breakingChange=false 但 sourceType/dataType 变更 → 强制升版 ──────
@@ -294,7 +294,7 @@ class MetricWriteServiceImplTest {
         verify(metricDefinitionMapper, times(1)).updateById(active);
         verify(metricDefinitionMapper, never()).insert((MetricDefinition) any());
         // 补：与既有原地更新用例对称，确认 audit_log 写入一次
-        verify(auditLogMapper, times(1)).insert(any(AuditLog.class));
+        verify(eventPublisher, times(1)).publishEvent(any(OperationAuditedEvent.class));
     }
 
     // ── update 无 ACTIVE 行 ───────────────────────────────────────────────────

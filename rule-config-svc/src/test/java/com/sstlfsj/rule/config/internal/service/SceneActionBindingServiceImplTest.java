@@ -2,10 +2,9 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneActionBindingService.SceneActionBindingItem;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.SceneActionBindingDef;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneActionBindingMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +29,6 @@ class SceneActionBindingServiceImplTest {
 
     private SceneMapper sceneMapper;
     private SceneActionBindingMapper bindingMapper;
-    private AuditLogMapper auditLogMapper;
     private ApplicationEventPublisher eventPublisher;
     private SceneActionBindingServiceImpl service;
 
@@ -38,10 +36,9 @@ class SceneActionBindingServiceImplTest {
     void setUp() {
         sceneMapper = mock(SceneMapper.class);
         bindingMapper = mock(SceneActionBindingMapper.class);
-        auditLogMapper = mock(AuditLogMapper.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new SceneActionBindingServiceImpl(
-                sceneMapper, bindingMapper, auditLogMapper, eventPublisher);
+                sceneMapper, bindingMapper, eventPublisher);
     }
 
     private SceneDef scene(Long id, String status) {
@@ -73,13 +70,12 @@ class SceneActionBindingServiceImplTest {
         verify(bindingMapper, times(2)).insert(any(SceneActionBindingDef.class));
         verify(bindingMapper, never()).updateById(any(SceneActionBindingDef.class));
         verify(bindingMapper, never()).deleteById(any(Long.class));
-        verify(auditLogMapper).insert(any(AuditLog.class));
+        verify(eventPublisher).publishEvent(any(OperationAuditedEvent.class));
 
-        ArgumentCaptor<SceneChangedEvent> ev = ArgumentCaptor.forClass(SceneChangedEvent.class);
-        verify(eventPublisher).publishEvent(ev.capture());
-        assertThat(ev.getValue().tenantId()).isEqualTo("1");
-        assertThat(ev.getValue().sceneCode()).isEqualTo("PAY");
-        assertThat(ev.getValue().active()).isTrue();
+        SceneChangedEvent changed = captureSceneChangedEvent();
+        assertThat(changed.tenantId()).isEqualTo("1");
+        assertThat(changed.sceneCode()).isEqualTo("PAY");
+        assertThat(changed.active()).isTrue();
     }
 
     @Test
@@ -106,9 +102,17 @@ class SceneActionBindingServiceImplTest {
         service.replace("1", "PAY",
                 List.of(new SceneActionBindingItem("BLOCK_TX", null)), "bob");
 
-        ArgumentCaptor<SceneChangedEvent> ev = ArgumentCaptor.forClass(SceneChangedEvent.class);
-        verify(eventPublisher).publishEvent(ev.capture());
-        assertThat(ev.getValue().active()).isFalse();
+        assertThat(captureSceneChangedEvent().active()).isFalse();
+    }
+
+    /** disable/replace 现在每次发两个事件（OperationAuditedEvent + SceneChangedEvent），取后者断言。 */
+    private SceneChangedEvent captureSceneChangedEvent() {
+        ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, times(2)).publishEvent(ev.capture());
+        return ev.getAllValues().stream()
+                .filter(SceneChangedEvent.class::isInstance)
+                .map(SceneChangedEvent.class::cast)
+                .findFirst().orElseThrow();
     }
 
     @Test

@@ -4,19 +4,19 @@ import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.SourceType;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricEnums;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +42,7 @@ public class RuleImportService {
     private final SceneMapper sceneMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
-    private final AuditLogMapper auditLogMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** 幂等批量导入 Bundle 到目标租户。 */
     @Transactional
@@ -190,17 +190,12 @@ public class RuleImportService {
             rv.setCreatedAt(LocalDateTime.now());
             ruleVersionMapper.insert(rv);
 
-            AuditLog log = new AuditLog();
-            log.setTenantId(tenantId);
-            log.setActor(actorId);
-            log.setActorType("USER");
-            log.setAction("IMPORT");
-            log.setTargetType("rule_definition");
-            log.setTargetId(rd.getId().toString());
-            log.setAfterSnapshot("{\"ruleVersionId\":" + rv.getId() + ",\"version\":" + newVersion
-                    + ",\"ruleExisted\":" + ruleExisted + "}");
-            log.setOperatedAt(LocalDateTime.now());
-            auditLogMapper.insert(log);
+            eventPublisher.publishEvent(new OperationAuditedEvent(
+                    tenantId, actorId, "USER", "IMPORT", "rule_definition", rd.getId().toString(),
+                    null,
+                    "{\"ruleVersionId\":" + rv.getId() + ",\"version\":" + newVersion
+                            + ",\"ruleExisted\":" + ruleExisted + "}",
+                    LocalDateTime.now()));
 
             importedRules.add(new RuleImportResult.ImportedRule(
                     rd.getId(), rv.getId(), newVersion, rule.code(), rule.sceneCode(), ruleExisted));

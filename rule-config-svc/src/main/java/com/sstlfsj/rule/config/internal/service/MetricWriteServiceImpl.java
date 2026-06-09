@@ -3,18 +3,18 @@ package com.sstlfsj.rule.config.internal.service;
 import lombok.RequiredArgsConstructor;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.internal.MetricProperties;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricEnums;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,11 +37,11 @@ import java.util.stream.Collectors;
 public class MetricWriteServiceImpl implements MetricWriteService {
 
     private final MetricDefinitionMapper metricDefinitionMapper;
-    private final AuditLogMapper auditLogMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
     private final MetricProperties metricProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public Long create(Long tenantId, String metricCode, MetricWriteCommand cmd, String actorId) {
@@ -56,7 +56,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(m);
 
-        writeAudit(tenantId, actorId, "CREATE", m.getId().toString(),
+        publishAudit(tenantId, actorId, "CREATE", m.getId().toString(),
                 "{\"metricCode\":\"" + metricCode + "\",\"version\":1}");
         return m.getId();
     }
@@ -83,7 +83,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
             active.setUpdatedAt(LocalDateTime.now());
             metricDefinitionMapper.updateById(active);
 
-            writeAudit(tenantId, actorId, "UPDATE", active.getId().toString(),
+            publishAudit(tenantId, actorId, "UPDATE", active.getId().toString(),
                     "{\"metricCode\":\"" + metricCode + "\",\"version\":"
                     + active.getVersion() + ",\"breaking\":false}");
             return active.getVersion();
@@ -106,7 +106,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         next.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(next);
 
-        writeAudit(tenantId, actorId, "UPDATE", next.getId().toString(),
+        publishAudit(tenantId, actorId, "UPDATE", next.getId().toString(),
                 "{\"metricCode\":\"" + metricCode + "\",\"version\":"
                 + newVersion + ",\"breaking\":true}");
         return newVersion;
@@ -185,18 +185,11 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setAllowProvided(cmd.allowProvided());
     }
 
-    /** 写入 audit_log，同事务（D14 约定）。 */
-    private void writeAudit(Long tenantId, String actorId, String action,
+    /** 发布操作审计事件，由集中监听器 BEFORE_COMMIT 同事务落 audit_log（D14 约定）。 */
+    private void publishAudit(Long tenantId, String actorId, String action,
                             String targetId, String afterSnapshot) {
-        AuditLog log = new AuditLog();
-        log.setTenantId(tenantId);
-        log.setActor(actorId);
-        log.setActorType("USER");
-        log.setAction(action);
-        log.setTargetType("metric_definition");
-        log.setTargetId(targetId);
-        log.setAfterSnapshot(afterSnapshot);
-        log.setOperatedAt(LocalDateTime.now());
-        auditLogMapper.insert(log);
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", action, "metric_definition", targetId,
+                null, afterSnapshot, LocalDateTime.now()));
     }
 }
