@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.publish;
 
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 
 import java.util.HashMap;
@@ -21,23 +22,23 @@ class AstDataTypeResolver {
 
     static {
         Map<String, Set<String>> m = new HashMap<>();
-        m.put("EQ",           Set.of("LONG", "DOUBLE", "DECIMAL", "STRING", "BOOLEAN", "DATE", "DATETIME"));
-        m.put("NEQ",          Set.of("LONG", "DOUBLE", "DECIMAL", "STRING", "BOOLEAN", "DATE", "DATETIME"));
-        m.put("GT",           Set.of("LONG", "DOUBLE", "DECIMAL"));
-        m.put("GTE",          Set.of("LONG", "DOUBLE", "DECIMAL"));
-        m.put("LT",           Set.of("LONG", "DOUBLE", "DECIMAL"));
-        m.put("LTE",          Set.of("LONG", "DOUBLE", "DECIMAL"));
-        m.put("BETWEEN",      Set.of("LONG", "DOUBLE", "DECIMAL", "DATE", "DATETIME"));
-        m.put("NOT_BETWEEN",  Set.of("LONG", "DOUBLE", "DECIMAL", "DATE", "DATETIME"));
-        m.put("IN",           Set.of("LONG", "STRING"));
-        m.put("NOT_IN",       Set.of("LONG", "STRING"));
-        m.put("CONTAINS",     Set.of("LIST"));
-        m.put("NOT_CONTAINS", Set.of("LIST"));
-        m.put("STARTS_WITH",  Set.of("STRING"));
-        m.put("ENDS_WITH",    Set.of("STRING"));
-        m.put("MATCHES",      Set.of("STRING"));
-        m.put("DATE_BEFORE",  Set.of("DATE", "DATETIME"));
-        m.put("DATE_AFTER",   Set.of("DATE", "DATETIME"));
+        m.put("EQ",           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put("NEQ",          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put("GT",           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put("GTE",          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put("LT",           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put("LTE",          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put("BETWEEN",      Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put("NOT_BETWEEN",  Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put("IN",           Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
+        m.put("NOT_IN",       Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
+        m.put("CONTAINS",     Set.of(DataType.LIST.tag()));
+        m.put("NOT_CONTAINS", Set.of(DataType.LIST.tag()));
+        m.put("STARTS_WITH",  Set.of(DataType.STRING.tag()));
+        m.put("ENDS_WITH",    Set.of(DataType.STRING.tag()));
+        m.put("MATCHES",      Set.of(DataType.STRING.tag()));
+        m.put("DATE_BEFORE",  Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put("DATE_AFTER",   Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
         ALLOWED = Map.copyOf(m);
     }
 

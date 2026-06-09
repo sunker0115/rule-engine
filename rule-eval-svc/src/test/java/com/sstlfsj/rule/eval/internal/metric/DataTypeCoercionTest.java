@@ -33,4 +33,10 @@ class DataTypeCoercionTest {
     void nullStaysNull() {
         assertThat(DataTypeCoercion.coerce(null, "LONG")).isNull();
     }
+
+    @Test
+    void unrecognizedDataTypeStringifies() {
+        // 未识别 dataType 经 DataType.fromTag → UNKNOWN，落 default 分支字符串化（同原 default 行为）
+        assertThat(DataTypeCoercion.coerce(5L, "INT")).isEqualTo("5");
+    }
 }

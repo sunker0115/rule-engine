@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition.time;
 
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 
 import java.time.Instant;
@@ -69,8 +70,8 @@ public final class PlaceholderResolver {
      * @return 类型化值或直通值；DATE/DATETIME 解析失败返回 null
      */
     public static Object resolveTyped(String dataType, Object raw, EvalContext ctx, ZoneId zone) {
-        if ("DATE".equals(dataType)) return resolveDate(raw, ctx, zone);
-        if ("DATETIME".equals(dataType)) return resolveDateTime(raw, ctx, zone);
+        if (DataType.DATE.tag().equals(dataType)) return resolveDate(raw, ctx, zone);
+        if (DataType.DATETIME.tag().equals(dataType)) return resolveDateTime(raw, ctx, zone);
         return raw;
     }
 }

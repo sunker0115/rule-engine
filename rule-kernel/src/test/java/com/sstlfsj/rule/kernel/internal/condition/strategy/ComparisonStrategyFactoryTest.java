@@ -57,6 +57,13 @@ class ComparisonStrategyFactoryTest {
     }
 
     @Test
+    void forType_unrecognized_returnsDefault() {
+        // 未识别字符串经 DataType.fromTag → UNKNOWN，落 DEFAULT（同原 default 分支）
+        assertThat(ComparisonStrategyFactory.forType("INT"))
+                .isInstanceOf(DefaultComparisonStrategy.class);
+    }
+
+    @Test
     void forType_returnsCachedSingleton() {
         // 相同 dataType 调用两次，返回同一实例（缓存单例，零分配）
         assertThat(ComparisonStrategyFactory.forType("LONG"))

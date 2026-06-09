@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -20,7 +21,7 @@ final class DateComparisonSupport {
         Object threshold = node.params().get("threshold");
         if (threshold == null) return false;
         // dataType=null（DSL 默认）→ DATETIME（保持旧 toInstant UTC Instant 语义）；DATE → LocalDate 比较
-        String effectiveType = "DATE".equals(node.dataType()) ? "DATE" : "DATETIME";
+        String effectiveType = DataType.DATE.tag().equals(node.dataType()) ? DataType.DATE.tag() : DataType.DATETIME.tag();
         ZoneId zone = TimeZoneResolver.resolve((String) node.params().get("timezone"), null);
         Object actual = PlaceholderResolver.resolveTyped(effectiveType, mv.value(), ctx, zone);
         Object operand = PlaceholderResolver.resolveTyped(effectiveType, threshold, ctx, zone);

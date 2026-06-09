@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -26,7 +27,7 @@ public class NotBetweenEvaluator implements ConditionEvaluator {
         if (min == null || max == null) return false;
         String dt = node.dataType();
         Object actual = mv.value();
-        if ("DATE".equals(dt) || "DATETIME".equals(dt)) {
+        if (DataType.DATE.tag().equals(dt) || DataType.DATETIME.tag().equals(dt)) {
             ZoneId zone = TimeZoneResolver.resolve((String) node.params().get("timezone"), null);
             actual = PlaceholderResolver.resolveTyped(dt, actual, ctx, zone);
             min    = PlaceholderResolver.resolveTyped(dt, min, ctx, zone);

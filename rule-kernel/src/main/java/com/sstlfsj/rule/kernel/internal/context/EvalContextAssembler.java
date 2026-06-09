@@ -100,7 +100,7 @@ public class EvalContextAssembler {
         if (definitionResolver == null) {
             Map<String, MetricValue> provided = HashMap.newHashMap(event.providedMetrics().size());
             for (Map.Entry<String, Object> e : event.providedMetrics().entrySet()) {
-                provided.put(e.getKey(), new MetricValue(e.getValue(), "UNKNOWN", ValueSource.PROVIDED.tag()));
+                provided.put(e.getKey(), new MetricValue(e.getValue(), DataType.UNKNOWN.tag(), ValueSource.PROVIDED.tag()));
             }
             return new EvalContext(event.tenantId(), event, subject, provided, now);
         }
@@ -122,7 +122,7 @@ public class EvalContextAssembler {
 
             boolean hasProvided = event.providedMetrics().containsKey(code);
             if (hasProvided && (def == null || def.allowProvided())) {
-                String dt = def != null ? def.dataType() : "UNKNOWN";
+                String dt = def != null ? def.dataType() : DataType.UNKNOWN.tag();
                 metrics.put(code, new MetricValue(event.providedMetrics().get(code), dt, ValueSource.PROVIDED.tag()));
                 continue;
             }
@@ -146,7 +146,7 @@ public class EvalContextAssembler {
         // 候选未引用但调用方仍推送的 provided 指标：补入（不影响 allowProvided 语义）
         for (Map.Entry<String, Object> e : event.providedMetrics().entrySet()) {
             if (!chosenVersions.containsKey(e.getKey())) {
-                metrics.putIfAbsent(e.getKey(), new MetricValue(e.getValue(), "UNKNOWN", ValueSource.PROVIDED.tag()));
+                metrics.putIfAbsent(e.getKey(), new MetricValue(e.getValue(), DataType.UNKNOWN.tag(), ValueSource.PROVIDED.tag()));
             }
         }
 

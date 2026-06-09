@@ -14,6 +14,12 @@ class MetricEnumsTest {
     }
 
     @Test
+    void dataTypes_excludesUnknownSentinel() {
+        // UNKNOWN 是运行时哨兵，不得进合法 metric 类型集（否则会放松发布校验）
+        assertThat(MetricEnums.DATA_TYPES).doesNotContain("UNKNOWN");
+    }
+
+    @Test
     void sourceTypes_matchAllowedSet() {
         assertThat(MetricEnums.SOURCE_TYPES).containsExactlyInAnyOrder(
                 "ATTRIBUTE", "SQL_AGGREGATE", "EXTERNAL_HTTP", "STREAM");
