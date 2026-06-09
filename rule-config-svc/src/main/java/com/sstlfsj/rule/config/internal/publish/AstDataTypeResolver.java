@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.publish;
 
+import com.sstlfsj.rule.kernel.api.model.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 
@@ -22,23 +23,23 @@ class AstDataTypeResolver {
 
     static {
         Map<String, Set<String>> m = new HashMap<>();
-        m.put("EQ",           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put("NEQ",          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put("GT",           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put("GTE",          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put("LT",           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put("LTE",          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put("BETWEEN",      Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put("NOT_BETWEEN",  Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put("IN",           Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
-        m.put("NOT_IN",       Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
-        m.put("CONTAINS",     Set.of(DataType.LIST.tag()));
-        m.put("NOT_CONTAINS", Set.of(DataType.LIST.tag()));
-        m.put("STARTS_WITH",  Set.of(DataType.STRING.tag()));
-        m.put("ENDS_WITH",    Set.of(DataType.STRING.tag()));
-        m.put("MATCHES",      Set.of(DataType.STRING.tag()));
-        m.put("DATE_BEFORE",  Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put("DATE_AFTER",   Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.EQ,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.NEQ,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.GT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionType.GTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionType.LT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionType.LTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionType.BETWEEN,      Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.NOT_BETWEEN,  Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.IN,           Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
+        m.put(ConditionType.NOT_IN,       Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
+        m.put(ConditionType.CONTAINS,     Set.of(DataType.LIST.tag()));
+        m.put(ConditionType.NOT_CONTAINS, Set.of(DataType.LIST.tag()));
+        m.put(ConditionType.STARTS_WITH,  Set.of(DataType.STRING.tag()));
+        m.put(ConditionType.ENDS_WITH,    Set.of(DataType.STRING.tag()));
+        m.put(ConditionType.MATCHES,      Set.of(DataType.STRING.tag()));
+        m.put(ConditionType.DATE_BEFORE,  Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.DATE_AFTER,   Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
         ALLOWED = Map.copyOf(m);
     }
 
