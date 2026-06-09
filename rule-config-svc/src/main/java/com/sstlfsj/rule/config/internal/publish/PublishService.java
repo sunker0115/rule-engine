@@ -85,9 +85,8 @@ public class PublishService {
 
         // 4. 取草稿 AST（已 typed），收集 metricDependencies
         AstNode ast = draftVersion.getConditionAst();
-        // kind 合法性校验：null/blank 视为 AST_BOOLEAN（兼容历史存量数据）
-        String rawKind = rule.getKind();
-        String kind = (rawKind == null || rawKind.isBlank()) ? RuleKind.AST_BOOLEAN.tag() : rawKind;
+        // kind 合法性校验：null 视为 AST_BOOLEAN（兼容历史存量数据）
+        String kind = (rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN).name();
         java.util.Set<String> validKinds = java.util.Set.of(
                 RuleKind.AST_BOOLEAN.tag(), RuleKind.SCORECARD.tag(),
                 RuleKind.DECISION_TREE.tag(), RuleKind.DECISION_TABLE.tag());
@@ -188,7 +187,7 @@ public class PublishService {
                 ? draftVersion.getDecisionBindings() : java.util.List.of());
         newRv.setPreGates(draftVersion.getPreGates() != null
                 ? draftVersion.getPreGates() : java.util.List.of());
-        newRv.setKind(rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN.tag());
+        newRv.setKind(rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN);
         newRv.setTriggerEventTypes(scene.getEventTypes() != null
                 ? scene.getEventTypes() : java.util.List.of());
         newRv.setMetricDependencies(metricDeps);
@@ -277,14 +276,15 @@ public class PublishService {
         if (!validKinds.contains(effectiveKind)) {
             throw new IllegalArgumentException("不支持的规则 kind: " + effectiveKind);
         }
+        RuleKind effectiveRuleKind = RuleKind.valueOf(effectiveKind);
 
         // 4. INSERT rule_definition（status=DRAFT）
-        RuleDefinition rd = RuleDefinition.draft(tenantId, scene.getId(), code, name, effectiveKind, actorId);
+        RuleDefinition rd = RuleDefinition.draft(tenantId, scene.getId(), code, name, effectiveRuleKind, actorId);
         ruleDefinitionMapper.insert(rd);
 
         // 5. INSERT rule_version（version=1，status=DRAFT）
         RuleVersion rv = RuleVersion.draftV1(rd.getId(), conditionAst, decisionBindings, preGates,
-                triggerEventTypes, effectiveKind);
+                triggerEventTypes, effectiveRuleKind);
         ruleVersionMapper.insert(rv);
 
         // 6. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 约定）

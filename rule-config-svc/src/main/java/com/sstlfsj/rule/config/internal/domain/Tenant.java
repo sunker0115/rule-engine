@@ -14,5 +14,5 @@ public class Tenant {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String code;
-    private String status;
+    private TenantStatus status;
 }

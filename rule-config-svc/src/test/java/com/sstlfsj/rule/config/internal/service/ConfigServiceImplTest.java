@@ -4,6 +4,7 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
@@ -164,7 +165,7 @@ class ConfigServiceImplTest {
         rule.setCode("rule.a");
         rule.setName("规则A");
         rule.setStatus(RuleDefinitionStatus.PUBLISHED);
-        rule.setKind("AST_BOOLEAN");
+        rule.setKind(RuleKind.AST_BOOLEAN);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
 
         SceneDef scene = new SceneDef();

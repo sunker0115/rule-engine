@@ -10,7 +10,10 @@ import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.config.internal.domain.DominantMode;
+import com.sstlfsj.rule.config.internal.domain.DecisionStrategy;
 import com.sstlfsj.rule.config.internal.repository.ScenePayloadSchemaHistoryMapper;
+import com.sstlfsj.rule.kernel.api.model.SubjectType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -40,9 +43,9 @@ class SceneServiceImpl implements SceneService {
         scene.setCode(sceneCode);
         scene.setName(name);
         scene.setDescription(description);
-        scene.setDominantMode(dominantMode != null ? dominantMode : "PUSH");
-        scene.setDecisionStrategy("HIGHEST_PRIORITY");
-        scene.setSubjectType(subjectType != null ? subjectType : "USER");
+        scene.setDominantMode(DominantMode.valueOf(dominantMode != null ? dominantMode : "PUSH"));
+        scene.setDecisionStrategy(DecisionStrategy.HIGHEST_PRIORITY);
+        scene.setSubjectType(SubjectType.valueOf(subjectType != null ? subjectType : "USER"));
         scene.setEventTypes(eventTypes != null ? eventTypes : List.of());
         scene.setPayloadSchema(payloadSchema);
         scene.setDefaultParams(defaultParams);
@@ -101,7 +104,7 @@ class SceneServiceImpl implements SceneService {
     public List<SceneListItem> listScenes(String tenantId) {
         return sceneMapper.findByTenantId(Long.valueOf(tenantId)).stream()
                 .map(s -> new SceneListItem(s.getId(), s.getCode(), s.getName(),
-                        s.getDominantMode(), s.getSubjectType(), s.getStatus().name()))
+                        s.getDominantMode().name(), s.getSubjectType().name(), s.getStatus().name()))
                 .toList();
     }
 
@@ -148,8 +151,8 @@ class SceneServiceImpl implements SceneService {
                 scene.getCode(),
                 scene.getName(),
                 scene.getDescription(),
-                scene.getDominantMode(),
-                scene.getSubjectType(),
+                scene.getDominantMode().name(),
+                scene.getSubjectType().name(),
                 eventTypes,
                 payloadSchema,
                 defaultParams,

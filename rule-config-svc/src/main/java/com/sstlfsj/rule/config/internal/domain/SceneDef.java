@@ -23,9 +23,9 @@ public class SceneDef {
     private String code;
     private String name;
     private String description;
-    private String dominantMode;
-    private String decisionStrategy;
-    private String subjectType;
+    private DominantMode dominantMode;
+    private DecisionStrategy decisionStrategy;
+    private com.sstlfsj.rule.kernel.api.model.SubjectType subjectType;
     /** 允许的 eventType 白名单；JSON 列由 TypeHandler 转换。 */
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<String> eventTypes;

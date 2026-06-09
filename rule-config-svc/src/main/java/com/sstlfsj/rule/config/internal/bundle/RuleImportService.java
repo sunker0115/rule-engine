@@ -4,7 +4,11 @@ import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.SourceType;
+import com.sstlfsj.rule.kernel.api.model.SubjectType;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
+import com.sstlfsj.rule.config.internal.domain.DecisionStatus;
+import com.sstlfsj.rule.config.internal.domain.DecisionStrategy;
+import com.sstlfsj.rule.config.internal.domain.DominantMode;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricEnums;
 import com.sstlfsj.rule.config.internal.domain.MetricStatus;
@@ -74,9 +78,9 @@ public class RuleImportService {
                 s.setCode(ss.code());
                 s.setName(ss.name());
                 s.setDescription(ss.description());
-                s.setSubjectType(ss.subjectType());
-                s.setDominantMode(ss.dominantMode());
-                s.setDecisionStrategy(ss.decisionStrategy());
+                s.setSubjectType(SubjectType.valueOf(ss.subjectType()));
+                s.setDominantMode(DominantMode.valueOf(ss.dominantMode()));
+                s.setDecisionStrategy(DecisionStrategy.valueOf(ss.decisionStrategy()));
                 s.setEventTypes(ss.eventTypes());
                 s.setPayloadSchema(ss.payloadSchema());
                 s.setDefaultParams(ss.defaultParams());
@@ -147,7 +151,7 @@ public class RuleImportService {
                 d.setPriority(de.priority());
                 d.setDescription(de.description());
                 d.setActions(de.actions() == null ? List.of() : de.actions());
-                d.setStatus("ACTIVE");
+                d.setStatus(DecisionStatus.ACTIVE);
                 d.setCreatedBy(actorId);
                 d.setCreatedAt(LocalDateTime.now());
                 decisionDefinitionMapper.insert(d);
@@ -159,7 +163,8 @@ public class RuleImportService {
         List<RuleImportResult.ImportedRule> importedRules = new ArrayList<>();
         for (RuleBundle.RuleEntry rule : bundle.rules()) {
             Long sceneId = resolveSceneId(tenantId, rule.sceneCode(), sceneIdByCode);
-            String kind = (rule.kind() == null || rule.kind().isBlank()) ? RuleKind.AST_BOOLEAN.tag() : rule.kind();
+            RuleKind kind = (rule.kind() == null || rule.kind().isBlank())
+                    ? RuleKind.AST_BOOLEAN : RuleKind.valueOf(rule.kind());
 
             RuleDefinition rd = ruleDefinitionMapper.findBySceneAndCode(tenantId, sceneId, rule.code());
             boolean ruleExisted = rd != null;

@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.domain;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -19,7 +20,7 @@ public class RuleDefinition {
     private String name;
     private String description;
     private RuleDefinitionStatus status;
-    private String kind;
+    private RuleKind kind;
     private Long currentVersion;
     private String publishedBy;
     private java.time.LocalDateTime publishedAt;
@@ -35,12 +36,12 @@ public class RuleDefinition {
      * @param sceneId   场景 id
      * @param code      规则编码
      * @param name      规则名称
-     * @param kind      规则类型标签
+     * @param kind      规则类型
      * @param createdBy 创建人
      * @return 草稿态 RuleDefinition（id 由插入时回填）
      */
     public static RuleDefinition draft(Long tenantId, Long sceneId, String code, String name,
-                                       String kind, String createdBy) {
+                                       RuleKind kind, String createdBy) {
         RuleDefinition rd = new RuleDefinition();
         rd.setTenantId(tenantId);
         rd.setSceneId(sceneId);

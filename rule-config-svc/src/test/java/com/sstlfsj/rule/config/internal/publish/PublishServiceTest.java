@@ -10,6 +10,7 @@ import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
@@ -65,7 +66,7 @@ class PublishServiceTest {
         draftRule.setCode("rule.demo");
         draftRule.setName("测试规则");
         draftRule.setStatus(RuleDefinitionStatus.DRAFT);
-        draftRule.setKind("AST_BOOLEAN");
+        draftRule.setKind(RuleKind.AST_BOOLEAN);
 
         scene = new SceneDef();
         scene.setId(5L);
@@ -172,7 +173,7 @@ class PublishServiceTest {
     @Test
     void publish_scorecard_非ScorecardRootNode根节点_抛异常() {
         // kind=SCORECARD，但 conditionAst 是 ConditionNode（非 ScorecardRootNode）
-        draftRule.setKind("SCORECARD");
+        draftRule.setKind(RuleKind.SCORECARD);
         draftVersion.setConditionAst(new ConditionNode("c.type", "m.code", null, Map.of(), 1.0));
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
@@ -186,7 +187,7 @@ class PublishServiceTest {
     @Test
     void publish_scorecard_weight为零_抛异常() {
         // kind=SCORECARD，ScorecardRootNode 包含 weight=0 的 ConditionNode
-        draftRule.setKind("SCORECARD");
+        draftRule.setKind(RuleKind.SCORECARD);
         ConditionNode zeroWeightLeaf = new ConditionNode("c.type", "m.code", null, Map.of(), 0.0);
         draftVersion.setConditionAst(new ScorecardRootNode(List.of(zeroWeightLeaf), 60.0));
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
@@ -201,7 +202,7 @@ class PublishServiceTest {
     @Test
     void publish_decisionTree_conditionContainsXor_throws() {
         // kind=DECISION_TREE，IfNode 条件含 XorNode（决策树不支持 XOR）→ 发布期拒绝，避免上线后运行时 NO_EVALUATOR
-        draftRule.setKind("DECISION_TREE");
+        draftRule.setKind(RuleKind.DECISION_TREE);
         ConditionNode leaf = new ConditionNode("GTE", "m.code", null, Map.of("threshold", 0), null);
         IfNode root = new IfNode(new XorNode(List.of(leaf), null),
                 new DecisionLeafNode("PASS", "PASS"), null);
@@ -218,7 +219,7 @@ class PublishServiceTest {
     @Test
     void publish_scorecard_weight为null_抛异常() {
         // weight=null 视为未设置，同样不允许发布（SCORECARD 必须填 weight>0）
-        draftRule.setKind("SCORECARD");
+        draftRule.setKind(RuleKind.SCORECARD);
         ConditionNode nullWeightLeaf = new ConditionNode("c.type", "m.code", null, Map.of(), null);
         draftVersion.setConditionAst(new ScorecardRootNode(List.of(nullWeightLeaf), 60.0));
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
@@ -265,13 +266,13 @@ class PublishServiceTest {
         verify(ruleDefinitionMapper).insert(rdCaptor.capture());
         assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.DRAFT);
         assertThat(rdCaptor.getValue().getCode()).isEqualTo("rule.test");
-        assertThat(rdCaptor.getValue().getKind()).isEqualTo("SCORECARD");
+        assertThat(rdCaptor.getValue().getKind()).isEqualTo(RuleKind.SCORECARD);
 
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());
         assertThat(rvCaptor.getValue().getVersion()).isEqualTo(1L);
         assertThat(rvCaptor.getValue().getStatus()).isEqualTo(RuleVersionStatus.DRAFT);
-        assertThat(rvCaptor.getValue().getKind()).isEqualTo("SCORECARD");
+        assertThat(rvCaptor.getValue().getKind()).isEqualTo(RuleKind.SCORECARD);
         // conditionAst 直传 typed 落库（无 JSON 串来回）
         assertThat(rvCaptor.getValue().getConditionAst())
                 .isInstanceOf(com.sstlfsj.rule.kernel.api.model.ast.AndNode.class);
@@ -349,7 +350,7 @@ class PublishServiceTest {
 
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).insert(rdCaptor.capture());
-        assertThat(rdCaptor.getValue().getKind()).isEqualTo("AST_BOOLEAN");
+        assertThat(rdCaptor.getValue().getKind()).isEqualTo(RuleKind.AST_BOOLEAN);
     }
 
     @Test
@@ -436,8 +437,9 @@ class PublishServiceTest {
     }
 
     @Test
-    void publish_未知kind_抛IllegalArgument() {
-        draftRule.setKind("UNKNOWN_KIND");
+    void publish_unsupportedKind_throwsIllegalArgument() {
+        // EXPRESSION_SCRIPT 是合法 RuleKind，但 publish 不在支持集内，应被拒
+        draftRule.setKind(RuleKind.EXPRESSION_SCRIPT);
         draftVersion.setConditionAst(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
@@ -450,7 +452,7 @@ class PublishServiceTest {
 
     @Test
     void publish_decisionTreeKind_正常通过() {
-        draftRule.setKind("DECISION_TREE");
+        draftRule.setKind(RuleKind.DECISION_TREE);
         // 合法 IfNode：condition + thenBranch 均不为 null
         draftVersion.setConditionAst(new IfNode(
                 new ConditionNode("GT", "amount", null, Map.of(), 0.0),
@@ -474,7 +476,7 @@ class PublishServiceTest {
 
     @Test
     void publish_decisionTableKind_正常通过() {
-        draftRule.setKind("DECISION_TABLE");
+        draftRule.setKind(RuleKind.DECISION_TABLE);
         // 合法 DecisionTableNode：1 列 1 行，行列数一致
         draftVersion.setConditionAst(new DecisionTableNode(
                 List.of(new DecisionTableNode.Column("amount", "GT")),
@@ -497,7 +499,7 @@ class PublishServiceTest {
 
     @Test
     void publish_decisionTree_非IfNode根节点_抛异常() {
-        draftRule.setKind("DECISION_TREE");
+        draftRule.setKind(RuleKind.DECISION_TREE);
         // 根节点是 ConditionNode，不是 IfNode
         draftVersion.setConditionAst(new ConditionNode("GT", "amount", null, Map.of(), 0.0));
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
@@ -511,7 +513,7 @@ class PublishServiceTest {
 
     @Test
     void publish_decisionTree_thenBranchNull_抛异常() {
-        draftRule.setKind("DECISION_TREE");
+        draftRule.setKind(RuleKind.DECISION_TREE);
         // thenBranch = null
         draftVersion.setConditionAst(new IfNode(
                 new ConditionNode("GT", "amount", null, Map.of(), 0.0),
@@ -527,7 +529,7 @@ class PublishServiceTest {
 
     @Test
     void publish_decisionTable_非DecisionTableNode根节点_抛异常() {
-        draftRule.setKind("DECISION_TABLE");
+        draftRule.setKind(RuleKind.DECISION_TABLE);
         draftVersion.setConditionAst(new ConditionNode("GT", "amount", null, Map.of(), 0.0));
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
@@ -540,7 +542,7 @@ class PublishServiceTest {
 
     @Test
     void publish_decisionTable_行列数不一致_抛异常() {
-        draftRule.setKind("DECISION_TABLE");
+        draftRule.setKind(RuleKind.DECISION_TABLE);
         // 2 列但行只有 1 个条件值
         draftVersion.setConditionAst(new DecisionTableNode(
                 List.of(new DecisionTableNode.Column("amount", "GT"),
@@ -557,7 +559,7 @@ class PublishServiceTest {
 
     @Test
     void publish_decisionTable_columns为空_抛异常() {
-        draftRule.setKind("DECISION_TABLE");
+        draftRule.setKind(RuleKind.DECISION_TABLE);
         draftVersion.setConditionAst(new DecisionTableNode(
                 List.of(),
                 List.of(new DecisionTableNode.Row(List.of(), "BLOCK"))));
@@ -572,7 +574,7 @@ class PublishServiceTest {
 
     @Test
     void publish_decisionTable_rows为空_抛异常() {
-        draftRule.setKind("DECISION_TABLE");
+        draftRule.setKind(RuleKind.DECISION_TABLE);
         draftVersion.setConditionAst(new DecisionTableNode(
                 List.of(new DecisionTableNode.Column("amount", "GT")),
                 List.of()));

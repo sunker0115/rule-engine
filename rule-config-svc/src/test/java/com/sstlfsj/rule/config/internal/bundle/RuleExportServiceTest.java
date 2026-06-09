@@ -50,7 +50,7 @@ class RuleExportServiceTest {
     private RuleDefinition rule(long id, String code) {
         RuleDefinition r = new RuleDefinition();
         r.setId(id); r.setTenantId(1L); r.setSceneId(5L);
-        r.setCode(code); r.setName("规则" + code); r.setKind("AST_BOOLEAN");
+        r.setCode(code); r.setName("规则" + code); r.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         r.setStatus(RuleDefinitionStatus.PUBLISHED);
         return r;
     }
@@ -58,7 +58,7 @@ class RuleExportServiceTest {
     private RuleVersion activeVersion(long rdId) {
         RuleVersion v = new RuleVersion();
         v.setId(100L + rdId); v.setRuleDefinitionId(rdId); v.setVersion(3L); v.setStatus(RuleVersionStatus.ACTIVE);
-        v.setKind("AST_BOOLEAN");
+        v.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         v.setConditionAst(new AndNode(List.of(), null, null));
         v.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
         v.setPreGates(List.of());
@@ -70,7 +70,9 @@ class RuleExportServiceTest {
     private SceneDef scene() {
         SceneDef s = new SceneDef();
         s.setId(5L); s.setTenantId(1L); s.setCode("risk.transfer"); s.setName("转账风控");
-        s.setSubjectType("USER"); s.setDominantMode("PUSH"); s.setDecisionStrategy("HIGHEST_PRIORITY");
+        s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
+        s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        s.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
         s.setEventTypes(java.util.List.of("transfer")); s.setPayloadSchema(java.util.List.of());
         s.setDefaultParams(java.util.Map.of());
         s.setPayloadSchemaVersion(1);

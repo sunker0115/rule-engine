@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
@@ -29,7 +30,7 @@ public class RuleVersion {
     private List<DecisionBinding> decisionBindings;
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<PreGateConfig> preGates;
-    private String kind;
+    private RuleKind kind;
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<String> triggerEventTypes;
     @TableField(typeHandler = Jackson3TypeHandler.class)
@@ -48,12 +49,12 @@ public class RuleVersion {
      * @param decisionBindings  决策绑定列表，null 视为空
      * @param preGates          前置门控列表，null 视为空
      * @param triggerEventTypes 触发事件类型列表，null 视为空
-     * @param kind              规则类型标签
+     * @param kind              规则类型
      * @return 首版草稿 RuleVersion（id 由插入时回填）
      */
     public static RuleVersion draftV1(Long ruleDefinitionId, AstNode conditionAst,
                                       List<DecisionBinding> decisionBindings, List<PreGateConfig> preGates,
-                                      List<String> triggerEventTypes, String kind) {
+                                      List<String> triggerEventTypes, RuleKind kind) {
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(ruleDefinitionId);
         rv.setVersion(1L);

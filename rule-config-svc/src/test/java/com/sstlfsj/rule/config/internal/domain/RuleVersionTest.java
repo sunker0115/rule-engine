@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.domain;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
@@ -25,7 +26,7 @@ class RuleVersionTest {
         ver.setConditionAst(ast);
         ver.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
         ver.setPreGates(List.of(new PreGateConfig("ROLLOUT", Map.of("percentage", 50))));
-        ver.setKind("AST_BOOLEAN");
+        ver.setKind(RuleKind.AST_BOOLEAN);
         ver.setTriggerEventTypes(List.of("payment.initiated"));
         ver.setMetricDependencies(List.of(new MetricDependency("user.age", 1)));
         ver.setStatus(RuleVersionStatus.ACTIVE);
@@ -37,7 +38,7 @@ class RuleVersionTest {
         assertSame(ast, ver.getConditionAst());
         assertEquals("BLOCK", ver.getDecisionBindings().getFirst().decisionCode());
         assertEquals("ROLLOUT", ver.getPreGates().getFirst().gateType());
-        assertEquals("AST_BOOLEAN", ver.getKind());
+        assertEquals(RuleKind.AST_BOOLEAN, ver.getKind());
         assertEquals(List.of("payment.initiated"), ver.getTriggerEventTypes());
         assertEquals("user.age", ver.getMetricDependencies().getFirst().metricCode());
         assertEquals(RuleVersionStatus.ACTIVE, ver.getStatus());
@@ -60,13 +61,13 @@ class RuleVersionTest {
                 10L, ast,
                 List.of(new DecisionBinding("BLOCK", 100)),
                 List.of(new PreGateConfig("ROLLOUT", Map.of("percentage", 50))),
-                List.of("payment.initiated"), "AST_BOOLEAN");
+                List.of("payment.initiated"), RuleKind.AST_BOOLEAN);
 
         assertEquals(10L, ver.getRuleDefinitionId());
         assertSame(ast, ver.getConditionAst());
         assertEquals("BLOCK", ver.getDecisionBindings().getFirst().decisionCode());
         assertEquals("ROLLOUT", ver.getPreGates().getFirst().gateType());
-        assertEquals("AST_BOOLEAN", ver.getKind());
+        assertEquals(RuleKind.AST_BOOLEAN, ver.getKind());
         assertEquals(List.of("payment.initiated"), ver.getTriggerEventTypes());
         // 草稿默认：version=1、status=DRAFT、metricDependencies 空、createdAt 已赋值
         assertEquals(1L, ver.getVersion());
@@ -77,7 +78,7 @@ class RuleVersionTest {
 
     @Test
     void draftV1_nullArgsFallBackToEmpty() {
-        RuleVersion ver = RuleVersion.draftV1(10L, null, null, null, null, "AST_BOOLEAN");
+        RuleVersion ver = RuleVersion.draftV1(10L, null, null, null, null, RuleKind.AST_BOOLEAN);
 
         // conditionAst null 兜底为空 AndNode，各 list null 兜底为空
         assertInstanceOf(AndNode.class, ver.getConditionAst());

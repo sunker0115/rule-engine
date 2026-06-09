@@ -91,7 +91,8 @@ class ConfigServiceImpl implements ConfigService {
         SceneDef scene = sceneMapper.selectById(rule.getSceneId());
         RuleVersion active = ruleVersionMapper.findActiveVersion(ruleId);
         return new RuleDetailVO(
-                rule.getId(), rule.getCode(), rule.getName(), rule.getStatus().name(), rule.getKind(),
+                rule.getId(), rule.getCode(), rule.getName(), rule.getStatus().name(),
+                rule.getKind() != null ? rule.getKind().name() : null,
                 scene != null ? scene.getCode() : null,
                 active != null ? active.getConditionAst() : null,
                 active != null ? active.getDecisionBindings() : null,

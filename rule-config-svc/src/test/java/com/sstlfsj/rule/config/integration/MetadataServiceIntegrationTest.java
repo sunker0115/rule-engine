@@ -108,9 +108,9 @@ class MetadataServiceIntegrationTest {
         s.setTenantId(TENANT);
         s.setCode(code);
         s.setName(code);
-        s.setDominantMode("PUSH");
-        s.setDecisionStrategy("HIGHEST_PRIORITY");
-        s.setSubjectType("USER");
+        s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        s.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
+        s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
         s.setEventTypes(eventTypes);
         s.setStatus(SceneStatus.ACTIVE);
         return s;
@@ -137,7 +137,7 @@ class MetadataServiceIntegrationTest {
         r.setCode(code);
         r.setName(code);
         r.setStatus(RuleDefinitionStatus.PUBLISHED);
-        r.setKind("AST_BOOLEAN");
+        r.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         r.setCurrentVersion(1L);
         return r;
     }
@@ -149,7 +149,7 @@ class MetadataServiceIntegrationTest {
         v.setConditionAst(AND_NODE);
         v.setDecisionBindings(List.of());
         v.setPreGates(List.of());
-        v.setKind("AST_BOOLEAN");
+        v.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         v.setTriggerEventTypes(List.of("e"));
         v.setMetricDependencies(metricDeps);
         v.setStatus(RuleVersionStatus.ACTIVE);

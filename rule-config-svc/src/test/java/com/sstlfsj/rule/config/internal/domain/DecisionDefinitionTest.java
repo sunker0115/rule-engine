@@ -22,7 +22,7 @@ class DecisionDefinitionTest {
         dd.setDescription("高风险直接拒绝");
         List<DecisionAction> actions = List.of(new DecisionAction("a1", "BLOCK", 0, Map.of()));
         dd.setActions(actions);
-        dd.setStatus("ACTIVE");
+        dd.setStatus(DecisionStatus.ACTIVE);
         dd.setCreatedBy("admin");
         dd.setUpdatedBy("admin2");
 
@@ -33,7 +33,7 @@ class DecisionDefinitionTest {
         assertEquals(1, dd.getPriority());
         assertEquals("高风险直接拒绝", dd.getDescription());
         assertEquals(List.of(new DecisionAction("a1", "BLOCK", 0, Map.of())), dd.getActions());
-        assertEquals("ACTIVE", dd.getStatus());
+        assertEquals(DecisionStatus.ACTIVE, dd.getStatus());
         assertEquals("admin", dd.getCreatedBy());
         assertEquals("admin2", dd.getUpdatedBy());
     }

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.internal.domain.Tenant;
+import com.sstlfsj.rule.config.internal.domain.TenantStatus;
 import com.sstlfsj.rule.config.internal.repository.TenantMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,7 +20,7 @@ class TenantQueryServiceImplTest {
         Tenant t = new Tenant();
         t.setId(id);
         t.setCode(code);
-        t.setStatus("ACTIVE");
+        t.setStatus(TenantStatus.ACTIVE);
         return t;
     }
 

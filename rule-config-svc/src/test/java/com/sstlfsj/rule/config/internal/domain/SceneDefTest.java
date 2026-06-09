@@ -19,9 +19,9 @@ class SceneDefTest {
         scene.setCode("SCENE_A");
         scene.setName("场景A");
         scene.setDescription("测试描述");
-        scene.setDominantMode("PUSH");
-        scene.setDecisionStrategy("HIGHEST_PRIORITY");
-        scene.setSubjectType("USER");
+        scene.setDominantMode(DominantMode.PUSH);
+        scene.setDecisionStrategy(DecisionStrategy.HIGHEST_PRIORITY);
+        scene.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
         PayloadFieldSpec field = new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null);
         scene.setEventTypes(List.of("payment.initiated"));
         scene.setPayloadSchema(List.of(field));
@@ -35,9 +35,9 @@ class SceneDefTest {
         assertEquals("SCENE_A", scene.getCode());
         assertEquals("场景A", scene.getName());
         assertEquals("测试描述", scene.getDescription());
-        assertEquals("PUSH", scene.getDominantMode());
-        assertEquals("HIGHEST_PRIORITY", scene.getDecisionStrategy());
-        assertEquals("USER", scene.getSubjectType());
+        assertEquals(DominantMode.PUSH, scene.getDominantMode());
+        assertEquals(DecisionStrategy.HIGHEST_PRIORITY, scene.getDecisionStrategy());
+        assertEquals(com.sstlfsj.rule.kernel.api.model.SubjectType.USER, scene.getSubjectType());
         assertEquals(List.of("payment.initiated"), scene.getEventTypes());
         assertEquals(List.of(field), scene.getPayloadSchema());
         assertEquals(Map.of("timezone", "Asia/Shanghai"), scene.getDefaultParams());

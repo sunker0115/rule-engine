@@ -42,7 +42,7 @@ class AuditLogWriterTest {
         AuditLog log = captor.getValue();
         assertThat(log.getTenantId()).isEqualTo(1L);
         assertThat(log.getActor()).isEqualTo("alice");
-        assertThat(log.getActorType()).isEqualTo("USER");
+        assertThat(log.getActorType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.ActorType.USER);
         assertThat(log.getAction()).isEqualTo("CREATE");
         assertThat(log.getTargetType()).isEqualTo("rule_definition");
         assertThat(log.getTargetId()).isEqualTo("10");

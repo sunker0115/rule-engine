@@ -15,7 +15,7 @@ class AuditLogTest {
         log.setId(1L);
         log.setTenantId(100L);
         log.setActor("operator1");
-        log.setActorType("USER");
+        log.setActorType(ActorType.USER);
         log.setAction("PUBLISH");
         log.setTargetType("rule_definition");
         log.setTargetId("42");
@@ -28,7 +28,7 @@ class AuditLogTest {
         assertEquals(1L, log.getId());
         assertEquals(100L, log.getTenantId());
         assertEquals("operator1", log.getActor());
-        assertEquals("USER", log.getActorType());
+        assertEquals(ActorType.USER, log.getActorType());
         assertEquals("PUBLISH", log.getAction());
         assertEquals("rule_definition", log.getTargetType());
         assertEquals("42", log.getTargetId());

@@ -86,7 +86,9 @@ class RuleBundleIntegrationTest {
     private Long seedTwoPublishedRules() {
         SceneDef scene = new SceneDef();
         scene.setTenantId(SRC_TENANT); scene.setCode("risk.transfer"); scene.setName("转账风控");
-        scene.setSubjectType("USER"); scene.setDominantMode("PUSH"); scene.setDecisionStrategy("HIGHEST_PRIORITY");
+        scene.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
+        scene.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        scene.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
         scene.setEventTypes(java.util.List.of("transfer")); scene.setPayloadSchema(java.util.List.of());
         scene.setDefaultParams(java.util.Map.of());
         scene.setPayloadSchemaVersion(1); scene.setStatus(SceneStatus.ACTIVE); scene.setCreatedBy("seed");
@@ -104,7 +106,7 @@ class RuleBundleIntegrationTest {
         decision.setTenantId(SRC_TENANT); decision.setCode("BLOCK"); decision.setName("拦截");
         decision.setPriority(100); decision.setDescription("拦截交易");
         decision.setActions(java.util.List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())));
-        decision.setStatus("ACTIVE"); decision.setCreatedBy("seed"); decision.setCreatedAt(LocalDateTime.now());
+        decision.setStatus(com.sstlfsj.rule.config.internal.domain.DecisionStatus.ACTIVE); decision.setCreatedBy("seed"); decision.setCreatedAt(LocalDateTime.now());
         decisionDefinitionMapper.insert(decision);
 
         seedRule(scene.getId(), "rule.night.transfer", "夜间大额转账");
@@ -115,7 +117,7 @@ class RuleBundleIntegrationTest {
     private void seedRule(Long sceneId, String code, String name) {
         RuleDefinition rd = new RuleDefinition();
         rd.setTenantId(SRC_TENANT); rd.setSceneId(sceneId); rd.setCode(code);
-        rd.setName(name); rd.setStatus(RuleDefinitionStatus.PUBLISHED); rd.setKind("AST_BOOLEAN");
+        rd.setName(name); rd.setStatus(RuleDefinitionStatus.PUBLISHED); rd.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         rd.setCreatedBy("seed"); rd.setCreatedAt(LocalDateTime.now());
         ruleDefinitionMapper.insert(rd);
 
@@ -123,7 +125,7 @@ class RuleBundleIntegrationTest {
         rv.setRuleDefinitionId(rd.getId()); rv.setVersion(1L);
         rv.setConditionAst(new AndNode(java.util.List.of(), null, null));
         rv.setDecisionBindings(java.util.List.of(new DecisionBinding("BLOCK", 100)));
-        rv.setPreGates(java.util.List.of()); rv.setKind("AST_BOOLEAN");
+        rv.setPreGates(java.util.List.of()); rv.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         rv.setTriggerEventTypes(java.util.List.of("transfer"));
         rv.setMetricDependencies(java.util.List.of(new MetricDependency("account.age", 1)));
         rv.setStatus(RuleVersionStatus.ACTIVE); rv.setPublishedBy("seed"); rv.setPublishedAt(LocalDateTime.now());

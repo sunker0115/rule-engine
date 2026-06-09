@@ -76,7 +76,7 @@ public class RuleExportService {
         List<RuleBundle.SceneSnapshot> scenes = sceneById.values().stream()
                 .map(s -> new RuleBundle.SceneSnapshot(
                         s.getCode(), s.getName(), s.getDescription(),
-                        s.getSubjectType(), s.getDominantMode(), s.getDecisionStrategy(),
+                        s.getSubjectType().name(), s.getDominantMode().name(), s.getDecisionStrategy().name(),
                         s.getEventTypes(), s.getPayloadSchema(), s.getDefaultParams(),
                         s.getPayloadSchemaVersion()))
                 .toList();
@@ -110,7 +110,7 @@ public class RuleExportService {
             SceneDef scene = sceneById.get(rd.getSceneId());
             rules.add(new RuleBundle.RuleEntry(
                     rd.getCode(), rd.getName(),
-                    rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN.tag(),
+                    (rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN).name(),
                     scene != null ? scene.getCode() : null,
                     rv.getConditionAst(), rv.getDecisionBindings(),
                     rv.getPreGates(), rv.getTriggerEventTypes(),

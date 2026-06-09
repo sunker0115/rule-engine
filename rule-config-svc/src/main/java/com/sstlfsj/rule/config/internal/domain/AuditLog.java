@@ -15,7 +15,7 @@ public class AuditLog {
     private Long id;
     private Long tenantId;
     private String actor;
-    private String actorType;
+    private ActorType actorType;
     private String action;
     private String targetType;
     private String targetId;

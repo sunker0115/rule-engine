@@ -26,7 +26,7 @@ public class DecisionDefinition {
     /** actions 列表（含 actionId/actionType/sortOrder/params），JSON 列由 TypeHandler 转换。 */
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<DecisionAction> actions;
-    private String status;
+    private DecisionStatus status;
     private String createdBy;
     private java.time.LocalDateTime createdAt;
     private String updatedBy;

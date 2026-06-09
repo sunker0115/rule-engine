@@ -187,8 +187,8 @@ class SceneServiceImplTest {
         scene.setTenantId(1L);
         scene.setCode("PAYMENT");
         scene.setName("支付场景");
-        scene.setDominantMode("PUSH");
-        scene.setSubjectType("USER");
+        scene.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        scene.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
         scene.setEventTypes(List.of("payment.initiated"));
         scene.setPayloadSchema(List.of(field("amount")));
         scene.setDefaultParams(Map.of("timezone", "Asia/Shanghai"));
@@ -221,8 +221,8 @@ class SceneServiceImplTest {
         s.setId(5L);
         s.setCode("PAYMENT");
         s.setName("支付场景");
-        s.setDominantMode("PUSH");
-        s.setSubjectType("USER");
+        s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
         s.setStatus(SceneStatus.ACTIVE);
         when(sceneMapper.findByTenantId(1L)).thenReturn(List.of(s));
 
