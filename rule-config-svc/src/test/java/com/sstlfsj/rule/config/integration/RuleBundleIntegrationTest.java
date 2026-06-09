@@ -82,7 +82,8 @@ class RuleBundleIntegrationTest {
         SceneDef scene = new SceneDef();
         scene.setTenantId(SRC_TENANT); scene.setCode("risk.transfer"); scene.setName("转账风控");
         scene.setSubjectType("USER"); scene.setDominantMode("PUSH"); scene.setDecisionStrategy("HIGHEST_PRIORITY");
-        scene.setEventTypes("[\"transfer\"]"); scene.setPayloadSchema("{}"); scene.setDefaultParams("{}");
+        scene.setEventTypes(java.util.List.of("transfer")); scene.setPayloadSchema(java.util.List.of());
+        scene.setDefaultParams(java.util.Map.of());
         scene.setPayloadSchemaVersion(1); scene.setStatus("ACTIVE"); scene.setCreatedBy("seed");
         scene.setCreatedAt(LocalDateTime.now());
         sceneMapper.insert(scene);

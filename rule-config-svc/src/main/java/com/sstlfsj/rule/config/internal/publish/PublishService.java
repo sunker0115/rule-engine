@@ -195,10 +195,8 @@ public class PublishService {
         newRv.setPreGates(draftVersion.getPreGates() != null
                 ? draftVersion.getPreGates() : java.util.List.of());
         newRv.setKind(rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN.tag());
-        // scene.eventTypes 仍是 String JSON（SceneDef 未 typed），反序列化后写入 typed 列
-        newRv.setTriggerEventTypes(isBlank(scene.getEventTypes()) ? java.util.List.of()
-                : objectMapper.readValue(scene.getEventTypes(),
-                    new tools.jackson.core.type.TypeReference<java.util.List<String>>() {}));
+        newRv.setTriggerEventTypes(scene.getEventTypes() != null
+                ? scene.getEventTypes() : java.util.List.of());
         newRv.setMetricDependencies(metricDeps);
         newRv.setStatus("ACTIVE");
         newRv.setPublishedBy(actorId);
@@ -377,26 +375,17 @@ public class PublishService {
      * scene.eventTypes 为空时跳过（Scene 尚未配置白名单，容错）；
      * triggerEventTypes 为空时也跳过（规则通配所有事件）。
      */
-    private void validateTriggerEventTypes(List<String> ruleTypes, String sceneEventTypesJson) {
-        try {
-            if (ruleTypes == null || ruleTypes.isEmpty()) return;
+    private void validateTriggerEventTypes(List<String> ruleTypes, List<String> sceneTypes) {
+        if (ruleTypes == null || ruleTypes.isEmpty()) return;
+        if (sceneTypes == null || sceneTypes.isEmpty()) return;   // Scene 未设置白名单，容错通过
 
-            java.util.List<String> sceneTypes = objectMapper.readValue(sceneEventTypesJson,
-                    new tools.jackson.core.type.TypeReference<>() {});
-            if (sceneTypes.isEmpty()) return;   // Scene 未设置白名单，容错通过
-
-            java.util.Set<String> allowed = new java.util.HashSet<>(sceneTypes);
-            java.util.List<String> invalid = ruleTypes.stream()
-                    .filter(et -> !allowed.contains(et))
-                    .toList();
-            if (!invalid.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "triggerEventType 不在 Scene 允许列表，非法值: " + invalid);
-            }
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (Exception e) {
-            // JSON 解析失败时容错（不阻断发布）
+        java.util.Set<String> allowed = new java.util.HashSet<>(sceneTypes);
+        java.util.List<String> invalid = ruleTypes.stream()
+                .filter(et -> !allowed.contains(et))
+                .toList();
+        if (!invalid.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "triggerEventType 不在 Scene 允许列表，非法值: " + invalid);
         }
     }
 

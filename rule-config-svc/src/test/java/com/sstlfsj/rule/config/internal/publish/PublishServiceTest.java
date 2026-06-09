@@ -68,7 +68,7 @@ class PublishServiceTest {
         scene = new SceneDef();
         scene.setId(5L);
         scene.setCode("PAYMENT");
-        scene.setEventTypes("[\"payment.initiated\"]");
+        scene.setEventTypes(java.util.List.of("payment.initiated"));
         scene.setStatus("ACTIVE");
 
         draftVersion = new RuleVersion();
@@ -337,7 +337,7 @@ class PublishServiceTest {
     @Test
     void publish_triggerEventType不在Scene白名单_抛IllegalArgument() {
         draftVersion.setTriggerEventTypes(List.of("order.placed"));
-        scene.setEventTypes("[\"payment.initiated\"]");   // 只允许 payment 类型
+        scene.setEventTypes(java.util.List.of("payment.initiated"));   // 只允许 payment 类型
 
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
@@ -351,7 +351,7 @@ class PublishServiceTest {
     @Test
     void publish_triggerEventType在Scene白名单内_正常发布() {
         draftVersion.setTriggerEventTypes(List.of("payment.initiated"));
-        scene.setEventTypes("[\"payment.initiated\",\"payment.refunded\"]");
+        scene.setEventTypes(java.util.List.of("payment.initiated", "payment.refunded"));
         draftVersion.setConditionAst(new ConditionNode("EQ", "metric1", null, Map.of(), 0.0));
 
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
@@ -375,7 +375,7 @@ class PublishServiceTest {
     @Test
     void publish_triggerEventTypes为空_跳过校验() {
         draftVersion.setTriggerEventTypes(List.of());
-        scene.setEventTypes("[\"payment.initiated\"]");
+        scene.setEventTypes(java.util.List.of("payment.initiated"));
         draftVersion.setConditionAst(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
 
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
@@ -400,7 +400,7 @@ class PublishServiceTest {
     void publish_sceneEventTypes为空_跳过校验() {
         // scene.eventTypes 为空（Scene 尚未配置白名单），发布不应被阻断
         draftVersion.setTriggerEventTypes(List.of("payment.initiated"));
-        scene.setEventTypes("[]");
+        scene.setEventTypes(java.util.List.of());
         draftVersion.setConditionAst(new ConditionNode("EQ", "m1", null, Map.of(), 0.0));
 
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);

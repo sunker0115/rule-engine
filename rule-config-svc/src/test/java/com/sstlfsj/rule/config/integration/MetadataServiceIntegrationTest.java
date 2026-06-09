@@ -77,9 +77,9 @@ class MetadataServiceIntegrationTest {
         metricDefinitionMapper.delete(new LambdaQueryWrapper<MetricDefinition>().isNotNull(MetricDefinition::getId));
         sceneMapper.delete(new LambdaQueryWrapper<SceneDef>().isNotNull(SceneDef::getId));
 
-        SceneDef fraud = scene("fraud", "[\"login\"]");
+        SceneDef fraud = scene("fraud", List.of("login"));
         sceneMapper.insert(fraud);
-        SceneDef payment = scene("payment", "[\"pay\"]");
+        SceneDef payment = scene("payment", List.of("pay"));
         sceneMapper.insert(payment);
 
         // 三个 ACTIVE metric 定义；user.age 不被任何规则引用
@@ -99,7 +99,7 @@ class MetadataServiceIntegrationTest {
                 List.of(new MetricDependency("account.balance", 1))));
     }
 
-    private SceneDef scene(String code, String eventTypesJson) {
+    private SceneDef scene(String code, List<String> eventTypes) {
         SceneDef s = new SceneDef();
         s.setTenantId(TENANT);
         s.setCode(code);
@@ -107,7 +107,7 @@ class MetadataServiceIntegrationTest {
         s.setDominantMode("PUSH");
         s.setDecisionStrategy("HIGHEST_PRIORITY");
         s.setSubjectType("USER");
-        s.setEventTypes(eventTypesJson);
+        s.setEventTypes(eventTypes);
         s.setStatus("ACTIVE");
         return s;
     }

@@ -71,7 +71,8 @@ class RuleExportServiceTest {
         SceneDef s = new SceneDef();
         s.setId(5L); s.setTenantId(1L); s.setCode("risk.transfer"); s.setName("转账风控");
         s.setSubjectType("USER"); s.setDominantMode("PUSH"); s.setDecisionStrategy("HIGHEST_PRIORITY");
-        s.setEventTypes("[\"transfer\"]"); s.setPayloadSchema("{}"); s.setDefaultParams("{}");
+        s.setEventTypes(java.util.List.of("transfer")); s.setPayloadSchema(java.util.List.of());
+        s.setDefaultParams(java.util.Map.of());
         s.setPayloadSchemaVersion(1);
         return s;
     }

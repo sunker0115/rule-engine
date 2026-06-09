@@ -6,14 +6,15 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 规则导出 / 导入自包含 Bundle（B7 / 08-evolution §2.9）。
  * <p>多规则结构：{@code rules} 为本次导出的规则版本集合，{@code scenes} / {@code metricDefinitions} /
  * {@code decisionDefinitions} 为跨规则去重的依赖定义，{@code actionTypeManifest} 为去重 actionType 清单。
- * 所有 JSON 列（conditionAst / decisionBindings / preGates / triggerEventTypes /
- * payloadSchema / eventTypes / defaultParams / actions）以原始 JSON 字符串无损搬运，
- * 导入端按原文写库，不做 AST 重解析。</p>
+ * 所有结构化字段（conditionAst / decisionBindings / preGates / triggerEventTypes /
+ * payloadSchema / eventTypes / defaultParams / actions）以 typed 对象无损搬运，
+ * 持久层 TypeHandler 负责 JSON 列序列化，导入端不做重解析。</p>
  *
  * @param bundleVersion       Bundle schema 版本，当前固定 1
  * @param exportedAt          导出时间 ISO-8601
@@ -55,9 +56,9 @@ public record RuleBundle(
             String subjectType,
             String dominantMode,
             String decisionStrategy,
-            String eventTypes,
-            String payloadSchema,
-            String defaultParams,
+            List<String> eventTypes,
+            List<PayloadFieldSpec> payloadSchema,
+            Map<String, Object> defaultParams,
             Integer payloadSchemaVersion
     ) {}
 

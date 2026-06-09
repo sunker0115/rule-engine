@@ -5,6 +5,9 @@ import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.SceneService;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +17,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -52,10 +56,9 @@ class LoadTestSeeder {
     @Autowired DataSource dataSource;
 
     /** AST：demo.score GTE 0（provided 100 恒命中）。 */
-    static String conditionAstJson() {
-        return "{\"type\":\"ConditionNode\",\"conditionType\":\"GTE\","
-             + "\"metricCode\":\"" + METRIC + "\",\"displayLabel\":\"score>=0\","
-             + "\"params\":{\"threshold\":0},\"dataType\":\"LONG\"}";
+    static AstNode conditionAst() {
+        return new ConditionNode("GTE", METRIC, "score>=0",
+                Map.<String, Object>of("threshold", 0), null, "LONG");
     }
 
     /** 按租户清理压测数据（FK 序：rule_version→rule_definition→metric_definition→scene），可重跑。 */
@@ -78,14 +81,14 @@ class LoadTestSeeder {
     void seedRules(int ruleCount) {
         cleanup();
         sceneService.createScene(TENANT, SCENE, "Load Test Scene", null,
-                "HYBRID", "USER", "[\"" + EVENT_TYPE + "\"]", null, null, ACTOR);
+                "HYBRID", "USER", List.of(EVENT_TYPE), null, null, ACTOR);
         metricWriteService.create(Long.valueOf(TENANT), METRIC,
                 new MetricWriteCommand("demo score", "ATTRIBUTE", "LONG", Map.of(), null, true), ACTOR);
         for (int i = 1; i <= ruleCount; i++) {
             DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
                     "lt-rule-" + i, "lt rule " + i,
-                    conditionAstJson(), "[{\"decisionCode\":\"PASS\",\"priority\":1}]",
-                    "[]", "[\"" + EVENT_TYPE + "\"]", "AST_BOOLEAN", ACTOR);
+                    conditionAst(), List.of(new DecisionBinding("PASS", 1)),
+                    List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", ACTOR);
             configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
         }
     }
@@ -95,10 +98,9 @@ class LoadTestSeeder {
     @Test void seed200() { seedRules(200); }
 
     /** AST：demo.agg GTE 0（demo.agg 为 SQL_AGGREGATE，需 fetch，SELECT 100 恒命中）。 */
-    static String conditionAstJsonAgg() {
-        return "{\"type\":\"ConditionNode\",\"conditionType\":\"GTE\","
-             + "\"metricCode\":\"" + METRIC_AGG + "\",\"displayLabel\":\"agg>=0\","
-             + "\"params\":{\"threshold\":0},\"dataType\":\"LONG\"}";
+    static AstNode conditionAstAgg() {
+        return new ConditionNode("GTE", METRIC_AGG, "agg>=0",
+                Map.<String, Object>of("threshold", 0), null, "LONG");
     }
 
     /**
@@ -109,14 +111,14 @@ class LoadTestSeeder {
     void seedFetchRule() {
         cleanup();
         sceneService.createScene(TENANT, SCENE, "Load Test Scene", null,
-                "HYBRID", "USER", "[\"" + EVENT_TYPE + "\"]", null, null, ACTOR);
+                "HYBRID", "USER", List.of(EVENT_TYPE), null, null, ACTOR);
         metricWriteService.create(Long.valueOf(TENANT), METRIC_AGG,
                 new MetricWriteCommand("demo agg", "SQL_AGGREGATE", "LONG",
                         Map.of("datasource", "loadtest_ro", "sql", "SELECT 100"), 60, false), ACTOR);
         DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
                 "lt-fetch-rule", "lt fetch rule",
-                conditionAstJsonAgg(), "[{\"decisionCode\":\"PASS\",\"priority\":1}]",
-                "[]", "[\"" + EVENT_TYPE + "\"]", "AST_BOOLEAN", ACTOR);
+                conditionAstAgg(), List.of(new DecisionBinding("PASS", 1)),
+                List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", ACTOR);
         configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
     }
 

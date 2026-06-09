@@ -9,6 +9,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,7 +34,9 @@ class RuleBundleTest {
                                 new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), List.of())),
                 List.of(new RuleBundle.SceneSnapshot(
                         "risk.transfer", "转账风控", "desc", "USER", "PUSH", "HIGHEST_PRIORITY",
-                        "[\"transfer\"]", "{\"amount\":\"NUMBER\"}", "{}", 1)),
+                        List.of("transfer"),
+                        List.of(new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null)),
+                        Map.of(), 1)),
                 List.of(new RuleBundle.MetricEntry(
                         "account.age", 1, "账户年龄", "ATTRIBUTE", "LONG", "{}", 3600, true)),
                 List.of(new RuleBundle.DecisionEntry(

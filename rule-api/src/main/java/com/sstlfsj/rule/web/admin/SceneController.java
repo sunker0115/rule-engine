@@ -1,8 +1,6 @@
 package com.sstlfsj.rule.web.admin;
 
 import lombok.RequiredArgsConstructor;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.service.SceneService;
@@ -22,8 +20,6 @@ import java.util.List;
 public class SceneController {
 
     private final SceneService sceneService;
-    /** Spring Boot 自动配置的 ObjectMapper bean，通过构造器注入。 */
-    private final ObjectMapper objectMapper;
 
     /**
      * GET /admin/v1/scenes — 查询租户全部场景（精简列表，供前端场景选择器 / 列表页）。
@@ -43,24 +39,12 @@ public class SceneController {
     public ApiResponse<CreateSceneResponse> createScene(
             @Valid @RequestBody CreateSceneRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        try {
-            String eventTypesJson = req.eventTypes() != null
-                    ? objectMapper.writeValueAsString(req.eventTypes()) : null;
-            // payloadSchema / defaultParams 是 Object（Jackson 反序列化为 List/Map），转为 JSON 字符串传给 Service
-            String payloadSchemaJson = req.payloadSchema() != null
-                    ? objectMapper.writeValueAsString(req.payloadSchema()) : null;
-            String defaultParamsJson = req.defaultParams() != null
-                    ? objectMapper.writeValueAsString(req.defaultParams()) : null;
-            Long id = sceneService.createScene(
-                    req.tenantId(), req.sceneCode(), req.name(),
-                    req.description(), req.dominantMode(), req.subjectType(),
-                    eventTypesJson, payloadSchemaJson, defaultParamsJson,
-                    actorId);
-            return ApiResponse.ok(new CreateSceneResponse(id));
-        } catch (JacksonException e) {
-            // Object → JSON 序列化不应失败，属于内部错误
-            throw new IllegalStateException("JSON 序列化失败", e);
-        }
+        Long id = sceneService.createScene(
+                req.tenantId(), req.sceneCode(), req.name(),
+                req.description(), req.dominantMode(), req.subjectType(),
+                req.eventTypes(), req.payloadSchema(), req.defaultParams(),
+                actorId);
+        return ApiResponse.ok(new CreateSceneResponse(id));
     }
 
     /**
@@ -86,21 +70,11 @@ public class SceneController {
             @PathVariable String sceneCode,
             @Valid @RequestBody UpdateSceneRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        try {
-            String eventTypesJson = req.eventTypes() != null
-                    ? objectMapper.writeValueAsString(req.eventTypes()) : null;
-            String payloadSchemaJson = req.payloadSchema() != null
-                    ? objectMapper.writeValueAsString(req.payloadSchema()) : null;
-            String defaultParamsJson = req.defaultParams() != null
-                    ? objectMapper.writeValueAsString(req.defaultParams()) : null;
-            sceneService.updateScene(
-                    req.tenantId(), sceneCode,
-                    req.name(), eventTypesJson,
-                    payloadSchemaJson, defaultParamsJson,
-                    actorId);
-            return ApiResponse.ok(null);
-        } catch (JacksonException e) {
-            throw new IllegalStateException("JSON 序列化失败", e);
-        }
+        sceneService.updateScene(
+                req.tenantId(), sceneCode,
+                req.name(), req.eventTypes(),
+                req.payloadSchema(), req.defaultParams(),
+                actorId);
+        return ApiResponse.ok(null);
     }
 }

@@ -1,6 +1,10 @@
 package com.sstlfsj.rule.config.internal.domain;
 
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -18,9 +22,10 @@ class SceneDefTest {
         scene.setDominantMode("PUSH");
         scene.setDecisionStrategy("HIGHEST_PRIORITY");
         scene.setSubjectType("USER");
-        scene.setEventTypes("[\"payment.initiated\"]");
-        scene.setPayloadSchema("{\"amount\":\"LONG\"}");
-        scene.setDefaultParams("{\"timezone\":\"Asia/Shanghai\"}");
+        PayloadFieldSpec field = new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null);
+        scene.setEventTypes(List.of("payment.initiated"));
+        scene.setPayloadSchema(List.of(field));
+        scene.setDefaultParams(Map.of("timezone", "Asia/Shanghai"));
         scene.setStatus("ACTIVE");
         scene.setCreatedBy("operator1");
         scene.setUpdatedBy("operator2");
@@ -33,9 +38,9 @@ class SceneDefTest {
         assertEquals("PUSH", scene.getDominantMode());
         assertEquals("HIGHEST_PRIORITY", scene.getDecisionStrategy());
         assertEquals("USER", scene.getSubjectType());
-        assertEquals("[\"payment.initiated\"]", scene.getEventTypes());
-        assertEquals("{\"amount\":\"LONG\"}", scene.getPayloadSchema());
-        assertEquals("{\"timezone\":\"Asia/Shanghai\"}", scene.getDefaultParams());
+        assertEquals(List.of("payment.initiated"), scene.getEventTypes());
+        assertEquals(List.of(field), scene.getPayloadSchema());
+        assertEquals(Map.of("timezone", "Asia/Shanghai"), scene.getDefaultParams());
         assertEquals("ACTIVE", scene.getStatus());
         assertEquals("operator1", scene.getCreatedBy());
         assertEquals("operator2", scene.getUpdatedBy());

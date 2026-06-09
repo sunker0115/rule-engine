@@ -1,7 +1,5 @@
 package com.sstlfsj.rule.web.admin;
 
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
@@ -30,9 +28,8 @@ class SceneControllerTest {
         sceneService = mock(SceneService.class);
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        // ObjectMapper 注入点同生产：测试用默认实例，行为与 Spring Boot 自动配置 bean 一致
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new SceneController(sceneService, JsonMapper.builder().build()))
+                .standaloneSetup(new SceneController(sceneService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -73,7 +70,7 @@ class SceneControllerTest {
     }
 
     @Test
-    void createScene_withPayloadSchema_传入序列化后的字符串() throws Exception {
+    void createScene_withPayloadSchema_传入typed对象() throws Exception {
         when(sceneService.createScene(any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any())).thenReturn(99L);
 
@@ -95,8 +92,8 @@ class SceneControllerTest {
         verify(sceneService).createScene(
                 eq("t1"), eq("payment"), eq("支付场景"),
                 isNull(), isNull(), isNull(),
-                eq("[\"payment.initiated\"]"),
-                argThat(s -> s != null && s.contains("amount")),
+                eq(List.of("payment.initiated")),
+                argThat(ps -> ps != null && !ps.isEmpty() && "amount".equals(ps.get(0).name())),
                 isNull(), eq("user1"));
     }
 
@@ -131,7 +128,7 @@ class SceneControllerTest {
 
         verify(sceneService).updateScene(
                 eq("t1"), eq("payment"), isNull(), isNull(),
-                argThat(s -> s != null && s.contains("amount")),
+                argThat(ps -> ps != null && !ps.isEmpty() && "amount".equals(ps.getFirst().name())),
                 isNull(), eq("user1"));
     }
 
