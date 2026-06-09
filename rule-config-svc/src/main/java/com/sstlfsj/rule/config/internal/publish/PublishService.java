@@ -9,10 +9,14 @@ import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
 import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
 import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
+import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
+import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -109,16 +113,13 @@ public class PublishService {
                 }
             }
         }
-        // DECISION_TREE 校验：根节点必须是 IfNode，thenBranch 不得为 null
+        // DECISION_TREE 校验：根节点必须是 IfNode；递归校验分支节点类型 + thenBranch 非空 + 条件子树不含不支持节点（如 XOR）
         if (RuleKind.DECISION_TREE.tag().equals(kind)) {
             if (!(ast instanceof IfNode ifRoot)) {
                 throw new IllegalArgumentException(
                         "kind=DECISION_TREE 的规则 conditionAst 根节点必须是 IfNode");
             }
-            if (ifRoot.thenBranch() == null) {
-                throw new IllegalArgumentException(
-                        "kind=DECISION_TREE 的 IfNode thenBranch 不得为 null");
-            }
+            validateDecisionTree(ifRoot);
         }
         // DECISION_TABLE 校验：根节点必须是 DecisionTableNode，columns/rows 非空，行列数一致
         if (RuleKind.DECISION_TABLE.tag().equals(kind)) {
@@ -409,5 +410,45 @@ public class PublishService {
     /** 判断字符串是否为 null 或空白。 */
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
+    }
+
+    /**
+     * 递归校验决策树结构：分支节点只能是 IfNode 或 DecisionLeafNode，每个 IfNode 的 thenBranch 非空、
+     * 条件子树仅含决策树支持的节点（见 {@link #validateTreeCondition}）。
+     */
+    private static void validateDecisionTree(AstNode node) {
+        switch (node) {
+            case IfNode ifn -> {
+                if (ifn.thenBranch() == null) {
+                    throw new IllegalArgumentException("kind=DECISION_TREE 的 IfNode thenBranch 不得为 null");
+                }
+                if (ifn.condition() == null) {
+                    throw new IllegalArgumentException("kind=DECISION_TREE 的 IfNode condition 不得为 null");
+                }
+                validateTreeCondition(ifn.condition());
+                validateDecisionTree(ifn.thenBranch());
+                if (ifn.elseBranch() != null) validateDecisionTree(ifn.elseBranch());
+            }
+            case DecisionLeafNode ignored -> { /* 终点叶子，合法 */ }
+            default -> throw new IllegalArgumentException(
+                    "kind=DECISION_TREE 的分支节点只能是 IfNode 或 DecisionLeafNode，实际: "
+                            + node.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * 决策树条件子树仅支持 ConditionNode/AndNode/OrNode/NotNode；出现 XorNode 等不支持的节点即拒绝发布
+     * （决策树条件求值不支持 XOR，避免上线后运行时才报 NO_EVALUATOR）。
+     */
+    private static void validateTreeCondition(AstNode cond) {
+        switch (cond) {
+            case ConditionNode ignored -> { }
+            case AndNode and -> and.children().forEach(PublishService::validateTreeCondition);
+            case OrNode or -> or.children().forEach(PublishService::validateTreeCondition);
+            case NotNode not -> validateTreeCondition(not.child());
+            default -> throw new IllegalArgumentException(
+                    "kind=DECISION_TREE 的条件不支持节点类型: " + cond.getClass().getSimpleName()
+                            + "（决策树条件仅支持 Condition/And/Or/Not；XOR 等逻辑请用 AST_BOOLEAN kind）");
+        }
     }
 }

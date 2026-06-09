@@ -15,6 +15,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
 import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
 import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
+import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -186,6 +187,23 @@ class PublishServiceTest {
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("weight 必须 > 0");
+    }
+
+    @Test
+    void publish_decisionTree_conditionContainsXor_throws() {
+        // kind=DECISION_TREE，IfNode 条件含 XorNode（决策树不支持 XOR）→ 发布期拒绝，避免上线后运行时 NO_EVALUATOR
+        draftRule.setKind("DECISION_TREE");
+        ConditionNode leaf = new ConditionNode("GTE", "m.code", null, Map.of("threshold", 0), null);
+        IfNode root = new IfNode(new XorNode(List.of(leaf), null),
+                new DecisionLeafNode("PASS", "PASS"), null);
+        draftVersion.setConditionAst(root);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("XOR");
     }
 
     @Test
