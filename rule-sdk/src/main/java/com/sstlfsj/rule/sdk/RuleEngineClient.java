@@ -75,7 +75,8 @@ public class RuleEngineClient implements AutoCloseable {
                 : new InterpretedExecutor(evaluators);
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
-                Map.of("AST_BOOLEAN", executor));
+                Map.of("AST_BOOLEAN", executor),
+                false);
 
         // 规则来源：显式 ruleSource() + localSnapshot() 转 DslRuleSource + serverUrl 转 PollingRuleSource
         List<RuleSource> allSources = new ArrayList<>(b.ruleSources);
