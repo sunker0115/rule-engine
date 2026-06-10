@@ -102,6 +102,7 @@ public class EvalContextAssembler {
             for (Map.Entry<String, Object> e : event.providedMetrics().entrySet()) {
                 provided.put(e.getKey(), new MetricValue(e.getValue(), DataType.UNKNOWN.tag(), ValueSource.PROVIDED.tag()));
             }
+            injectPayload(event, provided);
             return new EvalContext(event.tenantId(), event, subject, provided, now);
         }
 
@@ -153,7 +154,25 @@ public class EvalContextAssembler {
         if (!needFetch.isEmpty()) {
             fetchConcurrently(event, now, needFetch, descriptors, metrics);
         }
+        injectPayload(event, metrics);
         return new EvalContext(event.tenantId(), event, subject, metrics, now);
+    }
+
+    /**
+     * 把事件 payload 的每个字段以 ValueSource.PAYLOAD 注入值 map（putIfAbsent，
+     * 同名 metric/provided 优先）。payload 字段的 dataType 在比较时由 node.dataType()
+     * （发布期冻结）决定，故此处统一 UNKNOWN。
+     *
+     * @param event  触发事件（payload 来源）
+     * @param target 值 map（degraded 路径为 provided，正常路径为 metrics）
+     */
+    private static void injectPayload(RuleEvent event, Map<String, MetricValue> target) {
+        Map<String, Object> payload = event.payload();
+        if (payload == null) return;
+        for (Map.Entry<String, Object> e : payload.entrySet()) {
+            target.putIfAbsent(e.getKey(),
+                    new MetricValue(e.getValue(), DataType.UNKNOWN.tag(), ValueSource.PAYLOAD.tag()));
+        }
     }
 
     /**
