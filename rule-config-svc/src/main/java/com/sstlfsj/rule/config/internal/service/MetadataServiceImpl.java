@@ -11,6 +11,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -92,6 +94,42 @@ class MetadataServiceImpl implements MetadataService {
             }
         }
         return result;
+    }
+
+    @Override
+    public InputManifestResponse getInputManifest(String tenantId, String sceneCode, String eventType) {
+        Long tid = Long.valueOf(tenantId);
+        SceneDef scene = sceneMapper.findByCode(tid, sceneCode);
+        if (scene == null) {
+            return new InputManifestResponse(List.of());
+        }
+
+        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneIds(tid, List.of(scene.getId()))
+                .stream().map(RuleDefinition::getId).toList();
+        if (defIds.isEmpty()) {
+            return new InputManifestResponse(List.of());
+        }
+
+        boolean narrow = eventType != null && !eventType.isBlank();
+
+        // 按 name 去重并保持首次出现顺序：同名字段以最先遇到的 (dataType,required) 为准
+        Map<String, InputFieldSpec> union = new LinkedHashMap<>();
+        for (RuleVersion rv : ruleVersionMapper.findActiveWithPayloadByRuleDefIds(defIds)) {
+            // eventType 非空时仅纳入会被该事件触发的规则；triggerEventTypes 为空视为通配（匹配所有事件类型）
+            if (narrow) {
+                List<String> triggers = rv.getTriggerEventTypes();
+                if (triggers != null && !triggers.isEmpty() && !triggers.contains(eventType)) {
+                    continue;
+                }
+            }
+            List<PayloadDependency> deps = rv.getPayloadDependencies() != null
+                    ? rv.getPayloadDependencies() : List.of();
+            for (PayloadDependency dep : deps) {
+                union.putIfAbsent(dep.name(),
+                        new InputFieldSpec(dep.name(), dep.dataType(), dep.required()));
+            }
+        }
+        return new InputManifestResponse(List.copyOf(union.values()));
     }
 
     /**

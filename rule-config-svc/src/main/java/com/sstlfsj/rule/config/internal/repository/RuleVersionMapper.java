@@ -56,6 +56,20 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
                         RuleVersion::getMetricDependencies));
     }
 
+    /**
+     * 按 rule_definition id 集合查 ACTIVE 版本，取输入清单所需列
+     * （ruleDefinitionId / payloadDependencies / triggerEventTypes），用于 input-manifest 发现。
+     * 空集合返回空列表。
+     */
+    default List<RuleVersion> findActiveWithPayloadByRuleDefIds(Collection<Long> ruleDefinitionIds) {
+        if (ruleDefinitionIds == null || ruleDefinitionIds.isEmpty()) return List.of();
+        return selectList(new LambdaQueryWrapper<RuleVersion>()
+                .in(RuleVersion::getRuleDefinitionId, ruleDefinitionIds)
+                .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE)
+                .select(RuleVersion::getRuleDefinitionId,
+                        RuleVersion::getPayloadDependencies, RuleVersion::getTriggerEventTypes));
+    }
+
     /** 将指定 ACTIVE 版本置为 SUPERSEDED；返回受影响行数。 */
     default int markSuperseded(Long ruleVersionId) {
         return update(null, new LambdaUpdateWrapper<RuleVersion>()

@@ -13,6 +13,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -316,5 +317,43 @@ class MetadataServiceImplTest {
 
         // 容错：跳过缺失定义，不抛异常，返回空列表
         assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();
+    }
+
+    @Test
+    void getInputManifest_unionsPayloadDeps_dedupByName() {
+        // demo.login → scene id 5 → ruleDef id 11 → 两条 ACTIVE rule_version 的 payloadDependencies 并集
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setTenantId(1L);
+        scene.setCode("demo.login");
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
+
+        RuleDefinition def = new RuleDefinition();
+        def.setId(11L);
+        def.setTenantId(1L);
+        def.setSceneId(5L);
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
+
+        RuleVersion rv1 = new RuleVersion();
+        rv1.setRuleDefinitionId(11L);
+        rv1.setStatus(RuleVersionStatus.ACTIVE);
+        rv1.setTriggerEventTypes(List.of());
+        rv1.setPayloadDependencies(List.of(new PayloadDependency("amount", "DECIMAL", true)));
+
+        RuleVersion rv2 = new RuleVersion();
+        rv2.setRuleDefinitionId(11L);
+        rv2.setStatus(RuleVersionStatus.ACTIVE);
+        rv2.setTriggerEventTypes(List.of());
+        rv2.setPayloadDependencies(List.of(
+                new PayloadDependency("amount", "DECIMAL", true),
+                new PayloadDependency("country", "STRING", true)));
+        when(ruleVersionMapper.findActiveWithPayloadByRuleDefIds(any())).thenReturn(List.of(rv1, rv2));
+
+        MetadataService.InputManifestResponse resp =
+                metadataService.getInputManifest("1", "demo.login", null);
+
+        assertThat(resp.fields())
+                .extracting(MetadataService.InputFieldSpec::name)
+                .containsExactlyInAnyOrder("amount", "country");
     }
 }

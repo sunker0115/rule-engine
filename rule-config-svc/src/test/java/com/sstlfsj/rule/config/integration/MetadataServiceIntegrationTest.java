@@ -16,6 +16,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -143,6 +144,11 @@ class MetadataServiceIntegrationTest {
     }
 
     private RuleVersion ruleVersion(Long ruleDefinitionId, List<MetricDependency> metricDeps) {
+        return ruleVersion(ruleDefinitionId, metricDeps, List.of());
+    }
+
+    private RuleVersion ruleVersion(Long ruleDefinitionId, List<MetricDependency> metricDeps,
+                                    List<PayloadDependency> payloadDeps) {
         RuleVersion v = new RuleVersion();
         v.setRuleDefinitionId(ruleDefinitionId);
         v.setVersion(1L);
@@ -152,7 +158,7 @@ class MetadataServiceIntegrationTest {
         v.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         v.setTriggerEventTypes(List.of("e"));
         v.setMetricDependencies(metricDeps);
-        v.setPayloadDependencies(java.util.List.of());
+        v.setPayloadDependencies(payloadDeps);
         v.setStatus(RuleVersionStatus.ACTIVE);
         return v;
     }
@@ -181,5 +187,33 @@ class MetadataServiceIntegrationTest {
     @Test
     void declaredMode_unknownScene_returnsEmpty() {
         assertThat(metadataService.listMetricDefinitions("1", List.of("nope"))).isEmpty();
+    }
+
+    /**
+     * input-manifest 场景级并集：fraud 场景下两条 ACTIVE 规则的 payloadDependencies
+     * （rule1: amount；rule2: amount+country）经真 DB 持久化/读回后，按 name 去重并集为 [amount, country]。
+     */
+    @Test
+    void getInputManifest_unionsPayloadDepsAcrossRules_dedupByName() {
+        // fraud 场景已 seed 一条无 payload 依赖的规则；再补两条带 payload 依赖的规则
+        SceneDef fraud = sceneMapper.findByCode(TENANT, "fraud");
+
+        RuleDefinition rd1 = ruleDef(fraud.getId(), "r-pay-amount");
+        ruleDefinitionMapper.insert(rd1);
+        ruleVersionMapper.insert(ruleVersion(rd1.getId(), List.of(),
+                List.of(new PayloadDependency("amount", "DECIMAL", true))));
+
+        RuleDefinition rd2 = ruleDef(fraud.getId(), "r-pay-amount-country");
+        ruleDefinitionMapper.insert(rd2);
+        ruleVersionMapper.insert(ruleVersion(rd2.getId(), List.of(),
+                List.of(new PayloadDependency("amount", "DECIMAL", true),
+                        new PayloadDependency("country", "STRING", true))));
+
+        MetadataService.InputManifestResponse resp =
+                metadataService.getInputManifest("1", "fraud", null);
+
+        assertThat(resp.fields())
+                .extracting(MetadataService.InputFieldSpec::name)
+                .containsExactlyInAnyOrder("amount", "country");
     }
 }
