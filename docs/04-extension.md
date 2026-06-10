@@ -57,33 +57,34 @@ public @interface ConditionType {
 
 Spring Bean + 注解扫描：引擎启动时扫 `@ConditionType` 注解的 Bean，注册到 `ConditionTypeRegistry`（全局唯一 + 重复注册报错）。
 
-### 2.4 实现示例（metric.threshold）
+### 2.4 实现示例（自定义算子 `geo.distance_within`）
+
+> 内置比较算子（`GT` / `IN` / `BETWEEN` …，见 [`03-rule-expression.md`](./03-rule-expression.md) §三）已由 `KernelEvaluators.defaults()` 注册，**算子码即 conditionType**，无需自己写。下例演示注册一个内置清单里没有的**自定义算子**：判断指标坐标点是否在目标点指定半径内。
 
 ```java
 @Component
 @ConditionType(
-    value = "metric.threshold",
-    displayName = "指标阈值比较",
+    value = "geo.distance_within",
+    displayName = "地理半径内",
     paramsSchema = """
         {
           "type": "object",
-          "required": ["operator"],
+          "required": ["centerLat", "centerLng", "radiusKm"],
           "properties": {
-            "operator": { "type": "string", "enum": ["EQ","NEQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
-            "value":    { "type": "number" },
-            "min":      { "type": "number" },
-            "max":      { "type": "number" }
+            "centerLat": { "type": "number" },
+            "centerLng": { "type": "number" },
+            "radiusKm":  { "type": "number" }
           }
         }
     """
 )
-public class MetricThresholdEvaluator implements ConditionEvaluator {
+public class GeoDistanceWithinEvaluator implements ConditionEvaluator {
     @Override
     public boolean evaluate(ConditionNode node, EvalContext ctx) {
         Object metricVal = ctx.getMetric(node.getMetricCode());
         if (metricVal == null) throw new MetricNotFoundException(node.getMetricCode());
-        // 按 node.getParams().get("operator") 做比较
-        return compare(metricVal, node.getParams());
+        // metricVal 为 "lat,lng" 坐标点；按 params 的 center + radiusKm 判定是否在圈内
+        return withinRadius(metricVal, node.getParams());
     }
 }
 ```
@@ -277,24 +278,22 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 {
   "conditionTypes": [
     {
-      "code": "metric.threshold",
-      "displayName": "指标阈值比较",
+      "code": "GT",
+      "displayName": "大于",
       "paramsSchema": {
         "type": "object",
+        "required": ["threshold"],
         "properties": {
-          "operator": { "type": "string", "enum": ["EQ","NEQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
-          "value": { "type": "number" },
-          "min": { "type": "number" },
-          "max": { "type": "number" }
+          "threshold": { "type": "number" }
         }
       },
       "requiresMetric": true
     },
     {
-      "code": "event.payload.compare",
-      "displayName": "Payload 字段比较",
-      "paramsSchema": { "type": "object", "properties": { "field": { "type": "string" }, "operator": { "type": "string" }, "value": {} } },
-      "requiresMetric": false
+      "code": "geo.distance_within",
+      "displayName": "地理半径内",
+      "paramsSchema": { "type": "object", "required": ["centerLat", "centerLng", "radiusKm"], "properties": { "centerLat": { "type": "number" }, "centerLng": { "type": "number" }, "radiusKm": { "type": "number" } } },
+      "requiresMetric": true
     }
   ],
   "actionTypes": [

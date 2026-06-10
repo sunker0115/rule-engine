@@ -58,7 +58,7 @@
    - `actionTypes[]`（含 paramsSchema）
    - `availableMetrics[]`
 2. 用户选择节点类型后，按 `paramsSchema`（JSON Schema）动态渲染参数表单
-3. `requiresMetric=true` 的 ConditionType（如 `metric.threshold`）同时渲染 metric 下拉框（来自 availableMetrics）
+3. `requiresMetric=true` 的 ConditionType（如比较算子 `GT`）同时渲染值来源选择：`valueRef=METRIC` 时渲染 metric 下拉框（来自 availableMetrics），`valueRef=PAYLOAD` 时渲染 payload 字段选择（来自 Scene.payloadSchema）
 
 **JSON Schema → 表单组件映射（v1 最小集）：**
 

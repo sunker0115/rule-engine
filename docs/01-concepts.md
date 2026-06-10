@@ -302,14 +302,14 @@ sealed RuleNode {
 
 **是什么**：AST 的叶子节点，一条原子判断。由 `conditionType` 决定语义，参数化配置。
 
-**典型 conditionType**：
+**典型 conditionType**（算子码本身即 conditionType，内置清单见 [`03-rule-expression.md`](./03-rule-expression.md) §三）：
 
 | conditionType | 例子 |
 |---------------|------|
-| `user.attribute.equals` | `user.kycLevel == 2` |
-| `user.attribute.range` | `user.age >= 18 && user.age < 65` |
-| `metric.threshold` | `metric:user.trade.sum.7d >= 1000` |
-| `event.payload.equals` | `event.payload.currency == "USD"` |
+| `EQ` | `metric:user.kycLevel == 2` |
+| `BETWEEN` | `metric:user.age ∈ [18, 65)` |
+| `GTE` | `metric:user.trade.sum.7d >= 1000` |
+| `EQ`（`valueRef=PAYLOAD`） | `payload:currency == "USD"` |
 | `time.window` | `now in [9:00, 22:00] timezone Asia/Shanghai` |
 
 **节点字段**（持久化在 AST JSON 内，不另存表）：
@@ -325,7 +325,7 @@ sealed RuleNode {
 **关键边界**：
 
 - **Condition 不取数**：取数是 Metric / EvalContext 的职责；Condition 只判断**已经在 EvalContext 里的数据**。
-- **同一 conditionType 跨 Rule 复用**：通过 `@ConditionType("metric.threshold")` 注解的 Evaluator 是平台资产。
+- **同一 conditionType 跨 Rule 复用**：一个 `@ConditionType("geo.within_country")` 注解的自定义 Evaluator 是平台资产，可被任意 Rule 引用。
 - **Condition 是 AST 中的叶子，不能脱离 Rule 单独存在**：增删 Condition 即修改 AST，走 Rule 版本升级流程。
 
 ### 3.7 Action（动作，可选）
@@ -1056,7 +1056,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | `scene` | `<domain>.<subdomain>`，最多两层 | `marketing.signup` |
 | `eventType` | `<entity>.<verb>`，过去式 | `trade.completed` |
 | `metricCode` | `<domain>.<entity>.<measure>[.<window>]` | `user.trade.sum.7d` |
-| `conditionType` | `<category>.<operation>` | `metric.threshold` / `user.attribute.equals` |
+| `conditionType` | 内置算子码为裸名（时间算子用点分），自定义建议 `<category>.<operation>` 避免冲突 | 内置 `GT` / `IN` / `BETWEEN` / `time.window`；自定义 `geo.within_country` |
 | `actionType` | `<verb>.<noun>` 或 `<domain>.<verb>` | `coupon.issue` / `webhook.post` |
 
 ### 6.2 ID 字段约定
