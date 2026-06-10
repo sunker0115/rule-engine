@@ -1,6 +1,6 @@
 # 高风险登录拦截(high-risk-login)
 
-> **状态**:✅ 对齐当前实现(2026-06-09),已通过 HTTP API 端到端跑通。
+> **状态**:✅ 对齐当前实现(2026-06-10,含配置闭环 B 轮 D54:decision 独立写 API + 发布期冻结 name/priority/actions + PULL 决策无 action 校验),已通过 HTTP API 端到端跑通。
 > 本案例是按**当前真实 API 契约**重写的样板——其余旧案例已归档于 [`../../archive/`](../../archive/)（`new-account-large-transfer` / `ticket-creation` / `user-register` / `time-conditions`），使用了已废弃的形态(见文末「旧案例过期点」),需逐个按本案例范式重写后移回业务域目录。
 
 ## 一、场景与业务目标
@@ -13,10 +13,11 @@
 | 组成 | 取值 |
 |---|---|
 | Scene | `demo.login`,PULL,subjectType=USER,eventTypes=`[login]`,payloadSchema=`amount(number,必填)`/`country(string,必填)` |
-| Metric | `amount`(LONG)、`user.risk.score`(LONG),均 ATTRIBUTE + `allowProvided=true` |
-| Rule | `demo-high-risk-login`,AST_BOOLEAN:`AND( GT(amount,1000), GTE(user.risk.score,80) )`,preGate `ROLLOUT 100%`,命中 `REJECT` |
+| Metric | `amount`(LONG)、`user.risk.score`(LONG),均 ATTRIBUTE + `allowProvided=true`(tenant 级可用,无 scene 白名单) |
+| Decision | `REJECT`(priority 1)/`REVIEW`(2)/`PASS`(100),tenant 级,**均无 action**(PULL 场景) |
+| Rule | `demo-high-risk-login`,AST_BOOLEAN:`AND( GT(amount,1000), GTE(user.risk.score,80) )`,preGate `ROLLOUT 100%`,绑定 `REJECT` |
 
-文件:[`scene.json`](./scene.json) · [`metrics/metrics.json`](./metrics/metrics.json) · [`rules/high-risk-login.json`](./rules/high-risk-login.json) · [`mock-events.json`](./mock-events.json) · [`expected-results.json`](./expected-results.json)
+文件:[`scene.json`](./scene.json) · [`metrics/metrics.json`](./metrics/metrics.json) · [`decisions/decisions.json`](./decisions/decisions.json) · [`rules/high-risk-login.json`](./rules/high-risk-login.json) · [`mock-events.json`](./mock-events.json) · [`expected-results.json`](./expected-results.json)
 
 ## 三、端到端 curl 剧本(可直接复制)
 
@@ -35,38 +36,44 @@ curl -s $H -X POST "$BASE/admin/v1/metrics?tenantId=9001&metricCode=amount" \
 curl -s $H -X POST "$BASE/admin/v1/metrics?tenantId=9001&metricCode=user.risk.score" \
   -d '{"name":"用户风险分","sourceType":"ATTRIBUTE","dataType":"LONG","params":{"table":"user_profile","column":"risk_score"},"cacheTtlSeconds":60,"allowProvided":true}'
 
-# 3) 建规则草稿 → 记下返回的 ruleDefinitionId
+# 3) 建 decision(D54:decision 是 tenant 级独立实体,发布期校验 decisionCode 必须存在,否则 DECISION_CODE_NOT_FOUND)
+#    PULL 场景的 decision 必须无 action(同步返回不派发;发布期会拒绝带 action 的 decision)
+python3 -c 'import json;[print(json.dumps(d)) for d in json.load(open("decisions/decisions.json"))]' | while read d; do
+  curl -s $H -X POST "$BASE/admin/v1/decisions?tenantId=9001" -d "$d"; echo
+done
+
+# 4) 建规则草稿 → 记下返回的 ruleDefinitionId
 RID=$(curl -s $H -X POST "$BASE/admin/v1/rules" --data @rules/high-risk-login.json | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["ruleDefinitionId"])')
 echo "ruleDefinitionId=$RID"
 
-# 4) 发布
+# 5) 发布(发布期从 decision_definition 冻结 name/priority/actions 进 rule_version.decision_bindings 快照)
 curl -s $H -X POST "$BASE/admin/v1/rules/$RID/publish?tenantId=9001"
 
-# 5) 评估——命中 REJECT
+# 6) 评估——命中 REJECT(finalDecision.name="拒绝"、priority=1,均来自 decision_definition)
 curl -s -H Content-Type:application/json -X POST "$BASE/api/v1/rule/evaluate" \
   -d '{"tenantCode":"loadtest","sceneCode":"demo.login","eventType":"login","subjectId":"user-001","eventId":"evt-hit-001","occurredAt":"2026-06-09T22:00:00+08:00","payload":{"amount":5000,"country":"CN"},"providedMetrics":{"amount":5000,"user.risk.score":90}}'
 
-# 6) 评估——未命中 MISS(amount=500)
+# 7) 评估——未命中 MISS(amount=500)
 curl -s -H Content-Type:application/json -X POST "$BASE/api/v1/rule/evaluate" \
   -d '{"tenantCode":"loadtest","sceneCode":"demo.login","eventType":"login","subjectId":"user-002","eventId":"evt-miss-001","occurredAt":"2026-06-09T22:01:00+08:00","payload":{"amount":500,"country":"CN"},"providedMetrics":{"amount":500,"user.risk.score":90}}'
 
-# 7) dry-run——命中 + 完整 nodeTrace
+# 8) dry-run——命中 + 完整 nodeTrace
 curl -s -H Content-Type:application/json -X POST "$BASE/api/v1/rule/dry-run" \
   -d '{"tenantCode":"loadtest","sceneCode":"demo.login","eventType":"login","subjectId":"user-003","eventId":"evt-dry-001","occurredAt":"2026-06-09T22:02:00+08:00","payload":{"amount":8000,"country":"US"},"providedMetrics":{"amount":8000,"user.risk.score":85}}'
 
-# 8) 查询(异步落库,稍等几秒)
+# 9) 查询(异步落库,稍等几秒)
 curl -s "$BASE/admin/v1/evaluation-sessions?tenantId=9001&sceneCode=demo.login"
 curl -s "$BASE/admin/v1/audit-logs?tenantId=9001&targetType=rule_definition&targetId=$RID"
 curl -s "$BASE/sdk/v1/snapshots?tenantId=9001&scenes=demo.login"
 ```
 
-预期结果见 [`expected-results.json`](./expected-results.json):命中 → `ruleHit=true` + `finalDecision.code=REJECT`;未命中 → `ruleHit=false` + `status=MISS`。
+预期结果见 [`expected-results.json`](./expected-results.json):命中 → `ruleHit=true` + `finalDecision={code:REJECT, name:"拒绝", priority:1}`(name/priority 来自 decision);未命中 → `ruleHit=false` + `status=MISS`。
 
 ## 四、当前实现注意点(踩坑记录)
 
 1. **payload 字段也必须注册成 metric**。发布期 `MetricDependencyCollector` 把规则里每个 `ConditionNode.metricCode` 都当 metric 依赖、要求有 ACTIVE 版本,**不区分 payload 字段**。所以 `amount` 虽是 payload,也得注册 metric,否则发布报 `被引用的 metric 无 ACTIVE 版本: amount`。
 2. **比较算子用 `conditionType` + `metricCode`(顶层) + `params`**:`GT/GTE/LT/LTE` 用 `params.threshold`,`EQ/NEQ` 用 `params.value`,`IN/NOT_IN` 用 `params.values`,`BETWEEN` 用 `params.min/max`(见 `kernel ConditionType` 与 `sdk Condition`)。**没有 `METRIC_COMPARE`/`PAYLOAD_COMPARE` 这类算子**。
-3. **decision 当前无写 HTTP API**。发布不校验 decision 是否存在,规则能命中,但 `decision_definition` 为空时 `finalDecision` 只有 `code`、`name=""`、`priority=0`。要补全 name/priority/actions,目前只能走 `POST /admin/v1/rules/import` 携带 `decisionDefinitions`。
+3. **decision 是 tenant 级独立实体,发布前必须先建**(D54/D27 补齐)。`POST /admin/v1/decisions` 建 `decision_definition`(code/name/priority/description/actions);发布期校验规则绑定的 decisionCode 必须存在,否则 `DECISION_CODE_NOT_FOUND`,并把 decision 的 `name`/`priority`/`actions` 冻结进 `rule_version.decision_bindings` 快照。命中时 `finalDecision` 即带 `name`/`priority`/`actions`(不再是空串/0)。**PULL 场景的 decision 必须无 action**(同步返回不派发;发布期拒绝 PULL+带 action 的 decision);action 派发是 PUSH/HYBRID 场景的事。
 4. **ATTRIBUTE metric 发布免安全校验**;`SQL_AGGREGATE`/`EXTERNAL_HTTP` 才过 `MetricSafetyValidator`(拒 DB 时间函数/`${}` 拼接 + 资源名注册)。本地无真实数据源,用 ATTRIBUTE + `allowProvided` + `providedMetrics` 喂值跑通。
 5. **评估请求体的租户字段是 `tenantCode`**(不是 `tenantId`);管理接口才用 `tenantId`(= `tenant.id` 数字)。
 
@@ -74,7 +81,7 @@ curl -s "$BASE/sdk/v1/snapshots?tenantId=9001&scenes=demo.login"
 
 | 旧形态(已废弃) | 当前形态 |
 |---|---|
-| `scene.json` 含 `metricBindings`/`actionBindings`/`decisions`/`decisionStrategy` | `POST /scenes` 只收 `tenantId/sceneCode/name/description/dominantMode/subjectType/eventTypes/payloadSchema/defaultParams`;binding/decision 无随场景创建 |
+| `scene.json` 含 `metricBindings`/`actionBindings`/`decisions`/`decisionStrategy` | `POST /scenes` 只收 `tenantId/sceneCode/name/description/dominantMode/subjectType/eventTypes/payloadSchema/defaultParams`;metric 在 tenant 级可用(无 scene 白名单,D54)、decision 走 `POST /admin/v1/decisions` 单独建(tenant 级)、action 归 decision(无 scene_action_binding,D54) |
 | `payloadSchema` 为对象 `{字段:{type,required}}` | 数组 `[{name,type,required,...}]` |
 | 条件用 `conditionType:"METRIC_COMPARE"/"PAYLOAD_COMPARE"` + `params.{metricCode,operator,value,field}` | `conditionType:"GT"/"GTE"/...` + 顶层 `metricCode` + `params.threshold`(payload 字段也走 metricCode 并注册 metric) |
 | preGate 用 `type` | 用 `gateType` |

@@ -60,6 +60,19 @@
 - **跨模块改动必须带 `-am`**：否则用 `~/.m2` 里的旧 jar，出 `NoSuchMethodError` / 编译假象。一轮改动最终用全量 `$MVN clean test`（无 `-pl`）兜底——只有 `clean` 才强制重编译所有 test 类，增量编译会漏掉过期 test。
 - 有测试失败不得用 `-DskipTests` 绕过，必须修复后再提交。
 
+## 功能测试纪律(集成测试通过后)
+
+单测 / 集成测试绿之后,**涉及配置→发布→评估→落库链路或 DB schema 的改动**,还要起真实服务走一遍 API 端到端功能测试(单测 mock 不掉的"真落库 / 真发布快照 / 真派发"问题在这里暴露)。标准流程:
+
+1. **起服务**:`$MVN -pl rule-app -am package -DskipTests` 打可执行 jar,再 `java -jar rule-app/target/rule-app-*.jar`(后台)。**不要用 `spring-boot:run`**——多模块 reactor 下它会跑到根聚合 pom 报"找不到 main class"。启动时 Flyway 自动应用新迁移,日志 `Successfully applied N migrations` + `Started RuleEngineApplication` 即就绪。
+2. **盘现状**:`mysql_local` MCP 查 `flyway_schema_history` 版本 + 各表数据量;`GET /admin/v1/{scenes,rules,decisions,metrics}` 列已有配置,定位缺什么。
+3. **补配置(API)**:缺的实体经 admin API 建。**注意发布前置依赖**:规则引用的 metric 须有 ACTIVE 版本、引用的 `decisionCode` 须先 `POST /admin/v1/decisions` 建(否则发布报 `DECISION_CODE_NOT_FOUND`);PULL 场景的 decision 必须无 action。
+4. **发布 → 核对快照落库**:发布后查 `rule_version.decision_bindings` 是否富化(发布期从 `decision_definition` 冻结的 `name`/`priority`/`actions`),不是草稿占位。
+5. **评估 → 核对链路**:`POST /api/v1/rule/evaluate`(租户字段是 `tenantCode`)验 `finalDecision`(`name`/`priority`/`actions` 来自 decision、非空串/0);命中带 action 的(PUSH)再查 `action_execution` 是否落库(SendAlert 无 webhook URL 时为 `SKIPPED/NO_WEBHOOK_URL`,属 best-effort 正常)。
+6. **DB 字段落库审计**:对有数据的表逐表查恒空字段,分类——**遗漏(bug,必修)** / 不用了 / 设计如此(如 `context_snapshot` 默认开关关) / 数据使然(测试数据无 scorecard/tree/blocked)。本轮改动点要**专门验证**(如新增列是否真落库、新校验是否真拦截、审计 before/after 是否真捕获)。
+
+参考端到端剧本:[`docs/examples/risk-control/high-risk-login/`](./docs/examples/risk-control/high-risk-login/)(可直接复制的 curl 脚本 + 预期结果)。
+
 ## 文档纪律
 
 - `00-decisions.md` 是单一决策日志,新决策追加,不改历史条目状态以外的内容。

@@ -3,7 +3,7 @@
     "eventId": "evt-hit-001",
     "expected": {
       "ruleHit": true,
-      "finalDecision": { "code": "REJECT", "name": "", "priority": 0 },
+      "finalDecision": { "code": "REJECT", "name": "拒绝", "priority": 1, "actions": [] },
       "nodeTrace": {
         "nodeType": "AndNode",
         "result": true,
@@ -13,7 +13,7 @@
         ]
       }
     },
-    "_note": "finalDecision.name 为空、priority 为 0,因为 REJECT 未在 decision_definition 注册(当前无 decision 写 HTTP API)。要补全 name/priority,走 import bundle 把 decision 一并建入。"
+    "_note": "finalDecision.name/priority 来自 decision_definition(D54:发布期已冻结进 rule_version.decision_bindings 快照)。PULL 场景 REJECT 无 action,不派发、actions 为空。"
   },
   {
     "eventId": "evt-miss-001",
@@ -28,7 +28,7 @@
     "eventId": "evt-dry-001",
     "expected": {
       "ruleHit": true,
-      "finalDecision": { "code": "REJECT", "name": "", "priority": 0 },
+      "finalDecision": { "code": "REJECT", "name": "拒绝", "priority": 1, "actions": [] },
       "nodeTrace": {
         "nodeType": "AndNode",
         "result": true,
@@ -38,6 +38,6 @@
         ]
       }
     },
-    "_note": "dry-run 同样会落 evaluation_session(记为 HIT);nodeTrace 与 evaluate 一致填充。"
+    "_note": "dry-run 同样会落 evaluation_session(记为 HIT);PULL 场景 dry-run 与 evaluate 等价,不派发 action;nodeTrace 与 evaluate 一致填充。"
   }
 ]

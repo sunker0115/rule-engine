@@ -1,0 +1,5 @@
+[
+  { "code": "REJECT", "name": "拒绝",     "priority": 1,   "description": "高风险拒绝", "actions": [] },
+  { "code": "REVIEW", "name": "人工审核", "priority": 2,   "description": "转人工复核", "actions": [] },
+  { "code": "PASS",   "name": "通过",     "priority": 100, "description": "放行",       "actions": [] }
+]
