@@ -22,11 +22,11 @@
 | 概念 | 一句话定义 | 谁来定义 / 配 |
 |------|------------|---------------|
 | **Tenant** | 数据与权限的最外层隔离单元（一个公司 / 一条业务线 / 一个 SaaS 租户） | 平台运维 |
-| **Scene** | Tenant 内的业务域命名空间（如 `marketing.signup` / `risk.transfer`），兼任 **Matcher 路由键 + metric / action 治理白名单 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID） + 元数据 schema 承载者（`payloadSchema` / `eventTypes` / `subjectType` / `defaultParams`，D13）** | 平台运维 |
+| **Scene** | Tenant 内的业务域命名空间（如 `marketing.signup` / `risk.transfer`），兼任 **Matcher 路由键 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID） + 元数据 schema 承载者（`payloadSchema` / `eventTypes` / `subjectType` / `defaultParams`，D13）**（D54 起 metric/action 治理白名单已移除：metric tenant 级可用、action 归 decision） | 平台运维 |
 | **RuleEvent** | 触发评估的"一次发生"：谁、在哪、做了什么（不可变 POJO） | 上游业务方推 |
 | **Rule** | 一条规则定义：在什么条件下、对谁、满足后输出哪个 Decision；带版本、灰度、Pre-Gate；条件用 **AST 树**表达（v1 仅 `kind=AST_BOOLEAN`；D12 预留 SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT 多态扩展位） | 业务运营 / 风控配置 |
 | **Condition** | AST 叶子节点：一条原子判断（`age >= 18` / `近 7 天交易额 > 1000`），由 `conditionType` 路由到具体评估器 | 业务运营选类型 + 配参数 |
-| **Metric** | 取数原子（按 `metricCode` 注册），同一指标可被多 Rule 共享、可缓存；**可见性由 Scene 白名单决定** | 平台 + 业务方共同治理 |
+| **Metric** | 取数原子（按 `metricCode` 注册），同一指标可被多 Rule 共享、可缓存；**在 tenant 级对所有 scene 可用**（D54，无 scene 白名单） | 平台 + 业务方共同治理 |
 | **EvalContext** | 一次评估的运行时上下文：指标快照 + 用户画像 + 业务身份（不可变 POJO） | 引擎在评估前现场构建 |
 | **Decision** | Tenant 级输出定义：规则命中后输出的语义结论（REJECT / REVIEW / PASS 等）；带 `priority` 字段，多规则命中时 Scene 按 `decisionStrategy` 合成最终 Decision；持有 **actions 列表**（D27） | 平台运维 |
 | **Action** | Decision 命中后要做的事（发券 / 调 webhook / 写库），由 `actionType` 路由到具体处理器；配置在 **Decision.actions** 上（D27）；**可空**——PULL 模式 Scene 的 Decision 不配 Action | 业务运营选类型 + 配参数 |
@@ -42,25 +42,22 @@
 ## 二、关系总览
 
 ```
-Tenant ──── 1:N ────► Scene ──── N:N ────► Metric  (经 scene_metric_binding)
+Tenant ──── 1:N ────► Scene                Metric (tenant 级,经 metricCode 直接引用)
   │                    │                     ▲
-  │ 1:N                │ N:N (仅 PUSH/HYBRID) │ 经 metricCode
+  │ 1:N                │ 1:N                  │ 经 metricCode（D54:无 scene 级绑定）
   ▼                    ▼                     │
-Decision           actionType               │
-(code+priority     (白名单治理)              │
- +actions)              │ 1:N               │
-  ▲                     ▼                   │
-  │ N:1 (经        ┌────────────────────────────────────────────┐
-  │  RuleDecision  │  Rule（心智概念，框内可视为一个整体）        │
-  │  Binding)      │                                             │
-  │                │  RuleDefinition ◄── trigger ── RuleEvent    │
-  │                │       │                                     │
-  │                │   1:N │ current_version 指向                │
-  │                │       ▼                                     │
-  └──────────────► │  RuleVersion (不可变发布快照, D6/D19)       │
-                   │  持有: AST + preGates（含 ROLLOUT 灰度）    │
-                   │       + decision_bindings                    │
+Decision           ┌────────────────────────────────────────────┐
+(tenant 级,         │  Rule（心智概念，框内可视为一个整体）        │
+ code+priority     │                                             │
+ +actions,D27)     │  RuleDefinition ◄── trigger ── RuleEvent    │
+  ▲                │       │                                     │
+  │ N:1 (经        │   1:N │ current_version 指向                │
+  │  RuleDecision  │       ▼                                     │
+  │  Binding)      │  RuleVersion (不可变发布快照, D6/D19)       │
+  └──────────────► │  持有: AST + preGates（含 ROLLOUT 灰度）    │
+                   │       + decision_bindings（含 actions 快照） │
                    └────────────────────────────────────────────┘
+（actionType 是 ActionHandler 的全局 SPI 注册键，不属 Scene；action 归 Decision，D27/D54）
                             │
                         1:1 │ (RuleVersion 持有冻结的 AST，不含 Actions)
                             ▼
@@ -85,11 +82,11 @@ Decision           actionType               │
 
 - 一个 **Tenant** 下有多个 **Scene** 和多个 **Decision**；Decision 是 Tenant 级，所有 Scene 共享同一套 Decision 词汇表；
 - **Decision** 持有 `actions` 字段（D27 从 Rule 迁移）：命中该 Decision 时派发的动作列表；
-- 一个 **Scene** 有可见的 **Metric 集合**（白名单绑定）+（PUSH/HYBRID 模式下）可见的 **actionType 集合** + 多条 **Rule**；
+- 一个 **Scene** 有多条 **Rule**；metric 在 tenant 级对所有 scene 可用（D54，无白名单绑定），actionType 由 Decision.actions 决定（D27，与 scene 无关）；
 - **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（可编辑草稿，持 `current_version` 指针）+ **RuleVersion**（每次发布产生的不可变快照）；运行时评估锁定 RuleVersion，回滚 = 用旧版本快照建新草稿走标准发布（D6 / D17 / D19）；
 - 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树）+ `decision_bindings`（Rule 绑定的 Decision 及其 actions 的快照，DDL 列名；D27，actions 随 `decision_bindings` 一同快照化，不再有独立的 `actions_snapshot` 列）；
 - AST 内部由 `AndNode` / `OrNode` / `NotNode` 嵌套，叶子是 `ConditionNode`；
-- **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（限本 Scene 白名单内）构建 **EvalContext**，喂给 ConditionNode 做判定；
+- **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（tenant 级注册的 ACTIVE metric）构建 **EvalContext**，喂给 ConditionNode 做判定；
 - AST 求值为 true 后 → 取 Rule 绑定的 Decision → `decisionStrategy` 合成 `finalDecision`：**PUSH/HYBRID** 模式异步派发 `finalDecision.actions`；**PULL** 模式同步返回 `EvalResult{finalDecision, hitDecisions, ...}`，调用方自行决策，不派发 Action。
 
 ---
@@ -98,7 +95,7 @@ Decision           actionType               │
 
 > **横切：核心配置表共享审计字段**（D14）
 >
-> 所有可由人编辑的配置对象（`tenant`、`scene`（DDL 落地表名，旧称 `scene_definition`）、`rule_definition`、`metric_definition`、`scene_metric_binding`、`scene_action_binding`、`job_definition` 等）的表结构都横切包含以下审计字段，下方各章节字段表**默认不再重复列出**：
+> 所有可由人编辑的配置对象（`tenant`、`scene`（DDL 落地表名，旧称 `scene_definition`）、`rule_definition`、`metric_definition`、`decision_definition`、`job_definition` 等）的表结构都横切包含以下审计字段，下方各章节字段表**默认不再重复列出**：
 >
 > | 字段 | 说明 |
 > |------|------|
@@ -131,7 +128,7 @@ Decision           actionType               │
 **是什么**：Tenant 内的业务域命名空间。四重身份：
 
 1. **Matcher 路由键**：把 (tenant + scene + eventType) 当倒排索引主键，规则候选粗筛从千级降到十级（D8 性能预留）；
-2. **治理白名单**：Scene 显式绑定可见的 **metric 集合**（`scene_metric_binding`）和（PUSH/HYBRID 模式下）**actionType 集合**（`scene_action_binding`）；规则只能引用本 Scene 绑定的资源，防跨域读写越界；
+2. **资源可见性**（D54 收敛）：metric 在 tenant 级对所有 scene 可用（无 scene 级白名单）；actionType 由 Decision.actions 决定（tenant 级，与 scene 无关）；scene 不再承担 metric/action 治理白名单职责；
 3. **数据源初始化锚点**：Scene 有生命周期，启动时按绑定批量预热 MetricSource + ActionHandler 的资源（DB 连接池 / HTTP client / MQ producer / 缓存），卸载时反向清理；热路径上无懒加载判断；
 4. **使用模式声明**：Scene 字段 `dominantMode` ∈ `{PUSH, PULL, HYBRID}`，决定 API 入口 / 前端 UI 行为 / 资源预热范围（PULL 不预热 ActionHandler）。
 
@@ -161,14 +158,14 @@ Decision           actionType               │
 | `eventTypes` | 该 Scene 允许的 eventType 白名单数组；事件接入按 (scene + eventType) 二元组校验，规则 trigger 下拉与 Job `eventTypeTemplate` 也按此过滤 |
 | `decisionStrategy` | 多规则命中时的合成策略。v1 固定为 `HIGHEST_PRIORITY`（priority 最小者胜出），DDL 层 NOT NULL DEFAULT，PUSH/HYBRID Scene 强制生效（D29）；PULL Scene 不参与合成，配置了也忽略。v2 预留 `MAJORITY` / `CUSTOM_SPI` 扩展位（届时需 `ALTER TABLE MODIFY COLUMN`，非加列） |
 
-Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `cache_policy_override`）；Scene 与 actionType 通过 `scene_action_binding` 多对多关联（含 Scene 级 `default_params`），仅 PUSH / HYBRID Scene 用到。Scene 与 `JobDefinition` 一对多关联，PULL Scene 不允许配置 Job（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
+metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）；actionType 由 Decision.actions 决定（D27，tenant 级，无 scene_action_binding）。Scene 与 `JobDefinition` 一对多关联，PULL Scene 不允许配置 Job（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
 
 **关键边界**：
 
 - **Scene 变更热加载**（D24）：Scene 配置（bindings / payloadSchema / status）变更后无需重启；单服务模式下由 Modulith `SceneChangedEvent` 触发（毫秒级）；嵌入式 SDK 模式下由 `SceneWatcher`（`DbPollingSceneWatcher`，默认 30s 轮询）触发（30s 最终一致）；Scene `DISABLED` → 从 Matcher 路由表摘除，已进行中的 session 不中断；bindings 变更 → 触发对应 MetricSource / ActionHandler 资源重新预热/卸载。
 - **同一 Scene 不能跨 Tenant**：`acme.marketing.signup` 和 `beta.marketing.signup` 是两个 Scene。
 - **同一 Rule 属于唯一 Scene**：如果两个业务想要"看起来一样的规则"，请各自在自己 Scene 配一条。
-- **Scene 的白名单是发布时校验项**：规则发布前校验 AST 引用的全部 `metricCode` 在 metric 白名单内、规则绑定的 Decision.actions 中全部 `actionType` 在 action 白名单内（PUSH/HYBRID 模式），否则发布拒绝。
+- **发布时校验项**（D54）：规则发布前校验 AST 引用的全部 `metricCode` 有 ACTIVE metric（tenant 级）、规则绑定的 decisionCode 在 `decision_definition` 存在（DECISION_CODE_NOT_FOUND）；actionType 不再发布期校验（运行期 NO_HANDLER skip）。
 - **PULL 模式 Scene 拒收 Action 配置**：规则发布时如果规则绑定的 Decision.actions 非空，校验拒绝；前端 UI 也直接隐藏 Action 编辑区块。
 - **`payloadSchema` / `eventTypes` 是发布与接入双校验项**（D13）：
   - 规则发布：trigger eventType 必须 ∈ `eventTypes`；AST 引用的 `event.payload.<field>` 必须 ∈ `payloadSchema`；
@@ -321,7 +318,7 @@ sealed RuleNode {
 |------|------|
 | `conditionType` | 路由键，决定用哪个 `ConditionEvaluator` 实现 |
 | `params` | JSON 参数（依 conditionType 而异） |
-| `metricCode` | 当 conditionType 涉及指标时，引用一个 Metric（必须在本 Scene 白名单内） |
+| `metricCode` | 当 conditionType 涉及指标时，引用一个 Metric（须为 tenant 级已注册的 ACTIVE metric，D54） |
 | `displayLabel` | 给运营 UI 看的别名 |
 | `weight` | 可选数值，v1 评估器**忽略**该字段；`Rule.kind = SCORECARD` 时启用，表示该条件命中对总分的贡献（D12 预留） |
 
@@ -391,7 +388,7 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 
 - **Action 归属 Decision，不归属 Rule**（D27）：Action 配置在 `Decision.actions` 字段上，Rule 不再持 `actions` 字段；仅 `finalDecision`（合成后最终决策）的 actions 被 Dispatcher 派发；`hitDecisions` 列表中其他 Decision 的 actions 不派发（避免多规则命中时重复执行）。
 - **Action 是配置数据，ActionHandler 是代码** —— 两者关系类似"Condition 节点 vs ConditionEvaluator"。
-- **`actionType` 受 Scene 白名单约束**（PUSH/HYBRID）：Rule 发布时引擎检查 Rule 绑定的 Decision.actions 内所有 `actionType` 都在本 Scene 的 `scene_action_binding` 内；PULL Scene 校验 Decision.actions 必须为空；前端配 Decision 时 actionType 下拉项按当前 Scene 过滤。
+- **`actionType` 合法性 = 运行期 NO_HANDLER skip**（D54）：actionType 是开放 SPI，发布期不校验白名单（`scene_action_binding` 已移除）；运行期找不到注册 handler → `ActionResult.skipped(NO_HANDLER)`（best-effort，D53）。PULL Scene 仍校验 Decision.actions 必须为空；前端配 Decision 时 actionType 下拉按全局已注册 handler 列表。
 - **best-effort 投递**（D53）：命中后 action 经进程内队列异步派发，**不重试不补偿**；一个 Action 失败不影响其他（除非配置 `failFast`）。队列满/进程重启会丢（队列满计数 + WARN，不静默）。
 - **v1 Action 是平铺 forEach 顺序执行** —— 按 `sortOrder` 串行，编排（并行 / 等待 / 分支）留到 v2。
 - **失败语义**（D53 best-effort + D18 failFast）：单 Action 失败 → `ActionResult { status=FAILED, errorCode }` 直接落 `action_execution` 终态，**不重试不补偿**。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。可靠投递（MQ）/ 业务补偿（saga）未来另设计。
@@ -421,7 +418,7 @@ EvalContext {
 
 **AST 条件表达式的内置可寻址路径**（D20 §3 闭合枚举——发布期输入引用闭合校验的根路径表）：
 
-这 7 条路径是 ConditionNode 表达式可以**按名字直接引用**的内置字段，来自 `RuleEvent` + 引擎注入，不需要注册 Metric。与 `Scene.payloadSchema` 字段集合、`Scene` metric 白名单**三者并集**构成发布期允许的完整引用范围。
+这 7 条路径是 ConditionNode 表达式可以**按名字直接引用**的内置字段，来自 `RuleEvent` + 引擎注入，不需要注册 Metric。与 `Scene.payloadSchema` 字段集合、tenant 级已注册 metric**三者并集**构成发布期允许的完整引用范围。
 
 | 引用路径 | 类型 | 来源 | 语义 |
 |----------|------|------|------|
@@ -480,26 +477,20 @@ EvalContext {
 
 > `params` 完整字段 schema 及 `EXTERNAL_HTTP` 的 `jsonPath` 语法、`STREAM` 适配协议见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南。
 
-**Scene 级可见性**（`scene_metric_binding` 表）：
-
-| 字段 | 说明 |
-|------|------|
-| `scene_id` | Scene 主键（外键引用 `scene.id`，BIGINT） |
-| `metric_definition_id` | 引用 Metric（外键引用 `metric_definition.id`，BIGINT；通过 JOIN 取 `metric_code`） |
-| `cache_policy_override` | Scene 级缓存策略覆盖（可选） |
+**可见性**（D54）：metric 在 **tenant 级**对所有 scene 可用，无 scene 级绑定白名单（原 `scene_metric_binding` 表已移除）。
 
 **关键边界**：
 
-- **定义全局/租户级，可见性 Scene 级**：避免每个 Scene 重新发明"近 7 天交易额"，但 Scene 间元数据不互相污染。
-- **Scene 启动时按绑定预热 MetricSource**：JDBC 连接池、HTTP client、缓存初始化等在 Scene 生效瞬间完成；热路径上无懒加载判断。
+- **定义 tenant 级，全租户可见**：避免每个 Scene 重新发明"近 7 天交易额"；metric 是 tenant 级共享资产。
+- **应用启动时预热 MetricSource**：JDBC 连接池、HTTP client、缓存初始化等在启动时完成；热路径上无懒加载判断。
 - **同一指标可被多 Rule / 多 Condition 引用**，引擎按 evalSession 维度去重取数。
 - **Metric 不做判断**，只输出值。"值是否满足阈值"是 Condition 的事。
-- **指标定义是治理对象**：新增 metric 要走平台审批；Scene 把 metric 加入白名单也要走审批（防止运营越界）。
+- **指标定义是治理对象**：新增 metric 要走平台审批；metric 一经注册（ACTIVE）在 tenant 级对所有 scene 可用（D54，无 scene 级白名单审批环节）。
 - **MetricRegistry 并发契约**：读路径必须 thread-safe 且不阻塞热路径；评估期内读到的快照保持稳定（评估期间发生 metric 变更不影响本次评估结果）。具体并发策略（不可变快照 / ConcurrentHashMap / copy-on-write 等）由实现层选择，详见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南。
 - **缓存与实时性权衡**：`cachePolicyDefault` 对实时性敏感场景（风控阈值、额度校验）配 `ttl=0` 强制每次取数；可放宽场景（营销画像、近 30 天聚合）按业务可接受延迟配 `ttl>0`，由 Scene `cache_policy_override` 局部收紧；引擎不替业务选默认策略，由 metric 注册者声明。
 - **预拉值评估期内冻结**（D20 §1 派生）：D20 metric 批量预拉后注入 `EvalContext` 即视为本次评估的不可变快照；评估期内**不**再受 `cachePolicyDefault.ttl` 影响，即使评估耗时跨过 TTL 边界，本次评估仍读初始预拉值。TTL 只作用于"下次评估是否复用上次缓存值"层面，与"本次评估内的取数稳定性"无关。
 - **超时与异常归一**（D15 派生）：`MetricSource` 实现自管 timeout / retry / 熔断（不同 `sourceType` 合理默认不同：EXTERNAL_HTTP 短超时、SQL_AGGREGATE 中超时，建议值见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南）；任何取数异常（timeout / 熔断 / 连接拒绝 / 反序列化失败）统一归 D15 `METRIC_FETCH_FAIL`，引擎核心不重试。
-- **业务共享常量建议建为只读 metric**：跨多条规则共享的业务阈值 / 配置值（如 VIP 门槛、风控分数线）**建议建为只读 metric**（`sourceType=ATTRIBUTE` 或固定返回值的 `EXTERNAL_HTTP`），复用 metric 的白名单 / `cachePolicy` / 版本化通道，不另设"常量库"一等概念。引擎不内置 urule 风格的 ConstantLibrary——若业务常量变更频次很低也可直接内联到 `ConditionNode.params`，二选一由业务方按变更频次自决。独立常量库一等概念的演进留 [`08-evolution.md`](./08-evolution.md) §四。
+- **业务共享常量建议建为只读 metric**：跨多条规则共享的业务阈值 / 配置值（如 VIP 门槛、风控分数线）**建议建为只读 metric**（`sourceType=ATTRIBUTE` 或固定返回值的 `EXTERNAL_HTTP`），复用 metric 的 `cachePolicy` / 版本化通道，不另设"常量库"一等概念。引擎不内置 urule 风格的 ConstantLibrary——若业务常量变更频次很低也可直接内联到 `ConditionNode.params`，二选一由业务方按变更频次自决。独立常量库一等概念的演进留 [`08-evolution.md`](./08-evolution.md) §四。
 
 ### 3.10 Job（定时触发，不是一等公民）
 
@@ -600,9 +591,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 | errorCode | 含义 |
 |-----------|------|
-| `UNRESOLVED_VARIABLE` | D20 §3 输入引用闭合校验失败：conditionAst 引用了未在 Schema/Metric 白名单/EvalContext 标准字段中声明的变量名 |
-| `METRIC_NOT_BOUND` | 规则 AST 引用的 metricCode 不在 `scene_metric_binding` 白名单内 |
-| `ACTION_TYPE_NOT_BOUND` | Rule 绑定的 Decision.actions 中存在 actionType 不在 `scene_action_binding` 白名单内（PUSH/HYBRID Scene） |
+| `UNRESOLVED_VARIABLE` | D20 §3 输入引用闭合校验失败：conditionAst 引用了未在 Schema / tenant 级已注册 metric / EvalContext 标准字段中声明的变量名 |
 | `DECISION_CODE_NOT_FOUND` | Rule 的 `decisionBindings` 引用了 Scene 所属 Tenant 未定义的 Decision code |
 | `ZOMBIE_PUBLISHING` | D19 PUBLISHING 残留清扫修正：后台清扫检测到 PUBLISHING 状态超过阈值，强制修正为 PUBLISH_FAILED |
 | `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
@@ -789,7 +778,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 **关键边界**：
 
 - **Tenant 级，非 Scene 级**：同一 Tenant 的所有 Scene 共享 Decision 词汇表；不同 Tenant 的 Decision 严格隔离；
-- **Action 挂在 Decision 上**（D27）：Rule 不再持 `actions` 字段；PULL Scene 下 Decision.actions 必须为空（发布校验 + 前端屏蔽）；PUSH/HYBRID Scene 下 Decision.actions 的 `actionType` 须在 Rule 所属 Scene 的 `scene_action_binding` 内（Rule 发布时校验）；
+- **Action 挂在 Decision 上**（D27 实装，D54）：Rule 不再持 `actions` 字段；触发源唯一 = finalDecision.actions（tenant 级，与 scene 无关）；PULL Scene 下 Decision.actions 必须为空（发布校验 + 前端屏蔽）；actionType 合法性走运行期 NO_HANDLER skip，不再有 scene_action_binding 白名单；
 - **Decision.actions 快照在 Rule 发布时拍**：`rule_version.decision_bindings` JSON 随 Rule 发布产生，此后修改 Decision.actions **不会**影响已发布的 Rule 版本；若要让新 actions 生效，必须重新发布 Rule——运营容易忽视这一点；
 - **priority 只用于合成排序**：priority 数值本身不影响 Rule 是否命中（Pre-Gate 和 AST 求值结果不读 priority）；priority 只在 `HIGHEST_PRIORITY` 合成策略里生效；
 - **Decision 不内置分类标签**：v1 不区分"拒绝类/通过类"，由 `priority` 数值隐式体现；分类标签留 [`08-evolution.md`](./08-evolution.md) §演进；
@@ -866,7 +855,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 6. 对通过 Pre-Gate 的 RuleVersion 集合，做 metric 批量预拉 (D20 §1)
    - 取每条 RuleVersion.metric_dependencies 并集
      → {user.kycLevel, user.trade.count.7d}
-     (并集字段都在 Scene `marketing.first-trade` 的 metric 白名单内)
+     (引用的 metric 都是 tenant 级已注册的 ACTIVE metric)
    - 一次性 mget / batch API 拉取 → 注入 EvalContext
    - 评估期 MetricSource 只从 EvalContext 读，禁止再发起 metric 网络调用
         │
@@ -960,7 +949,7 @@ AndNode (displayLabel: "金额门槛")
 三个原因：
 
 1. **复用**：同一 metric 被 10 条规则用，只配一次 / 取数一次；
-2. **治理**：指标是平台资产，新增要审批，防止口径分裂；Scene 级白名单进一步防越界；
+2. **治理**：指标是平台资产，新增要审批，防止口径分裂（D54 后 metric tenant 级可用，无 scene 级白名单）；
 3. **缓存与预热**：metric 取数可以加 evalSession 级缓存（同次评估内多 Condition 引用，只查一次）；Scene 启动时预热 MetricSource，热路径上无懒加载。
 
 把 SQL 写进 Condition 等同于把数据访问层和判定层耦合，规则数稍多就会失控。
@@ -978,7 +967,7 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 
 ### Q6: Tenant vs Scene —— 不能合并吗？
 
-不能。Tenant 是**数据隔离**（不同租户绝不互相看见），Scene 是**业务域**（同租户内的命名空间 + Matcher 路由键 + metric/action 白名单 + 数据源初始化锚点 + 使用模式声明）。
+不能。Tenant 是**数据隔离**（不同租户绝不互相看见），Scene 是**业务域**（同租户内的命名空间 + Matcher 路由键 + 数据源初始化锚点 + 使用模式声明；D54 后不再承担 metric/action 白名单）。
 
 - 一个 Tenant 下有多个 Scene（如 acme 公司既配营销规则又配风控规则）；
 - 一个 Scene **不会**跨 Tenant（acme 的 `marketing.signup` 和 beta 的 `marketing.signup` 是两条 Scene）。
@@ -989,19 +978,19 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 
 但**幂等键含 eventId**——同一条事件（同一个 eventId）只评估一次，不会因为命中两个 Scene 而处理两次。
 
-### Q8: Scene 的 metric / action 白名单具体如何生效？
+### Q8: metric / action 的引用与校验如何生效（D54 收敛后）？
 
-**Metric 白名单**（所有模式 Scene 都生效）三处生效点：
+**Metric**（tenant 级，对所有 scene 可用，无白名单）：
 
-1. **规则发布时校验**：规则 AST 引用的所有 `metricCode` 必须在本 Scene 的 `scene_metric_binding` 内，否则发布拒绝；
-2. **Scene 启动时预热**：应用启动加载 Scene 配置，按白名单批量初始化对应 MetricSource（连接池、HTTP client、缓存）；
-3. **运行时取数白名单兜底**：MetricRegistry 即使被误调（运行时拿到不在白名单的 metricCode），也直接拒绝并报警，防止配置漂移导致越界。
+1. **规则发布时校验**：规则 AST 引用的所有 `metricCode` 必须是本 tenant 已注册的 ACTIVE metric，否则发布拒绝（`UNRESOLVED_VARIABLE`）；
+2. **应用启动时预热**：启动加载 tenant 的 ACTIVE metric，批量初始化对应 MetricSource（连接池、HTTP client、缓存）；
+3. **取数稳定性**：metric 预拉值在评估期内冻结（D20 §1），取数异常归 `METRIC_FETCH_FAIL`（D15）。
 
-**Action 白名单**（PUSH / HYBRID Scene 生效）三处生效点：
+**Action**（归 Decision，tenant 级，与 scene 无关，D27/D54）：
 
-1. **规则发布时校验**：规则绑定的 Decision.actions 中所有 `actionType` 必须在本 Scene 的 `scene_action_binding` 内，否则发布拒绝；PULL Scene 要求 Decision.actions 为空；
-2. **Scene 启动时预热**：按白名单批量预热 ActionHandler 的外部资源（HTTP client / MQ producer / RPC 连接池 / 限流器）；PULL Scene 跳过 ActionHandler 预热；
-3. **前端 UI 下拉过滤**：配规则页面的 actionType 下拉项按当前 Scene 的 action binding 过滤，运营选不到越界 actionType；PULL Scene 直接隐藏 Action 编辑区块。
+1. **规则发布时校验**：规则绑定的 decisionCode 必须在 `decision_definition` 存在（`DECISION_CODE_NOT_FOUND`）；PULL Scene 要求 Decision.actions 为空；
+2. **actionType 合法性 = 运行期 NO_HANDLER skip**（D54）：actionType 是开放 SPI，发布期不校验白名单（无 scene_action_binding）；运行期找不到注册 handler → `ActionResult.skipped(NO_HANDLER)`；
+3. **前端 UI 下拉**：配 Decision 页面的 actionType 下拉按全局已注册 handler 列表；PULL Scene 直接隐藏 Action 编辑区块。
 
 ### Q9: EvalContext 里能放任意业务数据吗？
 
@@ -1009,7 +998,7 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 
 - **事件维度的扩展**：通过 `RuleEvent.payload` 进入，但字段必须 ∈ `Scene.payloadSchema`；
 - **主体维度的扩展**：通过 subject 属性进入，主体来源由 `Scene.subjectType` 决定（USER → user_profile / ACCOUNT → account 等）；
-- **指标维度的扩展**：注册新 Metric + 加入 Scene `scene_metric_binding` 白名单。
+- **指标维度的扩展**：注册新 Metric（ACTIVE 即 tenant 级可用，D54，无需 scene 白名单）。
 
 为什么这么收口：
 
@@ -1069,7 +1058,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 
 | 想找 | 看 |
 |------|----|
-| 字段 / DDL 细节（含 `scene`（旧称 `scene_definition`）/ `scene_metric_binding` / `rule_definition` / `rule_version`） | [05-storage](./05-storage.md) |
+| 字段 / DDL 细节（含 `scene`（旧称 `scene_definition`）/ `decision_definition` / `rule_definition` / `rule_version`） | [05-storage](./05-storage.md) |
 | Rule 版本快照（不可变快照、回滚语义、运行时锁定） | §3.12 RuleVersion |
 | AST 节点类型 / 操作符 / `displayLabel` 渲染 | [03-rule-expression](./03-rule-expression.md) |
 | 加新的 ConditionEvaluator / ActionHandler / MetricSource | [04-extension](./04-extension.md) |

@@ -36,8 +36,6 @@
 | `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
 | `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级 / actions（D26/D27） | 同步事务 | 永久 |
 | `rule_decision_binding` | 规则与 Decision 的绑定关系（支持可选 score 区间，D26 SCORECARD 占位） | 同步事务 | 永久 |
-| `scene_metric_binding` | Scene 可用 Metric 白名单（D30），Rule 发布时校验 | 同步事务 | 永久 |
-| `scene_action_binding` | Scene 可用 ActionType 白名单（D27），仅 PUSH/HYBRID Scene | 同步事务 | 永久 |
 | `job_definition` | 定时触发规则配置（§3.10），调度器到点合成 RuleEvent | 同步事务 | 永久 |
 | `job_execution` | Job 每次运行记录（§3.10） | 异步 | 永久 |
 | `audit_log` | 配置变更审计——人的行为（D14，同步事务红线） | 同步事务 | 永久 |
@@ -207,37 +205,8 @@ CREATE TABLE rule_decision_binding (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则与 Decision 绑定关系（D26）；score 区间 v1 为 null 占位，SCORECARD kind 时启用';
 ```
 
-**scene_metric_binding**（Scene 与 Metric 白名单关联）
-
-```sql
-CREATE TABLE scene_metric_binding (
-  id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
-  scene_id              BIGINT       NOT NULL COMMENT '关联 scene.id',
-  metric_definition_id  BIGINT       NOT NULL COMMENT '关联 metric_definition.id',
-  cache_policy_override JSON         COMMENT 'Scene 级缓存策略覆盖（ttl_seconds），null=使用 metric_definition 默认值',
-  created_by            VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at            TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  updated_by            VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at            TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_scene_metric (scene_id, metric_definition_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Scene 可用 Metric 白名单；Rule 发布时校验 AST 引用的 metricCode 必须在此列表内（白名单来自早期 Scene 治理边界设计，D30 是 providedMetrics/allowProvided 特性）';
-```
-
-**scene_action_binding**（Scene 与 ActionType 白名单关联，仅 PUSH/HYBRID Scene）
-
-```sql
-CREATE TABLE scene_action_binding (
-  id                BIGINT AUTO_INCREMENT PRIMARY KEY,
-  scene_id          BIGINT       NOT NULL COMMENT '关联 scene.id',
-  action_type       VARCHAR(64)  NOT NULL COMMENT 'ActionHandler 注册的 actionType，如 ticket.create',
-  default_params    JSON         COMMENT 'Scene 级默认参数，与 Decision.actions[n].params 合并（Decision 级优先）',
-  created_by        VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at        TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  updated_by        VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at        TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_scene_action (scene_id, action_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Scene 可用 ActionType 白名单（D27）；仅 PUSH/HYBRID Scene 使用；PULL Scene 发布时校验 actions 为空';
-```
+> **scene_metric_binding 已移除（D54，V1_22）**：metric 在 tenant 级对所有 scene 可用，不再有 scene 级 metric 白名单。
+> **scene_action_binding 已移除（D54，V1_23）**：action 触发源唯一 = decision（tenant 级，与 scene 无关，D27 实装），不再有 scene 级 actionType 白名单 + `default_params`；D50 写 API 作废。actionType 合法性降级为运行期 NO_HANDLER skip（D53 best-effort）。
 
 **job_definition**（定时触发规则，非一等公民）
 
@@ -453,8 +422,6 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)`<br>`idx_operated_at (operated_at)` | 查某个规则/Scene 的所有变更记录<br>按时间范围查审计日志 |
 | `decision_definition` | UK `uk_tenant_code (tenant_id, code)` | Tenant 内 Decision 码唯一性约束 + 发布时查 Decision |
 | `rule_decision_binding` | UK `uk_rule_decision (rule_definition_id, decision_id)` | 规则与 Decision 绑定唯一性 |
-| `scene_metric_binding` | UK `uk_scene_metric (scene_id, metric_definition_id)` | Rule 发布时验证 metricCode 在白名单内 |
-| `scene_action_binding` | UK `uk_scene_action (scene_id, action_type)` | Rule 发布时验证 actionType 在白名单内 |
 | `job_definition` | UK `uk_tenant_scene_code (tenant_id, scene_code, code)` | 租户 + 场景内 Job 唯一性约束 |
 | `job_execution` | `idx_job_trigger (job_definition_id, trigger_at)` | 按 Job 查运行历史 |
 

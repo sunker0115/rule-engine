@@ -130,7 +130,7 @@
   - 线上 Incident 排查需要在测试环境精确复现生产规则版本。
 - **演进方向**：
   - **导出格式**：JSON Bundle = `{ruleVersion, metricDefinitions[], actionTypeManifest[], sceneSnapshot}` 自包含包，目标环境无需额外查询即可完整重建；
-  - **导入校验**：Scene 白名单兼容性（目标环境 Scene 是否有相同 `metricCode` / `actionType` 白名单）+ metric 参数安全性（SQL 类型需人工审核标记）+ 版本号重映射（源环境主键 id 不照搬，按 `rule.code` 做 upsert）；
+  - **导入校验**：decisionCode 存在性（目标环境 Tenant 是否已定义引用的 Decision，D54）+ metric 参数安全性（SQL 类型需人工审核标记）+ 版本号重映射（源环境主键 id 不照搬，按 `rule.code` 做 upsert）；
   - **幂等**：重复导入 = 新建草稿版本，不覆盖已发布版本；
   - **权限**：导出需 EXPORT 权限；导入需目标 Scene 的 PUBLISH 权限；
   - **不做**：跨租户实时同步（由 §2.10 规则模板市场解决）。

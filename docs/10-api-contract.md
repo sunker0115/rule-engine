@@ -237,7 +237,7 @@ POST /admin/v1/rules
 POST /admin/v1/rules/{ruleDefinitionId}/publish
 ```
 
-**响应**：发布成功 200，返回新激活的 `RuleVersionSnapshot`；发布校验失败 422 + errorCode（`UNRESOLVED_VARIABLE` / `METRIC_NOT_BOUND` 等，见 §七）。
+**响应**：发布成功 200，返回新激活的 `RuleVersionSnapshot`；发布校验失败 422 + errorCode（`UNRESOLVED_VARIABLE` / `DECISION_CODE_NOT_FOUND` 等，见 §七）。
 
 ### 4.3 禁用规则
 
@@ -597,9 +597,7 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 | errorCode | 含义 |
 |-----------|------|
 | `UNRESOLVED_VARIABLE` | conditionAst / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内） |
-| `METRIC_NOT_BOUND` | metric 不在 Scene.scene_metric_binding 白名单内 |
-| `ACTION_TYPE_NOT_BOUND` | actionType 不在 Scene.scene_action_binding 白名单内 |
-| `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了该 Rule 所属 Tenant 未定义的 Decision（Decision 是 Tenant 级实体，D26） |
+| `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了该 Rule 所属 Tenant 未定义的 Decision（Decision 是 Tenant 级实体，D26/D54） |
 | `ZOMBIE_PUBLISHING` | 后台清扫检测到 PUBLISHING 状态残留超时，强制修正为 PUBLISH_FAILED（D19） |
 | `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
 

@@ -169,7 +169,7 @@
 | `EvalResult` | 评估输出契约多态：`{satisfied, score?, category?, decision?, finalDecision?, hitDecisions, trace, errorCode?, errorMessage?, failedNodeIds?, partial?}`；D12 多态 + D15 失败槽位 + D26 Decision 合成输出 | ✅ |
 | `Decision` | Tenant 级决策定义（D26 + D27）：`{tenant_id, code, name, priority, description, actions}`；Tenant 内 `code` 唯一；`priority` 数值越小优先级越高（如 REJECT=1, REVIEW=2, PASS=100）；`actions` 为 Action 列表（D27 迁移自 Rule），仅 `finalDecision.actions` 被派发；PULL Scene 下 Decision.actions 必须为空 | — |
 | `RuleDecisionBinding` | Rule 与 Decision 的关联（D26，版本快照化）：`{rule_id, decision_code, score_range_min?, score_range_max?}`；v1 `AST_BOOLEAN` kind 直接 1:1 绑定；score 区间在 D12 SCORECARD kind 时启用；发布时冻结进 `rule_version.decision_bindings`（DDL 落地列名，无 `_snapshot` 后缀） | — |
-| `Scene` | Tenant 内的业务域命名空间 + metric / action 治理白名单 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID）+ 元数据 schema（`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`）+ 决策合成策略（`decisionStrategy`，D26） | — |
+| `Scene` | Tenant 内的业务域命名空间 + Matcher 路由键 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID）+ 元数据 schema（`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`）+ 决策合成策略（`decisionStrategy`，D26）。metric/action 治理白名单已移除（D54：metric tenant 级可用，action 归 decision） | — |
 | `SceneMetricBinding` | Scene 与 Metric 的可见性绑定，规则只能引用本 Scene 绑定的 metric | — |
 | `SceneActionBinding` | Scene 与 actionType 的可见性绑定（仅 PUSH / HYBRID Scene 需要），规则只能配置本 Scene 绑定的 actionType；含 Scene 级默认参数与速率覆盖 | — |
 | `MetricSource` | 按 `metricCode` 取指标，支持实时 / 预计算 / 外部指标平台（Java SPI 接口名 `MetricSourceHandler`，见 [`04-extension.md`](./04-extension.md) §四） | — |
@@ -190,7 +190,7 @@
 | `Scheduler` | 调度器抽象接口：`register` / `unregister` / `triggerOnce` / `status`；`XxlJobScheduler` 为首个实现，未来可替换 Quartz / 云调度 | — |
 | `AuditLog` | 操作审计记录（D14）：`{tenant_id, actor, target_type, target_id, action, before_snapshot, after_snapshot, operated_at, trace_id}`；与 `evaluation_session` / `node_trace` / `action_execution` 是不同维度（人的行为 vs 系统行为），严格分离 | ✅ |
 | `RuleVersionWatcher` | 规则变更感知接口（D17 + D20 §4 固化为正式 SPI）：`subscribe(callback) / pull(since) / status`；契约要求实现方满足"最终一致 + 至多一次 callback 重复（消费方幂等）+ 启动期一次性全量拉"。v1 唯一实现 `DbPollingRuleWatcher`（默认 15s）；多 backend（MQ / Nacos / ZK）切换详见 [`08-evolution.md`](./08-evolution.md) §2.14 | — |
-| `SceneWatcher` | Scene 配置变更感知接口（D24，与 `RuleVersionWatcher` 平级）：`subscribe(callback) / pull(since) / status`；监听 `scene`（DDL 落地表名，旧称 `scene_definition`）+ `scene_metric_binding` + `scene_action_binding` 变更，触发 MetricSource/ActionHandler 资源预热/卸载 + Matcher 路由表更新。v1 唯一实现 `DbPollingSceneWatcher`（默认 30s，Scene 变更频率低于规则）；SPI 契约与 `RuleVersionWatcher` 对齐 | — |
+| `SceneWatcher` | Scene 配置变更感知接口（D24，与 `RuleVersionWatcher` 平级）：`subscribe(callback) / pull(since) / status`；监听 `scene`（DDL 落地表名，旧称 `scene_definition`）变更，触发 MetricSource/ActionHandler 资源预热/卸载 + Matcher 路由表更新（D54 后无 scene_metric_binding / scene_action_binding）。v1 唯一实现 `DbPollingSceneWatcher`（默认 30s，Scene 变更频率低于规则）；SPI 契约与 `RuleVersionWatcher` 对齐 | — |
 | `SubjectLoader` | 主体加载 SPI（D25）：`load(subjectId, subjectType, event) → Subject`；v1 唯一实现 `UserProfileLoader`（`subjectType=USER`，查 `user_profile` 表）；与 metric 并行加载进 `EvalContext` | — |
 | `SubjectLoaderRegistry` | `SubjectLoader` 注册中心（D25）：按 `subjectType` 路由到对应实现；与 `MetricRegistry` 同款模式 | — |
 | `RuleVersionExecutor` | 规则版本执行 SPI（D20 §5）：`execute(RuleVersion, EvalContext) → EvalResult`。v1 默认实现 `InterpretedExecutor`（Visitor 树遍历）；v1.5 引入 `CompiledExecutor`（Janino / LambdaMetafactory 编译产物），由 `ExecutorRegistry` 按 RuleVersion 灰度切换。`rule_version.compiled_predicate_ref` 列预留供编译产物引用 | — |
