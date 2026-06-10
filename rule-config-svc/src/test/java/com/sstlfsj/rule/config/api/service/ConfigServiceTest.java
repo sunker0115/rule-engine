@@ -53,6 +53,14 @@ class ConfigServiceTest {
                 List<PreGateConfig> preGates, List<String> triggerEventTypes, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
+
+        @Override
+        public DraftCreatedResult newVersion(String tenantId, Long ruleId, String name, String kind,
+                AstNode conditionAst, List<DecisionBinding> decisionBindings,
+                List<PreGateConfig> preGates, List<String> triggerEventTypes,
+                Long fromVersionId, String actorId) {
+            throw new UnsupportedOperationException("stub");
+        }
     };
 
     @Test
@@ -91,5 +99,12 @@ class ConfigServiceTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.editDraft("t1", 1L, "名", "AST_BOOLEAN",
                         null, null, null, null, "actor"));
+    }
+
+    @Test
+    void newVersion_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.newVersion("t1", 1L, "名", "AST_BOOLEAN",
+                        null, null, null, null, null, "actor"));
     }
 }

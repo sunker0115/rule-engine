@@ -127,6 +127,15 @@ class ConfigServiceImpl implements ConfigService {
                 conditionAst, decisionBindings, preGates, triggerEventTypes, actorId);
     }
 
+    @Override
+    public DraftCreatedResult newVersion(String tenantId, Long ruleId, String name, String kind,
+            AstNode conditionAst, List<DecisionBinding> decisionBindings,
+            List<PreGateConfig> preGates, List<String> triggerEventTypes,
+            Long fromVersionId, String actorId) {
+        return publishService.newVersion(Long.valueOf(tenantId), ruleId, name, parseKind(kind),
+                conditionAst, decisionBindings, preGates, triggerEventTypes, fromVersionId, actorId);
+    }
+
     /** 解析 kind 字符串为 RuleKind，null/空返回 null（由下游兜底 AST_BOOLEAN），非法抛 IllegalArgumentException。 */
     private static RuleKind parseKind(String kind) {
         if (kind == null || kind.isBlank()) {

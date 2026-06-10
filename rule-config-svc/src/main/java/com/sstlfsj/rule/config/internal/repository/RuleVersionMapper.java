@@ -24,6 +24,13 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
     @Select("SELECT COALESCE(MAX(version), 0) FROM rule_version WHERE rule_definition_id = #{ruleDefinitionId}")
     Long maxVersion(Long ruleDefinitionId);
 
+    /** 按 id + 规则定义 id 查版本（归属隔离），不存在返回 null。 */
+    default RuleVersion findByIdAndRule(Long versionId, Long ruleDefinitionId) {
+        return selectOne(new LambdaQueryWrapper<RuleVersion>()
+                .eq(RuleVersion::getId, versionId)
+                .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId));
+    }
+
     /** 查规则当前 ACTIVE 版本（最高版本号的 ACTIVE 行），不存在返回 null。 */
     default RuleVersion findActiveVersion(Long ruleDefinitionId) {
         return selectOne(new LambdaQueryWrapper<RuleVersion>()

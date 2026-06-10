@@ -12,6 +12,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.web.admin.dto.CreateRuleRequest;
 import com.sstlfsj.rule.web.admin.dto.EditDraftRequest;
+import com.sstlfsj.rule.web.admin.dto.NewVersionRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -72,6 +73,32 @@ public class RuleController {
                 req.tenantId(), ruleId, req.name(), req.kind(),
                 req.conditionAst(), bindings,
                 req.preGates(), req.triggerEventTypes(), actorId));
+    }
+
+    /**
+     * POST /admin/v1/rules/{ruleId}/versions — 出新版本草稿（body 可带 fromVersionId = 回退克隆）。
+     *
+     * @param ruleId  规则 ID
+     * @param req     出新版本请求体
+     * @param actorId 操作人
+     * @return 新建草稿的 ID 信息（version = v_max+1）
+     */
+    @PostMapping("/{ruleId}/versions")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<DraftCreatedResult> newVersion(
+            @PathVariable Long ruleId,
+            @Valid @RequestBody NewVersionRequest req,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        // DecisionBindingInput(仅 decisionCode) → DecisionBinding：priority 草稿期占位 0，发布时回填
+        List<DecisionBinding> bindings = req.decisionBindings() == null ? null
+                : req.decisionBindings().stream()
+                        .map(i -> new DecisionBinding(i.decisionCode(), 0))
+                        .toList();
+        return ApiResponse.ok(configService.newVersion(
+                req.tenantId(), ruleId, req.name(), req.kind(),
+                req.conditionAst(), bindings,
+                req.preGates(), req.triggerEventTypes(),
+                req.fromVersionId(), actorId));
     }
 
     /**

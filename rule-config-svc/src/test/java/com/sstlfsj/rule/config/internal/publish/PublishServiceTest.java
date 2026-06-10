@@ -385,4 +385,66 @@ class PublishServiceTest {
                 .hasMessageContaining("ACTIVE");
     }
 
+    @Test
+    void newVersion_requiresNoPendingDraft_createsNextVersion() {
+        draftRule.setStatus(RuleDefinitionStatus.PUBLISHED);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(null);   // 无待发布草稿
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(1L);
+        doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(30L); return 1; })
+                .when(ruleVersionMapper).insert(any(RuleVersion.class));
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("amount"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+
+        DraftCreatedResult r = publishService.newVersion(1L, 10L, null, RuleKind.AST_BOOLEAN,
+                new ConditionNode("GT", "amount", null, Map.of("threshold", 9), 0.0),
+                List.of(), List.of(), List.of(), null, "actor");
+
+        assertThat(r.version()).isEqualTo(2L);
+        assertThat(r.status()).isEqualTo("DRAFT");
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(cap.capture());
+        assertThat(cap.getValue().getStatus()).isEqualTo(RuleVersionStatus.DRAFT);
+        assertThat(cap.getValue().getVersion()).isEqualTo(2L);
+    }
+
+    @Test
+    void newVersion_pendingDraftExists_throws() {
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);   // 已有 DRAFT
+        assertThatThrownBy(() -> publishService.newVersion(1L, 10L, null, RuleKind.AST_BOOLEAN,
+                new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), null, "actor"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("待发布");
+    }
+
+    @Test
+    void rollback_clonesFromOldVersion_reresolvesAgainstCurrentWorld() {
+        draftRule.setStatus(RuleDefinitionStatus.PUBLISHED);
+        RuleVersion oldV = new RuleVersion();
+        oldV.setId(50L); oldV.setRuleDefinitionId(10L); oldV.setVersion(1L);
+        oldV.setConditionAst(new ConditionNode("GT", "amount", "LONG", Map.of("threshold", 1), 0.0));
+        oldV.setDecisionBindings(List.of()); oldV.setPreGates(List.of()); oldV.setTriggerEventTypes(List.of());
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(null);
+        when(ruleVersionMapper.findByIdAndRule(50L, 10L)).thenReturn(oldV);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(2L);
+        doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(40L); return 1; })
+                .when(ruleVersionMapper).insert(any(RuleVersion.class));
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("amount"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+
+        DraftCreatedResult r = publishService.newVersion(1L, 10L, null, RuleKind.AST_BOOLEAN,
+                null, null, null, null, 50L, "actor");
+
+        assertThat(r.version()).isEqualTo(3L);   // v_max+1,克隆 v1 内容
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(cap.capture());
+        assertThat(((ConditionNode) cap.getValue().getConditionAst()).metricCode()).isEqualTo("amount");
+    }
+
 }

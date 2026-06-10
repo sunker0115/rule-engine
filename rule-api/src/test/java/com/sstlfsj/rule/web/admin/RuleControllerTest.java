@@ -128,6 +128,45 @@ class RuleControllerTest {
     }
 
     @Test
+    void newVersion_returns201_andCallsService() throws Exception {
+        DraftCreatedResult result = new DraftCreatedResult(10L, 30L, 3L, "DRAFT");
+        when(configService.newVersion(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(result);
+
+        mockMvc.perform(post("/admin/v1/rules/10/versions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {
+                              "tenantId": "t1",
+                              "name": "v3",
+                              "kind": "AST_BOOLEAN",
+                              "fromVersionId": 50
+                            }
+                            """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.ruleDefinitionId").value(10))
+                .andExpect(jsonPath("$.data.version").value(3))
+                .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        // 透传 tenantId / ruleId / name / kind / fromVersionId / actorId
+        verify(configService).newVersion(eq("t1"), eq(10L), eq("v3"), eq("AST_BOOLEAN"),
+                any(), any(), any(), any(), eq(50L), eq("user1"));
+    }
+
+    @Test
+    void newVersion_returns400_whenTenantIdMissing() throws Exception {
+        mockMvc.perform(post("/admin/v1/rules/10/versions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {"name":"v3","kind":"AST_BOOLEAN"}
+                            """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void disable_returns200_andCallsService() throws Exception {
         doNothing().when(configService).disable(any(), any(), any());
 

@@ -184,6 +184,84 @@ public class PublishService {
     }
 
     /**
+     * 给已发布规则出新版本草稿（v_max+1, DRAFT）。要求当前无未发布 DRAFT（一条规则同时一条 DRAFT）。
+     * <p>
+     * fromVersionId 非空时为"回退"：草稿内容克隆自该版本（ast/bindings/preGates/triggers + kind，
+     * 忽略入参的 body 内容字段），按当前世界重跑 resolveAndValidate（metric 须仍 ACTIVE 等）；
+     * 产出的是 DRAFT，激活仍走显式 publish。
+     * </p>
+     *
+     * @param tenantId          租户 id
+     * @param ruleDefinitionId  规则定义 id
+     * @param name              新规则名称，null/空白时不改
+     * @param kind              规则类型，null 时兜底规则现有 kind 或 AST_BOOLEAN
+     * @param conditionAst      新条件 AST（fromVersionId 非空时忽略，改用克隆值）
+     * @param decisionBindings  新决策绑定（fromVersionId 非空时忽略），null 视为空
+     * @param preGates          新前置门控（fromVersionId 非空时忽略），null 视为空
+     * @param triggerEventTypes 新触发事件类型（fromVersionId 非空时忽略），null 视为空
+     * @param fromVersionId     回退源版本 id，非空时克隆其内容；null 时按入参建新草稿
+     * @param actorId           操作人
+     * @return 新建草稿的 id 与版本信息（version = v_max+1）
+     */
+    @Transactional
+    public DraftCreatedResult newVersion(Long tenantId, Long ruleDefinitionId, String name, RuleKind kind,
+            AstNode conditionAst, List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
+            List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes,
+            Long fromVersionId, String actorId) {
+        RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
+        if (rule == null || !tenantId.equals(rule.getTenantId())) {
+            throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
+        }
+        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        if (scene == null) {
+            throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
+        }
+        // 一条规则同时只允许一条待发布 DRAFT：有未发布草稿则拒绝出新版本
+        if (ruleVersionMapper.findLatestDraft(ruleDefinitionId) != null) {
+            throw new IllegalArgumentException("规则已有待发布草稿，请先发布或删除后再出新版本");
+        }
+
+        RuleKind effectiveKind = kind != null ? kind
+                : (rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN);
+        AstNode srcAst = conditionAst;
+        List<RuleVersionSnapshot.DecisionBinding> srcBindings = decisionBindings;
+        List<RuleVersionSnapshot.PreGateConfig> srcGates = preGates;
+        List<String> srcTriggers = triggerEventTypes;
+        if (fromVersionId != null) {
+            // 回退：克隆旧版本内容（忽略入参 body 内容字段），按当前世界重解析
+            RuleVersion from = ruleVersionMapper.findByIdAndRule(fromVersionId, ruleDefinitionId);
+            if (from == null) {
+                throw new IllegalArgumentException("回退源版本不存在: versionId=" + fromVersionId);
+            }
+            srcAst = from.getConditionAst();
+            srcBindings = from.getDecisionBindings();
+            srcGates = from.getPreGates();
+            srcTriggers = from.getTriggerEventTypes();
+            effectiveKind = from.getKind() != null ? from.getKind() : effectiveKind;
+        }
+
+        ResolvedDraft resolved = resolveAndValidate(
+                tenantId, scene, effectiveKind, srcAst, srcBindings, srcGates, srcTriggers);
+        long version = ruleVersionMapper.maxVersion(ruleDefinitionId) + 1;
+        RuleVersion rv = buildDraftVersion(ruleDefinitionId, version, resolved);
+        ruleVersionMapper.insert(rv);
+
+        if (name != null && !name.isBlank()) {
+            rule.setName(name);
+        }
+        rule.setKind(effectiveKind);
+        rule.setUpdatedBy(actorId);
+        rule.setUpdatedAt(LocalDateTime.now());
+        ruleDefinitionMapper.updateById(rule);
+
+        DraftCreatedSnapshot snap = new DraftCreatedSnapshot(rule.getId(), rv.getId());
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", "CREATE", "rule_definition", rule.getId().toString(),
+                snap, snap, LocalDateTime.now()));
+        return new DraftCreatedResult(rule.getId(), rv.getId(), version, RuleDefinitionStatus.DRAFT.name());
+    }
+
+    /**
      * 草稿解析+校验产出：已冻结的 rule_version 内容字段（resolvedAst 含 dataType、
      * metricDeps/payloadDeps 已冻、decisionBindings 含 name/actions、triggerEventTypes/preGates 规整）。
      */

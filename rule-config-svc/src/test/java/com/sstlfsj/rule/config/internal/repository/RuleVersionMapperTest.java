@@ -44,6 +44,13 @@ class RuleVersionMapperTest {
     }
 
     @Test
+    void findByIdAndRule_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod("findByIdAndRule", Long.class, Long.class);
+        assertTrue(m.isDefault(), "findByIdAndRule 应为 default 方法");
+        assertEquals(RuleVersion.class, m.getReturnType());
+    }
+
+    @Test
     void findActiveWithPayloadByRuleDefIds_defaultMethodExists_withCorrectSignature()
             throws NoSuchMethodException {
         Method m = RuleVersionMapper.class.getDeclaredMethod(
