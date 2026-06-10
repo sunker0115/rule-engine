@@ -12,6 +12,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -172,6 +173,35 @@ class PublishServiceTest {
         assertThat(cap.getValue().getVersion()).isEqualTo(1L);
         assertThat(((ConditionNode) cap.getValue().getConditionAst()).dataType()).isEqualTo("LONG");
         verify(ruleVersionMapper, never()).insert((RuleVersion) any());
+    }
+
+    @Test
+    void editDraft_kindOmitted_preservesExistingDraftKind() {
+        // kind 省略(null)时应保留草稿现有 kind(SCORECARD)，而非静默重置为 AST_BOOLEAN
+        draftRule.setKind(RuleKind.SCORECARD);
+        draftVersion.setVersion(1L);
+        draftVersion.setKind(RuleKind.SCORECARD);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);
+        when(ruleVersionMapper.updateById((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("score"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+
+        // 合法 ScorecardRootNode（叶子 weight>0），kind 入参传 null
+        ConditionNode leaf = new ConditionNode("GT", "score", null, Map.of("threshold", 1), 5.0);
+        publishService.editDraft(1L, 10L, null, null,
+                new ScorecardRootNode(List.of(leaf), 60.0),
+                List.of(), List.of(), List.of(), "actor");
+
+        ArgumentCaptor<RuleVersion> rvCap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).updateById(rvCap.capture());
+        assertThat(rvCap.getValue().getKind()).isEqualTo(RuleKind.SCORECARD);
+        ArgumentCaptor<RuleDefinition> rdCap = ArgumentCaptor.forClass(RuleDefinition.class);
+        verify(ruleDefinitionMapper).updateById(rdCap.capture());
+        assertThat(rdCap.getValue().getKind()).isEqualTo(RuleKind.SCORECARD);
     }
 
     @Test

@@ -150,7 +150,9 @@ public class PublishService {
             throw new IllegalStateException("没有可编辑的草稿版本");
         }
 
-        RuleKind effectiveKind = kind != null ? kind : RuleKind.AST_BOOLEAN;
+        // kind 省略时回退到草稿现有 kind（原地编辑不应静默把已有 SCORECARD/TREE/TABLE 重置为 AST_BOOLEAN）
+        RuleKind effectiveKind = kind != null ? kind
+                : (draft.getKind() != null ? draft.getKind() : RuleKind.AST_BOOLEAN);
         ResolvedDraft resolved = resolveAndValidate(
                 tenantId, scene, effectiveKind, conditionAst, decisionBindings, preGates, triggerEventTypes);
 
@@ -172,6 +174,8 @@ public class PublishService {
         rule.setUpdatedAt(LocalDateTime.now());
         ruleDefinitionMapper.updateById(rule);
 
+        // 草稿编辑不做内容级 diff 审计：before/after 同一快照仅标识被改的草稿(ruleId+versionId)，
+        // 不还原编辑前内容(草稿是可反复改的中间态，内容历史不进审计；线上变更审计在 publish 处)
         DraftCreatedSnapshot snap = new DraftCreatedSnapshot(rule.getId(), draft.getId());
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, "USER", "UPDATE", "rule_definition", rule.getId().toString(),
