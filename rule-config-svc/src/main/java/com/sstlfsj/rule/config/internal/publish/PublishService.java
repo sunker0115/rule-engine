@@ -307,7 +307,11 @@ public class PublishService {
     private void validatePreGateParams(List<RuleVersionSnapshot.PreGateConfig> gates) {
         if (gates == null || gates.isEmpty()) return;
         for (RuleVersionSnapshot.PreGateConfig gate : gates) {
-            if (!"ROLLOUT".equals(gate.gateType())) continue;
+            // pre-gate 收敛:仅 ROLLOUT 是注册的合法 gate;RATE_LIMIT/MUTEX 等已砍,配了即拒绝发布
+            if (!"ROLLOUT".equals(gate.gateType())) {
+                throw new IllegalArgumentException(
+                        "不支持的 pre-gate gateType(仅 ROLLOUT 合法): " + gate.gateType());
+            }
             if (gate.params() == null) continue;
             RolloutParams params = RolloutParams.from(gate.params());
 

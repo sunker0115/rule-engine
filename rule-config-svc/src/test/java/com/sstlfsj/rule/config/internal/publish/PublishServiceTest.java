@@ -626,6 +626,19 @@ class PublishServiceTest {
     }
 
     @Test
+    void publish_unregisteredGateType_throws() {
+        // pre-gate 收敛:仅 ROLLOUT 合法,已砍的 RATE_LIMIT/MUTEX 等配置一律拒绝发布
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
+        draftVersion.setTriggerEventTypes(List.of());
+        draftVersion.setPreGates(List.of(new PreGateConfig("RATE_LIMIT", Map.of("limit", 10))));
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("gateType");
+    }
+
+    @Test
     void publish_rolloutValidRange_publishes() {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
