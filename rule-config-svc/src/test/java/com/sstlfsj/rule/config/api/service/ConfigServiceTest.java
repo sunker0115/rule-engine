@@ -46,6 +46,13 @@ class ConfigServiceTest {
         public RuleDetailVO getRuleDetail(String tenantId, Long ruleId) {
             throw new UnsupportedOperationException("stub");
         }
+
+        @Override
+        public DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
+                AstNode conditionAst, List<DecisionBinding> decisionBindings,
+                List<PreGateConfig> preGates, List<String> triggerEventTypes, String actorId) {
+            throw new UnsupportedOperationException("stub");
+        }
     };
 
     @Test
@@ -77,5 +84,12 @@ class ConfigServiceTest {
     void getRuleDetail_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.getRuleDetail("t1", 1L));
+    }
+
+    @Test
+    void editDraft_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.editDraft("t1", 1L, "名", "AST_BOOLEAN",
+                        null, null, null, null, "actor"));
     }
 }

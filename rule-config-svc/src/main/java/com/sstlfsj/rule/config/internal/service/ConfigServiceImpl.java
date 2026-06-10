@@ -15,6 +15,7 @@ import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
@@ -116,5 +117,25 @@ class ConfigServiceImpl implements ConfigService {
                 conditionAst, decisionBindings,
                 preGates, triggerEventTypes,
                 kind, actorId);
+    }
+
+    @Override
+    public DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
+            AstNode conditionAst, List<DecisionBinding> decisionBindings,
+            List<PreGateConfig> preGates, List<String> triggerEventTypes, String actorId) {
+        return publishService.editDraft(Long.valueOf(tenantId), ruleId, name, parseKind(kind),
+                conditionAst, decisionBindings, preGates, triggerEventTypes, actorId);
+    }
+
+    /** 解析 kind 字符串为 RuleKind，null/空返回 null（由下游兜底 AST_BOOLEAN），非法抛 IllegalArgumentException。 */
+    private static RuleKind parseKind(String kind) {
+        if (kind == null || kind.isBlank()) {
+            return null;
+        }
+        try {
+            return RuleKind.valueOf(kind);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("不支持的规则 kind: " + kind);
+        }
     }
 }

@@ -74,4 +74,22 @@ public interface ConfigService {
             AstNode conditionAst, List<DecisionBinding> decisionBindings,
             List<PreGateConfig> preGates, List<String> triggerEventTypes,
             String kind, String actorId);
+
+    /**
+     * 原地编辑规则最新 DRAFT 版本（不增版本）：重跑 resolveAndValidate 冻结新内容到同一草稿行。
+     *
+     * @param tenantId          租户 ID
+     * @param ruleId            规则定义 ID
+     * @param name              新规则名称，null/空白时不改
+     * @param kind              规则类型字符串（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
+     * @param conditionAst      新条件 AST，null 视为空 AND
+     * @param decisionBindings  新决策绑定列表（草稿期 priority 占位，发布时回填），null 视为空
+     * @param preGates          新前置门列表，null 视为空
+     * @param triggerEventTypes 新触发事件类型列表，null 视为空
+     * @param actorId           操作人 ID
+     * @return 被更新草稿的 ID 信息（version 不变）
+     */
+    DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
+            AstNode conditionAst, List<DecisionBinding> decisionBindings,
+            List<PreGateConfig> preGates, List<String> triggerEventTypes, String actorId);
 }

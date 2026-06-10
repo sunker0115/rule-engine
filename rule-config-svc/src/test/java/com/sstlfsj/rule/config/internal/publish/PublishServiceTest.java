@@ -150,6 +150,41 @@ class PublishServiceTest {
     }
 
     @Test
+    void editDraft_updatesLatestDraftInPlace_noVersionBump() {
+        draftRule.setKind(RuleKind.AST_BOOLEAN);
+        draftVersion.setVersion(1L);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);
+        when(ruleVersionMapper.updateById((RuleVersion) any())).thenReturn(1);
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("amount"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+
+        DraftCreatedResult r = publishService.editDraft(1L, 10L, "新名", RuleKind.AST_BOOLEAN,
+                new ConditionNode("GT", "amount", null, Map.of("threshold", 5), 0.0),
+                List.of(), List.of(), List.of(), "actor");
+
+        assertThat(r.version()).isEqualTo(1L);
+        assertThat(r.status()).isEqualTo("DRAFT");
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).updateById(cap.capture());
+        assertThat(cap.getValue().getVersion()).isEqualTo(1L);
+        assertThat(((ConditionNode) cap.getValue().getConditionAst()).dataType()).isEqualTo("LONG");
+        verify(ruleVersionMapper, never()).insert((RuleVersion) any());
+    }
+
+    @Test
+    void editDraft_noDraft_throws() {
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(null);
+        assertThatThrownBy(() -> publishService.editDraft(1L, 10L, "n", RuleKind.AST_BOOLEAN,
+                new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), "actor"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("草稿");
+    }
+
+    @Test
     void createDraft_insertsRuleDefinitionAndVersion() {
         SceneDef draftScene = new SceneDef();
         draftScene.setId(5L);

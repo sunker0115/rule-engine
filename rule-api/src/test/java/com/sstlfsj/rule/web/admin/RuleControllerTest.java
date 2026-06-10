@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /** RuleController 单元测试：publish / disable / createDraft / listRules。 */
@@ -82,6 +83,48 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.success").value(true));
 
         verify(configService).publish("t1", 1L, "user1");
+    }
+
+    @Test
+    void editDraft_returns200_andCallsService() throws Exception {
+        DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
+        when(configService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(result);
+
+        mockMvc.perform(put("/admin/v1/rules/10/draft")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {
+                              "tenantId": "t1",
+                              "name": "改名后",
+                              "kind": "AST_BOOLEAN",
+                              "conditionAst": {"type":"AndNode","children":[]},
+                              "decisionBindings": [],
+                              "preGates": [],
+                              "triggerEventTypes": []
+                            }
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.ruleDefinitionId").value(10))
+                .andExpect(jsonPath("$.data.version").value(1))
+                .andExpect(jsonPath("$.data.status").value("DRAFT"));
+
+        // version 不变（草稿原地编辑），透传 ruleId / tenantId / name / kind
+        verify(configService).editDraft(eq("t1"), eq(10L), eq("改名后"), eq("AST_BOOLEAN"),
+                any(), any(), any(), any(), eq("user1"));
+    }
+
+    @Test
+    void editDraft_returns400_whenTenantIdMissing() throws Exception {
+        mockMvc.perform(put("/admin/v1/rules/10/draft")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {"name":"改名后","kind":"AST_BOOLEAN"}
+                            """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

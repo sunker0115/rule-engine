@@ -203,4 +203,27 @@ class ConfigServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("规则不存在");
     }
+
+    @Test
+    void editDraft_validKind_delegatesWithParsedRuleKind() {
+        when(publishService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new DraftCreatedResult(10L, 20L, 1L, "DRAFT"));
+
+        configService.editDraft("1", 10L, "名", "AST_BOOLEAN",
+                null, null, null, null, "actor");
+
+        // kind 字符串 "AST_BOOLEAN" 解析为枚举后透传 publishService
+        verify(publishService).editDraft(eq(1L), eq(10L), eq("名"), eq(RuleKind.AST_BOOLEAN),
+                any(), any(), any(), any(), eq("actor"));
+    }
+
+    @Test
+    void editDraft_invalidKind_throwsBeforeDelegating() {
+        // 非法 kind 在 parseKind 阶段即拒，不触达 publishService
+        assertThatThrownBy(() -> configService.editDraft("1", 10L, "名", "BOGUS_KIND",
+                null, null, null, null, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("不支持的规则 kind");
+        verifyNoInteractions(publishService);
+    }
 }

@@ -11,6 +11,7 @@ import com.sstlfsj.rule.web.common.PageResponse;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.web.admin.dto.CreateRuleRequest;
+import com.sstlfsj.rule.web.admin.dto.EditDraftRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -47,6 +48,30 @@ public class RuleController {
                 req.conditionAst(), bindings,
                 req.preGates(), req.triggerEventTypes(),
                 req.kind(), actorId));
+    }
+
+    /**
+     * PUT /admin/v1/rules/{ruleId}/draft — 原地编辑规则草稿（不增版本）。
+     *
+     * @param ruleId  规则 ID
+     * @param req     编辑草稿请求体
+     * @param actorId 操作人
+     * @return 被更新草稿的 ID 信息（version 不变）
+     */
+    @PutMapping("/{ruleId}/draft")
+    public ApiResponse<DraftCreatedResult> editDraft(
+            @PathVariable Long ruleId,
+            @Valid @RequestBody EditDraftRequest req,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        // DecisionBindingInput(仅 decisionCode) → DecisionBinding：priority 草稿期占位 0，发布时回填
+        List<DecisionBinding> bindings = req.decisionBindings() == null ? null
+                : req.decisionBindings().stream()
+                        .map(i -> new DecisionBinding(i.decisionCode(), 0))
+                        .toList();
+        return ApiResponse.ok(configService.editDraft(
+                req.tenantId(), ruleId, req.name(), req.kind(),
+                req.conditionAst(), bindings,
+                req.preGates(), req.triggerEventTypes(), actorId));
     }
 
     /**

@@ -116,6 +116,70 @@ public class PublishService {
     }
 
     /**
+     * 原地更新该规则最新 DRAFT 版本内容（不增版本），按当前世界重跑 resolveAndValidate 冻结快照。
+     * <p>
+     * 仅最新 DRAFT 行可改：editDraft 不产生新版本号，落库的仍是同一行（version 不变）。
+     * 规则的 name/kind/updatedBy/updatedAt 一并更新；发 UPDATE 审计事件。
+     * </p>
+     *
+     * @param tenantId         租户 id
+     * @param ruleDefinitionId 规则定义 id
+     * @param name             新规则名称，null/空白时不改
+     * @param kind             规则类型，null 时兜底 AST_BOOLEAN
+     * @param conditionAst     新条件 AST，null 兜底为空 AndNode（由 resolveAndValidate 处理）
+     * @param decisionBindings 新决策绑定（仅 decisionCode + 占位 priority），null 视为空
+     * @param preGates         新前置门控，null 视为空
+     * @param triggerEventTypes 新触发事件类型，null 视为空
+     * @param actorId          操作人
+     * @return 被更新草稿的 id 与版本信息（version 不变）
+     */
+    @Transactional
+    public DraftCreatedResult editDraft(Long tenantId, Long ruleDefinitionId, String name, RuleKind kind,
+            AstNode conditionAst, List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
+            List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes, String actorId) {
+        RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
+        if (rule == null || !tenantId.equals(rule.getTenantId())) {
+            throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
+        }
+        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        if (scene == null) {
+            throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
+        }
+        RuleVersion draft = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
+        if (draft == null) {
+            throw new IllegalStateException("没有可编辑的草稿版本");
+        }
+
+        RuleKind effectiveKind = kind != null ? kind : RuleKind.AST_BOOLEAN;
+        ResolvedDraft resolved = resolveAndValidate(
+                tenantId, scene, effectiveKind, conditionAst, decisionBindings, preGates, triggerEventTypes);
+
+        // 原地更新 DRAFT 行内容（version 不变）
+        draft.setConditionAst(resolved.resolvedAst());
+        draft.setDecisionBindings(resolved.decisionBindings());
+        draft.setPreGates(resolved.preGates());
+        draft.setKind(effectiveKind);
+        draft.setTriggerEventTypes(resolved.triggerEventTypes());
+        draft.setMetricDependencies(resolved.metricDeps());
+        draft.setPayloadDependencies(resolved.payloadDeps());
+        ruleVersionMapper.updateById(draft);
+
+        if (name != null && !name.isBlank()) {
+            rule.setName(name);
+        }
+        rule.setKind(effectiveKind);
+        rule.setUpdatedBy(actorId);
+        rule.setUpdatedAt(LocalDateTime.now());
+        ruleDefinitionMapper.updateById(rule);
+
+        DraftCreatedSnapshot snap = new DraftCreatedSnapshot(rule.getId(), draft.getId());
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", "UPDATE", "rule_definition", rule.getId().toString(),
+                snap, snap, LocalDateTime.now()));
+        return new DraftCreatedResult(rule.getId(), draft.getId(), draft.getVersion(), RuleDefinitionStatus.DRAFT.name());
+    }
+
+    /**
      * 草稿解析+校验产出：已冻结的 rule_version 内容字段（resolvedAst 含 dataType、
      * metricDeps/payloadDeps 已冻、decisionBindings 含 name/actions、triggerEventTypes/preGates 规整）。
      */
