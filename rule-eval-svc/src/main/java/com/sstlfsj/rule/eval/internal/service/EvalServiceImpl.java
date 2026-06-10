@@ -10,6 +10,7 @@ import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
 import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
+import com.sstlfsj.rule.eval.internal.validate.PayloadInputValidator;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.springframework.beans.factory.DisposableBean;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件、经 ActionCommandChannel 投递 action，自身不做内联持久化。 */
@@ -72,6 +74,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         if (isDryRun && specificVersionId != null) {
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);
             if (snap == null) return EvalResult.miss();
+            // 单快照 dry-run：仅校验该快照的 payload 依赖
+            PayloadInputValidator.validate(snap.payloadDependencies(), event.payload());
             // dry-run 始终强制收集 NodeTrace（需回传 nodeTrace），不受全局 trace 开关影响
             EvalOutcome outcome = evalEngine.evaluateWithContext(
                     event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow, true);
@@ -85,6 +89,16 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
         List<RuleVersionSnapshot> candidates = evalEngine.match(event);
         if (candidates.isEmpty()) return EvalResult.miss();   // 无候选短路：不发事件（现状保留）
+
+        // 无候选规则=该事件不触发任何规则,不强加输入契约,维持原 miss 行为;校验只在有候选时做。
+        // 取候选快照 payload 依赖并集（按 name 去重；同 scene.payloadSchema 下同名声明一致）
+        LinkedHashMap<String, PayloadDependency> union = new LinkedHashMap<>();
+        for (RuleVersionSnapshot c : candidates) {
+            for (PayloadDependency d : c.payloadDependencies()) {
+                union.putIfAbsent(d.name(), d);
+            }
+        }
+        PayloadInputValidator.validate(List.copyOf(union.values()), event.payload());
 
         // 异步落库需提前确定 id，供 node_trace/action 关联（snowflake，请求线程生成）
         long sessionId = IdWorker.getId();

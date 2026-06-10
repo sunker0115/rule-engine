@@ -243,4 +243,43 @@ class EvalServiceImplTest {
 
         assertNull(result.score());
     }
+
+    /** 带 payload 的事件（用于校验链路测试）。 */
+    private RuleEvent eventWithPayload(Map<String, Object> payload) {
+        return new RuleEvent("1", "fraud_check", "RISK_EVENT", "u1",
+                "evt-001", Instant.now(), payload, Map.of(),
+                com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
+    }
+
+    /** 带 payload 依赖的候选快照。 */
+    private RuleVersionSnapshot snapshotWithDep(String name, String dataType, boolean required) {
+        return RuleVersionSnapshot.builder()
+                .ruleVersionId(1L).sceneCode("fraud_check").tenantId("1")
+                .conditionAst(new ConditionNode("EQ", null, null, Map.of(), 0.0))
+                .addDecisionBinding("REJECT", 10)
+                .addPayloadDependency(name, dataType, required)
+                .build();
+    }
+
+    @Test
+    void doEvaluate_rejectsMissingRequiredPayload() {
+        when(evalEngine.match(any(RuleEvent.class)))
+                .thenReturn(List.of(snapshotWithDep("amount", "DECIMAL", true)));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> impl.evaluate(eventWithPayload(Map.of("country", "CN"))));
+        assertTrue(ex.getMessage().contains("MISSING_REQUIRED_INPUT"));
+        verify(evalEngine, never()).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
+    }
+
+    @Test
+    void doEvaluate_passesWhenRequiredPresent_ignoresExtra() {
+        when(evalEngine.match(any(RuleEvent.class)))
+                .thenReturn(List.of(snapshotWithDep("amount", "DECIMAL", true)));
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class)))
+                .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
+
+        assertDoesNotThrow(() -> impl.evaluate(eventWithPayload(Map.of("amount", 5000, "extra", "x"))));
+        verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
+    }
 }
