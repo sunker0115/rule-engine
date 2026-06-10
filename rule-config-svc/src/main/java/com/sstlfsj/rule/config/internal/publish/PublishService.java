@@ -60,7 +60,6 @@ public class PublishService {
      */
     @Transactional
     public RuleVersionSnapshot publish(Long tenantId, Long ruleDefinitionId, String actorId) {
-        // 1. 加载 RuleDefinition，校验 tenantId 和 status
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
@@ -68,61 +67,192 @@ public class PublishService {
         if (rule.getStatus() != RuleDefinitionStatus.DRAFT) {
             throw new IllegalStateException("只有 DRAFT 状态的规则可以发布，当前状态: " + rule.getStatus());
         }
-
-        // 2. 加载 Scene
         SceneDef scene = sceneMapper.selectById(rule.getSceneId());
         if (scene == null) {
             throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
         }
-
-        // 3. 查最新草稿 rule_version 行（status=DRAFT），作为 AST 来源
         RuleVersion draftVersion = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
         if (draftVersion == null) {
             throw new IllegalStateException("没有找到草稿版本，请先保存规则草稿");
         }
 
-        // 3.5. 校验 triggerEventTypes ⊆ Scene.eventTypes（D13）
-        validateTriggerEventTypes(draftVersion.getTriggerEventTypes(), scene.getEventTypes());
+        RuleKind kind = rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN;
+        ResolvedDraft resolved = resolveAndValidate(
+                tenantId, scene, kind,
+                draftVersion.getConditionAst(),
+                draftVersion.getDecisionBindings(),
+                draftVersion.getPreGates(),
+                draftVersion.getTriggerEventTypes());
 
-        // 3.6. 校验 pre_gates 中 ROLLOUT 项参数合法性
-        validatePreGateParams(draftVersion.getPreGates());
+        long newVersion = ruleVersionMapper.maxVersion(ruleDefinitionId) + 1;
+        RuleVersion newRv = new RuleVersion();
+        newRv.setRuleDefinitionId(ruleDefinitionId);
+        newRv.setVersion(newVersion);
+        newRv.setConditionAst(resolved.resolvedAst());
+        newRv.setDecisionBindings(resolved.decisionBindings());
+        newRv.setPreGates(resolved.preGates());
+        newRv.setKind(kind);
+        newRv.setTriggerEventTypes(resolved.triggerEventTypes());
+        newRv.setMetricDependencies(resolved.metricDeps());
+        newRv.setPayloadDependencies(resolved.payloadDeps());
+        newRv.setStatus(RuleVersionStatus.ACTIVE);
+        newRv.setPublishedBy(actorId);
+        newRv.setPublishedAt(LocalDateTime.now());
+        ruleVersionMapper.insert(newRv);
 
-        // 4. 取草稿 AST（已 typed），收集 metricDependencies
-        AstNode ast = draftVersion.getConditionAst();
-        // kind 合法性校验：null 视为 AST_BOOLEAN（兼容历史存量数据）
-        String kind = (rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN).name();
+        if (rule.getCurrentVersion() != null) {
+            ruleVersionMapper.markSuperseded(rule.getCurrentVersion());
+        }
+        RuleStatusSnapshot beforeSnap = new RuleStatusSnapshot(
+                ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
+        rule.setStatus(RuleDefinitionStatus.PUBLISHED);
+        rule.setCurrentVersion(newRv.getId());
+        rule.setPublishedBy(actorId);
+        rule.setPublishedAt(LocalDateTime.now());
+        ruleDefinitionMapper.updateById(rule);
+
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
+                beforeSnap, new RulePublishedSnapshot(newRv.getId(), newVersion), LocalDateTime.now()));
+
+        RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
+                newRv.getId(), scene.getCode(), String.valueOf(tenantId),
+                resolved.resolvedAst(), List.of(), List.of(), List.of(),
+                kind.name(), resolved.metricDeps(), newRv.getPayloadDependencies());
+        eventPublisher.publishEvent(new RulePublishedEvent(
+                String.valueOf(tenantId), scene.getCode(), newRv.getId()));
+        return snapshot;
+    }
+
+    /**
+     * 草稿解析+校验产出：已冻结的 rule_version 内容字段（resolvedAst 含 dataType、
+     * metricDeps/payloadDeps 已冻、decisionBindings 含 name/actions、triggerEventTypes/preGates 规整）。
+     */
+    public record ResolvedDraft(
+            RuleKind kind,
+            AstNode resolvedAst,
+            List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
+            List<RuleVersionSnapshot.PreGateConfig> preGates,
+            List<String> triggerEventTypes,
+            List<MetricDependency> metricDeps,
+            List<PayloadDependency> payloadDeps) {
+    }
+
+    /**
+     * 解析+校验草稿输入，产出完整冻结的版本内容（premise A）。供 createDraft/editDraft/newVersion 调用。
+     * 任一校验不过抛 IllegalArgumentException（→ 400）。
+     *
+     * @param tenantId          租户 id
+     * @param scene             所属场景（已加载）
+     * @param kind              规则类型（非空）
+     * @param conditionAst      草稿条件 AST，null 兜底为空 AndNode
+     * @param rawBindings       草稿决策绑定（仅 decisionCode + 占位 priority），null 视为空
+     * @param preGates          前置门控，null 视为空
+     * @param triggerEventTypes 触发事件类型，null 视为空
+     * @return 冻结后的版本内容
+     */
+    public ResolvedDraft resolveAndValidate(
+            Long tenantId, SceneDef scene, RuleKind kind,
+            AstNode conditionAst,
+            List<RuleVersionSnapshot.DecisionBinding> rawBindings,
+            List<RuleVersionSnapshot.PreGateConfig> preGates,
+            List<String> triggerEventTypes) {
+
+        AstNode ast = conditionAst != null ? conditionAst
+                : new AndNode(List.of(), null, null);
+        List<RuleVersionSnapshot.DecisionBinding> bindings = rawBindings != null ? rawBindings : List.of();
+        List<RuleVersionSnapshot.PreGateConfig> gates = preGates != null ? preGates : List.of();
+        List<String> triggers = triggerEventTypes != null ? triggerEventTypes : List.of();
+
+        String kindTag = kind.name();
         java.util.Set<String> validKinds = java.util.Set.of(
                 RuleKind.AST_BOOLEAN.tag(), RuleKind.SCORECARD.tag(),
                 RuleKind.DECISION_TREE.tag(), RuleKind.DECISION_TABLE.tag());
-        if (!validKinds.contains(kind)) {
-            throw new IllegalArgumentException("不支持的规则 kind: " + kind);
+        if (!validKinds.contains(kindTag)) {
+            throw new IllegalArgumentException("不支持的规则 kind: " + kindTag);
         }
-        // SCORECARD kind 校验：根节点必须是 ScorecardRootNode，叶子 weight 必须 > 0
-        if (RuleKind.SCORECARD.tag().equals(kind)) {
+        // 结构校验：SCORECARD 根/权重、DECISION_TREE 结构、DECISION_TABLE 行列一致
+        validateKindStructure(kindTag, ast);
+
+        validateTriggerEventTypes(triggers, scene.getEventTypes());
+        validatePreGateParams(gates);
+
+        // metric 收集 + ACTIVE 冻结 + 安全校验
+        List<String> metricCodes = MetricDependencyCollector.collect(ast);
+        List<MetricDependency> metricDeps = new ArrayList<>();
+        Map<String, String> dataTypeMap = new HashMap<>();
+        if (!metricCodes.isEmpty()) {
+            List<MetricDefinition> metricDefs = metricDefinitionMapper.findActiveByCodes(tenantId, metricCodes);
+            Map<String, MetricDefinition> activeByCode = new HashMap<>();
+            for (MetricDefinition m : metricDefs) {
+                MetricDefinition prev = activeByCode.putIfAbsent(m.getMetricCode(), m);
+                if (prev != null) {
+                    throw new IllegalArgumentException("metric 存在多个 ACTIVE 版本，数据异常: " + m.getMetricCode());
+                }
+            }
+            for (String code : metricCodes) {
+                MetricDefinition m = activeByCode.get(code);
+                if (m == null) {
+                    throw new IllegalArgumentException("被引用的 metric 无 ACTIVE 版本: " + code);
+                }
+                int ver = m.getVersion() == null ? 1 : m.getVersion();
+                metricDeps.add(new MetricDependency(code, ver));
+            }
+            dataTypeMap.putAll(activeByCode.values().stream()
+                    .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
+            java.util.Set<String> dsNames = metricResourceCatalog != null ? metricResourceCatalog.datasourceNames() : null;
+            java.util.Set<String> epNames = metricResourceCatalog != null ? metricResourceCatalog.endpointNames() : null;
+            new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
+        }
+
+        // payload 收集 + scene.payloadSchema 声明校验 + 冻结依赖
+        List<String> payloadFields = PayloadFieldCollector.collect(ast);
+        Map<String, String> payloadTypeMap = new HashMap<>();
+        List<PayloadDependency> payloadDeps = new ArrayList<>();
+        if (!payloadFields.isEmpty()) {
+            List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null ? scene.getPayloadSchema() : List.of();
+            Map<String, PayloadFieldSpec> specByName = new HashMap<>();
+            for (PayloadFieldSpec f : schema) specByName.put(f.name(), f);
+            for (String field : payloadFields) {
+                PayloadFieldSpec spec = specByName.get(field);
+                if (spec == null) {
+                    throw new IllegalArgumentException("规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
+                }
+                String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
+                payloadTypeMap.put(field, dataTypeTag);
+                payloadDeps.add(new PayloadDependency(field, dataTypeTag, spec.required()));
+            }
+        }
+
+        AstNode resolvedAst = (metricCodes.isEmpty() && payloadFields.isEmpty())
+                ? ast : AstDataTypeResolver.resolve(ast, dataTypeMap, payloadTypeMap);
+
+        List<RuleVersionSnapshot.DecisionBinding> frozenBindings = freezeDecisionBindings(tenantId, scene, bindings);
+
+        return new ResolvedDraft(kind, resolvedAst, frozenBindings, gates, triggers, metricDeps, payloadDeps);
+    }
+
+    /** kind 结构校验（从 publish 抽取，逻辑原样）。 */
+    private void validateKindStructure(String kindTag, AstNode ast) {
+        if (RuleKind.SCORECARD.tag().equals(kindTag)) {
             if (!(ast instanceof ScorecardRootNode scorecardRoot)) {
-                throw new IllegalArgumentException(
-                        "kind=SCORECARD 的规则 conditionAst 根节点必须是 ScorecardRootNode");
+                throw new IllegalArgumentException("kind=SCORECARD 的规则 conditionAst 根节点必须是 ScorecardRootNode");
             }
             for (ConditionNode leaf : scorecardRoot.conditions()) {
                 if (leaf.weight() == null || leaf.weight() <= 0) {
-                    throw new IllegalArgumentException(
-                            "SCORECARD 条件节点 weight 必须 > 0，conditionType=" + leaf.conditionType());
+                    throw new IllegalArgumentException("SCORECARD 条件节点 weight 必须 > 0，conditionType=" + leaf.conditionType());
                 }
             }
         }
-        // DECISION_TREE 校验：根节点必须是 IfNode；递归校验分支节点类型 + thenBranch 非空 + 条件子树不含不支持节点（如 XOR）
-        if (RuleKind.DECISION_TREE.tag().equals(kind)) {
+        if (RuleKind.DECISION_TREE.tag().equals(kindTag)) {
             if (!(ast instanceof IfNode ifRoot)) {
-                throw new IllegalArgumentException(
-                        "kind=DECISION_TREE 的规则 conditionAst 根节点必须是 IfNode");
+                throw new IllegalArgumentException("kind=DECISION_TREE 的规则 conditionAst 根节点必须是 IfNode");
             }
             validateDecisionTree(ifRoot);
         }
-        // DECISION_TABLE 校验：根节点必须是 DecisionTableNode，columns/rows 非空，行列数一致
-        if (RuleKind.DECISION_TABLE.tag().equals(kind)) {
+        if (RuleKind.DECISION_TABLE.tag().equals(kindTag)) {
             if (!(ast instanceof DecisionTableNode tableRoot)) {
-                throw new IllegalArgumentException(
-                        "kind=DECISION_TABLE 的规则 conditionAst 根节点必须是 DecisionTableNode");
+                throw new IllegalArgumentException("kind=DECISION_TABLE 的规则 conditionAst 根节点必须是 DecisionTableNode");
             }
             if (tableRoot.columns() == null || tableRoot.columns().isEmpty()) {
                 throw new IllegalArgumentException("DECISION_TABLE columns 不得为空");
@@ -134,141 +264,11 @@ public class PublishService {
             for (int i = 0; i < tableRoot.rows().size(); i++) {
                 DecisionTableNode.Row row = tableRoot.rows().get(i);
                 if (row.conditions().size() != colCount) {
-                    throw new IllegalArgumentException(
-                            "DECISION_TABLE 第 " + i + " 行 conditions 数量（" + row.conditions().size()
-                                    + "）与列数（" + colCount + "）不一致");
+                    throw new IllegalArgumentException("DECISION_TABLE 第 " + i + " 行 conditions 数量（"
+                            + row.conditions().size() + "）与列数（" + colCount + "）不一致");
                 }
             }
         }
-        List<String> metricCodes = MetricDependencyCollector.collect(ast);
-
-        // 4.5. 查 ACTIVE metric，冻结版本号进 metricDeps（B6），同时提取 dataType 冻结进 AST（B19）
-        List<MetricDependency> metricDeps = new ArrayList<>();
-        Map<String, String> dataTypeMap = new HashMap<>();
-        if (!metricCodes.isEmpty()) {
-            List<MetricDefinition> metricDefs = metricDefinitionMapper.findActiveByCodes(tenantId, metricCodes);
-            // 按 metricCode 建索引，同 code 多行 ACTIVE = 数据异常，兜底拒绝
-            Map<String, MetricDefinition> activeByCode = new HashMap<>();
-            for (MetricDefinition m : metricDefs) {
-                MetricDefinition prev = activeByCode.putIfAbsent(m.getMetricCode(), m);
-                if (prev != null) {
-                    throw new IllegalArgumentException(
-                            "metric 存在多个 ACTIVE 版本，数据异常: " + m.getMetricCode());
-                }
-            }
-            // 逐 code 冻结版本号，无 ACTIVE 行则拒绝发布
-            for (String code : metricCodes) {
-                MetricDefinition m = activeByCode.get(code);
-                if (m == null) {
-                    throw new IllegalArgumentException(
-                            "被引用的 metric 无 ACTIVE 版本: " + code);
-                }
-                // version 为 null：存量无版本行，兜底为首版本号 1
-                int ver = m.getVersion() == null ? 1 : m.getVersion();
-                metricDeps.add(new MetricDependency(code, ver));
-            }
-            dataTypeMap.putAll(activeByCode.values().stream()
-                    .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
-
-            // 4.6. metric 安全校验（B21）：SQL 时间函数/拼接拒绝 + 资源名注册（catalog 为 null 时跳过资源名校验）
-            java.util.Set<String> dsNames = metricResourceCatalog != null
-                    ? metricResourceCatalog.datasourceNames() : null;
-            java.util.Set<String> epNames = metricResourceCatalog != null
-                    ? metricResourceCatalog.endpointNames() : null;
-            new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
-        }
-
-        // 4.7. payload 引用校验：valueRef=PAYLOAD 字段必须在 scene.payloadSchema 声明，注入 dataType，
-        // 并冻结成 payloadDependencies(name+dataType+required) —— 三者同源于 payloadSchema，一次迭代取齐。
-        List<String> payloadFields = PayloadFieldCollector.collect(ast);
-        Map<String, String> payloadTypeMap = new HashMap<>();
-        List<PayloadDependency> payloadDeps = new ArrayList<>();
-        if (!payloadFields.isEmpty()) {
-            List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null
-                    ? scene.getPayloadSchema() : java.util.List.of();
-            Map<String, PayloadFieldSpec> specByName = new HashMap<>();
-            for (PayloadFieldSpec f : schema) specByName.put(f.name(), f);
-            for (String field : payloadFields) {
-                PayloadFieldSpec spec = specByName.get(field);
-                if (spec == null) {
-                    throw new IllegalArgumentException(
-                            "规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
-                }
-                String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
-                payloadTypeMap.put(field, dataTypeTag);
-                payloadDeps.add(new PayloadDependency(field, dataTypeTag, spec.required()));
-            }
-        }
-
-        // 仅当有 metric 或 payload 引用时才重建 AST（注入 dataType）；都没有则原样保留
-        AstNode resolvedAst = (metricCodes.isEmpty() && payloadFields.isEmpty())
-                ? ast : AstDataTypeResolver.resolve(ast, dataTypeMap, payloadTypeMap);
-
-        // 5. 计算新版本号（max(version)+1）
-        long newVersion = ruleVersionMapper.maxVersion(ruleDefinitionId) + 1;
-
-        // 6. INSERT 新 rule_version（status=ACTIVE，不可变）
-        RuleVersion newRv = new RuleVersion();
-        newRv.setRuleDefinitionId(ruleDefinitionId);
-        newRv.setVersion(newVersion);
-        newRv.setConditionAst(resolvedAst);
-        // D27:发布期冻结 decision.name/actions 进 binding 快照(方案甲,守 D6);引用的 decisionCode 必须存在
-        List<RuleVersionSnapshot.DecisionBinding> rawBindings = draftVersion.getDecisionBindings() != null
-                ? draftVersion.getDecisionBindings() : java.util.List.of();
-        newRv.setDecisionBindings(freezeDecisionBindings(tenantId, scene, rawBindings));
-        newRv.setPreGates(draftVersion.getPreGates() != null
-                ? draftVersion.getPreGates() : java.util.List.of());
-        newRv.setKind(rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN);
-        newRv.setTriggerEventTypes(scene.getEventTypes() != null
-                ? scene.getEventTypes() : java.util.List.of());
-        newRv.setMetricDependencies(metricDeps);
-        newRv.setPayloadDependencies(payloadDeps);
-        newRv.setStatus(RuleVersionStatus.ACTIVE);
-        newRv.setPublishedBy(actorId);
-        newRv.setPublishedAt(LocalDateTime.now());
-        ruleVersionMapper.insert(newRv);
-
-        // 7. 旧 ACTIVE rule_version 改为 SUPERSEDED（如有前一个正式版本）
-        if (rule.getCurrentVersion() != null) {
-            ruleVersionMapper.markSuperseded(rule.getCurrentVersion());
-        }
-
-        // 8. UPDATE rule_definition：状态改为 PUBLISHED，记录 currentVersion
-        // 捕获发布前状态作为 before 快照（D14 审计完整性，能还原"发布前的状态 + 上一个生效版本"）
-        RuleStatusSnapshot beforeSnap = new RuleStatusSnapshot(
-                ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
-        rule.setStatus(RuleDefinitionStatus.PUBLISHED);
-        rule.setCurrentVersion(newRv.getId());
-        rule.setPublishedBy(actorId);
-        rule.setPublishedAt(LocalDateTime.now());
-        ruleDefinitionMapper.updateById(rule);
-
-        // 9. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 红线）
-        eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
-                beforeSnap,
-                new RulePublishedSnapshot(newRv.getId(), newVersion),
-                LocalDateTime.now()));
-
-        // 10. 生成 RuleVersionSnapshot 供返回和事件携带
-        RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
-                newRv.getId(),
-                scene.getCode(),
-                String.valueOf(tenantId),
-                resolvedAst,
-                List.of(),   // preGates v1 暂时不反序列化
-                List.of(),   // decisionBindings v1 暂时不反序列化
-                List.of(),   // triggerEventTypes v1 暂时不反序列化，通配
-                kind,
-                metricDeps,
-                newRv.getPayloadDependencies()
-        );
-
-        // 11. 发布 Modulith 事件（事务提交后由 Spring 事件机制触发，eval-svc 监听热更索引）
-        eventPublisher.publishEvent(new RulePublishedEvent(
-                String.valueOf(tenantId), scene.getCode(), newRv.getId()));
-
-        return snapshot;
     }
 
     /**
