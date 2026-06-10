@@ -160,4 +160,21 @@ class RuleVersionSnapshotTest {
         assertEquals(List.of(new MetricDependency("balance", 1), new MetricDependency("score", 2)),
                 built.metricDependencies());
     }
+
+    @Test
+    void decisionBinding_enrichedFieldsAndCompatCtor() {
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "SEND_ALERT", 0, Map.of("ch", "sms"));
+        RuleVersionSnapshot.DecisionBinding enriched =
+                new RuleVersionSnapshot.DecisionBinding("REJECT", "拒绝", 10, List.of(action));
+        assertEquals("REJECT", enriched.decisionCode());
+        assertEquals("拒绝", enriched.name());
+        assertEquals(10, enriched.priority());
+        assertEquals(List.of(action), enriched.actions());
+
+        // 兼容旧 (code, priority) 构造：name=null、actions 空
+        RuleVersionSnapshot.DecisionBinding compat = new RuleVersionSnapshot.DecisionBinding("PASS", 1);
+        assertNull(compat.name());
+        assertTrue(compat.actions().isEmpty());
+    }
 }
