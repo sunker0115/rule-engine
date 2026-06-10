@@ -12,4 +12,9 @@ class ValueSourceTest {
         assertEquals("PROVIDED", ValueSource.PROVIDED.tag());
         assertEquals("FETCHED", ValueSource.FETCHED.tag());
     }
+
+    @Test
+    void payload_tag() {
+        assertEquals("PAYLOAD", ValueSource.PAYLOAD.tag());
+    }
 }
