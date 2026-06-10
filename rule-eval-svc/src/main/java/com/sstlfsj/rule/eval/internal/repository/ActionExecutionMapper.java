@@ -23,12 +23,11 @@ public interface ActionExecutionMapper extends BaseMapper<ActionExecutionEntity>
             <script>
             INSERT INTO action_execution
               (evaluation_session_id, tenant_id, event_id, action_id, action_type, decision_code,
-               status, error_code, retryable, retry_count, executed_at, compensated, created_at)
+               status, error_code, executed_at, created_at)
             VALUES
             <foreach collection="list" item="e" separator=",">
               (#{e.evaluationSessionId}, #{e.tenantId}, #{e.eventId}, #{e.actionId}, #{e.actionType},
-               #{e.decisionCode}, #{e.status}, #{e.errorCode}, #{e.retryable}, #{e.retryCount},
-               #{e.executedAt}, #{e.compensated}, #{e.createdAt})
+               #{e.decisionCode}, #{e.status}, #{e.errorCode}, #{e.executedAt}, #{e.createdAt})
             </foreach>
             ON DUPLICATE KEY UPDATE id = id
             </script>

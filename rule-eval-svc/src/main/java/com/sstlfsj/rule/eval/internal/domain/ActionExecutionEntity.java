@@ -25,11 +25,6 @@ public class ActionExecutionEntity {
     private String decisionCode;
     private ActionResult.ActionStatus status;
     private String errorCode;
-    private Boolean retryable;
-    private Integer retryCount;
     private LocalDateTime executedAt;
-    private Boolean compensated;
-    private LocalDateTime compensatedAt;
-    private String compensatedBy;
     private LocalDateTime createdAt;
 }

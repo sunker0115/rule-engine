@@ -14,16 +14,6 @@ public interface ActionHandler {
     ActionResult execute(ActionContext ctx);
 
     /**
-     * 补偿（回滚）已执行的动作；默认实现不支持补偿。
-     *
-     * @param ctx 动作执行上下文
-     * @return 补偿结果，默认返回 notSupported
-     */
-    default ActionResult compensate(ActionContext ctx) {
-        return ActionResult.notSupported();
-    }
-
-    /**
      * 试运行动作（dry-run），不产生真实副作用；默认实现跳过。
      *
      * @param ctx 动作执行上下文

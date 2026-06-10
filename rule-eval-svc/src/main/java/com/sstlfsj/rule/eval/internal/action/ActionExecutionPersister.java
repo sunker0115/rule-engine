@@ -98,9 +98,6 @@ public class ActionExecutionPersister implements InitializingBean, DisposableBea
         entity.setDecisionCode(e.decisionCode());
         entity.setStatus(e.result().status());
         entity.setErrorCode(e.result().errorCode());
-        entity.setRetryable(e.result().retryable());
-        entity.setRetryCount(0);
-        entity.setCompensated(false);
         LocalDateTime now = LocalDateTime.now();
         entity.setExecutedAt(now);
         entity.setCreatedAt(now);

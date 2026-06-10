@@ -30,13 +30,6 @@ class ActionHandlerTest {
     }
 
     @Test
-    void compensate_defaultReturnsNotSupported() {
-        ActionResult r = NO_OP.compensate(buildCtx());
-        assertEquals(ActionResult.ActionStatus.SKIPPED, r.status());
-        assertEquals("COMPENSATE_NOT_SUPPORTED", r.errorCode());
-    }
-
-    @Test
     void dryRun_defaultReturnsSkippedWithReason() {
         ActionContext ctx = buildCtx();
         ActionResult r = NO_OP.dryRun(ctx);
