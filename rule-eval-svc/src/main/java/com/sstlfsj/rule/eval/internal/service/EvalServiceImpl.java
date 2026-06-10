@@ -83,7 +83,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         if (ruleId != null) {
             Long tid = parseTenantId(event.tenantId());
             if (tid == null) {
-                throw new IllegalArgumentException("MISSING_DRYRUN_TARGET: 无法解析租户");
+                // 已给 ruleId 但租户上下文非法：是租户问题，不是"缺目标"，用独立错误码避免排错误判
+                throw new IllegalArgumentException("INVALID_TENANT: 无法解析租户");
             }
             Long vid = ruleVersionReadMapper.latestVersionIdByRule(tid, ruleId);
             if (vid == null) {
@@ -96,6 +97,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId) {
         Instant evalNow = Instant.now();
+        // dry-run 路径下 specificVersionId 已由 resolveDryRunVersionId 保证非空；此处 != null 为防御性守卫，
+        // 防止未来出现"isDryRun=true 但无版本 id"的新调用路径误落候选分支（有副作用）。
         if (isDryRun && specificVersionId != null) {
             RuleVersionSnapshot snap = snapshotLoader.loadById(specificVersionId);
             if (snap == null) return EvalResult.miss();

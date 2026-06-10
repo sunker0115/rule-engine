@@ -282,6 +282,21 @@ class EvalServiceImplTest {
     }
 
     @Test
+    void dryRun_byRuleId_invalidTenant_throws() {
+        // 给了 ruleId 但租户上下文非数字 → INVALID_TENANT（非 MISSING_DRYRUN_TARGET），不查 mapper、不评估
+        RuleEvent badTenant = new RuleEvent("not-a-number", "fraud_check", "RISK_EVENT", "u1",
+                "evt-001", Instant.now(), Map.of(), Map.of(),
+                com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> impl.dryRun(badTenant, 5L, null));
+        assertTrue(ex.getMessage().contains("INVALID_TENANT"));
+        verifyNoInteractions(ruleVersionReadMapper);
+        verifyNoInteractions(snapshotLoader);
+        verifyNoInteractions(actionDelivery);
+    }
+
+    @Test
     void evaluate_scoreFromEngine_isPropagated() {
         Decision d = new Decision("REJECT", "", 10, 1L);
         EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
