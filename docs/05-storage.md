@@ -442,17 +442,19 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 - 新 version INSERT，Matcher 倒排索引热更指向新 version（≤15s 全实例收敛，D17）
 - 回滚 = 用旧 version 的 `condition_ast` / `decision_bindings` 内容新建草稿 → 走标准发布流程产出新 version 号，不是直接切回旧 version（避免 current_version 倒退造成审计断层）
 
-### 数据保留策略（D9：v1 全 MySQL，30 天保留）
+### 数据保留策略（D9：v1 全 MySQL；各模块 `@Scheduled` 定时清理）
 
-| 表 | 保留期 | 清理方式 |
-|---|---|---|
-| `evaluation_session` | 30 天 | 定时任务 `DELETE WHERE started_at < NOW() - INTERVAL 30 DAY LIMIT 5000` |
-| `node_trace` | 30 天 | 同上，`LIMIT 10000` |
-| `action_execution` | 30 天 | 同 evaluation_session（跟随其生命周期） |
-| `dry_run_session` | 7 天 | 定时任务 `DELETE WHERE started_at < NOW() - INTERVAL 7 DAY LIMIT 2000` |
-| `dry_run_node_trace` | 7 天 | 同上 |
-| `audit_log` | **永久** | 不清理 |
-| 配置层所有表 | **永久** | 不清理（rule_version 不可删，D19） |
+各属主模块各一个 `@Scheduled` 清理 bean（observability 清 trace 两表、eval-svc 清 session/action 三表），按 `engine.rule.retention.*` 配置（`cron` 默认每日 03:30、`batch-size` 默认 1000、`enabled` 总开关）分批 `DELETE ... LIMIT batch-size` 循环删超期行（短事务、幂等、可恢复）。无 FK,删除顺序为逻辑安全。
+
+| 表 | 保留期(默认) | age 列 | 配置键 |
+|---|---|---|---|
+| `evaluation_session` | 90 天 | `started_at` | `evaluation-session-days` |
+| `node_trace` | 30 天 | `evaluated_at` | `node-trace-days` |
+| `action_execution` | 90 天（跟随 evaluation_session 生命周期） | `created_at` | `action-execution-days` |
+| `dry_run_session` | 7 天 | `started_at` | `dry-run-session-days` |
+| `dry_run_node_trace` | 7 天 | `evaluated_at` | `dry-run-session-days`（同管 dry_run 两表） |
+| `audit_log` | **永久** | — | 不清理 |
+| 配置层所有表 | **永久** | — | 不清理（rule_version 不可删，D19） |
 
 ### Flyway 命名规范（DDL 版本管理）
 

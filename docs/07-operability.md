@@ -190,9 +190,13 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `engine.rule.metric.default-cache-ttl-seconds` | 60 | metric 取数结果缓存 TTL（per-metric 可覆盖） |
 | `engine.rule.fetch.timeout-ms` | 800 | **全局 metric 并发取数超时**（`FetchResourceProperties`，单一来源）；超时未完成的 metric 置 `METRIC_FETCH_FAIL` 降级。`engine.rule.fetch.datasources` / `.endpoints` 为命名只读数据源 / HTTP 端点（凭证从环境变量注入，不落配置表） |
 | `engine.rule.action.default-timeout-ms` | 3000 | ActionHandler 默认超时（per-handler 可覆盖） |
-| `engine.rule.retention.evaluation-session-days` | 30 | evaluation_session 保留天数（D9） |
+| `engine.rule.retention.enabled` | true | 数据保留清理总开关（各模块 `@Scheduled` cleaner，关则不清） |
+| `engine.rule.retention.cron` | `0 30 3 * * *` | 清理调度 cron（默认每日 03:30） |
+| `engine.rule.retention.batch-size` | 1000 | 单批 `DELETE ... LIMIT` 上限（分批短事务循环） |
+| `engine.rule.retention.evaluation-session-days` | 90 | evaluation_session 保留天数（D9） |
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |
-| `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session 保留天数 |
+| `engine.rule.retention.action-execution-days` | 90 | action_execution 保留天数（跟随 evaluation_session 生命周期） |
+| `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session + dry_run_node_trace 保留天数（同管 dry_run 两表） |
 | `engine.rule.action.send-alert.url` | （空） | SEND_ALERT webhook URL；空则不实发（D53 best-effort） |
 | `engine.rule.action.send-alert.timeout-ms` | 2000 | SEND_ALERT webhook 连接+请求超时 |
 
