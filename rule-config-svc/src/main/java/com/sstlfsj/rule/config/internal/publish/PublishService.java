@@ -39,6 +39,7 @@ public class PublishService {
     private final RuleVersionMapper ruleVersionMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final MetricDefinitionMapper metricDefinitionMapper;
+    private final DecisionDefinitionMapper decisionDefinitionMapper;
 
     /**
      * 已注册取数资源名目录（由 eval-svc 提供）；纯 config 部署时为 null，资源名校验跳过。
@@ -183,8 +184,10 @@ public class PublishService {
         newRv.setRuleDefinitionId(ruleDefinitionId);
         newRv.setVersion(newVersion);
         newRv.setConditionAst(resolvedAst);
-        newRv.setDecisionBindings(draftVersion.getDecisionBindings() != null
-                ? draftVersion.getDecisionBindings() : java.util.List.of());
+        // D27:发布期冻结 decision.name/actions 进 binding 快照(方案甲,守 D6);引用的 decisionCode 必须存在
+        List<RuleVersionSnapshot.DecisionBinding> rawBindings = draftVersion.getDecisionBindings() != null
+                ? draftVersion.getDecisionBindings() : java.util.List.of();
+        newRv.setDecisionBindings(freezeDecisionBindings(tenantId, rawBindings));
         newRv.setPreGates(draftVersion.getPreGates() != null
                 ? draftVersion.getPreGates() : java.util.List.of());
         newRv.setKind(rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN);
@@ -297,6 +300,31 @@ public class PublishService {
                 LocalDateTime.now()));
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, RuleDefinitionStatus.DRAFT.name());
+    }
+
+    /**
+     * 把 draft 的 (decisionCode, priority) binding 富化为含 name/actions 的快照 binding（方案甲，守 D6）。
+     * 引用的 decisionCode 必须在 decision_definition 存在，否则拒绝发布（DECISION_CODE_NOT_FOUND）。
+     */
+    private List<RuleVersionSnapshot.DecisionBinding> freezeDecisionBindings(
+            Long tenantId, List<RuleVersionSnapshot.DecisionBinding> rawBindings) {
+        if (rawBindings.isEmpty()) return java.util.List.of();
+        List<String> codes = rawBindings.stream()
+                .map(RuleVersionSnapshot.DecisionBinding::decisionCode).distinct().toList();
+        Map<String, DecisionDefinition> byCode = decisionDefinitionMapper.findByCodes(tenantId, codes).stream()
+                .collect(Collectors.toMap(DecisionDefinition::getCode, d -> d, (a, b) -> a));
+        List<RuleVersionSnapshot.DecisionBinding> frozen = new ArrayList<>(rawBindings.size());
+        for (RuleVersionSnapshot.DecisionBinding b : rawBindings) {
+            DecisionDefinition d = byCode.get(b.decisionCode());
+            if (d == null) {
+                throw new IllegalArgumentException(
+                        "DECISION_CODE_NOT_FOUND: 引用的 decision 不存在: " + b.decisionCode());
+            }
+            frozen.add(new RuleVersionSnapshot.DecisionBinding(
+                    b.decisionCode(), d.getName(), b.priority(),
+                    d.getActions() != null ? d.getActions() : java.util.List.of()));
+        }
+        return frozen;
     }
 
     /**

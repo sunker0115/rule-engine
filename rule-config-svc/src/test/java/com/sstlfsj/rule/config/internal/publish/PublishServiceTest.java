@@ -85,6 +85,50 @@ class PublishServiceTest {
     }
 
     @Test
+    void publish_rejectsWhenDecisionCodeNotFound() {
+        // draft 绑定 REJECT,但 decision_definition 查不到 → DECISION_CODE_NOT_FOUND 拒绝
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("m.code"); md.setDataType("STRING"); md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(md));
+        draftVersion.setDecisionBindings(List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)));
+        when(decisionDefinitionMapper.findByCodes(eq(1L), anyCollection())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DECISION_CODE_NOT_FOUND");
+    }
+
+    @Test
+    void publish_freezesDecisionNameAndActionsIntoSnapshot() {
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("m.code"); md.setDataType("STRING"); md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(md));
+        draftVersion.setDecisionBindings(List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)));
+        DecisionDefinition dd = new DecisionDefinition();
+        dd.setTenantId(1L); dd.setCode("REJECT"); dd.setName("拒绝");
+        dd.setActions(List.of(new RuleVersionSnapshot.DecisionAction("a1", "SEND_ALERT", 0, Map.of())));
+        when(decisionDefinitionMapper.findByCodes(eq(1L), anyCollection())).thenReturn(List.of(dd));
+
+        publishService.publish(1L, 10L, "actor");
+
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(cap.capture());
+        RuleVersionSnapshot.DecisionBinding frozen = cap.getValue().getDecisionBindings().getFirst();
+        assertThat(frozen.name()).isEqualTo("拒绝");
+        assertThat(frozen.actions()).hasSize(1);
+        assertThat(frozen.actions().getFirst().actionType()).isEqualTo("SEND_ALERT");
+    }
+
+    @Test
     void publish_draftRule_createsVersionAndUpdatesDefinition() {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
