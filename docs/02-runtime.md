@@ -123,6 +123,8 @@ RuleEvent
 | `POST /api/v1/rule/evaluate` | PULL | 是 | `EvalResult { ... }` |
 | `POST /api/v1/rule/dry-run` | PULL（试算） | 是 | `EvalResult + nodeTrace` |
 
+> **dry-run 试跑目标二选一必传**（D56）：`ruleVersionId`（精确版本）/ `ruleId`（取最新版本，含 DRAFT）二选一，都不传 → 400 `MISSING_DRYRUN_TARGET`。dry-run 结构上恒走"带版本单快照"分支——**不写 `evaluation_session`、不派发 action**（副作用从结构上根除），痕迹按需落 `dry_run_session` / `dry_run_node_trace`。premise A 下草稿即冻结快照，故 dry-run 试跑的 DRAFT 与发布后内容一致。
+
 **异常语义**：
 - 400 系列：schema 校验失败，不进入评估链路；
 - 事件接入失败（MQ 反序列化异常）：消息不 ack，由 MQ 重投，引擎不进入评估链路。
@@ -220,7 +222,7 @@ RuleEvent
 | `NotNode` | 取反唯一子节点 | 无短路 |
 | `ConditionNode` | 调用对应 `ConditionEvaluator.evaluate()` | 失败时 satisfied=false，整树继续（D15） |
 
-**dry-run 模式**：写 `dry_run_session` 系列表，不写 prod `evaluation_session` / `node_trace` 表；TraceWriter 内部按 `EvalContext.dryRun` 标记路由到不同目标表（D7 / D21）。
+**dry-run 模式**：恒走"带版本单快照"分支（按 `ruleVersionId` / `ruleId` 解析出的单个版本试跑），**结构上不进派发链路、不写 prod `evaluation_session`**——副作用从分支结构根除，而非靠 `isDryRun` 标志逐处门控（D56）。痕迹写 `dry_run_session` / `dry_run_node_trace`，TraceWriter 按 `EvalContext.dryRun` 标记路由到 dry-run 目标表（D7 / D21）。
 
 **EvalResult 输出字段**（D12 多态，v1 仅填 satisfied 部分）：
 

@@ -65,7 +65,7 @@
 只删 DRAFT,碰到 ACTIVE/SUPERSEDED 一律拒绝(D19):
 - **删整条未发布规则** `DELETE /admin/v1/rules/{ruleId}`:仅当该规则**从未发布过**(无任何 ACTIVE/SUPERSEDED 版本,rule_definition 仍 DRAFT)→ 级联删 `rule_definition` + 其全部 `rule_version`(都是 DRAFT)。
 - **删单个待发布草稿版本** `DELETE /admin/v1/rules/{ruleId}/versions/{versionId}`:仅当该 version 是 DRAFT → 删那条 rule_version(保留线上 ACTIVE 不动)。
-- **级联范围只 `rule_version`**:草稿从未激活 → 无 evaluation_session/node_trace/action_execution 引用、未进 Matcher 索引;`audit_log` 是历史不动。
+- **级联范围只 `rule_version`**:草稿从未激活 → 无 `evaluation_session`/`node_trace`/`action_execution` 引用、未进 Matcher 索引。**dry-run 痕迹(`dry_run_session`/`dry_run_node_trace`)不级联删**——视同审计历史(记录"某时刻对版本 X 做过 dry-run"),靠 `SessionRetentionCleaner` 的 TTL 退休自然清理;删除后这些行的 ruleVersionId 成悬空引用(无 FK 约束,不报错;会话查询 join 不到版本时取空,可接受)。`audit_log` 同理不动。
 
 ### 6.1 删除边界 / 引用完整性(已定)
 

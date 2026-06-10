@@ -17,8 +17,10 @@
 |---|---|---|---|---|
 | PULL 评估 `/evaluate`(命中/未命中) | `EvalController.evaluate` | ✅ | 示例 / 2026-06-10 | 含 payload 注入、`evaluation_session` + `node_trace` 落库 |
 | 评估期入参校验(缺必填/类型不符 → 400) | `EvalServiceImpl` + `PayloadInputValidator` | ✅ | 2026-06-10 | `MISSING_REQUIRED_INPUT` / `INPUT_TYPE_MISMATCH` |
-| dry-run `/dry-run?ruleVersionId=`(带版本) | `EvalController.dryRun` | ✅ | 2026-06-10 | `dry_run_session` + `dry_run_node_trace` 落库;**本轮逮并修了 actual_value JSON bug** |
-| dry-run 场景级(不带 ruleVersionId) | `doEvaluate` 候选分支 | 🐞 | 2026-06-10 | **BUG(待修)**:候选分支不门控 `isDryRun` → 落**真 `evaluation_session`+node_trace**、且**派发真 action**(若决策带 action),违反 dry-run 无副作用语义。`isDryRun` 仅在「带 ruleVersionId」分支被尊重 |
+| dry-run `/dry-run?ruleVersionId=`(精确版本) | `EvalController.dryRun` | ✅ | 2026-06-10 | `dry_run_session` + `dry_run_node_trace` 落库;**本轮逮并修了 actual_value JSON bug** |
+| dry-run `/dry-run?ruleId=`(取最新版本含 DRAFT,D56) | `EvalController.dryRun` | ⬜ | — | D56 新签名;待 Task 9 真服务核对取最新版本正确 + **无副作用**(`evaluation_session`/`action_execution` 无新增) |
+| dry-run 无 target → 400 `MISSING_DRYRUN_TARGET`(D56) | `EvalController.dryRun` | ⬜ | — | 二选一必传,都不传须 400;待 Task 9 验 |
+| ~~dry-run 场景级副作用 BUG~~(D56 已根除) | `EvalServiceImpl.dryRun` | ⬜ | — | 旧 BUG(候选分支不门控 `isDryRun` → 落真 session/派发真 action)由 D56 **结构上根除**:dry-run 恒走带版本单快照分支,不进派发链路;待 Task 9 真服务回归断言无副作用 |
 | 输入清单发现 `/scenes/{code}/input-manifest` | `SceneManifestController` | ✅ | 2026-06-10 | eventType 收窄正确 |
 | **PUSH 事件 `/event` → 异步 action 派发 → `action_execution` 落库** | `EvalController.pushEvent` → `ActionDispatchService` → `ActionExecutionPersister` | ✅ | 2026-06-10 | PUSH 场景 + decision 带 SEND_ALERT action;202 受理 → `evaluation_session`(HIT/PUSH_REJECT)+ `node_trace` + `action_execution`(SEND_ALERT/SKIPPED/NO_WEBHOOK_URL,空 url 走跳过态)全落库;persister 无吞错(不像 trace writer 有 JSON 列雷,action_execution 全 varchar) |
 | HYBRID 评估 | 与 PUSH 共享派发路径 | ⬜ | — | 派发路径已由 PUSH 验证;HYBRID 自身(同步返回 + 异步派发并存)未直接跑 |
@@ -30,9 +32,13 @@
 |---|---|---|---|---|
 | 建场景 `POST /scenes` | `SceneController.create` | ✅ | 示例 / 2026-06-10 | |
 | 改场景 `PATCH /scenes/{code}` | `SceneController.updateScene` | ✅ | 2026-06-10 | name/eventTypes/payloadSchema/defaultParams 可 patch(tenantId 在 body);**description 不在 `UpdateSceneRequest`、建后不可改**(小产品缺口,非 bug) |
-| 建规则草稿 `POST /rules` | `RuleController.createDraft` | ✅ | 示例 / 2026-06-10 | |
-| 发布规则 `POST /rules/{id}/publish` | `RuleController.publish` | ✅ | 示例 / 2026-06-10 | 含 payload/metric 依赖冻结、快照落库 |
+| 建规则草稿 `POST /rules`(premise A 冻结快照,D56) | `RuleController.createDraft` | ✅ | 示例 / 2026-06-10 | 草稿写入期即跑 resolveAndValidate;待 Task 9 复核冻结列(resolvedAst dataType / metric·payloadDependencies / decisionBindings name·actions)真落库 |
+| 编辑草稿 `PUT /rules/{id}/draft`(不增版本,D56) | `RuleController.editDraft` | ⬜ | — | 待 Task 9 验:原地更新最新 DRAFT、version 不变、内容变 |
+| 出新版本 / 回退 `POST /rules/{id}/versions`(D56) | `RuleController.newVersion` | ⬜ | — | 待 Task 9 验:已发布规则出 v_max+1 DRAFT;带 `fromVersionId` 回退(克隆旧版本按当前世界重解析);要求无在途 DRAFT |
+| 发布规则 `POST /rules/{id}/publish`(退化为激活,D56) | `RuleController.publish` | ⬜ | — | D56 改语义:最新 DRAFT 行**原地翻 ACTIVE**(version 不变)、supersede 旧 ACTIVE;triggerEventTypes 用草稿声明值;待 Task 9 真服务核对落库 |
 | 停用规则 `POST /rules/{id}/disable` | `RuleController.disable` | ✅ | 2026-06-10 | rule_definition.status → DISABLED |
+| 删规则(从未发布)`DELETE /rules/{id}`(D56) | `RuleController.deleteRule` | ⬜ | — | 待 Task 9 验:无 ACTIVE/SUPERSEDED 时级联删 rule_definition + 全部 rule_version;碰已上线版本拒 |
+| 删草稿版本 `DELETE /rules/{id}/versions/{versionId}`(D56) | `RuleController.deleteDraftVersion` | ⬜ | — | 待 Task 9 验:仅删 DRAFT 行;碰 ACTIVE/SUPERSEDED 拒 |
 | 建/改/停 decision | `DecisionController` | ✅ | 示例 / 2026-06-10 | 建(示例)+ PUT(改 name/priority/description)+ disable(status→DISABLED)均真落库 |
 | metric 注册 `POST /metrics` | `MetricController.create` | ✅ | 示例 | |
 | metric 版本影响面查询 `/{code}/versions/{v}/impact` | `MetricController` | ✅ | 2026-06-10 | amount v1 → affectedRules 含 rule 871 |

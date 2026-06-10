@@ -83,8 +83,8 @@ Decision           ┌───────────────────�
 - 一个 **Tenant** 下有多个 **Scene** 和多个 **Decision**；Decision 是 Tenant 级，所有 Scene 共享同一套 Decision 词汇表；
 - **Decision** 持有 `actions` 字段（D27 从 Rule 迁移）：命中该 Decision 时派发的动作列表；
 - 一个 **Scene** 有多条 **Rule**；metric 在 tenant 级对所有 scene 可用（D54，无白名单绑定），actionType 由 Decision.actions 决定（D27，与 scene 无关）；
-- **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（可编辑草稿，持 `current_version` 指针）+ **RuleVersion**（每次发布产生的不可变快照）；运行时评估锁定 RuleVersion，回滚 = 用旧版本快照建新草稿走标准发布（D6 / D17 / D19）；
-- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树）+ `decision_bindings`（Rule 绑定的 Decision 及其 actions 的快照，DDL 列名；D27，actions 随 `decision_bindings` 一同快照化，不再有独立的 `actions_snapshot` 列）；
+- **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（规则元数据 + `current_version` 指针）+ **RuleVersion**（一行版本快照）；**草稿即完整冻结快照（premise A，D56）**——`rule_version` 行在 createDraft（v1）/ newVersion（v_max+1）时即跑全套解析校验并冻结，DRAFT 与发布后是同一行（publish 原地翻 ACTIVE，不重解析、不增版本）；运行时评估锁定 ACTIVE RuleVersion，回滚 = newVersion 带 `fromVersionId`（克隆旧版本输入意图、按当前世界重解析产新 DRAFT，再显式发布，D6 / D17 / D19 / D56）；
+- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树，`resolvedAst` 含 dataType）+ 冻结的 `metric_dependencies` / `payload_dependencies` + `decision_bindings`（Rule 绑定的 Decision 及其 actions 的快照，含 `name`；DDL 列名；D27，actions 随 `decision_bindings` 一同快照化，不再有独立的 `actions_snapshot` 列）；
 - AST 内部由 `AndNode` / `OrNode` / `NotNode` 嵌套，叶子是 `ConditionNode`；
 - **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（tenant 级注册的 ACTIVE metric）构建 **EvalContext**，喂给 ConditionNode 做判定；
 - AST 求值为 true 后 → 取 Rule 绑定的 Decision → `decisionStrategy` 合成 `finalDecision`：**PUSH/HYBRID** 模式异步派发 `finalDecision.actions`；**PULL** 模式同步返回 `EvalResult{finalDecision, hitDecisions, ...}`，调用方自行决策，不派发 Action。
@@ -218,7 +218,7 @@ metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）�
 | `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 kind 用各自的 JSON 内部结构，与 ast 互斥） |
 | `preGates` | 准入闸门列表（v1 仅灰度命中 ROLLOUT，D52） |
 | `actions` | **已迁移到 Decision**（D27）：Rule 不再直接持 actions；命中后要执行的动作由 Rule 绑定的 Decision.actions 决定 |
-| `status` | 状态机：`DRAFT` → `PUBLISHING`（瞬时）→ `PUBLISHED` / `PUBLISH_FAILED`；`PUBLISHED ↔ DISABLED` 独立分支；`PUBLISH_FAILED → DRAFT` 需 UI 显式确认（D19） |
+| `status` | `rule_definition` 状态机：`DRAFT` → `PUBLISHED`；`PUBLISHED ↔ DISABLED` 独立分支。版本行（`rule_version`）有自己的状态 `DRAFT` / `ACTIVE` / `SUPERSEDED`（D56）：createDraft/newVersion 产 DRAFT 行，publish 把最新 DRAFT 行**原地翻 ACTIVE**（不增版本）并 supersede 旧 ACTIVE，无需 INSERT 新行（D19/D56） |
 | `current_version` | 指向当前生效 `rule_version` 行的**主键 id**（`BIGINT`，即 `rule_version.id`，而非业务版本序号 `rule_version.version`）。`PUBLISHED` / `DISABLED` 状态下有值；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本。`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
 | `published_by / published_at` | 发布审计字段（D14，仅 PUBLISHED 状态有值；通用 `created_by` / `updated_by` 见 §三 顶部横切说明） |
 
@@ -261,14 +261,16 @@ DecisionRef {
 
 **关键边界**：
 
-- **Rule 是版本化的**：每次发布产生不可变快照，进行中的评估锁定快照版本（D6）。
+- **Rule 是版本化的**：版本快照在 createDraft（v1）/ newVersion（v_max+1）时产生并冻结（premise A，D56），进行中的评估锁定 ACTIVE 快照版本（D6）。
 - **Rule 不直接含 Condition**：Condition 是 AST 的叶子节点（`ConditionNode`），不能脱离 AST 存在。
 - **Rule 内表达任意复杂逻辑**全靠 AST：`AndNode` / `OrNode` / `NotNode` 任意嵌套，没有"层数"限制。
 - **AST 节点上的 `displayLabel`** 是给运营 UI 看的分组标题，后端评估时忽略它，只看逻辑结构。
 - **已实装 `kind`**：`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）；`EXPRESSION_SCRIPT` 未实装（留 v1.5）。发布校验按 kind 校验 AST schema；演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态。
 - **评估失败单节点降级，整树继续短路求值**（D15）：单个 `ConditionNode` 失败 → 该节点 satisfied=false，其他节点正常评估；整树评估完毕后若有失败节点，`EvalResult.errorCode` 非空。规则间隔离：单条 Rule 失败不影响同 (scene + eventType) 下其他 Rule。PUSH 默认安静失败不派发 Action；PULL 返回 `{satisfied, errorCode}`，调用方按 fail-secure / fail-open 决策。对账四态：`HIT / MISS / BLOCKED / ERROR`（D22）。
 - **运行时锁定快照版本**（D17 派生）：evaluation_session 开始时拍当前候选规则版本快照，整 session 用同一快照——即使中途发生 publish 切版本，本次评估不受影响。索引热更：单服务模式由 Modulith `RulePublishedEvent` 触发（毫秒级）；嵌入式 SDK 模式由 `DbPollingRuleWatcher`（默认 15s 轮询）触发（15s 最终一致）。
-- **发布是单条规则原子事务**（D19）：状态机迁移 + 新 version 行写入 + audit_log 在同一 DB 事务；事务失败 → 状态落 `PUBLISH_FAILED`（不是自动回 DRAFT），同时追加一条 `audit_log.action = PUBLISH_FAILED` 记录失败原因；运营从 UI 看到 `PUBLISH_FAILED` 后显式点"重新编辑"才会迁回 DRAFT，避免静默丢失发布上下文。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。"回滚到旧版本" = 用旧版本快照建新草稿走标准发布流程产出新版本号，不可变快照永不覆盖。
+- **草稿即冻结快照，校验前移到草稿写入期**（premise A，D56）：createDraft / editDraft / newVersion 时即跑全套 `resolveAndValidate`（metric 须 ACTIVE、payload 字段须在 `Scene.payloadSchema` 声明、decision 须存在、kind 结构 + 算子×dataType 校验），不过即拒（400），不落库非法草稿。落库的 DRAFT 行已是完整冻结快照（`resolvedAst` 含 dataType、`metric_dependencies`/`payload_dependencies` 已冻、`decision_bindings` 含 `name`/`actions`、`trigger_event_types` 是草稿自己声明的值）。**publish 退化为激活**：把最新 DRAFT 行原地翻 ACTIVE（不增版本、不重解析），supersede 旧 ACTIVE，单事务内迁状态 + 写 audit_log + 发 `RulePublishedEvent`；保证"dry-run 预览 == 发布"。版本号只在 createDraft（v1）/ newVersion（v_max+1）产生，editDraft 原地、publish 激活都不增。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。
+- **"回滚到旧版本" = newVersion 带 `fromVersionId`**（D19/D56）：克隆指定旧版本的输入意图、按当前世界重新解析冻结产出 `v_max+1` DRAFT，再显式 publish 激活；不可变快照永不覆盖。
+- **删草稿边界**（D56）：deleteRule 仅删从未发布过的规则（无 ACTIVE/SUPERSEDED），级联删 `rule_definition` + 全部 `rule_version`；deleteDraftVersion 仅删 DRAFT 版本行；碰 ACTIVE/SUPERSEDED 一律拒（只能 disable）。级联范围只 `rule_version`/`rule_definition`，dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`）视同审计历史不级联删，靠 TTL 退休。
 - **DISABLED 状态从倒排索引剔除**（D17 + D19 派生）：`PUBLISHED → DISABLED` 切换后，下一次索引热更（单服务模式：事件触发，毫秒级；SDK 模式：15s 轮询）将该 RuleVersion 从内存 `(scene, eventType) → List<RuleVersionSnapshot>` 倒排索引中剔除；`DISABLED → PUBLISHED` 切换则按同一窗口重新入索引。`current_version` 指针在切换过程中**不变**（D19）——索引剔除/回填只动运行时视图，不动 `rule_version` 表内容。
 
 ### 3.5 AST 与"分组心智"
@@ -617,27 +619,30 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 ### 3.12 RuleVersion（规则版本快照，不是一等公民）
 
-**是什么**：D6 / D17 / D19 共同依赖的"规则发布产物"，是一行不可变的版本快照。`rule_definition` 表持当前可编辑的规则元数据 + 指向当前生效版本（`current_version`）；每次成功发布产生一行 `rule_version`，承载本次发布的完整冻结副本——运行时评估、灰度桶计算、回滚都基于这张表。
+**是什么**：D6 / D17 / D19 / D56 共同依赖的"规则版本快照"，承载完整冻结副本——运行时评估、灰度桶计算、回滚都基于这张表。`rule_definition` 表持规则元数据 + 指向当前生效版本（`current_version`）。**草稿即冻结快照（premise A，D56）**：`rule_version` 行在 createDraft（v1）/ newVersion（v_max+1）时即跑全套解析校验并冻结；publish 不 INSERT 新行，只把最新 DRAFT 行原地翻 ACTIVE（不重解析、不增版本）。
 
 **字段**：
 
 | 字段 | 说明 |
 |------|------|
-| `version` | 单调递增 `Long`，`(rule_definition_id, version)` 唯一 |
+| `version` | 单调递增 `Long`，`(rule_definition_id, version)` 唯一。仅 createDraft（v1）/ newVersion（v_max+1）产生新值；editDraft 原地改不增、publish 激活不增（D56） |
+| `status` | 版本行状态：`DRAFT`（草稿，可 editDraft / deleteDraftVersion）/ `ACTIVE`（当前生效）/ `SUPERSEDED`（被新版本取代）。publish 把最新 DRAFT 翻 ACTIVE 并 supersede 旧 ACTIVE（D56） |
 | `rule_definition_id` | 归属规则（FK → `rule_definition.id`）；按 Scene 查所有候选版本通过 JOIN rule_definition 实现，不冗余 scene_id |
-| `trigger_event_types` | 冻结：发布瞬间的 eventType 数组 |
-| `condition_ast` | 冻结：完整 AST JSON（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
+| `trigger_event_types` | 冻结：草稿自己声明的 eventType 数组（写入草稿时已校验 ⊆ `Scene.eventTypes`；不再于 publish 时覆盖成 scene 全集，保「dry-run 预览 == 发布」，D56） |
+| `condition_ast` | 冻结：完整 `resolvedAst` JSON（含解析出的 dataType）（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
 | `pre_gates` | 冻结：preGates 列表（含 ROLLOUT 灰度配置；无独立 `rollout` 列，D43）（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
-| `decision_bindings` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
+| `decision_bindings` | 冻结：Rule 绑定的 Decision 列表（含 `name`）及各 Decision.actions 快照（含 `failFast` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |
-| `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。发布期由 AST 静态分析得出；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
+| `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。**草稿写入期**由 AST 静态分析 + metric ACTIVE 校验冻结（premise A，D56）；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
+| `payload_dependencies` | 数组 JSON，本 RuleVersion 引用的 payload 字段集合 `[{name, dataType, required}]`（D55）。草稿写入期由 `valueRef=PAYLOAD` 节点 + `Scene.payloadSchema` 声明校验冻结（premise A，D56） |
 | `compiled_predicate_ref?` | 可选字符串，编译产物引用键（D20 §5）。v1 留空；v1.5 启用，由 `CompiledExecutor` + `ExecutorRegistry` 按版本 id 检索编译产物 |
 | `published_by / published_at` | 发布审计字段（D14） |
 
 **关键边界**：
 
-- **不可变**（D6）：行写入后永不 UPDATE，永不 DELETE。修改规则 = 在 `rule_definition` 改草稿 → 走标准发布产生新一行 `rule_version`。
-- **回滚不是覆盖**（D19）：回滚到 `version=N-2` = 把 N-2 的快照内容拷回 `rule_definition` 草稿，走标准发布产出 `version=N+1`（内容等于 N-2），审计链完整可追溯，N-1 / N-2 行均原样保留。
+- **冻结快照**（D6 / D56）：ACTIVE / SUPERSEDED 行永不 UPDATE、永不 DELETE。DRAFT 行可经 editDraft 原地更新（同 version，premise A 下仍是完整冻结快照）、可经 deleteDraftVersion 删除；publish 把 DRAFT 翻 ACTIVE 后即不可变。
+- **回滚不是覆盖**（D19 / D56）：回滚到 `version=N-2` = newVersion 带 `fromVersionId=<N-2 的 id>`，克隆 N-2 的输入意图、按当前世界重解析冻结产出 `version=N+1` DRAFT，再显式 publish 激活；审计链完整可追溯，旧行均原样保留。
+- **删草稿边界**（D56）：deleteRule 仅删从未发布规则（无 ACTIVE/SUPERSEDED）级联全部 `rule_version`；deleteDraftVersion 仅删 DRAFT 行；碰 ACTIVE/SUPERSEDED 拒绝（只能 disable）。dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`）不级联删，靠 TTL 退休。
 - **运行时锁定**（D17 派生）：`evaluation_session` 开始时按 `(scene, eventType)` **倒排索引**拿当前候选 `rule_version` 列表（`current_version` 在索引预热时已解析）并拍快照，整 session 用同一组版本——即使中途切版本，本次评估不受影响。
 - **灰度桶稳定性**（D6 派生）：`hash(subjectId, experimentId ?? ruleVersionId)` 计算桶号，每个不可变版本对应稳定的桶分布；版本切换会触发桶漂移，这是 D6 的固有语义。`subjectId` 由 Scene.subjectType 决定语义（v1 仅 USER 实装），与 §3.10 Job / §3.4 ROLLOUT 灰度口径一致。
 - **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键，且 `node_trace` 记 `rule_version_id` 便于按版本对账 trace；`action_execution` 记 `decision_code`，可与 `rule_version.decision_bindings` 关联溯源。

@@ -1498,6 +1498,39 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 ---
 
+## D56. 规则草稿/版本生命周期重构：premise A 草稿即冻结快照 + publish 退化为激活 + 删草稿边界 + dry-run 二选一 ⭐⭐⭐
+
+**背景**：D6（版本与灰度）+ D19（规则发布事务性）确立了"快照不可变 + 回滚 = 用旧版本快照建新草稿"，但现状实现把生命周期压成了一次性链路（createDraft 存 raw 未解析草稿 → publish 时才解析 + INSERT 新 ACTIVE 行 → 之后只能 disable），且 dry-run 复用评估主链路会落 `evaluation_session` / 派发 action（副作用 bug）。本决策补全生命周期、把"草稿即完整冻结快照"立为 premise，并重设计 dry-run。设计见 `specs/2026-06-10-rule-draft-version-lifecycle-design.md`（设计冻结 2026-06-10，本条落地）。
+
+**决策**：
+
+1. **生命周期补全**：规则生命周期方法集补全为 createDraft / editDraft / newVersion / rollback / publish / deleteRule / deleteDraftVersion——
+   - `createDraft`：建 v1 DRAFT 行。
+   - `editDraft`：原地更新当前最新 DRAFT 行内容，**不增版本号**（同一 versionId、同一 version）。
+   - `newVersion`：对已发布规则出 `v_max+1` DRAFT；要求当前**无未发布 DRAFT**（先发布或删掉在途草稿，避免多个并行草稿）。
+   - `rollback`：= `newVersion` 带 `fromVersionId`——克隆指定旧版本的内容、按**当前世界重新解析**（metric/decision/payload 的现状），产出新 DRAFT；激活仍走显式 `publish`（不自动上线）。这是 D19"回滚 = 用旧版本快照建新草稿"的精确落地：克隆的是输入意图，冻结的是当前世界的解析结果。
+   - `publish` / `deleteRule` / `deleteDraftVersion`：见第 3、4 条。
+
+2. **premise A：草稿即完整冻结快照**——草稿在 **create / edit / newVersion 时**就跑全套 `resolveAndValidate`（解析 + 硬校验）：metric 必须 ACTIVE、payload 字段必须在 `scene.payloadSchema` 声明、decision 必须存在、kind 结构校验（SCORECARD 根/权重、DECISION_TREE 结构、DECISION_TABLE 行列一致）、算子×dataType 校验。**任一校验不过即拒绝建/改草稿**（抛 `IllegalArgumentException` → 400）。落库的 DRAFT 行已是冻结快照：`resolvedAst` 含 dataType、`metricDependencies`/`payloadDependencies` 已冻、`decisionBindings` 含 `name`/`actions`、`triggerEventTypes`/`preGates` 已规整。校验从发布期前移到草稿写入期，配置错误第一时间暴露，dry-run 试跑的就是发布后一模一样的快照。
+
+3. **publish 退化为激活**：publish 不再 INSERT 新 ACTIVE 行、不再重解析——把当前最新 DRAFT 行**原地翻 ACTIVE**（version 不变），supersede 旧 ACTIVE 行，发 `RulePublishedEvent` 触发 eval 侧索引热更。**版本号只在 createDraft（v1）/ newVersion（v_max+1）产生**；editDraft 原地更新不增、publish 激活不增。这相对现状是最大行为变化（现状 publish 插一条新 version=max+1 的 ACTIVE 行并保留 DRAFT）。
+
+4. **triggerEventTypes 冻结口径**：发布落库的 `triggerEventTypes` 是草稿**自己声明的值**（写入草稿时已校验 ⊆ `scene.eventTypes`），不再像现状那样 publish 时覆盖成 `scene.getEventTypes()` 全集——保证"预览（dry-run 草稿）的 == 发布的"。空 `triggerEventTypes` 仍归 eval 侧 `*` 通配桶。
+
+5. **dry-run 重设计为 ruleId / ruleVersionId 二选一必传**：`POST /api/v1/rule/dry-run` 改为二者择一必传——传 `ruleVersionId` 试跑该精确版本；传 `ruleId` 取该规则**最新版本**（最高版本号，含 DRAFT）；两者都不传 → 400 `MISSING_DRYRUN_TARGET`。结构上恒走"带版本单快照"分支 → dry-run **不落 `evaluation_session`、不派发 action**（从结构上根除旧实现复用评估主链路带来的副作用 bug，而非靠 `isDryRun` 标志逐处门控）。dry-run 痕迹仍按需落 `dry_run_session` / `dry_run_node_trace`（D7 试算观测，与正式评估隔离）。
+
+6. **删草稿边界**：
+   - `deleteRule` 仅删**从未发布过**的规则（无 ACTIVE/SUPERSEDED 版本），级联删 `rule_definition` + 其全部 `rule_version`。
+   - `deleteDraftVersion` 仅删 **DRAFT** 版本行。
+   - 碰 ACTIVE / SUPERSEDED 版本一律**拒绝**（已上线/曾上线的版本只能 `disable`，保留审计与可回滚历史）。
+   - **级联范围只 `rule_version`**：草稿出站引用（metric/decision/scene/payload）全是 `rule_version` 冻结快照内的值，删行即净；入站 dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`，按 ruleVersionId 关联）**不级联删**——视同审计历史，靠 `SessionRetentionCleaner` TTL 退休（详见 spec §六）。资源（metric/decision/scene）无硬删除接口，删草稿不影响被引用实体。
+
+**取舍（已接受）**：草稿写入期跑全套解析校验，建/改草稿比"raw 存草稿"重（多查 metric/decision/scene），换来"草稿即真实快照 + dry-run == 发布"的确定性与副作用根除；newVersion 要求无在途 DRAFT（单草稿约束），简化版本状态机，多并行草稿是伪需求。
+
+**已实装**（D56）：`PublishService` 抽 `resolveAndValidate` + `ResolvedDraft` record；`publish` 改原地激活；新增 `editDraft`/`newVersion`/`deleteRule`/`deleteDraftVersion`；`RuleVersion.draftV1`（raw 草稿工厂）删除；`RuleVersionMapper` 补 `findByIdAndRule`/`hasNonDraftVersion`/`deleteByRuleDefinitionId`；`ConfigService` 接口扩展；`RuleController` 加 PUT `/draft`、POST `/versions`、DELETE `/{ruleId}`、DELETE `/{ruleId}/versions/{versionId}`；`EvalService.dryRun` 改签名 `(event, ruleId, ruleVersionId)` + 恒走带版本单快照分支（不落 session、不派发 action）；`RuleVersionReadMapper.latestVersionIdByRule`；`MISSING_DRYRUN_TARGET` 错误码。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1551,5 +1584,6 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D54 | 配置闭环 B 轮：补齐 D27 + 砍两张 binding 表 | A | **补齐 D27（decision.actions 接进派发，实装）**：`DecisionBinding` 快照扩 `name`/`actions`（发布期从 `decision_definition` 冻结，方案甲——守 D6 不可变 + 评估零额外查询，改 decision 需重发生效）；`Decision` 加 `actions` 字段；`EvalEngine.resolveRuleDecisions` + Tree/Table executor 从 binding 读 `name`/`actions`（**修 `finalDecision.name` 永远空串真 bug**）；`ActionDispatchService` 改读 **finalDecision.actions** 派发（不再 `hitDecisions × scene_action_binding` 笛卡尔积），`DispatchActionsCommand` 携带 `finalDecision`；发布期新增 **DECISION_CODE_NOT_FOUND** 校验（rule 绑定的 decisionCode 必须在 `decision_definition` 存在）；新增 **decision tenant 级写 API**（`/admin/v1/decisions` CRUD + actions + 审计）。**触发源单一性**：action 触发唯一来源 = decision（tenant 级，与 scene 无关），否 D27 当年的 C 方案（两层并存）。**决策二 砍 metric binding**：drop `scene_metric_binding`（V1_22），metric 在 tenant 级对所有 scene 可用。**决策三 砍 scene_action_binding 整表**（V1_23）：action 端到端 tenant 级、与 scene 无关，该表退化为纯白名单后是 action 最后残留的 scene 耦合，鸡肋；连同 **D50 写 API 作废**、`scene_action_binding.default_params` 移除。actionType 合法性降级为**运行期 NO_HANDLER skip**（与 D53 best-effort 一致），不在发布期校验，`ACTION_TYPE_NOT_BOUND` errorCode 删除。D26/D27/D50 历史条目记当时设计，本决策收敛覆盖（D27 由"待实装"转"已实装"；D50 作废）。取舍：放弃 scene 级 action 差异化（伪需求，走不同 decision 解决）+ scene 级 metric/action 治理白名单 |
 | D51 | 剩余 DB ENUM 列全面 VARCHAR 化（R10） | A | 承 V1_11（metric source_type/data_type/status）、V1_15（rule_definition/rule_version/scene status）后，将剩余全部 MySQL `ENUM` 列改 `VARCHAR`：tenant.status、scene.dominant_mode/decision_strategy/subject_type、decision_definition.status、rule_definition.kind/rule_version.kind、audit_log.actor_type（V1_16）；evaluation_session.source/mode/status、action_execution.status、dry_run_session.status/trigger（V1_17）；node_trace/dry_run_node_trace.value_source（V1_18）；job_definition.status/job_execution.status（V1_19）。取值真相源统一在 app 层 Java enum，按 `name()` 与列往返（MyBatis-Plus 全局 `MybatisEnumTypeHandler`）；契约边界 `.name()` 保持 String。封闭取值复用 kernel `SubjectType`(+CUSTOM)/`RuleKind`/`EventSource`/`ValueSource`/`ActionResult.ActionStatus`，新建 `TenantStatus`/`DecisionStatus`/`DominantMode`/`DecisionStrategy`/`ActorType`/`SessionStatus`/`EvalMode`/`JobStatus`/`JobExecutionStatus`。`dry_run_session.trigger` 无实体字段（纯列改型）。理由同 V1_11：ENUM 加值需 ALTER+双重定义，VARCHAR 后单一真相源、增删枚举项零迁移风险。至此 DB 不再保留 MySQL ENUM 列 |
 | D55 | 场景输入参数清单（范围 B）：公开评估只收 payload + 输入清单发现/校验 | A | 依赖范围 A（payload 直接引用）。**公开评估只收 `payload`**：`EvalEventRequest` 删 `providedMetrics`，metric 全归引擎；内部 `RuleEvent` 保留 `providedMetrics` 供 SDK/Job 非公开注入。**清单来源 = 发布期快照**：规则发布冻结引用的 `valueRef=PAYLOAD` 字段进 `rule_version.payload_dependencies`（`[{name,dataType,required}]`，V1_24 加列），随 `RuleVersionSnapshot.payloadDependencies` 下发；场景级清单 = 该场景 ACTIVE 规则清单并集。**评估期整体校验**：缺必填 → `MISSING_REQUIRED_INPUT`（拒绝 400 不降级），类型不符 → `INPUT_TYPE_MISMATCH`（400），多塞忽略；经 `IllegalArgumentException → 400`，wire `errorCode=INVALID_ARGUMENT` + 语义码携于 message；与发布期 `UNRESOLVED_VARIABLE` 正交。**新发现接口** `GET /api/v1/rule/scenes/{sceneCode}/input-manifest`（`ApiResponse.data.fields`）；**删 `getProvidedMetrics`** 端点（`/admin/v1/scenes/{sceneCode}/provided-metrics`），`/metadata` 保留。设计见 `specs/2026-06-10-scene-input-manifest-design.md` |
+| D56 | 规则草稿/版本生命周期重构：premise A 草稿即冻结快照 + publish 退化为激活 + 删草稿边界 + dry-run 二选一 | A | 落地 D6/D19。**生命周期补全**：createDraft(v1 DRAFT)/editDraft(原地更新最新 DRAFT，不增版本)/newVersion(已发布出 v_max+1 DRAFT，要求无在途 DRAFT)/rollback(=newVersion 带 fromVersionId，克隆旧版本按当前世界重解析→DRAFT，激活仍走 publish)/publish/deleteRule/deleteDraftVersion。**premise A 草稿即冻结快照**：草稿在 create/edit/newVersion 时即跑全套 `resolveAndValidate`（metric 须 ACTIVE、payload 须在 scene.payloadSchema 声明、decision 须存在、kind 结构 + 算子×dataType 校验），不过即拒；落库 DRAFT 已含 resolvedAst(dataType)/metric·payloadDependencies/decisionBindings(name·actions)。**publish 退化为激活**：把最新 DRAFT 行原地翻 ACTIVE（不增版本、不重解析），supersede 旧 ACTIVE，发 `RulePublishedEvent`；版本号只在 createDraft(v1)/newVersion(+1) 产生。**triggerEventTypes 冻结草稿声明值**（已校验 ⊆ scene.eventTypes，不再覆盖成 scene 全集），保「预览==发布」。**dry-run 二选一必传**：`POST /api/v1/rule/dry-run` 传 ruleVersionId(精确版本)/ruleId(取最新版本含 DRAFT) 二选一，都不传→400 `MISSING_DRYRUN_TARGET`；结构上恒走带版本单快照分支→不落 `evaluation_session`、不派发 action（根除副作用 bug）。**删草稿边界**：deleteRule 仅删从未发布规则(无 ACTIVE/SUPERSEDED)级联 rule_definition+全部 rule_version；deleteDraftVersion 仅删 DRAFT；碰 ACTIVE/SUPERSEDED 一律拒(只能 disable)；级联范围只 rule_version，dry-run 痕迹不级联删（TTL 退休）。覆盖 D19「回滚=旧快照建草稿」为精确生命周期；设计见 `specs/2026-06-10-rule-draft-version-lifecycle-design.md` |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

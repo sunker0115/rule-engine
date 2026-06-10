@@ -34,7 +34,7 @@
 | 类别 | 分组 | 路径前缀 | 主要场景 |
 |------|------|---------|---------|
 | api | 评估接口 | `/api/v1/rule/` | 业务方触发评估（PUSH/PULL/dry-run）+ 场景输入清单发现 |
-| admin | 规则管理 | `/admin/v1/rules` | 创建 / 发布 / 禁用 / 查询规则；批量导出 / 导入 Bundle 文件（B7） |
+| admin | 规则管理 | `/admin/v1/rules` | 创建草稿 / 改草稿 / 出新版本 / 发布 / 禁用 / 删草稿 / 查询规则；批量导出 / 导入 Bundle 文件（B7） |
 | admin | Scene 管理 | `/admin/v1/scenes` | 创建 / 更新 / 禁用 Scene |
 | admin | 指标管理 | `/admin/v1/metrics` | 注册 / 更新 / 禁用 Metric |
 | admin | 元数据接口 | `/admin/v1/scenes/{sceneCode}/metadata` | 前端编辑器拉 ConditionType / ActionType 枚举 + tenant 级 ACTIVE metric |
@@ -125,7 +125,16 @@ POST /api/v1/rule/evaluate
 POST /api/v1/rule/dry-run
 ```
 
-**Request：** 同 3.1，额外可传 `ruleVersionId`（指定版本回放，null = 使用当前版本）。
+**Request：** 同 3.1（event 体），并以 **`ruleVersionId` / `ruleId` 二选一必传**指定试跑目标（D56）：
+
+| 参数 | 说明 |
+|------|------|
+| `ruleVersionId` | 试跑该**精确版本**（DRAFT 或已发布版本均可），用于"发布前预览这条草稿" |
+| `ruleId` | 取该规则的**最新版本**（最高版本号，含未发布 DRAFT）试跑 |
+
+- 两者都不传 → 400 `MISSING_DRYRUN_TARGET`（见 §七）。
+- 两者都传时以 `ruleVersionId` 为准（精确版本优先）。
+- dry-run 恒走"带版本单快照"分支：**不写 `evaluation_session`、不派发 action**（仅返回预览 ActionResult），dry-run 痕迹按需落 `dry_run_session` / `dry_run_node_trace`（与正式评估隔离，D7）。
 
 **Response 200：** 同 3.2，但 `nodeTrace` 字段填充真实节点路径（evaluate 时为空数组）；v1.5（D7）已全量实装 `dryRun()`，`actionResults` 返回真实预览 ActionResult（不实际派发）：
 ```json
@@ -265,13 +274,54 @@ POST /admin/v1/rules
 { "ruleDefinitionId": 1, "ruleVersionId": 1, "version": 1, "status": "DRAFT" }
 ```
 
+> **premise A（D56）**：创建即跑全套 `resolveAndValidate`（解析 + 硬校验：metric 须 ACTIVE、payload 字段须在 `Scene.payloadSchema` 声明、decision 须存在、kind 结构 + 算子×dataType 校验）。校验不过返回 400 `INVALID_ARGUMENT`（语义码携于 message）。落库的 DRAFT 行已是冻结快照（`resolvedAst` 含 dataType、`metricDependencies`/`payloadDependencies` 已冻、`decisionBindings` 含 `name`/`actions`），与发布后内容一致。
+
+### 4.1.1 编辑草稿（editDraft，D56）
+
+> **已实装（D56）**：原地更新当前最新 DRAFT 行内容，**不增版本号**（同一 `ruleVersionId`、同一 `version`）。
+
+```
+PUT /admin/v1/rules/{ruleDefinitionId}/draft
+```
+
+**Request：** 字段同 §4.1（`conditionAst` / `decisionBindings` / `preGates` / `triggerEventTypes` / `kind` / `name`），整组覆盖当前 DRAFT 内容；`tenantId` / `sceneCode` / `code` 不可改。
+
+- 同 §4.1 跑全套 `resolveAndValidate`（premise A），校验不过返回 400。
+- 规则当前**无 DRAFT 版本**（仅有已发布版本）时返回 400 `INVALID_ARGUMENT`（须先 §4.1.2 出新版本再编辑）。
+
+**Response 200：** 同 §4.1 结构（`ruleDefinitionId` / `ruleVersionId` / `version` / `status=DRAFT`，version 与编辑前一致）。
+
+### 4.1.2 出新版本 / 回退（newVersion，D56）
+
+> **已实装（D56）**：对已发布规则产出 `v_max+1` 的新 DRAFT。带 `fromVersionId` 即**回退**（克隆旧版本内容、按当前世界重解析）。
+
+```
+POST /admin/v1/rules/{ruleDefinitionId}/versions
+```
+
+**Request：**
+```json
+{ "fromVersionId": 100 }
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `fromVersionId` | Long | 否 | 缺省：以当前最新版本内容为基底出新版本草稿；传入：**回退**——克隆该 `rule_version` 的输入意图，按**当前世界**（metric/decision/payload 现状）重新 `resolveAndValidate` 产出新 DRAFT。激活仍走显式 §4.2 publish。 |
+
+- **前置约束**：规则当前**不得存在未发布 DRAFT**（先发布或删掉在途草稿）→ 否则 400 `INVALID_ARGUMENT`。
+- 新版本 `version = v_max + 1`，`status=DRAFT`，内容为冻结快照（premise A）。
+
+**Response 201：** 同 §4.1 结构（新 `ruleVersionId`，`version=v_max+1`，`status=DRAFT`）。
+
 ### 4.2 发布规则
 
 ```
 POST /admin/v1/rules/{ruleDefinitionId}/publish
 ```
 
-**响应**：发布成功 200，返回新激活的 `RuleVersionSnapshot`；发布校验失败 422 + errorCode（`UNRESOLVED_VARIABLE` / `DECISION_CODE_NOT_FOUND` 等，见 §七）。
+**语义（D56）**：publish **退化为激活**——把当前最新 DRAFT 行**原地翻 ACTIVE**（version 不变、不重解析，草稿写入期已是冻结快照），supersede 旧 ACTIVE 行，发 `RulePublishedEvent` 触发 eval 侧索引热更。发布落库的 `triggerEventTypes` 是草稿自己声明的值（保证"dry-run 预览 == 发布"），不再覆盖成 scene 全集。版本号只在 §4.1 createDraft（v1）/ §4.1.2 newVersion（+1）产生，publish 不增。
+
+**响应**：发布成功 200，返回新激活的 `RuleVersionSnapshot`；当前无 DRAFT 可发布返回 400；草稿写入期校验已前移，publish 不再做解析校验（premise A 下校验失败的草稿无法落库）。
 
 ### 4.3 禁用规则
 
@@ -280,6 +330,32 @@ POST /admin/v1/rules/{ruleDefinitionId}/disable
 ```
 
 效果：`rule_definition.status = DISABLED`，Matcher 倒排索引热摘除（≤15s 全实例收敛，D17）。
+
+### 4.3.1 删除规则（deleteRule，D56）
+
+> **已实装（D56）**：仅删**从未发布过**的规则（无 ACTIVE/SUPERSEDED 版本），级联删 `rule_definition` + 其全部 `rule_version`。
+
+```
+DELETE /admin/v1/rules/{ruleDefinitionId}
+```
+
+- 规则存在任一 ACTIVE / SUPERSEDED 版本（曾上线）→ 拒绝（返回 400），只能 §4.3 disable。
+- 级联范围**只 `rule_version` + `rule_definition`**；dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`，按 ruleVersionId 关联）视同审计历史**不级联删**，靠 TTL 退休（D56 / D7）。被引用的 metric/decision/scene 不受影响。
+
+**Response 200：** 删除成功。
+
+### 4.3.2 删除草稿版本（deleteDraftVersion，D56）
+
+> **已实装（D56）**：仅删指定 **DRAFT** 版本行（如放弃在途草稿）。
+
+```
+DELETE /admin/v1/rules/{ruleDefinitionId}/versions/{versionId}
+```
+
+- 目标版本须属该规则且 `status=DRAFT`；碰 ACTIVE / SUPERSEDED 版本一律拒绝（返回 400，只能 disable）。
+- 不触碰 `rule_definition` 行与其它版本。
+
+**Response 200：** 删除成功。
 
 ### 4.4 查询规则列表
 
@@ -572,6 +648,7 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 | `INPUT_TYPE_MISMATCH` | 400 | 评估请求 `payload` 字段基础类型与清单声明不符（`number→DECIMAL` / `integer→LONG` / `string→STRING` / `boolean→BOOLEAN`，B-T8） | 按清单声明的 `dataType` 修正字段类型重试 |
 | `INVALID_EVENT_TYPE` | 400 | eventType 不在 Scene 白名单内 | 确认 sceneCode + eventType |
 | `SCENE_NOT_FOUND` | 404 | sceneCode 未注册或 DISABLED | 确认 tenantId + sceneCode |
+| `MISSING_DRYRUN_TARGET` | 400 | `POST /api/v1/rule/dry-run` 未传 `ruleVersionId` 或 `ruleId`（二选一必传，D56） | 补传 `ruleVersionId`（精确版本）或 `ruleId`（取最新版本）重试 |
 
 > `MISSING_REQUIRED_INPUT` / `INPUT_TYPE_MISMATCH` 经 `IllegalArgumentException → GlobalExceptionHandler → HTTP 400` 落地，与既有约定一致：**wire 层 `errorCode` 统一为 `INVALID_ARGUMENT`**，语义码（`MISSING_REQUIRED_INPUT` 等）携带在 message 前缀（同 `DECISION_CODE_NOT_FOUND` 等发布期语义码经 message 透出的方式）。两者管"调用期：调用方别漏传 / 错类型"，与发布期 `UNRESOLVED_VARIABLE`（管"授权期：规则别越界引用"）正交。
 
