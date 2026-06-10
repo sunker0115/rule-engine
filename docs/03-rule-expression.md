@@ -16,7 +16,7 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 AST 节点结构 | ✅（含 XorNode §2.5） |
+| §二 AST 节点结构 | ✅（含 XorNode §2.5、payload 直接引用 §2.6） |
 | §三 操作符清单 | ✅（含 DATE_BEFORE/DATE_AFTER §3.4） |
 | §四 短路求值规则 | ✅ |
 | §五 节点级 trace | ✅ |
@@ -67,11 +67,45 @@ AST 由五种节点类型组成，每种节点字段如下。
 | `type` | `"ConditionNode"` | 是 | 固定值 |
 | `conditionType` | `string` | 是 | ConditionType 注册码，如 `metric.threshold` / `event.payload.compare` / `time.window` |
 | `displayLabel` | `string` | 否 | UI 显示名 |
-| `metricCode` | `string` | 仅 metric 类需填 | 引用的指标码；`conditionType` 非 metric 类时留 null |
+| `metricCode` | `string` | 仅 metric 类需填 | 值引用名：`valueRef=METRIC`（默认）时为指标码；`valueRef=PAYLOAD` 时为 payload 字段名；`conditionType` 非 metric/payload 类时留 null |
+| `valueRef` | `"METRIC" \| "PAYLOAD"` | 否 | 值来源。缺省 `METRIC`（向后兼容，序列化时可省略）：`metricCode` 引用受治理指标，按 tenant 级 ACTIVE metric 取数 / 注入；`PAYLOAD`：`metricCode` 直接引用事件 payload 字段（须在 `Scene.payloadSchema` 声明），不注册 metric，见 §2.6 |
 | `params` | `object` | 是 | 传给 ConditionEvaluator 的参数对象，结构由各 conditionType 定义 |
 | `weight` | `number` | 否 | SCORECARD kind 专用（D12），v1 AST_BOOLEAN 忽略此字段 |
 
 **嵌套约束**：ConditionNode 是叶子节点，不能有 `children`；AndNode / OrNode / NotNode / XorNode 是中间节点，不能作为最终叶子（children 不能为空）。
+
+### 2.6 payload 直接引用（`valueRef=PAYLOAD`）
+
+ConditionNode 的值默认来自受治理指标（`valueRef=METRIC`）；当判据对象是**事件自带的事实**（如转账金额 `amount`、币种 `currency`）时，可设 `valueRef=PAYLOAD` 直接引用 `RuleEvent.payload` 字段，无需把它注册成 metric、无需走 `providedMetrics` 喂值。
+
+| 维度 | `valueRef=METRIC`（默认） | `valueRef=PAYLOAD` |
+|------|--------------------------|--------------------|
+| `metricCode` 语义 | 指标码 | payload 字段名 |
+| 取值来源 | 取数 / `providedMetrics` 注入 | `event.payload.<字段>` 装配期注入 |
+| 发布期要求 | 须为 tenant 级 ACTIVE metric | 字段须在 `Scene.payloadSchema` 声明（否则发布拒绝，`UNRESOLVED_VARIABLE`，见 10-api-contract §七） |
+| dataType | metric 定义的 dataType | 从 payloadSchema 字段 `type` 冻结：`number→DECIMAL` / `integer→LONG` / `string→STRING` / `boolean→BOOLEAN` / `array→LIST` / 其他→`UNKNOWN` |
+| 是否计入 metric 依赖 | 是（须 ACTIVE） | 否（`MetricDependencyCollector` 跳过） |
+
+**操作符与 params 完全一致**：payload 引用复用 §三 全部比较操作符（GT/GTE/LT/LTE/EQ/NEQ/IN/BETWEEN 等）与同名 `params` 键，写法与 metric 引用唯一差别仅在 `valueRef`。
+
+**示例**：交易金额 > 1000（`amount` 在 payloadSchema 声明为 `number`，冻结为 DECIMAL）：
+
+```json
+{
+  "type": "ConditionNode",
+  "conditionType": "metric.threshold",
+  "metricCode": "amount",
+  "valueRef": "PAYLOAD",
+  "params": {
+    "operator": "GT",
+    "value": 1000
+  }
+}
+```
+
+**配置判据（payload 还是 metric）**——"指标身份"测试，任一为 yes 走 metric，全 no 走 payload：需要取数 / 需要权威保护（`allowProvided=false`）/ 跨规则复用同一定义 / 要版本化 / 要下发 SDK / 要影响面查询。`amount` 永远是 payload（这笔交易的事实）；`user.risk.score` 永远是 metric（哪怕这次值由上游注入，身份仍是受治理指标）。详见 [`01-concepts.md`](./01-concepts.md) §3.9。
+
+**SDK DSL**：`Condition` 提供与 metric 工厂对称的 payload 一组工厂 `payloadGt / payloadGte / payloadLt / payloadLte / payloadEq / payloadNeq / payloadIn / payloadBetween`，生成 `valueRef=PAYLOAD` 节点（见 10-api-contract §8.5）。
 
 ### 2.5 XorNode（异或节点）
 

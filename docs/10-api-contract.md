@@ -198,7 +198,7 @@ POST /admin/v1/rules
 | `code`          | String | 是   | 规则业务编码，同 tenantId + sceneCode 下唯一 |
 | `name`          | String | 是   | 规则显示名称 |
 | `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` |
-| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST |
+| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST。ConditionNode 字段语义见 [`03-rule-expression.md`](./03-rule-expression.md) §2.4；其中 `valueRef`（枚举 `METRIC` \| `PAYLOAD`，缺省 `METRIC`）选值来源：`PAYLOAD` 时 `metricCode` 为 payload 字段名（须在 `Scene.payloadSchema` 声明），不注册 metric，详见 §2.6 |
 | `decisionBindings` | Array | 否 | 命中决策绑定列表，缺省空数组 |
 | `preGates`      | Array  | 否   | 前置门列表，缺省空数组；每项 `{ gateType, params }`。ROLLOUT 灰度门的 params 见下 |
 | `triggerEventTypes` | Array | 否 | 触发事件类型白名单，缺省空数组 |
@@ -596,7 +596,7 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 
 | errorCode | 含义 |
 |-----------|------|
-| `UNRESOLVED_VARIABLE` | conditionAst / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内） |
+| `UNRESOLVED_VARIABLE` | conditionAst / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内）。含 `valueRef=PAYLOAD` 的 ConditionNode 其 `metricCode`（payload 字段名）未在 `Scene.payloadSchema` 声明的情形——发布拒绝，message 指明该未声明字段 |
 | `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了该 Rule 所属 Tenant 未定义的 Decision（Decision 是 Tenant 级实体，D26/D54） |
 | `ZOMBIE_PUBLISHING` | 后台清扫检测到 PUBLISHING 状态残留超时，强制修正为 PUBLISH_FAILED（D19） |
 | `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
@@ -781,6 +781,17 @@ Condition.neq("status", "BLOCKED")    // status != BLOCKED
 Condition.in("country", "CN", "HK")   // country IN [CN, HK]
 Condition.notIn("country", "US")      // country NOT IN [US]
 Condition.between("age", 18, 65)      // age BETWEEN [18, 65]
+
+// payload 直接引用（valueRef=PAYLOAD，metricCode 为 payload 字段名，须在 Scene.payloadSchema 声明）
+// 与上方 metric 工厂一一对称，仅值来源不同；详见 03-rule-expression §2.6
+Condition.payloadGt("amount", 1000)            // payload.amount > 1000
+Condition.payloadGte("amount", 1000)
+Condition.payloadLt("amount", 1000)
+Condition.payloadLte("amount", 1000)
+Condition.payloadEq("currency", "CNY")
+Condition.payloadNeq("currency", "USD")
+Condition.payloadIn("currency", "CNY", "HKD")
+Condition.payloadBetween("amount", 100, 10000)
 
 // 字符串
 Condition.contains("name", "corp")    // name 包含 "corp"

@@ -491,6 +491,7 @@ EvalContext {
 - **预拉值评估期内冻结**（D20 §1 派生）：D20 metric 批量预拉后注入 `EvalContext` 即视为本次评估的不可变快照；评估期内**不**再受 `cachePolicyDefault.ttl` 影响，即使评估耗时跨过 TTL 边界，本次评估仍读初始预拉值。TTL 只作用于"下次评估是否复用上次缓存值"层面，与"本次评估内的取数稳定性"无关。
 - **超时与异常归一**（D15 派生）：`MetricSource` 实现自管 timeout / retry / 熔断（不同 `sourceType` 合理默认不同：EXTERNAL_HTTP 短超时、SQL_AGGREGATE 中超时，建议值见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南）；任何取数异常（timeout / 熔断 / 连接拒绝 / 反序列化失败）统一归 D15 `METRIC_FETCH_FAIL`，引擎核心不重试。
 - **业务共享常量建议建为只读 metric**：跨多条规则共享的业务阈值 / 配置值（如 VIP 门槛、风控分数线）**建议建为只读 metric**（`sourceType=ATTRIBUTE` 或固定返回值的 `EXTERNAL_HTTP`），复用 metric 的 `cachePolicy` / 版本化通道，不另设"常量库"一等概念。引擎不内置 urule 风格的 ConstantLibrary——若业务常量变更频次很低也可直接内联到 `ConditionNode.params`，二选一由业务方按变更频次自决。独立常量库一等概念的演进留 [`08-evolution.md`](./08-evolution.md) §四。
+- **payload vs metric —— "指标身份"判据**：事件自带的事实（`amount` / `currency` 等）走 **payload 直接引用**（`ConditionNode.valueRef=PAYLOAD`，`metricCode` 复用为 payload 字段名，须在 `Scene.payloadSchema` 声明），不注册 metric、不进 `providedMetrics`；受治理指标（`user.risk.score` 等）走 **metric**。判别测试——任一为 yes 走 metric，全 no 走 payload：需要取数 / 需要权威保护（`allowProvided=false`）/ 跨规则复用同一定义 / 要版本化 / 要下发 SDK / 要影响面查询。`amount` 永远是 payload（这笔交易的事实）；`user.risk.score` 永远是 metric（哪怕本次值由上游 `providedMetrics` 注入，身份仍是受治理指标）。AST 写法 + 操作符见 [`03-rule-expression.md`](./03-rule-expression.md) §2.6。
 
 ### 3.10 Job（定时触发，不是一等公民）
 
