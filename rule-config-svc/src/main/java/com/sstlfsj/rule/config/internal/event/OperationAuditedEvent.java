@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
  * @param tenantId       租户 id
  * @param actor          操作人（来自请求头 X-Actor-Id）
  * @param actorType      操作方类型（USER / SYSTEM / JOB，当前恒为 USER）
- * @param action         操作类型（CREATE / UPDATE / PUBLISH / DISABLE / IMPORT / REPLACE_ACTION_BINDING 等）
- * @param targetType     变更对象类型（rule_definition / scene / metric_definition / scene_action_binding 等）
+ * @param action         操作类型（CREATE / UPDATE / PUBLISH / DISABLE / IMPORT 等）
+ * @param targetType     变更对象类型（rule_definition / scene / metric_definition / decision_definition 等）
  * @param targetId       变更对象 id
  * @param beforeSnapshot 变更前快照（typed，由监听器序列化为 JSON 落库），可空
  * @param afterSnapshot  变更后快照（typed，由监听器序列化为 JSON 落库），可空

@@ -318,7 +318,7 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 5.3 约束
 
-- `availableMetrics` 只返回 Scene.metricBindings 白名单内的 metric，不暴露全局 metric 列表
+- `availableMetrics` 返回 tenant 级全部 ACTIVE metric（D54：metric tenant 级可用，无 scene 白名单）
 - `requiresMetric=true` 的 ConditionType 在前端选择时同时渲染 metric 下拉框（来自 availableMetrics）
 - `paramsSchema` 是 JSON Schema Draft-07 格式，前端按此动态渲染参数表单（不硬编码表单字段）
 - 好处：业务方新注册 `@ConditionType` 后，前端无需改代码，元数据接口自动返回新类型

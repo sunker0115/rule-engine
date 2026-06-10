@@ -193,7 +193,6 @@ public class EvalAutoConfiguration {
      * 注册 ActionDispatchService，按 @ActionType.value() 构建 handler 映射。
      *
      * @param actionHandlers  Spring 容器中所有 ActionHandler bean（可为空）
-     * @param bindingIndex    scene_action_binding 内存索引（派发零 DB 读）
      * @param eventPublisher  领域事件发布缝（ActionExecutedEvent 由 persister 异步落库）
      * @return ActionDispatchService 实例
      */
