@@ -43,6 +43,7 @@ import java.util.concurrent.Executors;
 @ComponentScan("com.sstlfsj.rule.eval.internal")
 @org.springframework.boot.context.properties.EnableConfigurationProperties({
         com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
+        com.sstlfsj.rule.eval.internal.action.SendAlertProperties.class,
         com.sstlfsj.rule.eval.internal.TraceProperties.class,
         com.sstlfsj.rule.eval.internal.async.AuditProperties.class})
 public class EvalAutoConfiguration {

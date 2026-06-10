@@ -64,6 +64,10 @@ engine:
     action:
       # 规划中：action 派发超时未实现
       default-timeout-ms: 3000
+      send-alert:
+        # SEND_ALERT webhook（best-effort，失败不重试）；url 为空则不实发（skipped）
+        url:
+        timeout-ms: 2000
     # 规划中：数据保留/清理 job 未实现
     retention:
       evaluation-session-days: 90
