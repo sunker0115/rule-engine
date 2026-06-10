@@ -102,6 +102,27 @@ class PublishServiceTest {
     }
 
     @Test
+    void publish_pullSceneWithDecisionActions_throws() {
+        // D27:PULL Scene 下 Decision.actions 必须为空,绑了带 action 的 decision → 拒绝发布
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        scene.setDominantMode(DominantMode.PULL);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("m.code"); md.setDataType("STRING"); md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(md));
+        draftVersion.setDecisionBindings(List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 0)));
+        DecisionDefinition dd = new DecisionDefinition();
+        dd.setTenantId(1L); dd.setCode("REJECT"); dd.setName("拒绝"); dd.setPriority(1);
+        dd.setActions(List.of(new RuleVersionSnapshot.DecisionAction("a1", "SEND_ALERT", 0, Map.of())));
+        when(decisionDefinitionMapper.findByCodes(eq(1L), anyCollection())).thenReturn(List.of(dd));
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("PULL");
+    }
+
+    @Test
     void publish_freezesDecisionNameAndActionsIntoSnapshot() {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);

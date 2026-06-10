@@ -187,7 +187,7 @@ public class PublishService {
         // D27:发布期冻结 decision.name/actions 进 binding 快照(方案甲,守 D6);引用的 decisionCode 必须存在
         List<RuleVersionSnapshot.DecisionBinding> rawBindings = draftVersion.getDecisionBindings() != null
                 ? draftVersion.getDecisionBindings() : java.util.List.of();
-        newRv.setDecisionBindings(freezeDecisionBindings(tenantId, rawBindings));
+        newRv.setDecisionBindings(freezeDecisionBindings(tenantId, scene, rawBindings));
         newRv.setPreGates(draftVersion.getPreGates() != null
                 ? draftVersion.getPreGates() : java.util.List.of());
         newRv.setKind(rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN);
@@ -307,12 +307,13 @@ public class PublishService {
      * 引用的 decisionCode 必须在 decision_definition 存在，否则拒绝发布（DECISION_CODE_NOT_FOUND）。
      */
     private List<RuleVersionSnapshot.DecisionBinding> freezeDecisionBindings(
-            Long tenantId, List<RuleVersionSnapshot.DecisionBinding> rawBindings) {
+            Long tenantId, SceneDef scene, List<RuleVersionSnapshot.DecisionBinding> rawBindings) {
         if (rawBindings.isEmpty()) return java.util.List.of();
         List<String> codes = rawBindings.stream()
                 .map(RuleVersionSnapshot.DecisionBinding::decisionCode).distinct().toList();
         Map<String, DecisionDefinition> byCode = decisionDefinitionMapper.findByCodes(tenantId, codes).stream()
                 .collect(Collectors.toMap(DecisionDefinition::getCode, d -> d, (a, b) -> a));
+        boolean pullScene = scene.getDominantMode() == DominantMode.PULL;
         List<RuleVersionSnapshot.DecisionBinding> frozen = new ArrayList<>(rawBindings.size());
         for (RuleVersionSnapshot.DecisionBinding b : rawBindings) {
             DecisionDefinition d = byCode.get(b.decisionCode());
@@ -320,11 +321,17 @@ public class PublishService {
                 throw new IllegalArgumentException(
                         "DECISION_CODE_NOT_FOUND: 引用的 decision 不存在: " + b.decisionCode());
             }
+            List<RuleVersionSnapshot.DecisionAction> actions =
+                    d.getActions() != null ? d.getActions() : java.util.List.of();
+            // PULL Scene 下 Decision.actions 必须为空(D27/D54)：PULL 同步返回不派发 action
+            if (pullScene && !actions.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "PULL Scene 的 Decision 不得挂 action(同步返回不派发): decisionCode=" + b.decisionCode());
+            }
             // priority 从 decision_definition 回填(草稿期 binding priority 是 0 占位，DecisionBindingInput 契约)
             int priority = d.getPriority() != null ? d.getPriority() : b.priority();
             frozen.add(new RuleVersionSnapshot.DecisionBinding(
-                    b.decisionCode(), d.getName(), priority,
-                    d.getActions() != null ? d.getActions() : java.util.List.of()));
+                    b.decisionCode(), d.getName(), priority, actions));
         }
         return frozen;
     }
