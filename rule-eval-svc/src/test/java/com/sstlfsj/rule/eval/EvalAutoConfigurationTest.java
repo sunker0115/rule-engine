@@ -6,6 +6,7 @@ import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.TraceProperties;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
+import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
@@ -184,6 +185,7 @@ class EvalAutoConfigurationTest {
         SessionRetentionCleaner cleaner = config.sessionRetentionCleaner(
                 mock(EvaluationSessionMapper.class),
                 mock(DryRunSessionMapper.class),
+                mock(ActionExecutionMapper.class),
                 new RetentionProperties());
         assertNotNull(cleaner);
     }

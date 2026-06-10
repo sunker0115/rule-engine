@@ -22,6 +22,7 @@ class RetentionPropertiesTest {
             assertThat(props.isEnabled()).isTrue();
             assertThat(props.getEvaluationSessionDays()).isEqualTo(90);
             assertThat(props.getDryRunSessionDays()).isEqualTo(7);
+            assertThat(props.getActionExecutionDays()).isEqualTo(90);
             assertThat(props.getBatchSize()).isEqualTo(1000);
         });
     }
@@ -32,12 +33,14 @@ class RetentionPropertiesTest {
                         "engine.rule.retention.enabled=false",
                         "engine.rule.retention.evaluation-session-days=120",
                         "engine.rule.retention.dry-run-session-days=14",
+                        "engine.rule.retention.action-execution-days=60",
                         "engine.rule.retention.batch-size=500")
                 .run(ctx -> {
                     RetentionProperties props = ctx.getBean(RetentionProperties.class);
                     assertThat(props.isEnabled()).isFalse();
                     assertThat(props.getEvaluationSessionDays()).isEqualTo(120);
                     assertThat(props.getDryRunSessionDays()).isEqualTo(14);
+                    assertThat(props.getActionExecutionDays()).isEqualTo(60);
                     assertThat(props.getBatchSize()).isEqualTo(500);
                 });
     }

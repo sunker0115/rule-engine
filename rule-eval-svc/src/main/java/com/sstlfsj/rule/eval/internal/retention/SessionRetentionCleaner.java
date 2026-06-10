@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.retention;
 
+import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import org.slf4j.Logger;
@@ -16,13 +17,16 @@ public class SessionRetentionCleaner {
 
     private final EvaluationSessionMapper evaluationSessionMapper;
     private final DryRunSessionMapper dryRunSessionMapper;
+    private final ActionExecutionMapper actionExecutionMapper;
     private final RetentionProperties props;
 
     public SessionRetentionCleaner(EvaluationSessionMapper evaluationSessionMapper,
                                    DryRunSessionMapper dryRunSessionMapper,
+                                   ActionExecutionMapper actionExecutionMapper,
                                    RetentionProperties props) {
         this.evaluationSessionMapper = evaluationSessionMapper;
         this.dryRunSessionMapper = dryRunSessionMapper;
+        this.actionExecutionMapper = actionExecutionMapper;
         this.props = props;
     }
 
@@ -33,7 +37,9 @@ public class SessionRetentionCleaner {
                 LocalDateTime.now().minusDays(props.getEvaluationSessionDays()));
         int dr = purgeLoop(c -> dryRunSessionMapper.purgeOlderThan(c, props.getBatchSize()),
                 LocalDateTime.now().minusDays(props.getDryRunSessionDays()));
-        log.info("retention 清理 session 完成 evaluation_session={} dry_run_session={}", es, dr);
+        int ae = purgeLoop(c -> actionExecutionMapper.purgeOlderThan(c, props.getBatchSize()),
+                LocalDateTime.now().minusDays(props.getActionExecutionDays()));
+        log.info("retention 清理 session 完成 evaluation_session={} dry_run_session={} action_execution={}", es, dr, ae);
     }
 
     /** 分批循环删，直到单批不足 batchSize；返回累计删除数。 */

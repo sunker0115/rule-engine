@@ -34,4 +34,12 @@ class ActionExecutionMapperTest {
         java.lang.reflect.ParameterizedType pt = (java.lang.reflect.ParameterizedType) types[0];
         assertEquals(ActionExecutionEntity.class, pt.getActualTypeArguments()[0]);
     }
+
+    @Test
+    void purgeOlderThanDefaultMethodPresent() throws NoSuchMethodException {
+        java.lang.reflect.Method m = ActionExecutionMapper.class.getMethod(
+                "purgeOlderThan", java.time.LocalDateTime.class, int.class);
+        assertTrue(m.isDefault(), "purgeOlderThan 须为接口 default 方法");
+        assertEquals(int.class, m.getReturnType());
+    }
 }

@@ -24,6 +24,7 @@ import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
+import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
@@ -54,11 +55,12 @@ import java.util.concurrent.Executors;
 public class EvalAutoConfiguration {
 
     /**
-     * 注册 session 表数据保留清理调度 bean（evaluation_session / dry_run_session）。
+     * 注册 session 表数据保留清理调度 bean（evaluation_session / dry_run_session / action_execution）。
      * 可通过 engine.rule.retention.enabled=false 关闭。
      *
      * @param evaluationSessionMapper evaluation_session Mapper
      * @param dryRunSessionMapper     dry_run_session Mapper
+     * @param actionExecutionMapper   action_execution Mapper
      * @param retentionProperties     保留清理配置
      * @return SessionRetentionCleaner 实例
      */
@@ -66,8 +68,9 @@ public class EvalAutoConfiguration {
     @ConditionalOnProperty(name = "engine.rule.retention.enabled", matchIfMissing = true)
     public SessionRetentionCleaner sessionRetentionCleaner(EvaluationSessionMapper evaluationSessionMapper,
                                                            DryRunSessionMapper dryRunSessionMapper,
+                                                           ActionExecutionMapper actionExecutionMapper,
                                                            RetentionProperties retentionProperties) {
-        return new SessionRetentionCleaner(evaluationSessionMapper, dryRunSessionMapper, retentionProperties);
+        return new SessionRetentionCleaner(evaluationSessionMapper, dryRunSessionMapper, actionExecutionMapper, retentionProperties);
     }
 
     /**
