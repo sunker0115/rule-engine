@@ -10,6 +10,7 @@ import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
 import com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
@@ -177,20 +178,25 @@ public class PublishService {
             new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
         }
 
-        // 4.7. payload 引用校验：valueRef=PAYLOAD 字段必须在 scene.payloadSchema 声明，并注入 dataType
+        // 4.7. payload 引用校验：valueRef=PAYLOAD 字段必须在 scene.payloadSchema 声明，注入 dataType，
+        // 并冻结成 payloadDependencies(name+dataType+required) —— 三者同源于 payloadSchema，一次迭代取齐。
         List<String> payloadFields = PayloadFieldCollector.collect(ast);
         Map<String, String> payloadTypeMap = new HashMap<>();
+        List<PayloadDependency> payloadDeps = new ArrayList<>();
         if (!payloadFields.isEmpty()) {
             List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null
                     ? scene.getPayloadSchema() : java.util.List.of();
-            Map<String, String> schemaTypeByName = new HashMap<>();
-            for (PayloadFieldSpec f : schema) schemaTypeByName.put(f.name(), f.type());
+            Map<String, PayloadFieldSpec> specByName = new HashMap<>();
+            for (PayloadFieldSpec f : schema) specByName.put(f.name(), f);
             for (String field : payloadFields) {
-                if (!schemaTypeByName.containsKey(field)) {
+                PayloadFieldSpec spec = specByName.get(field);
+                if (spec == null) {
                     throw new IllegalArgumentException(
                             "规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
                 }
-                payloadTypeMap.put(field, PayloadDataTypeMapper.toDataTypeTag(schemaTypeByName.get(field)));
+                String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
+                payloadTypeMap.put(field, dataTypeTag);
+                payloadDeps.add(new PayloadDependency(field, dataTypeTag, spec.required()));
             }
         }
 
@@ -216,6 +222,7 @@ public class PublishService {
         newRv.setTriggerEventTypes(scene.getEventTypes() != null
                 ? scene.getEventTypes() : java.util.List.of());
         newRv.setMetricDependencies(metricDeps);
+        newRv.setPayloadDependencies(payloadDeps);
         newRv.setStatus(RuleVersionStatus.ACTIVE);
         newRv.setPublishedBy(actorId);
         newRv.setPublishedAt(LocalDateTime.now());

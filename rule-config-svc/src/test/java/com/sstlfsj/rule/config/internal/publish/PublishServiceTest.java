@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.publish;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot;
@@ -10,8 +11,10 @@ import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -179,7 +182,7 @@ class PublishServiceTest {
         // metricDependencies 由 AST 收集并冻结进 snapshot（B6 版本号由 ACTIVE 行读取，version 字段为 null 时兜底 1）
         assertThat(snapshot.metricDependencies())
                 .containsExactly(new MetricDependency("m.code", 1));
-        // payloadDependencies 取自 newRv（B-T5 冻结前为草稿默认空列表），随 snapshot 下发
+        // 无 payload 引用时 payloadDependencies 为空列表，随 snapshot 下发
         assertThat(snapshot.payloadDependencies()).isEmpty();
         // 验证 rule_version 被插入，version=1，status=ACTIVE
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
@@ -873,5 +876,60 @@ class PublishServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("account.age")
                 .hasMessageContaining("ACTIVE");
+    }
+
+    @Test
+    void publish_freezesPayloadDependencies_intoEntityAndSnapshot() {
+        // B-T5：规则引用 valueRef=PAYLOAD 的 amount，scene.payloadSchema 声明 amount 为 number+required
+        // → 发布期冻结 PayloadDependency("amount","DECIMAL",true) 进 rule_version 实体与快照
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+
+        draftVersion.setConditionAst(new ConditionNode("GT", "amount", null,
+                Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD));
+        scene.setPayloadSchema(List.of(
+                new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null)));
+
+        RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "op");
+
+        PayloadDependency expected = new PayloadDependency("amount", "DECIMAL", true);
+        // 落库实体携带冻结依赖
+        ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(rvCaptor.capture());
+        assertThat(rvCaptor.getValue().getPayloadDependencies()).containsExactly(expected);
+        // 快照同步携带冻结依赖
+        assertThat(snapshot.payloadDependencies()).containsExactly(expected);
+    }
+
+    @Test
+    void publish_metricValueRef_doesNotLeakIntoPayloadDependencies() {
+        // valueRef=METRIC（默认）的字段不应进入 payloadDependencies，只走 metricDependencies
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+
+        draftVersion.setConditionAst(new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0));
+        // 即便 payloadSchema 声明了同名字段，METRIC 引用也不应被冻结为 payload 依赖
+        scene.setPayloadSchema(List.of(
+                new PayloadFieldSpec("account.age", "INTEGER", true, null, null, null, null, null)));
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("account.age");
+        md.setDataType("LONG");
+        md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+
+        RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "op");
+
+        assertThat(snapshot.payloadDependencies()).isEmpty();
+        ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(rvCaptor.capture());
+        assertThat(rvCaptor.getValue().getPayloadDependencies()).isEmpty();
     }
 }
