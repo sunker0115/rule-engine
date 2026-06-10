@@ -1,12 +1,1 @@
-[
-  {
-    "metricCode": "user.risk.score",
-    "name": "用户风险分",
-    "sourceType": "ATTRIBUTE",
-    "dataType": "LONG",
-    "params": { "table": "user_profile", "column": "risk_score" },
-    "cacheTtlSeconds": 60,
-    "allowProvided": true,
-    "_note": "ATTRIBUTE 类型发布期免 SQL/资源名安全校验(MetricSafetyValidator 只校验 SQL_AGGREGATE/EXTERNAL_HTTP)。本地无 user_profile 表,靠 allowProvided + providedMetrics 跑通。"
-  }
-]
+[]

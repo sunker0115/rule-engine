@@ -8,12 +8,12 @@
         "nodeType": "AndNode",
         "result": true,
         "children": [
-          { "conditionType": "GT",  "metricCode": "amount",          "actualValue": 5000, "valueSource": "PAYLOAD",  "result": true },
-          { "conditionType": "GTE", "metricCode": "user.risk.score", "actualValue": 90,   "valueSource": "PROVIDED", "result": true }
+          { "conditionType": "GT", "metricCode": "amount",  "actualValue": 5000, "valueSource": "PAYLOAD", "result": true },
+          { "conditionType": "IN", "metricCode": "country", "actualValue": "US", "valueSource": "PAYLOAD", "result": true }
         ]
       }
     },
-    "_note": "finalDecision.name/priority 来自 decision_definition(D54:发布期已冻结进 rule_version.decision_bindings 快照)。PULL 场景 REJECT 无 action,不派发、actions 为空。"
+    "_note": "finalDecision.name/priority 来自 decision_definition(D54:发布期已冻结进 rule_version.decision_bindings 快照)。PULL 场景 REJECT 无 action,不派发、actions 为空。两个叶子节点都从事件 payload 取值(valueSource=PAYLOAD)。"
   },
   {
     "eventId": "evt-miss-001",
@@ -22,7 +22,7 @@
       "finalDecision": null,
       "nodeTrace": { "nodeType": "AndNode", "result": false }
     },
-    "_note": "amount=500 不满足 GT 1000,AndNode 整体 false → evaluation_session.status=MISS(已落库)。"
+    "_note": "amount=500 不满足 GT 1000,AndNode 整体 false(IN(country) 因短路不再求值)→ evaluation_session.status=MISS(已落库)。"
   },
   {
     "eventId": "evt-dry-001",
@@ -33,8 +33,8 @@
         "nodeType": "AndNode",
         "result": true,
         "children": [
-          { "conditionType": "GT",  "metricCode": "amount",          "actualValue": 8000, "valueSource": "PAYLOAD",  "result": true },
-          { "conditionType": "GTE", "metricCode": "user.risk.score", "actualValue": 85,   "valueSource": "PROVIDED", "result": true }
+          { "conditionType": "GT", "metricCode": "amount",  "actualValue": 8000, "valueSource": "PAYLOAD", "result": true },
+          { "conditionType": "IN", "metricCode": "country", "actualValue": "RU", "valueSource": "PAYLOAD", "result": true }
         ]
       }
     },

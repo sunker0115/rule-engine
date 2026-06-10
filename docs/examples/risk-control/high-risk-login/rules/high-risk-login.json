@@ -18,10 +18,11 @@
       },
       {
         "type": "ConditionNode",
-        "displayLabel": "风险分>=80",
-        "conditionType": "GTE",
-        "metricCode": "user.risk.score",
-        "params": { "threshold": 80 }
+        "displayLabel": "高风险国家",
+        "conditionType": "IN",
+        "metricCode": "country",
+        "valueRef": "PAYLOAD",
+        "params": { "values": ["US", "RU", "IR"] }
       }
     ]
   },
