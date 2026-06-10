@@ -67,6 +67,14 @@
 - **删单个待发布草稿版本** `DELETE /admin/v1/rules/{ruleId}/versions/{versionId}`:仅当该 version 是 DRAFT → 删那条 rule_version(保留线上 ACTIVE 不动)。
 - **级联范围只 `rule_version`**:草稿从未激活 → 无 evaluation_session/node_trace/action_execution 引用、未进 Matcher 索引;`audit_log` 是历史不动。
 
+### 6.1 删除边界 / 引用完整性(已定)
+
+premise A 让"规则 → metric / decision"产生**冻结耦合**(草稿冻结 metric 版本 + decision 快照)。需明确两个方向都不产生悬空引用:
+
+- **删草稿规则(本 spec 的删除)无悬空**:冻结引用只是 `rule_version` 行里的数据,删行不碰被引用的 metric/decision/scene 实体;草稿未激活,无下游。premise A 的"引用须 ACTIVE"是**建/改草稿时**的校验,与删除无关。
+- **被依赖资源(metric/decision/scene)当前无「硬删除」**:只有 新版本 / `disable` / `PATCH`。所以草稿冻结的 (code, version) 引用**永不指向被删资源**。`disable` 只改状态、不删旧版本行 → 已冻结的草稿/已发布规则评估时仍按冻结版本取数,照常工作;`disable` 只挡**新草稿**(premise A 要 ACTIVE)再引用它,符合预期。
+- **未来护栏**:若将来给 metric/decision/scene 加「硬删除」,**必须先做影响面拦截**(参照 metric 现有 `/{code}/versions/{v}/impact`:被任何 rule_version 引用即拒删)。本 spec **不**实现资源硬删除,仅在此立约束,避免未来踩雷。
+
 ## 七、API 面(增/改)
 
 | 端点 | 方法 | 说明 |
