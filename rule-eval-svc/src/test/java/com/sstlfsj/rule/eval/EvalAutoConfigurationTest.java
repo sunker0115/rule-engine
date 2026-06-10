@@ -6,6 +6,10 @@ import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.TraceProperties;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
+import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
+import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
+import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
@@ -173,6 +177,15 @@ class EvalAutoConfigurationTest {
                 List.of(noAnnotation),
                 mock(DomainEventPublisher.class));
         assertNotNull(svc);
+    }
+
+    @Test
+    void sessionRetentionCleaner_returnsInstance() {
+        SessionRetentionCleaner cleaner = config.sessionRetentionCleaner(
+                mock(EvaluationSessionMapper.class),
+                mock(DryRunSessionMapper.class),
+                new RetentionProperties());
+        assertNotNull(cleaner);
     }
 
     /** 测试用 stub，带 @ActionType 注解。 */

@@ -1,11 +1,13 @@
 package com.sstlfsj.rule.eval.internal.repository;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /** evaluation_session 表 Mapper。AuditPersister 异步消费侧用 {@link #insertBatch} 多行批量落库（单次往返/单次 fsync）。 */
@@ -37,4 +39,12 @@ public interface EvaluationSessionMapper extends BaseMapper<EvaluationSession> {
             </script>
             """)
     int insertBatch(@Param("list") List<EvaluationSession> list);
+
+    /** 删 started_at 早于 cutoff 的行，单次最多 batchSize 条（分批短事务）。返回删除行数。 */
+    default int purgeOlderThan(LocalDateTime cutoff, int batchSize) {
+        // batchSize 为常量 int，无注入风险
+        return delete(new LambdaQueryWrapper<EvaluationSession>()
+                .lt(EvaluationSession::getStartedAt, cutoff)
+                .last("LIMIT " + batchSize));
+    }
 }

@@ -1,0 +1,44 @@
+package com.sstlfsj.rule.eval.internal.retention;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/** 验证 RetentionProperties 绑定 engine.rule.retention.* 子集，默认 enabled/90/7/1000。 */
+class RetentionPropertiesTest {
+
+    private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withUserConfiguration(Config.class);
+
+    @EnableConfigurationProperties(RetentionProperties.class)
+    static class Config {}
+
+    @Test
+    void defaults_matchHardcodedValues() {
+        runner.run(ctx -> {
+            RetentionProperties props = ctx.getBean(RetentionProperties.class);
+            assertThat(props.isEnabled()).isTrue();
+            assertThat(props.getEvaluationSessionDays()).isEqualTo(90);
+            assertThat(props.getDryRunSessionDays()).isEqualTo(7);
+            assertThat(props.getBatchSize()).isEqualTo(1000);
+        });
+    }
+
+    @Test
+    void binds_underEngineRuleRetentionPrefix() {
+        runner.withPropertyValues(
+                        "engine.rule.retention.enabled=false",
+                        "engine.rule.retention.evaluation-session-days=120",
+                        "engine.rule.retention.dry-run-session-days=14",
+                        "engine.rule.retention.batch-size=500")
+                .run(ctx -> {
+                    RetentionProperties props = ctx.getBean(RetentionProperties.class);
+                    assertThat(props.isEnabled()).isFalse();
+                    assertThat(props.getEvaluationSessionDays()).isEqualTo(120);
+                    assertThat(props.getDryRunSessionDays()).isEqualTo(14);
+                    assertThat(props.getBatchSize()).isEqualTo(500);
+                });
+    }
+}

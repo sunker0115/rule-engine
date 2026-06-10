@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.repository;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
@@ -24,5 +25,13 @@ public interface DryRunSessionMapper extends BaseMapper<DryRunSession> {
                 .set(DryRunSession::getFinalDecision, finalDecision)
                 .set(DryRunSession::getFinishedAt, finishedAt)
                 .set(DryRunSession::getContextSnapshot, contextSnapshot));
+    }
+
+    /** 删 started_at 早于 cutoff 的行，单次最多 batchSize 条（分批短事务）。返回删除行数。 */
+    default int purgeOlderThan(LocalDateTime cutoff, int batchSize) {
+        // batchSize 为常量 int，无注入风险
+        return delete(new LambdaQueryWrapper<DryRunSession>()
+                .lt(DryRunSession::getStartedAt, cutoff)
+                .last("LIMIT " + batchSize));
     }
 }

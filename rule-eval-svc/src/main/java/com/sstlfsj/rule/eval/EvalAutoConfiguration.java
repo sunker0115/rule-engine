@@ -24,9 +24,14 @@ import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
+import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
+import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
+import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Primary;
@@ -44,8 +49,26 @@ import java.util.concurrent.Executors;
         com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
         com.sstlfsj.rule.eval.internal.action.SendAlertProperties.class,
         com.sstlfsj.rule.eval.internal.TraceProperties.class,
-        com.sstlfsj.rule.eval.internal.async.AuditProperties.class})
+        com.sstlfsj.rule.eval.internal.async.AuditProperties.class,
+        RetentionProperties.class})
 public class EvalAutoConfiguration {
+
+    /**
+     * 注册 session 表数据保留清理调度 bean（evaluation_session / dry_run_session）。
+     * 可通过 engine.rule.retention.enabled=false 关闭。
+     *
+     * @param evaluationSessionMapper evaluation_session Mapper
+     * @param dryRunSessionMapper     dry_run_session Mapper
+     * @param retentionProperties     保留清理配置
+     * @return SessionRetentionCleaner 实例
+     */
+    @Bean
+    @ConditionalOnProperty(name = "engine.rule.retention.enabled", matchIfMissing = true)
+    public SessionRetentionCleaner sessionRetentionCleaner(EvaluationSessionMapper evaluationSessionMapper,
+                                                           DryRunSessionMapper dryRunSessionMapper,
+                                                           RetentionProperties retentionProperties) {
+        return new SessionRetentionCleaner(evaluationSessionMapper, dryRunSessionMapper, retentionProperties);
+    }
 
     /**
      * 默认使用 InterpretedExecutor（AST 树形解释执行，按 TraceScope.COLLECT 守卫收集 NodeTrace）。
