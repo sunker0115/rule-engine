@@ -20,8 +20,8 @@
 | dry-run `/dry-run?ruleVersionId=`(带版本) | `EvalController.dryRun` | ✅ | 2026-06-10 | `dry_run_session` + `dry_run_node_trace` 落库;**本轮逮并修了 actual_value JSON bug** |
 | dry-run 场景级(不带 ruleVersionId) | 同上 → 候选分支 | ⬜ | — | 落普通候选路径、不进 dry_run 表(设计如此),语义待确认 |
 | 输入清单发现 `/scenes/{code}/input-manifest` | `SceneManifestController` | ✅ | 2026-06-10 | eventType 收窄正确 |
-| **PUSH 事件 `/event` → 异步 action 派发 → `action_execution` 落库** | `EvalController.pushEvent` → `ActionDispatchService` → `ActionExecutionPersister` | ⬜ | — | **最大空白**;进程内可跑(BLOCK_TRANSACTION stub / SEND_ALERT 空 url 都能走通落库);`ActionExecutionPersister` 是 best-effort persister,**从没真跑过 → 高风险藏同类 bug** |
-| HYBRID 评估 | 与 PUSH 共享派发路径 | ⬜ | — | 同 PUSH |
+| **PUSH 事件 `/event` → 异步 action 派发 → `action_execution` 落库** | `EvalController.pushEvent` → `ActionDispatchService` → `ActionExecutionPersister` | ✅ | 2026-06-10 | PUSH 场景 + decision 带 SEND_ALERT action;202 受理 → `evaluation_session`(HIT/PUSH_REJECT)+ `node_trace` + `action_execution`(SEND_ALERT/SKIPPED/NO_WEBHOOK_URL,空 url 走跳过态)全落库;persister 无吞错(不像 trace writer 有 JSON 列雷,action_execution 全 varchar) |
+| HYBRID 评估 | 与 PUSH 共享派发路径 | ⬜ | — | 派发路径已由 PUSH 验证;HYBRID 自身(同步返回 + 异步派发并存)未直接跑 |
 | 整次输入快照 `evaluation_session.context_snapshot` | `AuditPersister`(开关 `engine.rule.audit.context-snapshot.enabled`,默认关) | ✅ | 2026-06-10 | 开关开后验证合并 map 落库 |
 
 ## 二、配置写入(admin CRUD)
