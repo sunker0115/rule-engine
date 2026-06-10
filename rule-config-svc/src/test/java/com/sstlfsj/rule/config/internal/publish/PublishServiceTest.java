@@ -112,9 +112,10 @@ class PublishServiceTest {
         MetricDefinition md = new MetricDefinition();
         md.setMetricCode("m.code"); md.setDataType("STRING"); md.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(md));
-        draftVersion.setDecisionBindings(List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)));
+        // 草稿期 binding priority 是占位 0；发布应从 decision_definition.priority 回填
+        draftVersion.setDecisionBindings(List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 0)));
         DecisionDefinition dd = new DecisionDefinition();
-        dd.setTenantId(1L); dd.setCode("REJECT"); dd.setName("拒绝");
+        dd.setTenantId(1L); dd.setCode("REJECT"); dd.setName("拒绝"); dd.setPriority(10);
         dd.setActions(List.of(new RuleVersionSnapshot.DecisionAction("a1", "SEND_ALERT", 0, Map.of())));
         when(decisionDefinitionMapper.findByCodes(eq(1L), anyCollection())).thenReturn(List.of(dd));
 
@@ -124,6 +125,7 @@ class PublishServiceTest {
         verify(ruleVersionMapper).insert(cap.capture());
         RuleVersionSnapshot.DecisionBinding frozen = cap.getValue().getDecisionBindings().getFirst();
         assertThat(frozen.name()).isEqualTo("拒绝");
+        assertThat(frozen.priority()).isEqualTo(10);   // 从 decision 回填，非草稿占位 0
         assertThat(frozen.actions()).hasSize(1);
         assertThat(frozen.actions().getFirst().actionType()).isEqualTo("SEND_ALERT");
     }

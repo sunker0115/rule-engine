@@ -320,8 +320,10 @@ public class PublishService {
                 throw new IllegalArgumentException(
                         "DECISION_CODE_NOT_FOUND: 引用的 decision 不存在: " + b.decisionCode());
             }
+            // priority 从 decision_definition 回填(草稿期 binding priority 是 0 占位，DecisionBindingInput 契约)
+            int priority = d.getPriority() != null ? d.getPriority() : b.priority();
             frozen.add(new RuleVersionSnapshot.DecisionBinding(
-                    b.decisionCode(), d.getName(), b.priority(),
+                    b.decisionCode(), d.getName(), priority,
                     d.getActions() != null ? d.getActions() : java.util.List.of()));
         }
         return frozen;
