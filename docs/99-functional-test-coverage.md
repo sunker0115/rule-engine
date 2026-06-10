@@ -23,7 +23,7 @@
 | ~~dry-run 场景级副作用 BUG~~(D56 已根除) | `EvalServiceImpl.dryRun` | ✅ | 2026-06-11 | D56 **结构根除**已真服务验证:dry-run 恒走带版本单快照分支,不落 `evaluation_session`、不派发 action;不再靠 `isDryRun` 逐处门控 |
 | 输入清单发现 `/scenes/{code}/input-manifest` | `SceneManifestController` | ✅ | 2026-06-10 | eventType 收窄正确 |
 | **PUSH 事件 `/event` → 异步 action 派发 → `action_execution` 落库** | `EvalController.pushEvent` → `ActionDispatchService` → `ActionExecutionPersister` | ✅ | 2026-06-10 | PUSH 场景 + decision 带 SEND_ALERT action;202 受理 → `evaluation_session`(HIT/PUSH_REJECT)+ `node_trace` + `action_execution`(SEND_ALERT/SKIPPED/NO_WEBHOOK_URL,空 url 走跳过态)全落库;persister 无吞错(不像 trace writer 有 JSON 列雷,action_execution 全 varchar) |
-| HYBRID 评估 | 与 PUSH 共享派发路径 | ⬜ | — | 派发路径已由 PUSH 验证;HYBRID 自身(同步返回 + 异步派发并存)未直接跑 |
+| HYBRID 评估 | 与 PUSH 共享派发路径 | ✅ | 2026-06-11 | evaluate sync HIT/MISS + event async HIT/MISS 双路径全验;sync path 同样派发 action(空 webhook→SKIPPED),`evaluation_session`+`node_trace`+`action_execution` 全落库 |
 | 整次输入快照 `evaluation_session.context_snapshot` | `AuditPersister`(开关 `engine.rule.audit.context-snapshot.enabled`,默认关) | ✅ | 2026-06-10 | 开关开后验证合并 map 落库 |
 
 ## 二、配置写入(admin CRUD)
@@ -42,7 +42,7 @@
 | 建/改/停 decision | `DecisionController` | ✅ | 示例 / 2026-06-10 | 建(示例)+ PUT(改 name/priority/description)+ disable(status→DISABLED)均真落库 |
 | metric 注册 `POST /metrics` | `MetricController.create` | ✅ | 示例 | |
 | metric 版本影响面查询 `/{code}/versions/{v}/impact` | `MetricController` | ✅ | 2026-06-10 | amount v1 → affectedRules 含 rule 871 |
-| metric 改 `PUT /metrics/{code}` | `MetricController` | ⬜ | — | 未跑 |
+| metric 改 `PUT /metrics/{code}` | `MetricController` | ✅ | 2026-06-11 | 原地改(breakingChange=false,name+cacheTtlSeconds 改,version 不变)+ 显式升版(breakingChange=true,version 递增,旧行→SUPERSEDED)+ 自动升版(sourceType 变更即使传 false 也走 breaking change)全验 |
 | 场景元数据 `GET /scenes/{code}/metadata` | `MetadataController` | ✅ | 2026-06-10 | availableMetrics 返回 tenant 级 ACTIVE metric |
 | 审计 / 会话查询 `GET /evaluation-sessions`·`/audit-logs`·`/trace` | `AuditController` | ✅ | 示例 | |
 
@@ -52,7 +52,7 @@
 |---|---|---|---|---|
 | Job 手动触发 → 合成 RuleEvent → 评估 | `JobController.trigger` → `@RuleJob` | ✅ | 2026-06-10 | 触发 `demo-daily`(租户1/fraud_check)→ SUCCESS/subjectCount=2/errorCount=0,`job_execution` 落库;**eval 为 miss 不落 session**(fraud_check 无规则→空候选短路,预期);job→event→eval 提交路径已验 |
 | Job executions 查询 `GET /jobs/{id}/executions` | `JobController` | ✅ | 2026-06-10 | 返回执行记录 |
-| Job CRUD / enable / disable | `JobController` | ⬜ | — | 未跑 |
+| Job enable / disable | `JobController` | ✅ | 2026-06-11 | enable/disable 全验(DISABLED→ACTIVE 往返,enable 校验 scene 存在);Job 定义由 @RuleJob 注解启动期自动落库,无 CRUD 接口 |
 | xxl-job 定时调度 | `XxlJobSchedulerAdapter` | 🟡 | — | 需真 xxl-job-admin |
 
 ## 四、Bundle 导出 / 导入
@@ -92,7 +92,4 @@
 
 ## 优先补跑建议(⬜ 中,可跑、价值高)
 
-1. **HYBRID 评估 真服务验证**(§一)—— 同步返回 + 异步派发并存,派发路径已由 PUSH 验证,组合场景未直接跑
-2. **metric 改 `PUT /metrics/{code}`**(§二)—— 原地改 + breakingChange 升版两路径
-3. **Job CRUD / enable / disable**(§三)—— 定时任务管理面未跑
-4. **SDK 嵌入式 zero-network 评估**(§五)—— 需 SDK 测试宿主,验证完整离线链路
+1. **SDK 嵌入式 zero-network 评估**(§五)—— 需 SDK 测试宿主,验证完整离线链路
