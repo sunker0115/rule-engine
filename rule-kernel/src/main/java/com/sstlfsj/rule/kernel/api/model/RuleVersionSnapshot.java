@@ -19,7 +19,9 @@ public record RuleVersionSnapshot(
         /** 规则类型，默认 AST_BOOLEAN；SCORECARD 时由 ScorecardExecutor 求值。 */
         String kind,
         /** AST 引用的 (metricCode, metricVersion) 依赖，发布期冻结。 */
-        List<MetricDependency> metricDependencies
+        List<MetricDependency> metricDependencies,
+        /** AST 引用的 payload 字段依赖，发布期从 scene.payloadSchema 冻结。 */
+        List<PayloadDependency> payloadDependencies
 ) {
     public RuleVersionSnapshot {
         preGates = preGates == null ? List.of() : List.copyOf(preGates);
@@ -27,6 +29,7 @@ public record RuleVersionSnapshot(
         triggerEventTypes = triggerEventTypes == null ? List.of() : List.copyOf(triggerEventTypes);
         kind = kind == null ? RuleKind.AST_BOOLEAN.tag() : kind;
         metricDependencies = metricDependencies == null ? List.of() : List.copyOf(metricDependencies);
+        payloadDependencies = payloadDependencies == null ? List.of() : List.copyOf(payloadDependencies);
     }
 
     /**
@@ -45,7 +48,7 @@ public record RuleVersionSnapshot(
                                List<PreGateConfig> preGates, List<DecisionBinding> decisionBindings,
                                List<String> triggerEventTypes, String kind) {
         this(ruleVersionId, sceneCode, tenantId, conditionAst, preGates, decisionBindings,
-                triggerEventTypes, kind, List.of());
+                triggerEventTypes, kind, List.of(), List.of());
     }
 
     /** Pre-Gate 配置快照。 */
@@ -102,6 +105,7 @@ public record RuleVersionSnapshot(
         private final List<DecisionBinding> decisionBindings = new ArrayList<>();
         private final List<String> triggerEventTypes = new ArrayList<>();
         private final List<MetricDependency> metricDependencies = new ArrayList<>();
+        private final List<PayloadDependency> payloadDependencies = new ArrayList<>();
 
         /** 规则版本 ID（本地模式可传任意 Long）。 */
         public Builder ruleVersionId(Long v)  { this.ruleVersionId = v; return this; }
@@ -127,11 +131,16 @@ public record RuleVersionSnapshot(
         public Builder addMetricDependency(String metricCode, int metricVersion) {
             metricDependencies.add(new MetricDependency(metricCode, metricVersion)); return this;
         }
+        /** 追加一条 payload 字段依赖(发布期从 payloadSchema 冻结)。 */
+        public Builder addPayloadDependency(String name, String dataType, boolean required) {
+            this.payloadDependencies.add(new PayloadDependency(name, dataType, required));
+            return this;
+        }
 
         /** 构建 RuleVersionSnapshot。 */
         public RuleVersionSnapshot build() {
             return new RuleVersionSnapshot(ruleVersionId, sceneCode, tenantId, conditionAst,
-                    preGates, decisionBindings, triggerEventTypes, kind, metricDependencies);
+                    preGates, decisionBindings, triggerEventTypes, kind, metricDependencies, payloadDependencies);
         }
     }
 }

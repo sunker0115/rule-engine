@@ -56,7 +56,8 @@ public class SnapshotAssembler {
                 decisionBindings,
                 triggerEventTypes,
                 row.kind() != null ? row.kind() : RuleKind.AST_BOOLEAN.tag(),
-                metricDependencies
+                metricDependencies,
+                List.of()
         );
     }
 

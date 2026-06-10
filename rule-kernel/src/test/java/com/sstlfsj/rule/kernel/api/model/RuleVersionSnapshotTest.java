@@ -177,4 +177,14 @@ class RuleVersionSnapshotTest {
         assertNull(compat.name());
         assertTrue(compat.actions().isEmpty());
     }
+
+    @Test
+    void builder_carriesPayloadDependencies() {
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(1L).sceneCode("s1").tenantId("t1").conditionAst(leaf())
+                .addPayloadDependency("amount", "DECIMAL", true)
+                .build();
+        org.assertj.core.api.Assertions.assertThat(snap.payloadDependencies())
+                .containsExactly(new PayloadDependency("amount", "DECIMAL", true));
+    }
 }
