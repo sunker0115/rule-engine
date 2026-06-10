@@ -179,6 +179,8 @@ class PublishServiceTest {
         // metricDependencies 由 AST 收集并冻结进 snapshot（B6 版本号由 ACTIVE 行读取，version 字段为 null 时兜底 1）
         assertThat(snapshot.metricDependencies())
                 .containsExactly(new MetricDependency("m.code", 1));
+        // payloadDependencies 取自 newRv（B-T5 冻结前为草稿默认空列表），随 snapshot 下发
+        assertThat(snapshot.payloadDependencies()).isEmpty();
         // 验证 rule_version 被插入，version=1，status=ACTIVE
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());

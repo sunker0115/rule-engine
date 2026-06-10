@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.domain;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
@@ -29,6 +30,7 @@ class RuleVersionTest {
         ver.setKind(RuleKind.AST_BOOLEAN);
         ver.setTriggerEventTypes(List.of("payment.initiated"));
         ver.setMetricDependencies(List.of(new MetricDependency("user.age", 1)));
+        ver.setPayloadDependencies(List.of(new PayloadDependency("amount", "NUMBER", true)));
         ver.setStatus(RuleVersionStatus.ACTIVE);
         ver.setPublishedBy("operator1");
 
@@ -41,6 +43,7 @@ class RuleVersionTest {
         assertEquals(RuleKind.AST_BOOLEAN, ver.getKind());
         assertEquals(List.of("payment.initiated"), ver.getTriggerEventTypes());
         assertEquals("user.age", ver.getMetricDependencies().getFirst().metricCode());
+        assertEquals("amount", ver.getPayloadDependencies().getFirst().name());
         assertEquals(RuleVersionStatus.ACTIVE, ver.getStatus());
         assertEquals("operator1", ver.getPublishedBy());
     }
@@ -73,6 +76,7 @@ class RuleVersionTest {
         assertEquals(1L, ver.getVersion());
         assertEquals(RuleVersionStatus.DRAFT, ver.getStatus());
         assertTrue(ver.getMetricDependencies().isEmpty());
+        assertTrue(ver.getPayloadDependencies().isEmpty());
         assertNotNull(ver.getCreatedAt());
     }
 
@@ -87,6 +91,7 @@ class RuleVersionTest {
         assertTrue(ver.getPreGates().isEmpty());
         assertTrue(ver.getTriggerEventTypes().isEmpty());
         assertTrue(ver.getMetricDependencies().isEmpty());
+        assertTrue(ver.getPayloadDependencies().isEmpty());
         assertEquals(1L, ver.getVersion());
         assertEquals(RuleVersionStatus.DRAFT, ver.getStatus());
     }

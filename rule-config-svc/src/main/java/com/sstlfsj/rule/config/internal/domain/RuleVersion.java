@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
@@ -35,6 +36,8 @@ public class RuleVersion {
     private List<String> triggerEventTypes;
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<MetricDependency> metricDependencies;
+    @TableField(typeHandler = Jackson3TypeHandler.class)
+    private List<PayloadDependency> payloadDependencies;
     private RuleVersionStatus status;
     private String publishedBy;
     private java.time.LocalDateTime publishedAt;
@@ -65,6 +68,7 @@ public class RuleVersion {
         rv.setKind(kind);
         rv.setTriggerEventTypes(triggerEventTypes != null ? triggerEventTypes : List.of());
         rv.setMetricDependencies(List.of());
+        rv.setPayloadDependencies(List.of());
         rv.setStatus(RuleVersionStatus.DRAFT);
         rv.setCreatedAt(java.time.LocalDateTime.now());
         return rv;
