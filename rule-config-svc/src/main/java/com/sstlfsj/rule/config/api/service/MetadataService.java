@@ -13,15 +13,6 @@ public interface MetadataService {
     MetadataResponse getSceneMetadata(String tenantId, String sceneCode);
 
     /**
-     * 返回指定场景中调用方可携带的指标列表（allowProvided=true）。
-     *
-     * @param tenantId  租户 ID
-     * @param sceneCode 场景编码
-     * @return 可被业务方随评估携带的指标元数据列表
-     */
-    ProvidedMetricsResponse getProvidedMetrics(String tenantId, String sceneCode);
-
-    /**
      * 返回指定租户的 metric 运行时定义列表，供嵌入式 SDK 下发（仅元数据，不含凭证）。
      *
      * @param tenantId 租户 ID
@@ -47,9 +38,6 @@ public interface MetadataService {
             java.util.List<ActionTypeMeta> actionTypes,
             java.util.List<MetricMeta> availableMetrics
     ) {}
-
-    /** §5.2 provided-metrics 发现：返回 allowProvided=true 的指标列表。 */
-    record ProvidedMetricsResponse(java.util.List<MetricMeta> metrics) {}
 
     /** 输入清单响应（对外契约；字段值与发布期冻结的 PayloadDependency 同形）。 */
     record InputManifestResponse(java.util.List<InputFieldSpec> fields) {}

@@ -58,15 +58,6 @@ class MetadataServiceImpl implements MetadataService {
     }
 
     @Override
-    public ProvidedMetricsResponse getProvidedMetrics(String tenantId, String sceneCode) {
-        MetadataResponse all = getSceneMetadata(tenantId, sceneCode);
-        List<MetricMeta> provided = all.availableMetrics().stream()
-                .filter(MetricMeta::allowProvided)
-                .toList();
-        return new ProvidedMetricsResponse(provided);
-    }
-
-    @Override
     public List<MetricDescriptor> listMetricDefinitions(String tenantId, List<String> scenes) {
         Long tid = Long.valueOf(tenantId);
 

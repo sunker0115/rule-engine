@@ -60,61 +60,6 @@ class MetadataServiceImplTest {
     }
 
     @Test
-    void getProvidedMetrics_只返回allowProvided为true的指标() {
-        SceneDef scene = new SceneDef();
-        scene.setId(5L);
-        scene.setTenantId(1L);
-        scene.setCode("PAYMENT");
-        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
-
-        MetricDefinition provided = new MetricDefinition();
-        provided.setMetricCode("user.kyc.level");
-        provided.setName("KYC等级");
-        provided.setDataType("LONG");
-        provided.setSourceType("ATTRIBUTE");
-        provided.setAllowProvided(true);
-
-        MetricDefinition notProvided = new MetricDefinition();
-        notProvided.setMetricCode("account.balance");
-        notProvided.setName("余额");
-        notProvided.setDataType("DECIMAL");
-        notProvided.setSourceType("SQL_AGGREGATE");
-        notProvided.setAllowProvided(false);
-
-        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(provided, notProvided));
-
-        MetadataService.ProvidedMetricsResponse response =
-                metadataService.getProvidedMetrics("1", "PAYMENT");
-
-        assertThat(response.metrics()).hasSize(1);
-        assertThat(response.metrics().get(0).metricCode()).isEqualTo("user.kyc.level");
-        assertThat(response.metrics().get(0).allowProvided()).isTrue();
-    }
-
-    @Test
-    void getProvidedMetrics_无allowProvided指标时返回空列表() {
-        SceneDef scene = new SceneDef();
-        scene.setId(5L);
-        scene.setTenantId(1L);
-        scene.setCode("PAYMENT");
-        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
-
-        MetricDefinition notProvided = new MetricDefinition();
-        notProvided.setMetricCode("account.balance");
-        notProvided.setName("余额");
-        notProvided.setDataType("DECIMAL");
-        notProvided.setSourceType("SQL_AGGREGATE");
-        notProvided.setAllowProvided(false);
-
-        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(notProvided));
-
-        MetadataService.ProvidedMetricsResponse response =
-                metadataService.getProvidedMetrics("1", "PAYMENT");
-
-        assertThat(response.metrics()).isEmpty();
-    }
-
-    @Test
     void listMetricDefinitions_mapsRowToDescriptor_withParamsAndDataType() {
         MetricDefinition row = new MetricDefinition();
         row.setMetricCode("account.balance");
