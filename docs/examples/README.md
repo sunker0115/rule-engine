@@ -31,13 +31,13 @@ examples/
 ```
 <example-name>/
 ├── README.md          场景描述 + 业务目标 + 关键决策引用
-├── scene.json         Scene 定义（含 payloadSchema / eventTypes / metricBindings /
-│                      actionBindings / decisions 列表及各 Decision.actions）
+├── scene.json         Scene 定义（含 payloadSchema / eventTypes / dominantMode /
+│                      subjectType；metric 为 tenant 级、decision 独立建，见 D54）
 ├── rules/             该 Scene 下的 Rule 定义（含 AST + preGates + decisionBindings；
 │                      Action 挂在 Decision 上，rules/ 不含 Action 配置，见 D27）
 ├── metrics/           Scene 用到的 metric 注册（含 sourceType / dataType /
-│                      cachePolicyDefault / allowProvided，见 D30）
-├── mock-events.json   mock 的 RuleEvent 样本（含 providedMetrics 字段，用于 dry-run）
+│                      cacheTtlSeconds / allowProvided）
+├── mock-events.json   mock 的 RuleEvent 样本（payload 驱动；公开评估只收 payload，D55）
 └── expected-results.json   各 mock event 的预期 EvalResult
                             （含 finalDecision / hitDecisions / trace.metricSources）
 ```
@@ -54,7 +54,7 @@ examples/
 
 - **新人首次** → 选 `risk-control/` 或 `marketing/` 下最简单案例 → 对照 [`../01-concepts.md`](../01-concepts.md) 一等概念
 - **接入新场景** → 找业务域最接近的案例 → 复制 → 改 Scene / Rule
-- **学习某个技术模式** → 看 `patterns/`（时间条件 / sourceType 对比 / providedMetrics 等）
+- **学习某个技术模式** → 看 `patterns/`（时间条件 / sourceType 对比 / payload 直接引用 等）
 - **评审 / 设计参考** → 按相关决策反查案例
 
 ## 五、维护原则

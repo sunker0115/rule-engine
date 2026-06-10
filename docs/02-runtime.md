@@ -46,7 +46,7 @@ RuleEvent
   ▼
 ④ EvalContext 构建
   │  · 扫 AST 收集涉及的 metricCode（集合并集）
-  │  · providedMetrics 优先匹配（D30），其余按 sourceType 并发取数（D25）
+  │  · payload 字段直接注入（valueRef=PAYLOAD）；metric 按 provided（SDK/Job 注入）优先 → 其余按 sourceType 并发取数（D25/D55）
   │  · 组装 EvalContext（不可变 POJO）；evaluation_session 行同步写入 DB
   ▼
 ⑤ AST 评估（Visitor 树遍历）
@@ -173,10 +173,10 @@ RuleEvent
 
 **输出**：不可变 `EvalContext` + `evaluation_session` 行（同步写 DB）
 
-**核心动作（5 步）**（B21 已实装：`EvalContextAssembler` 接线 provided 优先 → 查缓存 → 按 `sourceType` 并发 fetch → 失败降级 `METRIC_FETCH_FAIL`）：
+**核心动作（5 步）**（B21 已实装：`EvalContextAssembler` 接线 provided 优先 → 查缓存 → 按 `sourceType` 并发 fetch → 失败降级 `METRIC_FETCH_FAIL`；并注入 payload 字段）：
 
 1. **收集 metricCode**：扫每条候选 RuleVersion 的 `metric_dependencies`，取并集；
-2. **providedMetrics 优先匹配**（D30）：检查评估请求中 `providedMetrics` 字段，对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；
+2. **payload 注入 + metric provided 优先**：payload 字段（`valueRef=PAYLOAD`）由 `EvalContextAssembler` 直接注入值 map（`ValueSource.PAYLOAD`，`putIfAbsent` 让同名 metric/provided 优先）；metric 的 `providedMetrics` 来自 SDK/Job 非公开注入（**公开评估请求体已删该字段，D55**；内部 `RuleEvent` 仍持有），有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；
 3. **并发取数**（D25）：Subject 加载（`SubjectLoader.load()`）与剩余 metric 批拉（各 `MetricSource` 自管连接池/HTTP client）并行启动，`CompletableFuture.allOf()` 等待全部完成；
 4. **组装 EvalContext**：将 Subject + metrics + RuleEvent + `now`（评估开始时间）+ traceId 封装为不可变 POJO；
 5. **同步写 evaluation_session**（D21）：INSERT `evaluation_session { status=PENDING（中间状态）, tenant_id, event_id, scene_code, subject_id, ... }`，与 event_id DB uk 构成幂等双兜底下半层。（注：Pre-Gate 全部拦截时在阶段③直接写 `status=BLOCKED`，不经过本步骤）
