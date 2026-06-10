@@ -880,14 +880,15 @@ GET /sdk/v1/metric-definitions
 
 ```java
 RuleEvent event = new RuleEvent(
-        tenantId,       // String，与规则快照的 tenantId 一致
-        sceneCode,      // String，如 "fraud"
-        eventType,      // String，如 "TRANSACTION"
-        subjectId,      // String，业务主体唯一标识
-        eventId,        // String，业务幂等 ID（建议 UUID）
-        Instant.now(),  // occurredAt
-        payload,        // Map<String, Object>，事件 payload
-        providedMetrics // Map<String, Object>，预计算指标（可为 null）
+        tenantId,        // String，与规则快照的 tenantId 一致
+        sceneCode,       // String，如 "fraud"
+        eventType,       // String，如 "TRANSACTION"
+        subjectId,       // String，业务主体唯一标识
+        eventId,         // String，业务幂等 ID（建议 UUID）
+        Instant.now(),   // occurredAt
+        payload,         // Map<String, Object>，事件 payload
+        providedMetrics, // Map<String, Object>，预计算指标（可为 null；仅非公开链路注入——SDK/Job，公开请求体无此字段，D55）
+        source           // EventSource，事件来源：HTTP / MQ / JOB / SDK / REPLAY
 );
 ```
 
