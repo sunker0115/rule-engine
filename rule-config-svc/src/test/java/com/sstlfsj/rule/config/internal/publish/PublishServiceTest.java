@@ -197,8 +197,9 @@ class PublishServiceTest {
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
         assertThat(audit.action()).isEqualTo("PUBLISH");
-        // PUBLISH 为非创建发布点：before 仍为 null，after 为 typed RulePublishedSnapshot
-        assertThat(audit.beforeSnapshot()).isNull();
+        // PUBLISH：before 为发布前状态快照(RuleStatusSnapshot)，after 为 RulePublishedSnapshot
+        assertThat(audit.beforeSnapshot()).isInstanceOf(
+                com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot.class);
         assertThat(audit.afterSnapshot()).isInstanceOf(RulePublishedSnapshot.class);
         RulePublishedEvent published = events.stream()
                 .filter(RulePublishedEvent.class::isInstance)

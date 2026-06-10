@@ -6,6 +6,7 @@ import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
+import com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -205,6 +206,9 @@ public class PublishService {
         }
 
         // 8. UPDATE rule_definition：状态改为 PUBLISHED，记录 currentVersion
+        // 捕获发布前状态作为 before 快照（D14 审计完整性，能还原"发布前的状态 + 上一个生效版本"）
+        RuleStatusSnapshot beforeSnap = new RuleStatusSnapshot(
+                ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
         rule.setStatus(RuleDefinitionStatus.PUBLISHED);
         rule.setCurrentVersion(newRv.getId());
         rule.setPublishedBy(actorId);
@@ -214,7 +218,7 @@ public class PublishService {
         // 9. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 红线）
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
-                null,
+                beforeSnap,
                 new RulePublishedSnapshot(newRv.getId(), newVersion),
                 LocalDateTime.now()));
 

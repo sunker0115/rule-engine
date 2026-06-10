@@ -78,6 +78,11 @@ class ConfigServiceImplTest {
         assertThat(ev.targetType()).isEqualTo("rule_definition");
         assertThat(ev.targetId()).isEqualTo("10");
         assertThat(ev.actorType()).isEqualTo("USER");
+        // before 记禁用前状态(PUBLISHED)，after 记 DISABLED(审计完整性)
+        var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.beforeSnapshot();
+        var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.afterSnapshot();
+        assertThat(before.status()).isEqualTo("PUBLISHED");
+        assertThat(after.status()).isEqualTo("DISABLED");
     }
 
     @Test

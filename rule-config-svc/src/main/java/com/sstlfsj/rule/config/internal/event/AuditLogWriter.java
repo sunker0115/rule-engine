@@ -25,6 +25,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RegisterReflectionForBinding({
         DraftCreatedSnapshot.class,
         RulePublishedSnapshot.class,
+        RuleStatusSnapshot.class,
         RuleImportedSnapshot.class,
         MetricChangedSnapshot.class
 })

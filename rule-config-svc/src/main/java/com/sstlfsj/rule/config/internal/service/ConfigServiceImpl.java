@@ -10,6 +10,7 @@ import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
+import com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
@@ -49,12 +50,17 @@ class ConfigServiceImpl implements ConfigService {
         if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
+        // 捕获禁用前状态作为 before 快照（D14 审计完整性，能还原"禁用前规则是什么状态"）
+        RuleStatusSnapshot before = new RuleStatusSnapshot(
+                ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
         rule.setStatus(RuleDefinitionStatus.DISABLED);
         ruleDefinitionMapper.updateById(rule);
+        RuleStatusSnapshot after = new RuleStatusSnapshot(
+                ruleDefinitionId, RuleDefinitionStatus.DISABLED.name(), rule.getCurrentVersion());
 
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 Long.valueOf(tenantId), actorId, "USER", "DISABLE", "rule_definition",
-                ruleDefinitionId.toString(), null, null, LocalDateTime.now()));
+                ruleDefinitionId.toString(), before, after, LocalDateTime.now()));
     }
 
     @Override
