@@ -167,7 +167,7 @@ public class PublishService {
             }
             Map<String, String> dataTypeMap = activeByCode.values().stream()
                     .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType));
-            resolvedAst = AstDataTypeResolver.resolve(ast, dataTypeMap);
+            resolvedAst = AstDataTypeResolver.resolve(ast, dataTypeMap, java.util.Map.of());
 
             // 4.6. metric 安全校验（B21）：SQL 时间函数/拼接拒绝 + 资源名注册（catalog 为 null 时跳过资源名校验）
             java.util.Set<String> dsNames = metricResourceCatalog != null
