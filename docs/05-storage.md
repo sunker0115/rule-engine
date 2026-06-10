@@ -183,7 +183,7 @@ CREATE TABLE decision_definition (
   name        VARCHAR(128) NOT NULL COMMENT '决策名称，如"拒绝"/"人工审核"/"放行"',
   priority    INT          NOT NULL COMMENT '优先级，值越小越高（D26：HIGHEST_PRIORITY 策略取 priority 最小的命中决策）',
   description TEXT         COMMENT '给运营/风控看的业务说明',
-  actions     JSON         NOT NULL DEFAULT '[]' COMMENT 'D27：Action 列表（命中此 Decision 时派发），含 actionId/actionType/sortOrder/failFast/compensateActionType/params',
+  actions     JSON         NOT NULL DEFAULT '[]' COMMENT 'D27：Action 列表（命中此 Decision 时派发），含 actionId/actionType/sortOrder/failFast/params',
   status      VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED',
   created_by  VARCHAR(64)  COMMENT '创建人（D14）',
   created_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -367,20 +367,16 @@ CREATE TABLE action_execution (
   action_id             VARCHAR(128) NOT NULL COMMENT 'Decision.actions[n].actionId',
   action_type           VARCHAR(64)  NOT NULL,
   decision_code         VARCHAR(64)  NOT NULL COMMENT '触发本 Action 的 Decision 码（D27）',
-  status                VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT '取值: PENDING/SUCCESS/FAILED/SKIPPED/RETRYING',
-  error_code            VARCHAR(64)  COMMENT 'TIMEOUT / BUSINESS_REJECTED / PREDECESSOR_FAILED 等',
-  retryable             TINYINT(1)   COMMENT '1=可重试；0=不可重试；NULL=尚未执行',
-  retry_count           INT          NOT NULL DEFAULT 0,
+  status                VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT '取值: PENDING/SUCCESS/FAILED/SKIPPED',
+  error_code            VARCHAR(64)  COMMENT 'NO_WEBHOOK_URL / ALERT_DELIVERY_FAILED / PREDECESSOR_FAILED 等',
   executed_at           TIMESTAMP(3)  COMMENT '最后一次执行时间',
-  compensated           TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否已补偿（§3.18 补偿流水线）',
-  compensated_at        TIMESTAMP(3)  COMMENT '补偿完成时间',
-  compensated_by        VARCHAR(64)  COMMENT '发起补偿的操作人（来自 X-Actor-Id header）',
   created_at            TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_idempotency (tenant_id, event_id, decision_code, action_id) COMMENT 'D27 幂等 UK：DB 层最终防重',
-  KEY idx_session_id (evaluation_session_id),
-  KEY idx_status_retryable (status, retryable)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Action 派发执行记录（D4/D27）';
+  UNIQUE KEY uk_idempotency (tenant_id, event_id, decision_code, action_id) COMMENT 'D27 幂等 UK：DB 层最终防重（落库去重）',
+  KEY idx_session_id (evaluation_session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Action 派发执行记录（D4/D27；best-effort 投递 D53，retry/补偿列已 V1_21 移除）';
 ```
+
+> **best-effort 化（D53，V1_21）**：原 `retryable`/`retry_count`/`compensated`/`compensated_at`/`compensated_by` 列 + `idx_status_retryable` 索引已移除。Action 投递为 best-effort fire-and-forget，不重试不补偿；重复防护仅靠 `uk_idempotency` 落库去重。可靠投递（MQ）/ 业务补偿（saga）未来另设计。
 
 **dry_run_session**（共享 evaluation_session 主体字段，追加 dry-run 专有列，7 天 TTL，D7）
 
@@ -451,7 +447,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `evaluation_session` | `idx_scene_subject (scene_code, subject_id)` | 按用户查历史评估记录 |
 | `evaluation_session` | （无专用索引）按规则查历史 session 走 `node_trace.rule_version_id` IN 该规则所有版本 id → 取 `evaluation_session_id` → JOIN evaluation_session；不在 evaluation_session 加规则外键索引以避免写热点，JOIN 量小可接受（见 10-api-contract §6.4） | |
 | `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
-| `action_execution` | UK `uk_idempotency (tenant_id, event_id, decision_code, action_id)`<br>`idx_status_retryable (status, retryable)`<br>`idx_session_id (evaluation_session_id)` | Action 派发幂等检查（D27 DB 层最终防重）<br>重试队列扫描（查 status=FAILED AND retryable=1）<br>按 session 查 action 执行记录 |
+| `action_execution` | UK `uk_idempotency (tenant_id, event_id, decision_code, action_id)`<br>`idx_session_id (evaluation_session_id)` | Action 派发幂等检查（D27 DB 层最终防重，best-effort 落库去重）<br>按 session 查 action 执行记录 |
 | `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |
 | `rule_version` | UK `uk_def_version (rule_definition_id, version)` | 版本唯一性约束 + 按规则查所有版本 |
 | `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)`<br>`idx_operated_at (operated_at)` | 查某个规则/Scene 的所有变更记录<br>按时间范围查审计日志 |

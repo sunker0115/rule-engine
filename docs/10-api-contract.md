@@ -579,16 +579,18 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 
 ### Action 执行 errorCode（ActionResult.errorCode）
 
-| errorCode | retryable | 含义 |
-|-----------|-----------|------|
-| `TIMEOUT` | true | Handler execute() 超时（D18） |
-| `EXTERNAL_SERVICE_ERROR` | true | 外部系统返回 5xx / 连接失败 |
-| `BUSINESS_REJECTED` | false | 外部系统明确拒绝（如工单系统返回 400） |
-| `PREDECESSOR_FAILED` | false | failFast 前置 Action 失败（D18） |
-| `QUEUE_OVERFLOW` | true | Action Dispatcher 队列满，Action 已丢弃入重试队列（D20） |
-| `HANDLER_EXCEPTION` | false | ActionHandler.execute() 抛出未捕获异常（D18） |
-| `DRY_RUN_NOT_IMPLEMENTED` | false | ~~v1 占位~~；v1.5 已全量实装（D7），不再产生 |
-| `NOT_SUPPORTED` | false | compensate() 不支持 |
+> Action 投递 best-effort（D53）：失败即终态，不重试不补偿；`retryable` 字段保留但不再驱动重试。队列满则丢弃 + 计数 + WARN（不再产生 `QUEUE_OVERFLOW`）。
+
+| errorCode | 含义 |
+|-----------|------|
+| `TIMEOUT` | Handler execute() 超时（D18），FAILED 终态 |
+| `EXTERNAL_SERVICE_ERROR` | 外部系统返回 5xx / 连接失败，FAILED 终态 |
+| `BUSINESS_REJECTED` | 外部系统明确拒绝（如工单系统返回 400） |
+| `PREDECESSOR_FAILED` | failFast 前置 Action 失败（D18），SKIPPED |
+| `HANDLER_EXCEPTION` | ActionHandler.execute() 抛出未捕获异常（D18） |
+| `NO_WEBHOOK_URL` | SEND_ALERT 未配 webhook URL（D53），SKIPPED |
+| `ALERT_DELIVERY_FAILED` / `ALERT_HTTP_<code>` | SEND_ALERT webhook 失败 / 非 2xx（D53），FAILED |
+| `DRY_RUN_NOT_IMPLEMENTED` | ~~v1 占位~~；v1.5 已全量实装（D7），不再产生 |
 
 ### 发布期 errorCode（audit_log.after_snapshot.errorCode）
 

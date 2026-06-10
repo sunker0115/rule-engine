@@ -246,16 +246,15 @@ EvalResult {
 
 **输出**：`action_execution` 行（异步写 DB）
 
-**核心动作**：
-- 从 `decision_bindings` 取 `finalDecision.actions` 列表，按 `sortOrder` 顺序提交给 ActionExecutor 线程池（D20 §2）；
+**核心动作**（best-effort fire-and-forget，D53）：
+- 从 `decision_bindings` 取 `finalDecision.actions` 列表，按 `sortOrder` 顺序提交给进程内异步队列（D20 §2）；
 - **评估线程不等待 Action 完成**：提交入队即返回 `EvalResult`（PULL 模式同步返回；PUSH 模式调用方收到 accepted=true）；
 - Handler 执行结果写 `action_execution` 表（异步，不阻塞评估线程）；
-- 队列满 → `ActionResult { status=FAILED, errorCode=QUEUE_OVERFLOW, retryable=true }`（D20 §2）。
+- 队列满 → 丢弃 + 累计计数 + WARN 日志（best-effort 可丢，不重试；不再产生 `QUEUE_OVERFLOW` errorCode，D53）。
 
-**失败与重试语义**（D18）：
-- `retryable=true` → 入重试队列（独立调度，不阻塞同 Decision 后续 Action）；
-- `retryable=false` → 直接落 `action_execution.status=FAILED`；
-- `failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 更大的 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，不进入重试队列。
+**失败语义**（D53 best-effort + D18 failFast）：
+- Handler 失败 → `action_execution.status=FAILED` 终态，**不重试不补偿**（可靠投递未来接 MQ）；
+- `failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 更大的 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`（D18 多 action 失败传播语义不变）。
 
 **缺省 decisionStrategy**（D29）：PUSH/HYBRID Scene 未配 `decisionStrategy` 时，缺省等价 `HIGHEST_PRIORITY`；PULL Scene `decisionStrategy` 无效，`EvalResult` 直接返回调用方不做合成。
 
@@ -360,20 +359,17 @@ EvalResult {
 ActionHandler.execute() → 异常 / timeout
   │ 引擎归一
   ▼
-ActionResult { status=FAILED, errorCode, retryable }
-  │
-  ├─ retryable=true  → 入重试队列（不阻塞同 Decision 后续 Action）
-  └─ retryable=false → 直接落 action_execution.status=FAILED
+ActionResult { status=FAILED, errorCode }
+  │ best-effort：直接落 action_execution.status=FAILED 终态，不重试不补偿（D53）
 
 failFast=true 的 Action 失败时：
   → 同 Decision 内 sortOrder 更大的 Action 全部
-     status=SKIPPED, errorCode=PREDECESSOR_FAILED
-     不进重试队列
+     status=SKIPPED, errorCode=PREDECESSOR_FAILED（D18）
 ```
 
 Action 失败**不影响** `EvalResult.satisfied`（评估阶段已结束，Action 是命中后行为）。
 
-**补偿不自动触发**（D18）：引擎只记录 FAILED 状态，补偿由 D4 补偿流水线外部调度（对账任务 / 运营手动回滚按钮）发起 `ActionHandler.compensate(ActionContext ctx)` 调用。
+**best-effort 投递**（D53）：命中后 action 经进程内队列异步派发，队列满/进程重启会丢、不重试不补偿；引擎只记录最终结果。可靠投递（MQ）/ 业务补偿（saga）未来另设计，不在应用层做重试表/补偿 SPI。
 
 ### 5.3 整体降级矩阵（对账用）
 
@@ -393,7 +389,7 @@ Action 失败**不影响** `EvalResult.satisfied`（评估阶段已结束，Acti
 | 维度 | PUSH 模式 | PULL 模式 |
 |------|-----------|----------|
 | 评估节点失败 | 安静失败，Action 不派发（满足且无 error 才派发）；trace 落 ERROR 状态，触发监控告警 | 返回 `EvalResult { satisfied, errorCode }`，调用方策略自决（fail-secure / fail-open） |
-| Action 失败 | 重试队列 / FAILED 终态，写 action_execution；通过监控告警可见 | N/A（PULL 无 Action） |
+| Action 失败 | FAILED 终态（best-effort 不重试），写 action_execution；通过监控告警可见 | N/A（PULL 无 Action） |
 | 调用方职责 | 接受异步不透明；通过 evaluation_session / node_trace 后验排障 | 必须判断 errorCode 是否非空，按业务策略决策 |
 
 ---

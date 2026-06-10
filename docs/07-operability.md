@@ -162,7 +162,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | MetricSource (EXTERNAL_HTTP) | 取数超时 | D15 单节点降级 false，EvalResult.errorCode=METRIC_FETCH_FAIL |
 | MetricSource (SQL_AGGREGATE) | DB 慢查询 / 连接池耗尽 | 同上；建议对 SQL 指标设 cache_ttl > 0 |
 | TraceWriter 队列满 | trace 行丢弃 | trace 丢弃 + counter 告警；**不影响** EvalResult |
-| ActionHandler 外部系统不可用 | execute() 超时 | TIMEOUT retryable=true，入重试队列 |
+| ActionHandler 外部系统不可用 | execute() 超时 | TIMEOUT，落 FAILED 终态（best-effort 不重试，D53）；队列满则丢弃 + 计数 + WARN |
 
 ### v1 不做的高可用（见 08-evolution）
 
@@ -193,10 +193,10 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `engine.rule.retention.evaluation-session-days` | 30 | evaluation_session 保留天数（D9） |
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |
 | `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session 保留天数 |
-| `engine.rule.action.retry-queue-capacity` | 10000 | Action 重试队列容量（内存，进程重启丢失） |
-| `engine.rule.action.retry-initial-interval-ms` | 1000 | 指数退避初始间隔 |
-| `engine.rule.action.retry-max-interval-ms` | 60000 | 指数退避最大间隔 |
-| `engine.rule.action.retry-max-attempts` | 5 | 最大重试次数，超出后落 FAILED 终态 |
+| `engine.rule.action.send-alert.url` | （空） | SEND_ALERT webhook URL；空则不实发（D53 best-effort） |
+| `engine.rule.action.send-alert.timeout-ms` | 2000 | SEND_ALERT webhook 连接+请求超时 |
+
+> Action 投递 best-effort（D53）：原 `engine.rule.action.retry-*` 重试队列参数已移除，失败不重试不补偿。
 
 ---
 

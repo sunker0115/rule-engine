@@ -370,21 +370,20 @@ if (!r.satisfied()) {
 | `actionType` | 路由键，决定用哪个 `ActionHandler` 实现 |
 | `params` | JSON 参数（依 actionType 而异） |
 | `sortOrder` | Decision 内多 Action 的执行顺序 |
-| `failFast` | 布尔，默认 `false`。`true` 时本 Action 失败 → 同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部标 `SKIPPED`，不进入重试队列（D18） |
-| `compensateActionType` | 反向动作类型（用于补偿流水线，可选） |
+| `failFast` | 布尔，默认 `false`。`true` 时本 Action 失败 → 同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部标 `SKIPPED`（D18 多 action 失败传播；best-effort 下无重试队列） |
 
 **`ActionResult.errorCode` 枚举（v1）**：与 `EvalResult.errorCode`（D15）不同维度，独立枚举：
 
 | errorCode | 来源 | 含义 |
 |-----------|------|------|
-| `HANDLER_EXCEPTION` | D18 | `ActionHandler.execute` 抛未捕获异常，引擎归一为 `status=FAILED, retryable=false` |
-| `TIMEOUT` | D18 | `ActionHandler.execute` 超过 handler 自身声明的超时阈值（同步等待 / 调外部 HTTP / MQ ack 等），引擎归一为 `status=FAILED, retryable=true`。超时阈值由 handler 在 `@ActionType` 注解 / 注册元数据声明（详见 04-extension），未声明回落引擎默认 |
-| `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED`，不入重试队列 |
-| `DRY_RUN_NOT_IMPLEMENTED` | D7 | ~~v1 阶段占位~~；v1.5 已全量实装（`BlockTransactionHandler` + `SendAlertHandler` 均 override `dryRun()`），此 errorCode 不再产生 |
-| `QUEUE_OVERFLOW` | D20 | 异步 Dispatcher 内部队列满拒绝该 ActionInstance；引擎归一为 `status=FAILED, retryable=true`，监控告警 |
-| `EXTERNAL_SERVICE_ERROR` | D18 | Handler 调用外部系统返回 5xx / 连接失败；`retryable=true` |
-| `BUSINESS_REJECTED` | D18 | 外部系统明确拒绝（如工单系统返回 400）；`retryable=false` |
-| `NOT_SUPPORTED` | D18 | `ActionHandler.compensate()` 未实装（返回 `ActionResult.notSupported()`）；`retryable=false` |
+| `HANDLER_EXCEPTION` | D18 | `ActionHandler.execute` 抛未捕获异常，引擎归一为 `status=FAILED`（best-effort，不重试） |
+| `TIMEOUT` | D18 | `ActionHandler.execute` 超过 handler 自身声明的超时阈值；引擎归一为 `status=FAILED`（best-effort，不重试）。超时阈值由 handler 在 `@ActionType` 注解声明（详见 04-extension），未声明回落引擎默认 |
+| `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED` |
+| `DRY_RUN_NOT_IMPLEMENTED` | D7 | ~~v1 阶段占位~~；v1.5 已全量实装（`SendAlertHandler` 等均 override `dryRun()`），此 errorCode 不再产生 |
+| `NO_WEBHOOK_URL` | D53 | `SEND_ALERT` 未配置 webhook URL，`status=SKIPPED`（不实发） |
+| `ALERT_DELIVERY_FAILED` / `ALERT_HTTP_<code>` | D53 | `SEND_ALERT` webhook 连接失败/超时 / 非 2xx；`status=FAILED`（best-effort，不重试） |
+| `EXTERNAL_SERVICE_ERROR` | D18 | Handler 调用外部系统返回 5xx / 连接失败；`status=FAILED`（best-effort，不重试） |
+| `BUSINESS_REJECTED` | D18 | 外部系统明确拒绝（如工单系统返回 400）；`status=FAILED` |
 
 handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 errorCode（带分类前缀），引擎不对未知 errorCode 做特判但要求**全部新增枚举回填到本表**——避免散落各处导致后续遗漏对齐。
 
@@ -393,12 +392,11 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **Action 归属 Decision，不归属 Rule**（D27）：Action 配置在 `Decision.actions` 字段上，Rule 不再持 `actions` 字段；仅 `finalDecision`（合成后最终决策）的 actions 被 Dispatcher 派发；`hitDecisions` 列表中其他 Decision 的 actions 不派发（避免多规则命中时重复执行）。
 - **Action 是配置数据，ActionHandler 是代码** —— 两者关系类似"Condition 节点 vs ConditionEvaluator"。
 - **`actionType` 受 Scene 白名单约束**（PUSH/HYBRID）：Rule 发布时引擎检查 Rule 绑定的 Decision.actions 内所有 `actionType` 都在本 Scene 的 `scene_action_binding` 内；PULL Scene 校验 Decision.actions 必须为空；前端配 Decision 时 actionType 下拉项按当前 Scene 过滤。
-- **每个 Action 独立事务 + 独立重试** —— 一个 Action 失败不影响其他（除非配置 `failFast`）。
+- **best-effort 投递**（D53）：命中后 action 经进程内队列异步派发，**不重试不补偿**；一个 Action 失败不影响其他（除非配置 `failFast`）。队列满/进程重启会丢（队列满计数 + WARN，不静默）。
 - **v1 Action 是平铺 forEach 顺序执行** —— 按 `sortOrder` 串行，编排（并行 / 等待 / 分支）留到 v2。
-- **失败补偿语义**（D18）：单 Action 失败 → 引擎将异常归一为 `ActionResult { status=FAILED, errorCode, retryable }`；`retryable=true` 入重试队列（不阻塞同 Decision 内后续 Action），`retryable=false` 直接落 `action_execution.status=FAILED`。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，**不**进入重试队列。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。
-- **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。
-- **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。DDL 另有 `PENDING`（已入队待执行）和 `RETRYING`（重试进行中）两个过程态——对账、监控、失败率统计只看最终三态，过程态由引擎内部维护。
-- **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
+- **失败语义**（D53 best-effort + D18 failFast）：单 Action 失败 → `ActionResult { status=FAILED, errorCode }` 直接落 `action_execution` 终态，**不重试不补偿**。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。可靠投递（MQ）/ 业务补偿（saga）未来另设计。
+- **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。另有过程态 `PENDING`（已入队待执行）——对账、监控、失败率统计只看最终三态。
+- **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作落库去重；多规则命中同一 Decision 时幂等键天然去重。best-effort 下重复防护仅靠 DB `uk_idempotency`（ON DUPLICATE KEY 吞重），不防"handler 被重复执行"（进程内幂等缓存已砍，D53；未来 MQ 消费端再做幂等）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一。DDL 详见 [`05-storage.md`](./05-storage.md)。
 - **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **提供 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。评估层 dry-run 是一等公民（走完整评估链路 + 节点 trace）；`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7），返回 `ActionResult.success()` 预览结果。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
 - **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(ActionContext ctx)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
@@ -624,7 +622,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 | `trigger_event_types` | 冻结：发布瞬间的 eventType 数组 |
 | `condition_ast` | 冻结：完整 AST JSON（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
 | `pre_gates` | 冻结：preGates 列表（含 ROLLOUT 灰度配置；无独立 `rollout` 列，D43）（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
-| `decision_bindings` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `compensateActionType` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
+| `decision_bindings` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |
 | `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。发布期由 AST 静态分析得出；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
 | `compiled_predicate_ref?` | 可选字符串，编译产物引用键（D20 §5）。v1 留空；v1.5 启用，由 `CompiledExecutor` + `ExecutorRegistry` 按版本 id 检索编译产物 |
@@ -761,54 +759,13 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 - **dry-run 行为全定义在 §五 Q10**：本节只定义存储结构，不重复 Q10 的副作用 / 短路规则；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §dry_run_session 表。
 
-### 3.17 Action 重试队列（Dispatcher 内部，非一等公民）
+### 3.17 Action 重试队列（已移除，D53）
 
-**是什么**：Dispatcher 内部承载 `retryable=true` 的失败 ActionInstance 的有界内存队列，与主派发队列（D20 §2）**独立**，防止重试事件阻塞新命中事件的正常派发。
+> **已移除**：Action 投递改为 best-effort fire-and-forget（D53），不再有应用层重试队列。失败即 `action_execution.status=FAILED` 终态，不重试。可靠投递（at-least-once）未来接 **MQ**（重试由 MQ 消费端保证），不在应用层做重试表/重发逻辑。
 
-**结构**：
+### 3.18 Compensation Pipeline（已移除，D53）
 
-```
-主派发队列 (BlockingQueue<ActionInstance>)
-    └── 消费者发现 ActionResult.retryable=true → 入重试队列
-
-重试队列 (BlockingQueue<RetryableActionInstance>)
-    └── 独立消费者：指数退避重试
-        → 重试达上限仍 FAILED → action_execution 终态（不再重试）
-        → 终态后补偿由 D4 补偿流水线外部调度（§3.18）
-```
-
-**关键边界**：
-
-- **独立于主队列**：重试项不占主队列容量，不影响新命中事件派发吞吐；
-- **退避策略**：指数退避（初始间隔 / 最大间隔 / 最大重试次数在 [`07-operability.md`](./07-operability.md) §九 运维参数默认值表 给默认值）；
-- **v1 内存队列**：进程重启时未消费重试项丢失；上游重推 RuleEvent（D23 幂等需换新 eventId）可完整恢复；引入持久化重试留 [`08-evolution.md`](./08-evolution.md) §二；
-- **v1 不引入死信队列（DLQ）**（D20 §2）：`action_execution` FAILED 行即是终态游标，DLQ 在引入 MQ 时再考虑；
-- **运维参数**（`retry.queue.capacity` / `retry.initial.interval` / `retry.max.interval` / `retry.max.attempts`）留 [`07-operability.md`](./07-operability.md) §九 运维参数默认值表。
-
-### 3.18 Compensation Pipeline（补偿流水线，外部过程）
-
-**是什么**：引擎**不内置**的外部操作过程，用于已执行 Action 的逆向回滚。不是引擎运行时组件，是依托引擎提供的 SPI 接口运行的运维流程。
-
-**触发场景**：
-
-| 场景 | 典型触发方式 |
-|------|------------|
-| 业务撤销（交易退款、活动取消） | 对账定时任务扫描应补偿的 `action_execution` 行 → 调用 `ActionHandler.compensate()` |
-| 手动修正（运营后台"撤回奖励"按钮） | 管理员操作 API → 调用 `ActionHandler.compensate()` |
-| 错误发放纠正 | 对账任务按 `evaluation_session + action_execution` 批量扫描 → 批量补偿 |
-
-**引擎提供的接入点**：
-
-- `ActionHandler.compensate(ActionContext ctx): ActionResult`：SPI 方法，各 Handler 实现逆向逻辑（退券 / 扣回积分 / 关闭通知），返回类型与 `execute` 一致（实现签名见 04-extension §三）；
-- `Action.compensateActionType`：标记该 Action 的反向 handler 类型（如 `coupon.revoke`），补偿流水线按此字段路由；
-- 查询接口：补偿流水线通过管理 API 查 `action_execution`（`status=SUCCESS, compensated=false`）获取待补偿清单。
-
-**关键边界**：
-
-- **补偿不自动触发**（D18）：引擎只记录 FAILED 状态，**不自动调用** `compensate()`——补偿是业务语义，由业务侧按需发起；
-- **补偿幂等**：由各 `ActionHandler.compensate()` 实现自行保证（DB uk / Redis trySet / 外部幂等键），引擎不重复保证；
-- **补偿结果记录**：执行结果写入 `action_execution` 的补偿流水字段（`compensated` / `compensated_at` / `compensated_by`），详见 [`05-storage.md`](./05-storage.md) §action_execution 表；
-- **运营 UI 与对账配置**：补偿操作台与运维流程为 v2 规划功能，v1 由运营通过 `GET /admin/v1/evaluation-sessions` + `action_execution` 查询接口人工核查待补偿清单（`compensated=false, status=SUCCESS`）。
+> **已移除**：`ActionHandler.compensate()` SPI 与 `action_execution` 补偿列（`compensated` / `compensated_at` / `compensated_by`）已删除（D53）。业务补偿未来走 **saga / 补偿事务**，届时重新设计，不复用本次删除的 compensate SPI。
 
 ### 3.19 Decision（决策定义，一等公民）
 
@@ -825,7 +782,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 | `name` | 显示名（中文/英文均可，给运营/风控看） |
 | `priority` | 合成优先级，数值越小优先级越高；如 REJECT=1, REVIEW=2, PASS=100；业务方自定，引擎只排序 |
 | `description` | 给运营/风控看的业务说明 |
-| `actions` | Action 列表（D27 从 Rule 迁移）：命中该 Decision 时执行的动作；与 Rule.actions 字段结构相同（`actionType` / `params` / `sortOrder` / `failFast` / `compensateActionType`）；PULL Scene 下必须为空 |
+| `actions` | Action 列表（D27 从 Rule 迁移）：命中该 Decision 时执行的动作；字段含 `actionType` / `params` / `sortOrder` / `failFast`；PULL Scene 下必须为空 |
 
 （横切标准审计字段，见 §三 顶部横切说明）
 
@@ -929,15 +886,14 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
    - Dispatcher 多消费者线程池异步消费：
      · Action 1: coupon.issue (10 USD 券) → ActionHandler 执行 → 写 action_execution
      · Action 2: mq.send (发送站内信) → 声明式动作 → 推送 MQ
-   - 队列满 → ActionResult{status=FAILED, errorCode=QUEUE_OVERFLOW, retryable=true}
+   - 队列满 → 丢弃 + 累计计数 + WARN（best-effort 可丢，不重试，D53）
         │
         ▼
-9. 任一 Action 失败 → 引擎归一为 `ActionResult{status=FAILED, errorCode, retryable}`
-   - `retryable=true`：入重试队列；不阻塞同 Decision 内后续 Action（默认 continue-on-error）
-   - `retryable=false`：直接落 `action_execution.status=FAILED`
-   - 失败的 Action 若 `failFast=true`：同 Decision 内 `sortOrder` 更大的后续 Action 全部标 `SKIPPED`（errorCode=PREDECESSOR_FAILED），**不**进入重试队列
+9. 任一 Action 失败 → `ActionResult{status=FAILED, errorCode}`（best-effort，D53）
+   - 直接落 `action_execution.status=FAILED` 终态，**不重试不补偿**
+   - 失败的 Action 若 `failFast=true`：同 Decision 内 `sortOrder` 更大的后续 Action 全部标 `SKIPPED`（errorCode=PREDECESSOR_FAILED，D18）
    - Action 失败不影响 `EvalResult.satisfied`（评估已完成才派发 Action），跨 Rule 隔离
-   补偿场景（如交易后续撤销）**不由引擎自动触发**，由 D4 补偿流水线（对账任务 / 手动回滚按钮）显式调用 `ActionHandler.compensate(...)`
+   可靠投递（MQ）/ 业务补偿（saga）未来另设计
 ```
 
 **关键节奏**：
@@ -1123,8 +1079,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | 幂等 / 灰度 / dry-run / 监控的运营细节 | [07-operability](./07-operability.md) |
 | 生产评估持久化（字段表 / 四态 `status` 聚合） | §3.15 EvaluationSession |
 | dry-run 试算会话（隔离表、可重复运行） | §3.16 DryRunSession |
-| Action 失败后重试队列与退避策略 | §3.17 Action 重试队列 |
-| 已执行 Action 的逆向补偿触发与接口 | §3.18 Compensation Pipeline |
+| Action 投递语义（best-effort，不重试不补偿，D53） | §3.7 Action + §3.17/§3.18（已移除说明） |
 | Tenant 级决策码定义（REJECT / REVIEW / PASS 等） | §3.19 Decision |
 | Rule 与 Decision 的绑定关系 + 多规则命中合成策略 | §3.20 RuleDecisionBinding |
 | 历史决策时间线 / 路线图 | [08-evolution](./08-evolution.md) |

@@ -112,14 +112,6 @@ public interface ActionHandler {
     ActionResult execute(ActionContext ctx);
 
     /**
-     * 补偿（回滚）。由外部对账任务调用，非引擎自动触发（D18）。
-     * @return ActionResult
-     */
-    default ActionResult compensate(ActionContext ctx) {
-        return ActionResult.notSupported();
-    }
-
-    /**
      * dry-run 预览。不发起任何外部副作用（HTTP/MQ/DB 写入），返回预测 ActionResult。
      * v1.5 已全量实装（D7），DRY_RUN_NOT_IMPLEMENTED errorCode 不再产生。
      * @return ActionResult
@@ -145,14 +137,14 @@ ActionContext {
 
 > `ActionContext.evalContext.getEventId()` 是推荐幂等键组成之一，见 §3.5 实现约束。
 
-### 3.2 ActionResult 契约（D16 / D18 派生）
+### 3.2 ActionResult 契约（D16 派生）
 
 ```java
 ActionResult {
-    status:       SUCCESS | FAILED | SKIPPED   // SKIPPED 只由引擎填（PREDECESSOR_FAILED）
+    status:       SUCCESS | FAILED | SKIPPED   // SKIPPED 由引擎填（PREDECESSOR_FAILED / handler 缺失 / 无 webhook URL）
     errorCode:    String?                       // 见 01-concepts §3.7 errorCode 清单
     errorMessage: String?                       // 人类可读错误信息，不作程序判断
-    retryable:    Boolean                       // true = 入重试队列；false = 直接落库 FAILED
+    retryable:    Boolean                       // 保留字段；best-effort 化后不再驱动重试队列（D53），失败即终态
 }
 ```
 
@@ -166,7 +158,6 @@ public @interface ActionType {
     String displayName() default "";
     String paramsSchema() default "{}";   // 前端表单 schema
     int timeoutMs() default 3000;  // Handler 声明的超时预算；引擎据此设置调用上限，超时归 TIMEOUT errorCode
-    boolean compensatable() default false; // 是否声明补偿支持（前端提示）
 }
 ```
 
@@ -188,8 +179,7 @@ public @interface ActionType {
           }
         }
     """,
-    timeoutMs = 3000,
-    compensatable = true
+    timeoutMs = 3000
 )
 public class TicketCreateHandler implements ActionHandler {
     @Override
@@ -202,16 +192,10 @@ public class TicketCreateHandler implements ActionHandler {
             ticketService.create(buildRequest(ctx));
             return ActionResult.success();
         } catch (TimeoutException e) {
-            return ActionResult.failed("TIMEOUT", true);
+            return ActionResult.failed("TIMEOUT", false);
         } catch (BusinessException e) {
             return ActionResult.failed("BUSINESS_REJECTED", false);
         }
-    }
-
-    @Override
-    public ActionResult compensate(ActionContext ctx) {
-        ticketService.close(ctx.getEvalContext().getEventId());
-        return ActionResult.success();
     }
 }
 ```
@@ -221,8 +205,8 @@ public class TicketCreateHandler implements ActionHandler {
 - execute() 内**必须**做幂等检查（幂等键推荐：`tenantId + eventId + decisionCode + actionId`，与 D27 迁移后的幂等键设计对齐）
 - 超时处理分两种场景：
   - **Handler 主动处理**：catch TimeoutException 后返回 `ActionResult.failed("TIMEOUT", true)`（推荐，便于区分业务超时和引擎中断）
-  - **引擎强制中断**：Handler 超过 timeoutMs 仍未返回时，引擎中断调用并归为 `ActionResult { status=FAILED, errorCode=TIMEOUT, retryable=true }`；Handler 无需额外处理，但不会收到任何回调
-- compensate() 如不支持，返回 `ActionResult.notSupported()`（不要抛异常）
+  - **引擎强制中断**：Handler 超过 timeoutMs 仍未返回时，引擎中断调用并归为 `ActionResult { status=FAILED, errorCode=TIMEOUT }`；Handler 无需额外处理，但不会收到任何回调
+- Action 投递 best-effort（D53）：失败即终态、不重试不补偿；可靠投递未来接 MQ
 - Action 失败**不影响** EvalResult.satisfied（D18，评估阶段已结束）
 
 ---
@@ -317,8 +301,7 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
     {
       "code": "ticket.create",
       "displayName": "创建工单",
-      "paramsSchema": { "type": "object", "required": ["title", "assignee"], "properties": { "title": { "type": "string" }, "assignee": { "type": "string" } } },
-      "compensatable": true
+      "paramsSchema": { "type": "object", "required": ["title", "assignee"], "properties": { "title": { "type": "string" }, "assignee": { "type": "string" } } }
     }
   ],
   "availableMetrics": [
