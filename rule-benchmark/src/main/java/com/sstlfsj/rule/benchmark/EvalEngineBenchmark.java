@@ -50,7 +50,7 @@ public class EvalEngineBenchmark {
             snaps.add(new RuleVersionSnapshot((long) i, "scene", "1",
                     new AndNode(List.of(), null, null), List.of(),
                     List.of(new RuleVersionSnapshot.DecisionBinding("D" + i, i)),
-                    List.of(), "AST_BOOLEAN", deps));
+                    List.of(), "AST_BOOLEAN", deps, List.of()));
         }
         index.update("1", "scene", "ORDER", snaps);
         index.setStrategy("1", "scene", SceneExecutionStrategy.valueOf(strategy));

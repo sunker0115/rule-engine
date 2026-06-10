@@ -43,7 +43,7 @@ public class VersionMergeBenchmark {
             }
             candidates.add(new RuleVersionSnapshot((long) i, "scene", "1",
                     new AndNode(List.of(), null, null), List.of(), List.of(), List.of(),
-                    "AST_BOOLEAN", deps));
+                    "AST_BOOLEAN", deps, List.of()));
         }
     }
 
