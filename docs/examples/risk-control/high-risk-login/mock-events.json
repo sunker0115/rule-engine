@@ -9,7 +9,7 @@
     "eventId": "evt-hit-001",
     "occurredAt": "2026-06-09T22:00:00+08:00",
     "payload": { "amount": 5000, "country": "CN" },
-    "providedMetrics": { "amount": 5000, "user.risk.score": 90 }
+    "providedMetrics": { "user.risk.score": 90 }
   },
   {
     "_scenario": "未命中 MISS — amount=500 < 1000,AndNode 短路为 false",
@@ -21,7 +21,7 @@
     "eventId": "evt-miss-001",
     "occurredAt": "2026-06-09T22:01:00+08:00",
     "payload": { "amount": 500, "country": "CN" },
-    "providedMetrics": { "amount": 500, "user.risk.score": 90 }
+    "providedMetrics": { "user.risk.score": 90 }
   },
   {
     "_scenario": "dry-run — 命中,返回完整 nodeTrace,不实际派发 action",
@@ -33,6 +33,6 @@
     "eventId": "evt-dry-001",
     "occurredAt": "2026-06-09T22:02:00+08:00",
     "payload": { "amount": 8000, "country": "US" },
-    "providedMetrics": { "amount": 8000, "user.risk.score": 85 }
+    "providedMetrics": { "user.risk.score": 85 }
   }
 ]

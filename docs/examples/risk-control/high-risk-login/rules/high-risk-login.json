@@ -13,6 +13,7 @@
         "displayLabel": "金额>1000",
         "conditionType": "GT",
         "metricCode": "amount",
+        "valueRef": "PAYLOAD",
         "params": { "threshold": 1000 }
       },
       {

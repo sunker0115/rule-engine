@@ -1,15 +1,5 @@
 [
   {
-    "metricCode": "amount",
-    "name": "交易金额",
-    "sourceType": "ATTRIBUTE",
-    "dataType": "LONG",
-    "params": {},
-    "cacheTtlSeconds": 0,
-    "allowProvided": true,
-    "_note": "amount 本是 payload 字段,但仍须注册成 metric:发布期 MetricDependencyCollector 把规则里每个 ConditionNode.metricCode 都当 metric 依赖,要求有 ACTIVE 版本,不区分 payload。allowProvided=true 才能在评估时用 providedMetrics 喂值。"
-  },
-  {
     "metricCode": "user.risk.score",
     "name": "用户风险分",
     "sourceType": "ATTRIBUTE",

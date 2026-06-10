@@ -8,7 +8,7 @@
         "nodeType": "AndNode",
         "result": true,
         "children": [
-          { "conditionType": "GT",  "metricCode": "amount",          "actualValue": 5000, "valueSource": "PROVIDED", "result": true },
+          { "conditionType": "GT",  "metricCode": "amount",          "actualValue": 5000, "valueSource": "PAYLOAD",  "result": true },
           { "conditionType": "GTE", "metricCode": "user.risk.score", "actualValue": 90,   "valueSource": "PROVIDED", "result": true }
         ]
       }
@@ -33,7 +33,7 @@
         "nodeType": "AndNode",
         "result": true,
         "children": [
-          { "conditionType": "GT",  "metricCode": "amount",          "actualValue": 8000, "valueSource": "PROVIDED", "result": true },
+          { "conditionType": "GT",  "metricCode": "amount",          "actualValue": 8000, "valueSource": "PAYLOAD",  "result": true },
           { "conditionType": "GTE", "metricCode": "user.risk.score", "actualValue": 85,   "valueSource": "PROVIDED", "result": true }
         ]
       }
