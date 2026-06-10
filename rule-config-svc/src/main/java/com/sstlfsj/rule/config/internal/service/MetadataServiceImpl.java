@@ -42,7 +42,7 @@ class MetadataServiceImpl implements MetadataService {
             throw new IllegalArgumentException("Scene 不存在: " + sceneCode);
         }
 
-        // v1 简化：查该租户下全部 ACTIVE metric，不过 scene_metric_binding 白名单
+        // metric 在 tenant 级对所有 scene 可用（无 scene 级绑定白名单，配置闭环 B 轮决策二）
         List<MetricDefinition> metrics = metricDefinitionMapper.findActiveByTenant(Long.valueOf(tenantId));
 
         List<MetricMeta> metricMetas = metrics.stream()
