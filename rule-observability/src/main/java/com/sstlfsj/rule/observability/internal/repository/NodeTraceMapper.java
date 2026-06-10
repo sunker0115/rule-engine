@@ -1,10 +1,12 @@
 package com.sstlfsj.rule.observability.internal.repository;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.observability.internal.domain.NodeTraceEntity;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /** node_trace 表 MyBatis-Plus Mapper（批量写，异步通道）。 */
@@ -30,4 +32,12 @@ public interface NodeTraceMapper extends BaseMapper<NodeTraceEntity> {
             </script>
             """)
     void insertBatch(List<NodeTraceEntity> list);
+
+    /** 删 evaluated_at 早于 cutoff 的行，单次最多 batchSize 条（分批短事务）。返回删除行数。 */
+    default int purgeOlderThan(LocalDateTime cutoff, int batchSize) {
+        // batchSize 为常量 int，无注入风险
+        return delete(new LambdaQueryWrapper<NodeTraceEntity>()
+                .lt(NodeTraceEntity::getEvaluatedAt, cutoff)
+                .last("LIMIT " + batchSize));
+    }
 }

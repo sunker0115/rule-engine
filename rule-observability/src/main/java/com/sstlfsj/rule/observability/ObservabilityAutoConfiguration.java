@@ -5,6 +5,8 @@ import com.sstlfsj.rule.kernel.api.spi.trace.NoopDryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import com.sstlfsj.rule.observability.internal.repository.DryRunNodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
+import com.sstlfsj.rule.observability.internal.retention.RetentionProperties;
+import com.sstlfsj.rule.observability.internal.retention.TraceRetentionCleaner;
 import com.sstlfsj.rule.observability.internal.trace.DryRunTraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
@@ -17,8 +19,20 @@ import tools.jackson.databind.ObjectMapper;
 
 /** 自动装配规则可观测性模块（指标 + TraceWriter + DryRunTraceWriter）。 */
 @AutoConfiguration
-@EnableConfigurationProperties(TraceWriterProperties.class)
+@EnableConfigurationProperties({TraceWriterProperties.class, RetentionProperties.class})
 public class ObservabilityAutoConfiguration {
+
+    /**
+     * 注册 trace 表数据保留清理调度 bean（node_trace / dry_run_node_trace）。
+     * 可通过 engine.rule.retention.enabled=false 关闭。
+     */
+    @Bean
+    @ConditionalOnProperty(name = "engine.rule.retention.enabled", matchIfMissing = true)
+    public TraceRetentionCleaner traceRetentionCleaner(NodeTraceMapper nodeTraceMapper,
+                                                       DryRunNodeTraceMapper dryRunNodeTraceMapper,
+                                                       RetentionProperties retentionProperties) {
+        return new TraceRetentionCleaner(nodeTraceMapper, dryRunNodeTraceMapper, retentionProperties);
+    }
 
     /**
      * 默认启用异步 DB 批写 TraceWriter（主服务）。

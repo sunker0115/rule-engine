@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -55,5 +56,13 @@ class NodeTraceMapperTest {
         assertTrue(sql.contains("params"), "INSERT 须包含 params 列");
         assertTrue(sql.contains("#{e.displayLabel}"), "INSERT 须绑定 displayLabel");
         assertTrue(sql.contains("#{e.params}"), "INSERT 须绑定 params");
+    }
+
+    @Test
+    void purgeOlderThan_methodExists_returningIntForCutoffAndBatch() throws Exception {
+        // 数据保留清理入口：default 方法 purgeOlderThan(LocalDateTime, int) -> int
+        Method method = NodeTraceMapper.class.getMethod("purgeOlderThan", LocalDateTime.class, int.class);
+        assertTrue(method.isDefault(), "purgeOlderThan 须为 default 方法（封装 BaseMapper.delete，不在 service 散拼 wrapper）");
+        assertEquals(int.class, method.getReturnType(), "purgeOlderThan 须返回删除行数（int）");
     }
 }
