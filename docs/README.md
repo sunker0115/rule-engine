@@ -57,7 +57,7 @@
 
 ## 二、核心设计决策（已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)）
 
-下表与 `00-decisions.md` 的 D1-D30 一一对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
+下表与 `00-decisions.md` 的 D1-D30（及后续关键决策 D55）对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
 
 | # | 决策 | 选择 | 取舍 |
 |---|------|------|------|
@@ -90,7 +90,8 @@
 | D27 | **Action 归属从 Rule 迁移到 Decision** | Action 完全挂到 Decision，Rule 移除 `actions` 字段；仅 `finalDecision.actions` 被派发；幂等键变更为 `(tenantId, eventId, decisionCode, actionId)`；PULL Scene Decision 不配 Action 约束不变 | 同一决策码行为一致，配置集中；Rule 职责收窄为"判定条件"；Rule 级差异化 Action 留 v2 |
 | D28 | **Decision.actions 变更生效时机** | 快照语义不变；UI 在修改 Decision.actions 时提示引用该 Decision 的已发布规则需重新发布 | 设计最简；运营理解快照语义后无歧义；Decision 独立版本化留 v2 演进 |
 | D29 | **PUSH/HYBRID Scene decisionStrategy 默认值** | PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`，消灭 actions 静默不派发问题；PULL Scene 不参与合成 | `HIGHEST_PRIORITY` 覆盖绝大多数场景；消灭整类"漏配静默失效"问题，无配置成本 |
-| D30 | **providedMetrics — 业务方随评估携带指标值** | 评估请求体新增 `providedMetrics` 字段；Metric 注册新增 `allowProvided` 标志（按 sourceType 给推荐默认值，详见 D30）；`PROVIDED` 值优先于 sourceType 取数；只活在本次评估，不持久化 | 消灭注册/换绑等场景的冗余取数；平台按 metric 粒度控制信任边界；引擎不承担业务数据存储职责 |
+| D30 | **providedMetrics — 业务方随评估携带指标值** | 评估请求体新增 `providedMetrics` 字段；Metric 注册新增 `allowProvided` 标志（按 sourceType 给推荐默认值，详见 D30）；`PROVIDED` 值优先于 sourceType 取数；只活在本次评估，不持久化 | 消灭注册/换绑等场景的冗余取数；平台按 metric 粒度控制信任边界；引擎不承担业务数据存储职责。**注：公开侧 `providedMetrics` 已被 D55 退场（HTTP 评估只收 payload），仅内部 SDK/Job 注入链路保留** |
+| D55 | **场景输入参数清单 — 公开评估只收 payload** | 公开评估接口移除 `providedMetrics`（HTTP 调用方只传事件 `payload`）；发布期冻结 `rule_version.payload_dependencies` 随快照下发；新增公开发现接口 `GET /api/v1/rule/scenes/{sceneCode}/input-manifest`；删除 `getProvidedMetrics` 服务/端点；评估期缺必填或类型不符返回 400（`MISSING_REQUIRED_INPUT` / `INPUT_TYPE_MISMATCH`） | 公开侧不暴露 provided metric 概念，输入边界单一（payload）；payload 依赖随快照冻结可发现可校验；信任边界收敛。详见 [`00-decisions.md`](./00-decisions.md) D55 |
 
 > **派生约束**（由上述决策推出、值得单独标注的工程约定，详见 §六设计原则）：
 >

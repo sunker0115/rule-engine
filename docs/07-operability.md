@@ -375,7 +375,7 @@ curl -X POST http://localhost:8080/api/v1/rule/evaluate \
   -H "Content-Type: application/json" \
   -d '{"tenantId":"1","sceneCode":"smoke.scene","eventType":"order.placed",
        "subjectId":"u1","eventId":"evt-1","occurredAt":"2026-06-05T00:00:00Z",
-       "payload":{},"providedMetrics":{"order.amount":200}}'
+       "payload":{"order.amount":200}}'
 ```
 
 **3. 日志是否推送 Loki**

@@ -77,7 +77,7 @@
 ## 四、dry-run UI
 
 1. 右栏点击"试算"按钮 → 弹出 mockEvent 编辑框（JSON 编辑器，预填 Schema 必填字段）
-2. 可选：指定 `ruleVersionId`（默认当前版本）；填写 `providedMetrics`（D30）
+2. 可选：指定 `ruleVersionId`（默认当前版本）；填写事件 `payload`（事件事实，必填字段可经 `GET /api/v1/rule/scenes/{sceneCode}/input-manifest` 发现，D55 后公开评估只收 payload）
 3. 调用 `POST /api/v1/rule/dry-run` → 返回含 `nodeTrace` 的 Response（见 10-api-contract §3.3）
 4. 右栏渲染 AST trace 树：
    - `result=true` → 节点显示 ✅
