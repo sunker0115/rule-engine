@@ -16,10 +16,12 @@ public record RuleVersionRow(
         String kind,
         String decisionStrategy,
         /** rule_version.metric_dependencies JSON 数组字符串；可能为 null（旧行容错）。 */
-        String metricDependenciesJson
+        String metricDependenciesJson,
+        /** rule_version.payload_dependencies JSON 数组字符串；可能为 null（旧行容错）。 */
+        String payloadDependenciesJson
 ) {
     /**
-     * 兼容旧调用点的便利构造（无 metricDependenciesJson，默认 null）。
+     * 兼容旧调用点的便利构造（无 metricDependenciesJson / payloadDependenciesJson，均默认 null）。
      *
      * @param ruleVersionId        规则版本 id
      * @param sceneCode            场景编码
@@ -35,6 +37,6 @@ public record RuleVersionRow(
                           String conditionAstJson, String preGatesJson, String decisionBindingsJson,
                           String triggerEventTypesJson, String kind, String decisionStrategy) {
         this(ruleVersionId, sceneCode, tenantId, conditionAstJson, preGatesJson, decisionBindingsJson,
-                triggerEventTypesJson, kind, decisionStrategy, null);
+                triggerEventTypesJson, kind, decisionStrategy, null, null);
     }
 }

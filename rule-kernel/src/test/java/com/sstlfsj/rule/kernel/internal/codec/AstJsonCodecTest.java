@@ -3,6 +3,7 @@ package com.sstlfsj.rule.kernel.internal.codec;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,22 @@ class AstJsonCodecTest {
     @Test
     void deserializeMetricDependencies_emptyArray_returnsEmpty() throws Exception {
         List<MetricDependency> deps = codec.deserializeMetricDependencies("[]");
+        assertTrue(deps.isEmpty());
+    }
+
+    @Test
+    void deserializePayloadDependencies_parsesNameTypeRequired() throws Exception {
+        String json = "[{\"name\":\"amount\",\"dataType\":\"DECIMAL\",\"required\":true},"
+                + "{\"name\":\"channel\",\"dataType\":\"STRING\",\"required\":false}]";
+        List<PayloadDependency> deps = codec.deserializePayloadDependencies(json);
+        assertEquals(2, deps.size());
+        assertEquals(new PayloadDependency("amount", "DECIMAL", true), deps.get(0));
+        assertEquals(new PayloadDependency("channel", "STRING", false), deps.get(1));
+    }
+
+    @Test
+    void deserializePayloadDependencies_emptyArray_returnsEmpty() throws Exception {
+        List<PayloadDependency> deps = codec.deserializePayloadDependencies("[]");
         assertTrue(deps.isEmpty());
     }
 
