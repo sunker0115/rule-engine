@@ -18,7 +18,7 @@
 | PULL 评估 `/evaluate`(命中/未命中) | `EvalController.evaluate` | ✅ | 示例 / 2026-06-10 | 含 payload 注入、`evaluation_session` + `node_trace` 落库 |
 | 评估期入参校验(缺必填/类型不符 → 400) | `EvalServiceImpl` + `PayloadInputValidator` | ✅ | 2026-06-10 | `MISSING_REQUIRED_INPUT` / `INPUT_TYPE_MISMATCH` |
 | dry-run `/dry-run?ruleVersionId=`(带版本) | `EvalController.dryRun` | ✅ | 2026-06-10 | `dry_run_session` + `dry_run_node_trace` 落库;**本轮逮并修了 actual_value JSON bug** |
-| dry-run 场景级(不带 ruleVersionId) | 同上 → 候选分支 | ⬜ | — | 落普通候选路径、不进 dry_run 表(设计如此),语义待确认 |
+| dry-run 场景级(不带 ruleVersionId) | `doEvaluate` 候选分支 | 🐞 | 2026-06-10 | **BUG(待修)**:候选分支不门控 `isDryRun` → 落**真 `evaluation_session`+node_trace**、且**派发真 action**(若决策带 action),违反 dry-run 无副作用语义。`isDryRun` 仅在「带 ruleVersionId」分支被尊重 |
 | 输入清单发现 `/scenes/{code}/input-manifest` | `SceneManifestController` | ✅ | 2026-06-10 | eventType 收窄正确 |
 | **PUSH 事件 `/event` → 异步 action 派发 → `action_execution` 落库** | `EvalController.pushEvent` → `ActionDispatchService` → `ActionExecutionPersister` | ✅ | 2026-06-10 | PUSH 场景 + decision 带 SEND_ALERT action;202 受理 → `evaluation_session`(HIT/PUSH_REJECT)+ `node_trace` + `action_execution`(SEND_ALERT/SKIPPED/NO_WEBHOOK_URL,空 url 走跳过态)全落库;persister 无吞错(不像 trace writer 有 JSON 列雷,action_execution 全 varchar) |
 | HYBRID 评估 | 与 PUSH 共享派发路径 | ⬜ | — | 派发路径已由 PUSH 验证;HYBRID 自身(同步返回 + 异步派发并存)未直接跑 |
@@ -44,8 +44,9 @@
 
 | 流程 | 入口 | 状态 | 验证 | 备注 |
 |---|---|---|---|---|
-| Job 手动触发 → 合成 RuleEvent → 评估 | `JobController.trigger` → `@RuleJob` | ⬜ | — | 进程内可跑(`DemoFraudJob` local profile) |
-| Job CRUD / enable / disable / executions 查询 | `JobController` | ⬜ | — | |
+| Job 手动触发 → 合成 RuleEvent → 评估 | `JobController.trigger` → `@RuleJob` | ✅ | 2026-06-10 | 触发 `demo-daily`(租户1/fraud_check)→ SUCCESS/subjectCount=2/errorCount=0,`job_execution` 落库;**eval 为 miss 不落 session**(fraud_check 无规则→空候选短路,预期);job→event→eval 提交路径已验 |
+| Job executions 查询 `GET /jobs/{id}/executions` | `JobController` | ✅ | 2026-06-10 | 返回执行记录 |
+| Job CRUD / enable / disable | `JobController` | ⬜ | — | 未跑 |
 | xxl-job 定时调度 | `XxlJobSchedulerAdapter` | 🟡 | — | 需真 xxl-job-admin |
 
 ## 四、Bundle 导出 / 导入
