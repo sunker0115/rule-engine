@@ -26,6 +26,19 @@ class AstDataTypeResolverTest {
     }
 
     @Test
+    void resolve_conditionNode_existingDataTypeOverwrittenByCurrentWorld() {
+        // 回退克隆场景：输入 AST 已带 dataType(STRING)，重解析应按当前世界 typeMap 覆盖为 LONG，
+        // 不读取既有值（保证"按当前世界重解析"）。
+        ConditionNode preResolved = new ConditionNode("GT", "amount", null,
+                Map.of("threshold", 100), 0.0, "STRING", com.sstlfsj.rule.kernel.api.model.ValueRef.METRIC);
+        Map<String, String> typeMap = Map.of("amount", "LONG");
+
+        AstNode result = AstDataTypeResolver.resolve(preResolved, typeMap, Map.of());
+
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("LONG");
+    }
+
+    @Test
     void resolve_conditionNode_metricNotInMap_dataTypeRemainsNull() {
         ConditionNode cond = new ConditionNode("GT", "unknown_metric", null,
                 Map.of("threshold", 100), 0.0);

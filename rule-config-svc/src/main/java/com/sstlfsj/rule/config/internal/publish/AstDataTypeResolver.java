@@ -126,8 +126,8 @@ class AstDataTypeResolver {
         }
         // 重建 ConditionNode，冻结 dataType（查不到的 metric/payload 字段 -> dataType=null，原样不变），
         // 并透传 valueRef（METRIC/PAYLOAD 区分由 7 参规范构造器承载）。
-        // 不变量：草稿 AST 的 ConditionNode.dataType 一律为 null（DSL 构造路径），
-        // 本次赋值是唯一的写入点，不存在覆盖既有值的情况。
+        // 输入 AST 的 dataType 可能已非空（回退克隆既有版本场景）：本方法一律按当前世界的
+        // dataTypeMap/payloadTypeMap 重算并覆盖，不读取既有 dataType，保证"按当前世界重解析"。
         return new ConditionNode(cond.conditionType(), cond.metricCode(),
                 cond.displayLabel(), cond.params(), cond.weight(), dataType, cond.valueRef());
     }
