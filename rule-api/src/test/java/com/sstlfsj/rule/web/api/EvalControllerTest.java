@@ -27,7 +27,7 @@ class EvalControllerTest {
     private static final String EVENT_JSON = """
             {"tenantCode":"acme","sceneCode":"PAYMENT","eventType":"ORDER",
              "subjectId":"u1","eventId":"evt-1","occurredAt":null,
-             "payload":{},"providedMetrics":{}}
+             "payload":{}}
             """;
 
     @BeforeEach
@@ -77,7 +77,7 @@ class EvalControllerTest {
         String badJson = """
                 {"tenantCode":"ghost","sceneCode":"PAYMENT","eventType":"ORDER",
                  "subjectId":"u1","eventId":"evt-1","occurredAt":null,
-                 "payload":{},"providedMetrics":{}}
+                 "payload":{}}
                 """;
 
         mockMvc.perform(post("/api/v1/rule/evaluate")

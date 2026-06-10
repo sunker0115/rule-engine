@@ -69,7 +69,6 @@ public class EvalController {
                 .eventId(r.eventId())
                 .occurredAt(r.occurredAt())
                 .payload(r.payload())
-                .providedMetrics(r.providedMetrics())
                 .source(EventSource.HTTP)
                 .build();
     }

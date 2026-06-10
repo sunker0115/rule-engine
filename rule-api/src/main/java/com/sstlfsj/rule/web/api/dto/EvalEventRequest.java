@@ -14,6 +14,5 @@ public record EvalEventRequest(
         String subjectId,
         String eventId,
         Instant occurredAt,
-        Map<String, Object> payload,
-        Map<String, Object> providedMetrics
+        Map<String, Object> payload
 ) {}
