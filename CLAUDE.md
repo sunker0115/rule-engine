@@ -62,16 +62,17 @@
 
 ## 功能测试纪律(集成测试通过后)
 
-单测 / 集成测试绿之后,**涉及配置→发布→评估→落库链路或 DB schema 的改动**,还要起真实服务走一遍 API 端到端功能测试(单测 mock 不掉的"真落库 / 真发布快照 / 真派发"问题在这里暴露)。标准流程:
+单测 / 集成测试绿之后,**涉及配置→运行→落库链路或 DB schema 的改动**,还要起真实服务走一遍 API 端到端功能测试(单测 mock 不掉的"真落库 / 真持久化快照 / 真副作用"问题在这里暴露)。通用流程:
 
-1. **起服务**:`$MVN -pl rule-app -am package -DskipTests` 打可执行 jar,再 `java -jar rule-app/target/rule-app-*.jar`(后台)。**不要用 `spring-boot:run`**——多模块 reactor 下它会跑到根聚合 pom 报"找不到 main class"。启动时 Flyway 自动应用新迁移,日志 `Successfully applied N migrations` + `Started RuleEngineApplication` 即就绪。
-2. **盘现状**:`mysql_local` MCP 查 `flyway_schema_history` 版本 + 各表数据量;`GET /admin/v1/{scenes,rules,decisions,metrics}` 列已有配置,定位缺什么。
-3. **补配置(API)**:缺的实体经 admin API 建。**注意发布前置依赖**:规则引用的 metric 须有 ACTIVE 版本、引用的 `decisionCode` 须先 `POST /admin/v1/decisions` 建(否则发布报 `DECISION_CODE_NOT_FOUND`);PULL 场景的 decision 必须无 action。
-4. **发布 → 核对快照落库**:发布后查 `rule_version.decision_bindings` 是否富化(发布期从 `decision_definition` 冻结的 `name`/`priority`/`actions`),不是草稿占位。
-5. **评估 → 核对链路**:`POST /api/v1/rule/evaluate`(租户字段是 `tenantCode`)验 `finalDecision`(`name`/`priority`/`actions` 来自 decision、非空串/0);命中带 action 的(PUSH)再查 `action_execution` 是否落库(SendAlert 无 webhook URL 时为 `SKIPPED/NO_WEBHOOK_URL`,属 best-effort 正常)。
-6. **DB 字段落库审计**:对有数据的表逐表查恒空字段,分类——**遗漏(bug,必修)** / 不用了 / 设计如此(如 `context_snapshot` 默认开关关) / 数据使然(测试数据无 scorecard/tree/blocked)。本轮改动点要**专门验证**(如新增列是否真落库、新校验是否真拦截、审计 before/after 是否真捕获)。
+1. **起服务**:用打包产物运行(多模块项目打可执行包后直接跑,**别用 reactor 内的 run 目标**——会跑到聚合工程报"找不到启动入口");启动时确认依赖迁移 / 初始化执行完成、服务就绪后再调。
+2. **盘现状**:查数据存储(迁移版本 + 各表数据量)+ 经接口列已有配置,定位缺什么。
+3. **补配置(API)**:缺的实体经接口按**依赖顺序**建——被引用的资源须先存在 / 达到可用状态,否则发布 / 提交期校验会拒。
+4. **写后核对真落库**:每一步写操作后查持久层,确认应落库的派生数据 / 快照 / 冻结值**真写进去了**,不是占位 / 默认值。
+5. **核对端到端链路 + 副作用**:走运行时入口验证输出正确;异步 / best-effort 副作用也要查持久层确认落库(失败 / 跳过态也算正确落库)。
+6. **DB 字段落库审计**:对有数据的表逐表查恒空字段,分类——**遗漏(bug,必修)** / 不用了 / 设计如此(开关默认关等) / 数据使然(测试数据没覆盖该分支)。本轮改动点要**专门验证**(新增列是否真落库、新校验是否真拦截、新审计字段是否真捕获)。
+7. **清理测试数据**:验证完删掉本次为测试新建 / 改动的数据,把环境恢复到干净基线(参考样例的预期状态),不留脏数据污染后续。
 
-参考端到端剧本:[`docs/examples/risk-control/high-risk-login/`](./docs/examples/risk-control/high-risk-login/)(可直接复制的 curl 脚本 + 预期结果)。
+参考端到端剧本见 [docs/examples/](./docs/examples/) 下的样例(可直接复制的 curl 脚本 + 预期结果 + 清理)。
 
 ## 文档纪律
 
