@@ -267,7 +267,7 @@ class EvalIntegrationTest {
     void dryRun_writesToDryRunSession_notProdSession() throws InterruptedException {
         RuleEvent event = makeEvent("dry-001", "fraud_check");
         // ruleVersionId=1 指定已存在的版本
-        EvalResult result = evalService.dryRun(event, 1L);
+        EvalResult result = evalService.dryRun(event, null, 1L);
 
         // dry-run 改事件驱动后异步落库，轮询等待 dry_run_session 出现
         List<DryRunSession> dryRuns = awaitDryRuns("dry-001");

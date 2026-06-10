@@ -42,14 +42,17 @@ public class EvalController {
     }
 
     /** POST /api/v1/rule/dry-run — dry-run（含 nodeTrace，不派发 Action）
+     * ruleId / ruleVersionId 二选一必传，都不传返回 400。
      * @param req 待评估的事件请求体
-     * @param ruleVersionId null 表示使用当前活跃版本
+     * @param ruleId 规则 id（取其最新版本，含 DRAFT）；与 ruleVersionId 二选一
+     * @param ruleVersionId 精确版本 id；与 ruleId 二选一，优先生效
      * @return 评估结果（含节点 trace） */
     @PostMapping("/dry-run")
     public ApiResponse<EvalResult> dryRun(
             @RequestBody EvalEventRequest req,
+            @RequestParam(required = false) Long ruleId,
             @RequestParam(required = false) Long ruleVersionId) {
-        return ApiResponse.ok(evalService.dryRun(toEvent(req), ruleVersionId));
+        return ApiResponse.ok(evalService.dryRun(toEvent(req), ruleId, ruleVersionId));
     }
 
     /**

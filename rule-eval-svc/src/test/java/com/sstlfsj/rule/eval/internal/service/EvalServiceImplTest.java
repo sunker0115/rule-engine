@@ -5,6 +5,7 @@ import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
+import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -31,12 +32,13 @@ class EvalServiceImplTest {
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock DomainEventPublisher eventPublisher;
     @Mock ActionCommandChannel actionDelivery;
+    @Mock RuleVersionReadMapper ruleVersionReadMapper;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery, ruleVersionReadMapper);
     }
 
     private RuleEvent event() {
@@ -155,7 +157,7 @@ class EvalServiceImplTest {
                 any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
                 .thenReturn(new EvalOutcome(EvalResult.miss(), engineCtx));
 
-        impl.dryRun(event(), 42L);
+        impl.dryRun(event(), null, 42L);
 
         // dry-run 改事件驱动：发 DryRunRecordedEvent 事件由异步 persister 落 dry_run_session
         verify(eventPublisher).publish(argThat(o ->
@@ -175,7 +177,7 @@ class EvalServiceImplTest {
                 any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
                 .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
 
-        EvalResult result = impl.dryRun(event(), 42L);
+        EvalResult result = impl.dryRun(event(), null, 42L);
 
         assertFalse(result.ruleHit());
         verify(eventPublisher).publish(any(DryRunRecordedEvent.class));
@@ -219,9 +221,64 @@ class EvalServiceImplTest {
                 any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
                 .thenReturn(new EvalOutcome(hitResult("PASS", 10, 42L), ctx()));
 
-        impl.dryRun(event(), 42L);
+        impl.dryRun(event(), null, 42L);
 
         verifyNoInteractions(actionDelivery);
+    }
+
+    @Test
+    void dryRun_byRuleId_resolvesLatestVersion() {
+        RuleVersionSnapshot snap = snapshot(77L, "PASS");
+        when(ruleVersionReadMapper.latestVersionIdByRule(1L, 5L)).thenReturn(77L);
+        when(snapshotLoader.loadById(77L)).thenReturn(snap);
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
+                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
+                .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
+
+        // 只传 ruleId：经 latestVersionIdByRule 解析出最新版本 id（77），走带版本单快照分支
+        impl.dryRun(event(), 5L, null);
+
+        verify(ruleVersionReadMapper).latestVersionIdByRule(1L, 5L);
+        verify(snapshotLoader).loadById(77L);
+        verify(eventPublisher).publish(argThat(o ->
+                o instanceof DryRunRecordedEvent d && d.ruleVersionId().equals(77L)));
+        // dry-run 永不落候选分支：不走 match、不投递 action
+        verify(evalEngine, never()).match(any(RuleEvent.class));
+        verifyNoInteractions(actionDelivery);
+    }
+
+    @Test
+    void dryRun_ruleVersionIdTakesPrecedence_overRuleId() {
+        RuleVersionSnapshot snap = snapshot(42L, "PASS");
+        when(snapshotLoader.loadById(42L)).thenReturn(snap);
+        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
+                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
+                .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
+
+        // 两者都传时 ruleVersionId 优先，不查 ruleId
+        impl.dryRun(event(), 5L, 42L);
+
+        verify(snapshotLoader).loadById(42L);
+        verifyNoInteractions(ruleVersionReadMapper);
+    }
+
+    @Test
+    void dryRun_byRuleId_ruleNotFound_throws() {
+        when(ruleVersionReadMapper.latestVersionIdByRule(1L, 999L)).thenReturn(null);
+
+        assertThrows(IllegalArgumentException.class, () -> impl.dryRun(event(), 999L, null));
+        verifyNoInteractions(snapshotLoader);
+        verifyNoInteractions(actionDelivery);
+    }
+
+    @Test
+    void dryRun_missingTarget_throws() {
+        // ruleId / ruleVersionId 都不传 → 抛 IllegalArgumentException（→ 400），不触达任何评估
+        assertThrows(IllegalArgumentException.class, () -> impl.dryRun(event(), null, null));
+        verifyNoInteractions(evalEngine);
+        verifyNoInteractions(snapshotLoader);
+        verifyNoInteractions(actionDelivery);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

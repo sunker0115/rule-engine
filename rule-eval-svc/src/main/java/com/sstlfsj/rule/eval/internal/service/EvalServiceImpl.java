@@ -9,6 +9,7 @@ import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
 import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
+import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.eval.internal.validate.PayloadInputValidator;
 import com.sstlfsj.rule.kernel.api.model.*;
@@ -30,15 +31,18 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     private final SceneSnapshotLoader snapshotLoader;
     private final DomainEventPublisher eventPublisher;
     private final ActionCommandChannel actionDelivery;
+    private final RuleVersionReadMapper ruleVersionReadMapper;
     private final EvalActionDispatcher dispatcher;
 
     EvalServiceImpl(EvalEngine evalEngine, SceneSnapshotLoader snapshotLoader,
                     DomainEventPublisher eventPublisher,
-                    ActionCommandChannel actionDelivery) {
+                    ActionCommandChannel actionDelivery,
+                    RuleVersionReadMapper ruleVersionReadMapper) {
         this.evalEngine = evalEngine;
         this.snapshotLoader = snapshotLoader;
         this.eventPublisher = eventPublisher;
         this.actionDelivery = actionDelivery;
+        this.ruleVersionReadMapper = ruleVersionReadMapper;
         // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
         this.dispatcher = new EvalActionDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null));
     }
@@ -65,8 +69,29 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     }
 
     @Override
-    public EvalResult dryRun(RuleEvent event, Long ruleVersionId) {
-        return doEvaluate(event, EvalMode.PULL, true, ruleVersionId);
+    public EvalResult dryRun(RuleEvent event, Long ruleId, Long ruleVersionId) {
+        Long versionId = resolveDryRunVersionId(event, ruleId, ruleVersionId);
+        // dry-run 永远先解析出一个版本 id：恒走 doEvaluate 的带版本单快照分支，结构上不落候选分支（根除副作用 bug）
+        return doEvaluate(event, EvalMode.PULL, true, versionId);
+    }
+
+    /** 解析 dry-run 目标版本 id：ruleVersionId 优先；否则 ruleId 取最新版本；都无则抛 400。 */
+    private Long resolveDryRunVersionId(RuleEvent event, Long ruleId, Long ruleVersionId) {
+        if (ruleVersionId != null) {
+            return ruleVersionId;
+        }
+        if (ruleId != null) {
+            Long tid = parseTenantId(event.tenantId());
+            if (tid == null) {
+                throw new IllegalArgumentException("MISSING_DRYRUN_TARGET: 无法解析租户");
+            }
+            Long vid = ruleVersionReadMapper.latestVersionIdByRule(tid, ruleId);
+            if (vid == null) {
+                throw new IllegalArgumentException("DRYRUN_RULE_NOT_FOUND: 规则无任何版本: ruleId=" + ruleId);
+            }
+            return vid;
+        }
+        throw new IllegalArgumentException("MISSING_DRYRUN_TARGET: 必须指定 ruleId 或 ruleVersionId");
     }
 
     private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId) {

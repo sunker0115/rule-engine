@@ -23,11 +23,13 @@ public interface EvalService {
     EvalResult evaluate(RuleEvent event);
 
     /**
-     * 执行 dry-run 评估，返回含节点 trace 的结果，不派发 Action。
+     * 执行 dry-run 评估，返回含节点 trace 的结果，不派发 Action、不落 evaluation_session。
+     * ruleId / ruleVersionId 二选一必传：都不传抛 IllegalArgumentException（MISSING_DRYRUN_TARGET → 400）。
      *
      * @param event         待评估的规则事件
-     * @param ruleVersionId 指定测试的规则版本 ID，null 表示使用当前活跃版本
+     * @param ruleId        规则 id（取其最新版本，含 DRAFT）；与 ruleVersionId 二选一
+     * @param ruleVersionId 精确版本 id；与 ruleId 二选一，优先生效
      * @return 包含详细节点 trace 的评估结果，不执行任何 Action
      */
-    EvalResult dryRun(RuleEvent event, Long ruleVersionId);
+    EvalResult dryRun(RuleEvent event, Long ruleId, Long ruleVersionId);
 }

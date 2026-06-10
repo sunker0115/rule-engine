@@ -39,7 +39,8 @@ class DoEvaluateEmitsEventsTest {
 
     private EvalServiceImpl service(EvalEngine engine, DomainEventPublisher publisher,
                                    ActionCommandChannel actionDelivery) {
-        return new EvalServiceImpl(engine, mock(SceneSnapshotLoader.class), publisher, actionDelivery);
+        return new EvalServiceImpl(engine, mock(SceneSnapshotLoader.class), publisher, actionDelivery,
+                mock(com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper.class));
     }
 
     @Test

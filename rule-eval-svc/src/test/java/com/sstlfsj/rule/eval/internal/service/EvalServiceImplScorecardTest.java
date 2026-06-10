@@ -30,12 +30,13 @@ class EvalServiceImplScorecardTest {
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock DomainEventPublisher eventPublisher;
     @Mock ActionCommandChannel actionDelivery;
+    @Mock com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper ruleVersionReadMapper;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery, ruleVersionReadMapper);
     }
 
     private RuleEvent event() {

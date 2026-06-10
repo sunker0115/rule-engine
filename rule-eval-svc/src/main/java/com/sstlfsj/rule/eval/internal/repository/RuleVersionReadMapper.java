@@ -76,4 +76,15 @@ public interface RuleVersionReadMapper {
             WHERE rv.id = #{ruleVersionId}
             """)
     RuleVersionRow loadById(@Param("ruleVersionId") Long ruleVersionId);
+
+    /** 按 ruleId 取最新版本 id（最高版本号，含 DRAFT），供 dry-run ruleId 模式解析目标。不存在返回 null。 */
+    @Select("""
+            SELECT rv.id
+            FROM rule_version rv
+            INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
+            WHERE rd.tenant_id = #{tenantId} AND rd.id = #{ruleId}
+            ORDER BY rv.version DESC
+            LIMIT 1
+            """)
+    Long latestVersionIdByRule(@Param("tenantId") Long tenantId, @Param("ruleId") Long ruleId);
 }

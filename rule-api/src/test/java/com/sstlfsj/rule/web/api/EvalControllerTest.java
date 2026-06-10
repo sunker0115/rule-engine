@@ -101,12 +101,24 @@ class EvalControllerTest {
 
     @Test
     void dryRun_returns200_withResult() throws Exception {
-        when(evalService.dryRun(any(), isNull())).thenReturn(EvalResult.miss());
+        when(evalService.dryRun(any(), isNull(), eq(1L))).thenReturn(EvalResult.miss());
 
-        mockMvc.perform(post("/api/v1/rule/dry-run")
+        mockMvc.perform(post("/api/v1/rule/dry-run?ruleVersionId=1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(EVENT_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void dryRun_missingTarget_returns400() throws Exception {
+        // 不带 ruleId / ruleVersionId：service 抛 IllegalArgumentException → GlobalExceptionHandler 映射 400
+        when(evalService.dryRun(any(), isNull(), isNull()))
+                .thenThrow(new IllegalArgumentException("MISSING_DRYRUN_TARGET: 必须指定 ruleId 或 ruleVersionId"));
+
+        mockMvc.perform(post("/api/v1/rule/dry-run")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(EVENT_JSON))
+                .andExpect(status().isBadRequest());
     }
 }
