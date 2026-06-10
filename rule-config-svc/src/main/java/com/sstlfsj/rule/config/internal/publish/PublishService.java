@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.publish;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot;
@@ -141,8 +142,8 @@ public class PublishService {
         List<String> metricCodes = MetricDependencyCollector.collect(ast);
 
         // 4.5. 查 ACTIVE metric，冻结版本号进 metricDeps（B6），同时提取 dataType 冻结进 AST（B19）
-        AstNode resolvedAst = ast;
         List<MetricDependency> metricDeps = new ArrayList<>();
+        Map<String, String> dataTypeMap = new HashMap<>();
         if (!metricCodes.isEmpty()) {
             List<MetricDefinition> metricDefs = metricDefinitionMapper.findActiveByCodes(tenantId, metricCodes);
             // 按 metricCode 建索引，同 code 多行 ACTIVE = 数据异常，兜底拒绝
@@ -165,9 +166,8 @@ public class PublishService {
                 int ver = m.getVersion() == null ? 1 : m.getVersion();
                 metricDeps.add(new MetricDependency(code, ver));
             }
-            Map<String, String> dataTypeMap = activeByCode.values().stream()
-                    .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType));
-            resolvedAst = AstDataTypeResolver.resolve(ast, dataTypeMap, java.util.Map.of());
+            dataTypeMap.putAll(activeByCode.values().stream()
+                    .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
 
             // 4.6. metric 安全校验（B21）：SQL 时间函数/拼接拒绝 + 资源名注册（catalog 为 null 时跳过资源名校验）
             java.util.Set<String> dsNames = metricResourceCatalog != null
@@ -176,6 +176,27 @@ public class PublishService {
                     ? metricResourceCatalog.endpointNames() : null;
             new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
         }
+
+        // 4.7. payload 引用校验：valueRef=PAYLOAD 字段必须在 scene.payloadSchema 声明，并注入 dataType
+        List<String> payloadFields = PayloadFieldCollector.collect(ast);
+        Map<String, String> payloadTypeMap = new HashMap<>();
+        if (!payloadFields.isEmpty()) {
+            List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null
+                    ? scene.getPayloadSchema() : java.util.List.of();
+            Map<String, String> schemaTypeByName = new HashMap<>();
+            for (PayloadFieldSpec f : schema) schemaTypeByName.put(f.name(), f.type());
+            for (String field : payloadFields) {
+                if (!schemaTypeByName.containsKey(field)) {
+                    throw new IllegalArgumentException(
+                            "规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
+                }
+                payloadTypeMap.put(field, PayloadDataTypeMapper.toDataTypeTag(schemaTypeByName.get(field)));
+            }
+        }
+
+        // 仅当有 metric 或 payload 引用时才重建 AST（注入 dataType）；都没有则原样保留
+        AstNode resolvedAst = (metricCodes.isEmpty() && payloadFields.isEmpty())
+                ? ast : AstDataTypeResolver.resolve(ast, dataTypeMap, payloadTypeMap);
 
         // 5. 计算新版本号（max(version)+1）
         long newVersion = ruleVersionMapper.maxVersion(ruleDefinitionId) + 1;
