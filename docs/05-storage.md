@@ -318,7 +318,7 @@ CREATE TABLE node_trace (
   actual_value          JSON         COMMENT '节点实际取到的值（nullable，短路跳过为 null）',
   result                TINYINT(1)   COMMENT '1=满足/0=不满足/NULL=短路跳过',
   error_code            VARCHAR(64)  COMMENT 'nullable，METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR 等',
-  value_source          VARCHAR(16) COMMENT '取值: PROVIDED/FETCHED；D30：指标来源（nullable，仅 metric 类 ConditionNode）',
+  value_source          VARCHAR(16) COMMENT '取值: PROVIDED/FETCHED/PAYLOAD；D30：取值来源（nullable；PAYLOAD=payload 直接引用节点 valueRef=PAYLOAD）',
   evaluated_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY idx_session_id (evaluation_session_id),
   KEY idx_tenant_evaluated (tenant_id, evaluated_at)
@@ -390,7 +390,7 @@ CREATE TABLE dry_run_node_trace (
   actual_value          JSON,
   result                TINYINT(1),
   error_code            VARCHAR(64),
-  value_source          VARCHAR(16) COMMENT '取值: PROVIDED/FETCHED',
+  value_source          VARCHAR(16) COMMENT '取值: PROVIDED/FETCHED/PAYLOAD',
   evaluated_at          TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY idx_session_id (dry_run_session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='dry-run 节点 trace（与 prod 隔离，D7）';

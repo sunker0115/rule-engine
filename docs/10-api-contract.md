@@ -160,6 +160,8 @@ POST /api/v1/rule/dry-run
 }
 ```
 
+> `valueSource` 取值：`PROVIDED`（调用方注入）/ `FETCHED`（取数，如上例）/ `PAYLOAD`（payload 直接引用节点，valueRef=PAYLOAD，见 03-rule-expression §2.6）。
+
 v1.5（D7）已全量实装 `dryRun()`，`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。见 07-operability §四。
 
 ---
