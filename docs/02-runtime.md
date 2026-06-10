@@ -40,7 +40,7 @@ RuleEvent
   │  · 无候选：直接返回 EvalResult{satisfied=false}（API 字段名 ruleHit）
   ▼
 ③ Pre-Gate 拦截
-  │  · 按顺序评估每个 Gate（ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX）
+  │  · 评估 Pre-Gate（v1 仅 ROLLOUT；未注册 gateType → fail-closed 拦截）
   │  · 任一 Gate 不通过：blocked_by 记录 Gate 类型，跳过后续阶段
   │  · 全通过：继续
   ▼
@@ -150,18 +150,15 @@ RuleEvent
 **输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或写 `evaluation_session { status=BLOCKED, blocked_by=<Gate 类型> }` + 返回 `EvalResult { satisfied=false }`（API 字段名 `ruleHit`）
 
 **核心动作**：
-- 对每条候选 RuleVersion，按固定顺序（ROLLOUT → WHITELIST/BLACKLIST → RATE_LIMIT → MUTEX）串行评估 `pre_gates` 中声明的 Gate；
+- 对每条候选 RuleVersion，串行评估 `pre_gates` 中声明的 Gate（v1 仅 `ROLLOUT`）；
 - 任一 Gate 不通过 → 该 RuleVersion **跳过 AST 评估**，trace 落 `node_trace`（节点类型 `PRE_GATE_BLOCKED`，走同一 `TraceWriter`，D21）；
+- **未注册的 gateType → fail-closed 拦截**（D52，运行期兜底；发布期已拒绝非 ROLLOUT 配置）。
 
-**Gate 类型与通过条件**：
+**Gate 类型与通过条件**（Pre-Gate 收敛为仅 ROLLOUT，D52；黑白名单改走 BOOLEAN metric + condition，RATE_LIMIT/MUTEX 已移除）：
 
 | Gate 类型 | 通过条件 | `blocked_by` 值 |
 |-----------|---------|----------------|
-| `ROLLOUT` | `hash(subjectId, ruleVersionId) % 100 < percentage` | `ROLLOUT` |
-| `WHITELIST` | `subjectId` ∈ `listKey` 对应名单 | `WHITELIST` |
-| `BLACKLIST` | `subjectId` ∉ `listKey` 对应名单 | `BLACKLIST` |
-| `RATE_LIMIT` | 按 (tenantId, ruleId, subjectId, 时间窗口) 检查命中次数是否超阈值 | `RATE_LIMIT` |
-| `MUTEX` | 当前 `tenantId+subjectId` 无同 `mutexGroup` 规则正在评估 | `MUTEX` |
+| `ROLLOUT` | `hash(subjectId, experimentId ?? ruleVersionId) % 100` 落入命中区（percentage 或桶区间） | `ROLLOUT` |
 
 **结果语义**：
 - 某条 RuleVersion 被任一 Gate 拦截 → 该 RuleVersion 不进入 EvalContext 构建与 AST 评估；

@@ -123,7 +123,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | 指标名 | 类型 | labels | 说明 |
 |--------|------|--------|------|
 | `rule_engine_eval_total` | Counter | `result`(HIT/MISS/BLOCKED/ERROR) | 评估结果分布 |
-| `rule_engine_eval_blocked_total` | Counter | `gate_type`(ROLLOUT/WHITELIST/BLACKLIST/RATE_LIMIT/MUTEX) | Pre-Gate 按类型拦截计数，对应 `blocked_by` 枚举（D22） |
+| `rule_engine_eval_blocked_total` | Counter | `gate_type`(ROLLOUT) | Pre-Gate 按类型拦截计数，对应 `blocked_by`（D52 收敛后仅 ROLLOUT） |
 | `rule_engine_eval_duration_ms` | Histogram | `scene_code` | 评估 P50/P95/P99 延迟 |
 | `rule_engine_metric_fetch_duration_ms` | Histogram | `source_type`, `metric_code` | MetricSource 取数延迟 |
 | `rule_engine_metric_fetch_errors_total` | Counter | `source_type`, `error_type` | 取数失败计数 |

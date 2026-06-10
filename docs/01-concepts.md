@@ -219,7 +219,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `kind` | 规则形态枚举：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE`（已实装）/ `EXPRESSION_SCRIPT`（未实装，留 v1.5）。发布校验按 kind 校验 AST schema（详见下方 **kind 多态边界**） |
 | `triggerEventTypes` | 数组：哪些 eventType 触发本规则（如 `["trade.completed"]`） |
 | `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 kind 用各自的 JSON 内部结构，与 ast 互斥） |
-| `preGates` | 准入闸门列表（频次 / 互斥 / 黑白名单 / 灰度命中） |
+| `preGates` | 准入闸门列表（v1 仅灰度命中 ROLLOUT，D52） |
 | `actions` | **已迁移到 Decision**（D27）：Rule 不再直接持 actions；命中后要执行的动作由 Rule 绑定的 Decision.actions 决定 |
 | `status` | 状态机：`DRAFT` → `PUBLISHING`（瞬时）→ `PUBLISHED` / `PUBLISH_FAILED`；`PUBLISHED ↔ DISABLED` 独立分支；`PUBLISH_FAILED → DRAFT` 需 UI 显式确认（D19） |
 | `current_version` | 指向当前生效 `rule_version` 行的**主键 id**（`BIGINT`，即 `rule_version.id`，而非业务版本序号 `rule_version.version`）。`PUBLISHED` / `DISABLED` 状态下有值；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本。`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
@@ -668,32 +668,22 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 **是什么**：Rule 评估管线中"在进入 AST 评估前"的准入控制层，独立于 AST。Pre-Gate 是 `Rule.preGates` 字段持有的列表型配置，引擎按顺序串行执行；任一 Gate 不通过 → 该 Rule **直接跳过 AST 评估**，不进入 EvalResult.errorCode 维度（与 D15 评估失败不同维度——准入未通过是"该 Rule 本次不参与决策"，不是"评估出错"）。
 
-**v1 类型清单**（与 README §三顶层架构 Pre-Gate Chain 对齐）：
+**v1 类型清单**（与 README §三顶层架构 Pre-Gate Chain 对齐）—— Pre-Gate 收敛为仅 ROLLOUT（D52）：
 
 | 类型 | 用途 | 状态影响 |
 |------|------|---------|
-| **灰度命中**（ROLLOUT） | 按 `preGates` 中 ROLLOUT 项 params 计算桶号是否落入命中区（D6） | 纯只读判定，无副作用 |
-| **频次上限** | 按 `(tenantId, ruleId, subjectId, 时间窗口)` 检查命中次数是否超阈值 | 真实评估期会写新计数；dry-run 仅读不写（§五 Q10） |
-| **白名单**（WHITELIST） | 按 `(ruleId, subjectId)` 查白名单表，subject 不在白名单则拦截 | 纯只读判定 |
-| **黑名单**（BLACKLIST） | 按 `(ruleId, subjectId)` 查黑名单表，subject 在黑名单则拦截 | 纯只读判定 |
-| **互斥规则** | 检查同一 subject 是否已命中本规则的互斥组其他规则 | 真实评估期会占用互斥锁；dry-run 仅读不写 |
+| **灰度命中**（ROLLOUT） | 按 `preGates` 中 ROLLOUT 项 params 计算桶号是否落入命中区（D6） | 无状态纯只读判定，无副作用、无依赖 |
 
-**执行顺序**（v1 固定，不开放配置）：
-
-1. **灰度命中** —— 最便宜（纯 hash 计算，无 IO），优先短路；
-2. **白名单 / 黑名单**（WHITELIST / BLACKLIST）—— 单表查询；
-3. **频次上限** —— 需读计数器（Redis / DB）；
-4. **互斥规则** —— 需查互斥状态表，最贵放最后。
+> **移除 RATE_LIMIT / MUTEX**（D52）：二者有状态（计数窗口 / 并发锁），需引擎持有分布式状态（Redis），打破"无状态评估"假设；greenfield 阶段不引该架构依赖。
+> **黑白名单转 metric + condition**（D52）：按 subjectId 查名单判成员本是 metric 的活（取数/缓存/版本/影响面），且 pre-gate 在 EvalContext 装配**之前**、拿不到 metric。落地：名单 metric（`sourceType=SQL_AGGREGATE`、`dataType=BOOLEAN`）+ 规则条件 `EQ(in_blacklist, true)`，走条件层而非 Pre-Gate 层。
 
 **关键边界**：
 
-- **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 **`BLOCKED` 桶**（D22，第四态，独立于 `MISS`——`MISS` 是"通过 Pre-Gate 但 AST 求值不满足"，`BLOCKED` 是"Pre-Gate 拦截未进入 AST"）；`evaluation_session.blocked_by` 字段记录拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
+- **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 **`BLOCKED` 桶**（D22，第四态，独立于 `MISS`——`MISS` 是"通过 Pre-Gate 但 AST 求值不满足"，`BLOCKED` 是"Pre-Gate 拦截未进入 AST"）；`evaluation_session.blocked_by` 字段记录拦截 Gate 类型（D52 收敛后仅 `ROLLOUT`）；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
+- **未注册 gateType → fail-closed**（D52）：运行期遇到未注册的 gateType 视为拦截（不静默放行）；发布期已校验 `pre_gates[].gateType` 仅 ROLLOUT 合法，配已砍/未实装 gate 一律发布拒绝；
 - **Pre-Gate 与 AST 解耦**：Pre-Gate 不能引用 metric，也不能写 conditionType 自定义——只用 `Rule.preGates` 配置的内置类型；演进诉求（如"灰度按外部 AB 平台命中"）走 D6 留的接口替换，不在 Pre-Gate 层级开新类型；
-- **失败语义与 D15 区别**：Pre-Gate 内部执行异常（如 Redis 频次计数器超时）走与 D15 一致的归一——失败默认按"未通过该 Gate"处理（fail-closed，宁可漏发不可错发），具体 fail-open / fail-closed 默认由各 Gate 实现声明，详见 [`02-runtime.md §3.3`](./02-runtime.md)；
-- **dry-run 行为**：见 §五 Q10——判定全部执行（运营需要看见命中/拦截结果），但**频次计数器与互斥锁不落副作用**；
+- **dry-run 行为**：ROLLOUT 是纯只读 hash 判定，dry-run 与真实评估等价（无副作用差异）；
 - **顶层架构图对齐**：README §三 `Pre-Gate Chain` 框就是本节落地。
-
-具体字段 schema（频次窗口配置 / 互斥组定义 / 黑白名单表结构）留 [`04-extension.md`](./04-extension.md) §Pre-Gate 扩展点 + [`05-storage.md`](./05-storage.md) §准入控制表 展开。
 
 ### 3.15 EvaluationSession（评估会话，非一等公民）
 
@@ -710,7 +700,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 | `event_type` | 事件类型 |
 | `subject_id` | 主体 ID |
 | `status` | `PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态终态）/ `FAILED`（引擎异常崩溃，未正常结束）；D22 四态是对账统计口径，`PENDING` / `FAILED` 是运行时中间态，不参与对账分母 |
-| `blocked_by` | nullable；拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
+| `blocked_by` | nullable；拦截 Gate 类型（D52 收敛后仅 `ROLLOUT`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
 | `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
 | `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
 | `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |
@@ -910,11 +900,9 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
    → 命中 3 条："首单奖励" / "首单返现" / "新人引导消息"
         │
         ▼
-5. 对每条候选 Rule 走 Pre-Gate
+5. 对每条候选 Rule 走 Pre-Gate（v1 仅 ROLLOUT，D52）
    - 灰度命中 (按 subjectId hash → bucket 0..99，本规则 < 20)
-   - 频次上限 (本规则今天该用户已发 0/1)
-   - 黑白名单 (用户不在黑名单)
-   - 互斥 (本用户没拿过"首单返现"-互斥规则)
+   （黑白名单/频次/互斥已不在 Pre-Gate：黑白名单转 BOOLEAN metric+condition，频次/互斥已移除）
    → 通过 2 条："首单奖励" / "新人引导消息"
         │
         ▼
@@ -1081,17 +1069,14 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 
 | 环节 | dry-run 行为 |
 |------|--------------|
-| **Pre-Gate 灰度命中** | 纯只读判定，无副作用差异（hash 算法稳定，不依赖状态） |
-| **Pre-Gate 黑白名单** | 纯只读判定，无副作用差异 |
-| **Pre-Gate 频次门槛** | **读**频次计数器用于判定 + trace 展示，**不写**新计数（不污染真实运营频次记录） |
-| **Pre-Gate 互斥规则** | **读**互斥锁状态用于判定，**不占用**新锁 |
+| **Pre-Gate 灰度命中**（ROLLOUT，v1 唯一 Pre-Gate） | 纯只读判定，无副作用差异（hash 算法稳定，不依赖状态） |
 | **EvalContext 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
 | **AST 评估 + 节点 trace** | 真实评估、真实节点 trace；trace 写入 `dry_run_session` 表，不进 `evaluation_session` |
 | **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7）。 |
 | **`action_execution` 写入** | 不落生产表，预览结果随 dry-run 响应返回 |
 | **审计 `audit_log`** | 不写入（dry-run 不是发布操作） |
 
-**为什么 Pre-Gate 判定要执行**：运营试算的核心诉求之一就是"看见这个用户会不会被频次/灰度/互斥门槛拦下"——如果 Pre-Gate 一律跳过，trace 就缺失了关键信息；正确做法是判定执行但不落副作用。
+**为什么 Pre-Gate 判定要执行**：运营试算的核心诉求之一就是"看见这个用户会不会被灰度门槛拦下"——如果 Pre-Gate 一律跳过，trace 就缺失了关键信息；正确做法是判定执行但不落副作用。
 
 **PULL 模式 Scene 没有真实 Action，dry-run 与正常评估几乎等价**——区别仅在：1) trace 落 `dry_run_session` 表；2) Pre-Gate 副作用不落（同上）。
 

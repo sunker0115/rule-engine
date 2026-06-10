@@ -119,7 +119,7 @@
                                   ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Pre-Gate Chain  (准入闸门, 独立于 AST)                          │
-│  灰度命中 / 频次上限 / 黑白名单 / 互斥规则 — List<Gate>          │
+│  灰度命中 ROLLOUT (v1 唯一, D52) — List<Gate>                    │
 └─────────────────────────────────┬────────────────────────────────┘
                                   ▼
 ┌──────────────────────────────────────────────────────────────────┐
@@ -183,7 +183,7 @@
 | `EvaluationSession` | 一次评估的持久化记录（D23 幂等锚点）：1 行 per event；`status ∈ {HIT/MISS/BLOCKED/ERROR}`（D22 四态）；`(tenant_id, event_id)` DB uk；同步写（D21）；dry-run 写独立 `dry_run_session` 表 | — |
 | `DryRunSession` | 试算评估的隔离记录（D7 + §3.16）：无 UK 约束，同 eventId 可重复 dry-run；不计入生产统计报表；保留期短于生产 | — |
 | `ActionExecution` | 动作执行记录（独立表，支持重试和补偿）：`status ∈ {SUCCESS/FAILED/SKIPPED}`；幂等键 `(tenantId, eventId, decisionCode, actionId)`（D27）；`retryable=true` 进独立重试队列（§3.17）；失败最终态后补偿由外部补偿流水线调用 `ActionHandler.compensate()` | — |
-| `Gate` | 准入闸门接口（频次 / 互斥 / 黑名单 / 灰度命中） | — |
+| `Gate` | 准入闸门接口（v1 仅灰度命中 ROLLOUT，D52） | — |
 | `IdempotencyGuard` | Redis trySet + DB uk 双兜底 | — |
 | `JobDefinition` | 定时任务配置：cron / 主体查询（SQL / 外部 HTTP / Metric 结果）/ eventType 模板 / payload 模板 / 并发与限流 | — |
 | `JobExecution` | 单次 Job 运行的记录（含 `jobRunId`、主体数、合成事件数、错误明细），与 `EvaluationSession` 关联 | — |

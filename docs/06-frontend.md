@@ -92,10 +92,10 @@
 
 ## 五、灰度配置 UI
 
-在 Rule 编辑器的 Pre-Gate 配置区：
+在 Rule 编辑器的 Pre-Gate 配置区（v1 仅 ROLLOUT，D52；RATE_LIMIT/MUTEX 已移除）：
 - **ROLLOUT Gate**：百分比滑块（0–100%）+ 实时显示"约 X% 流量命中此规则"
-- **WHITELIST / BLACKLIST**：名单 key 下拉框（来自平台预设名单列表）
-- **RATE_LIMIT**：QPS / QPM 数字输入框 + 时间窗口选择
+
+> 黑白名单不再是 Pre-Gate（D52）：改用名单 metric（`sourceType=SQL_AGGREGATE`、`dataType=BOOLEAN`）+ 规则条件 `EQ(in_blacklist, true)` 配置，在条件编辑区而非 Pre-Gate 区。
 
 灰度发布建议工作流显示在侧边面板（仅 ROLLOUT Gate 显示）：
 
