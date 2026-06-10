@@ -162,4 +162,20 @@ class MetricDependencyCollectorTest {
         AstNode ast = new DecisionTableNode(List.of(), List.of());
         assertThat(MetricDependencyCollector.collect(ast)).isEmpty();
     }
+
+    @Test
+    void payloadValueRefNode_notCollected() {
+        AstNode ast = new ConditionNode("GT", "amount", null,
+                Map.of("threshold", 1000), 0.0, null,
+                com.sstlfsj.rule.kernel.api.model.ValueRef.PAYLOAD);
+        assertThat(MetricDependencyCollector.collect(ast)).isEmpty();
+    }
+
+    @Test
+    void metricValueRefNode_stillCollected() {
+        AstNode ast = new ConditionNode("GT", "user.risk.score", null,
+                Map.of("threshold", 80), 0.0, null,
+                com.sstlfsj.rule.kernel.api.model.ValueRef.METRIC);
+        assertThat(MetricDependencyCollector.collect(ast)).containsExactly("user.risk.score");
+    }
 }
