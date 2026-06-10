@@ -189,7 +189,7 @@ metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）�
 | `subjectId` | String | 业务主体 ID（用户 ID / 账户 ID / 订单 ID） |
 | `occurredAt` | Instant | 业务时间，不是引擎收到时间 |
 | `payload` | Map<String, Object> | 业务原始数据快照 |
-| `providedMetrics` | Map<String, Object> | 调用方预提供的指标值；EvalContext 构建时优先采用、跳过 sourceType 取数（`allowProvided=true` 才生效，D30）；因子评分等"值已在手"的场景零改造接入路径 |
+| `providedMetrics` | Map<String, Object> | 预提供的指标值；EvalContext 构建时优先采用、跳过 sourceType 取数（`allowProvided=true` 才生效，D30）。**仅内部链路可填**——公开评估请求体（`EvalEventRequest`）已移除该字段，只能由非公开路径（嵌入式 SDK 宿主 / Job）注入（见 §3.9a 输入契约） |
 | `source` | Enum | 事件来源渠道：`HTTP` / `MQ` / `JOB` / `SDK` / `REPLAY`；由注入入口权威设置（D49），不带链式标识（D16） |
 
 > **链路 ID（traceId）不在 RuleEvent 上**：链路追踪是横切的可观测性关注点，由 MDC / OTel 贯穿日志与 span（如 `ApiResponse` 从 `MDC.get("traceId")` 取），不作为领域事件字段重复携带。
@@ -492,6 +492,22 @@ EvalContext {
 - **超时与异常归一**（D15 派生）：`MetricSource` 实现自管 timeout / retry / 熔断（不同 `sourceType` 合理默认不同：EXTERNAL_HTTP 短超时、SQL_AGGREGATE 中超时，建议值见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南）；任何取数异常（timeout / 熔断 / 连接拒绝 / 反序列化失败）统一归 D15 `METRIC_FETCH_FAIL`，引擎核心不重试。
 - **业务共享常量建议建为只读 metric**：跨多条规则共享的业务阈值 / 配置值（如 VIP 门槛、风控分数线）**建议建为只读 metric**（`sourceType=ATTRIBUTE` 或固定返回值的 `EXTERNAL_HTTP`），复用 metric 的 `cachePolicy` / 版本化通道，不另设"常量库"一等概念。引擎不内置 urule 风格的 ConstantLibrary——若业务常量变更频次很低也可直接内联到 `ConditionNode.params`，二选一由业务方按变更频次自决。独立常量库一等概念的演进留 [`08-evolution.md`](./08-evolution.md) §四。
 - **payload vs metric —— "指标身份"判据**：事件自带的事实（`amount` / `currency` 等）走 **payload 直接引用**（`ConditionNode.valueRef=PAYLOAD`，`metricCode` 复用为 payload 字段名，须在 `Scene.payloadSchema` 声明），不注册 metric、不进 `providedMetrics`；受治理指标（`user.risk.score` 等）走 **metric**。判别测试——任一为 yes 走 metric，全 no 走 payload：需要取数 / 需要权威保护（`allowProvided=false`）/ 跨规则复用同一定义 / 要版本化 / 要下发 SDK / 要影响面查询。`amount` 永远是 payload（这笔交易的事实）；`user.risk.score` 永远是 metric（哪怕本次值由上游 `providedMetrics` 注入，身份仍是受治理指标）。AST 写法 + 操作符见 [`03-rule-expression.md`](./03-rule-expression.md) §2.6。
+
+### 3.9a 输入契约 / 场景输入清单
+
+**是什么**：调用方对一个场景发评估时"该精确传哪些字段"的对外契约。三个相关概念的边界：
+
+| 概念 | 定义 | 谁提供 |
+|------|------|--------|
+| **payload（事件事实）** | 一次事件自带的原始事实（`amount` / `country` 等），是**公开评估接口上唯一的业务输入**；规则用 `valueRef=PAYLOAD` 直接引用，须在 `Scene.payloadSchema` 声明 | 调用方随评估请求传 |
+| **metric（受治理指标）** | 被命名注册的取数原子（§3.9），100% 引擎侧——按 `sourceType` 自取（取数），或经非公开路径（嵌入式 SDK 宿主 / Job）注入；**不再由公开评估调用方提供** | 引擎 |
+| **场景输入清单** | 该场景所有 status=ACTIVE 规则引用的 payload 字段的**并集**（`{ name, dataType, required }`），是调用方导向的输入契约 | 引擎按发布期快照聚合 |
+
+**关键边界**：
+
+- **公开评估接口只收 payload**：`providedMetrics` 已从公开请求体（`EvalEventRequest`）移除；调用方碰不到引擎内部的 metric taxonomy。"上游注入受治理 metric"是非公开路径——内部 `RuleEvent` 仍持 `providedMetrics`（供 SDK 宿主 / Job 注入），但通用 HTTP 调用方填不进去（D30 的 `providedMetrics` 语义在公开侧退场，仅存于内部链路）。
+- **清单来源 = 发布期快照**：发布时每条规则把引用的 payload 字段（`valueRef=PAYLOAD` 节点）连同从 `Scene.payloadSchema` 取的 `dataType` / `required` 冻结进 `rule_version.payload_dependencies`（与 `metric_dependencies` 同套路、守 D6 不可变 + 评估零额外查询），随 `RuleVersionSnapshot.payloadDependencies` 下发到评估侧。场景级清单 = 该场景 ACTIVE 规则快照清单的并集（同名去重）。
+- **可发现 + 评估期校验**：调用方经 `GET /api/v1/rule/scenes/{sceneCode}/input-manifest`（10-api-contract §3.4）拿到清单；评估期按候选快照清单并集校验请求 payload——必填缺失 → `MISSING_REQUIRED_INPUT`（整体拒绝 400，不降级），类型不符 → `INPUT_TYPE_MISMATCH`（400），多塞的未被引用字段忽略。与发布期 `UNRESOLVED_VARIABLE`（规则别越界引用没声明的字段）正交：一个管授权期"规则别越界"，一个管调用期"调用方别漏传 / 错类型"。
 
 ### 3.10 Job（定时触发，不是一等公民）
 

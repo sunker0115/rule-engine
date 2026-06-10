@@ -33,11 +33,11 @@
 
 | 类别 | 分组 | 路径前缀 | 主要场景 |
 |------|------|---------|---------|
-| api | 评估接口 | `/api/v1/rule/` | 业务方触发评估（PUSH/PULL/dry-run） |
+| api | 评估接口 | `/api/v1/rule/` | 业务方触发评估（PUSH/PULL/dry-run）+ 场景输入清单发现 |
 | admin | 规则管理 | `/admin/v1/rules` | 创建 / 发布 / 禁用 / 查询规则；批量导出 / 导入 Bundle 文件（B7） |
 | admin | Scene 管理 | `/admin/v1/scenes` | 创建 / 更新 / 禁用 Scene |
 | admin | 指标管理 | `/admin/v1/metrics` | 注册 / 更新 / 禁用 Metric |
-| admin | 元数据接口 | `/admin/v1/scenes/{sceneCode}/metadata`，`/admin/v1/scenes/{sceneCode}/provided-metrics` | 前端编辑器拉 ConditionType / ActionType 枚举；D30 allowProvided 发现 |
+| admin | 元数据接口 | `/admin/v1/scenes/{sceneCode}/metadata` | 前端编辑器拉 ConditionType / ActionType 枚举 + tenant 级 ACTIVE metric |
 | admin | 审计与查询 | `/admin/v1/evaluation-sessions`，`/admin/v1/rules/{id}/sessions` | 查 session / trace / action 执行；按规则查历史触发记录 |
 | sdk | SDK 下发接口 | `/sdk/v1/snapshots`，`/sdk/v1/metric-definitions` | 嵌入式 SDK 拉规则快照 / metric 定义元数据（HTTP 模式，见 §8.7） |
 
@@ -62,12 +62,11 @@ POST /api/v1/rule/event
   "subjectId": "user-001",
   "eventId": "evt-001",
   "occurredAt": "2026-05-31T14:00:00+08:00",
-  "payload": { "amount": 25000, "currency": "CNY" },
-  "providedMetrics": {
-    "user.kyc.level": 2
-  }
+  "payload": { "amount": 25000, "currency": "CNY" }
 }
 ```
+
+> **公开评估接口只收 `payload`（事件事实）**：`providedMetrics` 已从公开请求体移除（B-T7）。受治理 metric 全归引擎侧——按 `sourceType` 自取（取数），或经**非公开**路径注入（嵌入式 SDK 宿主 / Job 预算，内部 `RuleEvent` 仍持 `providedMetrics`，但 HTTP 调用方碰不到）。调用方传哪些 payload 字段由场景输入清单（§3.4）声明。
 
 **Response 202：**
 ```json
@@ -163,6 +162,39 @@ POST /api/v1/rule/dry-run
 > `valueSource` 取值：`PROVIDED`（调用方注入）/ `FETCHED`（取数，如上例）/ `PAYLOAD`（payload 直接引用节点，valueRef=PAYLOAD，见 03-rule-expression §2.6）。
 
 v1.5（D7）已全量实装 `dryRun()`，`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。见 07-operability §四。
+
+### 3.4 场景输入清单发现接口
+
+> **已实装（B-T9）**：调用方据此精确知道"对该场景发事件要传哪些 payload 字段（名 + 类型 + 是否必填）"，照着填 §3.1 的 `payload`。
+
+```
+GET /api/v1/rule/scenes/{sceneCode}/input-manifest?tenantCode=loadtest[&eventType=login]
+```
+
+**Query 参数：**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `tenantCode` | 是 | 租户业务码（`tenant.code`） |
+| `eventType` | 否 | 事件类型；传入则收窄到会被该 eventType 触发的规则，不传则取该场景全部 active 规则的并集 |
+
+**口径**：返回该场景所有 status=ACTIVE 规则在发布期冻结的 `rule_version.payload_dependencies`（即 `valueRef=PAYLOAD` 的 ConditionNode 引用字段）的**并集**（同名去重，`dataType` / `required` 取 `Scene.payloadSchema` 声明）。
+
+**Response 200：** `ApiResponse` 包装，清单在 `data.fields`：
+
+```json
+{
+  "success": true,
+  "data": {
+    "fields": [
+      { "name": "amount", "dataType": "DECIMAL", "required": true },
+      { "name": "country", "dataType": "STRING", "required": true }
+    ]
+  }
+}
+```
+
+> `dataType` 为 `Scene.payloadSchema` 的 `type` 映射后的基础类型：`number→DECIMAL` / `integer→LONG` / `string→STRING` / `boolean→BOOLEAN`（与评估期校验同一映射，见 §七 `INPUT_TYPE_MISMATCH`）。
 
 ---
 
@@ -435,30 +467,7 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 **Response：** 见 `04-extension.md §五` 元数据契约（`conditionTypes` / `actionTypes` / `availableMetrics` 三段）。
 
-### 5.2 D30 providedMetrics 发现接口
-
-> **已实装（v2 第二阶段）**
-
-```
-GET /admin/v1/scenes/{sceneCode}/provided-metrics?tenantId=demo-tenant
-```
-
-**Response 200：**
-```json
-{
-  "metrics": [
-    {
-      "metricCode": "user.kyc.level",
-      "name": "KYC 等级",
-      "dataType": "LONG",
-      "allowProvided": true,
-      "note": "sourceType=ATTRIBUTE，外部系统通常比 DB 读更新"
-    }
-  ]
-}
-```
-
-### 5.3 查询 Scene 列表
+### 5.2 查询 Scene 列表
 
 ```
 GET /admin/v1/scenes?tenantId=demo-tenant
@@ -559,8 +568,12 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 | errorCode | HTTP 状态 | 含义 | 调用方建议 |
 |-----------|-----------|------|-----------|
 | `PAYLOAD_SCHEMA_MISMATCH` | 400 | payload 字段缺必填 / 类型错 | 修复请求体重试 |
+| `MISSING_REQUIRED_INPUT` | 400 | 评估请求 `payload` 缺场景输入清单要求的必填字段（候选规则 `payload_dependencies` 并集中 `required=true` 的字段未传，B-T8） | 先查 §3.4 input-manifest 拿清单，补齐必填字段重试 |
+| `INPUT_TYPE_MISMATCH` | 400 | 评估请求 `payload` 字段基础类型与清单声明不符（`number→DECIMAL` / `integer→LONG` / `string→STRING` / `boolean→BOOLEAN`，B-T8） | 按清单声明的 `dataType` 修正字段类型重试 |
 | `INVALID_EVENT_TYPE` | 400 | eventType 不在 Scene 白名单内 | 确认 sceneCode + eventType |
 | `SCENE_NOT_FOUND` | 404 | sceneCode 未注册或 DISABLED | 确认 tenantId + sceneCode |
+
+> `MISSING_REQUIRED_INPUT` / `INPUT_TYPE_MISMATCH` 经 `IllegalArgumentException → GlobalExceptionHandler → HTTP 400` 落地，与既有约定一致：**wire 层 `errorCode` 统一为 `INVALID_ARGUMENT`**，语义码（`MISSING_REQUIRED_INPUT` 等）携带在 message 前缀（同 `DECISION_CODE_NOT_FOUND` 等发布期语义码经 message 透出的方式）。两者管"调用期：调用方别漏传 / 错类型"，与发布期 `UNRESOLVED_VARIABLE`（管"授权期：规则别越界引用"）正交。
 
 ### 管理接口错误（HTTP 4xx）
 
