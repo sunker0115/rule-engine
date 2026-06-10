@@ -464,6 +464,35 @@ class PublishServiceTest {
     }
 
     @Test
+    void publish_freezesDraftOwnTriggerEventTypes_notSceneFullSet() {
+        // 设计决策 #3：发布落库的 triggerEventTypes 是草稿自己声明的子集（已校验 ⊆ scene.eventTypes），
+        // 而非 scene 全集。保证"你预览(dry-run 草稿)的 == 你发布的"。
+        scene.setEventTypes(List.of("payment.initiated", "payment.refunded"));   // scene 全集 2 个
+        draftVersion.setTriggerEventTypes(List.of("payment.initiated"));          // 草稿子集 1 个
+        draftVersion.setConditionAst(new ConditionNode("EQ", "m.code", null, Map.of(), 0.0));
+
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
+        when(ruleVersionMapper.maxVersion(10L)).thenReturn(0L);
+        when(ruleVersionMapper.insert((RuleVersion) any())).thenReturn(1);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("m.code");
+        md.setDataType("STRING");
+        md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(java.util.List.of(md));
+
+        publishService.publish(1L, 10L, "actor");
+
+        // 捕获落库实体，断言冻结的是草稿自己的值，不是 scene 全集
+        ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(rvCaptor.capture());
+        assertThat(rvCaptor.getValue().getTriggerEventTypes())
+                .containsExactly("payment.initiated");
+    }
+
+    @Test
     void publish_triggerEventTypes为空_跳过校验() {
         draftVersion.setTriggerEventTypes(List.of());
         scene.setEventTypes(java.util.List.of("payment.initiated"));
