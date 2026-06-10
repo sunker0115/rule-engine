@@ -29,14 +29,15 @@
 | 流程 | 入口 | 状态 | 验证 | 备注 |
 |---|---|---|---|---|
 | 建场景 `POST /scenes` | `SceneController.create` | ✅ | 示例 / 2026-06-10 | |
-| 改场景 `PATCH /scenes/{code}` | `SceneController.patch` | ⬜ | — | |
+| 改场景 `PATCH /scenes/{code}` | `SceneController.updateScene` | ✅ | 2026-06-10 | name/eventTypes/payloadSchema/defaultParams 可 patch(tenantId 在 body);**description 不在 `UpdateSceneRequest`、建后不可改**(小产品缺口,非 bug) |
 | 建规则草稿 `POST /rules` | `RuleController.createDraft` | ✅ | 示例 / 2026-06-10 | |
 | 发布规则 `POST /rules/{id}/publish` | `RuleController.publish` | ✅ | 示例 / 2026-06-10 | 含 payload/metric 依赖冻结、快照落库 |
-| 停用规则 `POST /rules/{id}/disable` | `RuleController.disable` | ⬜ | — | |
-| 建/改/停 decision | `DecisionController` | ✅ 建 / ⬜ 改停 | 示例(建) | PUT / disable 未跑 |
+| 停用规则 `POST /rules/{id}/disable` | `RuleController.disable` | ✅ | 2026-06-10 | rule_definition.status → DISABLED |
+| 建/改/停 decision | `DecisionController` | ✅ | 示例 / 2026-06-10 | 建(示例)+ PUT(改 name/priority/description)+ disable(status→DISABLED)均真落库 |
 | metric 注册 `POST /metrics` | `MetricController.create` | ✅ | 示例 | |
-| metric 改 / 版本影响面查询 | `MetricController` PUT / `/impact` | ⬜ | — | |
-| 场景元数据 `GET /scenes/{code}/metadata` | `MetadataController` | ⬜ | — | 前端配规则用 |
+| metric 版本影响面查询 `/{code}/versions/{v}/impact` | `MetricController` | ✅ | 2026-06-10 | amount v1 → affectedRules 含 rule 871 |
+| metric 改 `PUT /metrics/{code}` | `MetricController` | ⬜ | — | 未跑 |
+| 场景元数据 `GET /scenes/{code}/metadata` | `MetadataController` | ✅ | 2026-06-10 | availableMetrics 返回 tenant 级 ACTIVE metric |
 | 审计 / 会话查询 `GET /evaluation-sessions`·`/audit-logs`·`/trace` | `AuditController` | ✅ | 示例 | |
 
 ## 三、Job
@@ -51,15 +52,15 @@
 
 | 流程 | 入口 | 状态 | 验证 | 备注 |
 |---|---|---|---|---|
-| 导出 `GET /rules/export` | `RuleBundleController.export` | ⬜ | — | 单测过,真 HTTP 往返未跑 |
-| 导入 `POST /rules/import` | `RuleBundleController.import` | ⬜ | — | 同上;payloadDependencies 已贯穿(B-T7b) |
+| 导出 `GET /rules/export` | `RuleBundleController.export` | ✅ | 2026-06-10 | 按 sceneId 导出 → bundle JSON 含 rules/scenes/decisions + **payloadDependencies**(B-T7b) |
+| 导入 `POST /rules/import` | `RuleBundleController.import` | ✅ | 2026-06-10 | multipart 导入到**新租户 9002** → scene+decision 重建、rule 落 DRAFT,`rule_version.payload_dependencies` 完整保留;真跨租户往返无 bug |
 
 ## 五、SDK 嵌入式
 
 | 流程 | 入口 | 状态 | 验证 | 备注 |
 |---|---|---|---|---|
 | 快照下发 `GET /sdk/v1/snapshots` | `SdkController` | ✅ | 示例 | |
-| metric 定义下发 `GET /sdk/v1/metric-definitions` | `SdkController` | ⬜ | — | |
+| metric 定义下发 `GET /sdk/v1/metric-definitions` | `SdkController` | ✅ | 2026-06-10 | 返回 tenant 级 4 个 metric 定义 |
 | 嵌入式 zero-network 评估 | `RuleEngineClient` | 🟡 | — | 需 SDK 测试宿主 |
 | HTTP 轮询拉快照刷新 | `PollingRuleSource` / `PollingMetricDefinitionSource` | 🟡 | — | 需跑着的 rule-app 配合 |
 | DB 轮询 watcher | `DbPollingRuleWatcher` / `DbPollingSceneWatcher` | ⚪ | — | 抛 UnsupportedOperationException(SDK v2) |
