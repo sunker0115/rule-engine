@@ -176,13 +176,13 @@
 | `MetricRegistry` | 注册中心，启动扫 `@MetricSourceType` 注解 + 数据库声明式指标；并发契约：读路径 thread-safe 且不阻塞热路径，评估期内快照稳定（具体并发策略——不可变快照 / ConcurrentHashMap / copy-on-write 等——由实现层选择） | — |
 | `ConditionEvaluator` | 纯函数判定 `(ConditionNode node, EvalContext ctx) → boolean`；`actualValue` 由 AST Evaluator 从 EvalContext 提取后写入 node_trace，不在返回值中（见 [`04-extension.md`](./04-extension.md) §2.1） | — |
 | `ConditionTypeRegistry` | 注册中心，启动扫 `@ConditionType` 注解 | — |
-| `ActionHandler` | 动作执行三件套：`execute` / `compensate` / `dryRun`（仅 PUSH / HYBRID Scene 用到）；`execute` 返回 `ActionResult`，**不返回新事件**（D16 禁止链式）。**注**：v1 仅评估层 dry-run 一等公民，`dryRun` 接口已在签名内，全部 handler 实装在 **v1.5** 补齐（D7） | — |
-| `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（D18：`retryable=true` 入重试队列；`failFast=true` 的 Action 失败后同 **Decision** 内后续 Action 标 SKIPPED） | ✅ |
+| `ActionHandler` | 动作执行两件套：`execute` / `dryRun`（仅 PUSH / HYBRID Scene 用到）；`execute` 返回 `ActionResult`，**不返回新事件**（D16 禁止链式）。`compensate()` SPI 已删（D53 best-effort 化）。**注**：v1 仅评估层 dry-run 一等公民，`dryRun` 接口已在签名内，全部 handler 实装在 **v1.5** 补齐（D7） | — |
+| `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（`retryable` 保留但 best-effort 化后不再驱动重试，D53；`failFast=true` 的 Action 失败后同 **Decision** 内后续 Action 标 SKIPPED，D18） | ✅ |
 | `ActionRegistry` | 注册中心，启动扫 `@ActionType` 注解 + 声明式动作定义 | — |
 | `RuleEvalVisitor` | 遍历 AST，短路 + 节点级 trace | — |
 | `EvaluationSession` | 一次评估的持久化记录（D23 幂等锚点）：1 行 per event；`status ∈ {HIT/MISS/BLOCKED/ERROR}`（D22 四态）；`(tenant_id, event_id)` DB uk；同步写（D21）；dry-run 写独立 `dry_run_session` 表 | — |
 | `DryRunSession` | 试算评估的隔离记录（D7 + §3.16）：无 UK 约束，同 eventId 可重复 dry-run；不计入生产统计报表；保留期短于生产 | — |
-| `ActionExecution` | 动作执行记录（独立表，支持重试和补偿）：`status ∈ {SUCCESS/FAILED/SKIPPED}`；幂等键 `(tenantId, eventId, decisionCode, actionId)`（D27）；`retryable=true` 进独立重试队列（§3.17）；失败最终态后补偿由外部补偿流水线调用 `ActionHandler.compensate()` | — |
+| `ActionExecution` | 动作执行记录（best-effort 投递，D53）：`status ∈ {SUCCESS/FAILED/SKIPPED}`；幂等键 `(tenantId, eventId, decisionCode, actionId)`（D27，落库去重）；失败即终态，不重试不补偿（retry/补偿列已 V1_21 移除）；可靠投递（MQ）/ 业务补偿（saga）未来另设计 | — |
 | `Gate` | 准入闸门接口（v1 仅灰度命中 ROLLOUT，D52） | — |
 | `IdempotencyGuard` | Redis trySet + DB uk 双兜底 | — |
 | `JobDefinition` | 定时任务配置：cron / 主体查询（SQL / 外部 HTTP / Metric 结果）/ eventType 模板 / payload 模板 / 并发与限流 | — |
