@@ -4,7 +4,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
-import com.sstlfsj.rule.eval.internal.action.SceneActionBindingIndex;
 import com.sstlfsj.rule.eval.internal.TraceProperties;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
@@ -154,7 +153,6 @@ class EvalAutoConfigurationTest {
     void actionDispatchService_nullHandlers_returnsInstance() {
         ActionDispatchService svc = config.actionDispatchService(
                 null,
-                mock(SceneActionBindingIndex.class),
                 mock(DomainEventPublisher.class));
         assertNotNull(svc);
     }
@@ -164,7 +162,6 @@ class EvalAutoConfigurationTest {
         ActionHandler handler = new BlockTxStub();
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(handler),
-                mock(SceneActionBindingIndex.class),
                 mock(DomainEventPublisher.class));
         assertNotNull(svc);
     }
@@ -174,7 +171,6 @@ class EvalAutoConfigurationTest {
         ActionHandler noAnnotation = ctx -> ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(noAnnotation),
-                mock(SceneActionBindingIndex.class),
                 mock(DomainEventPublisher.class));
         assertNotNull(svc);
     }

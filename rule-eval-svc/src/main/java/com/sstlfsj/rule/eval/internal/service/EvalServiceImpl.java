@@ -96,9 +96,10 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         eventPublisher.publish(new AuditRecordedEvent(
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs));
         Long tid = parseTenantId(event.tenantId());
-        if (tid != null && result.ruleHit() && !result.hitDecisions().isEmpty()) {
+        // D27:仅派发 finalDecision 的 actions(命中且有挂载 action 才投递)
+        if (tid != null && result.finalDecision() != null && !result.finalDecision().actions().isEmpty()) {
             actionDelivery.deliver(new DispatchActionsCommand(
-                    sessionId, tid, event.eventId(), event.sceneCode(), result.hitDecisions()));
+                    sessionId, tid, event.eventId(), event.sceneCode(), result.finalDecision()));
         }
         return result;
     }

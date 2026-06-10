@@ -49,7 +49,9 @@ class DoEvaluateEmitsEventsTest {
         ActionCommandChannel actionDelivery = mock(ActionCommandChannel.class);
         RuleEvent event = event("e1");
         when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
-        Decision pass = new Decision("PASS", "", 1, 3L);
+        var action = new com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction(
+                "a1", "SEND_ALERT", 0, java.util.Map.of());
+        Decision pass = new Decision("PASS", "", 1, 3L, null, List.of(action));
         EvalResult hit = new EvalResult(true, pass, List.of(pass), List.of(),
                 null, List.of(), null, null, null);
         when(engine.evaluateWithContext(eq(event), anyList(), any()))
@@ -69,7 +71,7 @@ class DoEvaluateEmitsEventsTest {
                         && ar.tenantId() == 1L
                         && ar.eventId().equals("e1")
                         && ar.sceneCode().equals("s")
-                        && ar.hitDecisions().equals(List.of(pass))));
+                        && ar.finalDecision().equals(pass)));
     }
 
     @Test

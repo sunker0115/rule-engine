@@ -201,7 +201,6 @@ public class EvalAutoConfiguration {
     @Bean
     public ActionDispatchService actionDispatchService(
             @Autowired(required = false) List<ActionHandler> actionHandlers,
-            SceneActionBindingIndex bindingIndex,
             DomainEventPublisher eventPublisher) {
         Map<String, ActionHandler> handlerMap = new HashMap<>();
         if (actionHandlers != null) {
@@ -212,6 +211,6 @@ public class EvalAutoConfiguration {
                 }
             }
         }
-        return new ActionDispatchService(handlerMap, bindingIndex, eventPublisher);
+        return new ActionDispatchService(handlerMap, eventPublisher);
     }
 }

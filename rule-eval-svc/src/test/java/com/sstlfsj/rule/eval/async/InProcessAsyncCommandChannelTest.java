@@ -21,12 +21,14 @@ class InProcessAsyncCommandChannelTest {
         InProcessAsyncCommandChannel channel = new InProcessAsyncCommandChannel(2000, 200, 50, svc);
         channel.afterPropertiesSet();
 
-        channel.deliver(new DispatchActionsCommand(7L, 1L, "e1", "s", List.of()));
+        com.sstlfsj.rule.kernel.api.model.Decision fd =
+                new com.sstlfsj.rule.kernel.api.model.Decision("REJECT", "拒绝", 10, 1L);
+        channel.deliver(new DispatchActionsCommand(7L, 1L, "e1", "s", fd));
 
         Thread.sleep(300);   // 等后台消费
         channel.destroy();
 
-        verify(svc, times(1)).dispatch(7L, 1L, "e1", "s", List.of());
+        verify(svc, times(1)).dispatch(7L, 1L, "e1", "s", fd);
     }
 
     @Test
@@ -36,8 +38,10 @@ class InProcessAsyncCommandChannelTest {
         InProcessAsyncCommandChannel channel = new InProcessAsyncCommandChannel(1, 200, 60_000, svc);
         channel.afterPropertiesSet();
         try {
+            com.sstlfsj.rule.kernel.api.model.Decision fd =
+                    new com.sstlfsj.rule.kernel.api.model.Decision("REJECT", "拒绝", 10, 1L);
             for (int i = 0; i < 50; i++) {
-                channel.deliver(new DispatchActionsCommand(7L, 1L, "e" + i, "s", List.of()));
+                channel.deliver(new DispatchActionsCommand(7L, 1L, "e" + i, "s", fd));
             }
             assertThat(channel.droppedCount()).isGreaterThan(0);   // 满后丢弃被计数,不抛
         } finally {

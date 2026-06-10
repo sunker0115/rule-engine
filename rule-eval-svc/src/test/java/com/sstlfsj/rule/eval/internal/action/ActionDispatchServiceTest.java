@@ -1,11 +1,11 @@
 package com.sstlfsj.rule.eval.internal.action;
 
 import com.sstlfsj.rule.eval.internal.async.ActionExecutedEvent;
-import com.sstlfsj.rule.eval.internal.domain.SceneActionBindingRow;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
 import com.sstlfsj.rule.kernel.api.model.Decision;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,49 +18,41 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** ActionDispatchService 单元测试：验证 best-effort 派发、空绑定、handler 缺失、失败仍记录四个场景。 */
+/** ActionDispatchService 单元测试：D27 派发 finalDecision.actions（best-effort），handler 缺失/失败/空决策场景。 */
 class ActionDispatchServiceTest {
 
-    private SceneActionBindingIndex bindingIndex;
     private DomainEventPublisher eventPublisher;
     private ActionHandler stubHandler;
     private ActionDispatchService service;
 
     @BeforeEach
     void setUp() {
-        bindingIndex = mock(SceneActionBindingIndex.class);
         eventPublisher = mock(DomainEventPublisher.class);
         stubHandler = mock(ActionHandler.class);
-        when(stubHandler.execute(any())).thenReturn(ActionResult.success("aid", "BLOCK_TRANSACTION"));
+        when(stubHandler.execute(any())).thenReturn(ActionResult.success("a1", "SEND_ALERT"));
+        service = new ActionDispatchService(Map.of("SEND_ALERT", stubHandler), eventPublisher);
+    }
 
-        service = new ActionDispatchService(
-                Map.of("BLOCK_TRANSACTION", stubHandler),
-                bindingIndex,
-                eventPublisher);
+    private static Decision decisionWith(DecisionAction... actions) {
+        return new Decision("REJECT", "拒绝", 10, 1L, null, List.of(actions));
     }
 
     @Test
-    void dispatch_withBinding_callsHandlerAndPublishesEvent() {
-        when(bindingIndex.get(1L, "fraud_check"))
-                .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
-
+    void dispatch_finalDecisionActions_callsHandlerAndPublishesEvent() {
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
-                List.of(new Decision("REJECT", "", 10, 1L)));
+                decisionWith(new DecisionAction("a1", "SEND_ALERT", 0, Map.of())));
 
         verify(stubHandler).execute(any(ActionContext.class));
         verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
-                && "BLOCK_TRANSACTION".equals(ae.actionId())
+                && "a1".equals(ae.actionId())
+                && "REJECT".equals(ae.decisionCode())
                 && "SUCCESS".equals(ae.result().status().name())));
     }
 
     @Test
-    void dispatch_passesDefaultParamsToActionContext() {
-        when(bindingIndex.get(1L, "fraud_check"))
-                .thenReturn(List.of(new SceneActionBindingRow(
-                        "BLOCK_TRANSACTION", Map.of("reason", "risk"))));
-
+    void dispatch_paramsFromDecisionAction() {
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
-                List.of(new Decision("REJECT", "", 10, 1L)));
+                decisionWith(new DecisionAction("a1", "SEND_ALERT", 0, Map.of("reason", "risk"))));
 
         ArgumentCaptor<ActionContext> ctx = ArgumentCaptor.forClass(ActionContext.class);
         verify(stubHandler).execute(ctx.capture());
@@ -68,23 +60,23 @@ class ActionDispatchServiceTest {
     }
 
     @Test
-    void dispatch_emptyBindings_doesNothing() {
-        when(bindingIndex.get(1L, "fraud_check")).thenReturn(List.of());
+    void dispatch_nullFinalDecision_doesNothing() {
+        service.dispatch(42L, 1L, "evt-001", "fraud_check", null);
+        verifyNoInteractions(stubHandler);
+        verifyNoInteractions(eventPublisher);
+    }
 
-        service.dispatch(42L, 1L, "evt-001", "fraud_check",
-                List.of(new Decision("REJECT", "", 10, 1L)));
-
+    @Test
+    void dispatch_noActions_doesNothing() {
+        service.dispatch(42L, 1L, "evt-001", "fraud_check", decisionWith());
         verifyNoInteractions(stubHandler);
         verifyNoInteractions(eventPublisher);
     }
 
     @Test
     void dispatch_handlerNotRegistered_publishesSkippedEvent() {
-        when(bindingIndex.get(1L, "fraud_check"))
-                .thenReturn(List.of(new SceneActionBindingRow("UNKNOWN_ACTION", null)));
-
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
-                List.of(new Decision("REJECT", "", 10, 1L)));
+                decisionWith(new DecisionAction("a1", "UNKNOWN_ACTION", 0, Map.of())));
 
         verifyNoInteractions(stubHandler);
         verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
@@ -93,27 +85,13 @@ class ActionDispatchServiceTest {
     }
 
     @Test
-    void dispatch_actionId_isDeterministicActionType() {
-        when(bindingIndex.get(1L, "fraud_check"))
-                .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
-
-        service.dispatch(42L, 1L, "evt-001", "fraud_check",
-                List.of(new Decision("REJECT", "", 10, 1L)));
-
-        verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
-                && "BLOCK_TRANSACTION".equals(ae.actionId())));
-    }
-
-    @Test
     void dispatch_handlerFailed_stillPublishesEvent() {
-        // best-effort：失败不重试不释放，但仍发布 ActionExecutedEvent 落库记录结果
-        when(bindingIndex.get(1L, "fraud_check"))
-                .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
+        // best-effort：失败不重试，但仍发布 ActionExecutedEvent 落库记录结果
         when(stubHandler.execute(any()))
-                .thenReturn(ActionResult.failed("BLOCK_TRANSACTION", "BLOCK_TRANSACTION", "ERR", true));
+                .thenReturn(ActionResult.failed("a1", "SEND_ALERT", "ERR", false));
 
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
-                List.of(new Decision("REJECT", "", 10, 1L)));
+                decisionWith(new DecisionAction("a1", "SEND_ALERT", 0, Map.of())));
 
         verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
                 && "FAILED".equals(ae.result().status().name())));

@@ -90,7 +90,7 @@ public class InProcessAsyncCommandChannel
         for (DispatchActionsCommand e : batch) {
             try {
                 dispatchService.dispatch(e.sessionId(), e.tenantId(), e.eventId(),
-                        e.sceneCode(), e.hitDecisions());
+                        e.sceneCode(), e.finalDecision());
             } catch (RuntimeException ignored) {
                 // best-effort：单条派发失败不影响其余
             }
