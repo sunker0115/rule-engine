@@ -29,8 +29,8 @@ import java.util.stream.Collectors;
 /**
  * 规则发布核心流程。
  * <p>
- * 事务边界：整个发布流程在一个本地事务内完成（INSERT rule_version +
- * UPDATE rule_definition + INSERT audit_log），事务提交后发布 Modulith 事件。
+ * 事务边界：整个发布流程在一个本地事务内完成（原地 UPDATE rule_version 把最新 DRAFT 翻 ACTIVE
+ * + markSuperseded 旧 ACTIVE + UPDATE rule_definition + INSERT audit_log），事务提交后发布 Modulith 事件。
  * </p>
  */
 @Service
@@ -62,7 +62,9 @@ public class PublishService {
      * @param tenantId         租户 id
      * @param ruleDefinitionId 规则定义 id
      * @param actorId          操作人（来自 X-Actor-Id header）
-     * @return 被激活版本的 RuleVersionSnapshot（供 eval-svc 倒排索引热更使用）
+     * @return 被激活版本的 RuleVersionSnapshot（作为 publish API 响应；含 id/conditionAst/metricDeps/payloadDeps，
+     *         decisionBindings/preGates/triggerEventTypes 不在响应携带，需经 GET 规则详情查询。
+     *         eval-svc 倒排索引热更由 RulePublishedEvent 从 DB 重载触发，不依赖此返回值）
      */
     @Transactional
     public RuleVersionSnapshot publish(Long tenantId, Long ruleDefinitionId, String actorId) {
@@ -102,7 +104,8 @@ public class PublishService {
                 tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
                 beforeSnap, new RulePublishedSnapshot(draft.getId(), draft.getVersion()), LocalDateTime.now()));
 
-        RuleKind kind = rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN;
+        // kind 取被发布的 draft 行（premise A 冻结的权威值），抗"定义级 kind 与版本漂移"
+        RuleKind kind = draft.getKind() != null ? draft.getKind() : RuleKind.AST_BOOLEAN;
         RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
                 draft.getId(), scene.getCode(), String.valueOf(tenantId),
                 draft.getConditionAst(), List.of(), List.of(), List.of(),
