@@ -68,11 +68,14 @@ engine:
         # SEND_ALERT webhook（best-effort，失败不重试）；url 为空则不实发（skipped）
         url:
         timeout-ms: 2000
-    # 规划中：数据保留/清理 job 未实现
+    # 数据保留/清理:各模块 @Scheduled 按保留窗删超期运行/历史行(observability 清 trace 两表、eval-svc 清 session 两表)
     retention:
+      enabled: true
+      cron: "0 30 3 * * *"       # 每日 03:30
+      batch-size: 1000           # 单批删除上限(分批短事务)
       evaluation-session-days: 90
       node-trace-days: 30
-      dry-run-session-days: 7
+      dry-run-session-days: 7    # 同管 dry_run 两张表(dry_run_session + dry_run_node_trace)
     # 规划中：告警阈值逻辑未实现
     observability:
       eval-error-rate-threshold: 0.05
