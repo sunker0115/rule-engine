@@ -3,7 +3,6 @@ package com.sstlfsj.rule.eval;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.action.ActionIdempotencyGuard;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.action.SceneActionBindingIndex;
 import com.sstlfsj.rule.eval.internal.TraceProperties;
@@ -156,8 +155,7 @@ class EvalAutoConfigurationTest {
         ActionDispatchService svc = config.actionDispatchService(
                 null,
                 mock(SceneActionBindingIndex.class),
-                mock(DomainEventPublisher.class),
-                mock(ActionIdempotencyGuard.class));
+                mock(DomainEventPublisher.class));
         assertNotNull(svc);
     }
 
@@ -167,8 +165,7 @@ class EvalAutoConfigurationTest {
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(handler),
                 mock(SceneActionBindingIndex.class),
-                mock(DomainEventPublisher.class),
-                mock(ActionIdempotencyGuard.class));
+                mock(DomainEventPublisher.class));
         assertNotNull(svc);
     }
 
@@ -178,8 +175,7 @@ class EvalAutoConfigurationTest {
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(noAnnotation),
                 mock(SceneActionBindingIndex.class),
-                mock(DomainEventPublisher.class),
-                mock(ActionIdempotencyGuard.class));
+                mock(DomainEventPublisher.class));
         assertNotNull(svc);
     }
 

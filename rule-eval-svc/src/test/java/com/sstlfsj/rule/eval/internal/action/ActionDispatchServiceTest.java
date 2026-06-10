@@ -18,13 +18,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** ActionDispatchService 单元测试：验证 handler 派发、空绑定、handler 缺失、幂等与失败释放五个场景。 */
+/** ActionDispatchService 单元测试：验证 best-effort 派发、空绑定、handler 缺失、失败仍记录四个场景。 */
 class ActionDispatchServiceTest {
 
     private SceneActionBindingIndex bindingIndex;
     private DomainEventPublisher eventPublisher;
     private ActionHandler stubHandler;
-    private ActionIdempotencyGuard guard;
     private ActionDispatchService service;
 
     @BeforeEach
@@ -33,14 +32,11 @@ class ActionDispatchServiceTest {
         eventPublisher = mock(DomainEventPublisher.class);
         stubHandler = mock(ActionHandler.class);
         when(stubHandler.execute(any())).thenReturn(ActionResult.success("aid", "BLOCK_TRANSACTION"));
-        guard = mock(ActionIdempotencyGuard.class);
-        when(guard.claim(any())).thenReturn(true);   // 默认放行；去重用例单独 stub false
 
         service = new ActionDispatchService(
                 Map.of("BLOCK_TRANSACTION", stubHandler),
                 bindingIndex,
-                eventPublisher,
-                guard);
+                eventPublisher);
     }
 
     @Test
@@ -109,20 +105,8 @@ class ActionDispatchServiceTest {
     }
 
     @Test
-    void dispatch_claimRejected_skipsHandlerAndPublish() {
-        when(bindingIndex.get(1L, "fraud_check"))
-                .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
-        when(guard.claim(any())).thenReturn(false);   // 已被占坑（重复 eventId）
-
-        service.dispatch(42L, 1L, "evt-001", "fraud_check",
-                List.of(new Decision("REJECT", "", 10, 1L)));
-
-        verifyNoInteractions(stubHandler);
-        verify(eventPublisher, never()).publish(any());
-    }
-
-    @Test
-    void dispatch_handlerFailed_releasesClaimForRetry() {
+    void dispatch_handlerFailed_stillPublishesEvent() {
+        // best-effort：失败不重试不释放，但仍发布 ActionExecutedEvent 落库记录结果
         when(bindingIndex.get(1L, "fraud_check"))
                 .thenReturn(List.of(new SceneActionBindingRow("BLOCK_TRANSACTION", null)));
         when(stubHandler.execute(any()))
@@ -131,7 +115,6 @@ class ActionDispatchServiceTest {
         service.dispatch(42L, 1L, "evt-001", "fraud_check",
                 List.of(new Decision("REJECT", "", 10, 1L)));
 
-        verify(guard).release(anyString());
         verify(eventPublisher).publish(argThat(o -> o instanceof ActionExecutedEvent ae
                 && "FAILED".equals(ae.result().status().name())));
     }

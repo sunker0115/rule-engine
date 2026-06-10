@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.eval;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.action.ActionIdempotencyGuard;
 import com.sstlfsj.rule.eval.internal.action.SceneActionBindingIndex;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
@@ -44,7 +43,6 @@ import java.util.concurrent.Executors;
 @ComponentScan("com.sstlfsj.rule.eval.internal")
 @org.springframework.boot.context.properties.EnableConfigurationProperties({
         com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
-        com.sstlfsj.rule.eval.internal.action.ActionIdempotencyProperties.class,
         com.sstlfsj.rule.eval.internal.TraceProperties.class,
         com.sstlfsj.rule.eval.internal.async.AuditProperties.class})
 public class EvalAutoConfiguration {
@@ -203,8 +201,7 @@ public class EvalAutoConfiguration {
     public ActionDispatchService actionDispatchService(
             @Autowired(required = false) List<ActionHandler> actionHandlers,
             SceneActionBindingIndex bindingIndex,
-            DomainEventPublisher eventPublisher,
-            ActionIdempotencyGuard idempotencyGuard) {
+            DomainEventPublisher eventPublisher) {
         Map<String, ActionHandler> handlerMap = new HashMap<>();
         if (actionHandlers != null) {
             for (ActionHandler handler : actionHandlers) {
@@ -214,6 +211,6 @@ public class EvalAutoConfiguration {
                 }
             }
         }
-        return new ActionDispatchService(handlerMap, bindingIndex, eventPublisher, idempotencyGuard);
+        return new ActionDispatchService(handlerMap, bindingIndex, eventPublisher);
     }
 }

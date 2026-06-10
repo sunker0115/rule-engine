@@ -64,10 +64,6 @@ engine:
     action:
       # 规划中：action 派发超时未实现
       default-timeout-ms: 3000
-      idempotency:
-        # 幂等用进程内 Caffeine（无 Redis，best-effort：重启丢/多实例不共享，TTL 内去重）
-        ttl-seconds: 600
-        max-size: 100000
     # 规划中：数据保留/清理 job 未实现
     retention:
       evaluation-session-days: 90

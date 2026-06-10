@@ -24,16 +24,13 @@ public class ActionDispatchService {
     private final Map<String, ActionHandler> handlers;
     private final SceneActionBindingIndex bindingIndex;
     private final DomainEventPublisher eventPublisher;
-    private final ActionIdempotencyGuard idempotencyGuard;
 
     public ActionDispatchService(Map<String, ActionHandler> handlers,
                                  SceneActionBindingIndex bindingIndex,
-                                 DomainEventPublisher eventPublisher,
-                                 ActionIdempotencyGuard idempotencyGuard) {
+                                 DomainEventPublisher eventPublisher) {
         this.handlers = handlers;
         this.bindingIndex = bindingIndex;
         this.eventPublisher = eventPublisher;
-        this.idempotencyGuard = idempotencyGuard;
     }
 
     /**
@@ -56,15 +53,8 @@ public class ActionDispatchService {
         for (Decision decision : hitDecisions) {
             for (SceneActionBindingRow binding : bindings) {
                 String actionId = binding.actionType();   // 确定化：schema uk_scene_action 保证 scene 内 actionType 唯一
-                String key = tenantId + ":" + eventId + ":" + decision.code() + ":" + actionId;
-                if (!idempotencyGuard.claim(key)) {
-                    log.debug("action 幂等跳过 key={}", key);   // TTL 内已派发，跳过执行与落库
-                    continue;
-                }
                 ActionResult result = executeHandler(actionId, binding, decision);
-                if (result.status() == ActionResult.ActionStatus.FAILED) {
-                    idempotencyGuard.release(key);   // 失败释放，让后续重发能重试
-                }
+                // best-effort fire-and-forget：不做进程内幂等占坑,重复防护降级为落库 uk_idempotency（ON DUPLICATE KEY 吞重）
                 eventPublisher.publish(new ActionExecutedEvent(
                         sessionId, tenantId, eventId, actionId, binding.actionType(),
                         decision.code(), result));
