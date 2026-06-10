@@ -91,7 +91,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         EvalOutcome outcome = evalEngine.evaluateWithContext(event, candidates, evalNow);
         EvalResult result = outcome.result();
 
-        // 副作用事件化：审计内存 best-effort（可丢）；action 命中有决策时持久投递（at-least-once，不丢）
+        // 副作用事件化：审计内存 best-effort（可丢）；action 命中有决策时 best-effort fire-and-forget 派发（队列满/重启丢，不重试；可靠投递未来接 MQ）
         int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
         eventPublisher.publish(new AuditRecordedEvent(
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs));

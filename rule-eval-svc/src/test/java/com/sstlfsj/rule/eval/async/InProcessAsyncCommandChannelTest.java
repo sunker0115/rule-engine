@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -26,5 +27,21 @@ class InProcessAsyncCommandChannelTest {
         channel.destroy();
 
         verify(svc, times(1)).dispatch(7L, 1L, "e1", "s", List.of());
+    }
+
+    @Test
+    void queueFull_dropsAndCounts_withoutThrowing() throws Exception {
+        ActionDispatchService svc = mock(ActionDispatchService.class);
+        // capacity=1 + 超长 flush 间隔：消费者短期不排空，灌入超量必触发队列满丢弃
+        InProcessAsyncCommandChannel channel = new InProcessAsyncCommandChannel(1, 200, 60_000, svc);
+        channel.afterPropertiesSet();
+        try {
+            for (int i = 0; i < 50; i++) {
+                channel.deliver(new DispatchActionsCommand(7L, 1L, "e" + i, "s", List.of()));
+            }
+            assertThat(channel.droppedCount()).isGreaterThan(0);   // 满后丢弃被计数,不抛
+        } finally {
+            channel.destroy();
+        }
     }
 }

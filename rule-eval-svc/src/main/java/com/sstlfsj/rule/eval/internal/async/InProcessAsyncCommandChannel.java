@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.eval.internal.async;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * {@link ActionCommandChannel} 的本期实现：进程内异步队列 + 虚拟线程消费，best-effort 派发 action。
@@ -21,10 +24,14 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class InProcessAsyncCommandChannel
         implements ActionCommandChannel, InitializingBean, DisposableBean {
 
+    private static final Logger log = LoggerFactory.getLogger(InProcessAsyncCommandChannel.class);
+
     private final int queueCapacity;
     private final int batchSize;
     private final long flushIntervalMs;
     private final ActionDispatchService dispatchService;
+    /** 队列满丢弃累计计数(best-effort 可丢,但不能无声)。 */
+    private final AtomicLong droppedCount = new AtomicLong();
 
     private LinkedBlockingQueue<DispatchActionsCommand> queue;
     private volatile boolean running = false;
@@ -52,7 +59,17 @@ public class InProcessAsyncCommandChannel
 
     @Override
     public void deliver(DispatchActionsCommand event) {
-        queue.offer(event);   // 非阻塞入队，best-effort
+        // 非阻塞入队，best-effort：队列满则丢弃，但累计计数 + WARN，不静默
+        if (!queue.offer(event)) {
+            long dropped = droppedCount.incrementAndGet();
+            log.warn("action 派发队列已满(capacity={})，丢弃命令 eventId={}（best-effort，累计丢弃 {} 条）",
+                    queueCapacity, event.eventId(), dropped);
+        }
+    }
+
+    /** 队列满累计丢弃数(供监控/测试观测)。 */
+    public long droppedCount() {
+        return droppedCount.get();
     }
 
     private void consumeLoop() {
