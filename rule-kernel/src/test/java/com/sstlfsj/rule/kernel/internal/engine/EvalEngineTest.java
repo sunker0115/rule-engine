@@ -110,6 +110,30 @@ class EvalEngineTest {
     }
 
     @Test
+    void finalDecision_carriesNameAndActionsFromBinding() {
+        // boolean 规则命中 → resolveRuleDecisions 回退路径从 binding 取 name/actions(修 name 永远空串 bug)
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "SEND_ALERT", 0, Map.of());
+        RuleVersionSnapshot.DecisionBinding binding =
+                new RuleVersionSnapshot.DecisionBinding("REJECT", "拒绝", 10, List.of(action));
+        SceneRuleIndex index = new SceneRuleIndex();
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "scene", "t1",
+                EMPTY_AND, List.of(), List.of(binding), List.of(), "AST_BOOLEAN");
+        index.update("t1", "scene", "*", List.of(snap));
+
+        // AST_BOOLEAN 真实语义:命中但 hitDecisions 空 → resolveRuleDecisions 走 binding 回退赋决策
+        RuleVersionExecutor boolHit = (s, c) ->
+                new EvalResult(true, null, List.of(), List.of(), null, List.of(), null, null, null);
+        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
+        EvalEngine engine = new EvalEngine(index, asm, Map.of(),
+                Map.of("AST_BOOLEAN", boolHit), true);
+        EvalResult r = engine.evaluate(event("t1", "scene", "EVT"));
+
+        assertEquals("拒绝", r.finalDecision().name());          // 不再是空串
+        assertEquals(List.of(action), r.finalDecision().actions());   // actions 透传供派发
+    }
+
+    @Test
     void evaluate_unregisteredPreGate_failClosed_returnsMiss() {
         // 配了一个未注册的 gateType(注册表为空),fail-closed:视为拦截而非静默放行
         SceneRuleIndex index = new SceneRuleIndex();

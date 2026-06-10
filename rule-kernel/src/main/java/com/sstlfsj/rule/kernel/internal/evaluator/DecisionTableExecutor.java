@@ -120,7 +120,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
         Decision decision = snapshot.decisionBindings().stream()
                 .filter(b -> b.decisionCode().equals(decisionCode))
                 .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                .map(b -> new Decision(b.decisionCode(), "", b.priority(), snapshot.ruleVersionId()))
+                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), null, b.actions()))
                 .orElseGet(() -> new Decision(decisionCode, "", 0, snapshot.ruleVersionId()));
         return new EvalResult(true, decision, List.of(decision),
                 traces(sink), null, List.of(), null, null, decisionCode);
