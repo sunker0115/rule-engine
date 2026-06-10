@@ -114,7 +114,8 @@ public class RuleExportService {
                     scene != null ? scene.getCode() : null,
                     rv.getConditionAst(), rv.getDecisionBindings(),
                     rv.getPreGates(), rv.getTriggerEventTypes(),
-                    rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of()));
+                    rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of(),
+                    rv.getPayloadDependencies() != null ? rv.getPayloadDependencies() : List.of()));
         }
 
         return new RuleBundle(1, Instant.now().toString(), tenantIdStr,

@@ -152,6 +152,7 @@ class MetadataServiceIntegrationTest {
         v.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         v.setTriggerEventTypes(List.of("e"));
         v.setMetricDependencies(metricDeps);
+        v.setPayloadDependencies(java.util.List.of());
         v.setStatus(RuleVersionStatus.ACTIVE);
         return v;
     }

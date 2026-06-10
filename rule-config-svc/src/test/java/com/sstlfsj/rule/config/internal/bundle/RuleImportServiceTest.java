@@ -17,6 +17,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
@@ -60,7 +61,8 @@ class RuleImportServiceTest {
                 new AndNode(List.of(), null, null),
                 List.of(new DecisionBinding("BLOCK", 100)),
                 List.of(), List.of("transfer"),
-                List.of(new MetricDependency("account.age", 1)));
+                List.of(new MetricDependency("account.age", 1)),
+                List.of(new PayloadDependency("amount", "NUMBER", true)));
     }
 
     private RuleBundle bundle(String metricSourceType, String... ruleCodes) {

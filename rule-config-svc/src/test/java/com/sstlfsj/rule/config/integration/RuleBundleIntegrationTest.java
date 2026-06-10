@@ -128,6 +128,7 @@ class RuleBundleIntegrationTest {
         rv.setPreGates(java.util.List.of()); rv.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         rv.setTriggerEventTypes(java.util.List.of("transfer"));
         rv.setMetricDependencies(java.util.List.of(new MetricDependency("account.age", 1)));
+        rv.setPayloadDependencies(java.util.List.of());
         rv.setStatus(RuleVersionStatus.ACTIVE); rv.setPublishedBy("seed"); rv.setPublishedAt(LocalDateTime.now());
         rv.setCreatedAt(LocalDateTime.now());
         ruleVersionMapper.insert(rv);

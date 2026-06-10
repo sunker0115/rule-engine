@@ -14,6 +14,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
@@ -64,6 +65,7 @@ class RuleExportServiceTest {
         v.setPreGates(List.of());
         v.setTriggerEventTypes(List.of("transfer"));
         v.setMetricDependencies(List.of(new MetricDependency("account.age", 1)));
+        v.setPayloadDependencies(List.of(new PayloadDependency("amount", "NUMBER", true)));
         return v;
     }
 
@@ -112,6 +114,8 @@ class RuleExportServiceTest {
         assertThat(b.rules()).hasSize(2);
         assertThat(b.rules()).extracting(RuleBundle.RuleEntry::code).containsExactlyInAnyOrder("a", "b");
         assertThat(b.rules().getFirst().sceneCode()).isEqualTo("risk.transfer");
+        assertThat(b.rules().getFirst().payloadDependencies())
+                .containsExactly(new PayloadDependency("amount", "NUMBER", true));
         assertThat(b.scenes()).hasSize(1);                       // 去重
         assertThat(b.metricDefinitions()).hasSize(1);            // 去重
         assertThat(b.decisionDefinitions()).hasSize(1);          // 去重

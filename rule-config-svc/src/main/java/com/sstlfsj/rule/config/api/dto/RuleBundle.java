@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.api.dto;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
@@ -14,7 +15,8 @@ import java.util.Map;
  * <p>多规则结构：{@code rules} 为本次导出的规则版本集合，{@code scenes} / {@code metricDefinitions} /
  * {@code decisionDefinitions} 为跨规则去重的依赖定义，{@code actionTypeManifest} 为去重 actionType 清单。
  * 所有结构化字段（conditionAst / decisionBindings / preGates / triggerEventTypes /
- * payloadSchema / eventTypes / defaultParams / actions）以 typed 对象无损搬运，
+ * payloadSchema / eventTypes / defaultParams / actions / metricDependencies /
+ * payloadDependencies）以 typed 对象无损搬运，
  * 持久层 TypeHandler 负责 JSON 列序列化，导入端不做重解析。</p>
  *
  * @param bundleVersion       Bundle schema 版本，当前固定 1
@@ -46,7 +48,8 @@ public record RuleBundle(
             List<DecisionBinding> decisionBindings,
             List<PreGateConfig> preGates,
             List<String> triggerEventTypes,
-            List<MetricDependency> metricDependencies
+            List<MetricDependency> metricDependencies,
+            List<PayloadDependency> payloadDependencies
     ) {}
 
     /** Scene 快照，对应 scene 表可重建字段。 */

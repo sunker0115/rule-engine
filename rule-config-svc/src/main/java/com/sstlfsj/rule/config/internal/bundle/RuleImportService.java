@@ -196,6 +196,7 @@ public class RuleImportService {
             rv.setKind(kind);
             rv.setTriggerEventTypes(rule.triggerEventTypes() != null ? rule.triggerEventTypes() : java.util.List.of());
             rv.setMetricDependencies(rule.metricDependencies() != null ? rule.metricDependencies() : java.util.List.of());
+            rv.setPayloadDependencies(rule.payloadDependencies() != null ? rule.payloadDependencies() : java.util.List.of());
             rv.setStatus(RuleVersionStatus.DRAFT);
             rv.setCreatedAt(LocalDateTime.now());
             ruleVersionMapper.insert(rv);
