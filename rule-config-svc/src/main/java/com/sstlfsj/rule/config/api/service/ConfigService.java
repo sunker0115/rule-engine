@@ -113,4 +113,23 @@ public interface ConfigService {
             AstNode conditionAst, List<DecisionBinding> decisionBindings,
             List<PreGateConfig> preGates, List<String> triggerEventTypes,
             Long fromVersionId, String actorId);
+
+    /**
+     * 删整条未发布规则（级联删 rule_definition + 全部 rule_version）：仅当从未发布过。
+     *
+     * @param tenantId 租户 ID
+     * @param ruleId   规则定义 ID
+     * @param actorId  操作人 ID
+     */
+    void deleteRule(String tenantId, Long ruleId, String actorId);
+
+    /**
+     * 删单个待发布草稿版本：仅当该版本是 DRAFT（线上 ACTIVE/SUPERSEDED 不动）。
+     *
+     * @param tenantId  租户 ID
+     * @param ruleId    规则定义 ID
+     * @param versionId 待删版本 ID（须归属该规则）
+     * @param actorId   操作人 ID
+     */
+    void deleteDraftVersion(String tenantId, Long ruleId, Long versionId, String actorId);
 }

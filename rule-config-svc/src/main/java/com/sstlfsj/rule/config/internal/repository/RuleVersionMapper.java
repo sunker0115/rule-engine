@@ -84,4 +84,17 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
                 .eq(RuleVersion::getStatus, RuleVersionStatus.ACTIVE)
                 .set(RuleVersion::getStatus, RuleVersionStatus.SUPERSEDED));
     }
+
+    /** 该规则是否存在非 DRAFT 版本（判定"是否曾发布"）。 */
+    default boolean hasNonDraftVersion(Long ruleDefinitionId) {
+        return selectCount(new LambdaQueryWrapper<RuleVersion>()
+                .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId)
+                .ne(RuleVersion::getStatus, RuleVersionStatus.DRAFT)) > 0;
+    }
+
+    /** 删除该规则下全部版本行，返回删除行数。 */
+    default int deleteByRuleDefinitionId(Long ruleDefinitionId) {
+        return delete(new LambdaQueryWrapper<RuleVersion>()
+                .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId));
+    }
 }

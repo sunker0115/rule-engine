@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -164,6 +165,32 @@ class RuleControllerTest {
                             {"name":"v3","kind":"AST_BOOLEAN"}
                             """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deleteRule_returns200_andCallsService() throws Exception {
+        doNothing().when(configService).deleteRule(any(), any(), any());
+
+        mockMvc.perform(delete("/admin/v1/rules/10")
+                        .param("tenantId", "t1")
+                        .header("X-Actor-Id", "user1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(configService).deleteRule("t1", 10L, "user1");
+    }
+
+    @Test
+    void deleteDraftVersion_returns200_andCallsService() throws Exception {
+        doNothing().when(configService).deleteDraftVersion(any(), any(), any(), any());
+
+        mockMvc.perform(delete("/admin/v1/rules/10/versions/100")
+                        .param("tenantId", "t1")
+                        .header("X-Actor-Id", "user1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(configService).deleteDraftVersion("t1", 10L, 100L, "user1");
     }
 
     @Test

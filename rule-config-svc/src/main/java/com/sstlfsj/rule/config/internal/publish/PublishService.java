@@ -262,6 +262,62 @@ public class PublishService {
     }
 
     /**
+     * 删整条未发布规则：仅当从未发布过（无 ACTIVE/SUPERSEDED 版本）→ 级联删 rule_definition + 全部 rule_version。
+     * <p>
+     * 已发布过的规则（存在非 DRAFT 版本）一律拒删——线上引用完整性红线，请改用禁用。
+     * </p>
+     *
+     * @param tenantId         租户 id
+     * @param ruleDefinitionId 规则定义 id
+     * @param actorId          操作人
+     */
+    @Transactional
+    public void deleteRule(Long tenantId, Long ruleDefinitionId, String actorId) {
+        RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
+        if (rule == null || !tenantId.equals(rule.getTenantId())) {
+            throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
+        }
+        if (ruleVersionMapper.hasNonDraftVersion(ruleDefinitionId)) {
+            throw new IllegalArgumentException("规则已发布过（存在 ACTIVE/SUPERSEDED 版本），不可删除；请改用禁用");
+        }
+        RuleStatusSnapshot snap = new RuleStatusSnapshot(
+                ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
+        ruleVersionMapper.deleteByRuleDefinitionId(ruleDefinitionId);
+        ruleDefinitionMapper.deleteById(ruleDefinitionId);
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", "DELETE", "rule_definition", ruleDefinitionId.toString(),
+                snap, snap, LocalDateTime.now()));
+    }
+
+    /**
+     * 删单个待发布草稿版本：仅当该 version 是 DRAFT → 删那条 rule_version（线上 ACTIVE/SUPERSEDED 不动）。
+     *
+     * @param tenantId         租户 id
+     * @param ruleDefinitionId 规则定义 id
+     * @param versionId        待删版本 id（须归属该规则）
+     * @param actorId          操作人
+     */
+    @Transactional
+    public void deleteDraftVersion(Long tenantId, Long ruleDefinitionId, Long versionId, String actorId) {
+        RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
+        if (rule == null || !tenantId.equals(rule.getTenantId())) {
+            throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
+        }
+        RuleVersion version = ruleVersionMapper.findByIdAndRule(versionId, ruleDefinitionId);
+        if (version == null) {
+            throw new IllegalArgumentException("版本不存在: versionId=" + versionId);
+        }
+        if (version.getStatus() != RuleVersionStatus.DRAFT) {
+            throw new IllegalArgumentException("只能删除 DRAFT 版本，当前状态: " + version.getStatus());
+        }
+        ruleVersionMapper.deleteById(versionId);
+        DraftCreatedSnapshot snap = new DraftCreatedSnapshot(ruleDefinitionId, versionId);
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", "DELETE", "rule_version", versionId.toString(),
+                snap, snap, LocalDateTime.now()));
+    }
+
+    /**
      * 草稿解析+校验产出：已冻结的 rule_version 内容字段（resolvedAst 含 dataType、
      * metricDeps/payloadDeps 已冻、decisionBindings 含 name/actions、triggerEventTypes/preGates 规整）。
      */

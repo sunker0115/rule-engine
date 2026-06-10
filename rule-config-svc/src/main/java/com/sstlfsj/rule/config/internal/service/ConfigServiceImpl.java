@@ -136,6 +136,16 @@ class ConfigServiceImpl implements ConfigService {
                 conditionAst, decisionBindings, preGates, triggerEventTypes, fromVersionId, actorId);
     }
 
+    @Override
+    public void deleteRule(String tenantId, Long ruleId, String actorId) {
+        publishService.deleteRule(Long.valueOf(tenantId), ruleId, actorId);
+    }
+
+    @Override
+    public void deleteDraftVersion(String tenantId, Long ruleId, Long versionId, String actorId) {
+        publishService.deleteDraftVersion(Long.valueOf(tenantId), ruleId, versionId, actorId);
+    }
+
     /** 解析 kind 字符串为 RuleKind，null/空返回 null（由下游兜底 AST_BOOLEAN），非法抛 IllegalArgumentException。 */
     private static RuleKind parseKind(String kind) {
         if (kind == null || kind.isBlank()) {

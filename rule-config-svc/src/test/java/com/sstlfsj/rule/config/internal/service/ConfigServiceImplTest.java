@@ -249,4 +249,20 @@ class ConfigServiceImplTest {
                 .hasMessageContaining("不支持的规则 kind");
         verifyNoInteractions(publishService);
     }
+
+    @Test
+    void deleteRule_delegatesWithTenantIdConvertedToLong() {
+        configService.deleteRule("1", 10L, "actor");
+
+        // tenantId 字符串 "1" 转 Long 后透传 publishService
+        verify(publishService).deleteRule(1L, 10L, "actor");
+    }
+
+    @Test
+    void deleteDraftVersion_delegatesWithTenantIdConvertedToLong() {
+        configService.deleteDraftVersion("1", 10L, 100L, "actor");
+
+        // tenantId 字符串 "1" 转 Long 后透传 publishService，versionId 原样透传
+        verify(publishService).deleteDraftVersion(1L, 10L, 100L, "actor");
+    }
 }

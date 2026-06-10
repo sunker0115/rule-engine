@@ -135,6 +135,42 @@ public class RuleController {
     }
 
     /**
+     * DELETE /admin/v1/rules/{ruleId} — 删整条未发布规则（级联删定义 + 全部版本）。
+     *
+     * @param ruleId   规则 ID
+     * @param tenantId 租户
+     * @param actorId  操作人
+     * @return 空数据
+     */
+    @DeleteMapping("/{ruleId}")
+    public ApiResponse<Void> deleteRule(
+            @PathVariable Long ruleId,
+            @RequestParam String tenantId,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        configService.deleteRule(tenantId, ruleId, actorId);
+        return ApiResponse.ok(null);
+    }
+
+    /**
+     * DELETE /admin/v1/rules/{ruleId}/versions/{versionId} — 删单个待发布草稿版本。
+     *
+     * @param ruleId    规则 ID
+     * @param versionId 待删版本 ID
+     * @param tenantId  租户
+     * @param actorId   操作人
+     * @return 空数据
+     */
+    @DeleteMapping("/{ruleId}/versions/{versionId}")
+    public ApiResponse<Void> deleteDraftVersion(
+            @PathVariable Long ruleId,
+            @PathVariable Long versionId,
+            @RequestParam String tenantId,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        configService.deleteDraftVersion(tenantId, ruleId, versionId, actorId);
+        return ApiResponse.ok(null);
+    }
+
+    /**
      * GET /admin/v1/rules — 查询规则列表，支持 sceneCode / status 过滤与分页。
      *
      * @param tenantId  租户 ID

@@ -447,4 +447,48 @@ class PublishServiceTest {
         assertThat(((ConditionNode) cap.getValue().getConditionAst()).metricCode()).isEqualTo("amount");
     }
 
+    @Test
+    void deleteRule_neverPublished_cascadeDeletes() {
+        draftRule.setStatus(RuleDefinitionStatus.DRAFT);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(ruleVersionMapper.hasNonDraftVersion(10L)).thenReturn(false);
+        when(ruleVersionMapper.deleteByRuleDefinitionId(10L)).thenReturn(1);
+        when(ruleDefinitionMapper.deleteById(10L)).thenReturn(1);
+
+        publishService.deleteRule(1L, 10L, "actor");
+
+        verify(ruleVersionMapper).deleteByRuleDefinitionId(10L);
+        verify(ruleDefinitionMapper).deleteById(10L);
+    }
+
+    @Test
+    void deleteRule_published_rejected() {
+        draftRule.setStatus(RuleDefinitionStatus.PUBLISHED);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(ruleVersionMapper.hasNonDraftVersion(10L)).thenReturn(true);
+        assertThatThrownBy(() -> publishService.deleteRule(1L, 10L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("已发布");
+        verify(ruleDefinitionMapper, never()).deleteById((Long) any());
+    }
+
+    @Test
+    void deleteDraftVersion_draftStatus_deletesRow() {
+        draftVersion.setStatus(RuleVersionStatus.DRAFT);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(ruleVersionMapper.findByIdAndRule(100L, 10L)).thenReturn(draftVersion);
+        when(ruleVersionMapper.deleteById(100L)).thenReturn(1);
+        publishService.deleteDraftVersion(1L, 10L, 100L, "actor");
+        verify(ruleVersionMapper).deleteById(100L);
+    }
+
+    @Test
+    void deleteDraftVersion_nonDraft_rejected() {
+        draftVersion.setStatus(RuleVersionStatus.ACTIVE);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(ruleVersionMapper.findByIdAndRule(100L, 10L)).thenReturn(draftVersion);
+        assertThatThrownBy(() -> publishService.deleteDraftVersion(1L, 10L, 100L, "actor"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("DRAFT");
+        verify(ruleVersionMapper, never()).deleteById((Long) any());
+    }
+
 }

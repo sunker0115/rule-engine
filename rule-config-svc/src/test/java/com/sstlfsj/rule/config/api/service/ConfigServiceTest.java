@@ -61,6 +61,16 @@ class ConfigServiceTest {
                 Long fromVersionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
+
+        @Override
+        public void deleteRule(String tenantId, Long ruleId, String actorId) {
+            throw new UnsupportedOperationException("stub");
+        }
+
+        @Override
+        public void deleteDraftVersion(String tenantId, Long ruleId, Long versionId, String actorId) {
+            throw new UnsupportedOperationException("stub");
+        }
     };
 
     @Test
@@ -106,5 +116,17 @@ class ConfigServiceTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.newVersion("t1", 1L, "名", "AST_BOOLEAN",
                         null, null, null, null, null, "actor"));
+    }
+
+    @Test
+    void deleteRule_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.deleteRule("t1", 1L, "actor"));
+    }
+
+    @Test
+    void deleteDraftVersion_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.deleteDraftVersion("t1", 1L, 100L, "actor"));
     }
 }

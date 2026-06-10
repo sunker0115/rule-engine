@@ -58,4 +58,18 @@ class RuleVersionMapperTest {
         assertTrue(m.isDefault(), "findActiveWithPayloadByRuleDefIds 应为 default 方法");
         assertEquals(java.util.List.class, m.getReturnType());
     }
+
+    @Test
+    void hasNonDraftVersion_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod("hasNonDraftVersion", Long.class);
+        assertTrue(m.isDefault(), "hasNonDraftVersion 应为 default 方法");
+        assertEquals(boolean.class, m.getReturnType());
+    }
+
+    @Test
+    void deleteByRuleDefinitionId_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod("deleteByRuleDefinitionId", Long.class);
+        assertTrue(m.isDefault(), "deleteByRuleDefinitionId 应为 default 方法");
+        assertEquals(int.class, m.getReturnType());
+    }
 }
