@@ -178,4 +178,37 @@ class TraceWriterDbImplTest {
                 && "score>=0".equals(list.get(0).getDisplayLabel())
                 && "{\"threshold\":0}".equals(list.get(0).getParams())));
     }
+
+    @Test
+    void flushBatch_jsonEncodesStringActualValue() throws Exception {
+        NodeTraceMapper mapper = mock(NodeTraceMapper.class);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
+        w.afterPropertiesSet();
+
+        // actual_value 是 JSON 列:字符串值须 JSON 编码("US" → "\"US\""),
+        // 裸 toString 产生非法 JSON("US")会让整批 insert 被 MySQL 拒(回归)
+        NodeTrace leaf = new NodeTrace("ConditionNode", "IN", "country", true, "US", "PAYLOAD",
+                null, null, 7L, List.of("US", "RU"), "高风险国家");
+        w.write("1", "42", List.of(leaf));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
+                list.size() == 1 && "\"US\"".equals(list.get(0).getActualValue())));
+    }
+
+    @Test
+    void flushBatch_numericActualValue_staysValidJson() throws Exception {
+        NodeTraceMapper mapper = mock(NodeTraceMapper.class);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
+        w.afterPropertiesSet();
+
+        // 数值不带引号,仍是合法 JSON 数字(5000 → "5000")
+        NodeTrace leaf = new NodeTrace("ConditionNode", "GT", "amount", true, 5000, "PAYLOAD",
+                null, null, 7L, Map.of("threshold", 1000), "金额>1000");
+        w.write("1", "42", List.of(leaf));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
+                list.size() == 1 && "5000".equals(list.get(0).getActualValue())));
+    }
 }
