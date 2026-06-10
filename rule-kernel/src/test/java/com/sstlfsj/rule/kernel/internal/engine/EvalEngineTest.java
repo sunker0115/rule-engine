@@ -110,6 +110,24 @@ class EvalEngineTest {
     }
 
     @Test
+    void evaluate_unregisteredPreGate_failClosed_returnsMiss() {
+        // 配了一个未注册的 gateType(注册表为空),fail-closed:视为拦截而非静默放行
+        SceneRuleIndex index = new SceneRuleIndex();
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "scene", "t1",
+                EMPTY_AND,
+                List.of(new RuleVersionSnapshot.PreGateConfig("UNKNOWN_GATE", Map.of())),
+                List.of(new RuleVersionSnapshot.DecisionBinding("BLOCK", 10)),
+                List.of(), "AST_BOOLEAN");
+        index.update("t1", "scene", "*", List.of(snap));
+
+        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
+        EvalEngine engine = new EvalEngine(index, asm,
+                Map.of(),   // 空注册表:UNKNOWN_GATE 无对应 PreGate 实现
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
+        assertFalse(engine.evaluate(event("t1", "scene", "EVT")).ruleHit());
+    }
+
+    @Test
     void evaluateWithContext_directCandidates_skipsIndexLookup() {
         EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
         EvalEngine engine = new EvalEngine(new SceneRuleIndex(), asm, Map.of(),

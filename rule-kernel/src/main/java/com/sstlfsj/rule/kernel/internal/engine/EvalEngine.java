@@ -265,7 +265,9 @@ public class EvalEngine {
     private String applyPreGates(RuleEvent event, RuleVersionSnapshot snap) {
         for (RuleVersionSnapshot.PreGateConfig cfg : snap.preGates()) {
             PreGate gate = preGates.get(cfg.gateType());
-            if (gate == null) continue;
+            // fail-closed:未注册的 gateType 视为拦截(blockedBy=gateType),不静默放行——
+            // 配了已砍/未实装的 gate 应被挡住而非漏过(发布期已拒此类配置,此为运行期兜底)
+            if (gate == null) return cfg.gateType();
             PreGateContext pCtx = new PreGateContext(
                     event.tenantId(), event.sceneCode(), event.subjectId(),
                     event, snap.ruleVersionId(), cfg.params());
