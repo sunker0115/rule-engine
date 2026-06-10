@@ -19,9 +19,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
-/** 发布期 payload 引用校验：valueRef=PAYLOAD 字段必须在 scene.payloadSchema 声明。 */
+/** 草稿期 payload 引用校验（premise A）：valueRef=PAYLOAD 字段必须在 scene.payloadSchema 声明。 */
 @ExtendWith(MockitoExtension.class)
 class PublishServicePayloadTest {
 
@@ -34,49 +35,31 @@ class PublishServicePayloadTest {
 
     @InjectMocks PublishService publishService;
 
-    private RuleDefinition draftRule;
     private SceneDef scene;
-    private RuleVersion draftVersion;
 
     @BeforeEach
     void setUp() {
-        draftRule = new RuleDefinition();
-        draftRule.setId(10L);
-        draftRule.setTenantId(1L);
-        draftRule.setSceneId(5L);
-        draftRule.setCode("rule.demo");
-        draftRule.setName("测试规则");
-        draftRule.setStatus(RuleDefinitionStatus.DRAFT);
-        draftRule.setKind(RuleKind.AST_BOOLEAN);
-
         scene = new SceneDef();
         scene.setId(5L);
+        scene.setTenantId(1L);
         scene.setCode("PAYMENT");
         scene.setEventTypes(java.util.List.of("payment.initiated"));
         scene.setStatus(SceneStatus.ACTIVE);
-
-        draftVersion = new RuleVersion();
-        draftVersion.setId(100L);
-        draftVersion.setRuleDefinitionId(10L);
-        draftVersion.setVersion(0L);
-        draftVersion.setDecisionBindings(List.of());
-        draftVersion.setPreGates(List.of());
-        draftVersion.setStatus(RuleVersionStatus.DRAFT);
     }
 
     @Test
-    void publish_payloadFieldNotDeclaredInSchema_throws() {
-        // 规则引用 payload 字段 amount，但 scene.payloadSchema 只声明了 channel → 发布拒绝
-        draftVersion.setConditionAst(new ConditionNode("GT", "amount", null,
-                Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD));
+    void createDraft_payloadFieldNotDeclaredInSchema_throws() {
+        // 规则引用 payload 字段 amount，但 scene.payloadSchema 只声明了 channel → 建草稿即拒绝（premise A）
         scene.setPayloadSchema(List.of(
                 new PayloadFieldSpec("channel", "STRING", false, null, null, null, null, null)));
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
+                .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
 
-        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
-        when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
-
-        assertThatThrownBy(() -> publishService.publish(1L, 10L, "actor"))
+        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.demo", "测试规则",
+                new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD),
+                List.of(), List.of(), List.of(), "AST_BOOLEAN", "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("amount");
     }

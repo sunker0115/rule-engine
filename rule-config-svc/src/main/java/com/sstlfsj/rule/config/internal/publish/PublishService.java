@@ -51,12 +51,18 @@ public class PublishService {
     private com.sstlfsj.rule.config.api.spi.MetricResourceCatalog metricResourceCatalog;
 
     /**
-     * 发布规则：从最新草稿 rule_version 生成正式版本快照。
+     * 发布规则：把最新 DRAFT 版本原地激活（DRAFT→ACTIVE），不增版本、不重解析。
+     * <p>
+     * 草稿在 create/edit/newVersion 时已跑 resolveAndValidate 冻结为完整快照（premise A），
+     * 故发布仅做状态翻转：激活最新 DRAFT 行 + supersede 旧 ACTIVE + 更新 rule_definition 指向。
+     * 不要求规则当前为 DRAFT 状态（已发布规则出新版本后仍 PUBLISHED 但有新 DRAFT 待发布），
+     * 仅要求存在待发布的 DRAFT 版本。
+     * </p>
      *
      * @param tenantId         租户 id
      * @param ruleDefinitionId 规则定义 id
      * @param actorId          操作人（来自 X-Actor-Id header）
-     * @return 新生成的 RuleVersionSnapshot（供 eval-svc 倒排索引热更使用）
+     * @return 被激活版本的 RuleVersionSnapshot（供 eval-svc 倒排索引热更使用）
      */
     @Transactional
     public RuleVersionSnapshot publish(Long tenantId, Long ruleDefinitionId, String actorId) {
@@ -64,63 +70,45 @@ public class PublishService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        if (rule.getStatus() != RuleDefinitionStatus.DRAFT) {
-            throw new IllegalStateException("只有 DRAFT 状态的规则可以发布，当前状态: " + rule.getStatus());
-        }
         SceneDef scene = sceneMapper.selectById(rule.getSceneId());
         if (scene == null) {
             throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
         }
-        RuleVersion draftVersion = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
-        if (draftVersion == null) {
-            throw new IllegalStateException("没有找到草稿版本，请先保存规则草稿");
+        // 加载最新 DRAFT（已是冻结快照，premise A）；无待发布草稿则拒
+        RuleVersion draft = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
+        if (draft == null) {
+            throw new IllegalStateException("没有待发布的草稿版本，请先保存规则草稿");
         }
+        Long previousActiveId = rule.getCurrentVersion();
 
-        RuleKind kind = rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN;
-        ResolvedDraft resolved = resolveAndValidate(
-                tenantId, scene, kind,
-                draftVersion.getConditionAst(),
-                draftVersion.getDecisionBindings(),
-                draftVersion.getPreGates(),
-                draftVersion.getTriggerEventTypes());
+        // 原地激活 DRAFT 行（不增版本、不重解析）
+        draft.setStatus(RuleVersionStatus.ACTIVE);
+        draft.setPublishedBy(actorId);
+        draft.setPublishedAt(LocalDateTime.now());
+        ruleVersionMapper.updateById(draft);
 
-        long newVersion = ruleVersionMapper.maxVersion(ruleDefinitionId) + 1;
-        RuleVersion newRv = new RuleVersion();
-        newRv.setRuleDefinitionId(ruleDefinitionId);
-        newRv.setVersion(newVersion);
-        newRv.setConditionAst(resolved.resolvedAst());
-        newRv.setDecisionBindings(resolved.decisionBindings());
-        newRv.setPreGates(resolved.preGates());
-        newRv.setKind(kind);
-        newRv.setTriggerEventTypes(resolved.triggerEventTypes());
-        newRv.setMetricDependencies(resolved.metricDeps());
-        newRv.setPayloadDependencies(resolved.payloadDeps());
-        newRv.setStatus(RuleVersionStatus.ACTIVE);
-        newRv.setPublishedBy(actorId);
-        newRv.setPublishedAt(LocalDateTime.now());
-        ruleVersionMapper.insert(newRv);
-
-        if (rule.getCurrentVersion() != null) {
-            ruleVersionMapper.markSuperseded(rule.getCurrentVersion());
+        if (previousActiveId != null) {
+            ruleVersionMapper.markSuperseded(previousActiveId);
         }
         RuleStatusSnapshot beforeSnap = new RuleStatusSnapshot(
-                ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
+                ruleDefinitionId, rule.getStatus().name(), previousActiveId);
         rule.setStatus(RuleDefinitionStatus.PUBLISHED);
-        rule.setCurrentVersion(newRv.getId());
+        rule.setCurrentVersion(draft.getId());
         rule.setPublishedBy(actorId);
         rule.setPublishedAt(LocalDateTime.now());
         ruleDefinitionMapper.updateById(rule);
 
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
-                beforeSnap, new RulePublishedSnapshot(newRv.getId(), newVersion), LocalDateTime.now()));
+                beforeSnap, new RulePublishedSnapshot(draft.getId(), draft.getVersion()), LocalDateTime.now()));
 
+        RuleKind kind = rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN;
         RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
-                newRv.getId(), scene.getCode(), String.valueOf(tenantId),
-                resolved.resolvedAst(), List.of(), List.of(), List.of(),
-                kind.name(), resolved.metricDeps(), newRv.getPayloadDependencies());
+                draft.getId(), scene.getCode(), String.valueOf(tenantId),
+                draft.getConditionAst(), List.of(), List.of(), List.of(),
+                kind.name(), draft.getMetricDependencies(), draft.getPayloadDependencies());
         eventPublisher.publishEvent(new RulePublishedEvent(
-                String.valueOf(tenantId), scene.getCode(), newRv.getId()));
+                String.valueOf(tenantId), scene.getCode(), draft.getId()));
         return snapshot;
     }
 
