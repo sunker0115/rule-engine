@@ -113,8 +113,9 @@ public class DryRunTraceWriterDbImpl implements DryRunTraceWriter, InitializingB
             entity.setConditionType(trace.conditionType());
             entity.setMetricCode(trace.metricCode());
             entity.setDisplayLabel(trace.displayLabel());
-            entity.setParams(serializeExpected(trace.expectedValue()));
-            entity.setActualValue(trace.actualValue() == null ? null : trace.actualValue().toString());
+            entity.setParams(toJson(trace.expectedValue()));
+            // actual_value 是 JSON 列:字符串等值须 JSON 编码（裸 toString 对字符串产生非法 JSON,整批 insert 会被 MySQL 拒）
+            entity.setActualValue(toJson(trace.actualValue()));
             entity.setResult(trace.result());
             entity.setErrorCode(trace.errorCode());
             entity.setValueSource(trace.valueSource() == null ? null : com.sstlfsj.rule.kernel.api.model.ValueSource.valueOf(trace.valueSource()));
@@ -129,13 +130,13 @@ public class DryRunTraceWriterDbImpl implements DryRunTraceWriter, InitializingB
         }
     }
 
-    /** 将叶子条件的期望值（ConditionNode.params）序列化为 JSON 写入 params 列；null 或失败返回 null。 */
-    private String serializeExpected(Object expectedValue) {
-        if (expectedValue == null) return null;
+    /** 将值（params / actual_value 等 JSON 列内容）序列化为 JSON 文本；null 或失败返回 null。 */
+    private String toJson(Object value) {
+        if (value == null) return null;
         try {
-            return objectMapper.writeValueAsString(expectedValue);
+            return objectMapper.writeValueAsString(value);
         } catch (JacksonException ex) {
-            log.warn("dry_run_node_trace params 序列化失败,写 null", ex);
+            log.warn("dry_run_node_trace JSON 列序列化失败,写 null", ex);
             return null;
         }
     }
