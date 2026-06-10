@@ -311,6 +311,7 @@ class PublishServiceTest {
         draftScene.setTenantId(1L);
         draftScene.setCode("risk.transfer");
         when(sceneMapper.findByCode(any(), any())).thenReturn(draftScene);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn((RuleDefinition) null);
 
         doAnswer(inv -> {
             RuleDefinition rd = inv.getArgument(0);
@@ -325,10 +326,11 @@ class PublishServiceTest {
         }).when(ruleVersionMapper).insert(any(RuleVersion.class));
 
 
+        // SCORECARD + 空 AndNode 现会被结构校验拒，改用 AST_BOOLEAN + 空 AndNode（无 metric/payload 引用）
         DraftCreatedResult result = publishService.createDraft(
                 1L, "risk.transfer", "rule.test", "测试规则",
                 new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
-                java.util.List.of(), java.util.List.of(), java.util.List.of(), "SCORECARD", "actor1");
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(10L);
         assertThat(result.ruleVersionId()).isEqualTo(20L);
@@ -339,16 +341,19 @@ class PublishServiceTest {
         verify(ruleDefinitionMapper).insert(rdCaptor.capture());
         assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.DRAFT);
         assertThat(rdCaptor.getValue().getCode()).isEqualTo("rule.test");
-        assertThat(rdCaptor.getValue().getKind()).isEqualTo(RuleKind.SCORECARD);
+        assertThat(rdCaptor.getValue().getKind()).isEqualTo(RuleKind.AST_BOOLEAN);
 
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(rvCaptor.capture());
         assertThat(rvCaptor.getValue().getVersion()).isEqualTo(1L);
         assertThat(rvCaptor.getValue().getStatus()).isEqualTo(RuleVersionStatus.DRAFT);
-        assertThat(rvCaptor.getValue().getKind()).isEqualTo(RuleKind.SCORECARD);
+        assertThat(rvCaptor.getValue().getKind()).isEqualTo(RuleKind.AST_BOOLEAN);
         // conditionAst 直传 typed 落库（无 JSON 串来回）
         assertThat(rvCaptor.getValue().getConditionAst())
                 .isInstanceOf(com.sstlfsj.rule.kernel.api.model.ast.AndNode.class);
+        // 无 metric/payload 引用，冻结依赖均为空
+        assertThat(rvCaptor.getValue().getMetricDependencies()).isEmpty();
+        assertThat(rvCaptor.getValue().getPayloadDependencies()).isEmpty();
 
         // CREATE 类审计：before/after 为同一个 typed DraftCreatedSnapshot 实例
         ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
@@ -424,6 +429,50 @@ class PublishServiceTest {
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).insert(rdCaptor.capture());
         assertThat(rdCaptor.getValue().getKind()).isEqualTo(RuleKind.AST_BOOLEAN);
+    }
+
+    @Test
+    void createDraft_freezesMetricAndDecision_intoDraftVersion() {
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        sc.setEventTypes(List.of("payment.initiated"));
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
+                .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
+        doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
+                .when(ruleVersionMapper).insert(any(RuleVersion.class));
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("account.age"); md.setDataType("LONG"); md.setVersion(3); md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+
+        publishService.createDraft(1L, "PAYMENT", "rule.test", "测试",
+                new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0),
+                List.of(), List.of(), List.of(), "AST_BOOLEAN", "actor1");
+
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(cap.capture());
+        RuleVersion frozen = cap.getValue();
+        assertThat(frozen.getStatus()).isEqualTo(RuleVersionStatus.DRAFT);
+        assertThat(frozen.getMetricDependencies()).containsExactly(new MetricDependency("account.age", 3));
+        assertThat(((ConditionNode) frozen.getConditionAst()).dataType()).isEqualTo("LONG");
+    }
+
+    @Test
+    void createDraft_metricNotActive_rejected() {
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
+                .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.test", "测试",
+                new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0),
+                List.of(), List.of(), List.of(), "AST_BOOLEAN", "actor1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ACTIVE");
     }
 
     @Test

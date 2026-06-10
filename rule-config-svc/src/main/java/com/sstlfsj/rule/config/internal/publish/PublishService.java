@@ -318,9 +318,11 @@ public class PublishService {
         RuleDefinition rd = RuleDefinition.draft(tenantId, scene.getId(), code, name, effectiveRuleKind, actorId);
         ruleDefinitionMapper.insert(rd);
 
-        // 5. INSERT rule_version（version=1，status=DRAFT）
-        RuleVersion rv = RuleVersion.draftV1(rd.getId(), conditionAst, decisionBindings, preGates,
-                triggerEventTypes, effectiveRuleKind);
+        // 5. resolveAndValidate（premise A）：建草稿即冻结快照
+        ResolvedDraft resolved = resolveAndValidate(
+                tenantId, scene, effectiveRuleKind,
+                conditionAst, decisionBindings, preGates, triggerEventTypes);
+        RuleVersion rv = buildDraftVersion(rd.getId(), 1L, resolved);
         ruleVersionMapper.insert(rv);
 
         // 6. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 约定）
@@ -333,6 +335,23 @@ public class PublishService {
                 LocalDateTime.now()));
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, RuleDefinitionStatus.DRAFT.name());
+    }
+
+    /** 用冻结内容组装 DRAFT 版本行（createDraft/newVersion 共用）。 */
+    private RuleVersion buildDraftVersion(Long ruleDefinitionId, long version, ResolvedDraft r) {
+        RuleVersion rv = new RuleVersion();
+        rv.setRuleDefinitionId(ruleDefinitionId);
+        rv.setVersion(version);
+        rv.setConditionAst(r.resolvedAst());
+        rv.setDecisionBindings(r.decisionBindings());
+        rv.setPreGates(r.preGates());
+        rv.setKind(r.kind());
+        rv.setTriggerEventTypes(r.triggerEventTypes());
+        rv.setMetricDependencies(r.metricDeps());
+        rv.setPayloadDependencies(r.payloadDeps());
+        rv.setStatus(RuleVersionStatus.DRAFT);
+        rv.setCreatedAt(LocalDateTime.now());
+        return rv;
     }
 
     /**

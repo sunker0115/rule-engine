@@ -42,35 +42,4 @@ public class RuleVersion {
     private String publishedBy;
     private java.time.LocalDateTime publishedAt;
     private java.time.LocalDateTime createdAt;
-
-    /**
-     * 构造首版草稿（version=1，status=DRAFT）。conditionAst 为 null 时兜底为空 AndNode，
-     * 各 list 为 null 时兜底为空列表，metricDependencies 固定为空（草稿尚未冻结依赖）。
-     *
-     * @param ruleDefinitionId  所属规则定义 id
-     * @param conditionAst      条件 AST，null 视为空 AndNode
-     * @param decisionBindings  决策绑定列表，null 视为空
-     * @param preGates          前置门控列表，null 视为空
-     * @param triggerEventTypes 触发事件类型列表，null 视为空
-     * @param kind              规则类型
-     * @return 首版草稿 RuleVersion（id 由插入时回填）
-     */
-    public static RuleVersion draftV1(Long ruleDefinitionId, AstNode conditionAst,
-                                      List<DecisionBinding> decisionBindings, List<PreGateConfig> preGates,
-                                      List<String> triggerEventTypes, RuleKind kind) {
-        RuleVersion rv = new RuleVersion();
-        rv.setRuleDefinitionId(ruleDefinitionId);
-        rv.setVersion(1L);
-        rv.setConditionAst(conditionAst != null ? conditionAst
-                : new com.sstlfsj.rule.kernel.api.model.ast.AndNode(List.of(), null, null));
-        rv.setDecisionBindings(decisionBindings != null ? decisionBindings : List.of());
-        rv.setPreGates(preGates != null ? preGates : List.of());
-        rv.setKind(kind);
-        rv.setTriggerEventTypes(triggerEventTypes != null ? triggerEventTypes : List.of());
-        rv.setMetricDependencies(List.of());
-        rv.setPayloadDependencies(List.of());
-        rv.setStatus(RuleVersionStatus.DRAFT);
-        rv.setCreatedAt(java.time.LocalDateTime.now());
-        return rv;
-    }
 }
