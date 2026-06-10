@@ -21,7 +21,7 @@
 | 建新规则草稿 `createDraft` | v1 | DRAFT | 建时 `resolveAndValidate` |
 | **编辑草稿 `editDraft`** | **不变** | DRAFT | **原地更新**草稿版本内容,重跑 `resolveAndValidate`;只能编辑 DRAFT 版本 |
 | **出新版本 `newVersion`** | v_n+1 | DRAFT | 给已发布规则建新草稿版本;可选「从旧版本 X 克隆内容」(= 回退);建时 `resolveAndValidate` |
-| 发布 `publish` | **不变** | DRAFT→ACTIVE | **只激活** + supersede 旧 ACTIVE + 发 `SceneChangedEvent` 索引热更;**不增版本、不重解析、不重校验** |
+| 发布 `publish` | **不变** | DRAFT→ACTIVE | **只激活** + supersede 旧 ACTIVE + 发 `RulePublishedEvent` 索引热更;**不增版本、不重解析、不重校验** |
 | 回退 `rollback` | v_n+1 | DRAFT→(可发布) | = `newVersion(fromVersionId=旧好版本)`,内容克隆旧版本、按当前世界重解析 → 再 `publish` 激活(supersede 坏版本) |
 | 删草稿 `delete` | — | — | 见 §六 |
 
@@ -42,7 +42,7 @@
 
 **调用点**:`createDraft` / `editDraft` / `newVersion`(三者建/改草稿时都跑)。**`publish` 不再调用它**。
 
-**`publish` 退化为激活**:加载该规则最新 DRAFT 版本(已是冻结快照)→ `status=ACTIVE`、supersede 旧 ACTIVE、`rule_definition.status=PUBLISHED`、发 `SceneChangedEvent`。仅校验激活前置(存在 DRAFT 版本等),**不重解析、不重校验**。
+**`publish` 退化为激活**:加载该规则最新 DRAFT 版本(已是冻结快照)→ `status=ACTIVE`、supersede 旧 ACTIVE、`rule_definition.status=PUBLISHED`、发 `RulePublishedEvent`。仅校验激活前置(存在 DRAFT 版本等),**不重解析、不重校验**。
 
 ## 四、dry-run 重设计
 
@@ -109,7 +109,7 @@ premise A 让"规则 → metric / decision"产生**冻结耦合**(草稿冻结 m
 
 - `resolveAndValidate` 抽取后:createDraft/editDraft/newVersion 产出的草稿都是冻结快照(dataType/metricDeps/payloadDeps/decision 冻结);校验不过则拒(payload 未声明/metric 非 ACTIVE/decision 不存在)。
 - 版本号:editDraft 不增、newVersion +1、publish 不增、rollback +1。
-- publish 激活:DRAFT→ACTIVE + 旧 ACTIVE→SUPERSEDED + SceneChangedEvent;不重解析。
+- publish 激活:DRAFT→ACTIVE + 旧 ACTIVE→SUPERSEDED + RulePublishedEvent;不重解析。
 - dry-run:ruleVersionId→精确版本;ruleId→最新含 DRAFT;都不传→400;**dry-run 不落 evaluation_session、不派发 action**(回归断言)。
 - 删草稿:删整条未发布规则级联删 rule_version;删单个 DRAFT 版本;碰 ACTIVE/SUPERSEDED 拒绝。
 - 回退:从旧版本克隆 → 新版本号 → 内容按当前世界重解析 → publish 激活 supersede 坏版本。
