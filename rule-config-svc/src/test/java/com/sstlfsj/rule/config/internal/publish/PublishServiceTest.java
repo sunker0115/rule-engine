@@ -459,6 +459,17 @@ class PublishServiceTest {
 
         verify(ruleVersionMapper).deleteByRuleDefinitionId(10L);
         verify(ruleDefinitionMapper).deleteById(10L);
+        // D14:删除是破坏性操作，必须发 DELETE 审计事件，before 捕获删前规则状态
+        ArgumentCaptor<Object> evCap = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(evCap.capture());
+        OperationAuditedEvent audit = evCap.getAllValues().stream()
+                .filter(OperationAuditedEvent.class::isInstance)
+                .map(OperationAuditedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(audit.action()).isEqualTo("DELETE");
+        assertThat(audit.targetType()).isEqualTo("rule_definition");
+        assertThat(audit.beforeSnapshot()).isInstanceOf(
+                com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot.class);
     }
 
     @Test
@@ -479,6 +490,17 @@ class PublishServiceTest {
         when(ruleVersionMapper.deleteById(100L)).thenReturn(1);
         publishService.deleteDraftVersion(1L, 10L, 100L, "actor");
         verify(ruleVersionMapper).deleteById(100L);
+        // D14:删单个草稿版本也发 DELETE 审计，targetType=rule_version
+        ArgumentCaptor<Object> evCap = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(evCap.capture());
+        OperationAuditedEvent audit = evCap.getAllValues().stream()
+                .filter(OperationAuditedEvent.class::isInstance)
+                .map(OperationAuditedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(audit.action()).isEqualTo("DELETE");
+        assertThat(audit.targetType()).isEqualTo("rule_version");
+        assertThat(audit.beforeSnapshot()).isInstanceOf(
+                com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot.class);
     }
 
     @Test
