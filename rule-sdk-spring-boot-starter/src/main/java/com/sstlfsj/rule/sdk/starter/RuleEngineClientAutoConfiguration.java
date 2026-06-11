@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ public class RuleEngineClientAutoConfiguration {
     public RuleEngineClient ruleEngineClient(
             SdkProperties props,
             ApplicationContext ctx,
+            ApplicationEventPublisher eventPublisher,
             Optional<EvalResultListener> evalResultListener,
             Optional<EvalSessionListener> evalSessionListener,
             ObjectProvider<MetricSourceHandler> metricHandlers,
@@ -89,6 +91,33 @@ public class RuleEngineClientAutoConfiguration {
             builder.ruleSource(new AnnotationRuleSource(inlineSpecs, props.getTenantId()));
         }
 
+        // 注解规则(@RuleDef + @Condition 方法)装配:扫描 → 合成算子 + 快照
+        com.sstlfsj.rule.sdk.FactResolver factResolver = new com.sstlfsj.rule.sdk.FactResolver();
+        List<Object> annotatedRuleBeans = new ArrayList<>();
+        ctx.getBeansWithAnnotation(com.sstlfsj.rule.kernel.api.annotation.RuleDef.class)
+           .forEach((name, bean) -> {
+               for (java.lang.reflect.Method m : bean.getClass().getMethods()) {
+                   if (m.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.Condition.class)) {
+                       annotatedRuleBeans.add(bean);
+                       break;
+                   }
+               }
+           });
+        if (!annotatedRuleBeans.isEmpty()) {
+            com.sstlfsj.rule.sdk.source.AnnotatedRuleScanner.ScanResult scan =
+                    new com.sstlfsj.rule.sdk.source.AnnotatedRuleScanner(factResolver, props.getTenantId())
+                            .scan(annotatedRuleBeans);
+            scan.evaluators().forEach(builder::addEvaluator);
+            builder.ruleSource(new com.sstlfsj.rule.sdk.source.DslRuleSource(scan.snapshots()));
+        }
+
+        // 动作派发:Spring 事件 sink(甲) + @OnDecision sink(乙),装进 DecisionDispatcher
+        OnDecisionInvoker onDecisionInvoker = new OnDecisionInvoker(
+                factResolver, new ArrayList<>(beansWithOnDecision(ctx)));
+        com.sstlfsj.rule.sdk.DecisionSink springSink = eventPublisher::publishEvent;
+        builder.decisionContextListener(new com.sstlfsj.rule.sdk.DecisionDispatcher(
+                List.of(springSink, onDecisionInvoker)));
+
         // Listener Bean 注入
         evalResultListener.ifPresent(builder::evalResultListener);
         evalSessionListener.ifPresent(builder::evalSessionListener);
@@ -100,5 +129,18 @@ public class RuleEngineClientAutoConfiguration {
         metricDefinitionSources.forEach(builder::metricDefinitionSource);
 
         return builder.build();
+    }
+
+    private static List<Object> beansWithOnDecision(ApplicationContext ctx) {
+        List<Object> result = new ArrayList<>();
+        for (Object bean : ctx.getBeansOfType(Object.class).values()) {
+            for (java.lang.reflect.Method m : bean.getClass().getMethods()) {
+                if (m.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.OnDecision.class)) {
+                    result.add(bean);
+                    break;
+                }
+            }
+        }
+        return result;
     }
 }
