@@ -22,7 +22,7 @@ class OrderFraudScenario extends ScenarioSupport {
     @Test
     void dailyOrderAmount_exceedsThreshold_blocked() {
         createScene("order-anti", "订单反欺诈", "PULL", "USER", List.of("order"));
-        createDecision("BLOCK", "拦截交易", 100, List.of());
+        createDecision("BLOCK", "拦截交易", 100);
 
         createMetric("daily-order-sum", "当日订单总额", "SQL_AGGREGATE", "DECIMAL",
                 Map.of(

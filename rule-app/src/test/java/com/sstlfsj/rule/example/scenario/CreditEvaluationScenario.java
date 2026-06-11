@@ -28,7 +28,7 @@ class CreditEvaluationScenario extends ScenarioSupport {
     @Test
     void creditScore_belowThreshold_rejected() {
         createScene("loan", "贷款审批", "PULL", "USER", List.of("apply"));
-        createDecision("REJECT", "拒贷", 100, List.of());
+        createDecision("REJECT", "拒贷", 100);
 
         createMetric("credit-score", "信用评分", "EXTERNAL_HTTP", "LONG",
                 Map.of(
