@@ -14,8 +14,7 @@ import java.util.Map;
  * {@code condition()} 用 Condition DSL 链式写条件;starter 自动扫描装载。
  */
 @RuleDef(
-        id = 9001L,
-        tenantId = "9001",
+        code = "large-trade",
         sceneCode = "merchant-trade",
         trigger = "trade",
         decisions = @DecisionBinding(code = "REVIEW", priority = 50))
@@ -26,6 +25,6 @@ public class LargeTradeRule implements InlineRuleSpec {
     public Condition condition() {
         // 内置算子 payloadGt + 自定义算子 BUSINESS_HOURS 组合
         return Condition.payloadGt("amount", 5000)
-                .and(Condition.of("BUSINESS_HOURS", "hour", Map.of()));
+                .and(Condition.of("BUSINESS_HOURS", Map.of()));
     }
 }

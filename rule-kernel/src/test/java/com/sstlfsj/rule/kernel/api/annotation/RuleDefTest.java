@@ -8,20 +8,22 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RuleDefTest {
 
-    @RuleDef(id = 1L, tenantId = "t1", sceneCode = "fraud",
+    @RuleDef(code = "block-large", tenantId = "t1", sceneCode = "fraud",
+             version = 3L,
              trigger = "TRANSACTION",
              decisions = @DecisionBinding(code = "BLOCK", priority = 100))
     static class FullRule {}
 
-    @RuleDef(id = 2L, tenantId = "t1", sceneCode = "scene")
+    @RuleDef(code = "minimal", sceneCode = "scene")
     static class MinimalRule {}
 
     @Test
     void allAttributes_areReadCorrectly() {
         RuleDef ann = FullRule.class.getAnnotation(RuleDef.class);
-        assertEquals(1L, ann.id());
+        assertEquals("block-large", ann.code());
         assertEquals("t1", ann.tenantId());
         assertEquals("fraud", ann.sceneCode());
+        assertEquals(3L, ann.version());
         assertArrayEquals(new String[]{"TRANSACTION"}, ann.trigger());
         assertEquals(1, ann.decisions().length);
         assertEquals("BLOCK", ann.decisions()[0].code());
@@ -31,7 +33,9 @@ class RuleDefTest {
     @Test
     void defaults_areApplied() {
         RuleDef ann = MinimalRule.class.getAnnotation(RuleDef.class);
-        assertEquals(2L, ann.id());
+        assertEquals("minimal", ann.code());
+        assertEquals("", ann.tenantId());
+        assertEquals(1L, ann.version());
         assertEquals(0, ann.trigger().length);
         assertEquals(0, ann.decisions().length);
     }

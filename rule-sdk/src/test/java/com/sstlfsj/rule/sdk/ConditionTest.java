@@ -88,6 +88,15 @@ class ConditionTest {
     }
 
     @Test
+    void of_twoArg_customOperator_hasNullMetric() {
+        AstNode ast = Condition.of("BUSINESS_HOURS", Map.of("tz", "Asia/Shanghai")).toAst();
+        ConditionNode node = (ConditionNode) ast;
+        assertThat(node.conditionType()).isEqualTo("BUSINESS_HOURS");
+        assertThat(node.metricCode()).isNull();
+        assertThat(node.params().get("tz")).isEqualTo("Asia/Shanghai");
+    }
+
+    @Test
     void chained_andConditions_flattenedIntoOneAndNode() {
         AstNode ast = Condition.gt("a", 1)
                 .and(Condition.gt("b", 2))

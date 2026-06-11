@@ -86,7 +86,7 @@ public class RuleEngineClientAutoConfiguration {
         List<InlineRuleSpec> inlineSpecs = new ArrayList<>(
                 ctx.getBeansOfType(InlineRuleSpec.class).values());
         if (!inlineSpecs.isEmpty()) {
-            builder.ruleSource(new AnnotationRuleSource(inlineSpecs));
+            builder.ruleSource(new AnnotationRuleSource(inlineSpecs, props.getTenantId()));
         }
 
         // Listener Bean 注入

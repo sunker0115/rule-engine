@@ -82,6 +82,11 @@ public final class Condition {
         return leaf(conditionType, metric, params);
     }
 
+    /** 自定义算子，无绑定 metric（直接读 payload/context 的算子）。 */
+    public static Condition of(String conditionType, Map<String, Object> params) {
+        return of(conditionType, null, params);
+    }
+
     // ── payload 直接引用工厂（valueRef=PAYLOAD，字段名复用 metricCode，直接读 event.payload）──
 
     /** payload 字段 field 大于 threshold。 */

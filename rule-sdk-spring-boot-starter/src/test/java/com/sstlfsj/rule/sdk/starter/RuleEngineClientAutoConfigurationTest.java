@@ -86,7 +86,7 @@ class RuleEngineClientAutoConfigurationTest {
                 });
     }
 
-    @RuleDef(id = 10L, tenantId = "t1", sceneCode = "test",
+    @RuleDef(code = "test-inline", tenantId = "t1", sceneCode = "test",
              trigger = "TEST_EVENT",
              decisions = @DecisionBinding(code = "PASS", priority = 10))
     static class TestInlineRule implements InlineRuleSpec {

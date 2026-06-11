@@ -10,12 +10,14 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface RuleDef {
-    /** 规则版本 ID，调用方负责唯一且稳定，AnnotationRuleSource 幂等写入依赖此值。 */
-    long id();
-    /** 租户 ID。 */
-    String tenantId();
+    /** 规则逻辑编码，= 配置路径 rule.code，(tenant,scene) 内唯一。 */
+    String code();
     /** 场景编码。 */
     String sceneCode();
+    /** 租户 ID；空 = 用 RuleEngineClient 配置的租户。 */
+    String tenantId() default "";
+    /** 版本号，代码定义规则默认 1。 */
+    long version() default 1L;
     /** 触发事件类型；空数组表示通配（装载时写入 "*"）。 */
     String[] trigger() default {};
     /** Decision 绑定列表。 */

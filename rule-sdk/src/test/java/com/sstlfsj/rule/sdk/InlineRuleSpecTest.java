@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class InlineRuleSpecTest {
 
-    @RuleDef(id = 1L, tenantId = "t1", sceneCode = "fraud",
+    @RuleDef(code = "amount-rule", tenantId = "t1", sceneCode = "fraud",
              trigger = "TRANSACTION",
              decisions = @DecisionBinding(code = "BLOCK", priority = 100))
     static class AmountRule implements InlineRuleSpec {
@@ -29,7 +29,7 @@ class InlineRuleSpecTest {
     void ruleDefAnnotation_isReadable() {
         RuleDef ann = AmountRule.class.getAnnotation(RuleDef.class);
         assertThat(ann).isNotNull();
-        assertThat(ann.id()).isEqualTo(1L);
+        assertThat(ann.code()).isEqualTo("amount-rule");
         assertThat(ann.sceneCode()).isEqualTo("fraud");
     }
 
