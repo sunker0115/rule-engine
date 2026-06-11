@@ -12,11 +12,14 @@ import com.sstlfsj.rule.kernel.api.model.RuleEvent;
  * @param sessionId     请求线程生成的会话 id（snowflake）
  * @param event         触发评估的事件
  * @param ruleVersionId 本次 dry-run 试算的规则版本 id
+ * @param ruleCode      本次 dry-run 试算规则的逻辑编码（冗余，人类可读；快照无 code 时为 null）
+ * @param ruleVersion   本次 dry-run 试算规则的版本号（冗余；快照无版本时为 0）
  * @param result        评估结果
  * @param context       评估上下文（用于 started_at + context_snapshot；可为 null）
  * @param durationMs    评估耗时（毫秒），评估完成时测量并随事件携带，供持久化 eval_duration_ms
  */
 public record DryRunRecordedEvent(long sessionId, RuleEvent event, Long ruleVersionId,
+                             String ruleCode, long ruleVersion,
                              EvalResult result, EvalContext context, int durationMs) implements DomainEvent {
     @Override
     public Durability durability() { return Durability.BEST_EFFORT; }

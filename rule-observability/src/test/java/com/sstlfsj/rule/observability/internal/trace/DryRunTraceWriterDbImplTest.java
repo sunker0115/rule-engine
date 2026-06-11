@@ -85,14 +85,17 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, null, 42L, null, 0L, null, null);
+        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, null, 42L, "RC-1", 3L, null, null);
         w.write("1", "99", List.of(root));
         w.destroy();
 
         verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
                 list.size() == 1
                 && Long.valueOf(99L).equals(list.get(0).getDryRunSessionId())
-                && Long.valueOf(42L).equals(list.get(0).getRuleVersionId())));
+                && Long.valueOf(42L).equals(list.get(0).getRuleVersionId())
+                // 规则身份冗余键也须映射到 dry_run_node_trace 实体
+                && "RC-1".equals(list.get(0).getRuleCode())
+                && Long.valueOf(3L).equals(list.get(0).getRuleVersion())));
     }
 
     @Test

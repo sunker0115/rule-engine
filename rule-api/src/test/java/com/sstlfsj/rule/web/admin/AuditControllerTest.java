@@ -55,7 +55,7 @@ class AuditControllerTest {
     @Test
     void queryTrace_returns200_withNodes() throws Exception {
         AuditService.TraceNodeEntry node = new AuditService.TraceNodeEntry(
-                "0", "AND", null, null, null, true, null, null);
+                "0", "AND", null, null, null, true, null, null, null, null);
         when(auditService.queryTrace("t1", 42L)).thenReturn(List.of(node));
 
         mockMvc.perform(get("/admin/v1/evaluation-sessions/42/trace").param("tenantId", "t1"))
@@ -82,9 +82,9 @@ class AuditControllerTest {
     @Test
     void getTraceTree_返回嵌套结构() throws Exception {
         AuditService.TraceTreeNode child = new AuditService.TraceTreeNode(
-                "ConditionNode", "GT", "user.age", "25", true, null, "FETCHED", List.of());
+                "ConditionNode", "GT", "user.age", "25", true, null, "FETCHED", null, null, List.of());
         AuditService.TraceTreeNode root = new AuditService.TraceTreeNode(
-                "AndNode", null, null, null, true, null, null, List.of(child));
+                "AndNode", null, null, null, true, null, null, null, null, List.of(child));
         when(auditService.queryTraceTree("100", 1L)).thenReturn(List.of(root));
 
         mockMvc.perform(get("/admin/v1/evaluation-sessions/1/trace/tree").param("tenantId", "100"))

@@ -111,7 +111,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             long dryRunId = IdWorker.getId();
             int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
             eventPublisher.publish(new DryRunRecordedEvent(
-                    dryRunId, event, specificVersionId, outcome.result(), outcome.context(), durationMs));
+                    dryRunId, event, specificVersionId, snap.code(), snap.version(),
+                    outcome.result(), outcome.context(), durationMs));
             return outcome.result();
         }
 

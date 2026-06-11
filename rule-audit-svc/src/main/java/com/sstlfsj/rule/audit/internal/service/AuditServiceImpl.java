@@ -81,7 +81,9 @@ class AuditServiceImpl implements AuditService {
                         r.getActualValue(),
                         r.getResult(),
                         r.getErrorCode(),
-                        r.getValueSource()
+                        r.getValueSource(),
+                        r.getRuleCode(),
+                        r.getRuleVersion()
                 ))
                 .toList();
     }
@@ -152,6 +154,7 @@ class AuditServiceImpl implements AuditService {
             return new TraceTreeNode(
                     entry.nodeType(), entry.conditionType(), entry.metricCode(),
                     entry.actualValue(), entry.result(), entry.errorCode(), entry.valueSource(),
+                    entry.ruleCode(), entry.ruleVersion(),
                     children.stream().map(TraceTreeNodeBuilder::build).toList()
             );
         }

@@ -114,6 +114,23 @@ class TraceWriterDbImplTest {
     }
 
     @Test
+    void flushBatch_setsRuleCodeAndRuleVersion_onEntity() throws Exception {
+        NodeTraceMapper mapper = mock(NodeTraceMapper.class);
+        TraceWriterDbImpl w = new TraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
+        w.afterPropertiesSet();
+
+        // NodeTrace 携带 ruleCode/ruleVersion，落库实体须映射到 rule_code/rule_version 列
+        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, null, 42L, "RC-1", 3L, null, null);
+        w.write("1", "99", List.of(root));
+        w.destroy();
+
+        verify(mapper, atLeastOnce()).insertBatch(argThat(list ->
+                list.size() == 1
+                && "RC-1".equals(list.get(0).getRuleCode())
+                && Long.valueOf(3L).equals(list.get(0).getRuleVersion())));
+    }
+
+    @Test
     void flushBatch_callsInsertBatch_notInsert() throws Exception {
         NodeTraceMapper mapper = mock(NodeTraceMapper.class);
         // flushIntervalMs 超大，手动触发 destroy() 来触发最后一次 flush

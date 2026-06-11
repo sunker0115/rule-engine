@@ -66,7 +66,9 @@ public interface AuditService {
             String actualValue,
             Boolean result,
             String errorCode,
-            String valueSource
+            String valueSource,
+            String ruleCode,
+            Long ruleVersion
     ) {}
 
     /**
@@ -91,6 +93,8 @@ public interface AuditService {
             Boolean result,
             String errorCode,
             String valueSource,
+            String ruleCode,
+            Long ruleVersion,
             List<TraceTreeNode> children
     ) {}
 
