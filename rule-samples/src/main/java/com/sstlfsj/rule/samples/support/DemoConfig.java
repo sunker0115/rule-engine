@@ -15,10 +15,10 @@ public final class DemoConfig {
 
     /**
      * 示例租户内部 id(admin 写接口用)。需与你 seed 的 tenant 行 id 一致。
-     * 覆盖优先级:系统属性 {@code -Ddemo.tenantId} > 环境变量 {@code DEMO_TENANT_ID} > 默认 9001。
-     * 当目标库里 9001 已被占用时,seed 另一个 id 的租户并用 {@code -Ddemo.tenantId} 指向它。
+     * 默认取高位 9100 避开低段真实租户;覆盖优先级:系统属性 {@code -Ddemo.tenantId}
+     * > 环境变量 {@code DEMO_TENANT_ID} > 默认 9100。被占用时 seed 另一个 id 并用 {@code -Ddemo.tenantId} 指向它。
      */
-    public static final String TENANT_ID = resolve("demo.tenantId", "DEMO_TENANT_ID", "9001");
+    public static final String TENANT_ID = resolve("demo.tenantId", "DEMO_TENANT_ID", "9100");
     /**
      * 示例租户 code(公开评估接口用)。
      * 覆盖优先级:{@code -Ddemo.tenantCode} > {@code DEMO_TENANT_CODE} > 默认 samples。
