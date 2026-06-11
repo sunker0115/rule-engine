@@ -83,6 +83,8 @@
 
 **你的决定**：A
 
+> 已被 D60 作废：动作协议是动作子系统的根决策；引擎纯决策化、动作子系统整体移除后，"声明式 vs SPI 动作"议题不复存在，编排（含 C 选项的工作流）交流程引擎（首选 Flowable）。
+
 ---
 
 ## D5. 触发模型 ⭐⭐
@@ -1578,6 +1580,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 **取代 / 作废的历史决策**（显式声明）：
 
+- **D4（动作协议）** — 作废：动作协议是动作子系统的根决策（声明式优先 + SPI 兜底）；动作整体移除后，"运营如何配动作"议题不复存在，编排交流程引擎（D4 本就把工作流引擎接入留到 v2 接 Camunda / Flowable）。
 - **D16（链式触发与事件环）** — 作废：链式触发是 ActionHandler 能否产生新事件的问题，动作子系统已删，议题消失。
 - **D18（Action 失败补偿语义）** — 作废：多 Action 失败传播 / failFast / 补偿语义随动作派发一并移除。
 - **D27（Action 归属从 Rule 迁移到 Decision）** — 作废：Action 不再属于任何实体，Decision 仅承载决策码 / priority / name。
@@ -1653,7 +1656,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D56 | 规则草稿/版本生命周期重构：premise A 草稿即冻结快照 + publish 退化为激活 + 删草稿边界 + dry-run 二选一 | A | 落地 D6/D19。**生命周期补全**：createDraft(v1 DRAFT)/editDraft(原地更新最新 DRAFT，不增版本)/newVersion(已发布出 v_max+1 DRAFT，要求无在途 DRAFT)/rollback(=newVersion 带 fromVersionId，克隆旧版本按当前世界重解析→DRAFT，激活仍走 publish)/publish/deleteRule/deleteDraftVersion。**premise A 草稿即冻结快照**：草稿在 create/edit/newVersion 时即跑全套 `resolveAndValidate`（metric 须 ACTIVE、payload 须在 scene.payloadSchema 声明、decision 须存在、kind 结构 + 算子×dataType 校验），不过即拒；落库 DRAFT 已含 resolvedAst(dataType)/metric·payloadDependencies/decisionBindings(name·actions)。**publish 退化为激活**：把最新 DRAFT 行原地翻 ACTIVE（不增版本、不重解析），supersede 旧 ACTIVE，发 `RulePublishedEvent`；版本号只在 createDraft(v1)/newVersion(+1) 产生。**triggerEventTypes 冻结草稿声明值**（已校验 ⊆ scene.eventTypes，不再覆盖成 scene 全集），保「预览==发布」。**dry-run 二选一必传**：`POST /api/v1/rule/dry-run` 传 ruleVersionId(精确版本)/ruleId(取最新版本含 DRAFT) 二选一，都不传→400 `MISSING_DRYRUN_TARGET`；结构上恒走带版本单快照分支→不落 `evaluation_session`、不派发 action（根除副作用 bug）。**删草稿边界**：deleteRule 仅删从未发布规则(无 ACTIVE/SUPERSEDED)级联 rule_definition+全部 rule_version；deleteDraftVersion 仅删 DRAFT；碰 ACTIVE/SUPERSEDED 一律拒(只能 disable)；级联范围只 rule_version，dry-run 痕迹不级联删（TTL 退休）。覆盖 D19「回滚=旧快照建草稿」为精确生命周期；设计见 `specs/2026-06-10-rule-draft-version-lifecycle-design.md` |
 | D57 | 删除 `BlockTransactionHandler`，`BLOCK_TRANSACTION` 改由嵌入方 SPI 实现 | A | 通用规则引擎无通用"阻断交易"机制（怎么拦取决于宿主交易系统）；且 action 是评估后**异步 best-effort 派发**，真正的同步拒绝是 decision 结果（REJECT）——内置 stub 无条件返回 SUCCESS 是谎报"已拦截"，比 `NO_HANDLER` SKIPPED 更糟。删 `BlockTransactionHandler` + 单测；引擎内置 `ActionHandler` 仅保留 `SendAlertHandler`（HTTP webhook，足够通用可内置）。`BLOCK_TRANSACTION` 仍是**合法可配置 actionType**（SPI 开放），由嵌入方经 `ActionHandler` SPI 自行实现真实阻断；未配 handler 时派发落 `NO_HANDLER` SKIPPED（优雅，不崩）。覆盖 D7 v1.5「`BlockTransactionHandler.dryRun` 实装」中该 handler 部分（`SendAlertHandler` 不变）。bundle/manifest 把 `BLOCK_TRANSACTION` 当样例字符串透传的测试不受影响。**已被 D60 作废**：整套 ActionHandler SPI（含 `SendAlertHandler`）移除，引擎纯决策化，"命中后做什么"归消费方 / 流程引擎 |
 | D59 | 规则身份模型：逻辑键 `(tenant, sceneCode, code, version)` + 代理键 `ruleVersionId` 并存 | A | Camunda 补充模式（逻辑键 + 代理键共存，代理键留作存储/外键/去重/幂等）：`RuleVersionSnapshot` 补 code+version、`NodeTrace` 补 ruleCode+ruleVersion、`Decision` 补 fromRuleCode+fromRuleVersion；trace/audit 表加 `rule_code`/`rule_version`（V1_26）+ admin trace 透出；`@RuleDef` 删 `id()` 改 `code()`+`version()`，`tenantId() default ""` 继承 client 租户，`AnnotationRuleSource` 按 (tenant,scene,code) 哈希派生 ruleVersionId。阶段甲（核心/trace/注解，本次）vs 阶段乙（admin API 按 code+version 寻址，未做）；显式不移除代理键 PK |
-| D60 | 规则引擎纯决策化，移除动作子系统 | A | 对标 OPA（决策/PEP 执行）/ Camunda DMN+BPMN（决策与编排分层），编排后续接 Flowable（以 Service/HTTP Task 调本引擎决策节点）。删 `ActionHandler`/`@ActionType`/`ActionContext`/`ActionResult`、`Decision.actions`/`EvalResult.actionResults`/`DecisionBinding.actions`/`DecisionAction`、eval-svc 动作派发 + `action_execution` 落库、config/api 动作配置、`decision_definition.actions` 列（V1_27）。**取代/作废 D16/D18/D27/D28/D57**，顺带退役 D27/D54 的 PULL-scene action 发布校验。保留：决策输出（`evaluate()` + SDK `EvalResultListener`/`EvalSessionListener`）+ PULL/PUSH 双模（PUSH 去派发，仍评估+落库）。引擎只出决策，"命中后做什么"归消费方 / 流程引擎 |
+| D60 | 规则引擎纯决策化，移除动作子系统 | A | 对标 OPA（决策/PEP 执行）/ Camunda DMN+BPMN（决策与编排分层），编排后续接 Flowable（以 Service/HTTP Task 调本引擎决策节点）。删 `ActionHandler`/`@ActionType`/`ActionContext`/`ActionResult`、`Decision.actions`/`EvalResult.actionResults`/`DecisionBinding.actions`/`DecisionAction`、eval-svc 动作派发 + `action_execution` 落库、config/api 动作配置、`decision_definition.actions` 列（V1_27）。**取代/作废 D4/D16/D18/D27/D28/D57**，顺带退役 D27/D54 的 PULL-scene action 发布校验。保留：决策输出（`evaluate()` + SDK `EvalResultListener`/`EvalSessionListener`）+ PULL/PUSH 双模（PUSH 去派发，仍评估+落库）。引擎只出决策，"命中后做什么"归消费方 / 流程引擎 |
 | D58 | 不做 SDK 直连 DB 轮询；删孤儿 watcher SPI + `rule-kernel-polling` 模块 | A | SDK 嵌入式的定位是**零网络本地评估、不读库**。若让嵌入方直连引擎 DB:① 把宿主与引擎**内部表 schema**(`rule_version` JSON 列等)死耦合,schema 一改所有嵌入方全崩;② 既然有 DB 直连能力,不如直接用全套引擎——与 SDK 存在意义矛盾。要通讯,**HTTP 轮询**(`/sdk/v1/snapshots`,`PollingRuleSource`/`SnapshotPoller`)已实现并验证(`SdkTradingScenario`),覆盖"嵌入式保鲜"。故:**不实现 DB 直连轮询**;删一直**零生产装配的孤儿 SPI** `RuleVersionWatcher`/`SceneWatcher`(rule-kernel)+ 仅有的两个 stub 实现 `DbPollingRuleWatcher`/`DbPollingSceneWatcher` + 整个 `rule-kernel-polling` 模块(父 pom `modules`/`dependencyManagement` 同步摘除)。SDK 规则来源保持 HTTP 轮询 / 文件 / DSL / 注解四种。覆盖 `99-functional-test-coverage` 原 ⚪「DB 轮询 watcher(SDK v2)」占位项 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。
