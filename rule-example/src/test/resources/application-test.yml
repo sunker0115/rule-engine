@@ -1,0 +1,13 @@
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration,classpath:sql
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+engine:
+  rule:
+    metric:
+      source:
+        business-db:
+          type: MYSQL

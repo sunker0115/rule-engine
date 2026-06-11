@@ -269,6 +269,11 @@
             </dependency>
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -284,4 +289,13 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <profiles>
+        <profile>
+            <id>examples</id>
+            <modules>
+                <module>rule-example</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>
