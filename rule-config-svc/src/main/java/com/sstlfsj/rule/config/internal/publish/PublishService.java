@@ -320,7 +320,7 @@ public class PublishService {
 
     /**
      * 草稿解析+校验产出：已冻结的 rule_version 内容字段（resolvedAst 含 dataType、
-     * metricDeps/payloadDeps 已冻、decisionBindings 含 name/actions、triggerEventTypes/preGates 规整）。
+     * metricDeps/payloadDeps 已冻、decisionBindings 含 name、triggerEventTypes/preGates 规整）。
      */
     public record ResolvedDraft(
             RuleKind kind,

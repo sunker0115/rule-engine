@@ -30,12 +30,6 @@ class RuleMetricsTest {
     }
 
     @Test
-    void actionDispatchMetrics_haveExpectedNames() {
-        assertEquals("rule_action_dispatch_total", RuleMetrics.ACTION_DISPATCH_TOTAL);
-        assertEquals("rule_action_dispatch_failed_total", RuleMetrics.ACTION_DISPATCH_FAILED);
-    }
-
-    @Test
     void traceMetrics_haveExpectedNames() {
         assertEquals("rule_trace_queue_size", RuleMetrics.TRACE_QUEUE_SIZE);
         assertEquals("rule_trace_write_batch_total", RuleMetrics.TRACE_WRITE_BATCH_TOTAL);
@@ -50,8 +44,6 @@ class RuleMetricsTest {
             RuleMetrics.METRIC_FETCH_DURATION,
             RuleMetrics.METRIC_CACHE_HIT_TOTAL,
             RuleMetrics.METRIC_CACHE_MISS_TOTAL,
-            RuleMetrics.ACTION_DISPATCH_TOTAL,
-            RuleMetrics.ACTION_DISPATCH_FAILED,
             RuleMetrics.TRACE_QUEUE_SIZE,
             RuleMetrics.TRACE_WRITE_BATCH_TOTAL,
         };

@@ -834,7 +834,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 ### Q1: Rule vs Condition —— 谁包含谁？
 
-Rule **包含** Condition（作为 AST 的叶子节点 `ConditionNode`）。Rule 是"完整业务表达"（含触发 / 准入 / 判定 / 动作 / 版本 / 灰度），Condition 只是判定的最小原子。一个 Condition 不能独立存在，必须作为 AST 内的叶子节点存在；AST 必须挂在某 Rule 下。
+Rule **包含** Condition（作为 AST 的叶子节点 `ConditionNode`）。Rule 是"完整业务表达"（含触发 / 准入 / 判定 / 版本 / 灰度），Condition 只是判定的最小原子。一个 Condition 不能独立存在，必须作为 AST 内的叶子节点存在；AST 必须挂在某 Rule 下。
 
 ### Q2: 运营心智里的"条件分组"在数据模型里是什么？
 
