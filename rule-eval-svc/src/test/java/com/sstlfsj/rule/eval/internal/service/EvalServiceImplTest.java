@@ -1,7 +1,5 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
-import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
@@ -24,21 +22,20 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计、经 ActionCommandChannel 投递 action；dry-run 发 DryRunRecordedEvent 事件。 */
+/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计；dry-run 发 DryRunRecordedEvent 事件。 */
 @ExtendWith(MockitoExtension.class)
 class EvalServiceImplTest {
 
     @Mock EvalEngine evalEngine;
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock DomainEventPublisher eventPublisher;
-    @Mock ActionCommandChannel actionDelivery;
     @Mock RuleVersionReadMapper ruleVersionReadMapper;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery, ruleVersionReadMapper);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, ruleVersionReadMapper);
     }
 
     private RuleEvent event() {
@@ -95,7 +92,6 @@ class EvalServiceImplTest {
 
         assertFalse(result.ruleHit());
         verifyNoInteractions(eventPublisher);
-        verifyNoInteractions(actionDelivery);
         verify(evalEngine, never()).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
     }
 
@@ -170,63 +166,6 @@ class EvalServiceImplTest {
     }
 
     @Test
-    void dryRun_doesNotDeliverActions() {
-        RuleVersionSnapshot snap = snapshot(42L, "PASS");
-        when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
-                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
-                .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
-
-        EvalResult result = impl.dryRun(event(), null, 42L);
-
-        assertFalse(result.ruleHit());
-        verify(eventPublisher).publish(any(DryRunRecordedEvent.class));
-        verifyNoInteractions(actionDelivery);
-    }
-
-    @Test
-    void evaluate_ruleHit_deliversActions() {
-        // D27:仅当 finalDecision 携带 actions 才投递派发命令
-        var action = new com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction(
-                "a1", "SEND_ALERT", 0, java.util.Map.of());
-        Decision d = new Decision("REJECT", "拒绝", 10, 1L, null, 0L, null, java.util.List.of(action));
-        EvalResult r = new EvalResult(true, d, java.util.List.of(d), java.util.List.of(),
-                null, java.util.List.of(), null, null, null);
-        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(r, ctx()));
-
-        impl.evaluate(event());
-
-        verify(actionDelivery).deliver(argThat(o ->
-                o instanceof DispatchActionsCommand ar
-                        && ar.tenantId() == 1L
-                        && ar.eventId().equals("evt-001")
-                        && ar.finalDecision() != null
-                        && "REJECT".equals(ar.finalDecision().code())));
-    }
-
-    @Test
-    void evaluate_ruleMiss_doesNotDeliverActions() {
-        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
-
-        impl.evaluate(event());
-
-        verify(actionDelivery, never()).deliver(any());
-    }
-
-    @Test
-    void dryRun_hit_doesNotDeliverActions() {
-        RuleVersionSnapshot snap = snapshot(42L, "PASS");
-        when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
-                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
-                .thenReturn(new EvalOutcome(hitResult("PASS", 10, 42L), ctx()));
-
-        impl.dryRun(event(), null, 42L);
-
-        verifyNoInteractions(actionDelivery);
-    }
-
-    @Test
     void dryRun_byRuleId_resolvesLatestVersion() {
         RuleVersionSnapshot snap = snapshot(77L, "PASS");
         when(ruleVersionReadMapper.latestVersionIdByRule(1L, 5L)).thenReturn(77L);
@@ -242,9 +181,8 @@ class EvalServiceImplTest {
         verify(snapshotLoader).loadById(77L);
         verify(eventPublisher).publish(argThat(o ->
                 o instanceof DryRunRecordedEvent d && d.ruleVersionId().equals(77L)));
-        // dry-run 永不落候选分支：不走 match、不投递 action
+        // dry-run 永不落候选分支：不走 match
         verify(evalEngine, never()).match(any(RuleEvent.class));
-        verifyNoInteractions(actionDelivery);
     }
 
     @Test
@@ -268,7 +206,6 @@ class EvalServiceImplTest {
 
         assertThrows(IllegalArgumentException.class, () -> impl.dryRun(event(), 999L, null));
         verifyNoInteractions(snapshotLoader);
-        verifyNoInteractions(actionDelivery);
     }
 
     @Test
@@ -277,7 +214,6 @@ class EvalServiceImplTest {
         assertThrows(IllegalArgumentException.class, () -> impl.dryRun(event(), null, null));
         verifyNoInteractions(evalEngine);
         verifyNoInteractions(snapshotLoader);
-        verifyNoInteractions(actionDelivery);
         verifyNoInteractions(eventPublisher);
     }
 
@@ -293,7 +229,6 @@ class EvalServiceImplTest {
         assertTrue(ex.getMessage().contains("INVALID_TENANT"));
         verifyNoInteractions(ruleVersionReadMapper);
         verifyNoInteractions(snapshotLoader);
-        verifyNoInteractions(actionDelivery);
     }
 
     @Test

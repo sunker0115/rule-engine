@@ -2,8 +2,6 @@ package com.sstlfsj.rule.eval.internal.service;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
-import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
-import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
@@ -23,25 +21,22 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件、经 ActionCommandChannel 投递 action，自身不做内联持久化。 */
+/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件，自身不做内联持久化、不派发 action。 */
 @Service
 class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     private final EvalEngine evalEngine;
     private final SceneSnapshotLoader snapshotLoader;
     private final DomainEventPublisher eventPublisher;
-    private final ActionCommandChannel actionDelivery;
     private final RuleVersionReadMapper ruleVersionReadMapper;
     private final EvalActionDispatcher dispatcher;
 
     EvalServiceImpl(EvalEngine evalEngine, SceneSnapshotLoader snapshotLoader,
                     DomainEventPublisher eventPublisher,
-                    ActionCommandChannel actionDelivery,
                     RuleVersionReadMapper ruleVersionReadMapper) {
         this.evalEngine = evalEngine;
         this.snapshotLoader = snapshotLoader;
         this.eventPublisher = eventPublisher;
-        this.actionDelivery = actionDelivery;
         this.ruleVersionReadMapper = ruleVersionReadMapper;
         // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
         this.dispatcher = new EvalActionDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null));
@@ -134,16 +129,10 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         EvalOutcome outcome = evalEngine.evaluateWithContext(event, candidates, evalNow);
         EvalResult result = outcome.result();
 
-        // 副作用事件化：审计内存 best-effort（可丢）；action 命中有决策时 best-effort fire-and-forget 派发（队列满/重启丢，不重试；可靠投递未来接 MQ）
+        // 副作用事件化：审计内存 best-effort（可丢）；纯决策，不派发任何 action
         int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
         eventPublisher.publish(new AuditRecordedEvent(
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs));
-        Long tid = parseTenantId(event.tenantId());
-        // D27:仅派发 finalDecision 的 actions(命中且有挂载 action 才投递)
-        if (tid != null && result.finalDecision() != null && !result.finalDecision().actions().isEmpty()) {
-            actionDelivery.deliver(new DispatchActionsCommand(
-                    sessionId, tid, event.eventId(), event.sceneCode(), result.finalDecision()));
-        }
         return result;
     }
 

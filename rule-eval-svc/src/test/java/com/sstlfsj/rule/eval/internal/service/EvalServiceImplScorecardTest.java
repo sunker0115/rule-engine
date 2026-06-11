@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
@@ -29,14 +28,13 @@ class EvalServiceImplScorecardTest {
     @Mock EvalEngine evalEngine;
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock DomainEventPublisher eventPublisher;
-    @Mock ActionCommandChannel actionDelivery;
     @Mock com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper ruleVersionReadMapper;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery, ruleVersionReadMapper);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, ruleVersionReadMapper);
     }
 
     private RuleEvent event() {

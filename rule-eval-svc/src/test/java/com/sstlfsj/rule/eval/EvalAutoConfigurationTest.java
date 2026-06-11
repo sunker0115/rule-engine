@@ -1,20 +1,12 @@
 package com.sstlfsj.rule.eval;
 
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.TraceProperties;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
 import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
-import com.sstlfsj.rule.kernel.api.annotation.ActionType;
-import com.sstlfsj.rule.kernel.api.model.ActionContext;
-import com.sstlfsj.rule.kernel.api.model.ActionResult;
-import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
@@ -155,47 +147,11 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
-    void actionDispatchService_nullHandlers_returnsInstance() {
-        ActionDispatchService svc = config.actionDispatchService(
-                null,
-                mock(DomainEventPublisher.class));
-        assertNotNull(svc);
-    }
-
-    @Test
-    void actionDispatchService_withAnnotatedHandler_buildsHandlerMap() {
-        ActionHandler handler = new BlockTxStub();
-        ActionDispatchService svc = config.actionDispatchService(
-                List.of(handler),
-                mock(DomainEventPublisher.class));
-        assertNotNull(svc);
-    }
-
-    @Test
-    void actionDispatchService_handlerWithoutAnnotation_isIgnored() {
-        ActionHandler noAnnotation = ctx -> ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
-        ActionDispatchService svc = config.actionDispatchService(
-                List.of(noAnnotation),
-                mock(DomainEventPublisher.class));
-        assertNotNull(svc);
-    }
-
-    @Test
     void sessionRetentionCleaner_returnsInstance() {
         SessionRetentionCleaner cleaner = config.sessionRetentionCleaner(
                 mock(EvaluationSessionMapper.class),
                 mock(DryRunSessionMapper.class),
-                mock(ActionExecutionMapper.class),
                 new RetentionProperties());
         assertNotNull(cleaner);
-    }
-
-    /** 测试用 stub，带 @ActionType 注解。 */
-    @ActionType("BLOCK_TX")
-    private static class BlockTxStub implements ActionHandler {
-        @Override
-        public ActionResult execute(ActionContext ctx) {
-            return ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
-        }
     }
 }

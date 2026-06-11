@@ -1,10 +1,6 @@
 package com.sstlfsj.rule.eval;
 
-import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
-import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
-import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
@@ -24,7 +20,6 @@ import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
@@ -48,19 +43,17 @@ import java.util.concurrent.Executors;
 @ComponentScan("com.sstlfsj.rule.eval.internal")
 @org.springframework.boot.context.properties.EnableConfigurationProperties({
         com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
-        com.sstlfsj.rule.eval.internal.action.SendAlertProperties.class,
         com.sstlfsj.rule.eval.internal.TraceProperties.class,
         com.sstlfsj.rule.eval.internal.async.AuditProperties.class,
         RetentionProperties.class})
 public class EvalAutoConfiguration {
 
     /**
-     * 注册 session 表数据保留清理调度 bean（evaluation_session / dry_run_session / action_execution）。
+     * 注册 session 表数据保留清理调度 bean（evaluation_session / dry_run_session）。
      * 可通过 engine.rule.retention.enabled=false 关闭。
      *
      * @param evaluationSessionMapper evaluation_session Mapper
      * @param dryRunSessionMapper     dry_run_session Mapper
-     * @param actionExecutionMapper   action_execution Mapper
      * @param retentionProperties     保留清理配置
      * @return SessionRetentionCleaner 实例
      */
@@ -68,9 +61,8 @@ public class EvalAutoConfiguration {
     @ConditionalOnProperty(name = "engine.rule.retention.enabled", matchIfMissing = true)
     public SessionRetentionCleaner sessionRetentionCleaner(EvaluationSessionMapper evaluationSessionMapper,
                                                            DryRunSessionMapper dryRunSessionMapper,
-                                                           ActionExecutionMapper actionExecutionMapper,
                                                            RetentionProperties retentionProperties) {
-        return new SessionRetentionCleaner(evaluationSessionMapper, dryRunSessionMapper, actionExecutionMapper, retentionProperties);
+        return new SessionRetentionCleaner(evaluationSessionMapper, dryRunSessionMapper, retentionProperties);
     }
 
     /**
@@ -213,28 +205,5 @@ public class EvalAutoConfiguration {
                        RuleKind.DECISION_TREE.tag(),  decisionTreeExecutor,
                        RuleKind.DECISION_TABLE.tag(), decisionTableExecutor),
                 traceProperties.isEnabled());
-    }
-
-    /**
-     * 注册 ActionDispatchService，按 @ActionType.value() 构建 handler 映射。
-     *
-     * @param actionHandlers  Spring 容器中所有 ActionHandler bean（可为空）
-     * @param eventPublisher  领域事件发布缝（ActionExecutedEvent 由 persister 异步落库）
-     * @return ActionDispatchService 实例
-     */
-    @Bean
-    public ActionDispatchService actionDispatchService(
-            @Autowired(required = false) List<ActionHandler> actionHandlers,
-            DomainEventPublisher eventPublisher) {
-        Map<String, ActionHandler> handlerMap = new HashMap<>();
-        if (actionHandlers != null) {
-            for (ActionHandler handler : actionHandlers) {
-                ActionType ann = handler.getClass().getAnnotation(ActionType.class);
-                if (ann != null) {
-                    handlerMap.put(ann.value(), handler);
-                }
-            }
-        }
-        return new ActionDispatchService(handlerMap, eventPublisher);
     }
 }
