@@ -1531,6 +1531,30 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 ---
 
+## D59. 规则身份模型：逻辑键 `(tenant, sceneCode, code, version)` + 代理键 `ruleVersionId` 并存（Camunda 补充模式）⭐⭐⭐
+
+**背景**：现状规则的唯一身份是代理键 `ruleVersionId`（一个无业务含义的 long），它贯穿存储主键 / 外键 / 评估去重 / 幂等。但代理键不可人读：trace / audit 里只能看到一串数字，排障时无法直接判断"这是哪条业务规则的第几版"；SDK 注解模式（D40）让开发者用 `@RuleDef` 按名声明规则，"名字"（业务码 + 版本）才是开发者心智里的身份，逼其手填代理键 `id` 既反直觉又易撞号。需要在不动代理键存储角色的前提下，补上一层人可读、可溯源、名字驱动的逻辑身份。
+
+**决策**：
+
+1. **逻辑键 + 代理键并存（supplement，不替换）**：规则的逻辑身份 = `(tenant, sceneCode, code, version)`——`code`（业务规则码，String）+ `version`（版本号，long）为业务自然键，配合 tenant / sceneCode 作用域。代理键 `ruleVersionId` 全部保留，继续承担存储主键 / 外键 / 评估去重 / 幂等键角色。两者**共存互补**，不是二选一。
+
+2. **OSS 先例（Camunda 补充模式）**：Camunda 流程定义同时持有 `id`（代理 PK）+ `(key, version)`（逻辑键），K8s 对象同时有 `uid`（代理）+ `(namespace, name)`（自然键），Confluent Schema Registry 同时有 `id`（代理）+ `(subject, version)`（逻辑键）——业界惯例是**保留代理主键 + 反范式冗余自然键**，让人读路径与存储路径各取所需。本决策对齐该模式。
+
+3. **承载链路**：`RuleVersionSnapshot` 补 `code`(String) + `version`(long)；`NodeTrace` 补 `ruleCode` + `ruleVersion`；`Decision` 补 `fromRuleCode` + `fromRuleVersion`——全部**与既有 `ruleVersionId` 字段并列保留**，不删代理键。配置读路径（`RuleVersionReadMapper`）JOIN `rule_definition.code` + `rule_version.version` 填进快照，`PublishService` 落库时一并写。trace / audit 表 `node_trace` / `dry_run_session` / `dry_run_node_trace` 加可空列 `rule_code` / `rule_version`（迁移 V1_26），由 trace writer 落库，admin trace 接口（`GET /admin/v1/evaluation-sessions/{id}/trace` 与 `/trace/tree`）响应 VO 透出。
+
+4. **注解身份名字驱动**：`@RuleDef` 注解去掉 `long id()`，改为 `String code()`（逻辑身份）+ `long version() default 1`；`tenantId()` 默认 `""`（空 = 继承 `RuleEngineClient` 配置的租户）。代理键 `ruleVersionId` 不再由开发者手填，而由 `AnnotationRuleSource` 按 `(tenant, scene, code)` 稳定哈希派生——名字是真相源，代理键是其确定性投影。
+
+5. **范围拆分 阶段甲 / 阶段乙**：
+   - **阶段甲（本次落地）**：核心模型（snapshot / trace / decision 携带 code+version）+ trace / audit 透出 + 注解身份改造。
+   - **阶段乙（未来，未做）**：admin / config API 按 `(code, version)` 寻址（按业务码 + 版本号读写规则，而非按代理键 id）。本次**不做**，独立推进。
+
+**显式不做**：**不移除代理键 PK**。代理键在存储 / 外键 / 去重 / 幂等上的角色不可被自然键取代（自然键多列、可空、跨表 JOIN 成本高），逻辑键只是补充人读与名字身份，二者职责正交。
+
+**已实装**（阶段甲）：`RuleVersionSnapshot.code/version` + `NodeTrace.ruleCode/ruleVersion` + `Decision.fromRuleCode/fromRuleVersion`；`RuleVersionReadMapper` JOIN code/version、`PublishService` 落库；迁移 V1_26 加 `node_trace`/`dry_run_session`/`dry_run_node_trace` 的 `rule_code`/`rule_version` 可空列 + trace writer 落库 + admin trace 端点 VO 透出；`@RuleDef` 删 `id()`、加 `code()`/`version() default 1`、`tenantId() default ""`（空继承 client 租户）；`AnnotationRuleSource` 按 `(tenant,scene,code)` 稳定哈希派生 `ruleVersionId`；`Condition.of(conditionType, params)` 双参重载（无绑定 metric 的自定义算子）。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1586,6 +1610,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D55 | 场景输入参数清单（范围 B）：公开评估只收 payload + 输入清单发现/校验 | A | 依赖范围 A（payload 直接引用）。**公开评估只收 `payload`**：`EvalEventRequest` 删 `providedMetrics`，metric 全归引擎；内部 `RuleEvent` 保留 `providedMetrics` 供 SDK/Job 非公开注入。**清单来源 = 发布期快照**：规则发布冻结引用的 `valueRef=PAYLOAD` 字段进 `rule_version.payload_dependencies`（`[{name,dataType,required}]`，V1_24 加列），随 `RuleVersionSnapshot.payloadDependencies` 下发；场景级清单 = 该场景 ACTIVE 规则清单并集。**评估期整体校验**：缺必填 → `MISSING_REQUIRED_INPUT`（拒绝 400 不降级），类型不符 → `INPUT_TYPE_MISMATCH`（400），多塞忽略；经 `IllegalArgumentException → 400`，wire `errorCode=INVALID_ARGUMENT` + 语义码携于 message；与发布期 `UNRESOLVED_VARIABLE` 正交。**新发现接口** `GET /api/v1/rule/scenes/{sceneCode}/input-manifest`（`ApiResponse.data.fields`）；**删 `getProvidedMetrics`** 端点（`/admin/v1/scenes/{sceneCode}/provided-metrics`），`/metadata` 保留。设计见 `specs/2026-06-10-scene-input-manifest-design.md` |
 | D56 | 规则草稿/版本生命周期重构：premise A 草稿即冻结快照 + publish 退化为激活 + 删草稿边界 + dry-run 二选一 | A | 落地 D6/D19。**生命周期补全**：createDraft(v1 DRAFT)/editDraft(原地更新最新 DRAFT，不增版本)/newVersion(已发布出 v_max+1 DRAFT，要求无在途 DRAFT)/rollback(=newVersion 带 fromVersionId，克隆旧版本按当前世界重解析→DRAFT，激活仍走 publish)/publish/deleteRule/deleteDraftVersion。**premise A 草稿即冻结快照**：草稿在 create/edit/newVersion 时即跑全套 `resolveAndValidate`（metric 须 ACTIVE、payload 须在 scene.payloadSchema 声明、decision 须存在、kind 结构 + 算子×dataType 校验），不过即拒；落库 DRAFT 已含 resolvedAst(dataType)/metric·payloadDependencies/decisionBindings(name·actions)。**publish 退化为激活**：把最新 DRAFT 行原地翻 ACTIVE（不增版本、不重解析），supersede 旧 ACTIVE，发 `RulePublishedEvent`；版本号只在 createDraft(v1)/newVersion(+1) 产生。**triggerEventTypes 冻结草稿声明值**（已校验 ⊆ scene.eventTypes，不再覆盖成 scene 全集），保「预览==发布」。**dry-run 二选一必传**：`POST /api/v1/rule/dry-run` 传 ruleVersionId(精确版本)/ruleId(取最新版本含 DRAFT) 二选一，都不传→400 `MISSING_DRYRUN_TARGET`；结构上恒走带版本单快照分支→不落 `evaluation_session`、不派发 action（根除副作用 bug）。**删草稿边界**：deleteRule 仅删从未发布规则(无 ACTIVE/SUPERSEDED)级联 rule_definition+全部 rule_version；deleteDraftVersion 仅删 DRAFT；碰 ACTIVE/SUPERSEDED 一律拒(只能 disable)；级联范围只 rule_version，dry-run 痕迹不级联删（TTL 退休）。覆盖 D19「回滚=旧快照建草稿」为精确生命周期；设计见 `specs/2026-06-10-rule-draft-version-lifecycle-design.md` |
 | D57 | 删除 `BlockTransactionHandler`，`BLOCK_TRANSACTION` 改由嵌入方 SPI 实现 | A | 通用规则引擎无通用"阻断交易"机制（怎么拦取决于宿主交易系统）；且 action 是评估后**异步 best-effort 派发**，真正的同步拒绝是 decision 结果（REJECT）——内置 stub 无条件返回 SUCCESS 是谎报"已拦截"，比 `NO_HANDLER` SKIPPED 更糟。删 `BlockTransactionHandler` + 单测；引擎内置 `ActionHandler` 仅保留 `SendAlertHandler`（HTTP webhook，足够通用可内置）。`BLOCK_TRANSACTION` 仍是**合法可配置 actionType**（SPI 开放），由嵌入方经 `ActionHandler` SPI 自行实现真实阻断；未配 handler 时派发落 `NO_HANDLER` SKIPPED（优雅，不崩）。覆盖 D7 v1.5「`BlockTransactionHandler.dryRun` 实装」中该 handler 部分（`SendAlertHandler` 不变）。bundle/manifest 把 `BLOCK_TRANSACTION` 当样例字符串透传的测试不受影响 |
+| D59 | 规则身份模型：逻辑键 `(tenant, sceneCode, code, version)` + 代理键 `ruleVersionId` 并存 | A | Camunda 补充模式（逻辑键 + 代理键共存，代理键留作存储/外键/去重/幂等）：`RuleVersionSnapshot` 补 code+version、`NodeTrace` 补 ruleCode+ruleVersion、`Decision` 补 fromRuleCode+fromRuleVersion；trace/audit 表加 `rule_code`/`rule_version`（V1_26）+ admin trace 透出；`@RuleDef` 删 `id()` 改 `code()`+`version()`，`tenantId() default ""` 继承 client 租户，`AnnotationRuleSource` 按 (tenant,scene,code) 哈希派生 ruleVersionId。阶段甲（核心/trace/注解，本次）vs 阶段乙（admin API 按 code+version 寻址，未做）；显式不移除代理键 PK |
 | D58 | 不做 SDK 直连 DB 轮询；删孤儿 watcher SPI + `rule-kernel-polling` 模块 | A | SDK 嵌入式的定位是**零网络本地评估、不读库**。若让嵌入方直连引擎 DB:① 把宿主与引擎**内部表 schema**(`rule_version` JSON 列等)死耦合,schema 一改所有嵌入方全崩;② 既然有 DB 直连能力,不如直接用全套引擎——与 SDK 存在意义矛盾。要通讯,**HTTP 轮询**(`/sdk/v1/snapshots`,`PollingRuleSource`/`SnapshotPoller`)已实现并验证(`SdkTradingScenario`),覆盖"嵌入式保鲜"。故:**不实现 DB 直连轮询**;删一直**零生产装配的孤儿 SPI** `RuleVersionWatcher`/`SceneWatcher`(rule-kernel)+ 仅有的两个 stub 实现 `DbPollingRuleWatcher`/`DbPollingSceneWatcher` + 整个 `rule-kernel-polling` 模块(父 pom `modules`/`dependencyManagement` 同步摘除)。SDK 规则来源保持 HTTP 轮询 / 文件 / DSL / 注解四种。覆盖 `99-functional-test-coverage` 原 ⚪「DB 轮询 watcher(SDK v2)」占位项 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

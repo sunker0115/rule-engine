@@ -21,6 +21,9 @@
 | §四 加 MetricSource | ✅ 已展开 |
 | §五 元数据契约 | ✅ 已展开 |
 | §六 实现指南 | ✅ 已展开 |
+| §七 SubjectLoader 实现指南 | ✅ 已展开 |
+| §八 维护原则 | ✅ 已展开 |
+| §九 代码定义规则（`@RuleDef` 注解模式） | ✅ 已展开 |
 
 ---
 
@@ -400,3 +403,95 @@ public class AccountLoader implements SubjectLoader {
 - 本文档只描述**SPI 接口契约 + 注册指南**，不重复 SPI 模块归属（→ 09-skeleton §四）、不写运维参数默认值（→ 07-operability §九）。
 - 新增第四类 SPI（如未来进一步开放给业务方实现的扩展点）必须在本文档增章节 + 同步 09-skeleton §四 SPI 落点表。
 - 实现建议值（§六）只列**建议**，不列默认值；默认值由 07-operability 集中管理。
+
+---
+
+## 九、代码定义规则（`@RuleDef` 注解模式）
+
+> 扩展入口：前述 §二~§四 是为引擎补**算子 / 动作 / 取数**能力；本节是另一类扩展——用 **Java 代码直接定义规则本身**（嵌入式 SDK 场景，D40 / D59）。规则不再经 admin API 配置 + 数据库存储，而是标注在代码类上，由 SDK 启动时扫描装载到评估索引。适用单测 / 演示 / 离线部署 / 把规则当代码版本管理的场景。
+
+### 9.1 `@RuleDef` 注解（`rule-kernel`）
+
+在 `InlineRuleSpec` 实现类上标注 `@RuleDef` 声明规则的身份与触发 / 决策绑定：
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface RuleDef {
+    /** 业务规则码（逻辑身份，D59）；与 (tenant, sceneCode) 共同作用域内唯一。 */
+    String code();
+    /** 场景编码。 */
+    String sceneCode();
+    /** 租户 ID；默认空 = 继承 RuleEngineClient 配置的租户。 */
+    String tenantId() default "";
+    /** 版本号（逻辑身份的一部分，D59）。 */
+    long version() default 1;
+    /** 触发事件类型；空数组表示通配（等价于装载时写入 "*"）。 */
+    String[] trigger() default {};
+    /** Decision 绑定列表。 */
+    DecisionBinding[] decisions() default {};
+}
+```
+
+`@DecisionBinding`（嵌套注解，`rule-kernel`）声明命中后绑定的 Decision 码与优先级：
+
+```java
+@Target({})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface DecisionBinding {
+    String code();
+    int priority() default 0;
+}
+```
+
+> **身份模型（D59）**：规则逻辑身份 = `(tenant, sceneCode, code, version)`（人可读、名字驱动）；代理键 `ruleVersionId` 不由开发者手填，而由 `AnnotationRuleSource` 按 `(tenant, scene, code)` 稳定哈希派生（确定性投影，保证幂等装载）。`tenantId()` 留空时继承 `RuleEngineClient.builder()` 上配置的租户，避免每条规则重复写租户。
+
+### 9.2 `InlineRuleSpec` 接口（`rule-sdk`）
+
+规则类实现 `InlineRuleSpec`，`condition()` 返回 `Condition` DSL 表达式（D36 隐藏 AST 构造细节），由 `AnnotationRuleSource` 调 `toAst()` 转为 AST：
+
+```java
+public interface InlineRuleSpec {
+    /** 返回规则条件，由 AnnotationRuleSource 调用 toAst() 转为 AST。 */
+    Condition condition();
+}
+```
+
+### 9.3 实现示例
+
+```java
+@RuleDef(code = "amount-fraud", sceneCode = "fraud",
+         trigger = "TRANSACTION",
+         decisions = @DecisionBinding(code = "BLOCK", priority = 100))
+public class AmountFraudRule implements InlineRuleSpec {
+    @Override
+    public Condition condition() {
+        return Condition.gt("amount", 1000)
+                        .and(Condition.in("country", "CN", "HK"));
+    }
+}
+```
+
+> **无绑定 metric 的自定义算子**：`Condition.of(conditionType, params)` 双参重载用于直接指定 `conditionType` + 参数 Map，**不绑定具体 metric**（适用于不依赖单个指标值的自定义算子，与 §2.4 注册的 `@ConditionType` 配合）。常规带 metric 的比较算子仍用 `Condition.gt` / `Condition.in` 等便捷工厂。
+
+### 9.4 装载方式
+
+- **非 Spring（直接使用）**：把规则实例列表传给 `AnnotationRuleSource`，再交给 `RuleEngineClient.Builder.ruleSource(...)`：
+
+```java
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .tenantId("t1")   // @RuleDef.tenantId() 留空的规则继承此租户
+        .ruleSource(new AnnotationRuleSource(List.of(new AmountFraudRule())))
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+- **Spring Boot（自动装配）**：规则类加 `@Component`，`rule-sdk-spring-boot-starter` 的 AutoConfiguration 自动收集容器内所有 `InlineRuleSpec` Bean，构造 `AnnotationRuleSource` 装载，`@Autowired RuleEngineClient` 即可使用，无需手动注册。
+
+### 9.5 实现约束
+
+- `@RuleDef` 与 `InlineRuleSpec` 必须同类标注 + 实现；`AnnotationRuleSource` 跳过未标注 `@RuleDef` 的 spec。
+- `code` 在 `(tenant, sceneCode)` 作用域内须唯一且稳定——它参与代理键 `ruleVersionId` 的哈希派生，改 `code` = 换一条规则身份。
+- `condition()` 应为纯函数（无副作用、不依赖外部可变状态），与 §2.5 ConditionEvaluator 的无状态约束一致。
