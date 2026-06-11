@@ -19,7 +19,6 @@
 
     <modules>
         <module>rule-kernel</module>
-        <module>rule-kernel-polling</module>
         <module>rule-config-svc</module>
         <module>rule-mybatis-native</module>
         <module>rule-eval-svc</module>
@@ -225,11 +224,6 @@
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-kernel</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.sstlfsj.rule</groupId>
-                <artifactId>rule-kernel-polling</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

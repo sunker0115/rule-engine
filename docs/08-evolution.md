@@ -242,7 +242,7 @@
 
 ### 2.17 ActionHandler dryRun 全量实装（D7 v1.5，已实装）
 
-- **已实装（v1.5，D7）**：`BlockTransactionHandler.dryRun()` 和 `SendAlertHandler.dryRun()` 均已 override，返回 `ActionResult.success()` 预览结果；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。
+- **已实装（v1.5，D7）**：`SendAlertHandler.dryRun()` 已 override，返回 `ActionResult.success()` 预览结果；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。引擎内置 ActionHandler 仅 `SendAlertHandler`；`BlockTransactionHandler` 已删除（D57），`BLOCK_TRANSACTION` 由嵌入方经 `ActionHandler` SPI 实现。
 - **背景**：运营需要在 dry-run 时预览"会发什么短信 / 给什么优惠券"等 Action 输出，而不只是 AST 节点 trace。dry-run 响应体 `actionResults` 含真实预览输出；不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
 
 ### 2.18 规则列表查询 API（来源 10-api-contract.md §4.4）

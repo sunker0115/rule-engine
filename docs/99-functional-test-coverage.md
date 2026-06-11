@@ -70,7 +70,6 @@
 | metric 定义下发 `GET /sdk/v1/metric-definitions` | `SdkController` | ✅ | 2026-06-10 | 返回 tenant 级 4 个 metric 定义 |
 | 嵌入式 zero-network 评估 | `RuleEngineClient` | ✅ | rule-example / 2026-06-11 | `SdkTradingScenario`:SDK client(serverUrl=base host)轮询拉快照→本地评估交易(amount>5000 PAYLOAD 引用),命中/未命中双验;serverUrl 须传 base host(SnapshotPoller 自拼 `/sdk/v1/snapshots`) |
 | HTTP 轮询拉快照刷新 | `PollingRuleSource` / `SnapshotPoller` | ✅ | rule-example / 2026-06-11 | 同 `SdkTradingScenario`:`SnapshotPoller` 解析 `ApiResponse.data`→刷新 `SceneRuleIndex`,2s 轮询间隔下 15s 内拉到已发布规则 |
-| DB 轮询 watcher | `DbPollingRuleWatcher` / `DbPollingSceneWatcher` | ⚪ | — | 抛 UnsupportedOperationException(SDK v2) |
 
 ## 六、取数 / 派发
 
@@ -80,7 +79,6 @@
 | EXTERNAL_HTTP 取数 | `ExternalHttpMetricSourceHandler` | ✅ | rule-example / 2026-06-11 `CreditEvaluationScenario`:WireMock 模拟评分接口 + 命名端点 `engine.rule.fetch.endpoints[0]`,params 用 `endpoint`/`path`/`jsonPath`,JSONPath 提取 + 高低分双验 |
 | SEND_ALERT 派发 | `SendAlertHandler` | ✅ | rule-example / 2026-06-11 `HighRiskLoginScenario`:WireMock webhook,200→`action_execution`=SUCCESS、500→FAILED 均真投递验;全局 url 配 `engine.rule.action.send-alert.url`(空 url=SKIPPED 历史已验) |
 | ATTRIBUTE / STREAM 取数 | — | ⚪ | 无 handler bean(未实现) |
-| BLOCK_TRANSACTION 派发 | `BlockTransactionHandler` | ⚪ | v1 stub,直接返回成功 |
 
 ## 七、运维 / 数据保留
 

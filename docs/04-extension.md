@@ -100,6 +100,8 @@ public class GeoDistanceWithinEvaluator implements ConditionEvaluator {
 
 ## 三、加 ActionType
 
+> **引擎内置 handler 仅 `SEND_ALERT`**（HTTP webhook，足够通用）。`BLOCK_TRANSACTION` 等强依赖宿主系统的动作**不内置**（D57：通用引擎无通用"阻断交易"机制）——`actionType` 仍可自由配置，由嵌入方按本节经 `ActionHandler` SPI 自写真实实现;未注册对应 handler 时派发落 `NO_HANDLER` SKIPPED。
+
 ### 3.1 SPI 接口
 
 ```java
@@ -344,7 +346,7 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 6.3 Bean 生命周期
 
-MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（SceneWatcher 负责感知 Scene 状态变更并通知引擎调度这些回调，不直接调用 init()）。ActionHandler 类似，但 PULL Scene 不预热（只 PUSH/HYBRID Scene 预热，详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
+MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（引擎在 Scene 状态变更时调度这些回调，不由 handler 直接调用 init()）。ActionHandler 类似，但 PULL Scene 不预热（只 PUSH/HYBRID Scene 预热，详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
 
 ---
 

@@ -396,7 +396,7 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 - **失败语义**（D53 best-effort + D18 failFast）：单 Action 失败 → `ActionResult { status=FAILED, errorCode }` 直接落 `action_execution` 终态，**不重试不补偿**。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。可靠投递（MQ）/ 业务补偿（saga）未来另设计。
 - **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。另有过程态 `PENDING`（已入队待执行）——对账、监控、失败率统计只看最终三态。
 - **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作落库去重；多规则命中同一 Decision 时幂等键天然去重。best-effort 下重复防护仅靠 DB `uk_idempotency`（ON DUPLICATE KEY 吞重），不防"handler 被重复执行"（进程内幂等缓存已砍，D53；未来 MQ 消费端再做幂等）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一。DDL 详见 [`05-storage.md`](./05-storage.md)。
-- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **提供 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。评估层 dry-run 是一等公民（走完整评估链路 + 节点 trace）；`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7），返回 `ActionResult.success()` 预览结果。dry-run 完整行为契约见 §五 Q10。
+- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **提供 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。评估层 dry-run 是一等公民（走完整评估链路 + 节点 trace）；引擎内置 handler 仅 `SendAlertHandler`，已实装 `dryRun()`（v1.5，D7）返回 `ActionResult.success()` 预览结果；`BLOCK_TRANSACTION` 等由嵌入方经 `ActionHandler` SPI 实现（D57）。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
 - **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(ActionContext ctx)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
 
@@ -1039,7 +1039,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | **Pre-Gate 灰度命中**（ROLLOUT，v1 唯一 Pre-Gate） | 纯只读判定，无副作用差异（hash 算法稳定，不依赖状态） |
 | **EvalContext 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
 | **AST 评估 + 节点 trace** | 真实评估、真实节点 trace；trace 写入 `dry_run_session` 表，不进 `evaluation_session` |
-| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7）。 |
+| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。引擎内置 handler 仅 `SendAlertHandler`，已实装 `dryRun()`（v1.5，D7）；`BLOCK_TRANSACTION` 等由嵌入方 SPI 提供（D57）。 |
 | **`action_execution` 写入** | 不落生产表，预览结果随 dry-run 响应返回 |
 | **审计 `audit_log`** | 不写入（dry-run 不是发布操作） |
 
