@@ -38,7 +38,7 @@ class EvalEngineStrategyTest {
                     .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
                     .orElseThrow();
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+            return new EvalResult(true, d, List.of(d), List.of(), null, null, null, null);
         };
     }
 
@@ -83,7 +83,7 @@ class EvalEngineStrategyTest {
             evalCount.incrementAndGet();
             RuleVersionSnapshot.DecisionBinding b = snap.decisionBindings().get(0);
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+            return new EvalResult(true, d, List.of(d), List.of(), null, null, null, null);
         };
 
         SceneRuleIndex index = new SceneRuleIndex();
@@ -179,7 +179,7 @@ class EvalEngineStrategyTest {
             count.incrementAndGet();
             RuleVersionSnapshot.DecisionBinding b = snap.decisionBindings().get(0);
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+            return new EvalResult(true, d, List.of(d), List.of(), null, null, null, null);
         };
         SceneRuleIndex index = new SceneRuleIndex();
         index.setStrategy("t1", "fraud", SceneExecutionStrategy.FIRST_HIT);
@@ -192,7 +192,7 @@ class EvalEngineStrategyTest {
     @Test
     void firstHit_noMatch_returnsMiss() {
         RuleVersionExecutor missExec = (snap, ctx) ->
-                new EvalResult(false, null, List.of(), List.of(), null, List.of(), null, null, null);
+                new EvalResult(false, null, List.of(), List.of(), null, null, null, null);
 
         SceneRuleIndex index = new SceneRuleIndex();
         index.setStrategy("t1", "fraud", SceneExecutionStrategy.FIRST_HIT);
@@ -209,7 +209,7 @@ class EvalEngineStrategyTest {
     void allHits_decisionTree_usesLeafDecisionNotMaxBinding() {
         RuleVersionExecutor treeExec = (s, c) -> {
             Decision pass = new Decision("PASS", "", 10, s.ruleVersionId(), "低危");
-            return new EvalResult(true, pass, List.of(pass), List.of(), null, List.of(), null, "低危", null);
+            return new EvalResult(true, pass, List.of(pass), List.of(), null, null, "低危", null);
         };
         RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "fraud", "t1", EMPTY_AND, List.of(),
                 List.of(new RuleVersionSnapshot.DecisionBinding("BLOCK", 30),
@@ -228,9 +228,9 @@ class EvalEngineStrategyTest {
     @Test
     void allHits_multipleTrees_eachCategoryPreserved() {
         RuleVersionExecutor dev = (s, c) -> { Decision d = new Decision("REVIEW","",20,s.ruleVersionId(),"中危");
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, "中危", null); };
+            return new EvalResult(true, d, List.of(d), List.of(), null, null, "中危", null); };
         RuleVersionExecutor amt = (s, c) -> { Decision d = new Decision("REVIEW","",10,s.ruleVersionId(),"大额");
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, "大额", null); };
+            return new EvalResult(true, d, List.of(d), List.of(), null, null, "大额", null); };
         RuleVersionSnapshot s1 = new RuleVersionSnapshot(1L,"fraud","t1",EMPTY_AND,List.of(),
                 List.of(new RuleVersionSnapshot.DecisionBinding("REVIEW",20)),List.of(),"DEV");
         RuleVersionSnapshot s2 = new RuleVersionSnapshot(2L,"fraud","t1",EMPTY_AND,List.of(),

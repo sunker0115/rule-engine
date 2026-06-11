@@ -63,7 +63,7 @@ class EvalServiceImplScorecardTest {
     @Test
     void scorecard_result_score_isPropagated() {
         Decision d = new Decision("HIGH_RISK", "", 10, 1L);
-        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
+        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, 60.0, null, null);
         stubPull(engineResult);
 
         EvalResult result = impl.evaluate(event());

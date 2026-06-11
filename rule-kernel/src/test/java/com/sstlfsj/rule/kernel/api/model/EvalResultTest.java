@@ -17,7 +17,6 @@ class EvalResultTest {
         assertNull(r.errorCode());
         assertTrue(r.hitDecisions().isEmpty());
         assertTrue(r.nodeTrace().isEmpty());
-        assertTrue(r.actionResults().isEmpty());
     }
 
     @Test
@@ -28,7 +27,6 @@ class EvalResultTest {
         assertNull(r.errorCode());
         assertTrue(r.hitDecisions().isEmpty());
         assertTrue(r.nodeTrace().isEmpty());
-        assertTrue(r.actionResults().isEmpty());
     }
 
     @Test
@@ -40,7 +38,6 @@ class EvalResultTest {
         assertNull(r.errorCode());
         assertEquals(1, r.nodeTrace().size());
         assertTrue(r.hitDecisions().isEmpty());
-        assertTrue(r.actionResults().isEmpty());
     }
 
     @Test
@@ -64,17 +61,16 @@ class EvalResultTest {
 
     @Test
     void nullLists_defaultToEmpty() {
-        EvalResult r = new EvalResult(true, null, null, null, null, null, null, null, null);
+        EvalResult r = new EvalResult(true, null, null, null, null, null, null, null);
         assertNotNull(r.hitDecisions());
         assertNotNull(r.nodeTrace());
-        assertNotNull(r.actionResults());
     }
 
     @Test
     void hitDecisions_areImmutable() {
         Decision d = new Decision("BLOCK", "拦截", 100, 1L);
         List<Decision> mutable = new ArrayList<>(List.of(d));
-        EvalResult r = new EvalResult(true, d, mutable, List.of(), null, List.of(), null, null, null);
+        EvalResult r = new EvalResult(true, d, mutable, List.of(), null, null, null, null);
         mutable.add(d);
         assertEquals(1, r.hitDecisions().size(), "构造后修改原始列表不应影响 EvalResult");
     }
@@ -84,8 +80,6 @@ class EvalResultTest {
         EvalResult r = EvalResult.miss();
         assertThrows(UnsupportedOperationException.class,
                 () -> r.hitDecisions().add(new Decision("X", "X", 0, null)));
-        assertThrows(UnsupportedOperationException.class,
-                () -> r.actionResults().add(ActionResult.notSupported()));
     }
 
     @Test
@@ -93,7 +87,7 @@ class EvalResultTest {
         assertNull(EvalResult.hit().score());
         assertNull(EvalResult.miss().score());
 
-        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, List.of(), 42.5, null, null);
+        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, 42.5, null, null);
         assertEquals(42.5, r.score());
     }
 
@@ -107,14 +101,14 @@ class EvalResultTest {
 
     @Test
     void category_canBeSet_forDecisionTree() {
-        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, List.of(), null, "HIGH_RISK", null);
+        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, null, "HIGH_RISK", null);
         assertEquals("HIGH_RISK", r.category());
         assertNull(r.decision());
     }
 
     @Test
     void decision_canBeSet_forDecisionTable() {
-        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, List.of(), null, null, "BLOCK");
+        EvalResult r = new EvalResult(true, null, List.of(), List.of(), null, null, null, "BLOCK");
         assertNull(r.category());
         assertEquals("BLOCK", r.decision());
     }

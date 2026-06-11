@@ -63,35 +63,16 @@ public record RuleVersionSnapshot(
     }
 
     /**
-     * Decision 绑定配置快照。发布期从 decision_definition 冻结 name/actions 进来（方案甲，守 D6 不可变 + 评估零额外查询）。
+     * Decision 绑定配置快照。发布期从 decision_definition 冻结 name 进来（方案甲，守 D6 不可变 + 评估零额外查询）。
      *
      * @param decisionCode decision 编码
      * @param name         decision 名称（发布期冻结；旧兼容构造为 null）
      * @param priority     绑定优先级，越大越优先
-     * @param actions      decision 的 action 列表（发布期冻结；旧兼容构造为空）
      */
-    public record DecisionBinding(String decisionCode, String name, int priority, List<DecisionAction> actions) {
-        public DecisionBinding {
-            actions = actions == null ? List.of() : List.copyOf(actions);
-        }
-
-        /** 兼容旧调用点：仅 (decisionCode, priority)，name=null、actions 空。 */
+    public record DecisionBinding(String decisionCode, String name, int priority) {
+        /** 兼容旧调用点：仅 (decisionCode, priority)，name=null。 */
         public DecisionBinding(String decisionCode, int priority) {
-            this(decisionCode, null, priority, List.of());
-        }
-    }
-
-    /**
-     * Decision 内单个 action 项，对应 decision_definition.actions JSON 数组元素。
-     *
-     * @param actionId   action 实例标识
-     * @param actionType actionType 路由键
-     * @param sortOrder  执行顺序，升序
-     * @param params     依 actionType 异构的开放参数（结构无定义，故为 Map）
-     */
-    public record DecisionAction(String actionId, String actionType, int sortOrder, Map<String, Object> params) {
-        public DecisionAction {
-            params = params == null ? Map.of() : Map.copyOf(params);
+            this(decisionCode, null, priority);
         }
     }
 

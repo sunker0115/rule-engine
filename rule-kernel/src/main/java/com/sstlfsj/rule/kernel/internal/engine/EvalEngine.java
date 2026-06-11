@@ -169,7 +169,7 @@ public class EvalEngine {
                     // winner==null（命中但无决策/无 binding）不计 FIRST_HIT，与 evaluateAllCandidates 的「无决策即非命中」一致
                     if (winner == null) continue;
                     return new EvalResult(true, winner, List.of(winner),
-                            r.nodeTrace(), r.errorCode(), List.of(), r.score(),
+                            r.nodeTrace(), r.errorCode(), r.score(),
                             winner.category(), null);
                 }
             } catch (Exception ignored) {
@@ -214,7 +214,6 @@ public class EvalEngine {
                 Collections.unmodifiableList(hitDecisions),
                 Collections.unmodifiableList(allTraces),
                 errorCode,
-                List.of(),
                 aggregatedScore,
                 finalDecision != null ? finalDecision.category() : null,
                 null
@@ -235,7 +234,7 @@ public class EvalEngine {
             if (BINDING_PRECEDENCE.compare(b, best) > 0) best = b;
         }
         return List.of(new Decision(best.decisionCode(), best.name(), best.priority(),
-                snap.ruleVersionId(), snap.code(), snap.version(), null, best.actions()));
+                snap.ruleVersionId(), snap.code(), snap.version(), null));
     }
 
     /** 快照 decisionBindings 的最高 priority；无 binding 时返回 0。供 FIRST_HIT 排序用。 */

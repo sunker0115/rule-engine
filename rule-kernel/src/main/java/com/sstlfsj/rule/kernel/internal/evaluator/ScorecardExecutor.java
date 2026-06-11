@@ -71,7 +71,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
         boolean hit = score >= root.threshold();
         return new EvalResult(hit, null, List.of(),
                 scorecardRoot(collect, hit, factorTraces, rvId, code, version),
-                null, List.of(), score, null, null);
+                null, score, null, null);
     }
 
     /**

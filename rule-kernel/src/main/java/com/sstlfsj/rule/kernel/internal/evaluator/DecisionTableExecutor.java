@@ -122,10 +122,10 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
         Decision decision = snapshot.decisionBindings().stream()
                 .filter(b -> b.decisionCode().equals(decisionCode))
                 .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), null, b.actions()))
+                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), null))
                 .orElseGet(() -> new Decision(decisionCode, "", 0, snapshot.ruleVersionId()));
         return new EvalResult(true, decision, List.of(decision),
-                traces(sink), null, List.of(), null, null, decisionCode);
+                traces(sink), null, null, null, decisionCode);
     }
 
     /** sink 为 null（非收集模式）时返回空列表，否则返回当前 sink 内容。 */

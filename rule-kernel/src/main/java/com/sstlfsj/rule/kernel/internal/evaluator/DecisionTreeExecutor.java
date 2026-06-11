@@ -73,7 +73,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         }
         // 顶层结果挂上含 IfNode 根的完整 trace；命中布尔/决策取自分支求值
         return new EvalResult(branch.ruleHit(), branch.finalDecision(), branch.hitDecisions(),
-                traces(sink), branch.errorCode(), branch.actionResults(),
+                traces(sink), branch.errorCode(),
                 branch.score(), branch.category(), branch.decision());
     }
 
@@ -155,11 +155,11 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         Decision decision = snapshot.decisionBindings().stream()
                 .filter(b -> b.decisionCode().equals(leaf.decisionCode()))
                 .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), leaf.category(), b.actions()))
+                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), leaf.category()))
                 .orElseGet(() -> new Decision(leaf.decisionCode(), "", 0, snapshot.ruleVersionId(), leaf.category()));
         // 叶子命中：trace 由调用方（IfNode/顶层）汇总，这里只返回命中布尔/决策
         return new EvalResult(true, decision, List.of(decision),
-                List.of(), null, List.of(), null, leaf.category(), null);
+                List.of(), null, null, leaf.category(), null);
     }
 
     /** sink 为 null（非收集模式）时返回空列表，否则返回当前 sink 内容。 */

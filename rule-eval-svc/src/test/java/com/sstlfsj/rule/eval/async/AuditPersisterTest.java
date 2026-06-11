@@ -120,7 +120,7 @@ class AuditPersisterTest {
                 .subjectId("u1").eventId("e3").source(EventSource.HTTP).occurredAt(Instant.now()).build();
         // SCORECARD 命中：result.score 非 null → 落审计 score 列
         EvalResult scored = new EvalResult(true, null, java.util.List.of(), java.util.List.of(),
-                null, java.util.List.of(), 87.5, null, null);
+                null, 87.5, null, null);
         persister.onAudit(new AuditRecordedEvent(44L, event, EvalMode.PULL,1, scored, null, null, 0));
 
         Thread.sleep(300);
@@ -144,7 +144,7 @@ class AuditPersisterTest {
         Decision dev = new Decision("REVIEW", "", 20, 11L, "中危");
         Decision amt = new Decision("REVIEW", "", 10, 22L, "大额");
         EvalResult r = new EvalResult(true, dev, java.util.List.of(dev, amt), java.util.List.of(),
-                null, java.util.List.of(), null, "中危", null);
+                null, null, "中危", null);
         persister.onAudit(new AuditRecordedEvent(91L, event, EvalMode.PULL,2, r, null, null, 0));
 
         Thread.sleep(300);

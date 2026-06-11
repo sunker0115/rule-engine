@@ -47,7 +47,7 @@ class DoEvaluateEmitsEventsTest {
         when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
         Decision pass = new Decision("PASS", "", 1, 3L);
         EvalResult hit = new EvalResult(true, pass, List.of(pass), List.of(),
-                null, List.of(), null, null, null);
+                null, null, null, null);
         when(engine.evaluateWithContext(eq(event), anyList(), any()))
                 .thenReturn(new EvalOutcome(hit, null));
 
@@ -70,7 +70,7 @@ class DoEvaluateEmitsEventsTest {
         RuleEvent event = event("e3");
         when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
         EvalResult miss = new EvalResult(false, null, List.of(), List.of(),
-                null, List.of(), null, null, null);
+                null, null, null, null);
         when(engine.evaluateWithContext(eq(event), anyList(), any()))
                 .thenReturn(new EvalOutcome(miss, null));
 
@@ -88,7 +88,7 @@ class DoEvaluateEmitsEventsTest {
         RuleEvent event = event("e4");
         when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
         EvalResult miss = new EvalResult(false, null, List.of(), List.of(),
-                null, List.of(), null, null, null);
+                null, null, null, null);
         when(engine.evaluateWithContext(eq(event), anyList(), any()))
                 .thenReturn(new EvalOutcome(miss, null, "ROLLOUT"));
 

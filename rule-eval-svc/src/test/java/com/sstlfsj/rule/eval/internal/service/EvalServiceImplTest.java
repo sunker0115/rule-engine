@@ -55,7 +55,7 @@ class EvalServiceImplTest {
 
     private EvalResult hitResult(String code, int priority, Long ruleVersionId) {
         Decision d = new Decision(code, "", priority, ruleVersionId);
-        return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+        return new EvalResult(true, d, List.of(d), List.of(), null, null, null, null);
     }
 
     private EvalContext ctx() {
@@ -123,7 +123,7 @@ class EvalServiceImplTest {
         Decision highPriority = new Decision("REJECT", "", 20, 2L);
         EvalResult engineResult = new EvalResult(true, highPriority,
                 List.of(new Decision("LOW_RISK", "", 5, 1L), highPriority),
-                List.of(), null, List.of(), null, null, null);
+                List.of(), null, null, null, null);
         stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
 
         EvalResult result = impl.evaluate(event());
@@ -234,7 +234,7 @@ class EvalServiceImplTest {
     @Test
     void evaluate_scoreFromEngine_isPropagated() {
         Decision d = new Decision("REJECT", "", 10, 1L);
-        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
+        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, 60.0, null, null);
         stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
 
         EvalResult result = impl.evaluate(event());

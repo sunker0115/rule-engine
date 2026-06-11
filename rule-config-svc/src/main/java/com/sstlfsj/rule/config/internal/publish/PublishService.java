@@ -569,7 +569,7 @@ public class PublishService {
             // priority 从 decision_definition 回填(草稿期 binding priority 是 0 占位，DecisionBindingInput 契约)
             int priority = d.getPriority() != null ? d.getPriority() : b.priority();
             frozen.add(new RuleVersionSnapshot.DecisionBinding(
-                    b.decisionCode(), d.getName(), priority, java.util.List.of()));
+                    b.decisionCode(), d.getName(), priority));
         }
         return frozen;
     }

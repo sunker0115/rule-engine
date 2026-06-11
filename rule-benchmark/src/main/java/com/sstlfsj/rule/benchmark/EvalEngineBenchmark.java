@@ -68,7 +68,7 @@ public class EvalEngineBenchmark {
         RuleVersionExecutor exec = (snap, ctx) -> {
             RuleVersionSnapshot.DecisionBinding b = snap.decisionBindings().get(0);
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+            return new EvalResult(true, d, List.of(d), List.of(), null, null, null, null);
         };
         engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", exec), false);
 

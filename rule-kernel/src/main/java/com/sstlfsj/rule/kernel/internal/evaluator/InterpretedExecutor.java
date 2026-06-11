@@ -64,7 +64,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
         } else {
             traces = List.of();
         }
-        return new EvalResult(satisfied, null, List.of(), traces, null, List.of(), null, null, null);
+        return new EvalResult(satisfied, null, List.of(), traces, null, null, null, null);
     }
 
     /** 递归将规则身份（ruleVersionId/code/version）注入 trace 树（顶层和所有子节点，同一作用域）。 */

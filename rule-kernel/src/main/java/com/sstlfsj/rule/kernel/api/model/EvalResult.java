@@ -9,7 +9,6 @@ public record EvalResult(
         List<Decision> hitDecisions,
         List<NodeTrace> nodeTrace,
         String errorCode,
-        List<ActionResult> actionResults,
         /** D12 SCORECARD kind 的累计分；AST_BOOLEAN kind 时为 null。 */
         Double score,
         /** D42 DECISION_TREE 命中叶子节点时填充的分类标签；其他 kind 为 null。 */
@@ -20,17 +19,16 @@ public record EvalResult(
     public EvalResult {
         hitDecisions = hitDecisions == null ? List.of() : List.copyOf(hitDecisions);
         nodeTrace = nodeTrace == null ? List.of() : List.copyOf(nodeTrace);
-        actionResults = actionResults == null ? List.of() : List.copyOf(actionResults);
     }
 
     /** 规则命中时的标准结果（AST_BOOLEAN kind）。 */
     public static EvalResult hit() {
-        return new EvalResult(true, null, List.of(), List.of(), null, List.of(), null, null, null);
+        return new EvalResult(true, null, List.of(), List.of(), null, null, null, null);
     }
 
     /** 规则未命中时的标准结果（AST_BOOLEAN kind）。 */
     public static EvalResult miss() {
-        return new EvalResult(false, null, List.of(), List.of(), null, List.of(), null, null, null);
+        return new EvalResult(false, null, List.of(), List.of(), null, null, null, null);
     }
 
     /**
@@ -40,7 +38,7 @@ public record EvalResult(
      * @return 不命中结果
      */
     public static EvalResult miss(List<NodeTrace> nodeTrace) {
-        return new EvalResult(false, null, List.of(), nodeTrace, null, List.of(), null, null, null);
+        return new EvalResult(false, null, List.of(), nodeTrace, null, null, null, null);
     }
 
     /**
@@ -50,7 +48,7 @@ public record EvalResult(
      * @return 错误结果
      */
     public static EvalResult error(String errorCode) {
-        return new EvalResult(false, null, List.of(), List.of(), errorCode, List.of(), null, null, null);
+        return new EvalResult(false, null, List.of(), List.of(), errorCode, null, null, null);
     }
 
     /**
@@ -61,6 +59,6 @@ public record EvalResult(
      * @return 错误结果
      */
     public static EvalResult error(String errorCode, List<NodeTrace> nodeTrace) {
-        return new EvalResult(false, null, List.of(), nodeTrace, errorCode, List.of(), null, null, null);
+        return new EvalResult(false, null, List.of(), nodeTrace, errorCode, null, null, null);
     }
 }
