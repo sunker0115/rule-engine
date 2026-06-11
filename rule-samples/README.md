@@ -63,3 +63,12 @@ rule:
 ```
 
 注入即用:`@Autowired RuleEngineClient client;`。
+
+## 重复跑 & 清库
+
+- **重复跑无需清库**:`httpclient` / `sdkpolling` 的建配是幂等的——scene / decision / rule 已存在就复用、跳过创建。反复跑不会因"资源已存在"报错。
+- **彻底重置**:残留的 `evaluation_session` / `audit_log` 是 D14 不可变审计(无删除 API),只能直连 DB 清。需要回到干净基线时跑一次:
+  ```bash
+  mysql -uroot -p123456 rule_engine < rule-samples/cleanup.sql
+  ```
+  默认清 id 9100 的租户数据并保留租户行;改过 `-Ddemo.tenantId` 就同步改 `cleanup.sql` 顶部的 `@tid`。

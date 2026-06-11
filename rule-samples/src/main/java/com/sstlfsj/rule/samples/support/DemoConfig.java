@@ -9,7 +9,7 @@ import java.util.Map;
 /**
  * 通过 admin HTTP API 把示例场景 merchant-trade 的 scene/decision/rule 建好并发布,
  * 供 httpclient / sdkpolling demo 在评估前 seed 配置。
- * 前提:rule-app 已启动,且租户 (id=9001, code='samples') 已存在。
+ * 前提:rule-app 已启动,且对应租户(默认 id=9100, code='samples',见 {@link #TENANT_ID})已存在。
  */
 public final class DemoConfig {
 
@@ -42,29 +42,40 @@ public final class DemoConfig {
 
     /**
      * 建配并发布示例规则:scene → decision → rule → publish。
-     * 注意:幂等性未处理,重复 seed 会因资源已存在而报错——demo 假设干净库或单次运行。
+     * <p><b>幂等</b>:scene / decision / rule 三者均"已存在则跳过创建"(scene、decision 无删除 API;
+     * rule 一旦发布即复用,内容固定无需重建)。因此本方法可重复调用,demo 反复跑不会因"资源已存在"报错。
+     * 残留的 evaluation_session / audit_log 是 D14 不可变审计,不影响重跑;需彻底清空见模块根 cleanup.sql。
      *
      * @param baseUrl rule-app 根地址,如 http://localhost:8080
      */
     public static void seed(String baseUrl) {
         String admin = baseUrl + "/admin/v1";
 
-        post(admin + "/scenes", Map.of(
-                "tenantId", TENANT_ID,
-                "sceneCode", SCENE_CODE,
-                "name", "商户交易风控",
-                "dominantMode", "PULL",
-                "subjectType", "USER",
-                "eventTypes", List.of("trade"),
-                "payloadSchema", List.of(Map.of("name", "amount", "type", "NUMBER", "required", true)),
-                "defaultParams", Map.of()));
+        if (!sceneExists(admin)) {
+            post(admin + "/scenes", Map.of(
+                    "tenantId", TENANT_ID,
+                    "sceneCode", SCENE_CODE,
+                    "name", "商户交易风控",
+                    "dominantMode", "PULL",
+                    "subjectType", "USER",
+                    "eventTypes", List.of("trade"),
+                    "payloadSchema", List.of(Map.of("name", "amount", "type", "NUMBER", "required", true)),
+                    "defaultParams", Map.of()));
+        }
 
-        post(admin + "/decisions?tenantId=" + TENANT_ID, Map.of(
-                "code", "REVIEW",
-                "name", "人工审核",
-                "priority", 50,
-                "description", "samples",
-                "actions", List.of()));
+        if (!decisionExists(admin, "REVIEW")) {
+            post(admin + "/decisions?tenantId=" + TENANT_ID, Map.of(
+                    "code", "REVIEW",
+                    "name", "人工审核",
+                    "priority", 50,
+                    "description", "samples",
+                    "actions", List.of()));
+        }
+
+        // rule 已存在(首次已建并发布)则直接复用;不存在才创建并发布
+        if (findRuleId(admin, "large-trade") != null) {
+            return;
+        }
 
         Map<?, ?> ruleResp = post(admin + "/rules", Map.of(
                 "tenantId", TENANT_ID,
@@ -86,6 +97,52 @@ public final class DemoConfig {
         long ruleId = ((Number) data.get("ruleDefinitionId")).longValue();
 
         post(admin + "/rules/" + ruleId + "/publish?tenantId=" + TENANT_ID, null);
+    }
+
+    /** scene 列表里是否已有本示例场景(列表接口返回 200,无需处理 404;SceneListItem 的编码字段名为 sceneCode)。 */
+    private static boolean sceneExists(String admin) {
+        return listHasField(get(admin + "/scenes?tenantId=" + TENANT_ID), "sceneCode", SCENE_CODE);
+    }
+
+    /** decision 列表里是否已有指定 code(DecisionDefinition 的编码字段名为 code)。 */
+    private static boolean decisionExists(String admin, String code) {
+        return listHasField(get(admin + "/decisions?tenantId=" + TENANT_ID), "code", code);
+    }
+
+    /** 在规则列表里按 code 找规则定义 id,找不到返回 null。 */
+    private static Long findRuleId(String admin, String code) {
+        Map<?, ?> body = get(admin + "/rules?tenantId=" + TENANT_ID + "&sceneCode=" + SCENE_CODE);
+        Object data = body == null ? null : body.get("data");
+        if (!(data instanceof Map<?, ?> page)) {
+            return null;
+        }
+        if (!(page.get("items") instanceof List<?> items)) {
+            return null;
+        }
+        for (Object row : items) {
+            if (row instanceof Map<?, ?> m && code.equals(m.get("code"))) {
+                return ((Number) m.get("ruleDefinitionId")).longValue();
+            }
+        }
+        return null;
+    }
+
+    /** ApiResponse.data 为 List 时,判断其中是否存在指定字段等于目标值的元素。 */
+    private static boolean listHasField(Map<?, ?> body, String field, String value) {
+        Object data = body == null ? null : body.get("data");
+        if (!(data instanceof List<?> list)) {
+            return false;
+        }
+        return list.stream().anyMatch(e -> e instanceof Map<?, ?> m && value.equals(m.get(field)));
+    }
+
+    private static Map<?, ?> get(String url) {
+        return ADMIN.get()
+                .uri(url)
+                .header("X-Actor-Id", "samples")
+                .retrieve()
+                .toEntity(Map.class)
+                .getBody();
     }
 
     private static Map<?, ?> post(String url, Object body) {
