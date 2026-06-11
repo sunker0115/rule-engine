@@ -1,0 +1,5 @@
+# annotation demo:纯本地注解规则源,不连服务端(不设 rule.sdk.server-url)
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
