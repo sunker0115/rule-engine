@@ -56,23 +56,25 @@ public class InterpretedExecutor implements RuleVersionExecutor {
         boolean satisfied = eval(snapshot.conditionAst(), ctx, rawTraces);
         List<NodeTrace> traces;
         if (collect) {
-            // 顶层 trace 打上 ruleVersionId，供 TraceWriter 写库时使用
+            // 顶层 trace 打上 ruleVersionId/code/version，供 TraceWriter 写库时使用
             Long rvId = snapshot.ruleVersionId();
-            traces = rawTraces.stream().map(t -> withRuleVersionId(t, rvId)).toList();
+            String code = snapshot.code();
+            long version = snapshot.version();
+            traces = rawTraces.stream().map(t -> withRuleIdentity(t, rvId, code, version)).toList();
         } else {
             traces = List.of();
         }
         return new EvalResult(satisfied, null, List.of(), traces, null, List.of(), null, null, null);
     }
 
-    /** 递归将 ruleVersionId 注入 trace 树（顶层和所有子节点）。 */
-    private static NodeTrace withRuleVersionId(NodeTrace t, Long rvId) {
+    /** 递归将规则身份（ruleVersionId/code/version）注入 trace 树（顶层和所有子节点，同一作用域）。 */
+    private static NodeTrace withRuleIdentity(NodeTrace t, Long rvId, String code, long version) {
         List<NodeTrace> children = t.children().stream()
-                .map(c -> withRuleVersionId(c, rvId))
+                .map(c -> withRuleIdentity(c, rvId, code, version))
                 .toList();
         return new NodeTrace(t.nodeType(), t.conditionType(), t.metricCode(),
                 t.result(), t.actualValue(), t.valueSource(), t.errorCode(), children, rvId,
-                t.ruleCode(), t.ruleVersion(), t.expectedValue(), t.displayLabel());
+                code, version, t.expectedValue(), t.displayLabel());
     }
 
     /**

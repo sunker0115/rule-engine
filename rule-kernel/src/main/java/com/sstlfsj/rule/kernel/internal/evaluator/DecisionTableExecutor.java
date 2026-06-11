@@ -37,13 +37,15 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
 
         boolean collect = TraceScope.COLLECT.orElse(true);
         Long rvId = snapshot.ruleVersionId();
+        String code = snapshot.code();
+        long version = snapshot.version();
         // collect=false 时 sink 为 null，逐行跳过 trace 构建（零分配契约）
         List<NodeTrace> sink = collect ? new ArrayList<>() : null;
 
         for (DecisionTableNode.Row row : rows) {
             // 每行的列条件 trace 收集到 columnTraces，再包进 DecisionTableRow
             List<NodeTrace> columnTraces = sink != null ? new ArrayList<>() : null;
-            RowResult rr = rowMatches(row, columns, ctx, columnTraces, rvId);
+            RowResult rr = rowMatches(row, columns, ctx, columnTraces, rvId, code, version);
             if (rr.error() != null) {
                 // 取数失败：记录本行（带错码）后中止整表，整表置 ERROR + miss
                 if (sink != null) {
@@ -52,7 +54,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
                 return EvalResult.error(rr.error(), traces(sink));
             }
             if (sink != null) {
-                sink.add(NodeTrace.container(NodeType.DECISION_TABLE_ROW, rr.isMatch(), columnTraces, rvId));
+                sink.add(NodeTrace.container(NodeType.DECISION_TABLE_ROW, rr.isMatch(), columnTraces, rvId, code, version));
             }
             if (rr.isMatch()) {
                 return hit(row.decisionCode(), snapshot, sink);
@@ -80,7 +82,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
                                  List<DecisionTableNode.Column> columns,
                                  EvalContext ctx,
                                  List<NodeTrace> columnTraces,
-                                 Long rvId) {
+                                 Long rvId, String code, long version) {
         List<Object> conditions = row.conditions();
         for (int i = 0; i < columns.size(); i++) {
             Object condValue = (i < conditions.size()) ? conditions.get(i) : null;
@@ -97,7 +99,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
                 columnTraces.add(new NodeTrace(NodeType.CONDITION.tag(), col.operator(), col.metricCode(),
                         o.satisfied(), o.resolvedValue(), o.valueSource(),
                         o.isError() ? o.errorCode() : null, List.of(), rvId,
-                        null, 0L, node.params(), node.displayLabel()));
+                        code, version, node.params(), node.displayLabel()));
             }
             if (o.isError()) return RowResult.error(o.errorCode());
             if (!o.satisfied()) return RowResult.notMatched(); // 本行不匹配
@@ -120,7 +122,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
         Decision decision = snapshot.decisionBindings().stream()
                 .filter(b -> b.decisionCode().equals(decisionCode))
                 .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), null, 0L, null, b.actions()))
+                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), null, b.actions()))
                 .orElseGet(() -> new Decision(decisionCode, "", 0, snapshot.ruleVersionId()));
         return new EvalResult(true, decision, List.of(decision),
                 traces(sink), null, List.of(), null, null, decisionCode);

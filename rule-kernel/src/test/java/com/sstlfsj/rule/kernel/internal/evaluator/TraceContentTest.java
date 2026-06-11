@@ -87,4 +87,72 @@ class TraceContentTest {
         assertThat(t.ruleVersion()).isEqualTo(3L);
         assertThat(t.ruleVersionId()).isEqualTo(100L);
     }
+
+    @Test
+    void interpretedExecutor_threadsSnapshotCodeAndVersion_intoTopTrace() {
+        ConditionNode node = new ConditionNode("GTE", "score", "score>=0",
+                Map.of("threshold", 0), null, "LONG");
+        InterpretedExecutor exec = new InterpretedExecutor(Map.of("GTE", gte));
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(7L).tenantId("1").sceneCode("PAY").conditionAst(node)
+                .code("r1").version(2L)
+                .addDecisionBinding("APPROVE", 10)
+                .build();
+        EvalContext ctx = ctxWith(Map.of("score", new MetricValue(100L, "LONG", "PROVIDED")));
+
+        EvalResult r = exec.execute(snap, ctx);
+
+        // 顶层 trace 携带 snapshot 的 code/version（与 ruleVersionId 同作用域）
+        NodeTrace top = r.nodeTrace().get(0);
+        assertThat(top.ruleCode()).isEqualTo("r1");
+        assertThat(top.ruleVersion()).isEqualTo(2L);
+    }
+
+    @Test
+    void decisionTreeExecutor_threadsSnapshotCodeAndVersion_intoTraceAndDecision() {
+        ConditionNode cond = new ConditionNode("GTE", "score", "score>=0",
+                Map.of("threshold", 0), null, "LONG");
+        com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode thenLeaf =
+                new com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode("APPROVE", "APPROVE");
+        com.sstlfsj.rule.kernel.api.model.ast.IfNode root =
+                new com.sstlfsj.rule.kernel.api.model.ast.IfNode(cond, thenLeaf, null);
+        DecisionTreeExecutor exec = new DecisionTreeExecutor(Map.of("GTE", gte));
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(7L).tenantId("1").sceneCode("PAY").conditionAst(root)
+                .code("r1").version(2L)
+                .addDecisionBinding("APPROVE", 10)
+                .build();
+        EvalContext ctx = ctxWith(Map.of("score", new MetricValue(100L, "LONG", "PROVIDED")));
+
+        EvalResult r = exec.execute(snap, ctx);
+
+        // 顶层 trace 携带 snapshot 的 code/version
+        NodeTrace top = r.nodeTrace().get(0);
+        assertThat(top.ruleCode()).isEqualTo("r1");
+        assertThat(top.ruleVersion()).isEqualTo(2L);
+        // Decision 携带 snapshot 的 code/version
+        assertThat(r.finalDecision().fromRuleCode()).isEqualTo("r1");
+        assertThat(r.finalDecision().fromRuleVersion()).isEqualTo(2L);
+    }
+
+    @Test
+    void scorecardExecutor_threadsSnapshotCodeAndVersion_intoRootAndFactors() {
+        ConditionNode f1 = new ConditionNode("GTE", "score", "score>=0",
+                Map.of("threshold", 0), 50.0, "LONG");
+        ScorecardRootNode root = new ScorecardRootNode(List.of(f1), 50.0);
+        ScorecardExecutor exec = new ScorecardExecutor(Map.of("GTE", gte));
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(9L).tenantId("1").sceneCode("PAY").conditionAst(root)
+                .code("r1").version(2L).kind("SCORECARD").build();
+        EvalContext ctx = ctxWith(Map.of("score", new MetricValue(100L, "LONG", "FETCHED")));
+
+        EvalResult r = exec.execute(snap, ctx);
+
+        // 根节点与各因子叶子均携带 snapshot 的 code/version
+        NodeTrace rootTrace = r.nodeTrace().get(0);
+        assertThat(rootTrace.ruleCode()).isEqualTo("r1");
+        assertThat(rootTrace.ruleVersion()).isEqualTo(2L);
+        assertThat(rootTrace.children().get(0).ruleCode()).isEqualTo("r1");
+        assertThat(rootTrace.children().get(0).ruleVersion()).isEqualTo(2L);
+    }
 }
