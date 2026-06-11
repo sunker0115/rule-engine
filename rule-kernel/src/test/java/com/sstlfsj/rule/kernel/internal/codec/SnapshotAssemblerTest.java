@@ -67,7 +67,7 @@ class SnapshotAssemblerTest {
         RuleVersionRow r = new RuleVersionRow(1L, "PAY", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"score\",\"params\":{\"threshold\":1}}",
                 "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
-                "[{\"metricCode\":\"m1\",\"metricVersion\":1}]", "[]");
+                "[{\"metricCode\":\"m1\",\"metricVersion\":1}]", "[]", null, 0L);
         RuleVersionSnapshot snap = assembler.assemble(r);
         assertEquals(List.of(new MetricDependency("m1", 1)), snap.metricDependencies());
     }
@@ -87,7 +87,7 @@ class SnapshotAssemblerTest {
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"amount\",\"params\":{\"threshold\":1}}",
                 "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
                 "[]",
-                "[{\"name\":\"amount\",\"dataType\":\"DECIMAL\",\"required\":true}]");
+                "[{\"name\":\"amount\",\"dataType\":\"DECIMAL\",\"required\":true}]", null, 0L);
         RuleVersionSnapshot snap = assembler.assemble(r);
         org.assertj.core.api.Assertions.assertThat(snap.payloadDependencies())
                 .containsExactly(new com.sstlfsj.rule.kernel.api.model.PayloadDependency("amount", "DECIMAL", true));
