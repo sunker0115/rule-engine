@@ -29,8 +29,8 @@ import java.util.Map;
 @Testcontainers
 public abstract class ScenarioSupport {
 
-    static final String TENANT_ID = "9001";
-    static final String TENANT_CODE = "example";
+    protected static final String TENANT_ID = "9001";
+    protected static final String TENANT_CODE = "example";
     static final String ACTOR_ID = "scenario-runner";
 
     @Container
@@ -41,7 +41,7 @@ public abstract class ScenarioSupport {
             WireMockConfiguration.options().dynamicPort());
 
     @LocalServerPort
-    int localPort;
+    protected int localPort;
 
     @Autowired
     private RestClient.Builder restClientBuilder;

@@ -18,6 +18,10 @@
             <artifactId>rule-app</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-sdk</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>

@@ -32,6 +32,7 @@
         <module>rule-sdk</module>
         <module>rule-sdk-spring-boot-starter</module>
         <module>rule-benchmark</module>
+        <module>rule-example</module>
     </modules>
 
     <properties>
@@ -294,6 +295,8 @@
         <profile>
             <id>examples</id>
             <modules>
+                <module>rule-sdk</module>
+                <module>rule-sdk-spring-boot-starter</module>
                 <module>rule-example</module>
             </modules>
         </profile>
