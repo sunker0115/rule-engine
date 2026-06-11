@@ -12,6 +12,14 @@
 | SDK 本地 JSON | `sdklocal/SdkLocalDemo` | 否 | 离线 / 边缘,规则随应用发布 |
 | 注解规则即代码 | `annotation/AnnotationDemoApplication` | 否 | 规则随代码演进,要强类型 + 重构友好 |
 
+## 特性 demo
+
+按接入姿势之外,单独演示某类规则能力(均零依赖、`main()` 直接跑):
+
+| demo | 演示能力 |
+|---|---|
+| `timecondition/TimeConditionDemo` | 内置时间条件:`time.occurred_at`(事件时间 BEFORE/AFTER/BETWEEN,确定性)+ `time.window`(营业时段,结果随运行时刻变化)。kernel 默认注册,无需自定义算子。 |
+
 ## 运行前提
 
 - 跑 mvn 前先设置 `$MVN`(本机 mvn 不在 PATH)。
@@ -35,6 +43,7 @@
 ```bash
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.sdklocal.SdkLocalDemo"
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.annotation.AnnotationDemoApplication"
+$MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.timecondition.TimeConditionDemo"
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.httpclient.HttpClientDemo"
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.sdkpolling.SdkPollingDemo"
 ```
