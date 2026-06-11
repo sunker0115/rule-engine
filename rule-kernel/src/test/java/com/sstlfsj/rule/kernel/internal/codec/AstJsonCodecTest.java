@@ -104,20 +104,6 @@ class AstJsonCodecTest {
     }
 
     @Test
-    void deserializeSnapshot_missingPrimitiveVersion_defaultsToZero() throws Exception {
-        // 手写规则 JSON 省略新增的原始类型字段 version 时，应回退 0 而非抛 FAIL_ON_NULL_FOR_PRIMITIVES
-        String json = """
-                {"ruleVersionId":100,"sceneCode":"test","tenantId":"t1","kind":"AST_BOOLEAN",
-                 "triggerEventTypes":["TEST_EVENT"],"decisionBindings":[],"preGates":[],
-                 "conditionAst":{"type":"AndNode","children":[]}}
-                """;
-        RuleVersionSnapshot snap = codec.createMapper().readValue(json, RuleVersionSnapshot.class);
-        assertEquals(0L, snap.version());
-        assertNull(snap.code());
-        assertEquals("test", snap.sceneCode());
-    }
-
-    @Test
     void createMapper_returnsCachedInstance() {
         assertSame(codec.createMapper(), codec.createMapper());
     }

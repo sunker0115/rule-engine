@@ -1,6 +1,8 @@
 [
   {
     "ruleVersionId": 9001,
+    "code": "large-trade",
+    "version": 1,
     "sceneCode": "merchant-trade",
     "tenantId": "9001",
     "kind": "AST_BOOLEAN",

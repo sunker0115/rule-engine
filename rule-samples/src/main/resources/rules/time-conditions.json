@@ -1,6 +1,8 @@
 [
   {
     "ruleVersionId": 9201,
+    "code": "login-window",
+    "version": 1,
     "sceneCode": "time-demo",
     "tenantId": "9100",
     "kind": "AST_BOOLEAN",
@@ -19,6 +21,8 @@
   },
   {
     "ruleVersionId": 9202,
+    "code": "business-hours",
+    "version": 1,
     "sceneCode": "time-demo",
     "tenantId": "9100",
     "kind": "AST_BOOLEAN",

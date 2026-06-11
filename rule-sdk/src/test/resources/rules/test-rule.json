@@ -1,6 +1,8 @@
 [
   {
     "ruleVersionId": 100,
+    "code": "test-rule",
+    "version": 1,
     "sceneCode": "test",
     "tenantId": "t1",
     "kind": "AST_BOOLEAN",
