@@ -50,7 +50,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                 if (collect) {
                     factorTraces.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                             false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), rvId,
-                            node.params(), node.displayLabel()));
+                            null, 0L, node.params(), node.displayLabel()));
                 }
                 return EvalResult.error(outcome.errorCode(),
                         scorecardRoot(collect, false, factorTraces, rvId));
@@ -62,7 +62,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
             if (collect) {
                 factorTraces.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                         met, outcome.resolvedValue(), outcome.valueSource(), null, List.of(), rvId,
-                        node.params(), node.displayLabel()));
+                        null, 0L, node.params(), node.displayLabel()));
             }
         }
 

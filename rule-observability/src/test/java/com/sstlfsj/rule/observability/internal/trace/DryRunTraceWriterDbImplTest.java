@@ -31,7 +31,7 @@ class DryRunTraceWriterDbImplTest {
     void write_throwsNpe_beforeInit() {
         DryRunTraceWriterDbImpl writer = new DryRunTraceWriterDbImpl(100, 10, 50,
                 mock(DryRunNodeTraceMapper.class), objectMapper);
-        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
+        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, 0L, null, null);
         assertThrows(NullPointerException.class, () -> writer.write("t1", "s1", List.of(trace)));
     }
 
@@ -41,7 +41,7 @@ class DryRunTraceWriterDbImplTest {
                 mock(DryRunNodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         try {
-            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
+            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, 0L, null, null);
             assertDoesNotThrow(() -> writer.write("t1", "s1", List.of(trace)));
         } finally {
             writer.destroy();
@@ -54,7 +54,7 @@ class DryRunTraceWriterDbImplTest {
                 mock(DryRunNodeTraceMapper.class), objectMapper);
         writer.afterPropertiesSet();
         try {
-            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, null);
+            NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "FETCHED", null, null, null, null, 0L, null, null);
             assertDoesNotThrow(() -> {
                 writer.write("t1", "s1", List.of(trace));
                 writer.write("t1", "s2", List.of(trace));
@@ -70,8 +70,8 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, null);
-        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, List.of(child), 7L, null, null);
+        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, 0L, null, null);
+        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, List.of(child), 7L, null, 0L, null, null);
         w.write("1", "42", List.of(root));
         w.destroy();
 
@@ -85,7 +85,7 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, null, 42L, null, null);
+        NodeTrace root = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, null, 42L, null, 0L, null, null);
         w.write("1", "99", List.of(root));
         w.destroy();
 
@@ -101,8 +101,8 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, mapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, null);
-        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, List.of(child), 7L, null, null);
+        NodeTrace child = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, 0L, null, null);
+        NodeTrace root  = new NodeTrace("CONDITION", "GT", "revenue", true, 100, "FETCHED", null, List.of(child), 7L, null, 0L, null, null);
         w.write("1", "42", List.of(root));
         w.destroy();
 
@@ -121,7 +121,7 @@ class DryRunTraceWriterDbImplTest {
         DryRunTraceWriterDbImpl w = new DryRunTraceWriterDbImpl(100, 10, 60_000, dryMapper, objectMapper);
         w.afterPropertiesSet();
 
-        NodeTrace trace = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, null);
+        NodeTrace trace = new NodeTrace("LEAF", "EQ", "score", false, 50, "FETCHED", null, null, null, null, 0L, null, null);
         w.write("1", "1", List.of(trace));
         w.destroy();
 
@@ -143,7 +143,7 @@ class DryRunTraceWriterDbImplTest {
         w.afterPropertiesSet();
 
         // trace.valueSource() 是 String，落库实体字段是 kernel ValueSource 枚举
-        NodeTrace leaf = new NodeTrace("LEAF", "GTE", "score", true, 100, "FETCHED", null, null, 7L, null, null);
+        NodeTrace leaf = new NodeTrace("LEAF", "GTE", "score", true, 100, "FETCHED", null, null, 7L, null, 0L, null, null);
         w.write("1", "42", List.of(leaf));
         w.destroy();
 
@@ -159,7 +159,7 @@ class DryRunTraceWriterDbImplTest {
         w.afterPropertiesSet();
 
         // valueSource 为 null 时不应抛异常，落库为 null
-        NodeTrace leaf = new NodeTrace("LEAF", "GTE", "score", true, 100, null, null, null, 7L, null, null);
+        NodeTrace leaf = new NodeTrace("LEAF", "GTE", "score", true, 100, null, null, null, 7L, null, 0L, null, null);
         w.write("1", "42", List.of(leaf));
         w.destroy();
 
@@ -175,7 +175,7 @@ class DryRunTraceWriterDbImplTest {
 
         // 叶子自携带 expectedValue（→params JSON）与 displayLabel（→display_label 列）
         NodeTrace leaf = new NodeTrace("ConditionNode", "GTE", "score", true, 100, "PROVIDED",
-                null, null, 7L, Map.of("threshold", 0), "score>=0");
+                null, null, 7L, null, 0L, Map.of("threshold", 0), "score>=0");
         w.write("1", "42", List.of(leaf));
         w.destroy();
 
@@ -194,7 +194,7 @@ class DryRunTraceWriterDbImplTest {
         // actual_value 是 JSON 列:字符串值须 JSON 编码("US" → "\"US\""),
         // 裸 toString 产生非法 JSON("US")会让整批 insert 被 MySQL 拒(回归)
         NodeTrace leaf = new NodeTrace("ConditionNode", "IN", "country", true, "US", "PAYLOAD",
-                null, null, 7L, List.of("US", "RU"), "高风险国家");
+                null, null, 7L, null, 0L, List.of("US", "RU"), "高风险国家");
         w.write("1", "42", List.of(leaf));
         w.destroy();
 
@@ -210,7 +210,7 @@ class DryRunTraceWriterDbImplTest {
 
         // 数值不带引号,仍是合法 JSON 数字(5000 → "5000")
         NodeTrace leaf = new NodeTrace("ConditionNode", "GT", "amount", true, 5000, "PAYLOAD",
-                null, null, 7L, Map.of("threshold", 1000), "金额>1000");
+                null, null, 7L, null, 0L, Map.of("threshold", 1000), "金额>1000");
         w.write("1", "42", List.of(leaf));
         w.destroy();
 

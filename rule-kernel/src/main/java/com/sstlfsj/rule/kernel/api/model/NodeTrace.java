@@ -19,6 +19,10 @@ public record NodeTrace(
         List<NodeTrace> children,
         /** 所属规则版本 ID，由执行器在顶层 trace 上填充后向下透传写库；响应体可忽略。 */
         Long ruleVersionId,
+        /** 所属规则逻辑编码;顶层 trace 由执行器填充后向下透传。 */
+        String ruleCode,
+        /** 所属规则版本号。 */
+        long ruleVersion,
         Object expectedValue,
         String displayLabel
 ) {
@@ -28,12 +32,18 @@ public record NodeTrace(
 
     /** 容器/终点节点：无 conditionType/metric/actual/expected/label，只有类型+结果+子节点。 */
     public static NodeTrace container(NodeType type, Boolean result, List<NodeTrace> children, Long ruleVersionId) {
-        return new NodeTrace(type.tag(), null, null, result, null, null, null, children, ruleVersionId, null, null);
+        return new NodeTrace(type.tag(), null, null, result, null, null, null, children, ruleVersionId, null, 0L, null, null);
+    }
+
+    /** 容器/终点节点 + 规则编码/版本号（顶层 trace 由执行器填充，向下透传）。 */
+    public static NodeTrace container(NodeType type, Boolean result, List<NodeTrace> children,
+                                      Long ruleVersionId, String ruleCode, long ruleVersion) {
+        return new NodeTrace(type.tag(), null, null, result, null, null, null, children, ruleVersionId, ruleCode, ruleVersion, null, null);
     }
 
     /** 容器节点 + 错误码（取数失败中止时，容器仍记录 errorCode 与已收集子节点）。 */
     public static NodeTrace container(NodeType type, Boolean result, String errorCode,
                                       List<NodeTrace> children, Long ruleVersionId) {
-        return new NodeTrace(type.tag(), null, null, result, null, null, errorCode, children, ruleVersionId, null, null);
+        return new NodeTrace(type.tag(), null, null, result, null, null, errorCode, children, ruleVersionId, null, 0L, null, null);
     }
 }

@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
+import com.sstlfsj.rule.kernel.api.model.NodeType;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.Subject;
@@ -77,5 +78,13 @@ class TraceContentTest {
         assertThat(factor.nodeType()).isEqualTo("ConditionNode");
         assertThat(factor.actualValue()).isEqualTo(100L);
         assertThat(factor.valueSource()).isEqualTo("FETCHED");
+    }
+
+    @Test
+    void containerCarriesRuleCodeAndVersion() {
+        NodeTrace t = NodeTrace.container(NodeType.AND, true, java.util.List.of(), 100L, "large-trade", 3L);
+        assertThat(t.ruleCode()).isEqualTo("large-trade");
+        assertThat(t.ruleVersion()).isEqualTo(3L);
+        assertThat(t.ruleVersionId()).isEqualTo(100L);
     }
 }

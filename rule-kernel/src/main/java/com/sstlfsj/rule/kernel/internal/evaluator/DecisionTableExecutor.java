@@ -97,7 +97,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
                 columnTraces.add(new NodeTrace(NodeType.CONDITION.tag(), col.operator(), col.metricCode(),
                         o.satisfied(), o.resolvedValue(), o.valueSource(),
                         o.isError() ? o.errorCode() : null, List.of(), rvId,
-                        node.params(), node.displayLabel()));
+                        null, 0L, node.params(), node.displayLabel()));
             }
             if (o.isError()) return RowResult.error(o.errorCode());
             if (!o.satisfied()) return RowResult.notMatched(); // 本行不匹配

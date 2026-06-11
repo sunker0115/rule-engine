@@ -72,7 +72,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
                 .toList();
         return new NodeTrace(t.nodeType(), t.conditionType(), t.metricCode(),
                 t.result(), t.actualValue(), t.valueSource(), t.errorCode(), children, rvId,
-                t.expectedValue(), t.displayLabel());
+                t.ruleCode(), t.ruleVersion(), t.expectedValue(), t.displayLabel());
     }
 
     /**
@@ -186,14 +186,14 @@ public class InterpretedExecutor implements RuleVersionExecutor {
             if (sink != null) {
                 sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                         false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), null,
-                        node.params(), node.displayLabel()));
+                        null, 0L, node.params(), node.displayLabel()));
             }
             return false;
         }
         if (sink != null) {
             sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                     outcome.satisfied(), outcome.resolvedValue(), outcome.valueSource(), null, List.of(), null,
-                    node.params(), node.displayLabel()));
+                    null, 0L, node.params(), node.displayLabel()));
         }
         return outcome.satisfied();
     }

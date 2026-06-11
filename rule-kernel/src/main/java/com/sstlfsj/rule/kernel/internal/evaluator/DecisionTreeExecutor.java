@@ -136,7 +136,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
             sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                     outcome.satisfied(), outcome.resolvedValue(), outcome.valueSource(),
                     outcome.isError() ? outcome.errorCode() : null, List.of(), rvId,
-                    node.params(), node.displayLabel()));
+                    null, 0L, node.params(), node.displayLabel()));
         }
         return outcome;
     }

@@ -34,7 +34,7 @@ class EvalResultTest {
     @Test
     void missWithTrace_carriesTrace_noError() {
         NodeTrace leaf = new NodeTrace("CONDITION", "GT", "score",
-                false, 1, "PROVIDED", null, null, 7L, null, null);
+                false, 1, "PROVIDED", null, null, 7L, null, 0L, null, null);
         EvalResult r = EvalResult.miss(List.of(leaf));
         assertFalse(r.ruleHit());
         assertNull(r.errorCode());
@@ -55,7 +55,7 @@ class EvalResultTest {
     @Test
     void errorWithTrace_carriesErrorCodeAndTrace() {
         NodeTrace leaf = new NodeTrace("CONDITION", "GT", "score",
-                false, 1, "PROVIDED", "METRIC_FETCH_FAIL", null, 7L, null, null);
+                false, 1, "PROVIDED", "METRIC_FETCH_FAIL", null, 7L, null, 0L, null, null);
         EvalResult r = EvalResult.error("METRIC_FETCH_FAIL", List.of(leaf));
         assertFalse(r.ruleHit());
         assertEquals("METRIC_FETCH_FAIL", r.errorCode());
