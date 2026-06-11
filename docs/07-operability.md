@@ -41,7 +41,7 @@
 2. 未命中 → 正常评估 → evaluation_session INSERT
 3. INSERT 遇 DuplicateKeyException → SELECT 已有行 → 返回已有 EvalResult
 
-**幂等范围**：一次"评估"（Matcher + Pre-Gate + AST + 记录 session）幂等；Action 派发**不**幂等（由 ActionHandler 自行保证 execute() 幂等，见 04-extension §三）。
+**幂等范围**：一次"评估"（Matcher + Pre-Gate + AST + 记录 session）幂等。引擎纯决策化（D60），命中后的执行/编排交消费方，其幂等由消费方自负。
 
 ---
 
@@ -51,7 +51,6 @@
 |------|------|------|
 | `evaluation_session` 行 INSERT | **同步事务** | 幂等 UK 需先存在；量小（1 行/次），P99 延迟可忽略 |
 | `node_trace` 批 INSERT | **异步批写** | 量大（10-1000 行/次）；旁路观察通道，失败降级丢弃，不影响主流程 |
-| `action_execution` INSERT | **异步** | Action 派发本身异步，执行结果与评估线程解耦 |
 
 TraceWriter 队列参数（建议默认值，可 `engine.rule.trace.*` 配置覆盖，见 §九）：
 
@@ -67,7 +66,6 @@ TraceWriter 队列参数（建议默认值，可 `engine.rule.trace.*` 配置覆
 ## 四、dry-run 链路
 
 dry-run 走完整评估链路（Matcher / Pre-Gate / EvalContext / AST），但：
-- **不派发 Action**（Dispatcher 短路）
 - **不写** `evaluation_session` / `node_trace` prod 表
 - **写** `dry_run_session` / `dry_run_node_trace`（隔离表，D7）
 - 返回完整 `nodeTrace`（AST 每个节点的 result / actualValue / errorCode）
@@ -102,7 +100,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 ### 灰度验证流程
 
 1. 新版规则发布为 `ACTIVE`，ROLLOUT Gate 设 `percentage=5`
-2. 监控 `evaluation_session.error_code` 分布 + Action 派发成功率（5% bucket）
+2. 监控 `evaluation_session.error_code` 分布 + 决策命中分布（5% bucket）
 3. 对账无异常 → percentage 逐步调至 100
 4. 全量后将旧版 rule_version.status 改为 `SUPERSEDED`
 
@@ -114,7 +112,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 
 ## 六、Prometheus 指标清单
 
-> 本节指标均属**业务层可观测性**（规则命中 / 延迟 / Action 结果 / trace 队列），由 `rule-observability` 的 `RuleMetrics` 通过 Micrometer 注册，Actuator `/actuator/prometheus` 端点暴露供 Prometheus scrape。
+> 本节指标均属**业务层可观测性**（规则命中 / 延迟 / 决策分布 / trace 队列），由 `rule-observability` 的 `RuleMetrics` 通过 Micrometer 注册，Actuator `/actuator/prometheus` 端点暴露供 Prometheus scrape。
 >
 > 基础设施层可观测性（HTTP 请求分布式 trace、JVM 指标 OTLP 推送、日志聚合到 Loki）为独立演进方向，详见 [`08-evolution.md §2.22`](./08-evolution.md)。
 
@@ -127,8 +125,6 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `rule_engine_eval_duration_ms` | Histogram | `scene_code` | 评估 P50/P95/P99 延迟 |
 | `rule_engine_metric_fetch_duration_ms` | Histogram | `source_type`, `metric_code` | MetricSource 取数延迟 |
 | `rule_engine_metric_fetch_errors_total` | Counter | `source_type`, `error_type` | 取数失败计数 |
-| `rule_engine_action_dispatch_total` | Counter | `action_type`, `status` | Action 派发结果 |
-| `rule_engine_action_duration_ms` | Histogram | `action_type` | Action 执行延迟 |
 | `rule_engine_trace_queue_size` | Gauge | — | TraceWriter 队列深度 |
 | `rule_engine_trace_queue_overflow_total` | Counter | — | trace 丢弃计数（队满） |
 | `rule_engine_rule_version_cache_hit_total` | Counter | `scene_code` | Matcher 内存命中次数 |
@@ -146,7 +142,6 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | 评估 ERROR 率 | > 1% 持续 2min | WARNING | METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR |
 | 评估 ERROR 率 | > 5% 持续 1min | CRITICAL | 批量失败 |
 | trace 队列溢出 | > 0 次/min 持续 5min | WARNING | 写入跟不上评估速率 |
-| Action 失败率 | > 5% 持续 5min（按 action_type） | WARNING | |
 | MetricSource P99 | > 500ms 持续 5min | WARNING | 按 source_type 分组 |
 
 ---
@@ -162,7 +157,6 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | MetricSource (EXTERNAL_HTTP) | 取数超时 | D15 单节点降级 false，EvalResult.errorCode=METRIC_FETCH_FAIL |
 | MetricSource (SQL_AGGREGATE) | DB 慢查询 / 连接池耗尽 | 同上；建议对 SQL 指标设 cache_ttl > 0 |
 | TraceWriter 队列满 | trace 行丢弃 | trace 丢弃 + counter 告警；**不影响** EvalResult |
-| ActionHandler 外部系统不可用 | execute() 超时 | TIMEOUT，落 FAILED 终态（best-effort 不重试，D53）；队列满则丢弃 + 计数 + WARN |
 
 ### v1 不做的高可用（见 08-evolution）
 
@@ -189,18 +183,12 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `engine.rule.subject.load-timeout-ms` | 200 | SubjectLoader 单次加载超时（D25，超出则 EvalContext 失败） |
 | `engine.rule.metric.default-cache-ttl-seconds` | 60 | metric 取数结果缓存 TTL（per-metric 可覆盖） |
 | `engine.rule.fetch.timeout-ms` | 800 | **全局 metric 并发取数超时**（`FetchResourceProperties`，单一来源）；超时未完成的 metric 置 `METRIC_FETCH_FAIL` 降级。`engine.rule.fetch.datasources` / `.endpoints` 为命名只读数据源 / HTTP 端点（凭证从环境变量注入，不落配置表） |
-| `engine.rule.action.default-timeout-ms` | 3000 | ActionHandler 默认超时（per-handler 可覆盖） |
 | `engine.rule.retention.enabled` | true | 数据保留清理总开关（各模块 `@Scheduled` cleaner，关则不清） |
 | `engine.rule.retention.cron` | `0 30 3 * * *` | 清理调度 cron（默认每日 03:30） |
 | `engine.rule.retention.batch-size` | 1000 | 单批 `DELETE ... LIMIT` 上限（分批短事务循环） |
 | `engine.rule.retention.evaluation-session-days` | 90 | evaluation_session 保留天数（D9） |
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |
-| `engine.rule.retention.action-execution-days` | 90 | action_execution 保留天数（跟随 evaluation_session 生命周期） |
 | `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session + dry_run_node_trace 保留天数（同管 dry_run 两表） |
-| `engine.rule.action.send-alert.url` | （空） | SEND_ALERT webhook URL；空则不实发（D53 best-effort） |
-| `engine.rule.action.send-alert.timeout-ms` | 2000 | SEND_ALERT webhook 连接+请求超时 |
-
-> Action 投递 best-effort（D53）：原 `engine.rule.action.retry-*` 重试队列参数已移除，失败不重试不补偿。
 
 ---
 
