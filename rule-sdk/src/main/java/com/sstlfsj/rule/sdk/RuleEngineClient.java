@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.sdk;
 
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
+import com.sstlfsj.rule.kernel.api.model.EvalOutcome;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
@@ -49,6 +50,7 @@ public class RuleEngineClient implements AutoCloseable {
     private final List<PollingMetricDefinitionSource> metricPollingSources;
     private final EvalResultListener evalResultListener;
     private final EvalSessionListener evalSessionListener;
+    private final DecisionContextListener decisionContextListener;
 
     private RuleEngineClient(Builder b) {
         SceneRuleIndex index = new SceneRuleIndex();
@@ -113,6 +115,7 @@ public class RuleEngineClient implements AutoCloseable {
 
         this.evalResultListener = b.evalResultListener;
         this.evalSessionListener = b.evalSessionListener;
+        this.decisionContextListener = b.decisionContextListener;
     }
 
     /** 把 handler 列表按 @MetricSourceType 归类为 sourceType → handler 映射。 */
@@ -129,9 +132,14 @@ public class RuleEngineClient implements AutoCloseable {
     public EvalResult evaluate(RuleEvent event) {
         RuleEvent sdkEvent = event.source() == EventSource.SDK
                 ? event : event.toBuilder().source(EventSource.SDK).build();
-        EvalResult result = evalEngine.evaluate(sdkEvent);
+        EvalOutcome outcome = evalEngine.evaluateWithContext(
+                sdkEvent, evalEngine.match(sdkEvent), java.time.Instant.now());
+        EvalResult result = outcome.result();
         if (evalResultListener != null) evalResultListener.onResult(sdkEvent, result);
         if (evalSessionListener != null) evalSessionListener.onSession(sdkEvent, result);
+        if (decisionContextListener != null) {
+            decisionContextListener.onEvaluated(sdkEvent, result, outcome.context());
+        }
         return result;
     }
 
@@ -155,6 +163,7 @@ public class RuleEngineClient implements AutoCloseable {
         private Duration pollInterval = Duration.ofSeconds(30);
         private EvalResultListener evalResultListener;
         private EvalSessionListener evalSessionListener;
+        private DecisionContextListener decisionContextListener;
         private RuleVersionExecutor executor;
         private Map<String, PreGate> preGates;
         private final List<RuleVersionSnapshot> localSnapshots = new ArrayList<>();
@@ -181,6 +190,10 @@ public class RuleEngineClient implements AutoCloseable {
         public Builder evalResultListener(EvalResultListener v)  { this.evalResultListener = v; return this; }
         /** @param v 审计回调（可选） */
         public Builder evalSessionListener(EvalSessionListener v) { this.evalSessionListener = v; return this; }
+        /** @param v 带 context 的评估回调(可选),用于注解动作派发 */
+        public Builder decisionContextListener(DecisionContextListener v) {
+            this.decisionContextListener = v; return this;
+        }
         /** @param v 自定义 executor，不传则使用 InterpretedExecutor（内置全量算子） */
         public Builder executor(RuleVersionExecutor v)  { this.executor = v; return this; }
         /** @param v 自定义 Pre-Gate 映射（可选） */
