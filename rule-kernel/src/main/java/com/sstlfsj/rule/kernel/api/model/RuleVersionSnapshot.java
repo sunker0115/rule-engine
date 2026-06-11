@@ -18,6 +18,10 @@ public record RuleVersionSnapshot(
         List<String> triggerEventTypes,
         /** 规则类型，默认 AST_BOOLEAN；SCORECARD 时由 ScorecardExecutor 求值。 */
         String kind,
+        /** 逻辑规则编码(= rule_definition.code,(tenant,scene) 内唯一);本地/旧构造默认 null。 */
+        String code,
+        /** 版本号(= rule_version.version,per code 单调);本地/旧构造默认 0。 */
+        long version,
         /** AST 引用的 (metricCode, metricVersion) 依赖，发布期冻结。 */
         List<MetricDependency> metricDependencies,
         /** AST 引用的 payload 字段依赖，发布期从 scene.payloadSchema 冻结。 */
@@ -48,7 +52,7 @@ public record RuleVersionSnapshot(
                                List<PreGateConfig> preGates, List<DecisionBinding> decisionBindings,
                                List<String> triggerEventTypes, String kind) {
         this(ruleVersionId, sceneCode, tenantId, conditionAst, preGates, decisionBindings,
-                triggerEventTypes, kind, List.of(), List.of());
+                triggerEventTypes, kind, null, 0L, List.of(), List.of());
     }
 
     /** Pre-Gate 配置快照。 */
@@ -101,6 +105,8 @@ public record RuleVersionSnapshot(
         private String tenantId;
         private AstNode conditionAst;
         private String kind = RuleKind.AST_BOOLEAN.tag();
+        private String code;
+        private long version;
         private final List<PreGateConfig> preGates = new ArrayList<>();
         private final List<DecisionBinding> decisionBindings = new ArrayList<>();
         private final List<String> triggerEventTypes = new ArrayList<>();
@@ -117,6 +123,10 @@ public record RuleVersionSnapshot(
         public Builder conditionAst(AstNode v){ this.conditionAst = v; return this; }
         /** 规则类型，默认 AST_BOOLEAN。 */
         public Builder kind(String v)         { this.kind = v; return this; }
+        /** 逻辑规则编码。 */
+        public Builder code(String v)    { this.code = v; return this; }
+        /** 版本号。 */
+        public Builder version(long v)   { this.version = v; return this; }
         /** 追加一个监听的事件类型。 */
         public Builder addTriggerEventType(String v) { triggerEventTypes.add(v); return this; }
         /** 追加一个 Decision 绑定。 */
@@ -140,7 +150,8 @@ public record RuleVersionSnapshot(
         /** 构建 RuleVersionSnapshot。 */
         public RuleVersionSnapshot build() {
             return new RuleVersionSnapshot(ruleVersionId, sceneCode, tenantId, conditionAst,
-                    preGates, decisionBindings, triggerEventTypes, kind, metricDependencies, payloadDependencies);
+                    preGates, decisionBindings, triggerEventTypes, kind, code, version,
+                    metricDependencies, payloadDependencies);
         }
     }
 }
