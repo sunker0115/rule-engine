@@ -13,12 +13,27 @@ import java.util.Map;
  */
 public final class DemoConfig {
 
-    /** 示例租户内部 id(admin 写接口用)。需与 README 的 seed SQL 一致。 */
-    public static final String TENANT_ID = "9001";
-    /** 示例租户 code(公开评估接口用)。 */
-    public static final String TENANT_CODE = "samples";
+    /**
+     * 示例租户内部 id(admin 写接口用)。需与你 seed 的 tenant 行 id 一致。
+     * 覆盖优先级:系统属性 {@code -Ddemo.tenantId} > 环境变量 {@code DEMO_TENANT_ID} > 默认 9001。
+     * 当目标库里 9001 已被占用时,seed 另一个 id 的租户并用 {@code -Ddemo.tenantId} 指向它。
+     */
+    public static final String TENANT_ID = resolve("demo.tenantId", "DEMO_TENANT_ID", "9001");
+    /**
+     * 示例租户 code(公开评估接口用)。
+     * 覆盖优先级:{@code -Ddemo.tenantCode} > {@code DEMO_TENANT_CODE} > 默认 samples。
+     */
+    public static final String TENANT_CODE = resolve("demo.tenantCode", "DEMO_TENANT_CODE", "samples");
     /** 示例场景编码。 */
     public static final String SCENE_CODE = "merchant-trade";
+
+    private static String resolve(String prop, String env, String def) {
+        String v = System.getProperty(prop);
+        if (v == null || v.isBlank()) {
+            v = System.getenv(env);
+        }
+        return (v == null || v.isBlank()) ? def : v;
+    }
 
     private static final RestClient ADMIN = RestClient.create();
 
