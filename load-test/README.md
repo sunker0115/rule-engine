@@ -29,8 +29,7 @@
 4. **二期改代码优化（按本轮数据排序，缩短连接占用 = 直接提吞吐）**：
    - a. `session` 两写合一（评估后单次 INSERT 终态，省一次往返/请求）；
    - b. `action_execution` 批量/异步（本轮 action 未覆盖，见下）；
-   - c. 缓存 `scene_action_binding`（去掉每命中一次 SELECT，本轮 bindings 为空未触发）；
-   - d. **trace 已验证：开/关零差异（583↔589 req/s）**——trace 异步批量不占请求线程。**这反证了同步 session 写才是墙，把 session 改异步是最高 ROI 的二期改造**（异步这条路 trace 臂已证明零成本）。
+   - c. **trace 已验证：开/关零差异（583↔589 req/s）**——trace 异步批量不占请求线程。**这反证了同步 session 写才是墙，把 session 改异步是最高 ROI 的二期改造**（异步这条路 trace 臂已证明零成本）。
 
 ## 事件化异步复测发现（2026-06-08，重要）
 
@@ -185,7 +184,7 @@ trace.enabled=false(生产默认)、~19.5k req/s 稳态、候选50,asprof 采 CP
 
 ### Track A：action 派发路径（首次 seed binding 压测）
 
-seed 一条 `scene_action_binding`(scene17, SEND_ALERT)，PULL 候选50 复跑（3.5M 请求，150s 阶梯）：
+seed 一条 action 绑定（scene17 的 decision 配 SEND_ALERT，压测时经 `scene_action_binding` 表触发，该表已于 D54/V1_23 删除，现 action 直接走 `decision.actions`），PULL 候选50 复跑（3.5M 请求，150s 阶梯）：
 
 | 路径 | 落库 / 3.5M 请求 | 落库率 | 消费侧形态 |
 |---|---|---|---|
@@ -219,7 +218,7 @@ seed 一条 `scene_action_binding`(scene17, SEND_ALERT)，PULL 候选50 复跑�
 
 - **改异步没有提升 keep-up**（4,443 ≈ 4,500）。请求线程吞吐照旧不受影响（offer 丢弃 + dispatch 离线程）。
 
-接着加 `SceneActionBindingIndex` 内存索引（commit `9939998`，去掉每 dispatch 的 `findBySceneCode` SELECT），同 23k QPS 三测：
+接着加 action binding 内存索引（commit `9939998`，去掉每 dispatch 的 binding SELECT；压测时 binding 走 `scene_action_binding` 表，该表已于 D54/V1_23 删除，现 binding 直接来自 `decision.actions` 快照），同 23k QPS 三测：
 
 | | action 落库 | 落库率 | 空载纯 drain |
 |---|---|---|---|
