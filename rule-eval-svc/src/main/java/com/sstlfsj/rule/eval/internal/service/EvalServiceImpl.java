@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
-import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
+import com.sstlfsj.rule.eval.internal.dispatch.PushEventDispatcher;
 import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
@@ -29,7 +29,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     private final SceneSnapshotLoader snapshotLoader;
     private final DomainEventPublisher eventPublisher;
     private final RuleVersionReadMapper ruleVersionReadMapper;
-    private final EvalActionDispatcher dispatcher;
+    private final PushEventDispatcher dispatcher;
 
     EvalServiceImpl(EvalEngine evalEngine, SceneSnapshotLoader snapshotLoader,
                     DomainEventPublisher eventPublisher,
@@ -39,7 +39,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         this.eventPublisher = eventPublisher;
         this.ruleVersionReadMapper = ruleVersionReadMapper;
         // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
-        this.dispatcher = new EvalActionDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null));
+        this.dispatcher = new PushEventDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null));
     }
 
     @Override

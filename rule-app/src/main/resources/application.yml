@@ -61,13 +61,6 @@ engine:
       # TraceWriter 单虚拟线程批量落库；提吞吐调 batch-size/flush-interval-ms（旁路通道满则丢，不阻塞热路径）
     metric:
       default-cache-ttl-seconds: 60
-    action:
-      # 规划中：action 派发超时未实现
-      default-timeout-ms: 3000
-      send-alert:
-        # SEND_ALERT webhook（best-effort，失败不重试）；url 为空则不实发（skipped）
-        url:
-        timeout-ms: 2000
     # 数据保留/清理:各模块 @Scheduled 按保留窗删超期运行/历史行(observability 清 trace 两表、eval-svc 清 session 两表)
     retention:
       enabled: true
@@ -76,7 +69,6 @@ engine:
       evaluation-session-days: 90
       node-trace-days: 30
       dry-run-session-days: 7    # 同管 dry_run 两张表(dry_run_session + dry_run_node_trace)
-      action-execution-days: 90  # 跟随 evaluation_session 生命周期
     # 规划中：告警阈值逻辑未实现
     observability:
       eval-error-rate-threshold: 0.05

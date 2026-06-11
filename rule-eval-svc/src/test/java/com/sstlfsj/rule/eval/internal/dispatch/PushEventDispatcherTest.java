@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class EvalActionDispatcherTest {
+class PushEventDispatcherTest {
 
     private RuleEvent event(String id) {
         return new RuleEvent("1", "test_scene", "TEST_EVENT", "u1",
@@ -25,7 +25,7 @@ class EvalActionDispatcherTest {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicInteger callCount = new AtomicInteger(0);
 
-        EvalActionDispatcher dispatcher = new EvalActionDispatcher(100, e -> {
+        PushEventDispatcher dispatcher = new PushEventDispatcher(100, e -> {
             callCount.incrementAndGet();
             latch.countDown();
         });
@@ -46,7 +46,7 @@ class EvalActionDispatcherTest {
     void submit_returnsFalse_whenQueueFull() {
         // 队列满时 submit 返回 false（背压信号）
         // 消费者函数故意阻塞，使队列无法被消费
-        EvalActionDispatcher dispatcher = new EvalActionDispatcher(2, e -> {
+        PushEventDispatcher dispatcher = new PushEventDispatcher(2, e -> {
             try { Thread.sleep(60_000); } catch (InterruptedException ignored) {}
         });
         dispatcher.start();
@@ -72,7 +72,7 @@ class EvalActionDispatcherTest {
         CopyOnWriteArrayList<String> processed = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(total);
 
-        EvalActionDispatcher dispatcher = new EvalActionDispatcher(100, e -> {
+        PushEventDispatcher dispatcher = new PushEventDispatcher(100, e -> {
             processed.add(e.eventId());
             latch.countDown();
         });

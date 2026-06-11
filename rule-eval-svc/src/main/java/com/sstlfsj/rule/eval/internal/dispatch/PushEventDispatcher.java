@@ -9,7 +9,7 @@ import java.util.function.Consumer;
  * PUSH 模式异步派发器：LinkedBlockingQueue + 虚拟线程消费者，替代裸 CompletableFuture。
  * 队列满时 submit 返回 false（背压信号），不阻塞调用方。
  */
-public class EvalActionDispatcher {
+public class PushEventDispatcher {
 
     private final int capacity;
     private final Consumer<RuleEvent> evaluateFn;
@@ -17,7 +17,7 @@ public class EvalActionDispatcher {
     private volatile boolean running = false;
     private Thread consumerThread;
 
-    public EvalActionDispatcher(int capacity, Consumer<RuleEvent> evaluateFn) {
+    public PushEventDispatcher(int capacity, Consumer<RuleEvent> evaluateFn) {
         this.capacity = capacity;
         this.evaluateFn = evaluateFn;
     }
