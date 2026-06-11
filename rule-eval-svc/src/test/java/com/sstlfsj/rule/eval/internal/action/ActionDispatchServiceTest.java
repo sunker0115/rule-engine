@@ -34,7 +34,7 @@ class ActionDispatchServiceTest {
     }
 
     private static Decision decisionWith(DecisionAction... actions) {
-        return new Decision("REJECT", "拒绝", 10, 1L, null, List.of(actions));
+        return new Decision("REJECT", "拒绝", 10, 1L, null, 0L, null, List.of(actions));
     }
 
     @Test

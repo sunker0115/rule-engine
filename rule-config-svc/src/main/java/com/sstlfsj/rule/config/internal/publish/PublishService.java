@@ -109,7 +109,8 @@ public class PublishService {
         RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
                 draft.getId(), scene.getCode(), String.valueOf(tenantId),
                 draft.getConditionAst(), List.of(), List.of(), List.of(),
-                kind.name(), draft.getMetricDependencies(), draft.getPayloadDependencies());
+                kind.name(), rule.getCode(), draft.getVersion(),
+                draft.getMetricDependencies(), draft.getPayloadDependencies());
         eventPublisher.publishEvent(new RulePublishedEvent(
                 String.valueOf(tenantId), scene.getCode(), draft.getId()));
         return snapshot;

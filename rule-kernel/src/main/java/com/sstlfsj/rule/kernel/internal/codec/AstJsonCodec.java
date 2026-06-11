@@ -21,9 +21,15 @@ public class AstJsonCodec {
 
     private final ObjectMapper mapper;
 
-    /** 非 Spring 场景使用：创建仅禁用未知字段报错的默认 ObjectMapper。 */
+    /**
+     * 非 Spring 场景使用：创建容忍未知字段、且 JSON 缺失原始类型字段时回退默认值的 ObjectMapper。
+     * FAIL_ON_NULL_FOR_PRIMITIVES 关闭，使手写规则 JSON 省略 version 时回退 0（与便利构造默认一致）。
+     */
     public AstJsonCodec() {
-        this(JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build());
+        this(JsonMapper.builder()
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+                .build());
     }
 
     /**

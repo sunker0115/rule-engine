@@ -94,6 +94,9 @@ class PublishServiceTest {
         RuleVersionSnapshot snapshot = publishService.publish(1L, 10L, "operator1");
 
         assertThat(snapshot.sceneCode()).isEqualTo("PAYMENT");
+        // 快照携带规则逻辑身份 code(来自 rule_definition) + version(来自被激活的 rule_version)
+        assertThat(snapshot.code()).isEqualTo("rule.demo");
+        assertThat(snapshot.version()).isEqualTo(1L);
         assertThat(snapshot.metricDependencies()).containsExactly(new MetricDependency("amount", 1));
         // DRAFT 行原地翻 ACTIVE,无新 insert
         ArgumentCaptor<RuleVersion> rvCaptor = ArgumentCaptor.forClass(RuleVersion.class);

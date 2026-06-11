@@ -53,6 +53,14 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadAllActive_sqlContainsCodeAndVersion() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadAllActive");
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.code            AS code"), "loadAllActive SQL 应选 rd.code 列");
+        assertTrue(sql.contains("rv.version         AS version"), "loadAllActive SQL 应选 rv.version 列");
+    }
+
+    @Test
     void loadActiveByScene_hasCorrectParameters() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod(
                 "loadActiveByScene", Long.class, String.class);
@@ -89,6 +97,15 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadActiveByScene_sqlContainsCodeAndVersion() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "loadActiveByScene", Long.class, String.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.code            AS code"), "loadActiveByScene SQL 应选 rd.code 列");
+        assertTrue(sql.contains("rv.version         AS version"), "loadActiveByScene SQL 应选 rv.version 列");
+    }
+
+    @Test
     void loadById_returnsRuleVersionRow() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
         assertEquals(RuleVersionRow.class, method.getReturnType());
@@ -117,6 +134,14 @@ class RuleVersionReadMapperTest {
         String sql = method.getAnnotation(Select.class).value()[0];
         assertTrue(sql.contains("rv.payload_dependencies AS payloadDependenciesJson"),
                 "loadById SQL 应选 payload_dependencies 列");
+    }
+
+    @Test
+    void loadById_sqlContainsCodeAndVersion() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.code            AS code"), "loadById SQL 应选 rd.code 列");
+        assertTrue(sql.contains("rv.version         AS version"), "loadById SQL 应选 rv.version 列");
     }
 
     @Test

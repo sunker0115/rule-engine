@@ -52,7 +52,7 @@ class DoEvaluateEmitsEventsTest {
         when(engine.match(event)).thenReturn(List.of(mock(RuleVersionSnapshot.class)));
         var action = new com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction(
                 "a1", "SEND_ALERT", 0, java.util.Map.of());
-        Decision pass = new Decision("PASS", "", 1, 3L, null, List.of(action));
+        Decision pass = new Decision("PASS", "", 1, 3L, null, 0L, null, List.of(action));
         EvalResult hit = new EvalResult(true, pass, List.of(pass), List.of(),
                 null, List.of(), null, null, null);
         when(engine.evaluateWithContext(eq(event), anyList(), any()))

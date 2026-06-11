@@ -189,7 +189,7 @@ class EvalServiceImplTest {
         // D27:仅当 finalDecision 携带 actions 才投递派发命令
         var action = new com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction(
                 "a1", "SEND_ALERT", 0, java.util.Map.of());
-        Decision d = new Decision("REJECT", "拒绝", 10, 1L, null, java.util.List.of(action));
+        Decision d = new Decision("REJECT", "拒绝", 10, 1L, null, 0L, null, java.util.List.of(action));
         EvalResult r = new EvalResult(true, d, java.util.List.of(d), java.util.List.of(),
                 null, java.util.List.of(), null, null, null);
         stubPull(snapshot(1L, "REJECT"), new EvalOutcome(r, ctx()));
