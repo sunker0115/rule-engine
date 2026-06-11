@@ -423,7 +423,7 @@ public @interface RuleDef {
     String code();
     /** 场景编码。 */
     String sceneCode();
-    /** 租户 ID；默认空 = 继承 RuleEngineClient 配置的租户。 */
+    /** 租户 ID；默认空（继承范围见 §9.1 说明：仅 Spring starter 或显式双参构造时继承，单参构造留空得空租户）。 */
     String tenantId() default "";
     /** 版本号（逻辑身份的一部分，D59）。 */
     long version() default 1;
@@ -445,7 +445,9 @@ public @interface DecisionBinding {
 }
 ```
 
-> **身份模型（D59）**：规则逻辑身份 = `(tenant, sceneCode, code, version)`（人可读、名字驱动）；代理键 `ruleVersionId` 不由开发者手填，而由 `AnnotationRuleSource` 按 `(tenant, scene, code)` 稳定哈希派生（确定性投影，保证幂等装载）。`tenantId()` 留空时继承 `RuleEngineClient.builder()` 上配置的租户，避免每条规则重复写租户。
+> **身份模型（D59）**：规则逻辑身份 = `(tenant, sceneCode, code, version)`（人可读、名字驱动）；代理键 `ruleVersionId` 不由开发者手填，而由 `AnnotationRuleSource` 按 `(tenant, scene, code)` 稳定哈希派生（确定性投影，保证幂等装载）。
+>
+> **`tenantId()` 留空继承的精确范围**：继承仅在 **(a) Spring starter 自动装配**（AutoConfiguration 调双参构造，回落到 `rule.sdk.tenant-id`）或 **(b) 显式用双参构造 `new AnnotationRuleSource(specs, tenant)`** 时生效。**非 Spring 用单参 `new AnnotationRuleSource(specs)` 时留空 `tenantId` 会得到空租户 `""`**（单参构造的 `defaultTenantId` 为 `""`，而 `RuleEngineClient.Builder.tenantId(...)` 不会注入到 rule source——builder 把 `RuleSource` 当不透明对象），空租户不会匹配真实租户下的事件。此场景应在 `@RuleDef` 显式写 `tenantId`，或改用双参构造。
 
 ### 9.2 `InlineRuleSpec` 接口（`rule-sdk`）
 
@@ -481,8 +483,10 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 ```java
 try (RuleEngineClient client = RuleEngineClient.builder()
-        .tenantId("t1")   // @RuleDef.tenantId() 留空的规则继承此租户
-        .ruleSource(new AnnotationRuleSource(List.of(new AmountFraudRule())))
+        .tenantId("t1")
+        // 非 Spring 必须用双参构造把租户传给 rule source：单参 new AnnotationRuleSource(List.of(...)) 时
+        // @RuleDef 留空的 tenantId 会得到空租户 ""（builder.tenantId 不注入 rule source），不会继承此处的 "t1"。
+        .ruleSource(new AnnotationRuleSource(List.of(new AmountFraudRule()), "t1"))
         .build()) {
     EvalResult result = client.evaluate(event);
 }

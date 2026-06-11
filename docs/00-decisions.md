@@ -1543,7 +1543,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 3. **承载链路**：`RuleVersionSnapshot` 补 `code`(String) + `version`(long)；`NodeTrace` 补 `ruleCode` + `ruleVersion`；`Decision` 补 `fromRuleCode` + `fromRuleVersion`——全部**与既有 `ruleVersionId` 字段并列保留**，不删代理键。配置读路径（`RuleVersionReadMapper`）JOIN `rule_definition.code` + `rule_version.version` 填进快照，`PublishService` 落库时一并写。trace / audit 表 `node_trace` / `dry_run_session` / `dry_run_node_trace` 加可空列 `rule_code` / `rule_version`（迁移 V1_26），由 trace writer 落库，admin trace 接口（`GET /admin/v1/evaluation-sessions/{id}/trace` 与 `/trace/tree`）响应 VO 透出。
 
-4. **注解身份名字驱动**：`@RuleDef` 注解去掉 `long id()`，改为 `String code()`（逻辑身份）+ `long version() default 1`；`tenantId()` 默认 `""`（空 = 继承 `RuleEngineClient` 配置的租户）。代理键 `ruleVersionId` 不再由开发者手填，而由 `AnnotationRuleSource` 按 `(tenant, scene, code)` 稳定哈希派生——名字是真相源，代理键是其确定性投影。
+4. **注解身份名字驱动**：`@RuleDef` 注解去掉 `long id()`，改为 `String code()`（逻辑身份）+ `long version() default 1`；`tenantId()` 默认 `""`（空 = 继承租户，但继承仅在 Spring starter 自动装配读 `rule.sdk.tenant-id`、或显式双参 `new AnnotationRuleSource(specs, tenant)` 时生效；非 Spring 单参 `new AnnotationRuleSource(specs)` 留空得空租户 `""`，builder 的 `tenantId` 不注入 rule source）。代理键 `ruleVersionId` 不再由开发者手填，而由 `AnnotationRuleSource` 按 `(tenant, scene, code)` 稳定哈希派生——名字是真相源，代理键是其确定性投影。
 
 5. **范围拆分 阶段甲 / 阶段乙**：
    - **阶段甲（本次落地）**：核心模型（snapshot / trace / decision 携带 code+version）+ trace / audit 透出 + 注解身份改造。
@@ -1551,7 +1551,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 **显式不做**：**不移除代理键 PK**。代理键在存储 / 外键 / 去重 / 幂等上的角色不可被自然键取代（自然键多列、可空、跨表 JOIN 成本高），逻辑键只是补充人读与名字身份，二者职责正交。
 
-**已实装**（阶段甲）：`RuleVersionSnapshot.code/version` + `NodeTrace.ruleCode/ruleVersion` + `Decision.fromRuleCode/fromRuleVersion`；`RuleVersionReadMapper` JOIN code/version、`PublishService` 落库；迁移 V1_26 加 `node_trace`/`dry_run_session`/`dry_run_node_trace` 的 `rule_code`/`rule_version` 可空列 + trace writer 落库 + admin trace 端点 VO 透出；`@RuleDef` 删 `id()`、加 `code()`/`version() default 1`、`tenantId() default ""`（空继承 client 租户）；`AnnotationRuleSource` 按 `(tenant,scene,code)` 稳定哈希派生 `ruleVersionId`；`Condition.of(conditionType, params)` 双参重载（无绑定 metric 的自定义算子）。
+**已实装**（阶段甲）：`RuleVersionSnapshot.code/version` + `NodeTrace.ruleCode/ruleVersion` + `Decision.fromRuleCode/fromRuleVersion`；`RuleVersionReadMapper` JOIN code/version、`PublishService` 落库；迁移 V1_26 加 `node_trace`/`dry_run_session`/`dry_run_node_trace` 的 `rule_code`/`rule_version` 可空列 + trace writer 落库 + admin trace 端点 VO 透出；`@RuleDef` 删 `id()`、加 `code()`/`version() default 1`、`tenantId() default ""`（空继承租户，仅 Spring starter 或显式双参构造时生效，单参非 Spring 留空得空租户）；`AnnotationRuleSource` 按 `(tenant,scene,code)` 稳定哈希派生 `ruleVersionId`；`Condition.of(conditionType, params)` 双参重载（无绑定 metric 的自定义算子）。
 
 ---
 
