@@ -32,7 +32,6 @@
         <module>rule-sdk</module>
         <module>rule-sdk-spring-boot-starter</module>
         <module>rule-benchmark</module>
-        <module>rule-example</module>
     </modules>
 
     <properties>
@@ -270,11 +269,6 @@
             </dependency>
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
-                <artifactId>rule-app</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -290,15 +284,4 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-    <profiles>
-        <profile>
-            <id>examples</id>
-            <modules>
-                <module>rule-sdk</module>
-                <module>rule-sdk-spring-boot-starter</module>
-                <module>rule-example</module>
-            </modules>
-        </profile>
-    </profiles>
 </project>

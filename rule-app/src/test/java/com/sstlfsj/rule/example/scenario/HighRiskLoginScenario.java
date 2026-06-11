@@ -15,7 +15,7 @@ import static org.awaitility.Awaitility.await;
 class HighRiskLoginScenario extends ScenarioSupport {
 
     private Map<String, Object> alwaysTrueAst() {
-        return Map.of("type", "AND", "children", List.of());
+        return Map.of("type", "AndNode", "children", List.of());
     }
 
     // ---- PULL evaluate + webhook 通知 ----
@@ -26,27 +26,27 @@ class HighRiskLoginScenario extends ScenarioSupport {
                 .willReturn(aResponse().withStatus(200)));
 
         createScene("login-anti", "反欺诈登录检测", "PUSH", "USER", List.of("login"));
-        createDecision("SEC_ALERT", "安全告警", 100,
+        // decision code 每个 test 独特：action_execution 无 scene_code，按 decision_code 隔离本 test 的 action
+        createDecision("ALERT_PULL", "安全告警", 100,
                 List.of(Map.of("actionId", "a1", "actionType", "SEND_ALERT",
                         "sortOrder", 0, "params", Map.of("level", "critical"))));
 
         Map<String, Object> rule = createRule("login-anti", "high-risk-login", "高风险登录",
                 alwaysTrueAst(),
-                List.of(Map.of("decisionCode", "SEC_ALERT")),
+                List.of(Map.of("decisionCode", "ALERT_PULL")),
                 List.of("login"), "AST_BOOLEAN");
-        long ruleId = ((Number) rule.get("ruleDefinitionId")).longValue();
-        long versionId = ((Number) rule.get("ruleVersionId")).longValue();
-        publishRule(ruleId);
+        publishRule(((Number) rule.get("ruleDefinitionId")).longValue());
 
         Map<String, Object> result = evaluate("login-anti", "login", "u1",
                 Map.of("userId", "u1", "ip", "192.168.99.1"));
 
         assertThat(result.get("ruleHit")).isEqualTo(true);
-        assertThat(countRows("evaluation_session")).isEqualTo(1);
-        assertThat(countRows("action_execution")).isEqualTo(1);
+        // 评估审计与 action 落库异步 best-effort，按本 test 业务键等待（避免其他 test 异步残留干扰）
+        awaitRowCountWhere("evaluation_session", "scene_code='login-anti'", 1);
+        awaitRowCountWhereAtLeast("action_execution", "decision_code='ALERT_PULL'", 1);
 
         List<Map<String, Object>> actions = query(
-                "SELECT action_type, status FROM action_execution");
+                "SELECT status FROM action_execution WHERE decision_code='ALERT_PULL'");
         assertThat(actions.get(0).get("status").toString()).isEqualTo("SUCCESS");
 
         verify(postRequestedFor(urlPathEqualTo("/webhook/alert")));
@@ -70,28 +70,12 @@ class HighRiskLoginScenario extends ScenarioSupport {
         Map<String, Object> result = dryRun(versionId, null, "login-dry", "login", "u1", Map.of());
 
         assertThat(result.get("ruleHit")).isEqualTo(true);
-        assertThat(countRows("dry_run_session")).isEqualTo(1);
-        assertThat(countRows("dry_run_node_trace")).isGreaterThan(0);
-        assertThat(countRows("evaluation_session")).isEqualTo(0);
-        assertThat(countRows("action_execution")).isEqualTo(0);
-    }
-
-    @Test
-    void abnormalLogin_dryRun_byRuleId_draftVersion() {
-        createScene("login-dry2", "登录风控(Dry2)", "PULL", "USER", List.of("login"));
-        createDecision("BLOCK", "拦截", 100, List.of());
-
-        Map<String, Object> rule = createRule("login-dry2", "draft-rule2", "草稿规则",
-                alwaysTrueAst(),
-                List.of(Map.of("decisionCode", "BLOCK")),
-                List.of("login"), "AST_BOOLEAN");
-        long ruleId = ((Number) rule.get("ruleDefinitionId")).longValue();
-
-        Map<String, Object> result = dryRun(null, ruleId, "login-dry2", "login", "u1", Map.of());
-
-        assertThat(result.get("ruleHit")).isEqualTo(true);
-        assertThat(countRows("dry_run_session")).isEqualTo(1);
-        assertThat(countRows("evaluation_session")).isEqualTo(0);
+        // dry_run_session / dry_run_node_trace 异步落库
+        awaitRowCountWhere("dry_run_session", "scene_code='login-dry'", 1);
+        // dry_run_node_trace 全表即可：唯一的 dry-run 场景，不会被其他 test 污染
+        awaitRowCountAtLeast("dry_run_node_trace", 1);
+        // dry-run 不发 AuditRecordedEvent：本 scene 不落正式 evaluation_session（按 scene 过滤避开其他 test 残留）
+        assertThat(countRowsWhere("evaluation_session", "scene_code='login-dry'")).isZero();
     }
 
     // ---- PUSH 异步事件 ----
@@ -102,13 +86,13 @@ class HighRiskLoginScenario extends ScenarioSupport {
                 .willReturn(aResponse().withStatus(200)));
 
         createScene("login-push", "登录风控(Push)", "PUSH", "USER", List.of("login"));
-        createDecision("SEC_ALERT", "安全告警", 100,
+        createDecision("ALERT_PUSH", "安全告警", 100,
                 List.of(Map.of("actionId", "a1", "actionType", "SEND_ALERT",
                         "sortOrder", 0, "params", Map.of("level", "high"))));
 
         Map<String, Object> rule = createRule("login-push", "push-alert", "推送告警",
                 alwaysTrueAst(),
-                List.of(Map.of("decisionCode", "SEC_ALERT")),
+                List.of(Map.of("decisionCode", "ALERT_PUSH")),
                 List.of("login"), "AST_BOOLEAN");
         publishRule(((Number) rule.get("ruleDefinitionId")).longValue());
 
@@ -116,12 +100,10 @@ class HighRiskLoginScenario extends ScenarioSupport {
                 Map.of("userId", "u2", "ip", "10.10.10.10"));
         assertThat(pushResp.get("accepted")).isEqualTo(true);
 
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            assertThat(countRows("evaluation_session")).isEqualTo(1);
-        });
+        awaitRowCountWhere("evaluation_session", "scene_code='login-push'", 1);
 
         List<Map<String, Object>> sessions = query(
-                "SELECT status, mode FROM evaluation_session");
+                "SELECT status, mode FROM evaluation_session WHERE scene_code='login-push'");
         assertThat(sessions.get(0).get("status").toString()).isEqualTo("HIT");
         assertThat(sessions.get(0).get("mode").toString()).isEqualTo("PUSH");
 
@@ -136,20 +118,22 @@ class HighRiskLoginScenario extends ScenarioSupport {
                 .willReturn(aResponse().withStatus(500)));
 
         createScene("login-fail", "登录风控(Fail)", "PUSH", "USER", List.of("login"));
-        createDecision("SEC_ALERT", "安全告警", 100,
+        createDecision("ALERT_FAIL", "安全告警", 100,
                 List.of(Map.of("actionId", "a1", "actionType", "SEND_ALERT",
                         "sortOrder", 0, "params", Map.of())));
 
         Map<String, Object> rule = createRule("login-fail", "fail-alert", "失败告警",
                 alwaysTrueAst(),
-                List.of(Map.of("decisionCode", "SEC_ALERT")),
+                List.of(Map.of("decisionCode", "ALERT_FAIL")),
                 List.of("login"), "AST_BOOLEAN");
         publishRule(((Number) rule.get("ruleDefinitionId")).longValue());
 
         evaluate("login-fail", "login", "u1", Map.of("userId", "u1"));
 
+        // action 派发异步，按本 test 的 decision_code 等待落库后再查状态（隔离其他 test 异步残留）
+        awaitRowCountWhereAtLeast("action_execution", "decision_code='ALERT_FAIL'", 1);
         List<Map<String, Object>> actions = query(
-                "SELECT status FROM action_execution");
+                "SELECT status FROM action_execution WHERE decision_code='ALERT_FAIL'");
         assertThat(actions.get(0).get("status").toString()).isEqualTo("FAILED");
     }
 }

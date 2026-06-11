@@ -25,16 +25,20 @@ class SdkTradingScenario extends ScenarioSupport {
 
     @Test
     void tradingAmountExceedsLimit_sdkPullsAndEvaluatesHit() {
-        createScene("merchant-trade", "商户交易风控", "PULL", "USER", List.of("trade"));
+        // scene 声明 payload 字段 amount：SDK 本地评估直接读 event.payload.amount（valueRef=PAYLOAD），
+        // 无需取数源（SDK 是 zero-network 离线评估，没有 SQL/HTTP handler）
+        createScene("merchant-trade", "商户交易风控", "PULL", "USER", List.of("trade"),
+                List.of(Map.of("name", "amount", "type", "NUMBER", "required", true)));
         createDecision("REVIEW", "人工审核", 50, List.of());
 
         Map<String, Object> conditionAst = Map.of(
-                "type", "AND",
+                "type", "AndNode",
                 "children", List.of(Map.of(
-                        "type", "CONDITION",
+                        "type", "ConditionNode",
                         "conditionType", "GT",
                         "metricCode", "amount",
-                        "params", Map.of("threshold", 5000)
+                        "params", Map.of("threshold", 5000),
+                        "valueRef", "PAYLOAD"
                 ))
         );
         Map<String, Object> rule = createRule("merchant-trade", "large-trade", "大额交易",
@@ -43,16 +47,9 @@ class SdkTradingScenario extends ScenarioSupport {
                 List.of("trade"), "AST_BOOLEAN");
         publishRule(((Number) rule.get("ruleDefinitionId")).longValue());
 
-        // 验证 SDK 端点可访问
-        RestClient restClient = RestClient.builder().build();
-        var snapshotsResp = restClient.get()
-                .uri(sdkBaseUrl() + "/snapshots?tenantId=" + TENANT_ID)
-                .retrieve().toEntity(List.class);
-        assertThat(snapshotsResp.getStatusCode().is2xxSuccessful()).isTrue();
-
-        // SDK 客户端：连接管理端，启动轮询
+        // SDK 客户端：serverUrl 传 base host（SnapshotPoller 内部自拼 /sdk/v1/snapshots），启动轮询本地评估
         try (RuleEngineClient client = RuleEngineClient.builder()
-                .serverUrl(sdkBaseUrl())
+                .serverUrl("http://localhost:" + localPort)
                 .tenantId(TENANT_ID)
                 .pollInterval(Duration.ofSeconds(2))
                 .build()) {
@@ -76,15 +73,18 @@ class SdkTradingScenario extends ScenarioSupport {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void sdkMetricDefinitions_accessibleAfterAdminCreatesMetric() {
         createScene("sdk-metric-scene", "SDK指标场景", "PULL", "USER", List.of("event"));
         createMetric("sdk-counter", "SDK计数器", "ATTRIBUTE", "LONG",
                 Map.of(), 60, true);
 
+        // /sdk/v1/metric-definitions 返回 ApiResponse<List<MetricDescriptor>> 包装结构
         RestClient restClient = RestClient.builder().build();
-        var resp = restClient.get()
+        Map<String, Object> resp = restClient.get()
                 .uri(sdkBaseUrl() + "/metric-definitions?tenantId=" + TENANT_ID)
-                .retrieve().toEntity(List.class);
-        assertThat(resp.getStatusCode().is2xxSuccessful()).isTrue();
+                .retrieve().body(Map.class);
+        assertThat(resp.get("success")).isEqualTo(true);
+        assertThat((List<Object>) resp.get("data")).isNotEmpty();
     }
 }

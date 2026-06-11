@@ -68,17 +68,17 @@
 |---|---|---|---|---|
 | 快照下发 `GET /sdk/v1/snapshots` | `SdkController` | ✅ | 示例 | |
 | metric 定义下发 `GET /sdk/v1/metric-definitions` | `SdkController` | ✅ | 2026-06-10 | 返回 tenant 级 4 个 metric 定义 |
-| 嵌入式 zero-network 评估 | `RuleEngineClient` | 🟡 | — | 需 SDK 测试宿主 |
-| HTTP 轮询拉快照刷新 | `PollingRuleSource` / `PollingMetricDefinitionSource` | 🟡 | — | 需跑着的 rule-app 配合 |
+| 嵌入式 zero-network 评估 | `RuleEngineClient` | ✅ | rule-example / 2026-06-11 | `SdkTradingScenario`:SDK client(serverUrl=base host)轮询拉快照→本地评估交易(amount>5000 PAYLOAD 引用),命中/未命中双验;serverUrl 须传 base host(SnapshotPoller 自拼 `/sdk/v1/snapshots`) |
+| HTTP 轮询拉快照刷新 | `PollingRuleSource` / `SnapshotPoller` | ✅ | rule-example / 2026-06-11 | 同 `SdkTradingScenario`:`SnapshotPoller` 解析 `ApiResponse.data`→刷新 `SceneRuleIndex`,2s 轮询间隔下 15s 内拉到已发布规则 |
 | DB 轮询 watcher | `DbPollingRuleWatcher` / `DbPollingSceneWatcher` | ⚪ | — | 抛 UnsupportedOperationException(SDK v2) |
 
-## 六、取数 / 派发(需外部依赖,🟡)
+## 六、取数 / 派发
 
 | 流程 | 入口 | 状态 | 备注 |
 |---|---|---|---|
-| SQL_AGGREGATE 取数 | `SqlAggregateMetricSourceHandler` | 🟡 | 需真命名 MySQL 数据源 |
-| EXTERNAL_HTTP 取数 | `ExternalHttpMetricSourceHandler` | 🟡 | 需真 HTTP 端点 |
-| SEND_ALERT 派发 | `SendAlertHandler` | 🟡 | 需真 webhook URL(空 url = SKIPPED,可验跳过态) |
+| SQL_AGGREGATE 取数 | `SqlAggregateMetricSourceHandler` | ✅ | rule-example / 2026-06-11 `OrderFraudScenario`:Testcontainers MySQL `orders` 业务表 + 命名数据源 `engine.rule.fetch.datasources[0]`,`SELECT SUM(amount)...` 真取数;params 用 `datasource`(小写)/`sql`,命中/未命中双验 |
+| EXTERNAL_HTTP 取数 | `ExternalHttpMetricSourceHandler` | ✅ | rule-example / 2026-06-11 `CreditEvaluationScenario`:WireMock 模拟评分接口 + 命名端点 `engine.rule.fetch.endpoints[0]`,params 用 `endpoint`/`path`/`jsonPath`,JSONPath 提取 + 高低分双验 |
+| SEND_ALERT 派发 | `SendAlertHandler` | ✅ | rule-example / 2026-06-11 `HighRiskLoginScenario`:WireMock webhook,200→`action_execution`=SUCCESS、500→FAILED 均真投递验;全局 url 配 `engine.rule.action.send-alert.url`(空 url=SKIPPED 历史已验) |
 | ATTRIBUTE / STREAM 取数 | — | ⚪ | 无 handler bean(未实现) |
 | BLOCK_TRANSACTION 派发 | `BlockTransactionHandler` | ⚪ | v1 stub,直接返回成功 |
 
@@ -90,6 +90,10 @@
 
 ---
 
-## 优先补跑建议(⬜ 中,可跑、价值高)
+## 自动化端到端验证(rule-example,2026-06-11)
 
-1. **SDK 嵌入式 zero-network 评估**(§五)—— 需 SDK 测试宿主,验证完整离线链路
+§五 SDK 嵌入式 + §六 取数/派发 的 🟡 项已由 `rule-app/src/test` 下 4 个 `*Scenario`(Failsafe + `examples` profile + Testcontainers/WireMock)自动化跑通,不再需手工补跑:
+
+- 运行:`mvn verify -pl rule-app -Pexamples`(需 Docker;日常 `mvn test` 不触发)
+- 场景即业务故事:`HighRiskLoginScenario`(登录风控 PUSH/PULL + 告警)、`OrderFraudScenario`(订单 SQL 取数)、`CreditEvaluationScenario`(信用 HTTP 取数)、`SdkTradingScenario`(SDK 轮询 + 嵌入式评估)
+- 设计 / 计划见 `docs/superpowers/specs|plans/2026-06-11-rule-example-module*`

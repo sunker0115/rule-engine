@@ -26,14 +26,14 @@ class OrderFraudScenario extends ScenarioSupport {
 
         createMetric("daily-order-sum", "当日订单总额", "SQL_AGGREGATE", "DECIMAL",
                 Map.of(
-                        "dataSource", "business-db",
+                        "datasource", "business-db",
                         "sql", "SELECT COALESCE(SUM(amount), 0) FROM orders WHERE user_id = :subjectId AND DATE(created_at) = CURDATE()"
                 ), 60, false);
 
         Map<String, Object> conditionAst = Map.of(
-                "type", "AND",
+                "type", "AndNode",
                 "children", List.of(Map.of(
-                        "type", "CONDITION",
+                        "type", "ConditionNode",
                         "conditionType", "GT",
                         "metricCode", "daily-order-sum",
                         "params", Map.of("threshold", 10000)
@@ -55,9 +55,11 @@ class OrderFraudScenario extends ScenarioSupport {
         Map<String, Object> missResult = evaluate("order-anti", "order", "u2", Map.of());
         assertThat(missResult.get("ruleHit")).isEqualTo(false);
 
-        assertThat(countRows("evaluation_session")).isEqualTo(2);
+        // 评估审计异步落库；按本 scene 过滤，避免其他 test 异步残留干扰
+        awaitRowCountWhere("evaluation_session", "scene_code='order-anti'", 2);
         List<Map<String, Object>> sessions = query(
-                "SELECT subject_id, status FROM evaluation_session ORDER BY subject_id");
+                "SELECT subject_id, status FROM evaluation_session "
+                        + "WHERE scene_code='order-anti' ORDER BY subject_id");
         assertThat(sessions.get(0).get("status").toString()).isEqualTo("HIT");
         assertThat(sessions.get(1).get("status").toString()).isEqualTo("MISS");
     }

@@ -32,16 +32,15 @@ class CreditEvaluationScenario extends ScenarioSupport {
 
         createMetric("credit-score", "信用评分", "EXTERNAL_HTTP", "LONG",
                 Map.of(
-                        "dataSource", "mock-api",
-                        "urlTemplate", "/api/credit/score/{payload.uid}",
-                        "method", "GET",
+                        "endpoint", "credit-api",
+                        "path", "/api/credit/score/{payload.uid}",
                         "jsonPath", "data.score"
                 ), 120, false);
 
         Map<String, Object> conditionAst = Map.of(
-                "type", "AND",
+                "type", "AndNode",
                 "children", List.of(Map.of(
-                        "type", "CONDITION",
+                        "type", "ConditionNode",
                         "conditionType", "LT",
                         "metricCode", "credit-score",
                         "params", Map.of("threshold", 600)
@@ -68,6 +67,7 @@ class CreditEvaluationScenario extends ScenarioSupport {
         verify(getRequestedFor(urlPathEqualTo("/api/credit/score/u_rich")));
         verify(getRequestedFor(urlPathEqualTo("/api/credit/score/u_poor")));
 
-        assertThat(countRows("evaluation_session")).isEqualTo(2);
+        // 评估审计异步落库；按本 scene 过滤，避免其他 test 异步残留干扰
+        awaitRowCountWhere("evaluation_session", "scene_code='loan'", 2);
     }
 }

@@ -1,13 +1,7 @@
 spring:
   flyway:
     enabled: true
+    # 业务示例表（orders）独立 migration 路径，与引擎自身 db/migration 并列
     locations: classpath:db/migration,classpath:sql
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-
-engine:
-  rule:
-    metric:
-      source:
-        business-db:
-          type: MYSQL
