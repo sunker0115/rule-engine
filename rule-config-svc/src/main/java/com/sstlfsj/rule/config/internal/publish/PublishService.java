@@ -549,7 +549,7 @@ public class PublishService {
     }
 
     /**
-     * 把 draft 的 (decisionCode, priority) binding 富化为含 name/actions 的快照 binding（方案甲，守 D6）。
+     * 把 draft 的 (decisionCode, priority) binding 富化为含 name 的快照 binding（方案甲，守 D6）。
      * 引用的 decisionCode 必须在 decision_definition 存在，否则拒绝发布（DECISION_CODE_NOT_FOUND）。
      */
     private List<RuleVersionSnapshot.DecisionBinding> freezeDecisionBindings(
@@ -559,7 +559,6 @@ public class PublishService {
                 .map(RuleVersionSnapshot.DecisionBinding::decisionCode).distinct().toList();
         Map<String, DecisionDefinition> byCode = decisionDefinitionMapper.findByCodes(tenantId, codes).stream()
                 .collect(Collectors.toMap(DecisionDefinition::getCode, d -> d, (a, b) -> a));
-        boolean pullScene = scene.getDominantMode() == DominantMode.PULL;
         List<RuleVersionSnapshot.DecisionBinding> frozen = new ArrayList<>(rawBindings.size());
         for (RuleVersionSnapshot.DecisionBinding b : rawBindings) {
             DecisionDefinition d = byCode.get(b.decisionCode());
@@ -567,17 +566,10 @@ public class PublishService {
                 throw new IllegalArgumentException(
                         "DECISION_CODE_NOT_FOUND: 引用的 decision 不存在: " + b.decisionCode());
             }
-            List<RuleVersionSnapshot.DecisionAction> actions =
-                    d.getActions() != null ? d.getActions() : java.util.List.of();
-            // PULL Scene 下 Decision.actions 必须为空(D27/D54)：PULL 同步返回不派发 action
-            if (pullScene && !actions.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "PULL Scene 的 Decision 不得挂 action(同步返回不派发): decisionCode=" + b.decisionCode());
-            }
             // priority 从 decision_definition 回填(草稿期 binding priority 是 0 占位，DecisionBindingInput 契约)
             int priority = d.getPriority() != null ? d.getPriority() : b.priority();
             frozen.add(new RuleVersionSnapshot.DecisionBinding(
-                    b.decisionCode(), d.getName(), priority, actions));
+                    b.decisionCode(), d.getName(), priority, java.util.List.of()));
         }
         return frozen;
     }

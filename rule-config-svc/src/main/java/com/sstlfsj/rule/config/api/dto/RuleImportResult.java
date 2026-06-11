@@ -13,7 +13,6 @@ import java.util.List;
  * @param metricsRequiringReview  SQL_AGGREGATE 类缺失、未自动创建、需人工审核的 metricCode
  * @param decisionsCreated        缺失而自动创建的 decision code
  * @param decisionsSkippedExisting 已存在跳过的 decision code
- * @param actionTypesReferenced   Bundle 声明引用的 actionType（提醒目标环境核对 SPI handler 注册）
  */
 public record RuleImportResult(
         List<ImportedRule> rules,
@@ -23,8 +22,7 @@ public record RuleImportResult(
         List<String> metricsSkippedExisting,
         List<String> metricsRequiringReview,
         List<String> decisionsCreated,
-        List<String> decisionsSkippedExisting,
-        List<String> actionTypesReferenced
+        List<String> decisionsSkippedExisting
 ) {
     /**
      * 单条规则导入落库结果。

@@ -27,7 +27,7 @@ class RuleBundleServiceImplTest {
 
     @Test
     void export_delegatesToRuleExportService() {
-        RuleBundle expected = new RuleBundle(1, "t", "1", List.of(), List.of(), List.of(), List.of(), List.of());
+        RuleBundle expected = new RuleBundle(1, "t", "1", List.of(), List.of(), List.of(), List.of());
         when(ruleExportService.export("1", List.of(10L), null)).thenReturn(expected);
 
         RuleBundle result = sut.export("1", List.of(10L), null);
@@ -39,9 +39,9 @@ class RuleBundleServiceImplTest {
 
     @Test
     void importBundle_delegatesToRuleImportService() {
-        RuleBundle bundle = new RuleBundle(1, "t", "1", List.of(), List.of(), List.of(), List.of(), List.of());
+        RuleBundle bundle = new RuleBundle(1, "t", "1", List.of(), List.of(), List.of(), List.of());
         RuleImportResult expected = new RuleImportResult(
-                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
         when(ruleImportService.importBundle("2", bundle, "actor1")).thenReturn(expected);
 
         RuleImportResult result = sut.importBundle("2", bundle, "actor1");

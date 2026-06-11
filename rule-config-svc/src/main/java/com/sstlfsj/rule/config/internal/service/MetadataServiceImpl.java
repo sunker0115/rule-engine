@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** MetadataService 实现：为前端编辑器提供可用的 metric / conditionType / actionType 元数据。 */
+/** MetadataService 实现：为前端编辑器提供可用的 metric / conditionType 元数据。 */
 @Service
 @RequiredArgsConstructor
 class MetadataServiceImpl implements MetadataService {
@@ -53,8 +53,8 @@ class MetadataServiceImpl implements MetadataService {
                         Boolean.TRUE.equals(m.getAllowProvided())))
                 .toList();
 
-        // conditionType / actionType 来自注册的 SPI Bean，v1 返回空列表
-        return new MetadataResponse(List.of(), List.of(), metricMetas);
+        // conditionType 来自注册的 SPI Bean，v1 返回空列表
+        return new MetadataResponse(List.of(), metricMetas);
     }
 
     @Override

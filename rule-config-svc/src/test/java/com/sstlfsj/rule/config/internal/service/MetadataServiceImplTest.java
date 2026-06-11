@@ -54,9 +54,8 @@ class MetadataServiceImplTest {
 
         assertThat(response.availableMetrics()).hasSize(1);
         assertThat(response.availableMetrics().get(0).metricCode()).isEqualTo("user.age");
-        // conditionType / actionType v1 返回空列表
+        // conditionType v1 返回空列表
         assertThat(response.conditionTypes()).isEmpty();
-        assertThat(response.actionTypes()).isEmpty();
     }
 
     @Test

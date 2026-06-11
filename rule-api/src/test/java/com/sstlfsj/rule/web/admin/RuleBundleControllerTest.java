@@ -53,7 +53,7 @@ class RuleBundleControllerTest {
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", null, "USER",
                         "PUSH", "HIGHEST_PRIORITY", java.util.List.of(), java.util.List.of(),
                         java.util.Map.of(), 1)),
-                List.of(), List.of(), List.of());
+                List.of(), List.of());
     }
 
     @Test
@@ -99,7 +99,7 @@ class RuleBundleControllerTest {
                 List.of(new RuleImportResult.ImportedRule(10L, 100L, 1L, "rule.a", "risk.transfer", false)),
                 List.of("risk.transfer"), List.of(),
                 List.of("account.age"), List.of(), List.of(),
-                List.of("BLOCK"), List.of(), List.of("BLOCK_TRANSACTION"));
+                List.of("BLOCK"), List.of());
         when(service.importBundle(eq("t1"), any(), eq("user1"))).thenReturn(result);
 
         String bundleJson = """
@@ -113,7 +113,7 @@ class RuleBundleControllerTest {
                           "subjectType":"USER","dominantMode":"PUSH",
                           "decisionStrategy":"HIGHEST_PRIORITY","eventTypes":[],
                           "payloadSchema":[],"defaultParams":{},"payloadSchemaVersion":1}],
-                 "metricDefinitions":[],"decisionDefinitions":[],"actionTypeManifest":[]}
+                 "metricDefinitions":[],"decisionDefinitions":[]}
                 """;
         MockMultipartFile file = new MockMultipartFile(
                 "file", "rule-bundle.json", "application/json",

@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.config.api.service;
 
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 
 import java.util.List;
 
@@ -16,16 +15,15 @@ public interface DecisionService {
      * @param name        decision 名称
      * @param priority    优先级（数值越小越优先，由业务自定）
      * @param description 描述，可空
-     * @param actions     命中该 decision 时派发的动作列表
      * @param actorId     操作人（X-Actor-Id）
      * @return 新建 decision 的 id
      */
     Long create(Long tenantId, String code, String name, Integer priority,
-                String description, List<DecisionAction> actions, String actorId);
+                String description, String actorId);
 
-    /** 更新 decision 的 name/priority/description/actions（按 tenantId+code 定位，不存在抛异常）。 */
+    /** 更新 decision 的 name/priority/description（按 tenantId+code 定位，不存在抛异常）。 */
     void update(Long tenantId, String code, String name, Integer priority,
-                String description, List<DecisionAction> actions, String actorId);
+                String description, String actorId);
 
     /** 停用 decision（status → DISABLED）。 */
     void disable(Long tenantId, String code, String actorId);

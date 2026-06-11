@@ -150,7 +150,6 @@ public class RuleImportService {
                 d.setName(de.name());
                 d.setPriority(de.priority());
                 d.setDescription(de.description());
-                d.setActions(de.actions() == null ? List.of() : de.actions());
                 d.setStatus(DecisionStatus.ACTIVE);
                 d.setCreatedBy(actorId);
                 d.setCreatedAt(LocalDateTime.now());
@@ -214,8 +213,7 @@ public class RuleImportService {
         return new RuleImportResult(importedRules,
                 scenesCreated, scenesSkipped,
                 metricsCreated, metricsSkipped, metricsReview,
-                decisionsCreated, decisionsSkipped,
-                bundle.actionTypeManifest() == null ? List.of() : bundle.actionTypeManifest());
+                decisionsCreated, decisionsSkipped);
     }
 
     /** 按 sceneCode 解析 sceneId：优先本次 upsert 映射，缺失则兜底查库，仍无则报错。 */
