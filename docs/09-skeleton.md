@@ -44,9 +44,7 @@ v1 阶段 10 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个
 | `rule-sdk` | 嵌入式 SDK：`RuleEngineClient` 门面 + `SnapshotPoller` HTTP 轮询 + 本地模式（代码定义规则，零网络）+ FETCHED 取数（宿主注入 handler，定义独立下发，D46） | 库（jar），业务方引入，零 Spring |
 | `rule-sdk-spring-boot-starter` | Spring Boot 自动装配胶水层：读 `rule.sdk.*` 配置，注册 `RuleEngineClient` Bean | 库（jar），Spring Boot 业务方引入 |
 
-**`rule-kernel` / `rule-sdk` Native Image 说明**：两者均零 Spring 零 DB，完全兼容 GraalVM Native Image。主服务（`rule-app`）因 MyBatis-Plus 动态代理机制，v1 不支持 Native Image 编译（详见架构设计文档约束 5）。
-
-> **kernel 引入 Lombok（D49）**：`rule-kernel` 自 D49 起引 Lombok（如 `RuleEvent` 的 `@Builder(toBuilder)`）。Lombok 是**编译期注解处理器**，编译后无运行时依赖，不破坏 kernel「运行时零依赖 / GraalVM Native 兼容」承诺。
+> **kernel 引入 Lombok（D49）**：`rule-kernel` 自 D49 起引 Lombok（如 `RuleEvent` 的 `@Builder(toBuilder)`）。Lombok 是**编译期注解处理器**，编译后无运行时依赖，保持 kernel「运行时零依赖」。
 
 ---
 
@@ -257,7 +255,7 @@ engine:
 
 Spring Boot 4.0.x 使用 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 注册（替代旧版 `spring.factories`）。
 
-**Spring Boot AOT（JVM 模式）**：各 AutoConfiguration 模块（`rule-config-svc` / `rule-eval-svc` / `rule-audit-svc` / `rule-observability`）加 `spring-boot-autoconfigure-processor`（`optional=true`），编译期生成 condition metadata；`rule-app` 的 `spring-boot-maven-plugin` 配 `process-aot` goal，预生成 BeanDefinition，加速 JVM 启动。此为 JVM 模式加速，与 GraalVM Native Image 无关（主服务 v1 不支持 Native Image，见 §二说明）。
+**Spring Boot AOT（JVM 模式）**：各 AutoConfiguration 模块（`rule-config-svc` / `rule-eval-svc` / `rule-audit-svc` / `rule-observability`）加 `spring-boot-autoconfigure-processor`（`optional=true`），编译期生成 condition metadata；`rule-app` 的 `spring-boot-maven-plugin` 配 `process-aot` goal，预生成 BeanDefinition，加速 JVM 启动。此为纯 JVM 启动优化。
 
 ---
 

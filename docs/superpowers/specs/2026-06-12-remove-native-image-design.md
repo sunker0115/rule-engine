@@ -1,6 +1,6 @@
 # 去 GraalVM Native Image 化 — 设计
 
-> 状态:设计待评审 · 日期:2026-06-12 · 关联决策:D62(草案,见文末)
+> 状态:已实现 · 日期:2026-06-12 · 关联决策:D62(草案,见文末)
 > 背景关联:D49(kernel 引 Lombok 称"不破坏 Native")、D32(ArchUnit/release21,**与 native 无关,不动**)、archive/2026-06-01-modulith(约束 5 Native 部分支持)、2026-06-07 xxl native go/no-go(已判 NO-GO)
 
 ## 1. 背景与动机

@@ -31,7 +31,7 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Lombok：编译期注解处理器（@Builder），不进运行时，不破坏零运行时依赖 / Native Image -->
+        <!-- Lombok：编译期注解处理器（@Builder），编译后无运行时依赖 -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
