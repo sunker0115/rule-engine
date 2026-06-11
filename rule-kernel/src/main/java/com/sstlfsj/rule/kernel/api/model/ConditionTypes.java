@@ -2,8 +2,8 @@ package com.sstlfsj.rule.kernel.api.model;
 
 /** 内置条件算子的 conditionType 码(契约值,= AST ConditionNode.conditionType / evaluator 注册键)。
  *  算子是开放集——自定义 ConditionEvaluator 可注册任意 conditionType,故此处仅集中内置算子为常量,非闭合枚举。 */
-public final class ConditionType {
-    private ConditionType() {}
+public final class ConditionTypes {
+    private ConditionTypes() {}
 
     /** 等于。 */
     public static final String EQ = "EQ";

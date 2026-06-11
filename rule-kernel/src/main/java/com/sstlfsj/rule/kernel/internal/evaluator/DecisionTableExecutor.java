@@ -113,7 +113,7 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
      */
     private static Map<String, Object> buildParams(String operator, Object condValue) {
         return switch (operator.toUpperCase()) {
-            case ConditionType.IN, ConditionType.NOT_IN -> Map.of("values", condValue);
+            case ConditionTypes.IN, ConditionTypes.NOT_IN -> Map.of("values", condValue);
             default             -> Map.of("threshold", condValue);
         };
     }

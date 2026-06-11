@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.config.internal.publish;
 
-import com.sstlfsj.rule.kernel.api.model.ConditionType;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
@@ -24,23 +24,23 @@ class AstDataTypeResolver {
 
     static {
         Map<String, Set<String>> m = new HashMap<>();
-        m.put(ConditionType.EQ,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionType.NEQ,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionType.GT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put(ConditionType.GTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put(ConditionType.LT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put(ConditionType.LTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put(ConditionType.BETWEEN,      Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionType.NOT_BETWEEN,  Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionType.IN,           Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
-        m.put(ConditionType.NOT_IN,       Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
-        m.put(ConditionType.CONTAINS,     Set.of(DataType.LIST.tag()));
-        m.put(ConditionType.NOT_CONTAINS, Set.of(DataType.LIST.tag()));
-        m.put(ConditionType.STARTS_WITH,  Set.of(DataType.STRING.tag()));
-        m.put(ConditionType.ENDS_WITH,    Set.of(DataType.STRING.tag()));
-        m.put(ConditionType.MATCHES,      Set.of(DataType.STRING.tag()));
-        m.put(ConditionType.DATE_BEFORE,  Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionType.DATE_AFTER,   Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionTypes.EQ,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionTypes.NEQ,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionTypes.GT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionTypes.GTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionTypes.LT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionTypes.LTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionTypes.BETWEEN,      Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionTypes.NOT_BETWEEN,  Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionTypes.IN,           Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
+        m.put(ConditionTypes.NOT_IN,       Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
+        m.put(ConditionTypes.CONTAINS,     Set.of(DataType.LIST.tag()));
+        m.put(ConditionTypes.NOT_CONTAINS, Set.of(DataType.LIST.tag()));
+        m.put(ConditionTypes.STARTS_WITH,  Set.of(DataType.STRING.tag()));
+        m.put(ConditionTypes.ENDS_WITH,    Set.of(DataType.STRING.tag()));
+        m.put(ConditionTypes.MATCHES,      Set.of(DataType.STRING.tag()));
+        m.put(ConditionTypes.DATE_BEFORE,  Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionTypes.DATE_AFTER,   Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
         ALLOWED = Map.copyOf(m);
     }
 

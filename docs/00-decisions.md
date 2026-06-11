@@ -1313,6 +1313,8 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 **已实装**（D40）：`@RuleDef` + `@Decision` 注解 + `InlineRuleSpec` 接口 + `AnnotationRuleSource`（扫描类路径下带 `@RuleDef` 的 `InlineRuleSpec` 实现）+ Starter 自动收集注入。
 
+> 更新（D59，2026-06-11）：D40 中“`ruleVersionId` 调用方经 `@RuleDef.id()` 显式指定”已废弃——`@RuleDef` 改用 `code` + `version`，代理键 `ruleVersionId` 由 `(tenant,scene,code)` 哈希派生。详见 D59。
+
 ---
 
 ## D41. `Scene.executionStrategy` 扩展 — ALL_HITS / FIRST_HIT ⭐⭐

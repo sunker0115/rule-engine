@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
-import com.sstlfsj.rule.kernel.api.model.ConditionType;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
 import java.util.HashMap;
@@ -21,25 +21,25 @@ public final class KernelEvaluators {
      */
     public static Map<String, ConditionEvaluator> defaults() {
         Map<String, ConditionEvaluator> m = new HashMap<>();
-        m.put(ConditionType.EQ,           new EqEvaluator());
-        m.put(ConditionType.NEQ,          new NeqEvaluator());
-        m.put(ConditionType.GT,           new GtEvaluator());
-        m.put(ConditionType.GTE,          new GteEvaluator());
-        m.put(ConditionType.LT,           new LtEvaluator());
-        m.put(ConditionType.LTE,          new LteEvaluator());
-        m.put(ConditionType.IN,           new InEvaluator());
-        m.put(ConditionType.NOT_IN,       new NotInEvaluator());
-        m.put(ConditionType.BETWEEN,      new BetweenEvaluator());
-        m.put(ConditionType.NOT_BETWEEN,  new NotBetweenEvaluator());
-        m.put(ConditionType.CONTAINS,     new ContainsEvaluator());
-        m.put(ConditionType.NOT_CONTAINS, new NotContainsEvaluator());
-        m.put(ConditionType.STARTS_WITH,  new StartsWithEvaluator());
-        m.put(ConditionType.ENDS_WITH,    new EndsWithEvaluator());
-        m.put(ConditionType.MATCHES,      new MatchesEvaluator());
-        m.put(ConditionType.DATE_BEFORE,  new DateBeforeEvaluator());
-        m.put(ConditionType.DATE_AFTER,   new DateAfterEvaluator());
-        m.put(ConditionType.TIME_WINDOW,  new TimeWindowEvaluator());
-        m.put(ConditionType.TIME_OCCURRED_AT, new OccurredAtEvaluator());
+        m.put(ConditionTypes.EQ,           new EqEvaluator());
+        m.put(ConditionTypes.NEQ,          new NeqEvaluator());
+        m.put(ConditionTypes.GT,           new GtEvaluator());
+        m.put(ConditionTypes.GTE,          new GteEvaluator());
+        m.put(ConditionTypes.LT,           new LtEvaluator());
+        m.put(ConditionTypes.LTE,          new LteEvaluator());
+        m.put(ConditionTypes.IN,           new InEvaluator());
+        m.put(ConditionTypes.NOT_IN,       new NotInEvaluator());
+        m.put(ConditionTypes.BETWEEN,      new BetweenEvaluator());
+        m.put(ConditionTypes.NOT_BETWEEN,  new NotBetweenEvaluator());
+        m.put(ConditionTypes.CONTAINS,     new ContainsEvaluator());
+        m.put(ConditionTypes.NOT_CONTAINS, new NotContainsEvaluator());
+        m.put(ConditionTypes.STARTS_WITH,  new StartsWithEvaluator());
+        m.put(ConditionTypes.ENDS_WITH,    new EndsWithEvaluator());
+        m.put(ConditionTypes.MATCHES,      new MatchesEvaluator());
+        m.put(ConditionTypes.DATE_BEFORE,  new DateBeforeEvaluator());
+        m.put(ConditionTypes.DATE_AFTER,   new DateAfterEvaluator());
+        m.put(ConditionTypes.TIME_WINDOW,  new TimeWindowEvaluator());
+        m.put(ConditionTypes.TIME_OCCURRED_AT, new OccurredAtEvaluator());
         return Map.copyOf(m);
     }
 }
