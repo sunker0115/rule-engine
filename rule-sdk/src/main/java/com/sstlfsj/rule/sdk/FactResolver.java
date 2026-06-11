@@ -1,0 +1,89 @@
+package com.sstlfsj.rule.sdk;
+
+import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.sdk.annotation.Fact;
+import com.sstlfsj.rule.sdk.annotation.Metric;
+
+import java.lang.reflect.Parameter;
+import java.math.BigDecimal;
+
+/**
+ * 把方法参数解析成注入值。
+ * @Metric:从 EvalContext 取 metric(失败/缺失=null)。
+ * @Fact:先 payload,再元数据(eventId/tenantId/sceneCode/eventType/subjectId/occurredAt + 决策码/priority/category),都无=null。
+ */
+public final class FactResolver {
+
+    /**
+     * 解析整组参数。
+     *
+     * @param params 方法参数数组
+     * @param ctx    评估上下文(可为 null)
+     * @param fired  决策事件(动作侧传入,条件侧传 null);提供 decisionCode/priority/category 元数据
+     * @return 与 params 一一对应的注入值
+     */
+    public Object[] resolve(Parameter[] params, EvalContext ctx, DecisionFiredEvent fired) {
+        Object[] args = new Object[params.length];
+        for (int i = 0; i < params.length; i++) {
+            args[i] = resolveOne(params[i], ctx, fired);
+        }
+        return args;
+    }
+
+    private Object resolveOne(Parameter p, EvalContext ctx, DecisionFiredEvent fired) {
+        Metric metric = p.getAnnotation(Metric.class);
+        if (metric != null) {
+            MetricValue mv = ctx == null ? null : ctx.getMetric(metric.value());
+            if (mv == null || mv.isError()) return null;
+            return coerce(mv.value(), p.getType());
+        }
+        Fact fact = p.getAnnotation(Fact.class);
+        if (fact == null) {
+            throw new IllegalStateException(
+                    "@Condition/@OnDecision 参数必须标注 @Fact 或 @Metric: " + p);
+        }
+        String name = fact.value();
+        RuleEvent event = ctx == null ? null : ctx.event();
+        if (event != null && event.payload().containsKey(name)) {
+            return coerce(event.payload().get(name), p.getType());
+        }
+        return metadata(name, event, fired);
+    }
+
+    private static Object metadata(String name, RuleEvent event, DecisionFiredEvent fired) {
+        if (event != null) {
+            switch (name) {
+                case "eventId":    return event.eventId();
+                case "tenantId":   return event.tenantId();
+                case "sceneCode":  return event.sceneCode();
+                case "eventType":  return event.eventType();
+                case "subjectId":  return event.subjectId();
+                case "occurredAt": return event.occurredAt();
+                default: break;
+            }
+        }
+        if (fired != null) {
+            switch (name) {
+                case "decisionCode": return fired.decisionCode();
+                case "priority":     return fired.priority();
+                case "category":     return fired.category();
+                default: break;
+            }
+        }
+        return null;
+    }
+
+    private static Object coerce(Object v, Class<?> t) {
+        if (v == null || t.isInstance(v)) return v;
+        if (v instanceof Number) {
+            Number n = (Number) v;
+            if (t == Integer.class || t == int.class)       return n.intValue();
+            if (t == Long.class    || t == long.class)      return n.longValue();
+            if (t == Double.class  || t == double.class)    return n.doubleValue();
+            if (t == BigDecimal.class)                      return new BigDecimal(n.toString());
+        }
+        return v;
+    }
+}
