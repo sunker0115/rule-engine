@@ -149,7 +149,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         Decision decision = snapshot.decisionBindings().stream()
                 .filter(b -> b.decisionCode().equals(leaf.decisionCode()))
                 .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), leaf.category(), b.actions()))
+                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), null, 0L, leaf.category(), b.actions()))
                 .orElseGet(() -> new Decision(leaf.decisionCode(), "", 0, snapshot.ruleVersionId(), leaf.category()));
         // 叶子命中：trace 由调用方（IfNode/顶层）汇总，这里只返回命中布尔/决策
         return new EvalResult(true, decision, List.of(decision),

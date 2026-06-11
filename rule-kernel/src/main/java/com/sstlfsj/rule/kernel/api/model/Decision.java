@@ -9,6 +9,10 @@ public record Decision(
         String name,
         int priority,
         Long fromRuleVersionId,
+        /** 命中规则的逻辑编码;执行器构造时从 snapshot.code() 填充。 */
+        String fromRuleCode,
+        /** 命中规则的版本号;执行器从 snapshot.version() 填充。 */
+        long fromRuleVersion,
         String category,
         List<RuleVersionSnapshot.DecisionAction> actions
 ) {
@@ -18,11 +22,11 @@ public record Decision(
 
     /** 带 category、无 actions 的便捷构造（actions 空）。 */
     public Decision(String code, String name, int priority, Long fromRuleVersionId, String category) {
-        this(code, name, priority, fromRuleVersionId, category, List.of());
+        this(code, name, priority, fromRuleVersionId, null, 0L, category, List.of());
     }
 
     /** 无分类、无 actions 的便捷构造（category=null，actions 空）。 */
     public Decision(String code, String name, int priority, Long fromRuleVersionId) {
-        this(code, name, priority, fromRuleVersionId, null, List.of());
+        this(code, name, priority, fromRuleVersionId, null, 0L, null, List.of());
     }
 }

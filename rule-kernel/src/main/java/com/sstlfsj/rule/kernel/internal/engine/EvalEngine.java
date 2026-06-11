@@ -235,7 +235,7 @@ public class EvalEngine {
             if (BINDING_PRECEDENCE.compare(b, best) > 0) best = b;
         }
         return List.of(new Decision(best.decisionCode(), best.name(), best.priority(),
-                snap.ruleVersionId(), null, best.actions()));
+                snap.ruleVersionId(), null, 0L, null, best.actions()));
     }
 
     /** 快照 decisionBindings 的最高 priority；无 binding 时返回 0。供 FIRST_HIT 排序用。 */
