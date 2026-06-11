@@ -1,6 +1,10 @@
 package com.sstlfsj.rule.config.internal.domain;
 
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -15,13 +19,14 @@ class SceneDefTest {
         scene.setCode("SCENE_A");
         scene.setName("场景A");
         scene.setDescription("测试描述");
-        scene.setDominantMode("PUSH");
-        scene.setDecisionStrategy("HIGHEST_PRIORITY");
-        scene.setSubjectType("USER");
-        scene.setEventTypes("[\"payment.initiated\"]");
-        scene.setPayloadSchema("{\"amount\":\"LONG\"}");
-        scene.setDefaultParams("{\"timezone\":\"Asia/Shanghai\"}");
-        scene.setStatus("ACTIVE");
+        scene.setDominantMode(DominantMode.PUSH);
+        scene.setDecisionStrategy(DecisionStrategy.HIGHEST_PRIORITY);
+        scene.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
+        PayloadFieldSpec field = new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null);
+        scene.setEventTypes(List.of("payment.initiated"));
+        scene.setPayloadSchema(List.of(field));
+        scene.setDefaultParams(Map.of("timezone", "Asia/Shanghai"));
+        scene.setStatus(SceneStatus.ACTIVE);
         scene.setCreatedBy("operator1");
         scene.setUpdatedBy("operator2");
 
@@ -30,13 +35,13 @@ class SceneDefTest {
         assertEquals("SCENE_A", scene.getCode());
         assertEquals("场景A", scene.getName());
         assertEquals("测试描述", scene.getDescription());
-        assertEquals("PUSH", scene.getDominantMode());
-        assertEquals("HIGHEST_PRIORITY", scene.getDecisionStrategy());
-        assertEquals("USER", scene.getSubjectType());
-        assertEquals("[\"payment.initiated\"]", scene.getEventTypes());
-        assertEquals("{\"amount\":\"LONG\"}", scene.getPayloadSchema());
-        assertEquals("{\"timezone\":\"Asia/Shanghai\"}", scene.getDefaultParams());
-        assertEquals("ACTIVE", scene.getStatus());
+        assertEquals(DominantMode.PUSH, scene.getDominantMode());
+        assertEquals(DecisionStrategy.HIGHEST_PRIORITY, scene.getDecisionStrategy());
+        assertEquals(com.sstlfsj.rule.kernel.api.model.SubjectType.USER, scene.getSubjectType());
+        assertEquals(List.of("payment.initiated"), scene.getEventTypes());
+        assertEquals(List.of(field), scene.getPayloadSchema());
+        assertEquals(Map.of("timezone", "Asia/Shanghai"), scene.getDefaultParams());
+        assertEquals(SceneStatus.ACTIVE, scene.getStatus());
         assertEquals("operator1", scene.getCreatedBy());
         assertEquals("operator2", scene.getUpdatedBy());
     }

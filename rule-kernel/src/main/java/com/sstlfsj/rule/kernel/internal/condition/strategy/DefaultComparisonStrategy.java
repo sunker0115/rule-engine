@@ -7,7 +7,7 @@ package com.sstlfsj.rule.kernel.internal.condition.strategy;
  */
 class DefaultComparisonStrategy implements ComparisonStrategy {
 
-    private static final NumericComparisonStrategy NUMERIC = new NumericComparisonStrategy();
+    private static final DecimalComparisonStrategy NUMERIC = new DecimalComparisonStrategy();
     private static final StringComparisonStrategy STRING = new StringComparisonStrategy();
     private static final BooleanComparisonStrategy BOOLEAN = new BooleanComparisonStrategy();
 

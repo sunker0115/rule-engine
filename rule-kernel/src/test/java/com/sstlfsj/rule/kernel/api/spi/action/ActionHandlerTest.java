@@ -16,7 +16,7 @@ class ActionHandlerTest {
 
     private static ActionContext buildCtx() {
         RuleEvent event = new RuleEvent("t1", "SCENE1", "PAYMENT",
-                "u1", "e1", Instant.now(), Map.of(), Map.of());
+                "u1", "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext evalCtx = new EvalContext("t1", event, null, Map.<String, MetricValue>of(), Instant.parse("2026-06-01T00:00:00Z"));
         return new ActionContext("a1", "SEND_MSG", Map.of(), evalCtx, 1L, "BLOCK");
     }
@@ -27,13 +27,6 @@ class ActionHandlerTest {
     void execute_returnsSuccess() {
         ActionResult r = NO_OP.execute(buildCtx());
         assertEquals(ActionResult.ActionStatus.SUCCESS, r.status());
-    }
-
-    @Test
-    void compensate_defaultReturnsNotSupported() {
-        ActionResult r = NO_OP.compensate(buildCtx());
-        assertEquals(ActionResult.ActionStatus.SKIPPED, r.status());
-        assertEquals("COMPENSATE_NOT_SUPPORTED", r.errorCode());
     }
 
     @Test

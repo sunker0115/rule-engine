@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.sdk;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -10,14 +11,11 @@ import java.util.List;
 
 /** SDK metric 定义下发端点：供 MetricDefinitionPoller 拉取定义元数据（不含凭证）。 */
 @RestController
-@RequestMapping("/api/v1/sdk")
+@RequestMapping("/sdk/v1")
+@RequiredArgsConstructor
 public class SdkMetricDefinitionController {
 
     private final MetadataService metadataService;
-
-    public SdkMetricDefinitionController(MetadataService metadataService) {
-        this.metadataService = metadataService;
-    }
 
     /**
      * 拉取租户的 metric 运行时定义列表。

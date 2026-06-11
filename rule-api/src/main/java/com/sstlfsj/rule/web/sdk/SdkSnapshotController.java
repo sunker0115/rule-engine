@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.sdk;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -12,14 +13,11 @@ import java.util.Map;
 
 /** SDK 快照端点：供 SnapshotPoller 启动加载和增量热更新。 */
 @RestController
-@RequestMapping("/api/v1/sdk")
+@RequestMapping("/sdk/v1")
+@RequiredArgsConstructor
 public class SdkSnapshotController {
 
     private final SceneSnapshotLoader snapshotLoader;
-
-    public SdkSnapshotController(SceneSnapshotLoader snapshotLoader) {
-        this.snapshotLoader = snapshotLoader;
-    }
 
     /**
      * 拉取规则版本快照。

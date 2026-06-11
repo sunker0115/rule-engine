@@ -19,15 +19,18 @@
 
     <modules>
         <module>rule-kernel</module>
-        <module>rule-kernel-polling</module>
         <module>rule-config-svc</module>
+        <module>rule-mybatis-native</module>
         <module>rule-eval-svc</module>
+        <module>rule-job-svc</module>
+        <module>rule-job-xxl</module>
         <module>rule-audit-svc</module>
         <module>rule-observability</module>
         <module>rule-api</module>
         <module>rule-app</module>
         <module>rule-sdk</module>
         <module>rule-sdk-spring-boot-starter</module>
+        <module>rule-benchmark</module>
     </modules>
 
     <properties>
@@ -43,6 +46,14 @@
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <!-- OTel instrumentation（logback-appender 等），与 opentelemetry.version=1.55.0 配套 -->
         <opentelemetry-instrumentation.version>2.16.0-alpha</opentelemetry-instrumentation.version>
+        <!-- springdoc 3.x 系列适配 Spring Boot 4（3.0.3 以 spring-boot 4.0.5 为 parent） -->
+        <springdoc.version>3.0.3</springdoc.version>
+        <!-- xxl-job-core 3.4.0：稳定版（2026-04-05），自身基于 Spring Boot 4.0.5 构建，无 javax 引用 -->
+        <xxl-job.version>3.4.0</xxl-job.version>
+        <!-- 把 xxl-job-core 传递的 Groovy 5 锁回 4.x：GraalVM 内置 GroovySubstitutions 仅适配 Groovy 4，
+             对 Groovy 5 因 IndyInterface.invalidateSwitchPoints() 缺失导致 native 编译失败（GR-60622）。
+             适配器走 glueType=BEAN 不跑脚本，仅需 GroovyClassLoader 可加载，4.x 运行期等价。 -->
+        <groovy.version>4.0.24</groovy.version>
     </properties>
 
     <build>
@@ -189,15 +200,30 @@
                 <version>${opentelemetry-instrumentation.version}</version>
             </dependency>
 
+            <!-- springdoc OpenAPI：内嵌 Swagger UI，仅 rule-api 暴露 REST 文档 -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+
+            <!-- xxl-job 执行器核心（adapter 模块按需引入；admin 端独立部署不在此） -->
+            <dependency>
+                <groupId>com.xuxueli</groupId>
+                <artifactId>xxl-job-core</artifactId>
+                <version>${xxl-job.version}</version>
+            </dependency>
+            <!-- 强制 Groovy 4.x：覆盖 xxl-job-core 传递的 5.0.5（理由见 groovy.version 属性注释） -->
+            <dependency>
+                <groupId>org.apache.groovy</groupId>
+                <artifactId>groovy</artifactId>
+                <version>${groovy.version}</version>
+            </dependency>
+
             <!-- 内部模块版本管理 -->
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-kernel</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.sstlfsj.rule</groupId>
-                <artifactId>rule-kernel-polling</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -207,7 +233,22 @@
             </dependency>
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-mybatis-native</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-eval-svc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-job-svc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-job-xxl</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.sdk;
 
+import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 
 import java.util.ArrayList;
@@ -81,6 +82,48 @@ public final class Condition {
         return leaf(conditionType, metric, params);
     }
 
+    // ── payload 直接引用工厂（valueRef=PAYLOAD，字段名复用 metricCode，直接读 event.payload）──
+
+    /** payload 字段 field 大于 threshold。 */
+    public static Condition payloadGt(String field, Object threshold) {
+        return leaf("GT", field, Map.of("threshold", threshold), ValueRef.PAYLOAD);
+    }
+
+    /** payload 字段 field 大于等于 threshold。 */
+    public static Condition payloadGte(String field, Object threshold) {
+        return leaf("GTE", field, Map.of("threshold", threshold), ValueRef.PAYLOAD);
+    }
+
+    /** payload 字段 field 小于 threshold。 */
+    public static Condition payloadLt(String field, Object threshold) {
+        return leaf("LT", field, Map.of("threshold", threshold), ValueRef.PAYLOAD);
+    }
+
+    /** payload 字段 field 小于等于 threshold。 */
+    public static Condition payloadLte(String field, Object threshold) {
+        return leaf("LTE", field, Map.of("threshold", threshold), ValueRef.PAYLOAD);
+    }
+
+    /** payload 字段 field 等于 value。 */
+    public static Condition payloadEq(String field, Object value) {
+        return leaf("EQ", field, Map.of("value", value), ValueRef.PAYLOAD);
+    }
+
+    /** payload 字段 field 不等于 value。 */
+    public static Condition payloadNeq(String field, Object value) {
+        return leaf("NEQ", field, Map.of("value", value), ValueRef.PAYLOAD);
+    }
+
+    /** payload 字段 field 属于 values 集合。 */
+    public static Condition payloadIn(String field, Object... values) {
+        return leaf("IN", field, Map.of("values", Arrays.asList(values)), ValueRef.PAYLOAD);
+    }
+
+    /** payload 字段 field 落在 [min, max] 闭区间。 */
+    public static Condition payloadBetween(String field, Object min, Object max) {
+        return leaf("BETWEEN", field, Map.of("min", min, "max", max), ValueRef.PAYLOAD);
+    }
+
     /** 恒真条件（空 AND 节点）。 */
     public static Condition always() {
         return new Condition(new AndNode(List.of(), null, null));
@@ -133,6 +176,11 @@ public final class Condition {
     // ── 内部工具 ─────────────────────────────────────────────────────────────
 
     private static Condition leaf(String conditionType, String metric, Map<String, Object> params) {
-        return new Condition(new ConditionNode(conditionType, metric, null, params, 0.0));
+        return leaf(conditionType, metric, params, ValueRef.METRIC);
+    }
+
+    private static Condition leaf(String conditionType, String metric, Map<String, Object> params,
+                                  ValueRef valueRef) {
+        return new Condition(new ConditionNode(conditionType, metric, null, params, 0.0, null, valueRef));
     }
 }

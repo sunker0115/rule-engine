@@ -23,7 +23,8 @@ public interface RuleVersionReadMapper {
               rv.trigger_event_types AS triggerEventTypesJson,
               rd.kind            AS kind,
               s.decision_strategy AS decisionStrategy,
-              rv.metric_dependencies AS metricDependenciesJson
+              rv.metric_dependencies AS metricDependenciesJson,
+              rv.payload_dependencies AS payloadDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -43,7 +44,8 @@ public interface RuleVersionReadMapper {
               rv.trigger_event_types AS triggerEventTypesJson,
               rd.kind            AS kind,
               s.decision_strategy AS decisionStrategy,
-              rv.metric_dependencies AS metricDependenciesJson
+              rv.metric_dependencies AS metricDependenciesJson,
+              rv.payload_dependencies AS payloadDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -66,11 +68,23 @@ public interface RuleVersionReadMapper {
               rv.trigger_event_types AS triggerEventTypesJson,
               rd.kind            AS kind,
               s.decision_strategy AS decisionStrategy,
-              rv.metric_dependencies AS metricDependenciesJson
+              rv.metric_dependencies AS metricDependenciesJson,
+              rv.payload_dependencies AS payloadDependenciesJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
             WHERE rv.id = #{ruleVersionId}
             """)
     RuleVersionRow loadById(@Param("ruleVersionId") Long ruleVersionId);
+
+    /** 按 ruleId 取最新版本 id（最高版本号，含 DRAFT），供 dry-run ruleId 模式解析目标。不存在返回 null。 */
+    @Select("""
+            SELECT rv.id
+            FROM rule_version rv
+            INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
+            WHERE rd.tenant_id = #{tenantId} AND rd.id = #{ruleId}
+            ORDER BY rv.version DESC
+            LIMIT 1
+            """)
+    Long latestVersionIdByRule(@Param("tenantId") Long tenantId, @Param("ruleId") Long ruleId);
 }

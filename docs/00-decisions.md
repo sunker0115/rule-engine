@@ -997,7 +997,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `01-concepts.md` §3.8 EvalContext 构建逻辑需说明 `providedMetrics` 优先级
 - `10-api-contract.md` 需补充两处：
   - 评估接口请求体新增 `providedMetrics` 字段
-  - 新增 `GET /api/v1/scenes/{sceneCode}/provided-metrics` 发现接口，返回本 Scene 内 `allowProvided=true` 的 metric 列表（含 `metricCode / dataType / description`），供业务方接入时查询，响应可缓存（见 10-api-contract §5.2）
+  - 新增 `GET /admin/v1/scenes/{sceneCode}/provided-metrics` 发现接口，返回本 Scene 内 `allowProvided=true` 的 metric 列表（含 `metricCode / dataType / description`），供业务方接入时查询，响应可缓存（见 10-api-contract §5.2）
 
 ---
 
@@ -1147,7 +1147,7 @@ RuleEngineClient.builder()
 
 **`RuleSource` 不携带 evaluator**：规则数据与算子行为职责分离，evaluator 在 Client 级通过 `addEvaluator()` 注册（见 D37）。
 
-**文件格式**：JSON，与服务端 `GET /api/v1/sdk/snapshots` 响应体 `data` 数组格式完全一致，可直接从服务端导出存为文件离线使用。不做 YAML（需额外依赖 `jackson-dataformat-yaml`），如有需求后续扩展。
+**文件格式**：JSON，与服务端 `GET /sdk/v1/snapshots` 响应体 `data` 数组格式完全一致，可直接从服务端导出存为文件离线使用。不做 YAML（需额外依赖 `jackson-dataformat-yaml`），如有需求后续扩展。
 
 **不改的**：`EvalEngine`、`SceneRuleIndex`、服务端任何模块。
 
@@ -1460,7 +1460,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 2. **metric 定义独立下发，不进 `rule_version` 快照**：SDK 本地 `MetricDefinitionRegistry`（`tenantId:metricCode → MetricDescriptor`，HTTP 热更整体替换）+ `SnapshotMetricDefinitionResolver`（B21 resolver SPI 的嵌入式实现，读 registry）。
 
-3. **定义来源对称于 `RuleSource`**：`MetricDefinitionSource` SPI —— `DslMetricDefinitionSource` / `FileMetricDefinitionSource`（本地追加 put）/ `PollingMetricDefinitionSource`（HTTP 全量 replace）。HTTP 模式独立 `MetricDefinitionPoller` 复用 `pollInterval` 热更，端点 `GET /api/v1/sdk/metric-definitions`（仅下发元数据，不含凭证）。
+3. **定义来源对称于 `RuleSource`**：`MetricDefinitionSource` SPI —— `DslMetricDefinitionSource` / `FileMetricDefinitionSource`（本地追加 put）/ `PollingMetricDefinitionSource`（HTTP 全量 replace）。HTTP 模式独立 `MetricDefinitionPoller` 复用 `pollInterval` 热更，端点 `GET /sdk/v1/metric-definitions`（仅下发元数据，不含凭证）。
 
 4. **handler 由宿主注入，SDK 不内置 SQL/HTTP handler**：SDK 跑宿主进程，凭证/连接池属宿主职责。`RuleEngineClient.Builder` 加注入入口：`metricSourceHandler` / `metricDefinitionResolver` / `metricCache` / `fetchExecutor` / `metricDefinitionSource` / `localMetric`。
 
@@ -1473,6 +1473,61 @@ public class AmountFraudRule implements InlineRuleSpec {
 **不做的**：SDK 内置 SQL_AGGREGATE / EXTERNAL_HTTP handler（永远宿主提供）；定义冻进 `rule_version` 快照；HTTP 模式「本地算不了回源服务端评估」（破坏零网络/本地决策定位）；宿主 handler 的连接池/凭证管理。
 
 **已实装**（D46 / B23）：`MetricDefinitionRegistry` + `SnapshotMetricDefinitionResolver`；`MetricDefinitionSource` SPI + `Dsl`/`File`/`Polling` 三实现 + `MetricDefinitionPoller`；`RuleEngineClient.Builder` 取数注入入口 + 富构造装配 + `close()` 停 poller + 无 handler fail-fast；服务端 `MetadataService.listMetricDefinitions` + `SdkMetricDefinitionController`；starter `ObjectProvider` 自动注入。
+
+---
+
+## D55. 场景输入参数清单（范围 B）：公开评估只收 payload + 输入清单发现/校验 ⭐⭐⭐
+
+**背景**：依赖范围 A（payload 直接引用，`valueRef` 已把 payload 事实 / metric 指标分开）之上，给"对场景发事件"的调用方一个精确可校验的输入契约——查一次该场景要传哪些事件事实（名 + 类型），照着传 `payload`，剩下引擎自己搞定。设计见 `specs/2026-06-10-scene-input-manifest-design.md`（brainstorming 冻结 2026-06-10，本条落地）。
+
+**决策**：
+
+1. **范围 = B，依赖 A**：B（场景输入清单）建在 A（payload 直接引用）之上，B 的发布期收集 / 评估期校验都以 A 的 `valueRef=PAYLOAD` 节点为输入。
+
+2. **公开评估只收 `payload`，`providedMetrics` 从公开接口移除**：`EvalEventRequest`（rule-api）删 `providedMetrics`，公开 HTTP 调用方碰不到引擎内部 metric taxonomy；metric 100% 引擎侧（按 `sourceType` 自取）。**内部 `RuleEvent`（rule-kernel）保留 `providedMetrics` 字段**，供嵌入式 SDK 宿主注入 / Job 预算这条**非公开**路径用（`EvalController` 构造 `RuleEvent` 时不再从请求体填，恒空）。D30 的 `providedMetrics` 语义在公开侧退场，仅存于内部链路。
+
+3. **清单来源 = 发布期快照**：每条规则发布时把引用的 payload 字段（`valueRef=PAYLOAD` 节点）连同从 `Scene.payloadSchema` 取的 `dataType` / `required` 冻结进 `rule_version.payload_dependencies`（`List<PayloadDependency> = [{name, dataType, required}]`），与 `metric_dependencies` 同套路、守 D6（快照不可变 + 评估零额外查询）。随 `RuleVersionSnapshot.payloadDependencies` 下发到评估侧。场景级输入清单 = 该场景所有 ACTIVE 规则快照清单的并集（同名去重）。DB 迁移 V1_24 加 `rule_version.payload_dependencies` JSON 列（typed，`Jackson3TypeHandler`）。
+
+4. **评估期整体校验**：评估入口按候选快照（可按 eventType 收窄）的 `payloadDependencies` 并集校验请求 `payload`——必填缺失 → `MISSING_REQUIRED_INPUT`（**整体拒绝 400，不降级**）；基础类型不符（`number→DECIMAL` / `integer→LONG` / `string→STRING` / `boolean→BOOLEAN`）→ `INPUT_TYPE_MISMATCH`（400）；多塞的未被引用字段忽略。经 `IllegalArgumentException → HTTP 400`，wire `errorCode=INVALID_ARGUMENT` + 语义码携于 message 前缀。与发布期 `UNRESOLVED_VARIABLE` 正交（一个管授权期越界引用，一个管调用期漏传 / 错类型）。
+
+5. **新发现接口 + 删 getProvidedMetrics**：新增 `GET /api/v1/rule/scenes/{sceneCode}/input-manifest?tenantCode=xxx[&eventType=xxx]` → `ApiResponse.data.fields = [{name, dataType, required}]`（该场景 active 规则引用的 payload 字段并集，带 eventType 收窄）。作废 `MetadataService.getProvidedMetrics` + 其端点 `GET /admin/v1/scenes/{sceneCode}/provided-metrics`（公开侧无 provided metric 概念了）；`getSceneMetadata`（`/metadata`，配置侧元数据）保留。
+
+**取舍（已接受）**：每个被规则引用的 metric 必须引擎可解析（真实数据源 / 从 subject 取），本地"用 providedMetrics 喂 metric"的偷懒法挪到 SDK/dev 非公开路径——换来公开调用方契约的彻底干净。清单是发布期快照，改规则后清单随发布更新（已发布版本用旧快照，符合 D6），非即时。
+
+**已实装**（D55 / 范围 B）：`PayloadDependency` record + `RuleVersionSnapshot.payloadDependencies` + `AstJsonCodec`/`SnapshotAssembler` 序列化；DB 迁移 V1_24 + 实体列；`PublishService` 冻结 payload 依赖；`RuleVersionReadMapper` 三查询补列；`EvalEventRequest` 删 providedMetrics + 评估期 payload 入参校验（`MISSING_REQUIRED_INPUT` / `INPUT_TYPE_MISMATCH`）；input-manifest 发现接口；删 `getProvidedMetrics` 端点；`RuleBundle` 导入导出贯穿 payloadDependencies；示例 high-risk-login 纯 payload 化。
+
+---
+
+## D56. 规则草稿/版本生命周期重构：premise A 草稿即冻结快照 + publish 退化为激活 + 删草稿边界 + dry-run 二选一 ⭐⭐⭐
+
+**背景**：D6（版本与灰度）+ D19（规则发布事务性）确立了"快照不可变 + 回滚 = 用旧版本快照建新草稿"，但现状实现把生命周期压成了一次性链路（createDraft 存 raw 未解析草稿 → publish 时才解析 + INSERT 新 ACTIVE 行 → 之后只能 disable），且 dry-run 复用评估主链路会落 `evaluation_session` / 派发 action（副作用 bug）。本决策补全生命周期、把"草稿即完整冻结快照"立为 premise，并重设计 dry-run。设计见 `specs/2026-06-10-rule-draft-version-lifecycle-design.md`（设计冻结 2026-06-10，本条落地）。
+
+**决策**：
+
+1. **生命周期补全**：规则生命周期方法集补全为 createDraft / editDraft / newVersion / rollback / publish / deleteRule / deleteDraftVersion——
+   - `createDraft`：建 v1 DRAFT 行。
+   - `editDraft`：原地更新当前最新 DRAFT 行内容，**不增版本号**（同一 versionId、同一 version）。
+   - `newVersion`：对已发布规则出 `v_max+1` DRAFT；要求当前**无未发布 DRAFT**（先发布或删掉在途草稿，避免多个并行草稿）。
+   - `rollback`：= `newVersion` 带 `fromVersionId`——克隆指定旧版本的内容、按**当前世界重新解析**（metric/decision/payload 的现状），产出新 DRAFT；激活仍走显式 `publish`（不自动上线）。这是 D19"回滚 = 用旧版本快照建新草稿"的精确落地：克隆的是输入意图，冻结的是当前世界的解析结果。
+   - `publish` / `deleteRule` / `deleteDraftVersion`：见第 3、4 条。
+
+2. **premise A：草稿即完整冻结快照**——草稿在 **create / edit / newVersion 时**就跑全套 `resolveAndValidate`（解析 + 硬校验）：metric 必须 ACTIVE、payload 字段必须在 `scene.payloadSchema` 声明、decision 必须存在、kind 结构校验（SCORECARD 根/权重、DECISION_TREE 结构、DECISION_TABLE 行列一致）、算子×dataType 校验。**任一校验不过即拒绝建/改草稿**（抛 `IllegalArgumentException` → 400）。落库的 DRAFT 行已是冻结快照：`resolvedAst` 含 dataType、`metricDependencies`/`payloadDependencies` 已冻、`decisionBindings` 含 `name`/`actions`、`triggerEventTypes`/`preGates` 已规整。校验从发布期前移到草稿写入期，配置错误第一时间暴露，dry-run 试跑的就是发布后一模一样的快照。
+
+3. **publish 退化为激活**：publish 不再 INSERT 新 ACTIVE 行、不再重解析——把当前最新 DRAFT 行**原地翻 ACTIVE**（version 不变），supersede 旧 ACTIVE 行，发 `RulePublishedEvent` 触发 eval 侧索引热更。**版本号只在 createDraft（v1）/ newVersion（v_max+1）产生**；editDraft 原地更新不增、publish 激活不增。这相对现状是最大行为变化（现状 publish 插一条新 version=max+1 的 ACTIVE 行并保留 DRAFT）。
+
+4. **triggerEventTypes 冻结口径**：发布落库的 `triggerEventTypes` 是草稿**自己声明的值**（写入草稿时已校验 ⊆ `scene.eventTypes`），不再像现状那样 publish 时覆盖成 `scene.getEventTypes()` 全集——保证"预览（dry-run 草稿）的 == 发布的"。空 `triggerEventTypes` 仍归 eval 侧 `*` 通配桶。
+
+5. **dry-run 重设计为 ruleId / ruleVersionId 二选一必传**：`POST /api/v1/rule/dry-run` 改为二者择一必传——传 `ruleVersionId` 试跑该精确版本；传 `ruleId` 取该规则**最新版本**（最高版本号，含 DRAFT）；两者都不传 → 400 `MISSING_DRYRUN_TARGET`。结构上恒走"带版本单快照"分支 → dry-run **不落 `evaluation_session`、不派发 action**（从结构上根除旧实现复用评估主链路带来的副作用 bug，而非靠 `isDryRun` 标志逐处门控）。dry-run 痕迹仍按需落 `dry_run_session` / `dry_run_node_trace`（D7 试算观测，与正式评估隔离）。
+
+6. **删草稿边界**：
+   - `deleteRule` 仅删**从未发布过**的规则（无 ACTIVE/SUPERSEDED 版本），级联删 `rule_definition` + 其全部 `rule_version`。
+   - `deleteDraftVersion` 仅删 **DRAFT** 版本行。
+   - 碰 ACTIVE / SUPERSEDED 版本一律**拒绝**（已上线/曾上线的版本只能 `disable`，保留审计与可回滚历史）。
+   - **级联范围只 `rule_version`**：草稿出站引用（metric/decision/scene/payload）全是 `rule_version` 冻结快照内的值，删行即净；入站 dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`，按 ruleVersionId 关联）**不级联删**——视同审计历史，靠 `SessionRetentionCleaner` TTL 退休（详见 spec §六）。资源（metric/decision/scene）无硬删除接口，删草稿不影响被引用实体。
+
+**取舍（已接受）**：草稿写入期跑全套解析校验，建/改草稿比"raw 存草稿"重（多查 metric/decision/scene），换来"草稿即真实快照 + dry-run == 发布"的确定性与副作用根除；newVersion 要求无在途 DRAFT（单草稿约束），简化版本状态机，多并行草稿是伪需求。
+
+**已实装**（D56）：`PublishService` 抽 `resolveAndValidate` + `ResolvedDraft` record；`publish` 改原地激活；新增 `editDraft`/`newVersion`/`deleteRule`/`deleteDraftVersion`；`RuleVersion.draftV1`（raw 草稿工厂）删除；`RuleVersionMapper` 补 `findByIdAndRule`/`hasNonDraftVersion`/`deleteByRuleDefinitionId`；`ConfigService` 接口扩展；`RuleController` 加 PUT `/draft`、POST `/versions`、DELETE `/{ruleId}`、DELETE `/{ruleId}/versions/{versionId}`；`EvalService.dryRun` 改签名 `(event, ruleId, ruleVersionId)` + 恒走带版本单快照分支（不落 session、不派发 action）；`RuleVersionReadMapper.latestVersionIdByRule`；`MISSING_DRYRUN_TARGET` 错误码。
 
 ---
 
@@ -1520,5 +1575,17 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D42 | `DECISION_TREE` / `DECISION_TABLE` evaluator | A | 新增 `IfNode`/`DecisionLeafNode` AST 节点；独立 Executor SPI 实现；`EvalResult` 补 `category`/`decision` 字段；`EXPRESSION_SCRIPT` 留 v1.5 |
 | D43 | 灰度收口 pre_gates ROLLOUT，废弃 `rollout` 列 | A | 灰度由 ROLLOUT pre-gate 承载（percentage/bucketStart/bucketEnd/experimentId）；`V1_4` 删 `rollout` 列；桶区间+experimentId 实现一致分桶/互斥 + 发布期校验；USER_TAG/HYBRID 标签命中留演进 |
 | D44 | B20 时间框架：EvalContext.now 注入 + DATE/DATETIME 一等 dataType + 时间条件内置 | A | now 单次注入+单时钟约束；TimeZoneResolver（字面偏移>params.timezone>UTC，Scene级暂缓）；DATE/DATETIME 纯策略+两阶段管线；PlaceholderResolver($now/$today，不含相对时长)；context_snapshot 嵌套格式；time.window/time.occurred_at 注册；V1_5 扩展 ENUM |
+| D47 | D11 Job 模式落地 | A | 独立模块 `rule-job-svc`；`Scheduler` SPI 精简为 `schedule/unschedule`（cron→Runnable），手动触发/运行记录查询等管理能力上移 `JobService`；首个实现 `ThreadPoolSchedulerAdapter`（进程内 `ThreadPoolTaskScheduler`+`CronTrigger`，单实例，多实例需选主/xxl-job，作已知限制）；subjectQuery 首期仅 `type=SQL`（MyBatis `@Select` 跑配置化只读 SQL，EXTERNAL_HTTP/METRIC_RESULT 后续）；`job_definition` 以 `scene_code` 关联（非 scene_id），对齐 RuleEvent/SceneService 口径；注入点 `EvalService.acceptEvent`（PUSH 语义）；`eventId=murmur3(jobRunId+":"+subjectId)` 复用 `evaluation_session(tenant_id,event_id)` uk 幂等；迁移 V1_7 |
+| D48 | Job 改 `@RuleJob` 注解驱动、取数砍 SQL | A | 修订 D47 的 subjectQuery 方案：Job 定义由 `@RuleJob` 注解驱动——开发者在 Spring Bean 方法标注（code/cron/tenant/scene/eventType），方法体即自定义主体查询（返回含 subjectId 行，如查近期登录用户）；启动期 `RuleJobScanner` 扫描 upsert `job_definition`（`subjectQuery.type=BEAN_METHOD`, `ref=<bean>#<method>`）+ 注册调度。砍掉 SQL 类型（主体多在业务库、job DataSource 够不着，`SqlSubjectQuerySource`/`SubjectQueryMapper` 删）+ 砍按 type 分发抽象（仅 BEAN_METHOD，YAGNI，多 type 再加回）。去掉 createJob API（subjectQuery 是代码 ref，运营配不了），`/admin/v1/jobs` 仅管理类（list/get/enable/disable/trigger/executions），PULL 校验保留 `enableJob`；规则仍由运营事先经 Scene/Rule API 配，Job 只定时触发评估 |
+| D49 | 统一 RuleEvent 产生：渠道(source)/模式(mode) 拆分 + builder 构造 | A | `RuleEvent` 加 `source`（EventSource 渠道）+ Lombok `@Builder(toBuilder)`；评估 `mode`(PUSH/PULL) 由 EvalService 入口判定（acceptEvent=PUSH / evaluate·dryRun=PULL）写 session；`evaluation_session` 拆 `source`(渠道 ENUM HTTP/MQ/JOB/SDK/REPLAY)/`mode`(PUSH/PULL) 两列（V1_8），原 source(PUSH/PULL/REPLAY) 语义并入 mode。`source` 由注入入口权威设置、不信外部 JSON（HTTP→controller、Job→JobRunner、SDK→client 各自钉死）；三路径统一经 `RuleEvent.builder` 构造，无散落 `new RuleEvent`。Job 主体类型 `Subject`→`JobTarget`（携 payload/providedMetrics，删 PayloadTemplateRenderer 占位符渲染）。kernel 首次引 Lombok（编译期注解处理器，不破坏运行时零依赖 / GraalVM Native） |
+| D50 | scene_action_binding 写 API + 移除 rate_limit_override + 接 default_params | A | 新增 binding 写 API（config-svc `SceneActionBindingService.replace` 整组覆盖 + `/admin/v1/scenes/{sceneCode}/action-bindings` GET/PUT），写后发 `SceneChangedEvent`（active=场景真实状态）闭合 `SceneActionBindingIndex` 失效缺口。**移除 `rate_limit_override`**（V1_14 DROP COLUMN）：action 级频控无消费方且冗余——Job 注入端已控速率（§5.4 rateLimit），实时 PUSH 是业务速率，限流共享下游需分布式且更该贴 ActionHandler 内部（引擎保持下游无关）；真需限流走 handler 内部或上分布式。**接 default_params**：`SceneActionBindingIndex` 装载时解析 `default_params` JSON→`Map<String,Object>` 缓存，`ActionDispatchService` 传入 `ActionContext.params`（04-extension §3.4「以 default_params 为底」）。边界 JSON 字段统一 `Map<String,Object>`（禁 JSON String/裸 Object）；DTO↔service 转换走 MapStruct convert 包 |
+| D52 | Pre-Gate 收敛为仅 ROLLOUT | A | Pre-Gate 最终只保留 `ROLLOUT`（无状态 murmur3 分桶，无依赖）。**移除 `RATE_LIMIT`/`MUTEX`**：二者有状态（计数窗口/并发锁）需引擎持有分布式状态（Redis），打破"无状态评估"假设；greenfield 阶段不引该架构依赖，且当前是静默 fail-open 的伪能力，砍掉，未来真做分布式状态时单独设计。**黑白名单转 BOOLEAN metric + condition**（不再是 pre-gate）：① 时序——pre-gate 在 EvalContext 装配**之前**，metric 在 Context 阶段才取数，pre-gate 拿不到 metric；② 语义——按 subjectId 查名单判成员本就是 metric 的活，该走 metric 治理（取数/缓存/版本/allowProvided/影响面）。落地形态：名单 metric（`sourceType=SQL_AGGREGATE`、`dataType=BOOLEAN`、`SELECT EXISTS(... WHERE list_key=:listKey AND subject_id=:subjectId)`）+ 规则 `EQ(in_blacklist,true)`，复用现有 metric 机制无需写 pre-gate 代码。**堵 fail-open**：`EvalEngine.applyPreGates` 改 fail-closed（未注册 gateType 视为拦截）；发布期校验 `pre_gates[].gateType` 必须有注册 PreGate 实现（现仅 ROLLOUT 合法），配已砍/未实装 gate 一律发布拒绝。**对账语义取舍**：黑白名单拦截从 `BLOCKED`（pre-gate）变为 `MISS`（condition 不满足），`blocked_by` 合法值收敛为仅 `ROLLOUT`，要区分靠 node_trace 看具体 condition；失去"白名单用户直接跳过评估"的短路优化（白名单用户也进评估，多取一个 BOOLEAN metric，开销可控）。D22 四态/BLOCKED 桶语义不变（ROLLOUT 拦截仍归 BLOCKED） |
+| D53 | Action 投递 best-effort 化（砍应用层 retry/补偿） | A | Action 命中后投递语义钉死为 **best-effort fire-and-forget**：命中 → 派发 → 进程内队列异步跑 handler → 落 `action_execution`；队列满/进程重启会丢，不重试、不补偿、不保证投递。**砍应用层 retry/补偿建模**（与未来方案确定不复用、非预留）：DB（V1_21）drop `action_execution` 列 `retryable`/`retry_count`/`compensated`/`compensated_at`/`compensated_by` + 索引 `idx_status_retryable`；SPI 删 `ActionHandler.compensate()` 默认方法（保留 `execute`/`dryRun`）；删 `QUEUE_OVERFLOW` errorCode 承诺。**砍进程内幂等缓存**：删 `ActionIdempotencyGuard`/`CaffeineActionIdempotencyGuard`/`ActionIdempotencyProperties` + `ActionDispatchService` 的 claim/release——重复防护降级为落库 `uk_idempotency`（ON DUPLICATE KEY 吞重），不防"handler 被重复执行"（best-effort 接受，未来 MQ 消费端再做幂等）。**真实化 `SendAlertHandler`**：`SEND_ALERT` 由 stub 改真实 HTTP webhook（`engine.rule.action.send-alert.*` 可配 URL/短超时，POST 告警载荷；2xx=SUCCESS/非2xx/失败=FAILED 不重试/无 URL=SKIPPED），dryRun 仅预览；`BlockTransactionHandler` 留 stub。**队列满可观测**：`InProcessAsyncCommandChannel` 队列满保留丢弃，但加累计丢弃计数 + WARN（不静默）。保留 `action_execution` 主表 + `uk_idempotency` + `dryRun` SPI + `ActionResult.retryable` 字段（kernel record，未删，仅不再驱动重试队列）。**未来方向钉死**：可靠投递=MQ（at-least-once 由 MQ 保证，不在应用层做重试表/重发）；业务补偿=saga/补偿事务（不复用本次删的 `compensate()` SPI / `compensated` 列）。D18/D20 历史条目记当时设计，本决策收敛覆盖其中 retry/补偿/QUEUE_OVERFLOW 部分（failFast 多 action 失败传播语义不变，仍保留） |
+| D54 | 配置闭环 B 轮：补齐 D27 + 砍两张 binding 表 | A | **补齐 D27（decision.actions 接进派发，实装）**：`DecisionBinding` 快照扩 `name`/`actions`（发布期从 `decision_definition` 冻结，方案甲——守 D6 不可变 + 评估零额外查询，改 decision 需重发生效）；`Decision` 加 `actions` 字段；`EvalEngine.resolveRuleDecisions` + Tree/Table executor 从 binding 读 `name`/`actions`（**修 `finalDecision.name` 永远空串真 bug**）；`ActionDispatchService` 改读 **finalDecision.actions** 派发（不再 `hitDecisions × scene_action_binding` 笛卡尔积），`DispatchActionsCommand` 携带 `finalDecision`；发布期新增 **DECISION_CODE_NOT_FOUND** 校验（rule 绑定的 decisionCode 必须在 `decision_definition` 存在）；新增 **decision tenant 级写 API**（`/admin/v1/decisions` CRUD + actions + 审计）。**触发源单一性**：action 触发唯一来源 = decision（tenant 级，与 scene 无关），否 D27 当年的 C 方案（两层并存）。**决策二 砍 metric binding**：drop `scene_metric_binding`（V1_22），metric 在 tenant 级对所有 scene 可用。**决策三 砍 scene_action_binding 整表**（V1_23）：action 端到端 tenant 级、与 scene 无关，该表退化为纯白名单后是 action 最后残留的 scene 耦合，鸡肋；连同 **D50 写 API 作废**、`scene_action_binding.default_params` 移除。actionType 合法性降级为**运行期 NO_HANDLER skip**（与 D53 best-effort 一致），不在发布期校验，`ACTION_TYPE_NOT_BOUND` errorCode 删除。D26/D27/D50 历史条目记当时设计，本决策收敛覆盖（D27 由"待实装"转"已实装"；D50 作废）。取舍：放弃 scene 级 action 差异化（伪需求，走不同 decision 解决）+ scene 级 metric/action 治理白名单 |
+| D51 | 剩余 DB ENUM 列全面 VARCHAR 化（R10） | A | 承 V1_11（metric source_type/data_type/status）、V1_15（rule_definition/rule_version/scene status）后，将剩余全部 MySQL `ENUM` 列改 `VARCHAR`：tenant.status、scene.dominant_mode/decision_strategy/subject_type、decision_definition.status、rule_definition.kind/rule_version.kind、audit_log.actor_type（V1_16）；evaluation_session.source/mode/status、action_execution.status、dry_run_session.status/trigger（V1_17）；node_trace/dry_run_node_trace.value_source（V1_18）；job_definition.status/job_execution.status（V1_19）。取值真相源统一在 app 层 Java enum，按 `name()` 与列往返（MyBatis-Plus 全局 `MybatisEnumTypeHandler`）；契约边界 `.name()` 保持 String。封闭取值复用 kernel `SubjectType`(+CUSTOM)/`RuleKind`/`EventSource`/`ValueSource`/`ActionResult.ActionStatus`，新建 `TenantStatus`/`DecisionStatus`/`DominantMode`/`DecisionStrategy`/`ActorType`/`SessionStatus`/`EvalMode`/`JobStatus`/`JobExecutionStatus`。`dry_run_session.trigger` 无实体字段（纯列改型）。理由同 V1_11：ENUM 加值需 ALTER+双重定义，VARCHAR 后单一真相源、增删枚举项零迁移风险。至此 DB 不再保留 MySQL ENUM 列 |
+| D55 | 场景输入参数清单（范围 B）：公开评估只收 payload + 输入清单发现/校验 | A | 依赖范围 A（payload 直接引用）。**公开评估只收 `payload`**：`EvalEventRequest` 删 `providedMetrics`，metric 全归引擎；内部 `RuleEvent` 保留 `providedMetrics` 供 SDK/Job 非公开注入。**清单来源 = 发布期快照**：规则发布冻结引用的 `valueRef=PAYLOAD` 字段进 `rule_version.payload_dependencies`（`[{name,dataType,required}]`，V1_24 加列），随 `RuleVersionSnapshot.payloadDependencies` 下发；场景级清单 = 该场景 ACTIVE 规则清单并集。**评估期整体校验**：缺必填 → `MISSING_REQUIRED_INPUT`（拒绝 400 不降级），类型不符 → `INPUT_TYPE_MISMATCH`（400），多塞忽略；经 `IllegalArgumentException → 400`，wire `errorCode=INVALID_ARGUMENT` + 语义码携于 message；与发布期 `UNRESOLVED_VARIABLE` 正交。**新发现接口** `GET /api/v1/rule/scenes/{sceneCode}/input-manifest`（`ApiResponse.data.fields`）；**删 `getProvidedMetrics`** 端点（`/admin/v1/scenes/{sceneCode}/provided-metrics`），`/metadata` 保留。设计见 `specs/2026-06-10-scene-input-manifest-design.md` |
+| D56 | 规则草稿/版本生命周期重构：premise A 草稿即冻结快照 + publish 退化为激活 + 删草稿边界 + dry-run 二选一 | A | 落地 D6/D19。**生命周期补全**：createDraft(v1 DRAFT)/editDraft(原地更新最新 DRAFT，不增版本)/newVersion(已发布出 v_max+1 DRAFT，要求无在途 DRAFT)/rollback(=newVersion 带 fromVersionId，克隆旧版本按当前世界重解析→DRAFT，激活仍走 publish)/publish/deleteRule/deleteDraftVersion。**premise A 草稿即冻结快照**：草稿在 create/edit/newVersion 时即跑全套 `resolveAndValidate`（metric 须 ACTIVE、payload 须在 scene.payloadSchema 声明、decision 须存在、kind 结构 + 算子×dataType 校验），不过即拒；落库 DRAFT 已含 resolvedAst(dataType)/metric·payloadDependencies/decisionBindings(name·actions)。**publish 退化为激活**：把最新 DRAFT 行原地翻 ACTIVE（不增版本、不重解析），supersede 旧 ACTIVE，发 `RulePublishedEvent`；版本号只在 createDraft(v1)/newVersion(+1) 产生。**triggerEventTypes 冻结草稿声明值**（已校验 ⊆ scene.eventTypes，不再覆盖成 scene 全集），保「预览==发布」。**dry-run 二选一必传**：`POST /api/v1/rule/dry-run` 传 ruleVersionId(精确版本)/ruleId(取最新版本含 DRAFT) 二选一，都不传→400 `MISSING_DRYRUN_TARGET`；结构上恒走带版本单快照分支→不落 `evaluation_session`、不派发 action（根除副作用 bug）。**删草稿边界**：deleteRule 仅删从未发布规则(无 ACTIVE/SUPERSEDED)级联 rule_definition+全部 rule_version；deleteDraftVersion 仅删 DRAFT；碰 ACTIVE/SUPERSEDED 一律拒(只能 disable)；级联范围只 rule_version，dry-run 痕迹不级联删（TTL 退休）。覆盖 D19「回滚=旧快照建草稿」为精确生命周期；设计见 `specs/2026-06-10-rule-draft-version-lifecycle-design.md` |
+| D57 | 删除 `BlockTransactionHandler`，`BLOCK_TRANSACTION` 改由嵌入方 SPI 实现 | A | 通用规则引擎无通用"阻断交易"机制（怎么拦取决于宿主交易系统）；且 action 是评估后**异步 best-effort 派发**，真正的同步拒绝是 decision 结果（REJECT）——内置 stub 无条件返回 SUCCESS 是谎报"已拦截"，比 `NO_HANDLER` SKIPPED 更糟。删 `BlockTransactionHandler` + 单测；引擎内置 `ActionHandler` 仅保留 `SendAlertHandler`（HTTP webhook，足够通用可内置）。`BLOCK_TRANSACTION` 仍是**合法可配置 actionType**（SPI 开放），由嵌入方经 `ActionHandler` SPI 自行实现真实阻断；未配 handler 时派发落 `NO_HANDLER` SKIPPED（优雅，不崩）。覆盖 D7 v1.5「`BlockTransactionHandler.dryRun` 实装」中该 handler 部分（`SendAlertHandler` 不变）。bundle/manifest 把 `BLOCK_TRANSACTION` 当样例字符串透传的测试不受影响 |
+| D58 | 不做 SDK 直连 DB 轮询；删孤儿 watcher SPI + `rule-kernel-polling` 模块 | A | SDK 嵌入式的定位是**零网络本地评估、不读库**。若让嵌入方直连引擎 DB:① 把宿主与引擎**内部表 schema**(`rule_version` JSON 列等)死耦合,schema 一改所有嵌入方全崩;② 既然有 DB 直连能力,不如直接用全套引擎——与 SDK 存在意义矛盾。要通讯,**HTTP 轮询**(`/sdk/v1/snapshots`,`PollingRuleSource`/`SnapshotPoller`)已实现并验证(`SdkTradingScenario`),覆盖"嵌入式保鲜"。故:**不实现 DB 直连轮询**;删一直**零生产装配的孤儿 SPI** `RuleVersionWatcher`/`SceneWatcher`(rule-kernel)+ 仅有的两个 stub 实现 `DbPollingRuleWatcher`/`DbPollingSceneWatcher` + 整个 `rule-kernel-polling` 模块(父 pom `modules`/`dependencyManagement` 同步摘除)。SDK 规则来源保持 HTTP 轮询 / 文件 / DSL / 注解四种。覆盖 `99-functional-test-coverage` 原 ⚪「DB 轮询 watcher(SDK v2)」占位项 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

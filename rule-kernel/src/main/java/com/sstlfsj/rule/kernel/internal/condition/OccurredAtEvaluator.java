@@ -19,7 +19,7 @@ public class OccurredAtEvaluator implements ConditionEvaluator {
 
     @Override
     public boolean evaluate(ConditionNode node, EvalContext ctx) {
-        Instant occurred = ctx.getEvent() != null ? ctx.getEvent().occurredAt() : null;
+        Instant occurred = ctx.event() != null ? ctx.event().occurredAt() : null;
         if (occurred == null) return false;
 
         Map<String, Object> params = node.params();

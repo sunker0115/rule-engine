@@ -32,6 +32,37 @@ class EvalResultTest {
     }
 
     @Test
+    void missWithTrace_carriesTrace_noError() {
+        NodeTrace leaf = new NodeTrace("CONDITION", "GT", "score",
+                false, 1, "PROVIDED", null, null, 7L, null, null);
+        EvalResult r = EvalResult.miss(List.of(leaf));
+        assertFalse(r.ruleHit());
+        assertNull(r.errorCode());
+        assertEquals(1, r.nodeTrace().size());
+        assertTrue(r.hitDecisions().isEmpty());
+        assertTrue(r.actionResults().isEmpty());
+    }
+
+    @Test
+    void error_carriesErrorCode_emptyTrace() {
+        EvalResult r = EvalResult.error("DECISION_TABLE_AST_TYPE_MISMATCH");
+        assertFalse(r.ruleHit());
+        assertEquals("DECISION_TABLE_AST_TYPE_MISMATCH", r.errorCode());
+        assertTrue(r.nodeTrace().isEmpty());
+        assertNull(r.finalDecision());
+    }
+
+    @Test
+    void errorWithTrace_carriesErrorCodeAndTrace() {
+        NodeTrace leaf = new NodeTrace("CONDITION", "GT", "score",
+                false, 1, "PROVIDED", "METRIC_FETCH_FAIL", null, 7L, null, null);
+        EvalResult r = EvalResult.error("METRIC_FETCH_FAIL", List.of(leaf));
+        assertFalse(r.ruleHit());
+        assertEquals("METRIC_FETCH_FAIL", r.errorCode());
+        assertEquals(1, r.nodeTrace().size());
+    }
+
+    @Test
     void nullLists_defaultToEmpty() {
         EvalResult r = new EvalResult(true, null, null, null, null, null, null, null, null);
         assertNotNull(r.hitDecisions());

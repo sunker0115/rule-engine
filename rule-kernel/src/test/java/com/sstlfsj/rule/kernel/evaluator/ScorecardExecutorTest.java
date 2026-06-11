@@ -8,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.TraceScope;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -27,7 +28,7 @@ class ScorecardExecutorTest {
 
     private EvalContext ctx() {
         RuleEvent event = new RuleEvent("t1", "scene1", "ORDER_PLACED", "u1",
-                "evt-1", Instant.now(), Map.of(), null);
+                "evt-1", Instant.now(), Map.of(), null, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", event, null, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
@@ -89,7 +90,10 @@ class ScorecardExecutorTest {
         EvalResult result = new ScorecardExecutor(
                 Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse))
                 .execute(snapshot(root), ctx());
-        assertThat(result.nodeTrace()).hasSize(2);
+        // 顶层是单一 ScorecardRoot，各因子在其 children 中（不短路，全量遍历）
+        assertThat(result.nodeTrace()).hasSize(1);
+        assertThat(result.nodeTrace().getFirst().nodeType()).isEqualTo("ScorecardRoot");
+        assertThat(result.nodeTrace().getFirst().children()).hasSize(2);
     }
 
     @Test
@@ -101,6 +105,26 @@ class ScorecardExecutorTest {
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.score()).isEqualTo(0.0);
+    }
+
+    @Test
+    void collectFalse_noTrace_sameScore() throws Exception {
+        // collect=false 时跳过 NodeTrace 构建，score/hit 与 collect=true 完全一致
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE,  "m1", null, Map.of(), 30.0),
+                new ConditionNode(ALWAYS_FALSE, "m2", null, Map.of(), 70.0)
+        ), 80.0);
+        ScorecardExecutor executor = new ScorecardExecutor(
+                Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse));
+        RuleVersionSnapshot snap = snapshot(root);
+        EvalContext c = ctx();
+
+        EvalResult on  = ScopedValue.where(TraceScope.COLLECT, true).call(() -> executor.execute(snap, c));
+        EvalResult off = ScopedValue.where(TraceScope.COLLECT, false).call(() -> executor.execute(snap, c));
+
+        assertThat(off.nodeTrace()).isEmpty();
+        assertThat(off.score()).isEqualTo(on.score());
+        assertThat(off.ruleHit()).isEqualTo(on.ruleHit());
     }
 
     @Test

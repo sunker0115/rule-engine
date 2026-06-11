@@ -22,11 +22,11 @@
 | 概念 | 一句话定义 | 谁来定义 / 配 |
 |------|------------|---------------|
 | **Tenant** | 数据与权限的最外层隔离单元（一个公司 / 一条业务线 / 一个 SaaS 租户） | 平台运维 |
-| **Scene** | Tenant 内的业务域命名空间（如 `marketing.signup` / `risk.transfer`），兼任 **Matcher 路由键 + metric / action 治理白名单 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID） + 元数据 schema 承载者（`payloadSchema` / `eventTypes` / `subjectType` / `defaultParams`，D13）** | 平台运维 |
+| **Scene** | Tenant 内的业务域命名空间（如 `marketing.signup` / `risk.transfer`），兼任 **Matcher 路由键 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID） + 元数据 schema 承载者（`payloadSchema` / `eventTypes` / `subjectType` / `defaultParams`，D13）**（D54 起 metric/action 治理白名单已移除：metric tenant 级可用、action 归 decision） | 平台运维 |
 | **RuleEvent** | 触发评估的"一次发生"：谁、在哪、做了什么（不可变 POJO） | 上游业务方推 |
 | **Rule** | 一条规则定义：在什么条件下、对谁、满足后输出哪个 Decision；带版本、灰度、Pre-Gate；条件用 **AST 树**表达（v1 仅 `kind=AST_BOOLEAN`；D12 预留 SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT 多态扩展位） | 业务运营 / 风控配置 |
 | **Condition** | AST 叶子节点：一条原子判断（`age >= 18` / `近 7 天交易额 > 1000`），由 `conditionType` 路由到具体评估器 | 业务运营选类型 + 配参数 |
-| **Metric** | 取数原子（按 `metricCode` 注册），同一指标可被多 Rule 共享、可缓存；**可见性由 Scene 白名单决定** | 平台 + 业务方共同治理 |
+| **Metric** | 取数原子（按 `metricCode` 注册），同一指标可被多 Rule 共享、可缓存；**在 tenant 级对所有 scene 可用**（D54，无 scene 白名单） | 平台 + 业务方共同治理 |
 | **EvalContext** | 一次评估的运行时上下文：指标快照 + 用户画像 + 业务身份（不可变 POJO） | 引擎在评估前现场构建 |
 | **Decision** | Tenant 级输出定义：规则命中后输出的语义结论（REJECT / REVIEW / PASS 等）；带 `priority` 字段，多规则命中时 Scene 按 `decisionStrategy` 合成最终 Decision；持有 **actions 列表**（D27） | 平台运维 |
 | **Action** | Decision 命中后要做的事（发券 / 调 webhook / 写库），由 `actionType` 路由到具体处理器；配置在 **Decision.actions** 上（D27）；**可空**——PULL 模式 Scene 的 Decision 不配 Action | 业务运营选类型 + 配参数 |
@@ -42,25 +42,22 @@
 ## 二、关系总览
 
 ```
-Tenant ──── 1:N ────► Scene ──── N:N ────► Metric  (经 scene_metric_binding)
+Tenant ──── 1:N ────► Scene                Metric (tenant 级,经 metricCode 直接引用)
   │                    │                     ▲
-  │ 1:N                │ N:N (仅 PUSH/HYBRID) │ 经 metricCode
+  │ 1:N                │ 1:N                  │ 经 metricCode（D54:无 scene 级绑定）
   ▼                    ▼                     │
-Decision           actionType               │
-(code+priority     (白名单治理)              │
- +actions)              │ 1:N               │
-  ▲                     ▼                   │
-  │ N:1 (经        ┌────────────────────────────────────────────┐
-  │  RuleDecision  │  Rule（心智概念，框内可视为一个整体）        │
-  │  Binding)      │                                             │
-  │                │  RuleDefinition ◄── trigger ── RuleEvent    │
-  │                │       │                                     │
-  │                │   1:N │ current_version 指向                │
-  │                │       ▼                                     │
-  └──────────────► │  RuleVersion (不可变发布快照, D6/D19)       │
-                   │  持有: AST + preGates（含 ROLLOUT 灰度）    │
-                   │       + decision_bindings                    │
+Decision           ┌────────────────────────────────────────────┐
+(tenant 级,         │  Rule（心智概念，框内可视为一个整体）        │
+ code+priority     │                                             │
+ +actions,D27)     │  RuleDefinition ◄── trigger ── RuleEvent    │
+  ▲                │       │                                     │
+  │ N:1 (经        │   1:N │ current_version 指向                │
+  │  RuleDecision  │       ▼                                     │
+  │  Binding)      │  RuleVersion (不可变发布快照, D6/D19)       │
+  └──────────────► │  持有: AST + preGates（含 ROLLOUT 灰度）    │
+                   │       + decision_bindings（含 actions 快照） │
                    └────────────────────────────────────────────┘
+（actionType 是 ActionHandler 的全局 SPI 注册键，不属 Scene；action 归 Decision，D27/D54）
                             │
                         1:1 │ (RuleVersion 持有冻结的 AST，不含 Actions)
                             ▼
@@ -85,11 +82,11 @@ Decision           actionType               │
 
 - 一个 **Tenant** 下有多个 **Scene** 和多个 **Decision**；Decision 是 Tenant 级，所有 Scene 共享同一套 Decision 词汇表；
 - **Decision** 持有 `actions` 字段（D27 从 Rule 迁移）：命中该 Decision 时派发的动作列表；
-- 一个 **Scene** 有可见的 **Metric 集合**（白名单绑定）+（PUSH/HYBRID 模式下）可见的 **actionType 集合** + 多条 **Rule**；
-- **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（可编辑草稿，持 `current_version` 指针）+ **RuleVersion**（每次发布产生的不可变快照）；运行时评估锁定 RuleVersion，回滚 = 用旧版本快照建新草稿走标准发布（D6 / D17 / D19）；
-- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树）+ `decision_bindings`（Rule 绑定的 Decision 及其 actions 的快照，DDL 列名；D27，actions 随 `decision_bindings` 一同快照化，不再有独立的 `actions_snapshot` 列）；
+- 一个 **Scene** 有多条 **Rule**；metric 在 tenant 级对所有 scene 可用（D54，无白名单绑定），actionType 由 Decision.actions 决定（D27，与 scene 无关）；
+- **Rule 在心智上是一个概念，实际拆为两层**：**RuleDefinition**（规则元数据 + `current_version` 指针）+ **RuleVersion**（一行版本快照）；**草稿即完整冻结快照（premise A，D56）**——`rule_version` 行在 createDraft（v1）/ newVersion（v_max+1）时即跑全套解析校验并冻结，DRAFT 与发布后是同一行（publish 原地翻 ACTIVE，不重解析、不增版本）；运行时评估锁定 ACTIVE RuleVersion，回滚 = newVersion 带 `fromVersionId`（克隆旧版本输入意图、按当前世界重解析产新 DRAFT，再显式发布，D6 / D17 / D19 / D56）；
+- 一条 **RuleVersion** 冻结判定主体（v1 = `AST_BOOLEAN` 下的 `RuleNode` sealed 树，`resolvedAst` 含 dataType）+ 冻结的 `metric_dependencies` / `payload_dependencies` + `decision_bindings`（Rule 绑定的 Decision 及其 actions 的快照，含 `name`；DDL 列名；D27，actions 随 `decision_bindings` 一同快照化，不再有独立的 `actions_snapshot` 列）；
 - AST 内部由 `AndNode` / `OrNode` / `NotNode` 嵌套，叶子是 `ConditionNode`；
-- **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（限本 Scene 白名单内）构建 **EvalContext**，喂给 ConditionNode 做判定；
+- **RuleEvent** 触发 Matcher 按 `(scene, eventType)` 倒排索引拿候选 **RuleVersion 快照**列表（D17 派生：`current_version` 在索引预热时已解析，运行时直达 RuleVersion，不再二次查 RuleDefinition）→ 引擎按需取 **Metric**（tenant 级注册的 ACTIVE metric）构建 **EvalContext**，喂给 ConditionNode 做判定；
 - AST 求值为 true 后 → 取 Rule 绑定的 Decision → `decisionStrategy` 合成 `finalDecision`：**PUSH/HYBRID** 模式异步派发 `finalDecision.actions`；**PULL** 模式同步返回 `EvalResult{finalDecision, hitDecisions, ...}`，调用方自行决策，不派发 Action。
 
 ---
@@ -98,7 +95,7 @@ Decision           actionType               │
 
 > **横切：核心配置表共享审计字段**（D14）
 >
-> 所有可由人编辑的配置对象（`tenant`、`scene`（DDL 落地表名，旧称 `scene_definition`）、`rule_definition`、`metric_definition`、`scene_metric_binding`、`scene_action_binding`、`job_definition` 等）的表结构都横切包含以下审计字段，下方各章节字段表**默认不再重复列出**：
+> 所有可由人编辑的配置对象（`tenant`、`scene`（DDL 落地表名，旧称 `scene_definition`）、`rule_definition`、`metric_definition`、`decision_definition`、`job_definition` 等）的表结构都横切包含以下审计字段，下方各章节字段表**默认不再重复列出**：
 >
 > | 字段 | 说明 |
 > |------|------|
@@ -131,7 +128,7 @@ Decision           actionType               │
 **是什么**：Tenant 内的业务域命名空间。四重身份：
 
 1. **Matcher 路由键**：把 (tenant + scene + eventType) 当倒排索引主键，规则候选粗筛从千级降到十级（D8 性能预留）；
-2. **治理白名单**：Scene 显式绑定可见的 **metric 集合**（`scene_metric_binding`）和（PUSH/HYBRID 模式下）**actionType 集合**（`scene_action_binding`）；规则只能引用本 Scene 绑定的资源，防跨域读写越界；
+2. **资源可见性**（D54 收敛）：metric 在 tenant 级对所有 scene 可用（无 scene 级白名单）；actionType 由 Decision.actions 决定（tenant 级，与 scene 无关）；scene 不再承担 metric/action 治理白名单职责；
 3. **数据源初始化锚点**：Scene 有生命周期，启动时按绑定批量预热 MetricSource + ActionHandler 的资源（DB 连接池 / HTTP client / MQ producer / 缓存），卸载时反向清理；热路径上无懒加载判断；
 4. **使用模式声明**：Scene 字段 `dominantMode` ∈ `{PUSH, PULL, HYBRID}`，决定 API 入口 / 前端 UI 行为 / 资源预热范围（PULL 不预热 ActionHandler）。
 
@@ -161,14 +158,14 @@ Decision           actionType               │
 | `eventTypes` | 该 Scene 允许的 eventType 白名单数组；事件接入按 (scene + eventType) 二元组校验，规则 trigger 下拉与 Job `eventTypeTemplate` 也按此过滤 |
 | `decisionStrategy` | 多规则命中时的合成策略。v1 固定为 `HIGHEST_PRIORITY`（priority 最小者胜出），DDL 层 NOT NULL DEFAULT，PUSH/HYBRID Scene 强制生效（D29）；PULL Scene 不参与合成，配置了也忽略。v2 预留 `MAJORITY` / `CUSTOM_SPI` 扩展位（届时需 `ALTER TABLE MODIFY COLUMN`，非加列） |
 
-Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `cache_policy_override`）；Scene 与 actionType 通过 `scene_action_binding` 多对多关联（含 Scene 级 `default_params` / `rate_limit_override`），仅 PUSH / HYBRID Scene 用到。Scene 与 `JobDefinition` 一对多关联，PULL Scene 不允许配置 Job（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
+metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）；actionType 由 Decision.actions 决定（D27，tenant 级，无 scene_action_binding）。Scene 与 `JobDefinition` 一对多关联，PULL Scene 不允许配置 Job（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
 
 **关键边界**：
 
 - **Scene 变更热加载**（D24）：Scene 配置（bindings / payloadSchema / status）变更后无需重启；单服务模式下由 Modulith `SceneChangedEvent` 触发（毫秒级）；嵌入式 SDK 模式下由 `SceneWatcher`（`DbPollingSceneWatcher`，默认 30s 轮询）触发（30s 最终一致）；Scene `DISABLED` → 从 Matcher 路由表摘除，已进行中的 session 不中断；bindings 变更 → 触发对应 MetricSource / ActionHandler 资源重新预热/卸载。
 - **同一 Scene 不能跨 Tenant**：`acme.marketing.signup` 和 `beta.marketing.signup` 是两个 Scene。
 - **同一 Rule 属于唯一 Scene**：如果两个业务想要"看起来一样的规则"，请各自在自己 Scene 配一条。
-- **Scene 的白名单是发布时校验项**：规则发布前校验 AST 引用的全部 `metricCode` 在 metric 白名单内、规则绑定的 Decision.actions 中全部 `actionType` 在 action 白名单内（PUSH/HYBRID 模式），否则发布拒绝。
+- **发布时校验项**（D54）：规则发布前校验 AST 引用的全部 `metricCode` 有 ACTIVE metric（tenant 级）、规则绑定的 decisionCode 在 `decision_definition` 存在（DECISION_CODE_NOT_FOUND）；actionType 不再发布期校验（运行期 NO_HANDLER skip）。
 - **PULL 模式 Scene 拒收 Action 配置**：规则发布时如果规则绑定的 Decision.actions 非空，校验拒绝；前端 UI 也直接隐藏 Action 编辑区块。
 - **`payloadSchema` / `eventTypes` 是发布与接入双校验项**（D13）：
   - 规则发布：trigger eventType 必须 ∈ `eventTypes`；AST 引用的 `event.payload.<field>` 必须 ∈ `payloadSchema`；
@@ -192,8 +189,10 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `subjectId` | String | 业务主体 ID（用户 ID / 账户 ID / 订单 ID） |
 | `occurredAt` | Instant | 业务时间，不是引擎收到时间 |
 | `payload` | Map<String, Object> | 业务原始数据快照 |
-| `traceId` | String | 链路 ID，贯穿评估和动作执行 |
-| `source` | Enum | 事件来源：`HTTP` / `MQ` / `JOB` / `SDK` / `REPLAY`；不带链式标识（D16） |
+| `providedMetrics` | Map<String, Object> | 预提供的指标值；EvalContext 构建时优先采用、跳过 sourceType 取数（`allowProvided=true` 才生效，D30）。**仅内部链路可填**——公开评估请求体（`EvalEventRequest`）已移除该字段，只能由非公开路径（嵌入式 SDK 宿主 / Job）注入（见 §3.9a 输入契约） |
+| `source` | Enum | 事件来源渠道：`HTTP` / `MQ` / `JOB` / `SDK` / `REPLAY`；由注入入口权威设置（D49），不带链式标识（D16） |
+
+> **链路 ID（traceId）不在 RuleEvent 上**：链路追踪是横切的可观测性关注点，由 MDC / OTel 贯穿日志与 span（如 `ApiResponse` 从 `MDC.get("traceId")` 取），不作为领域事件字段重复携带。
 
 **关键边界**：
 
@@ -201,7 +200,7 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 - `payload` 在线协议层是 schemaless 的 Map，但**实际可消费字段由 `Scene.payloadSchema` 约束**（D13）：事件接入校验 + 规则发布校验 + 前端编辑器变量补全都按它走。schema 之外的字段被静默丢弃（v1）或拒收（v2 严格模式）。
 - `eventType` 必须 ∈ `Scene.eventTypes` 白名单，不在的事件直接拒收（D13）。
 - 不允许在 RuleEvent 里塞"指标"——指标按需在 EvalContext 构建阶段取。
-- **Job Trigger 同样产出标准 `RuleEvent`**：调度器到点查询主体集合 → 按模板批量合成 RuleEvent（`eventId = hash(jobRunId + subjectId)`）→ 注入标准评估链路；下游 Matcher / Rule / Action 完全无感（详见 §3.10）。
+- **Job Trigger 同样产出标准 `RuleEvent`**：调度器到点经 `@RuleJob` 方法查 `JobTarget` 集合 → 经 `RuleEvent.builder` 批量合成（`source=JOB`、`eventId = hash(jobRunId + subjectId)`，payload/providedMetrics 由 JobTarget 携带）→ 注入标准评估链路；下游 Matcher / Rule / Action 完全无感（详见 §3.10）。
 
 ### 3.4 Rule（规则）
 
@@ -217,9 +216,9 @@ Scene 与 Metric 通过 `scene_metric_binding` 多对多关联（含 Scene 级 `
 | `kind` | 规则形态枚举：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE`（已实装）/ `EXPRESSION_SCRIPT`（未实装，留 v1.5）。发布校验按 kind 校验 AST schema（详见下方 **kind 多态边界**） |
 | `triggerEventTypes` | 数组：哪些 eventType 触发本规则（如 `["trade.completed"]`） |
 | `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 kind 用各自的 JSON 内部结构，与 ast 互斥） |
-| `preGates` | 准入闸门列表（频次 / 互斥 / 黑白名单 / 灰度命中） |
+| `preGates` | 准入闸门列表（v1 仅灰度命中 ROLLOUT，D52） |
 | `actions` | **已迁移到 Decision**（D27）：Rule 不再直接持 actions；命中后要执行的动作由 Rule 绑定的 Decision.actions 决定 |
-| `status` | 状态机：`DRAFT` → `PUBLISHING`（瞬时）→ `PUBLISHED` / `PUBLISH_FAILED`；`PUBLISHED ↔ DISABLED` 独立分支；`PUBLISH_FAILED → DRAFT` 需 UI 显式确认（D19） |
+| `status` | `rule_definition` 状态机：`DRAFT` → `PUBLISHED`；`PUBLISHED ↔ DISABLED` 独立分支。版本行（`rule_version`）有自己的状态 `DRAFT` / `ACTIVE` / `SUPERSEDED`（D56）：createDraft/newVersion 产 DRAFT 行，publish 把最新 DRAFT 行**原地翻 ACTIVE**（不增版本）并 supersede 旧 ACTIVE，无需 INSERT 新行（D19/D56） |
 | `current_version` | 指向当前生效 `rule_version` 行的**主键 id**（`BIGINT`，即 `rule_version.id`，而非业务版本序号 `rule_version.version`）。`PUBLISHED` / `DISABLED` 状态下有值；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本。`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
 | `published_by / published_at` | 发布审计字段（D14，仅 PUBLISHED 状态有值；通用 `created_by` / `updated_by` 见 §三 顶部横切说明） |
 
@@ -262,14 +261,16 @@ DecisionRef {
 
 **关键边界**：
 
-- **Rule 是版本化的**：每次发布产生不可变快照，进行中的评估锁定快照版本（D6）。
+- **Rule 是版本化的**：版本快照在 createDraft（v1）/ newVersion（v_max+1）时产生并冻结（premise A，D56），进行中的评估锁定 ACTIVE 快照版本（D6）。
 - **Rule 不直接含 Condition**：Condition 是 AST 的叶子节点（`ConditionNode`），不能脱离 AST 存在。
 - **Rule 内表达任意复杂逻辑**全靠 AST：`AndNode` / `OrNode` / `NotNode` 任意嵌套，没有"层数"限制。
 - **AST 节点上的 `displayLabel`** 是给运营 UI 看的分组标题，后端评估时忽略它，只看逻辑结构。
 - **已实装 `kind`**：`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）；`EXPRESSION_SCRIPT` 未实装（留 v1.5）。发布校验按 kind 校验 AST schema；演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态。
 - **评估失败单节点降级，整树继续短路求值**（D15）：单个 `ConditionNode` 失败 → 该节点 satisfied=false，其他节点正常评估；整树评估完毕后若有失败节点，`EvalResult.errorCode` 非空。规则间隔离：单条 Rule 失败不影响同 (scene + eventType) 下其他 Rule。PUSH 默认安静失败不派发 Action；PULL 返回 `{satisfied, errorCode}`，调用方按 fail-secure / fail-open 决策。对账四态：`HIT / MISS / BLOCKED / ERROR`（D22）。
 - **运行时锁定快照版本**（D17 派生）：evaluation_session 开始时拍当前候选规则版本快照，整 session 用同一快照——即使中途发生 publish 切版本，本次评估不受影响。索引热更：单服务模式由 Modulith `RulePublishedEvent` 触发（毫秒级）；嵌入式 SDK 模式由 `DbPollingRuleWatcher`（默认 15s 轮询）触发（15s 最终一致）。
-- **发布是单条规则原子事务**（D19）：状态机迁移 + 新 version 行写入 + audit_log 在同一 DB 事务；事务失败 → 状态落 `PUBLISH_FAILED`（不是自动回 DRAFT），同时追加一条 `audit_log.action = PUBLISH_FAILED` 记录失败原因；运营从 UI 看到 `PUBLISH_FAILED` 后显式点"重新编辑"才会迁回 DRAFT，避免静默丢失发布上下文。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。"回滚到旧版本" = 用旧版本快照建新草稿走标准发布流程产出新版本号，不可变快照永不覆盖。
+- **草稿即冻结快照，校验前移到草稿写入期**（premise A，D56）：createDraft / editDraft / newVersion 时即跑全套 `resolveAndValidate`（metric 须 ACTIVE、payload 字段须在 `Scene.payloadSchema` 声明、decision 须存在、kind 结构 + 算子×dataType 校验），不过即拒（400），不落库非法草稿。落库的 DRAFT 行已是完整冻结快照（`resolvedAst` 含 dataType、`metric_dependencies`/`payload_dependencies` 已冻、`decision_bindings` 含 `name`/`actions`、`trigger_event_types` 是草稿自己声明的值）。**publish 退化为激活**：把最新 DRAFT 行原地翻 ACTIVE（不增版本、不重解析），supersede 旧 ACTIVE，单事务内迁状态 + 写 audit_log + 发 `RulePublishedEvent`；保证"dry-run 预览 == 发布"。版本号只在 createDraft（v1）/ newVersion（v_max+1）产生，editDraft 原地、publish 激活都不增。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。
+- **"回滚到旧版本" = newVersion 带 `fromVersionId`**（D19/D56）：克隆指定旧版本的输入意图、按当前世界重新解析冻结产出 `v_max+1` DRAFT，再显式 publish 激活；不可变快照永不覆盖。
+- **删草稿边界**（D56）：deleteRule 仅删从未发布过的规则（无 ACTIVE/SUPERSEDED），级联删 `rule_definition` + 全部 `rule_version`；deleteDraftVersion 仅删 DRAFT 版本行；碰 ACTIVE/SUPERSEDED 一律拒（只能 disable）。级联范围只 `rule_version`/`rule_definition`，dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`）视同审计历史不级联删，靠 TTL 退休。
 - **DISABLED 状态从倒排索引剔除**（D17 + D19 派生）：`PUBLISHED → DISABLED` 切换后，下一次索引热更（单服务模式：事件触发，毫秒级；SDK 模式：15s 轮询）将该 RuleVersion 从内存 `(scene, eventType) → List<RuleVersionSnapshot>` 倒排索引中剔除；`DISABLED → PUBLISHED` 切换则按同一窗口重新入索引。`current_version` 指针在切换过程中**不变**（D19）——索引剔除/回填只动运行时视图，不动 `rule_version` 表内容。
 
 ### 3.5 AST 与"分组心智"
@@ -303,14 +304,14 @@ sealed RuleNode {
 
 **是什么**：AST 的叶子节点，一条原子判断。由 `conditionType` 决定语义，参数化配置。
 
-**典型 conditionType**：
+**典型 conditionType**（算子码本身即 conditionType，内置清单见 [`03-rule-expression.md`](./03-rule-expression.md) §三）：
 
 | conditionType | 例子 |
 |---------------|------|
-| `user.attribute.equals` | `user.kycLevel == 2` |
-| `user.attribute.range` | `user.age >= 18 && user.age < 65` |
-| `metric.threshold` | `metric:user.trade.sum.7d >= 1000` |
-| `event.payload.equals` | `event.payload.currency == "USD"` |
+| `EQ` | `metric:user.kycLevel == 2` |
+| `BETWEEN` | `metric:user.age ∈ [18, 65)` |
+| `GTE` | `metric:user.trade.sum.7d >= 1000` |
+| `EQ`（`valueRef=PAYLOAD`） | `payload:currency == "USD"` |
 | `time.window` | `now in [9:00, 22:00] timezone Asia/Shanghai` |
 
 **节点字段**（持久化在 AST JSON 内，不另存表）：
@@ -319,14 +320,14 @@ sealed RuleNode {
 |------|------|
 | `conditionType` | 路由键，决定用哪个 `ConditionEvaluator` 实现 |
 | `params` | JSON 参数（依 conditionType 而异） |
-| `metricCode` | 当 conditionType 涉及指标时，引用一个 Metric（必须在本 Scene 白名单内） |
+| `metricCode` | 当 conditionType 涉及指标时，引用一个 Metric（须为 tenant 级已注册的 ACTIVE metric，D54） |
 | `displayLabel` | 给运营 UI 看的别名 |
 | `weight` | 可选数值，v1 评估器**忽略**该字段；`Rule.kind = SCORECARD` 时启用，表示该条件命中对总分的贡献（D12 预留） |
 
 **关键边界**：
 
 - **Condition 不取数**：取数是 Metric / EvalContext 的职责；Condition 只判断**已经在 EvalContext 里的数据**。
-- **同一 conditionType 跨 Rule 复用**：通过 `@ConditionType("metric.threshold")` 注解的 Evaluator 是平台资产。
+- **同一 conditionType 跨 Rule 复用**：一个 `@ConditionType("geo.within_country")` 注解的自定义 Evaluator 是平台资产，可被任意 Rule 引用。
 - **Condition 是 AST 中的叶子，不能脱离 Rule 单独存在**：增删 Condition 即修改 AST，走 Rule 版本升级流程。
 
 ### 3.7 Action（动作，可选）
@@ -368,21 +369,20 @@ if (!r.satisfied()) {
 | `actionType` | 路由键，决定用哪个 `ActionHandler` 实现 |
 | `params` | JSON 参数（依 actionType 而异） |
 | `sortOrder` | Decision 内多 Action 的执行顺序 |
-| `failFast` | 布尔，默认 `false`。`true` 时本 Action 失败 → 同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部标 `SKIPPED`，不进入重试队列（D18） |
-| `compensateActionType` | 反向动作类型（用于补偿流水线，可选） |
+| `failFast` | 布尔，默认 `false`。`true` 时本 Action 失败 → 同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部标 `SKIPPED`（D18 多 action 失败传播；best-effort 下无重试队列） |
 
 **`ActionResult.errorCode` 枚举（v1）**：与 `EvalResult.errorCode`（D15）不同维度，独立枚举：
 
 | errorCode | 来源 | 含义 |
 |-----------|------|------|
-| `HANDLER_EXCEPTION` | D18 | `ActionHandler.execute` 抛未捕获异常，引擎归一为 `status=FAILED, retryable=false` |
-| `TIMEOUT` | D18 | `ActionHandler.execute` 超过 handler 自身声明的超时阈值（同步等待 / 调外部 HTTP / MQ ack 等），引擎归一为 `status=FAILED, retryable=true`。超时阈值由 handler 在 `@ActionType` 注解 / 注册元数据声明（详见 04-extension），未声明回落引擎默认 |
-| `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED`，不入重试队列 |
-| `DRY_RUN_NOT_IMPLEMENTED` | D7 | ~~v1 阶段占位~~；v1.5 已全量实装（`BlockTransactionHandler` + `SendAlertHandler` 均 override `dryRun()`），此 errorCode 不再产生 |
-| `QUEUE_OVERFLOW` | D20 | 异步 Dispatcher 内部队列满拒绝该 ActionInstance；引擎归一为 `status=FAILED, retryable=true`，监控告警 |
-| `EXTERNAL_SERVICE_ERROR` | D18 | Handler 调用外部系统返回 5xx / 连接失败；`retryable=true` |
-| `BUSINESS_REJECTED` | D18 | 外部系统明确拒绝（如工单系统返回 400）；`retryable=false` |
-| `NOT_SUPPORTED` | D18 | `ActionHandler.compensate()` 未实装（返回 `ActionResult.notSupported()`）；`retryable=false` |
+| `HANDLER_EXCEPTION` | D18 | `ActionHandler.execute` 抛未捕获异常，引擎归一为 `status=FAILED`（best-effort，不重试） |
+| `TIMEOUT` | D18 | `ActionHandler.execute` 超过 handler 自身声明的超时阈值；引擎归一为 `status=FAILED`（best-effort，不重试）。超时阈值由 handler 在 `@ActionType` 注解声明（详见 04-extension），未声明回落引擎默认 |
+| `PREDECESSOR_FAILED` | D18 | 同 Decision 内 `failFast=true` 的前序 Action 失败导致本 Action 被跳过，`status=SKIPPED` |
+| `DRY_RUN_NOT_IMPLEMENTED` | D7 | ~~v1 阶段占位~~；v1.5 已全量实装（`SendAlertHandler` 等均 override `dryRun()`），此 errorCode 不再产生 |
+| `NO_WEBHOOK_URL` | D53 | `SEND_ALERT` 未配置 webhook URL，`status=SKIPPED`（不实发） |
+| `ALERT_DELIVERY_FAILED` / `ALERT_HTTP_<code>` | D53 | `SEND_ALERT` webhook 连接失败/超时 / 非 2xx；`status=FAILED`（best-effort，不重试） |
+| `EXTERNAL_SERVICE_ERROR` | D18 | Handler 调用外部系统返回 5xx / 连接失败；`status=FAILED`（best-effort，不重试） |
+| `BUSINESS_REJECTED` | D18 | 外部系统明确拒绝（如工单系统返回 400）；`status=FAILED` |
 
 handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 errorCode（带分类前缀），引擎不对未知 errorCode 做特判但要求**全部新增枚举回填到本表**——避免散落各处导致后续遗漏对齐。
 
@@ -390,14 +390,13 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 
 - **Action 归属 Decision，不归属 Rule**（D27）：Action 配置在 `Decision.actions` 字段上，Rule 不再持 `actions` 字段；仅 `finalDecision`（合成后最终决策）的 actions 被 Dispatcher 派发；`hitDecisions` 列表中其他 Decision 的 actions 不派发（避免多规则命中时重复执行）。
 - **Action 是配置数据，ActionHandler 是代码** —— 两者关系类似"Condition 节点 vs ConditionEvaluator"。
-- **`actionType` 受 Scene 白名单约束**（PUSH/HYBRID）：Rule 发布时引擎检查 Rule 绑定的 Decision.actions 内所有 `actionType` 都在本 Scene 的 `scene_action_binding` 内；PULL Scene 校验 Decision.actions 必须为空；前端配 Decision 时 actionType 下拉项按当前 Scene 过滤。
-- **每个 Action 独立事务 + 独立重试** —— 一个 Action 失败不影响其他（除非配置 `failFast`）。
+- **`actionType` 合法性 = 运行期 NO_HANDLER skip**（D54）：actionType 是开放 SPI，发布期不校验白名单（`scene_action_binding` 已移除）；运行期找不到注册 handler → `ActionResult.skipped(NO_HANDLER)`（best-effort，D53）。PULL Scene 仍校验 Decision.actions 必须为空；前端配 Decision 时 actionType 下拉按全局已注册 handler 列表。
+- **best-effort 投递**（D53）：命中后 action 经进程内队列异步派发，**不重试不补偿**；一个 Action 失败不影响其他（除非配置 `failFast`）。队列满/进程重启会丢（队列满计数 + WARN，不静默）。
 - **v1 Action 是平铺 forEach 顺序执行** —— 按 `sortOrder` 串行，编排（并行 / 等待 / 分支）留到 v2。
-- **失败补偿语义**（D18）：单 Action 失败 → 引擎将异常归一为 `ActionResult { status=FAILED, errorCode, retryable }`；`retryable=true` 入重试队列（不阻塞同 Decision 内后续 Action），`retryable=false` 直接落 `action_execution.status=FAILED`。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，**不**进入重试队列。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。
-- **补偿不自动触发**（D18）：`compensateActionType` 不在 Action 失败时由引擎自动跑——补偿是 D4 补偿流水线职责，由外部调度（对账任务 / 手动回滚按钮）发起 `ActionHandler.compensate(action, context)` 调用，**返回类型与 execute 一致**：`ActionResult { status, errorCode?, errorMessage?, retryable }`，状态语义复用。
-- **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。DDL 另有 `PENDING`（已入队待执行）和 `RETRYING`（重试进行中）两个过程态——对账、监控、失败率统计只看最终三态，过程态由引擎内部维护。
-- **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作只执行一次；多规则命中同一 Decision 时幂等键天然去重；Redis trySet + DB uk 双兜底（见顶层架构旁路 `Idempotency Guard`）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一，无需额外去重逻辑。DDL 详见 [`05-storage.md`](./05-storage.md)。
-- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **提供 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。评估层 dry-run 是一等公民（走完整评估链路 + 节点 trace）；`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7），返回 `ActionResult.success()` 预览结果。dry-run 完整行为契约见 §五 Q10。
+- **失败语义**（D53 best-effort + D18 failFast）：单 Action 失败 → `ActionResult { status=FAILED, errorCode }` 直接落 `action_execution` 终态，**不重试不补偿**。`failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 大于本 Action 的后续 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`。Action 失败 **不影响** `EvalResult.satisfied`（评估已完成才会派发 Action）。可靠投递（MQ）/ 业务补偿（saga）未来另设计。
+- **`action_execution` 对账三态**：最终态为 `SUCCESS / FAILED / SKIPPED`，SKIPPED 不计入失败率分母。另有过程态 `PENDING`（已入队待执行）——对账、监控、失败率统计只看最终三态。
+- **幂等键**（D27）：`action_execution` 唯一键 = `(tenantId, eventId, decisionCode, actionId)`；同一 event + 同一决策码下每个动作落库去重；多规则命中同一 Decision 时幂等键天然去重。best-effort 下重复防护仅靠 DB `uk_idempotency`（ON DUPLICATE KEY 吞重），不防"handler 被重复执行"（进程内幂等缓存已砍，D53；未来 MQ 消费端再做幂等）。批量 Job 场景因 `eventId = hash(jobRunId + subjectId)`（D11）已天然唯一。DDL 详见 [`05-storage.md`](./05-storage.md)。
+- **dryRun 透传**：dry-run 场景下 Action Dispatcher 接收 `dryRun=true` 标志，ActionHandler **提供 `dryRun(ctx: ActionContext)` 入口**（`ActionContext` 为复合参数对象，实现签名见 04-extension §三）——dry-run 时**不发起**实际外部副作用（HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）用于前端试算面板。评估层 dry-run 是一等公民（走完整评估链路 + 节点 trace）；引擎内置 handler 仅 `SendAlertHandler`，已实装 `dryRun()`（v1.5，D7）返回 `ActionResult.success()` 预览结果；`BLOCK_TRANSACTION` 等由嵌入方经 `ActionHandler` SPI 实现（D57）。dry-run 完整行为契约见 §五 Q10。
 - **PULL Scene 拒绝 Action**：发布校验 + UI 屏蔽双兜底。
 - **ActionHandler 不能产生引擎事件**（D16）：`ActionHandler.execute(ActionContext ctx)` 返回 `ActionResult { status, errorCode?, errorMessage?, retryable }`，**不返回 List<RuleEvent>**。Handler 可以调用外部 MQ / HTTP（这是 Action 本职），但上游若要把外部消息再翻译成 RuleEvent 推回引擎，是业务方主动行为，引擎不感知——不存在内置链式触发 / 环检测 / 深度限制 / 子事件灰度桶继承。
 
@@ -409,18 +408,19 @@ handler 自身报失败时建议复用上述枚举或在 04-extension 注册新 
 
 ```
 EvalContext {
+    tenantId: String                 // 租户 ID
     event:    RuleEvent              // 原始事件
     subject:  Subject                // 业务主体（用户 / 账户 / 设备）的属性快照
     metrics:  Map<metricCode, Value> // 本次评估涉及的指标快照
     now:      Instant                // 评估开始时间（统一时钟）— 已实装（B20）：由 EvalServiceImpl.doEvaluate / EvalEngine.evaluate 入口注入一次（单个 Instant.now()），整棵 AST 共用同一个 now，保证跨规则时钟一致性；不存在默认 Instant.now() 重载（禁止）
-    traceId:  String                 // 链路 ID
-    dryRun:   Boolean                // 引擎内部路由标志（D7/D21）：true 时 TraceWriter 写 dry_run_session 系列表而非 prod 表
 }
 ```
 
+> **`traceId` / `dryRun` 不是 EvalContext 字段**：链路 ID 走 MDC / OTel 横切层（见 §3.3）；dry-run 是引擎内部路由标志，由 `EvalServiceImpl.doEvaluate` 单独以 `isDryRun` 入参传递（true 时 TraceWriter 写 `dry_run_session` 系列表而非 prod 表，D7/D21），不进 EvalContext。
+
 **AST 条件表达式的内置可寻址路径**（D20 §3 闭合枚举——发布期输入引用闭合校验的根路径表）：
 
-这 7 条路径是 ConditionNode 表达式可以**按名字直接引用**的内置字段，来自 `RuleEvent` + 引擎注入，不需要注册 Metric。与 `Scene.payloadSchema` 字段集合、`Scene` metric 白名单**三者并集**构成发布期允许的完整引用范围。
+这 7 条路径是 ConditionNode 表达式可以**按名字直接引用**的内置字段，来自 `RuleEvent` + 引擎注入，不需要注册 Metric。与 `Scene.payloadSchema` 字段集合、tenant 级已注册 metric**三者并集**构成发布期允许的完整引用范围。
 
 | 引用路径 | 类型 | 来源 | 语义 |
 |----------|------|------|------|
@@ -432,7 +432,7 @@ EvalContext {
 | `subjectId` | `String` | RuleEvent | 业务主体 ID（用户 / 账户 / 设备 / 订单），灰度桶 hash 输入 |
 | `ruleVersionId` | `Long` | Matcher 锁定 | 当前评估的 RuleVersion id，与 `subjectId` 一同作为灰度桶稳定性输入（D6） |
 
-> 新增内置路径需走决策（影响所有已发布 RuleVersion 的校验集合）。`subject` / `metrics` / `traceId` 属于运行时填充体，不参与发布期闭合校验。
+> 新增内置路径需走决策（影响所有已发布 RuleVersion 的校验集合）。`subject` / `metrics` 属于运行时填充体，不参与发布期闭合校验。
 
 **关键边界**：
 
@@ -440,7 +440,7 @@ EvalContext {
 - **EvalContext 按需构建**：扫 AST 收集涉及的 `metricCode`，并发取数，组成本次 EvalContext；没引用的指标不取（D5 派生）。
 - **EvalContext ≠ 数据库快照**：EvalContext 里的 `subject` 可能比 DB 新（如某个属性是从事件 payload 补的），以 EvalContext 为准。
 - **`dryRun` 不参与 AST 引用**：`dryRun` 是引擎内部路由标志，不在 D20 §3 闭合校验的可寻址路径表中，ConditionNode 表达式不能引用它；仅 TraceWriter / Dispatcher 内部按此标记路由写入目标（D7 / D21）。
-- **`providedMetrics` 优先于 sourceType 取数**（D30）：评估请求携带 `providedMetrics` 时，EvalContext 构建阶段对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；`allowProvided=false` 的 key 即使传了也忽略（WARN 日志）。`providedMetrics` 的值只活在本次评估，不持久化。trace 记录每个 metric 的 `valueSource: PROVIDED | FETCHED`。
+- **`providedMetrics` 优先于 sourceType 取数**（D30）：内部 `RuleEvent` 持有 `providedMetrics` 时（非公开链路注入——SDK 宿主 / Job；**公开请求体已移除该字段，D55**，见 §3.9a），EvalContext 构建阶段对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；`allowProvided=false` 的 key 即使传了也忽略（WARN 日志）。`providedMetrics` 的值只活在本次评估，不持久化。trace 记录每个 metric 的 `valueSource: PROVIDED | FETCHED`。
 
 ### 3.9 Metric（指标）
 
@@ -479,33 +479,44 @@ EvalContext {
 
 > `params` 完整字段 schema 及 `EXTERNAL_HTTP` 的 `jsonPath` 语法、`STREAM` 适配协议见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南。
 
-**Scene 级可见性**（`scene_metric_binding` 表）：
-
-| 字段 | 说明 |
-|------|------|
-| `scene_id` | Scene 主键（外键引用 `scene.id`，BIGINT） |
-| `metric_definition_id` | 引用 Metric（外键引用 `metric_definition.id`，BIGINT；通过 JOIN 取 `metric_code`） |
-| `cache_policy_override` | Scene 级缓存策略覆盖（可选） |
+**可见性**（D54）：metric 在 **tenant 级**对所有 scene 可用，无 scene 级绑定白名单（原 `scene_metric_binding` 表已移除）。
 
 **关键边界**：
 
-- **定义全局/租户级，可见性 Scene 级**：避免每个 Scene 重新发明"近 7 天交易额"，但 Scene 间元数据不互相污染。
-- **Scene 启动时按绑定预热 MetricSource**：JDBC 连接池、HTTP client、缓存初始化等在 Scene 生效瞬间完成；热路径上无懒加载判断。
+- **定义 tenant 级，全租户可见**：避免每个 Scene 重新发明"近 7 天交易额"；metric 是 tenant 级共享资产。
+- **应用启动时预热 MetricSource**：JDBC 连接池、HTTP client、缓存初始化等在启动时完成；热路径上无懒加载判断。
 - **同一指标可被多 Rule / 多 Condition 引用**，引擎按 evalSession 维度去重取数。
 - **Metric 不做判断**，只输出值。"值是否满足阈值"是 Condition 的事。
-- **指标定义是治理对象**：新增 metric 要走平台审批；Scene 把 metric 加入白名单也要走审批（防止运营越界）。
+- **指标定义是治理对象**：新增 metric 要走平台审批；metric 一经注册（ACTIVE）在 tenant 级对所有 scene 可用（D54，无 scene 级白名单审批环节）。
 - **MetricRegistry 并发契约**：读路径必须 thread-safe 且不阻塞热路径；评估期内读到的快照保持稳定（评估期间发生 metric 变更不影响本次评估结果）。具体并发策略（不可变快照 / ConcurrentHashMap / copy-on-write 等）由实现层选择，详见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南。
 - **缓存与实时性权衡**：`cachePolicyDefault` 对实时性敏感场景（风控阈值、额度校验）配 `ttl=0` 强制每次取数；可放宽场景（营销画像、近 30 天聚合）按业务可接受延迟配 `ttl>0`，由 Scene `cache_policy_override` 局部收紧；引擎不替业务选默认策略，由 metric 注册者声明。
 - **预拉值评估期内冻结**（D20 §1 派生）：D20 metric 批量预拉后注入 `EvalContext` 即视为本次评估的不可变快照；评估期内**不**再受 `cachePolicyDefault.ttl` 影响，即使评估耗时跨过 TTL 边界，本次评估仍读初始预拉值。TTL 只作用于"下次评估是否复用上次缓存值"层面，与"本次评估内的取数稳定性"无关。
 - **超时与异常归一**（D15 派生）：`MetricSource` 实现自管 timeout / retry / 熔断（不同 `sourceType` 合理默认不同：EXTERNAL_HTTP 短超时、SQL_AGGREGATE 中超时，建议值见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南）；任何取数异常（timeout / 熔断 / 连接拒绝 / 反序列化失败）统一归 D15 `METRIC_FETCH_FAIL`，引擎核心不重试。
-- **业务共享常量建议建为只读 metric**：跨多条规则共享的业务阈值 / 配置值（如 VIP 门槛、风控分数线）**建议建为只读 metric**（`sourceType=ATTRIBUTE` 或固定返回值的 `EXTERNAL_HTTP`），复用 metric 的白名单 / `cachePolicy` / 版本化通道，不另设"常量库"一等概念。引擎不内置 urule 风格的 ConstantLibrary——若业务常量变更频次很低也可直接内联到 `ConditionNode.params`，二选一由业务方按变更频次自决。独立常量库一等概念的演进留 [`08-evolution.md`](./08-evolution.md) §四。
+- **业务共享常量建议建为只读 metric**：跨多条规则共享的业务阈值 / 配置值（如 VIP 门槛、风控分数线）**建议建为只读 metric**（`sourceType=ATTRIBUTE` 或固定返回值的 `EXTERNAL_HTTP`），复用 metric 的 `cachePolicy` / 版本化通道，不另设"常量库"一等概念。引擎不内置 urule 风格的 ConstantLibrary——若业务常量变更频次很低也可直接内联到 `ConditionNode.params`，二选一由业务方按变更频次自决。独立常量库一等概念的演进留 [`08-evolution.md`](./08-evolution.md) §四。
+- **payload vs metric —— "指标身份"判据**：事件自带的事实（`amount` / `currency` 等）走 **payload 直接引用**（`ConditionNode.valueRef=PAYLOAD`，`metricCode` 复用为 payload 字段名，须在 `Scene.payloadSchema` 声明），不注册 metric、不进 `providedMetrics`；受治理指标（`user.risk.score` 等）走 **metric**。判别测试——任一为 yes 走 metric，全 no 走 payload：需要取数 / 需要权威保护（`allowProvided=false`）/ 跨规则复用同一定义 / 要版本化 / 要下发 SDK / 要影响面查询。`amount` 永远是 payload（这笔交易的事实）；`user.risk.score` 永远是 metric（哪怕本次值由上游 `providedMetrics` 注入，身份仍是受治理指标）。AST 写法 + 操作符见 [`03-rule-expression.md`](./03-rule-expression.md) §2.6。
+
+### 3.9a 输入契约 / 场景输入清单
+
+**是什么**：调用方对一个场景发评估时"该精确传哪些字段"的对外契约。三个相关概念的边界：
+
+| 概念 | 定义 | 谁提供 |
+|------|------|--------|
+| **payload（事件事实）** | 一次事件自带的原始事实（`amount` / `country` 等），是**公开评估接口上唯一的业务输入**；规则用 `valueRef=PAYLOAD` 直接引用，须在 `Scene.payloadSchema` 声明 | 调用方随评估请求传 |
+| **metric（受治理指标）** | 被命名注册的取数原子（§3.9），100% 引擎侧——按 `sourceType` 自取（取数），或经非公开路径（嵌入式 SDK 宿主 / Job）注入；**不再由公开评估调用方提供** | 引擎 |
+| **场景输入清单** | 该场景所有 status=ACTIVE 规则引用的 payload 字段的**并集**（`{ name, dataType, required }`），是调用方导向的输入契约 | 引擎按发布期快照聚合 |
+
+**关键边界**：
+
+- **公开评估接口只收 payload**：`providedMetrics` 已从公开请求体（`EvalEventRequest`）移除；调用方碰不到引擎内部的 metric taxonomy。"上游注入受治理 metric"是非公开路径——内部 `RuleEvent` 仍持 `providedMetrics`（供 SDK 宿主 / Job 注入），但通用 HTTP 调用方填不进去（D30 的 `providedMetrics` 语义在公开侧退场，仅存于内部链路）。
+- **清单来源 = 发布期快照**：发布时每条规则把引用的 payload 字段（`valueRef=PAYLOAD` 节点）连同从 `Scene.payloadSchema` 取的 `dataType` / `required` 冻结进 `rule_version.payload_dependencies`（与 `metric_dependencies` 同套路、守 D6 不可变 + 评估零额外查询），随 `RuleVersionSnapshot.payloadDependencies` 下发到评估侧。场景级清单 = 该场景 ACTIVE 规则快照清单的并集（同名去重）。
+- **可发现 + 评估期校验**：调用方经 `GET /api/v1/rule/scenes/{sceneCode}/input-manifest`（10-api-contract §3.4）拿到清单；评估期按候选快照清单并集校验请求 payload——必填缺失 → `MISSING_REQUIRED_INPUT`（整体拒绝 400，不降级），类型不符 → `INPUT_TYPE_MISMATCH`（400），多塞的未被引用字段忽略。与发布期 `UNRESOLVED_VARIABLE`（规则别越界引用没声明的字段）正交：一个管授权期"规则别越界"，一个管调用期"调用方别漏传 / 错类型"。
 
 ### 3.10 Job（定时触发，不是一等公民）
 
 **是什么**：把"定时类规则"接入引擎的 Trigger 适配器，**不引入第四个一等概念**。调度器到点后：
 
-1. 按 `JobDefinition.subjectQuery` 查询本批次主体集合（用户列表 / 账户列表 / 订单列表）；
-2. 按 `eventTypeTemplate` / `payloadTemplate` 为每个主体合成 `RuleEvent`（`eventId = hash(jobRunId + subjectId)`，与 `record_no` 模式同构幂等）；
+1. 按 `JobDefinition.subjectQuery`（`type=BEAN_METHOD`）反射调用 `@RuleJob` 业务方法，查出本批次 `JobTarget` 集合（每个含 subjectId + 可选 payload + 可选 providedMetrics）；
+2. 经 `RuleEvent.builder` 为每个 `JobTarget` 合成 `RuleEvent`（`source=JOB`、`eventId = hash(jobRunId + subjectId)` 与 `record_no` 模式同构幂等，payload/providedMetrics 由 JobTarget 透传）；
 3. 批量注入标准评估链路（Matcher → Pre-Gate → EvalContext 构建 → AST → Action），下游完全无感。
 
 **字段（JobDefinition）**：
@@ -513,15 +524,17 @@ EvalContext {
 | 字段 | 说明 |
 |------|------|
 | `id` | 主键（DDL 列名；概念层有时称 `jobId`） |
-| `tenantId / sceneId` | 归属（DDL 列 `tenant_id` / `scene_id`；PULL Scene 拒绝绑定） |
+| `tenantId / sceneCode` | 归属（DDL 列 `tenant_id` / `scene_code`，关联 scene.code，与 RuleEvent.sceneCode / SceneService 口径一致；PULL Scene 拒绝绑定） |
 | `name` | 给运营看的名称 |
 | `cronExpression` | 标准 cron 表达式（DDL 列名 `cron_expression`）；时区可选——cron 自带时区时以 cron 为准（如 `CRON_TZ=Asia/Shanghai 0 30 0 * * *`），未指定时回落 `Scene.defaultParams.timezone`，仍未配回落引擎默认（`UTC`） |
-| `subjectQuery` | 主体集合查询配置 JSON（DDL 单列，包含 `type`（`SQL`/`EXTERNAL_HTTP`/`METRIC_RESULT`）和查询参数） |
+| `subjectQuery` | 主体集合查询配置 JSON（DDL 单列）。`type=BEAN_METHOD`（首期，`@RuleJob` 注解的业务查询方法，`ref=<bean>#<method>`，主体由方法返回）/ `EXTERNAL_HTTP` / `METRIC_RESULT`（后续）。详见下方「Job 定义方式」 |
 | `eventType` | 合成 RuleEvent 时使用的 eventType（DDL 列名 `event_type`；概念层有时称 `eventTypeTemplate`） |
-| `payloadTemplate` | 合成事件的 payload 模板（占位符填充主体字段） |
+| `payloadTemplate` | DDL 遗留列，D49 后不再使用——payload 改由 `@RuleJob` 方法返回的 `JobTarget.payload` 直接携带，不再做占位符模板渲染 |
 | `concurrency` | 单次运行并发 fan-out 上限（调度器运行时配置，非 DDL 独立列，存于 `subject_query` JSON 或外部配置） |
 | `rateLimit` | 注入引擎事件速率上限（保护下游；同 `concurrency` 为运行时配置） |
 | `status` | `ACTIVE` / `DISABLED`（DDL ENUM；概念层有时写 `PAUSED`，DDL 对应值为 `DISABLED`） |
+
+**Job 定义方式（D48 / D49）**：Job 由 `@RuleJob` 注解定义——开发者在 Spring Bean 方法上标注（`code`/`cron`/`tenant`/`scene`/`eventType`），方法体即自定义主体查询，返回 `List<JobTarget>`（每个 `JobTarget` 含 `subjectId` + 可选 `payload` + 可选 `providedMetrics`，如「查 10 分钟前登录的用户并带上其评分」）。启动期 `RuleJobScanner` 扫描注解 → upsert 到 `job_definition`（`subjectQuery.type=BEAN_METHOD`，`ref=<bean>#<method>`）→ 注册调度。触发时 `JobRunner` 经 `RuleEvent.builder` 把每个 `JobTarget` 合成事件（`source=JOB`、payload/providedMetrics 透传、`eventId=hash(jobRunId+subjectId)`）注入 `acceptEvent`。运营 API（`/admin/v1/jobs`）只做管理（列表 / 详情 / 启用 / 禁用 / 手动触发 / 执行记录），**不含创建**——"查哪些主体"是业务代码逻辑，不由运营在 UI 配；规则本身仍由运营事先经 Scene / Rule API 配好，Job 只定时触发对其评估。
 
 **字段（JobExecution，每次运行的记录）**：
 
@@ -537,19 +550,25 @@ EvalContext {
 | `status` | `RUNNING` / `SUCCESS` / `PARTIAL_FAIL` / `FAILED`（DDL ENUM 值，`PARTIAL_FAIL` 无 ED 后缀） |
 | `errorSummary` | 错误明细摘要（DDL 列名 `error_summary`） |
 
-**调度器接口（`Scheduler`）**：
+**调度器接口（`Scheduler` SPI，rule-kernel）**：
 
 ```
 interface Scheduler {
-    void register(JobDefinition def);
-    void unregister(String jobId);
-    JobRunHandle triggerOnce(String jobId);      // 手动触发
-    JobStatus status(String jobId);
-    Iterable<JobRunRecord> recentRuns(String jobId, int limit);
+    void schedule(String jobCode, String cronExpression, Runnable task);  // 注册 cron 周期任务
+    void unschedule(String jobCode);                                       // 撤销
 }
 ```
 
-`XxlJobScheduler` 是首个实现（D11），底层对接 xxl-job 调度中心 + 执行器集群。未来切 Quartz / 云调度仅替换 Adapter，业务侧 `JobDefinition` / `JobExecution` 不变。
+SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable），不耦合 JobDefinition 业务模型。早期设计草案在 `Scheduler` 上画的 `register/unregister/triggerOnce/status/recentRuns` 等业务方法（D47 落地时）按下表重新落位——能力不丢，只是从 SPI 方法变为 `JobService` 方法或内部机制：
+
+| 原草案 SPI 方法 | 落位 |
+|------|------|
+| `register(JobDefinition)` / `unregister(jobId)` | 内部 `JobScheduleManager`（启动期 RuleJobScanner / enableJob 注册、disableJob 撤销，自动调 `schedule/unschedule`） |
+| `triggerOnce(jobId)` | `JobService.triggerOnce(tenantId, jobId)`（手动触发一次，不经调度器） |
+| `recentRuns(jobId, limit)` | `JobService.recentExecutions(tenantId, jobId, limit)` |
+| `status(jobId)` | `JobService.getJob()` 返回的 `status`（ACTIVE/DISABLED）；进程内单实例下调度运行态≈配置态，未单独暴露，多实例时再补 |
+
+`ThreadPoolSchedulerAdapter`（进程内 `ThreadPoolTaskScheduler` + `CronTrigger`，单实例）是 v1 首个实现；多实例部署会重复触发，属已知限制，需 HA 时替换为选主或外部调度（xxl-job），业务侧 `JobDefinition` / `JobExecution` 不变。
 
 **关键边界**：
 
@@ -591,9 +610,7 @@ interface Scheduler {
 
 | errorCode | 含义 |
 |-----------|------|
-| `UNRESOLVED_VARIABLE` | D20 §3 输入引用闭合校验失败：conditionAst 引用了未在 Schema/Metric 白名单/EvalContext 标准字段中声明的变量名 |
-| `METRIC_NOT_BOUND` | 规则 AST 引用的 metricCode 不在 `scene_metric_binding` 白名单内 |
-| `ACTION_TYPE_NOT_BOUND` | Rule 绑定的 Decision.actions 中存在 actionType 不在 `scene_action_binding` 白名单内（PUSH/HYBRID Scene） |
+| `UNRESOLVED_VARIABLE` | D20 §3 输入引用闭合校验失败：conditionAst 引用了未在 Schema / tenant 级已注册 metric / EvalContext 标准字段中声明的变量名 |
 | `DECISION_CODE_NOT_FOUND` | Rule 的 `decisionBindings` 引用了 Scene 所属 Tenant 未定义的 Decision code |
 | `ZOMBIE_PUBLISHING` | D19 PUBLISHING 残留清扫修正：后台清扫检测到 PUBLISHING 状态超过阈值，强制修正为 PUBLISH_FAILED |
 | `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
@@ -602,27 +619,30 @@ interface Scheduler {
 
 ### 3.12 RuleVersion（规则版本快照，不是一等公民）
 
-**是什么**：D6 / D17 / D19 共同依赖的"规则发布产物"，是一行不可变的版本快照。`rule_definition` 表持当前可编辑的规则元数据 + 指向当前生效版本（`current_version`）；每次成功发布产生一行 `rule_version`，承载本次发布的完整冻结副本——运行时评估、灰度桶计算、回滚都基于这张表。
+**是什么**：D6 / D17 / D19 / D56 共同依赖的"规则版本快照"，承载完整冻结副本——运行时评估、灰度桶计算、回滚都基于这张表。`rule_definition` 表持规则元数据 + 指向当前生效版本（`current_version`）。**草稿即冻结快照（premise A，D56）**：`rule_version` 行在 createDraft（v1）/ newVersion（v_max+1）时即跑全套解析校验并冻结；publish 不 INSERT 新行，只把最新 DRAFT 行原地翻 ACTIVE（不重解析、不增版本）。
 
 **字段**：
 
 | 字段 | 说明 |
 |------|------|
-| `version` | 单调递增 `Long`，`(rule_definition_id, version)` 唯一 |
+| `version` | 单调递增 `Long`，`(rule_definition_id, version)` 唯一。仅 createDraft（v1）/ newVersion（v_max+1）产生新值；editDraft 原地改不增、publish 激活不增（D56） |
+| `status` | 版本行状态：`DRAFT`（草稿，可 editDraft / deleteDraftVersion）/ `ACTIVE`（当前生效）/ `SUPERSEDED`（被新版本取代）。publish 把最新 DRAFT 翻 ACTIVE 并 supersede 旧 ACTIVE（D56） |
 | `rule_definition_id` | 归属规则（FK → `rule_definition.id`）；按 Scene 查所有候选版本通过 JOIN rule_definition 实现，不冗余 scene_id |
-| `trigger_event_types` | 冻结：发布瞬间的 eventType 数组 |
-| `condition_ast` | 冻结：完整 AST JSON（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
+| `trigger_event_types` | 冻结：草稿自己声明的 eventType 数组（写入草稿时已校验 ⊆ `Scene.eventTypes`；不再于 publish 时覆盖成 scene 全集，保「dry-run 预览 == 发布」，D56） |
+| `condition_ast` | 冻结：完整 `resolvedAst` JSON（含解析出的 dataType）（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
 | `pre_gates` | 冻结：preGates 列表（含 ROLLOUT 灰度配置；无独立 `rollout` 列，D43）（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
-| `decision_bindings` | 冻结：Rule 绑定的 Decision 列表及各 Decision.actions 快照（含 `failFast` / `compensateActionType` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
+| `decision_bindings` | 冻结：Rule 绑定的 Decision 列表（含 `name`）及各 Decision.actions 快照（含 `failFast` / `sortOrder`）；D27 取代原 `actions_snapshot`；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |
-| `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。发布期由 AST 静态分析得出；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
+| `metric_dependencies` | 数组 JSON，本 RuleVersion 静态依赖的 metric 集合（D20 §1）。**草稿写入期**由 AST 静态分析 + metric ACTIVE 校验冻结（premise A，D56）；Matcher 取候选后做并集 + 批量预拉，注入 `EvalContext`，评估期禁止再发起 metric 网络调用 |
+| `payload_dependencies` | 数组 JSON，本 RuleVersion 引用的 payload 字段集合 `[{name, dataType, required}]`（D55）。草稿写入期由 `valueRef=PAYLOAD` 节点 + `Scene.payloadSchema` 声明校验冻结（premise A，D56） |
 | `compiled_predicate_ref?` | 可选字符串，编译产物引用键（D20 §5）。v1 留空；v1.5 启用，由 `CompiledExecutor` + `ExecutorRegistry` 按版本 id 检索编译产物 |
 | `published_by / published_at` | 发布审计字段（D14） |
 
 **关键边界**：
 
-- **不可变**（D6）：行写入后永不 UPDATE，永不 DELETE。修改规则 = 在 `rule_definition` 改草稿 → 走标准发布产生新一行 `rule_version`。
-- **回滚不是覆盖**（D19）：回滚到 `version=N-2` = 把 N-2 的快照内容拷回 `rule_definition` 草稿，走标准发布产出 `version=N+1`（内容等于 N-2），审计链完整可追溯，N-1 / N-2 行均原样保留。
+- **冻结快照**（D6 / D56）：ACTIVE / SUPERSEDED 行永不 UPDATE、永不 DELETE。DRAFT 行可经 editDraft 原地更新（同 version，premise A 下仍是完整冻结快照）、可经 deleteDraftVersion 删除；publish 把 DRAFT 翻 ACTIVE 后即不可变。
+- **回滚不是覆盖**（D19 / D56）：回滚到 `version=N-2` = newVersion 带 `fromVersionId=<N-2 的 id>`，克隆 N-2 的输入意图、按当前世界重解析冻结产出 `version=N+1` DRAFT，再显式 publish 激活；审计链完整可追溯，旧行均原样保留。
+- **删草稿边界**（D56）：deleteRule 仅删从未发布规则（无 ACTIVE/SUPERSEDED）级联全部 `rule_version`；deleteDraftVersion 仅删 DRAFT 行；碰 ACTIVE/SUPERSEDED 拒绝（只能 disable）。dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`）不级联删，靠 TTL 退休。
 - **运行时锁定**（D17 派生）：`evaluation_session` 开始时按 `(scene, eventType)` **倒排索引**拿当前候选 `rule_version` 列表（`current_version` 在索引预热时已解析）并拍快照，整 session 用同一组版本——即使中途切版本，本次评估不受影响。
 - **灰度桶稳定性**（D6 派生）：`hash(subjectId, experimentId ?? ruleVersionId)` 计算桶号，每个不可变版本对应稳定的桶分布；版本切换会触发桶漂移，这是 D6 的固有语义。`subjectId` 由 Scene.subjectType 决定语义（v1 仅 USER 实装），与 §3.10 Job / §3.4 ROLLOUT 灰度口径一致。
 - **与 `node_trace` / `action_execution` 的关联**：两者均以 `session_id` 为外键，且 `node_trace` 记 `rule_version_id` 便于按版本对账 trace；`action_execution` 记 `decision_code`，可与 `rule_version.decision_bindings` 关联溯源。
@@ -657,32 +677,22 @@ interface Scheduler {
 
 **是什么**：Rule 评估管线中"在进入 AST 评估前"的准入控制层，独立于 AST。Pre-Gate 是 `Rule.preGates` 字段持有的列表型配置，引擎按顺序串行执行；任一 Gate 不通过 → 该 Rule **直接跳过 AST 评估**，不进入 EvalResult.errorCode 维度（与 D15 评估失败不同维度——准入未通过是"该 Rule 本次不参与决策"，不是"评估出错"）。
 
-**v1 类型清单**（与 README §三顶层架构 Pre-Gate Chain 对齐）：
+**v1 类型清单**（与 README §三顶层架构 Pre-Gate Chain 对齐）—— Pre-Gate 收敛为仅 ROLLOUT（D52）：
 
 | 类型 | 用途 | 状态影响 |
 |------|------|---------|
-| **灰度命中**（ROLLOUT） | 按 `preGates` 中 ROLLOUT 项 params 计算桶号是否落入命中区（D6） | 纯只读判定，无副作用 |
-| **频次上限** | 按 `(tenantId, ruleId, subjectId, 时间窗口)` 检查命中次数是否超阈值 | 真实评估期会写新计数；dry-run 仅读不写（§五 Q10） |
-| **白名单**（WHITELIST） | 按 `(ruleId, subjectId)` 查白名单表，subject 不在白名单则拦截 | 纯只读判定 |
-| **黑名单**（BLACKLIST） | 按 `(ruleId, subjectId)` 查黑名单表，subject 在黑名单则拦截 | 纯只读判定 |
-| **互斥规则** | 检查同一 subject 是否已命中本规则的互斥组其他规则 | 真实评估期会占用互斥锁；dry-run 仅读不写 |
+| **灰度命中**（ROLLOUT） | 按 `preGates` 中 ROLLOUT 项 params 计算桶号是否落入命中区（D6） | 无状态纯只读判定，无副作用、无依赖 |
 
-**执行顺序**（v1 固定，不开放配置）：
-
-1. **灰度命中** —— 最便宜（纯 hash 计算，无 IO），优先短路；
-2. **白名单 / 黑名单**（WHITELIST / BLACKLIST）—— 单表查询；
-3. **频次上限** —— 需读计数器（Redis / DB）；
-4. **互斥规则** —— 需查互斥状态表，最贵放最后。
+> **移除 RATE_LIMIT / MUTEX**（D52）：二者有状态（计数窗口 / 并发锁），需引擎持有分布式状态（Redis），打破"无状态评估"假设；greenfield 阶段不引该架构依赖。
+> **黑白名单转 metric + condition**（D52）：按 subjectId 查名单判成员本是 metric 的活（取数/缓存/版本/影响面），且 pre-gate 在 EvalContext 装配**之前**、拿不到 metric。落地：名单 metric（`sourceType=SQL_AGGREGATE`、`dataType=BOOLEAN`）+ 规则条件 `EQ(in_blacklist, true)`，走条件层而非 Pre-Gate 层。
 
 **关键边界**：
 
-- **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 **`BLOCKED` 桶**（D22，第四态，独立于 `MISS`——`MISS` 是"通过 Pre-Gate 但 AST 求值不满足"，`BLOCKED` 是"Pre-Gate 拦截未进入 AST"）；`evaluation_session.blocked_by` 字段记录拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
+- **Pre-Gate 失败 ≠ 评估失败**：失败的 Rule 不进入 `EvalResult` 候选集合，**也不写 `evaluation_session` 的 ERROR 桶**；trace 落 `node_trace` 但节点类型为 `PRE_GATE_BLOCKED`（与 ConditionNode trace 区分），对账归 **`BLOCKED` 桶**（D22，第四态，独立于 `MISS`——`MISS` 是"通过 Pre-Gate 但 AST 求值不满足"，`BLOCKED` 是"Pre-Gate 拦截未进入 AST"）；`evaluation_session.blocked_by` 字段记录拦截 Gate 类型（D52 收敛后仅 `ROLLOUT`）；Pre-Gate trace 与 ConditionNode trace **走同一 `TraceWriter` 异步通道**（D21），不另起独立写入路径；
+- **未注册 gateType → fail-closed**（D52）：运行期遇到未注册的 gateType 视为拦截（不静默放行）；发布期已校验 `pre_gates[].gateType` 仅 ROLLOUT 合法，配已砍/未实装 gate 一律发布拒绝；
 - **Pre-Gate 与 AST 解耦**：Pre-Gate 不能引用 metric，也不能写 conditionType 自定义——只用 `Rule.preGates` 配置的内置类型；演进诉求（如"灰度按外部 AB 平台命中"）走 D6 留的接口替换，不在 Pre-Gate 层级开新类型；
-- **失败语义与 D15 区别**：Pre-Gate 内部执行异常（如 Redis 频次计数器超时）走与 D15 一致的归一——失败默认按"未通过该 Gate"处理（fail-closed，宁可漏发不可错发），具体 fail-open / fail-closed 默认由各 Gate 实现声明，详见 [`02-runtime.md §3.3`](./02-runtime.md)；
-- **dry-run 行为**：见 §五 Q10——判定全部执行（运营需要看见命中/拦截结果），但**频次计数器与互斥锁不落副作用**；
+- **dry-run 行为**：ROLLOUT 是纯只读 hash 判定，dry-run 与真实评估等价（无副作用差异）；
 - **顶层架构图对齐**：README §三 `Pre-Gate Chain` 框就是本节落地。
-
-具体字段 schema（频次窗口配置 / 互斥组定义 / 黑白名单表结构）留 [`04-extension.md`](./04-extension.md) §Pre-Gate 扩展点 + [`05-storage.md`](./05-storage.md) §准入控制表 展开。
 
 ### 3.15 EvaluationSession（评估会话，非一等公民）
 
@@ -699,11 +709,12 @@ interface Scheduler {
 | `event_type` | 事件类型 |
 | `subject_id` | 主体 ID |
 | `status` | `PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态终态）/ `FAILED`（引擎异常崩溃，未正常结束）；D22 四态是对账统计口径，`PENDING` / `FAILED` 是运行时中间态，不参与对账分母 |
-| `blocked_by` | nullable；拦截 Gate 类型（`ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
+| `blocked_by` | nullable；拦截 Gate 类型（D52 收敛后仅 `ROLLOUT`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
 | `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
 | `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
 | `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |
-| `source` | `PUSH / PULL / REPLAY`；记录**评估触发方式**（PUSH=异步推送 / PULL=同步调用 / REPLAY=事件回放）；与 `RuleEvent.source`（HTTP / MQ / JOB / SDK / REPLAY）含义不同——RuleEvent.source 记录事件来源渠道，session.source 记录引擎调用方式；Job 触发时 session.source 填 `PUSH`（Job 是异步推送的一种，与业务方 HTTP 推送同属 PUSH 语义）；不改幂等语义（D23） |
+| `source` | `HTTP / MQ / JOB / SDK / REPLAY`（D49）；记录**事件来源渠道**，取自 `RuleEvent.source`（由注入入口权威设置）；不改幂等语义（D23：`source=REPLAY` 仅作来源标记） |
+| `mode` | `PUSH / PULL`（D49）；记录**评估模式**，由 EvalService 入口判定（`acceptEvent`=PUSH 异步 / `evaluate`·`dryRun`=PULL 同步）；与 `source` 渠道正交——Job 触发走 `acceptEvent` 故 mode=PUSH、source=JOB |
 | `occurred_at` | 业务事件发生时间（来自 RuleEvent.occurredAt，非引擎收到时间） |
 | `started_at` | 评估开始时间 |
 | `finished_at` | 评估结束时间 |
@@ -759,54 +770,13 @@ interface Scheduler {
 - **dry-run 行为全定义在 §五 Q10**：本节只定义存储结构，不重复 Q10 的副作用 / 短路规则；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §dry_run_session 表。
 
-### 3.17 Action 重试队列（Dispatcher 内部，非一等公民）
+### 3.17 Action 重试队列（已移除，D53）
 
-**是什么**：Dispatcher 内部承载 `retryable=true` 的失败 ActionInstance 的有界内存队列，与主派发队列（D20 §2）**独立**，防止重试事件阻塞新命中事件的正常派发。
+> **已移除**：Action 投递改为 best-effort fire-and-forget（D53），不再有应用层重试队列。失败即 `action_execution.status=FAILED` 终态，不重试。可靠投递（at-least-once）未来接 **MQ**（重试由 MQ 消费端保证），不在应用层做重试表/重发逻辑。
 
-**结构**：
+### 3.18 Compensation Pipeline（已移除，D53）
 
-```
-主派发队列 (BlockingQueue<ActionInstance>)
-    └── 消费者发现 ActionResult.retryable=true → 入重试队列
-
-重试队列 (BlockingQueue<RetryableActionInstance>)
-    └── 独立消费者：指数退避重试
-        → 重试达上限仍 FAILED → action_execution 终态（不再重试）
-        → 终态后补偿由 D4 补偿流水线外部调度（§3.18）
-```
-
-**关键边界**：
-
-- **独立于主队列**：重试项不占主队列容量，不影响新命中事件派发吞吐；
-- **退避策略**：指数退避（初始间隔 / 最大间隔 / 最大重试次数在 [`07-operability.md`](./07-operability.md) §九 运维参数默认值表 给默认值）；
-- **v1 内存队列**：进程重启时未消费重试项丢失；上游重推 RuleEvent（D23 幂等需换新 eventId）可完整恢复；引入持久化重试留 [`08-evolution.md`](./08-evolution.md) §二；
-- **v1 不引入死信队列（DLQ）**（D20 §2）：`action_execution` FAILED 行即是终态游标，DLQ 在引入 MQ 时再考虑；
-- **运维参数**（`retry.queue.capacity` / `retry.initial.interval` / `retry.max.interval` / `retry.max.attempts`）留 [`07-operability.md`](./07-operability.md) §九 运维参数默认值表。
-
-### 3.18 Compensation Pipeline（补偿流水线，外部过程）
-
-**是什么**：引擎**不内置**的外部操作过程，用于已执行 Action 的逆向回滚。不是引擎运行时组件，是依托引擎提供的 SPI 接口运行的运维流程。
-
-**触发场景**：
-
-| 场景 | 典型触发方式 |
-|------|------------|
-| 业务撤销（交易退款、活动取消） | 对账定时任务扫描应补偿的 `action_execution` 行 → 调用 `ActionHandler.compensate()` |
-| 手动修正（运营后台"撤回奖励"按钮） | 管理员操作 API → 调用 `ActionHandler.compensate()` |
-| 错误发放纠正 | 对账任务按 `evaluation_session + action_execution` 批量扫描 → 批量补偿 |
-
-**引擎提供的接入点**：
-
-- `ActionHandler.compensate(ActionContext ctx): ActionResult`：SPI 方法，各 Handler 实现逆向逻辑（退券 / 扣回积分 / 关闭通知），返回类型与 `execute` 一致（实现签名见 04-extension §三）；
-- `Action.compensateActionType`：标记该 Action 的反向 handler 类型（如 `coupon.revoke`），补偿流水线按此字段路由；
-- 查询接口：补偿流水线通过管理 API 查 `action_execution`（`status=SUCCESS, compensated=false`）获取待补偿清单。
-
-**关键边界**：
-
-- **补偿不自动触发**（D18）：引擎只记录 FAILED 状态，**不自动调用** `compensate()`——补偿是业务语义，由业务侧按需发起；
-- **补偿幂等**：由各 `ActionHandler.compensate()` 实现自行保证（DB uk / Redis trySet / 外部幂等键），引擎不重复保证；
-- **补偿结果记录**：执行结果写入 `action_execution` 的补偿流水字段（`compensated` / `compensated_at` / `compensated_by`），详见 [`05-storage.md`](./05-storage.md) §action_execution 表；
-- **运营 UI 与对账配置**：补偿操作台与运维流程为 v2 规划功能，v1 由运营通过 `GET /api/v1/evaluation-sessions` + `action_execution` 查询接口人工核查待补偿清单（`compensated=false, status=SUCCESS`）。
+> **已移除**：`ActionHandler.compensate()` SPI 与 `action_execution` 补偿列（`compensated` / `compensated_at` / `compensated_by`）已删除（D53）。业务补偿未来走 **saga / 补偿事务**，届时重新设计，不复用本次删除的 compensate SPI。
 
 ### 3.19 Decision（决策定义，一等公民）
 
@@ -823,14 +793,14 @@ interface Scheduler {
 | `name` | 显示名（中文/英文均可，给运营/风控看） |
 | `priority` | 合成优先级，数值越小优先级越高；如 REJECT=1, REVIEW=2, PASS=100；业务方自定，引擎只排序 |
 | `description` | 给运营/风控看的业务说明 |
-| `actions` | Action 列表（D27 从 Rule 迁移）：命中该 Decision 时执行的动作；与 Rule.actions 字段结构相同（`actionType` / `params` / `sortOrder` / `failFast` / `compensateActionType`）；PULL Scene 下必须为空 |
+| `actions` | Action 列表（D27 从 Rule 迁移）：命中该 Decision 时执行的动作；字段含 `actionType` / `params` / `sortOrder` / `failFast`；PULL Scene 下必须为空 |
 
 （横切标准审计字段，见 §三 顶部横切说明）
 
 **关键边界**：
 
 - **Tenant 级，非 Scene 级**：同一 Tenant 的所有 Scene 共享 Decision 词汇表；不同 Tenant 的 Decision 严格隔离；
-- **Action 挂在 Decision 上**（D27）：Rule 不再持 `actions` 字段；PULL Scene 下 Decision.actions 必须为空（发布校验 + 前端屏蔽）；PUSH/HYBRID Scene 下 Decision.actions 的 `actionType` 须在 Rule 所属 Scene 的 `scene_action_binding` 内（Rule 发布时校验）；
+- **Action 挂在 Decision 上**（D27 实装，D54）：Rule 不再持 `actions` 字段；触发源唯一 = finalDecision.actions（tenant 级，与 scene 无关）；PULL Scene 下 Decision.actions 必须为空（发布校验 + 前端屏蔽）；actionType 合法性走运行期 NO_HANDLER skip，不再有 scene_action_binding 白名单；
 - **Decision.actions 快照在 Rule 发布时拍**：`rule_version.decision_bindings` JSON 随 Rule 发布产生，此后修改 Decision.actions **不会**影响已发布的 Rule 版本；若要让新 actions 生效，必须重新发布 Rule——运营容易忽视这一点；
 - **priority 只用于合成排序**：priority 数值本身不影响 Rule 是否命中（Pre-Gate 和 AST 求值结果不读 priority）；priority 只在 `HIGHEST_PRIORITY` 合成策略里生效；
 - **Decision 不内置分类标签**：v1 不区分"拒绝类/通过类"，由 `priority` 数值隐式体现；分类标签留 [`08-evolution.md`](./08-evolution.md) §演进；
@@ -898,18 +868,16 @@ interface Scheduler {
    → 命中 3 条："首单奖励" / "首单返现" / "新人引导消息"
         │
         ▼
-5. 对每条候选 Rule 走 Pre-Gate
+5. 对每条候选 Rule 走 Pre-Gate（v1 仅 ROLLOUT，D52）
    - 灰度命中 (按 subjectId hash → bucket 0..99，本规则 < 20)
-   - 频次上限 (本规则今天该用户已发 0/1)
-   - 黑白名单 (用户不在黑名单)
-   - 互斥 (本用户没拿过"首单返现"-互斥规则)
+   （黑白名单/频次/互斥已不在 Pre-Gate：黑白名单转 BOOLEAN metric+condition，频次/互斥已移除）
    → 通过 2 条："首单奖励" / "新人引导消息"
         │
         ▼
 6. 对通过 Pre-Gate 的 RuleVersion 集合，做 metric 批量预拉 (D20 §1)
    - 取每条 RuleVersion.metric_dependencies 并集
      → {user.kycLevel, user.trade.count.7d}
-     (并集字段都在 Scene `marketing.first-trade` 的 metric 白名单内)
+     (引用的 metric 都是 tenant 级已注册的 ACTIVE metric)
    - 一次性 mget / batch API 拉取 → 注入 EvalContext
    - 评估期 MetricSource 只从 EvalContext 读，禁止再发起 metric 网络调用
         │
@@ -929,15 +897,14 @@ interface Scheduler {
    - Dispatcher 多消费者线程池异步消费：
      · Action 1: coupon.issue (10 USD 券) → ActionHandler 执行 → 写 action_execution
      · Action 2: mq.send (发送站内信) → 声明式动作 → 推送 MQ
-   - 队列满 → ActionResult{status=FAILED, errorCode=QUEUE_OVERFLOW, retryable=true}
+   - 队列满 → 丢弃 + 累计计数 + WARN（best-effort 可丢，不重试，D53）
         │
         ▼
-9. 任一 Action 失败 → 引擎归一为 `ActionResult{status=FAILED, errorCode, retryable}`
-   - `retryable=true`：入重试队列；不阻塞同 Decision 内后续 Action（默认 continue-on-error）
-   - `retryable=false`：直接落 `action_execution.status=FAILED`
-   - 失败的 Action 若 `failFast=true`：同 Decision 内 `sortOrder` 更大的后续 Action 全部标 `SKIPPED`（errorCode=PREDECESSOR_FAILED），**不**进入重试队列
+9. 任一 Action 失败 → `ActionResult{status=FAILED, errorCode}`（best-effort，D53）
+   - 直接落 `action_execution.status=FAILED` 终态，**不重试不补偿**
+   - 失败的 Action 若 `failFast=true`：同 Decision 内 `sortOrder` 更大的后续 Action 全部标 `SKIPPED`（errorCode=PREDECESSOR_FAILED，D18）
    - Action 失败不影响 `EvalResult.satisfied`（评估已完成才派发 Action），跨 Rule 隔离
-   补偿场景（如交易后续撤销）**不由引擎自动触发**，由 D4 补偿流水线（对账任务 / 手动回滚按钮）显式调用 `ActionHandler.compensate(...)`
+   可靠投递（MQ）/ 业务补偿（saga）未来另设计
 ```
 
 **关键节奏**：
@@ -1004,7 +971,7 @@ AndNode (displayLabel: "金额门槛")
 三个原因：
 
 1. **复用**：同一 metric 被 10 条规则用，只配一次 / 取数一次；
-2. **治理**：指标是平台资产，新增要审批，防止口径分裂；Scene 级白名单进一步防越界；
+2. **治理**：指标是平台资产，新增要审批，防止口径分裂（D54 后 metric tenant 级可用，无 scene 级白名单）；
 3. **缓存与预热**：metric 取数可以加 evalSession 级缓存（同次评估内多 Condition 引用，只查一次）；Scene 启动时预热 MetricSource，热路径上无懒加载。
 
 把 SQL 写进 Condition 等同于把数据访问层和判定层耦合，规则数稍多就会失控。
@@ -1022,7 +989,7 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 
 ### Q6: Tenant vs Scene —— 不能合并吗？
 
-不能。Tenant 是**数据隔离**（不同租户绝不互相看见），Scene 是**业务域**（同租户内的命名空间 + Matcher 路由键 + metric/action 白名单 + 数据源初始化锚点 + 使用模式声明）。
+不能。Tenant 是**数据隔离**（不同租户绝不互相看见），Scene 是**业务域**（同租户内的命名空间 + Matcher 路由键 + 数据源初始化锚点 + 使用模式声明；D54 后不再承担 metric/action 白名单）。
 
 - 一个 Tenant 下有多个 Scene（如 acme 公司既配营销规则又配风控规则）；
 - 一个 Scene **不会**跨 Tenant（acme 的 `marketing.signup` 和 beta 的 `marketing.signup` 是两条 Scene）。
@@ -1033,27 +1000,27 @@ ConditionEvaluator / MetricSource 与 ConditionNode / Metric 的关系完全对�
 
 但**幂等键含 eventId**——同一条事件（同一个 eventId）只评估一次，不会因为命中两个 Scene 而处理两次。
 
-### Q8: Scene 的 metric / action 白名单具体如何生效？
+### Q8: metric / action 的引用与校验如何生效（D54 收敛后）？
 
-**Metric 白名单**（所有模式 Scene 都生效）三处生效点：
+**Metric**（tenant 级，对所有 scene 可用，无白名单）：
 
-1. **规则发布时校验**：规则 AST 引用的所有 `metricCode` 必须在本 Scene 的 `scene_metric_binding` 内，否则发布拒绝；
-2. **Scene 启动时预热**：应用启动加载 Scene 配置，按白名单批量初始化对应 MetricSource（连接池、HTTP client、缓存）；
-3. **运行时取数白名单兜底**：MetricRegistry 即使被误调（运行时拿到不在白名单的 metricCode），也直接拒绝并报警，防止配置漂移导致越界。
+1. **规则发布时校验**：规则 AST 引用的所有 `metricCode` 必须是本 tenant 已注册的 ACTIVE metric，否则发布拒绝（`UNRESOLVED_VARIABLE`）；
+2. **应用启动时预热**：启动加载 tenant 的 ACTIVE metric，批量初始化对应 MetricSource（连接池、HTTP client、缓存）；
+3. **取数稳定性**：metric 预拉值在评估期内冻结（D20 §1），取数异常归 `METRIC_FETCH_FAIL`（D15）。
 
-**Action 白名单**（PUSH / HYBRID Scene 生效）三处生效点：
+**Action**（归 Decision，tenant 级，与 scene 无关，D27/D54）：
 
-1. **规则发布时校验**：规则绑定的 Decision.actions 中所有 `actionType` 必须在本 Scene 的 `scene_action_binding` 内，否则发布拒绝；PULL Scene 要求 Decision.actions 为空；
-2. **Scene 启动时预热**：按白名单批量预热 ActionHandler 的外部资源（HTTP client / MQ producer / RPC 连接池 / 限流器）；PULL Scene 跳过 ActionHandler 预热；
-3. **前端 UI 下拉过滤**：配规则页面的 actionType 下拉项按当前 Scene 的 action binding 过滤，运营选不到越界 actionType；PULL Scene 直接隐藏 Action 编辑区块。
+1. **规则发布时校验**：规则绑定的 decisionCode 必须在 `decision_definition` 存在（`DECISION_CODE_NOT_FOUND`）；PULL Scene 要求 Decision.actions 为空；
+2. **actionType 合法性 = 运行期 NO_HANDLER skip**（D54）：actionType 是开放 SPI，发布期不校验白名单（无 scene_action_binding）；运行期找不到注册 handler → `ActionResult.skipped(NO_HANDLER)`；
+3. **前端 UI 下拉**：配 Decision 页面的 actionType 下拉按全局已注册 handler 列表；PULL Scene 直接隐藏 Action 编辑区块。
 
 ### Q9: EvalContext 里能放任意业务数据吗？
 
-**不能任意**。EvalContext 的字段是约定的（`event` / `subject` / `metrics` / `now` / `traceId`），扩展字段有明确入口（D13）：
+**不能任意**。EvalContext 的字段是约定的（`tenantId` / `event` / `subject` / `metrics` / `now`），扩展字段有明确入口（D13）：
 
 - **事件维度的扩展**：通过 `RuleEvent.payload` 进入，但字段必须 ∈ `Scene.payloadSchema`；
 - **主体维度的扩展**：通过 subject 属性进入，主体来源由 `Scene.subjectType` 决定（USER → user_profile / ACCOUNT → account 等）；
-- **指标维度的扩展**：注册新 Metric + 加入 Scene `scene_metric_binding` 白名单。
+- **指标维度的扩展**：注册新 Metric（ACTIVE 即 tenant 级可用，D54，无需 scene 白名单）。
 
 为什么这么收口：
 
@@ -1069,17 +1036,14 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 
 | 环节 | dry-run 行为 |
 |------|--------------|
-| **Pre-Gate 灰度命中** | 纯只读判定，无副作用差异（hash 算法稳定，不依赖状态） |
-| **Pre-Gate 黑白名单** | 纯只读判定，无副作用差异 |
-| **Pre-Gate 频次门槛** | **读**频次计数器用于判定 + trace 展示，**不写**新计数（不污染真实运营频次记录） |
-| **Pre-Gate 互斥规则** | **读**互斥锁状态用于判定，**不占用**新锁 |
+| **Pre-Gate 灰度命中**（ROLLOUT，v1 唯一 Pre-Gate） | 纯只读判定，无副作用差异（hash 算法稳定，不依赖状态） |
 | **EvalContext 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
 | **AST 评估 + 节点 trace** | 真实评估、真实节点 trace；trace 写入 `dry_run_session` 表，不进 `evaluation_session` |
-| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。`BlockTransactionHandler` 和 `SendAlertHandler` 均已实装 `dryRun()`（v1.5，D7）。 |
+| **ActionHandler** | 调用 handler 的 `dryRun(ActionContext ctx)` 入口（不触发外部 HTTP / MQ / DB 写入），返回**预览 `ActionResult`**（预测 status + 渲染后的 params）。引擎内置 handler 仅 `SendAlertHandler`，已实装 `dryRun()`（v1.5，D7）；`BLOCK_TRANSACTION` 等由嵌入方 SPI 提供（D57）。 |
 | **`action_execution` 写入** | 不落生产表，预览结果随 dry-run 响应返回 |
 | **审计 `audit_log`** | 不写入（dry-run 不是发布操作） |
 
-**为什么 Pre-Gate 判定要执行**：运营试算的核心诉求之一就是"看见这个用户会不会被频次/灰度/互斥门槛拦下"——如果 Pre-Gate 一律跳过，trace 就缺失了关键信息；正确做法是判定执行但不落副作用。
+**为什么 Pre-Gate 判定要执行**：运营试算的核心诉求之一就是"看见这个用户会不会被灰度门槛拦下"——如果 Pre-Gate 一律跳过，trace 就缺失了关键信息；正确做法是判定执行但不落副作用。
 
 **PULL 模式 Scene 没有真实 Action，dry-run 与正常评估几乎等价**——区别仅在：1) trace 落 `dry_run_session` 表；2) Pre-Gate 副作用不落（同上）。
 
@@ -1097,7 +1061,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | `scene` | `<domain>.<subdomain>`，最多两层 | `marketing.signup` |
 | `eventType` | `<entity>.<verb>`，过去式 | `trade.completed` |
 | `metricCode` | `<domain>.<entity>.<measure>[.<window>]` | `user.trade.sum.7d` |
-| `conditionType` | `<category>.<operation>` | `metric.threshold` / `user.attribute.equals` |
+| `conditionType` | 内置算子码为裸名（时间算子用点分），自定义建议 `<category>.<operation>` 避免冲突 | 内置 `GT` / `IN` / `BETWEEN` / `time.window`；自定义 `geo.within_country` |
 | `actionType` | `<verb>.<noun>` 或 `<domain>.<verb>` | `coupon.issue` / `webhook.post` |
 
 ### 6.2 ID 字段约定
@@ -1116,7 +1080,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 
 | 想找 | 看 |
 |------|----|
-| 字段 / DDL 细节（含 `scene`（旧称 `scene_definition`）/ `scene_metric_binding` / `rule_definition` / `rule_version`） | [05-storage](./05-storage.md) |
+| 字段 / DDL 细节（含 `scene`（旧称 `scene_definition`）/ `decision_definition` / `rule_definition` / `rule_version`） | [05-storage](./05-storage.md) |
 | Rule 版本快照（不可变快照、回滚语义、运行时锁定） | §3.12 RuleVersion |
 | AST 节点类型 / 操作符 / `displayLabel` 渲染 | [03-rule-expression](./03-rule-expression.md) |
 | 加新的 ConditionEvaluator / ActionHandler / MetricSource | [04-extension](./04-extension.md) |
@@ -1126,8 +1090,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | 幂等 / 灰度 / dry-run / 监控的运营细节 | [07-operability](./07-operability.md) |
 | 生产评估持久化（字段表 / 四态 `status` 聚合） | §3.15 EvaluationSession |
 | dry-run 试算会话（隔离表、可重复运行） | §3.16 DryRunSession |
-| Action 失败后重试队列与退避策略 | §3.17 Action 重试队列 |
-| 已执行 Action 的逆向补偿触发与接口 | §3.18 Compensation Pipeline |
+| Action 投递语义（best-effort，不重试不补偿，D53） | §3.7 Action + §3.17/§3.18（已移除说明） |
 | Tenant 级决策码定义（REJECT / REVIEW / PASS 等） | §3.19 Decision |
 | Rule 与 Decision 的绑定关系 + 多规则命中合成策略 | §3.20 RuleDecisionBinding |
 | 历史决策时间线 / 路线图 | [08-evolution](./08-evolution.md) |

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.observability.internal.domain;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -30,11 +31,12 @@ class DryRunNodeTraceEntityTest {
         entity.setNodeType("LEAF");
         entity.setConditionType("AMOUNT_GT");
         entity.setMetricCode("revenue");
+        entity.setDisplayLabel("revenue>1000");
         entity.setParams("{\"threshold\":1000}");
         entity.setActualValue("1500");
         entity.setResult(true);
         entity.setErrorCode(null);
-        entity.setValueSource("FETCHED");
+        entity.setValueSource(ValueSource.FETCHED);
         entity.setEvaluatedAt(now);
 
         assertEquals(1L, entity.getId());
@@ -45,11 +47,12 @@ class DryRunNodeTraceEntityTest {
         assertEquals("LEAF", entity.getNodeType());
         assertEquals("AMOUNT_GT", entity.getConditionType());
         assertEquals("revenue", entity.getMetricCode());
+        assertEquals("revenue>1000", entity.getDisplayLabel());
         assertEquals("{\"threshold\":1000}", entity.getParams());
         assertEquals("1500", entity.getActualValue());
         assertTrue(entity.getResult());
         assertNull(entity.getErrorCode());
-        assertEquals("FETCHED", entity.getValueSource());
+        assertEquals(ValueSource.FETCHED, entity.getValueSource());
         assertEquals(now, entity.getEvaluatedAt());
     }
 

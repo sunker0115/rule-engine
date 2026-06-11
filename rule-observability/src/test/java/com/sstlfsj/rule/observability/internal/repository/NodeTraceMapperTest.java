@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -44,5 +45,24 @@ class NodeTraceMapperTest {
         Method method = NodeTraceMapper.class.getDeclaredMethod("insertBatch", List.class);
         assertNotNull(method, "insertBatch(List) 方法须存在");
         assertNotNull(method.getAnnotation(Insert.class), "insertBatch 须有 @Insert 注解");
+    }
+
+    @Test
+    void insertBatch_sqlPersistsDisplayLabelAndParams() throws Exception {
+        Method method = NodeTraceMapper.class.getDeclaredMethod("insertBatch", List.class);
+        String sql = method.getAnnotation(Insert.class).value()[0];
+        // 列清单与占位符均须含 display_label / params，否则两字段被静默丢弃
+        assertTrue(sql.contains("display_label"), "INSERT 须包含 display_label 列");
+        assertTrue(sql.contains("params"), "INSERT 须包含 params 列");
+        assertTrue(sql.contains("#{e.displayLabel}"), "INSERT 须绑定 displayLabel");
+        assertTrue(sql.contains("#{e.params}"), "INSERT 须绑定 params");
+    }
+
+    @Test
+    void purgeOlderThan_methodExists_returningIntForCutoffAndBatch() throws Exception {
+        // 数据保留清理入口：default 方法 purgeOlderThan(LocalDateTime, int) -> int
+        Method method = NodeTraceMapper.class.getMethod("purgeOlderThan", LocalDateTime.class, int.class);
+        assertTrue(method.isDefault(), "purgeOlderThan 须为 default 方法（封装 BaseMapper.delete，不在 service 散拼 wrapper）");
+        assertEquals(int.class, method.getReturnType(), "purgeOlderThan 须返回删除行数（int）");
     }
 }

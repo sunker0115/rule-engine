@@ -6,54 +6,78 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RuleEventTest {
 
-    private static RuleEvent minimal() {
-        return new RuleEvent("t1", "scene1", "LOGIN", "u1", "evt-001",
-                Instant.EPOCH, Map.of(), null);
+    private static RuleEvent.RuleEventBuilder base() {
+        return RuleEvent.builder()
+                .tenantId("t1").sceneCode("s1").eventType("LOGIN")
+                .subjectId("u1").eventId("evt-1").source(EventSource.HTTP);
     }
 
     @Test
-    void providedMetrics_defaultsToEmptyWhenNull() {
-        RuleEvent event = minimal();
-        assertNotNull(event.providedMetrics());
-        assertTrue(event.providedMetrics().isEmpty());
+    void builderMinimalFillsDefaults() {
+        RuleEvent e = base().build();
+        assertThat(e.source()).isEqualTo(EventSource.HTTP);
+        assertThat(e.occurredAt()).isNotNull();   // 缺省 now
+        assertThat(e.payload()).isEmpty();         // 缺省空
+        assertThat(e.providedMetrics()).isEmpty();
     }
 
     @Test
-    void payload_areImmutable() {
+    void builderCarriesPayloadAndMetrics() {
+        RuleEvent e = base()
+                .payload(Map.of("k", "v")).providedMetrics(Map.of("fts", 0.8))
+                .source(EventSource.JOB).build();
+        assertThat(e.payload()).containsEntry("k", "v");
+        assertThat(e.providedMetrics()).containsEntry("fts", 0.8);
+        assertThat(e.source()).isEqualTo(EventSource.JOB);
+    }
+
+    @Test
+    void rejectsNullSource() {
+        assertThatThrownBy(() -> base().source(null).build())
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void payloadImmutableAndDefensivelyCopied() {
         Map<String, Object> mutable = new HashMap<>();
         mutable.put("k", "v");
-        RuleEvent event = new RuleEvent("t1", "s1", "T", "u1", "e1",
-                Instant.EPOCH, mutable, null);
+        RuleEvent e = base().payload(mutable).build();
         mutable.put("extra", "x");
-        assertEquals(1, event.payload().size(), "构造后修改原始 map 不应影响 payload");
+        assertThat(e.payload()).hasSize(1);   // 改原 map 不影响
+        assertThatThrownBy(() -> e.payload().put("a", "b"))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
-    void payload_mapIsUnmodifiable() {
-        RuleEvent event = minimal();
-        assertThrows(UnsupportedOperationException.class,
-                () -> event.payload().put("k", "v"));
-    }
-
-    @Test
-    void providedMetrics_areImmutableWhenProvided() {
+    void providedMetricsDefensivelyCopied() {
         Map<String, Object> mutable = new HashMap<>();
         mutable.put("balance", 100);
-        RuleEvent event = new RuleEvent("t1", "s1", "T", "u1", "e1",
-                Instant.EPOCH, Map.of(), mutable);
+        RuleEvent e = base().providedMetrics(mutable).build();
         mutable.put("extra", "x");
-        assertEquals(1, event.providedMetrics().size());
+        assertThat(e.providedMetrics()).hasSize(1);
     }
 
     @Test
-    void recordEquality_byValue() {
+    void toBuilderOverridesSourceKeepingOtherFields() {
+        // toBuilder 复制原值，仅改写 source —— SDK 入口据此把渠道权威改为 SDK
+        RuleEvent original = base().payload(Map.of("k", "v")).build();
+        RuleEvent rebuilt = original.toBuilder().source(EventSource.SDK).build();
+        assertThat(rebuilt.source()).isEqualTo(EventSource.SDK);
+        assertThat(rebuilt.tenantId()).isEqualTo("t1");
+        assertThat(rebuilt.eventId()).isEqualTo("evt-1");
+        assertThat(rebuilt.payload()).containsEntry("k", "v");
+    }
+
+    @Test
+    void recordEqualityByValue() {
         Instant now = Instant.EPOCH;
-        RuleEvent a = new RuleEvent("t1", "s1", "T", "u1", "e1", now, Map.of(), Map.of());
-        RuleEvent b = new RuleEvent("t1", "s1", "T", "u1", "e1", now, Map.of(), Map.of());
-        assertEquals(a, b);
+        RuleEvent a = base().occurredAt(now).build();
+        RuleEvent b = base().occurredAt(now).build();
+        assertThat(a).isEqualTo(b);
     }
 }

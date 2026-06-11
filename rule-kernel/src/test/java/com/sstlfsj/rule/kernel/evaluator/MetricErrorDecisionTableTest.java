@@ -23,7 +23,7 @@ class MetricErrorDecisionTableTest {
                 .ruleVersionId(1L).sceneCode("PAY").tenantId("1").conditionAst(table)
                 .kind("DECISION_TABLE").build();
         EvalContext ctx = new EvalContext("1",
-                new RuleEvent("1", "PAY", "transfer", "u1", "e1", Instant.now(), Map.of(), Map.of()),
+                new RuleEvent("1", "PAY", "transfer", "u1", "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP),
                 new Subject("u1", SubjectType.USER, Map.of()),
                 Map.of("balance", MetricValue.error("METRIC_FETCH_FAIL")), Instant.now());
 

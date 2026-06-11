@@ -20,7 +20,7 @@ class DateComparisonSupportTest {
     private static final Instant NOW = Instant.parse("2026-06-02T00:00:00Z");
 
     private EvalContext ctx(String metricCode, Object value, String dataType) {
-        RuleEvent event = new RuleEvent("t1", "s1", "E", "u1", "e1", NOW, Map.of(), Map.of());
+        RuleEvent event = new RuleEvent("t1", "s1", "E", "u1", "e1", NOW, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", event, null,
                 Map.of(metricCode, new MetricValue(value, dataType, "PROVIDED")), NOW);
     }
@@ -81,7 +81,7 @@ class DateComparisonSupportTest {
 
     @Test
     void metricMissing_returnsFalse() {
-        RuleEvent event = new RuleEvent("t1", "s1", "E", "u1", "e1", NOW, Map.of(), Map.of());
+        RuleEvent event = new RuleEvent("t1", "s1", "E", "u1", "e1", NOW, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         EvalContext emptyCtx = new EvalContext("t1", event, null, Map.of(), NOW);
         ConditionNode n = node("DATE_BEFORE", "d", "2026-06-02", "DATE");
         assertThat(DateComparisonSupport.evaluate(n, emptyCtx, true)).isFalse();

@@ -14,7 +14,7 @@ class ConditionEvaluationTest {
 
     private EvalContext ctx(Map<String, MetricValue> metrics) {
         return new EvalContext("1",
-                new RuleEvent("1", "PAY", "transfer", "u1", "e1", Instant.now(), Map.of(), Map.of()),
+                new RuleEvent("1", "PAY", "transfer", "u1", "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP),
                 new Subject("u1", SubjectType.USER, Map.of()), metrics, Instant.now());
     }
 

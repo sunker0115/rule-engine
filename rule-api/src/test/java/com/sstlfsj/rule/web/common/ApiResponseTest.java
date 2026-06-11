@@ -1,10 +1,17 @@
 package com.sstlfsj.rule.web.common;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class ApiResponseTest {
+
+    @AfterEach
+    void clearMdc() {
+        MDC.clear();
+    }
 
     @Test
     void ok_setsSuccessTrueAndData() {
@@ -29,5 +36,23 @@ class ApiResponseTest {
         assertNull(resp.data());
         assertEquals("RULE_NOT_FOUND", resp.errorCode());
         assertEquals("规则不存在", resp.message());
+    }
+
+    @Test
+    void ok_fillsTraceIdFromMdc() {
+        MDC.put("traceId", "abc123");
+        assertEquals("abc123", ApiResponse.ok("hi").traceId());
+    }
+
+    @Test
+    void error_fillsTraceIdFromMdc() {
+        MDC.put("traceId", "err999");
+        assertEquals("err999", ApiResponse.error("E", "m").traceId());
+    }
+
+    @Test
+    void traceId_isNullWhenNoTraceContext() {
+        MDC.clear();
+        assertNull(ApiResponse.ok("x").traceId());
     }
 }

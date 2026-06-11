@@ -14,13 +14,13 @@ class EvaluationSessionTest {
         s.setTenantId(1L);
         s.setEventId("evt-001");
         s.setSceneCode("fraud_check");
-        s.setStatus("PENDING");
+        s.setStatus(SessionStatus.PENDING);
         s.setOccurredAt(LocalDateTime.now());
 
         assertEquals(1L, s.getTenantId());
         assertEquals("evt-001", s.getEventId());
         assertEquals("fraud_check", s.getSceneCode());
-        assertEquals("PENDING", s.getStatus());
+        assertEquals(SessionStatus.PENDING, s.getStatus());
         assertNotNull(s.getOccurredAt());
     }
 
@@ -29,6 +29,22 @@ class EvaluationSessionTest {
         EvaluationSession s = new EvaluationSession();
         s.setContextSnapshot("{\"metrics\":{\"user.age\":25},\"evalNow\":\"2024-01-01T00:00:00Z\"}");
         assertEquals("{\"metrics\":{\"user.age\":25},\"evalNow\":\"2024-01-01T00:00:00Z\"}", s.getContextSnapshot());
+    }
+
+    @Test
+    void score_setAndGet() {
+        EvaluationSession s = new EvaluationSession();
+        assertNull(s.getScore());          // 默认 null（AST_BOOLEAN 等无分场景）
+        s.setScore(87.5);
+        assertEquals(87.5, s.getScore());
+    }
+
+    @Test
+    void category_setAndGet() {
+        EvaluationSession s = new EvaluationSession();
+        assertNull(s.getCategory());
+        s.setCategory("中危");
+        assertEquals("中危", s.getCategory());
     }
 
     @Test
@@ -50,11 +66,11 @@ class EvaluationSessionTest {
         DryRunSession d = new DryRunSession();
         d.setTenantId(1L);
         d.setRuleVersionId(99L);
-        d.setStatus("HIT");
+        d.setStatus(SessionStatus.HIT);
 
         assertEquals(1L, d.getTenantId());
         assertEquals(99L, d.getRuleVersionId());
-        assertEquals("HIT", d.getStatus());
+        assertEquals(SessionStatus.HIT, d.getStatus());
     }
 
     @Test

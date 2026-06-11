@@ -2,6 +2,10 @@
 
 > **目录用途**：承载端到端真实业务案例，作为新人首次接入 / 接入新场景 / 评审参考的具象材料。本目录与决策 / 概念 / 运行时文档互补——文档讲"为什么 + 怎么落"，案例讲"长什么样"。
 
+> **案例有效性(2026-06-09)**：
+> - ✅ 对齐当前实现、HTTP API 跑通：[`risk-control/high-risk-login/`](./risk-control/high-risk-login/)（新范式样板，含完整 curl 剧本）
+> - 🛑 已过期、归档于 [`archive/`](./archive/)：`new-account-large-transfer`、`ticket-creation`、`user-register`、`time-conditions`——使用了废弃的 `metricBindings`/`decisions`/`PAYLOAD_COMPARE`/`_mockMetrics` 等形态（过期点对照见 high-risk-login README §五），按新范式重写后再移回业务域目录。
+
 ---
 
 ## 一、目录组织
@@ -14,7 +18,8 @@ examples/
 ├── risk-control/       风控类（额度校验 / 黑名单 / 异常行为拦截）
 ├── marketing/          营销类（VIP 升级 / 满减 / 画像投放）
 ├── activity/           活动类（任务进度 / 奖励发放 / 兑换券）
-└── patterns/           跨域技术模式（时间条件写法 / Metric sourceType 对比 / Pre-Gate 组合等）
+├── patterns/           跨域技术模式（时间条件写法 / Metric sourceType 对比 / Pre-Gate 组合等）
+└── archive/           已过期案例归档（用废弃形态，待按新范式重写后移回业务域目录）
 ```
 
 ⏳ 子目录内案例待逐步沉淀。
@@ -26,13 +31,13 @@ examples/
 ```
 <example-name>/
 ├── README.md          场景描述 + 业务目标 + 关键决策引用
-├── scene.json         Scene 定义（含 payloadSchema / eventTypes / metricBindings /
-│                      actionBindings / decisions 列表及各 Decision.actions）
+├── scene.json         Scene 定义（含 payloadSchema / eventTypes / dominantMode /
+│                      subjectType；metric 为 tenant 级、decision 独立建，见 D54）
 ├── rules/             该 Scene 下的 Rule 定义（含 AST + preGates + decisionBindings；
 │                      Action 挂在 Decision 上，rules/ 不含 Action 配置，见 D27）
 ├── metrics/           Scene 用到的 metric 注册（含 sourceType / dataType /
-│                      cachePolicyDefault / allowProvided，见 D30）
-├── mock-events.json   mock 的 RuleEvent 样本（含 providedMetrics 字段，用于 dry-run）
+│                      cacheTtlSeconds / allowProvided）
+├── mock-events.json   mock 的 RuleEvent 样本（payload 驱动；公开评估只收 payload，D55）
 └── expected-results.json   各 mock event 的预期 EvalResult
                             （含 finalDecision / hitDecisions / trace.metricSources）
 ```
@@ -49,7 +54,7 @@ examples/
 
 - **新人首次** → 选 `risk-control/` 或 `marketing/` 下最简单案例 → 对照 [`../01-concepts.md`](../01-concepts.md) 一等概念
 - **接入新场景** → 找业务域最接近的案例 → 复制 → 改 Scene / Rule
-- **学习某个技术模式** → 看 `patterns/`（时间条件 / sourceType 对比 / providedMetrics 等）
+- **学习某个技术模式** → 看 `patterns/`（时间条件 / sourceType 对比 / payload 直接引用 等）
 - **评审 / 设计参考** → 按相关决策反查案例
 
 ## 五、维护原则

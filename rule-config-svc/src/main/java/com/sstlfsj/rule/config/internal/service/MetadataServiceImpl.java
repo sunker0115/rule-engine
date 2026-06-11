@@ -11,16 +11,16 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,7 +36,6 @@ class MetadataServiceImpl implements MetadataService {
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final RuleVersionMapper ruleVersionMapper;
-    private final ObjectMapper objectMapper;
 
     @Override
     public MetadataResponse getSceneMetadata(String tenantId, String sceneCode) {
@@ -45,7 +44,7 @@ class MetadataServiceImpl implements MetadataService {
             throw new IllegalArgumentException("Scene 不存在: " + sceneCode);
         }
 
-        // v1 简化：查该租户下全部 ACTIVE metric，不过 scene_metric_binding 白名单
+        // metric 在 tenant 级对所有 scene 可用（无 scene 级绑定白名单，配置闭环 B 轮决策二）
         List<MetricDefinition> metrics = metricDefinitionMapper.findActiveByTenant(Long.valueOf(tenantId));
 
         List<MetricMeta> metricMetas = metrics.stream()
@@ -56,15 +55,6 @@ class MetadataServiceImpl implements MetadataService {
 
         // conditionType / actionType 来自注册的 SPI Bean，v1 返回空列表
         return new MetadataResponse(List.of(), List.of(), metricMetas);
-    }
-
-    @Override
-    public ProvidedMetricsResponse getProvidedMetrics(String tenantId, String sceneCode) {
-        MetadataResponse all = getSceneMetadata(tenantId, sceneCode);
-        List<MetricMeta> provided = all.availableMetrics().stream()
-                .filter(MetricMeta::allowProvided)
-                .toList();
-        return new ProvidedMetricsResponse(provided);
     }
 
     @Override
@@ -97,6 +87,42 @@ class MetadataServiceImpl implements MetadataService {
         return result;
     }
 
+    @Override
+    public InputManifestResponse getInputManifest(String tenantId, String sceneCode, String eventType) {
+        Long tid = Long.valueOf(tenantId);
+        SceneDef scene = sceneMapper.findByCode(tid, sceneCode);
+        if (scene == null) {
+            return new InputManifestResponse(List.of());
+        }
+
+        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneIds(tid, List.of(scene.getId()))
+                .stream().map(RuleDefinition::getId).toList();
+        if (defIds.isEmpty()) {
+            return new InputManifestResponse(List.of());
+        }
+
+        boolean narrow = eventType != null && !eventType.isBlank();
+
+        // 按 name 去重并保持首次出现顺序：同名字段以最先遇到的 (dataType,required) 为准
+        Map<String, InputFieldSpec> union = new LinkedHashMap<>();
+        for (RuleVersion rv : ruleVersionMapper.findActiveWithPayloadByRuleDefIds(defIds)) {
+            // eventType 非空时仅纳入会被该事件触发的规则；triggerEventTypes 为空视为通配（匹配所有事件类型）
+            if (narrow) {
+                List<String> triggers = rv.getTriggerEventTypes();
+                if (triggers != null && !triggers.isEmpty() && !triggers.contains(eventType)) {
+                    continue;
+                }
+            }
+            List<PayloadDependency> deps = rv.getPayloadDependencies() != null
+                    ? rv.getPayloadDependencies() : List.of();
+            for (PayloadDependency dep : deps) {
+                union.putIfAbsent(dep.name(),
+                        new InputFieldSpec(dep.name(), dep.dataType(), dep.required()));
+            }
+        }
+        return new InputManifestResponse(List.copyOf(union.values()));
+    }
+
     /**
      * 取 scenes 下 ACTIVE rule_version 的 metricDependencies 并集，返回精确 (code,version) 对。
      * 与 collectRequiredMetricCodes 不同：保留 version，以便 DECLARED 分支按版本精确查询。
@@ -112,24 +138,14 @@ class MetadataServiceImpl implements MetadataService {
 
         Set<MetricDependency> deps = new HashSet<>();
         for (RuleVersion rv : ruleVersionMapper.findActiveByRuleDefIds(defIds)) {
-            deps.addAll(parseDepList(rv.getMetricDependencies()));
+            deps.addAll(rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of());
         }
         return deps;
     }
 
-    /** 解析 metric_dependencies 对象数组，取出 MetricDependency 列表。 */
-    private List<MetricDependency> parseDepList(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<MetricDependency>>() {});
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
-
     private MetricDescriptor toDescriptor(MetricDefinition m) {
         // 把 dataType 一并塞进 params，供宿主 handler 结果强转使用（镜像 DbMetricDefinitionResolver）
-        Map<String, Object> params = new HashMap<>(parseParams(m.getParams()));
+        Map<String, Object> params = new HashMap<>(m.getParams() != null ? m.getParams() : Map.of());
         params.put("dataType", m.getDataType());
         return new MetricDescriptor(
                 m.getMetricCode(),
@@ -140,12 +156,4 @@ class MetadataServiceImpl implements MetadataService {
                 params);
     }
 
-    private Map<String, Object> parseParams(String json) {
-        if (json == null || json.isBlank()) return Map.of();
-        try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            return Map.of();
-        }
-    }
 }

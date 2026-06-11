@@ -1,0 +1,21 @@
+-- config 模块剩余 ENUM 列 → VARCHAR：取值真相源上移 app 层 Java enum（按 name 与列往返）。
+-- DEFAULT 沿用 V1_0 原值；kind 沿用 kernel RuleKind 枚举名（tag()==name()）。
+ALTER TABLE tenant
+  MODIFY COLUMN status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE';
+
+ALTER TABLE scene
+  MODIFY COLUMN dominant_mode     VARCHAR(16) NOT NULL,
+  MODIFY COLUMN decision_strategy VARCHAR(32) NOT NULL DEFAULT 'HIGHEST_PRIORITY',
+  MODIFY COLUMN subject_type      VARCHAR(16) NOT NULL DEFAULT 'USER';
+
+ALTER TABLE decision_definition
+  MODIFY COLUMN status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE';
+
+ALTER TABLE rule_definition
+  MODIFY COLUMN kind VARCHAR(32) NOT NULL DEFAULT 'AST_BOOLEAN';
+
+ALTER TABLE rule_version
+  MODIFY COLUMN kind VARCHAR(32) NOT NULL DEFAULT 'AST_BOOLEAN';
+
+ALTER TABLE audit_log
+  MODIFY COLUMN actor_type VARCHAR(16) NOT NULL DEFAULT 'USER';

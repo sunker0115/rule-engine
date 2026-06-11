@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * metric 定义同步器：启动时全量拉取，后台线程定时刷新。镜像 {@link SnapshotPoller}，
- * 端点为 {@code /api/v1/sdk/metric-definitions}，结果整体替换该租户的本地定义集合。
+ * 端点为 {@code /sdk/v1/metric-definitions}，结果整体替换该租户的本地定义集合。
  * 用 JDK 内置 HttpClient + 普通 ObjectMapper（MetricDescriptor 无多态字段）。
  */
 public class MetricDefinitionPoller {
@@ -99,7 +99,7 @@ public class MetricDefinitionPoller {
     /** 构造下发端点 URL；DECLARED 且 scenes 非空时附加 scenes 参数。 */
     static String buildUrl(String serverUrl, String tenantId, FetchMode fetchMode, List<String> scenes) {
         StringBuilder url = new StringBuilder(serverUrl)
-                .append("/api/v1/sdk/metric-definitions?tenantId=")
+                .append("/sdk/v1/metric-definitions?tenantId=")
                 .append(tenantId);
         if (fetchMode == FetchMode.DECLARED && !scenes.isEmpty()) {
             url.append("&scenes=").append(String.join(",", scenes));

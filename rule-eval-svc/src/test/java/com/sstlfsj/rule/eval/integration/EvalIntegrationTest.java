@@ -5,7 +5,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
+import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
+import com.sstlfsj.rule.eval.internal.domain.SessionStatus;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
@@ -175,30 +178,30 @@ class EvalIntegrationTest {
                 Instant.now(),
                 Map.of(),
                 Map.of()
-        );
+        , com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     // ===== 测试 1：PULL 同步评估写入 evaluation_session =====
 
     /**
      * PULL 模式调用 evaluate() 后，evaluation_session 应有一条 status=HIT 的记录。
-     * 空 AndNode 条件在 TracingInterpretedExecutor 中返回 true，故规则命中。
+     * 空 AndNode 条件在 InterpretedExecutor 中返回 true，故规则命中。
      */
     @Test
-    void pull_evaluate_writesSessionToDb() {
+    void pull_evaluate_writesSessionToDb() throws InterruptedException {
         RuleEvent event = makeEvent("pull-001", "fraud_check");
         EvalResult result = evalService.evaluate(event);
 
         // 返回值验证：规则应命中
         assertThat(result.ruleHit()).isTrue();
 
-        // 数据库验证：evaluation_session 有一条 HIT 记录
-        List<EvaluationSession> sessions = sessionMapper.selectList(
-                new LambdaQueryWrapper<EvaluationSession>()
-                        .eq(EvaluationSession::getEventId, "pull-001")
-                        .eq(EvaluationSession::getTenantId, 1L));
+        // 数据库验证：审计异步落库，轮询等待 evaluation_session 出现 HIT 记录
+        List<EvaluationSession> sessions = awaitSessions("pull-001");
         assertThat(sessions).hasSize(1);
-        assertThat(sessions.get(0).getStatus()).isEqualTo("HIT");
+        assertThat(sessions.get(0).getStatus()).isEqualTo(SessionStatus.HIT);
+        // source 取自 event 渠道，mode 由 evaluate() 入口判定为 PULL
+        assertThat(sessions.get(0).getSource()).isEqualTo(EventSource.HTTP);
+        assertThat(sessions.get(0).getMode()).isEqualTo(EvalMode.PULL);
     }
 
     // ===== 测试 2：相同 eventId 幂等，只写一条 session =====
@@ -207,12 +210,13 @@ class EvalIntegrationTest {
      * 相同 eventId 两次调用 evaluate()，evaluation_session 只应有 1 条记录（幂等保证）。
      */
     @Test
-    void pull_idempotent_duplicateEventId_onlyOneSession() {
+    void pull_idempotent_duplicateEventId_onlyOneSession() throws InterruptedException {
         RuleEvent event = makeEvent("pull-idem-001", "fraud_check");
 
         evalService.evaluate(event);
         evalService.evaluate(event);
 
+        awaitSessions("pull-idem-001");   // 等异步落库（第二次重复因 uk_tenant_event 被吞，仅 1 行）
         long count = sessionMapper.selectCount(
                 new LambdaQueryWrapper<EvaluationSession>()
                         .eq(EvaluationSession::getEventId, "pull-idem-001")
@@ -243,6 +247,14 @@ class EvalIntegrationTest {
             Thread.sleep(100);
         }
         assertThat(count).isGreaterThan(0);
+
+        // PUSH 异步路径 mode 应记为 PUSH（acceptEvent 经 dispatcher 以 mode=PUSH 评估）
+        List<EvaluationSession> sessions = sessionMapper.selectList(
+                new LambdaQueryWrapper<EvaluationSession>()
+                        .eq(EvaluationSession::getEventId, "push-001")
+                        .eq(EvaluationSession::getTenantId, 1L));
+        assertThat(sessions.get(0).getSource()).isEqualTo(EventSource.HTTP);
+        assertThat(sessions.get(0).getMode()).isEqualTo(EvalMode.PUSH);
     }
 
     // ===== 测试 4：dry-run 写入 dry_run_session，不污染生产表 =====
@@ -252,18 +264,15 @@ class EvalIntegrationTest {
      * 使用 ruleVersionId=1（与 setUp 插入的版本一致）。
      */
     @Test
-    void dryRun_writesToDryRunSession_notProdSession() {
+    void dryRun_writesToDryRunSession_notProdSession() throws InterruptedException {
         RuleEvent event = makeEvent("dry-001", "fraud_check");
         // ruleVersionId=1 指定已存在的版本
-        EvalResult result = evalService.dryRun(event, 1L);
+        EvalResult result = evalService.dryRun(event, null, 1L);
 
-        // dry_run_session 应有记录
-        List<DryRunSession> dryRuns = dryRunMapper.selectList(
-                new LambdaQueryWrapper<DryRunSession>()
-                        .eq(DryRunSession::getEventId, "dry-001")
-                        .eq(DryRunSession::getTenantId, 1L));
+        // dry-run 改事件驱动后异步落库，轮询等待 dry_run_session 出现
+        List<DryRunSession> dryRuns = awaitDryRuns("dry-001");
         assertThat(dryRuns).hasSize(1);
-        assertThat(dryRuns.get(0).getStatus()).isIn("HIT", "MISS");
+        assertThat(dryRuns.get(0).getStatus()).isIn(SessionStatus.HIT, SessionStatus.MISS);
 
         // evaluation_session 不应有记录（dry-run 不写生产表）
         long prodCount = sessionMapper.selectCount(
@@ -290,5 +299,35 @@ class EvalIntegrationTest {
                         .eq(EvaluationSession::getEventId, "no-rule-001")
                         .eq(EvaluationSession::getTenantId, 1L));
         assertThat(count).isEqualTo(0);
+    }
+
+    /** 轮询最多 3 秒，等指定 eventId 的 dry_run_session 异步落库出现，返回查到的行。 */
+    private List<DryRunSession> awaitDryRuns(String eventId) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 3_000;
+        List<DryRunSession> dryRuns = List.of();
+        while (System.currentTimeMillis() < deadline) {
+            dryRuns = dryRunMapper.selectList(
+                    new LambdaQueryWrapper<DryRunSession>()
+                            .eq(DryRunSession::getEventId, eventId)
+                            .eq(DryRunSession::getTenantId, 1L));
+            if (!dryRuns.isEmpty()) break;
+            Thread.sleep(100);
+        }
+        return dryRuns;
+    }
+
+    /** 轮询最多 3 秒，等指定 eventId 的 evaluation_session 异步落库出现，返回查到的行。 */
+    private List<EvaluationSession> awaitSessions(String eventId) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 3_000;
+        List<EvaluationSession> sessions = List.of();
+        while (System.currentTimeMillis() < deadline) {
+            sessions = sessionMapper.selectList(
+                    new LambdaQueryWrapper<EvaluationSession>()
+                            .eq(EvaluationSession::getEventId, eventId)
+                            .eq(EvaluationSession::getTenantId, 1L));
+            if (!sessions.isEmpty()) break;
+            Thread.sleep(100);
+        }
+        return sessions;
     }
 }

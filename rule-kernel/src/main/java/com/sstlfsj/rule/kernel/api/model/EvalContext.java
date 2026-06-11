@@ -17,23 +17,21 @@ public final class EvalContext {
         this.tenantId = tenantId;
         this.event = event;
         this.subject = subject;
+        // 防御性拷贝：保证 metrics 快照不可变，外部修改原 map 不影响上下文
         this.metrics = Map.copyOf(metrics);
         this.now = now;
     }
 
-    public String getTenantId()  { return tenantId; }
-    public RuleEvent getEvent()  { return event; }
-    public Subject getSubject()  { return subject; }
-
-    /** record 风格 accessor，与 getSubject() 等价。 */
-    public Subject subject()     { return subject; }
+    /** 租户标识。 */
+    public String tenantId()  { return tenantId; }
+    /** 触发事件。 */
+    public RuleEvent event()  { return event; }
+    /** 评估主体。 */
+    public Subject subject()  { return subject; }
     /** 返回全量 metrics 快照（不可变视图）。 */
     public Map<String, MetricValue> metrics() { return metrics; }
-
     /** 返回本次评估的统一时刻。 */
-    public Instant getNow() { return now; }
-    /** record 风格 accessor，与 getNow() 等价。 */
-    public Instant now()    { return now; }
+    public Instant now()      { return now; }
 
     /** 返回已预拉的指标值，不存在时返回 null。 */
     public MetricValue getMetric(String metricCode) {

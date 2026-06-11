@@ -23,7 +23,7 @@ class DryRunTraceWriterTest {
         };
 
         NodeTrace trace = new NodeTrace("CONDITION", "AMOUNT_GT", null,
-                true, 100, "PROVIDED", null, null, null);
+                true, 100, "PROVIDED", null, null, null, null, null);
         writer.write("t1", "sess-001", List.of(trace));
 
         assertEquals("t1", capturedTenant.get(0));
@@ -44,7 +44,7 @@ class DryRunTraceWriterTest {
 
     @Test
     void noopDryRunTraceWriter_doesNotThrow_withNormalInput() {
-        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null);
+        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
         assertDoesNotThrow(() -> new NoopDryRunTraceWriter().write("t1", "s1", List.of(trace)));
     }
 

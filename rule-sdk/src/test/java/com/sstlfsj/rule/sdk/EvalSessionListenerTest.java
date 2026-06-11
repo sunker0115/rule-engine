@@ -19,7 +19,7 @@ class EvalSessionListenerTest {
 
         listener.onSession(
                 new RuleEvent("t1", "s1", "E", "sub1", "id1",
-                        Instant.now(), Map.of(), Map.of()),
+                        Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.SDK),
                 EvalResult.miss());
 
         assertThat(called.get()).isTrue();

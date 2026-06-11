@@ -3,9 +3,14 @@ package com.sstlfsj.rule.eval;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
-import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
+import com.sstlfsj.rule.eval.internal.TraceProperties;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
+import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
+import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
+import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
+import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.model.ActionContext;
 import com.sstlfsj.rule.kernel.api.model.ActionResult;
@@ -17,14 +22,17 @@ import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
-import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Primary;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -33,6 +41,11 @@ import static org.mockito.Mockito.mock;
 class EvalAutoConfigurationTest {
 
     private final EvalAutoConfiguration config = new EvalAutoConfiguration();
+
+    private static final ExecutorService EXEC = Executors.newVirtualThreadPerTaskExecutor();
+
+    @AfterAll
+    static void closeExec() { EXEC.shutdown(); }
 
     /** 取数资源配置桩（默认超时 800ms），供 evalContextAssembler 装配。 */
     private static FetchResourceProperties fetchProps() {
@@ -54,10 +67,10 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
-    void ruleVersionExecutor_returnsTracingInterpretedExecutor() {
+    void ruleVersionExecutor_returnsInterpretedExecutor() {
         RuleVersionExecutor executor = config.ruleVersionExecutor();
         assertNotNull(executor);
-        assertInstanceOf(TracingInterpretedExecutor.class, executor);
+        assertInstanceOf(InterpretedExecutor.class, executor);
     }
 
     @Test
@@ -96,14 +109,14 @@ class EvalAutoConfigurationTest {
 
     @Test
     void evalContextAssembler_nullLists_returnsInstance() {
-        EvalContextAssembler assembler = config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps());
+        EvalContextAssembler assembler = config.evalContextAssembler(null, null, null, null, EXEC, fetchProps());
         assertNotNull(assembler);
     }
 
     @Test
     void evalContextAssembler_emptyLists_returnsInstance() {
         EvalContextAssembler assembler = config.evalContextAssembler(
-                List.of(), List.of(), null, null, Runnable::run, fetchProps());
+                List.of(), List.of(), null, null, EXEC, fetchProps());
         assertNotNull(assembler);
     }
 
@@ -117,12 +130,13 @@ class EvalAutoConfigurationTest {
     void evalEngine_nullPreGates_returnsInstance() {
         EvalEngine engine = config.evalEngine(
                 config.sceneRuleIndex(),
-                config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps()),
+                config.evalContextAssembler(null, null, null, null, EXEC, fetchProps()),
                 null,
                 config.ruleVersionExecutor(),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
-                config.decisionTableExecutor());
+                config.decisionTableExecutor(),
+                new TraceProperties());
         assertNotNull(engine);
     }
 
@@ -130,12 +144,13 @@ class EvalAutoConfigurationTest {
     void evalEngine_emptyPreGates_returnsInstance() {
         EvalEngine engine = config.evalEngine(
                 config.sceneRuleIndex(),
-                config.evalContextAssembler(null, null, null, null, Runnable::run, fetchProps()),
+                config.evalContextAssembler(null, null, null, null, EXEC, fetchProps()),
                 List.of(),
                 config.ruleVersionExecutor(),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
-                config.decisionTableExecutor());
+                config.decisionTableExecutor(),
+                new TraceProperties());
         assertNotNull(engine);
     }
 
@@ -143,8 +158,7 @@ class EvalAutoConfigurationTest {
     void actionDispatchService_nullHandlers_returnsInstance() {
         ActionDispatchService svc = config.actionDispatchService(
                 null,
-                mock(SceneActionBindingReadMapper.class),
-                mock(ActionExecutionMapper.class));
+                mock(DomainEventPublisher.class));
         assertNotNull(svc);
     }
 
@@ -153,8 +167,7 @@ class EvalAutoConfigurationTest {
         ActionHandler handler = new BlockTxStub();
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(handler),
-                mock(SceneActionBindingReadMapper.class),
-                mock(ActionExecutionMapper.class));
+                mock(DomainEventPublisher.class));
         assertNotNull(svc);
     }
 
@@ -163,9 +176,18 @@ class EvalAutoConfigurationTest {
         ActionHandler noAnnotation = ctx -> ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
         ActionDispatchService svc = config.actionDispatchService(
                 List.of(noAnnotation),
-                mock(SceneActionBindingReadMapper.class),
-                mock(ActionExecutionMapper.class));
+                mock(DomainEventPublisher.class));
         assertNotNull(svc);
+    }
+
+    @Test
+    void sessionRetentionCleaner_returnsInstance() {
+        SessionRetentionCleaner cleaner = config.sessionRetentionCleaner(
+                mock(EvaluationSessionMapper.class),
+                mock(DryRunSessionMapper.class),
+                mock(ActionExecutionMapper.class),
+                new RetentionProperties());
+        assertNotNull(cleaner);
     }
 
     /** 测试用 stub，带 @ActionType 注解。 */

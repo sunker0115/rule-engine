@@ -1,9 +1,22 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
+import com.sstlfsj.rule.config.api.dto.SceneListItem;
+
+import java.util.List;
+import java.util.Map;
 
 /** 场景生命周期管理：创建、更新、查询、禁用。 */
 public interface SceneService {
+
+    /**
+     * 查询租户全部场景（精简列表，供前端场景选择器 / 列表页）。
+     *
+     * @param tenantId 租户 ID
+     * @return 场景精简列表
+     */
+    List<SceneListItem> listScenes(String tenantId);
 
     /**
      * 为指定租户创建新场景（含 D13 元数据）。
@@ -14,16 +27,16 @@ public interface SceneService {
      * @param description       场景业务说明（可为 null）
      * @param dominantMode      PUSH / PULL / HYBRID（null 时默认 PUSH）
      * @param subjectType       USER / ACCOUNT / DEVICE / ORDER / CUSTOM（null 时默认 USER）
-     * @param eventTypesJson    允许的 eventType 白名单 JSON 数组字符串（null 时默认 "[]"）
-     * @param payloadSchemaJson payloadSchema JSON 数组字符串（null 表示暂不设置）
-     * @param defaultParamsJson 默认参数 JSON 对象字符串（null 表示暂不设置）
+     * @param eventTypes        允许的 eventType 白名单（null 时默认空）
+     * @param payloadSchema     payloadSchema 字段声明（null 表示暂不设置）
+     * @param defaultParams     默认参数（开放结构，null 表示暂不设置）
      * @param actorId           创建操作人 ID
      * @return 新创建场景的 ID
      */
     Long createScene(String tenantId, String sceneCode, String name,
                      String description, String dominantMode, String subjectType,
-                     String eventTypesJson, String payloadSchemaJson, String defaultParamsJson,
-                     String actorId);
+                     List<String> eventTypes, List<PayloadFieldSpec> payloadSchema,
+                     Map<String, Object> defaultParams, String actorId);
 
     /**
      * 更新已有场景元数据。payloadSchema 发生变化时自动快照历史版本并自增版本号。
@@ -31,14 +44,14 @@ public interface SceneService {
      * @param tenantId          租户 ID
      * @param sceneCode         待更新的场景编码
      * @param name              新名称（null 表示不更新）
-     * @param eventTypesJson    新 eventType 白名单（null 表示不更新）
-     * @param payloadSchemaJson 新 payloadSchema（null 表示不更新）
-     * @param defaultParamsJson 新 defaultParams（null 表示不更新）
+     * @param eventTypes        新 eventType 白名单（null 表示不更新）
+     * @param payloadSchema     新 payloadSchema（null 表示不更新）
+     * @param defaultParams     新 defaultParams（null 表示不更新）
      * @param actorId           更新操作人 ID
      */
     void updateScene(String tenantId, String sceneCode,
-                     String name, String eventTypesJson,
-                     String payloadSchemaJson, String defaultParamsJson,
+                     String name, List<String> eventTypes,
+                     List<PayloadFieldSpec> payloadSchema, Map<String, Object> defaultParams,
                      String actorId);
 
     /**

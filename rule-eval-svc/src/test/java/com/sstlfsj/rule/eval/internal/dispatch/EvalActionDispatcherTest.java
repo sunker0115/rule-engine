@@ -16,7 +16,7 @@ class EvalActionDispatcherTest {
 
     private RuleEvent event(String id) {
         return new RuleEvent("1", "test_scene", "TEST_EVENT", "u1",
-                id, Instant.now(), Map.of(), Map.of());
+                id, Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     @Test

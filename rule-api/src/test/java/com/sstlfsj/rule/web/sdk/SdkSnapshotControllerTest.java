@@ -41,7 +41,7 @@ class SdkSnapshotControllerTest {
         when(snapshotLoader.loadByScene(eq("t1"), eq("payment")))
                 .thenReturn(Map.of("ORDER", List.of(snap)));
 
-        mockMvc.perform(get("/api/v1/sdk/snapshots")
+        mockMvc.perform(get("/sdk/v1/snapshots")
                         .param("tenantId", "t1")
                         .param("scenes", "payment"))
                 .andExpect(status().isOk())
@@ -50,7 +50,7 @@ class SdkSnapshotControllerTest {
 
     @Test
     void getSnapshots_missingTenantId_returns400() throws Exception {
-        mockMvc.perform(get("/api/v1/sdk/snapshots"))
+        mockMvc.perform(get("/sdk/v1/snapshots"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -58,7 +58,7 @@ class SdkSnapshotControllerTest {
     void getSnapshots_emptyScenes_callsLoadAll_returns200() throws Exception {
         when(snapshotLoader.loadAll()).thenReturn(Map.of());
 
-        mockMvc.perform(get("/api/v1/sdk/snapshots")
+        mockMvc.perform(get("/sdk/v1/snapshots")
                         .param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray());

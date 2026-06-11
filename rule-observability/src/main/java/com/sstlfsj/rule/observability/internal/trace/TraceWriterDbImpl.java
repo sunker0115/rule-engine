@@ -4,8 +4,12 @@ import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import com.sstlfsj.rule.observability.internal.domain.NodeTraceEntity;
 import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -18,10 +22,13 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class TraceWriterDbImpl implements TraceWriter, InitializingBean, DisposableBean {
 
+    private static final Logger log = LoggerFactory.getLogger(TraceWriterDbImpl.class);
+
     private final int queueCapacity;
     private final int batchSize;
     private final long flushIntervalMs;
     private final NodeTraceMapper nodeTraceMapper;
+    private final ObjectMapper objectMapper;
 
     // 存 (tenantId, sessionId, traces) 三元组
     private record TraceEntry(String tenantId, String sessionId, List<NodeTrace> traces) {}
@@ -31,11 +38,12 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
     private Thread consumerThread;
 
     public TraceWriterDbImpl(int queueCapacity, int batchSize, long flushIntervalMs,
-                             NodeTraceMapper nodeTraceMapper) {
+                             NodeTraceMapper nodeTraceMapper, ObjectMapper objectMapper) {
         this.queueCapacity = queueCapacity;
         this.batchSize = batchSize;
         this.flushIntervalMs = flushIntervalMs;
         this.nodeTraceMapper = nodeTraceMapper;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -86,7 +94,6 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
      * @param sessionId   评估会话 ID
      * @param tenantId    租户 ID
      * @param pathPrefix  父节点路径前缀（根节点传空串）
-     * @param indexOffset 当前层起始下标（通常为 0）
      * @param out         收集结果的输出列表
      */
     private void flattenToList(List<NodeTrace> traces, Long sessionId, Long tenantId,
@@ -105,10 +112,13 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
             entity.setNodeType(trace.nodeType());
             entity.setConditionType(trace.conditionType());
             entity.setMetricCode(trace.metricCode());
-            entity.setActualValue(trace.actualValue() == null ? null : trace.actualValue().toString());
+            entity.setDisplayLabel(trace.displayLabel());
+            entity.setParams(toJson(trace.expectedValue()));
+            // actual_value 是 JSON 列：字符串等值须 JSON 编码（裸 toString 对字符串产生非法 JSON，整批 insert 会被 MySQL 拒）
+            entity.setActualValue(toJson(trace.actualValue()));
             entity.setResult(trace.result());
             entity.setErrorCode(trace.errorCode());
-            entity.setValueSource(trace.valueSource());
+            entity.setValueSource(trace.valueSource() == null ? null : com.sstlfsj.rule.kernel.api.model.ValueSource.valueOf(trace.valueSource()));
             entity.setRuleVersionId(trace.ruleVersionId());
             entity.setEvaluatedAt(LocalDateTime.now());
             out.add(entity);
@@ -117,6 +127,17 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
             if (trace.children() != null && !trace.children().isEmpty()) {
                 flattenToList(trace.children(), sessionId, tenantId, nodePath, out);
             }
+        }
+    }
+
+    /** 将值（params / actual_value 等 JSON 列内容）序列化为 JSON 文本；null 或失败返回 null。 */
+    private String toJson(Object value) {
+        if (value == null) return null;
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JacksonException ex) {
+            log.warn("node_trace JSON 列序列化失败,写 null", ex);
+            return null;
         }
     }
 

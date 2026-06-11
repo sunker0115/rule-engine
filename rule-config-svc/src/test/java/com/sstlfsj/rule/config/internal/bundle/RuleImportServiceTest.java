@@ -2,24 +2,31 @@ package com.sstlfsj.rule.config.internal.bundle;
 
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.dto.RuleImportResult;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
+import com.sstlfsj.rule.config.internal.event.RuleImportedSnapshot;
+import org.mockito.ArgumentCaptor;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -46,26 +53,28 @@ class RuleImportServiceTest {
     @Mock SceneMapper sceneMapper;
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock DecisionDefinitionMapper decisionDefinitionMapper;
-    @Mock AuditLogMapper auditLogMapper;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks RuleImportService sut;
 
     private RuleBundle.RuleEntry ruleEntry(String code) {
         return new RuleBundle.RuleEntry(code, "规则" + code, "AST_BOOLEAN", "risk.transfer",
-                "{\"type\":\"AndNode\",\"children\":[]}",
-                "[{\"decisionCode\":\"BLOCK\",\"priority\":100}]",
-                "[]", "[\"transfer\"]",
-                List.of(new MetricDependency("account.age", 1)));
+                new AndNode(List.of(), null, null),
+                List.of(new DecisionBinding("BLOCK", 100)),
+                List.of(), List.of("transfer"),
+                List.of(new MetricDependency("account.age", 1)),
+                List.of(new PayloadDependency("amount", "NUMBER", true)));
     }
 
     private RuleBundle bundle(String metricSourceType, String... ruleCodes) {
         return new RuleBundle(1, "2026-06-06T10:00:00Z", "1",
                 java.util.Arrays.stream(ruleCodes).map(this::ruleEntry).toList(),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", "d", "USER",
-                        "PUSH", "HIGHEST_PRIORITY", "[\"transfer\"]", "{}", "{}", 1)),
+                        "PUSH", "HIGHEST_PRIORITY", java.util.List.of("transfer"),
+                        java.util.List.of(), java.util.Map.of(), 1)),
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
-                        metricSourceType, "LONG", "{}", 3600, true)),
+                        metricSourceType, "LONG", java.util.Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
-                        "[{\"actionType\":\"BLOCK_TRANSACTION\"}]")),
+                        List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())))),
                 List.of("BLOCK_TRANSACTION"));
     }
 
@@ -105,7 +114,14 @@ class RuleImportServiceTest {
         assertThat(r.decisionsCreated()).containsExactly("BLOCK");
         verify(metricDefinitionMapper, times(1)).insert(any(MetricDefinition.class));
         verify(decisionDefinitionMapper, times(1)).insert(any(DecisionDefinition.class));
-        verify(auditLogMapper, times(2)).insert(any(AuditLog.class));   // 每条规则一条审计
+        // 每条规则一条审计：IMPORT 非创建，before 为 null，after 为 typed RuleImportedSnapshot
+        ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher, times(2)).publishEvent(auditCaptor.capture());
+        assertThat(auditCaptor.getAllValues()).allSatisfy(audit -> {
+            assertThat(audit.action()).isEqualTo("IMPORT");
+            assertThat(audit.beforeSnapshot()).isNull();
+            assertThat(audit.afterSnapshot()).isInstanceOf(RuleImportedSnapshot.class);
+        });
     }
 
     @Test
@@ -117,6 +133,33 @@ class RuleImportServiceTest {
         stubInserts(5L, 10L, new AtomicLong(100));
 
         RuleImportResult r = sut.importBundle("1", bundle("SQL_AGGREGATE", "rule.a"), "dev");
+
+        assertThat(r.metricsRequiringReview()).containsExactly("account.age");
+        assertThat(r.metricsCreated()).isEmpty();
+        verify(metricDefinitionMapper, never()).insert(any(MetricDefinition.class));
+    }
+
+    @Test
+    void import_invalidDataType_flaggedForReviewNotCreated() {
+        when(sceneMapper.findByCode(any(), any())).thenReturn(null);
+        when(metricDefinitionMapper.findAnyByCode(any(), any())).thenReturn(null);
+        when(decisionDefinitionMapper.findByCode(any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        stubInserts(5L, 10L, new AtomicLong(100));
+
+        // data_type=FLOAT 非法(ENUM→VARCHAR 后 DB 不再约束,导入侧校验堵口)→ 不创建,交人工 review
+        RuleBundle bad = new RuleBundle(1, "2026-06-06T10:00:00Z", "1",
+                List.of(ruleEntry("rule.a")),
+                List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", "d", "USER",
+                        "PUSH", "HIGHEST_PRIORITY", java.util.List.of("transfer"),
+                        java.util.List.of(), java.util.Map.of(), 1)),
+                List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
+                        "ATTRIBUTE", "FLOAT", java.util.Map.of(), 3600, true)),
+                List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
+                        List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())))),
+                List.of("BLOCK_TRANSACTION"));
+
+        RuleImportResult r = sut.importBundle("1", bad, "dev");
 
         assertThat(r.metricsRequiringReview()).containsExactly("account.age");
         assertThat(r.metricsCreated()).isEmpty();
@@ -139,7 +182,7 @@ class RuleImportServiceTest {
 
         RuleDefinition existingRule = new RuleDefinition();
         existingRule.setId(10L); existingRule.setTenantId(1L); existingRule.setSceneId(5L);
-        existingRule.setCode("rule.a"); existingRule.setStatus("PUBLISHED");
+        existingRule.setCode("rule.a"); existingRule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(existingRule);
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(3L);
         doAnswer(inv -> { ((RuleVersion) inv.getArgument(0)).setId(101L); return 1; })

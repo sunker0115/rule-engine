@@ -1,9 +1,9 @@
 package com.sstlfsj.rule.eval;
 
 import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
-import com.sstlfsj.rule.eval.internal.repository.SceneActionBindingReadMapper;
+import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.kernel.api.annotation.ActionType;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
@@ -21,13 +21,18 @@ import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
-import com.sstlfsj.rule.kernel.internal.evaluator.TracingInterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
+import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
+import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
+import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
+import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Primary;
@@ -35,25 +40,49 @@ import org.springframework.context.annotation.Primary;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /** 自动装配规则评估模块。 */
 @AutoConfiguration
 @ComponentScan("com.sstlfsj.rule.eval.internal")
-@org.springframework.boot.context.properties.EnableConfigurationProperties(
-        com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class)
+@org.springframework.boot.context.properties.EnableConfigurationProperties({
+        com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
+        com.sstlfsj.rule.eval.internal.action.SendAlertProperties.class,
+        com.sstlfsj.rule.eval.internal.TraceProperties.class,
+        com.sstlfsj.rule.eval.internal.async.AuditProperties.class,
+        RetentionProperties.class})
 public class EvalAutoConfiguration {
 
     /**
-     * 默认使用 TracingInterpretedExecutor（AST 树形解释执行，附带 NodeTrace 收集）。
+     * 注册 session 表数据保留清理调度 bean（evaluation_session / dry_run_session / action_execution）。
+     * 可通过 engine.rule.retention.enabled=false 关闭。
+     *
+     * @param evaluationSessionMapper evaluation_session Mapper
+     * @param dryRunSessionMapper     dry_run_session Mapper
+     * @param actionExecutionMapper   action_execution Mapper
+     * @param retentionProperties     保留清理配置
+     * @return SessionRetentionCleaner 实例
+     */
+    @Bean
+    @ConditionalOnProperty(name = "engine.rule.retention.enabled", matchIfMissing = true)
+    public SessionRetentionCleaner sessionRetentionCleaner(EvaluationSessionMapper evaluationSessionMapper,
+                                                           DryRunSessionMapper dryRunSessionMapper,
+                                                           ActionExecutionMapper actionExecutionMapper,
+                                                           RetentionProperties retentionProperties) {
+        return new SessionRetentionCleaner(evaluationSessionMapper, dryRunSessionMapper, actionExecutionMapper, retentionProperties);
+    }
+
+    /**
+     * 默认使用 InterpretedExecutor（AST 树形解释执行，按 TraceScope.COLLECT 守卫收集 NodeTrace）。
      * 外部可注册自定义 RuleVersionExecutor Bean 覆盖此默认值。
      *
-     * @return TracingInterpretedExecutor 实例
+     * @return InterpretedExecutor 实例
      */
     @Bean
     @Primary
     public RuleVersionExecutor ruleVersionExecutor() {
-        return new TracingInterpretedExecutor(KernelEvaluators.defaults());
+        return new InterpretedExecutor(KernelEvaluators.defaults());
     }
 
     /**
@@ -113,14 +142,9 @@ public class EvalAutoConfiguration {
      * @return 命名为 metricFetchExecutor 的线程池
      */
     @Bean(name = "metricFetchExecutor")
-    public Executor metricFetchExecutor() {
-        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
-        ex.setCorePoolSize(8);
-        ex.setMaxPoolSize(32);
-        ex.setQueueCapacity(256);
-        ex.setThreadNamePrefix("metric-fetch-");
-        ex.initialize();
-        return ex;
+    public ExecutorService metricFetchExecutor() {
+        // 虚拟线程-per-task：无固定上限，取数并发由下游连接池兜底；ExecutorService 自带 AutoCloseable，Spring 关闭时 close
+        return Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
@@ -141,7 +165,7 @@ public class EvalAutoConfiguration {
             @Autowired(required = false) List<MetricSourceHandler> metricHandlers,
             @Autowired(required = false) MetricDefinitionResolver definitionResolver,
             @Autowired(required = false) MetricCache metricCache,
-            @Qualifier("metricFetchExecutor") Executor fetchExecutor,
+            @Qualifier("metricFetchExecutor") ExecutorService fetchExecutor,
             FetchResourceProperties fetchProps) {
         Map<String, MetricSourceHandler> bySource = new HashMap<>();
         if (metricHandlers != null) {
@@ -166,6 +190,7 @@ public class EvalAutoConfiguration {
      * @param scorecardExecutor     SCORECARD executor
      * @param decisionTreeExecutor  DECISION_TREE executor
      * @param decisionTableExecutor DECISION_TABLE executor
+     * @param traceProperties       全局 NodeTrace 收集开关配置（engine.rule.trace.enabled，默认 true）
      * @return EvalEngine 实例
      */
     @Bean
@@ -176,31 +201,31 @@ public class EvalAutoConfiguration {
             RuleVersionExecutor ruleVersionExecutor,
             ScorecardExecutor scorecardExecutor,
             DecisionTreeExecutor decisionTreeExecutor,
-            DecisionTableExecutor decisionTableExecutor) {
+            DecisionTableExecutor decisionTableExecutor,
+            com.sstlfsj.rule.eval.internal.TraceProperties traceProperties) {
         Map<String, PreGate> gateMap = new HashMap<>();
         if (preGates != null) {
             preGates.forEach(g -> gateMap.put(g.gateType(), g));
         }
         return new EvalEngine(sceneRuleIndex, evalContextAssembler, gateMap,
-                Map.of("AST_BOOLEAN",     ruleVersionExecutor,
-                       "SCORECARD",       scorecardExecutor,
-                       "DECISION_TREE",   decisionTreeExecutor,
-                       "DECISION_TABLE",  decisionTableExecutor));
+                Map.of(RuleKind.AST_BOOLEAN.tag(),    ruleVersionExecutor,
+                       RuleKind.SCORECARD.tag(),      scorecardExecutor,
+                       RuleKind.DECISION_TREE.tag(),  decisionTreeExecutor,
+                       RuleKind.DECISION_TABLE.tag(), decisionTableExecutor),
+                traceProperties.isEnabled());
     }
 
     /**
      * 注册 ActionDispatchService，按 @ActionType.value() 构建 handler 映射。
      *
      * @param actionHandlers  Spring 容器中所有 ActionHandler bean（可为空）
-     * @param bindingMapper   scene_action_binding 只读 Mapper
-     * @param executionMapper action_execution 写 Mapper
+     * @param eventPublisher  领域事件发布缝（ActionExecutedEvent 由 persister 异步落库）
      * @return ActionDispatchService 实例
      */
     @Bean
     public ActionDispatchService actionDispatchService(
             @Autowired(required = false) List<ActionHandler> actionHandlers,
-            SceneActionBindingReadMapper bindingMapper,
-            ActionExecutionMapper executionMapper) {
+            DomainEventPublisher eventPublisher) {
         Map<String, ActionHandler> handlerMap = new HashMap<>();
         if (actionHandlers != null) {
             for (ActionHandler handler : actionHandlers) {
@@ -210,6 +235,6 @@ public class EvalAutoConfiguration {
                 }
             }
         }
-        return new ActionDispatchService(handlerMap, bindingMapper, executionMapper);
+        return new ActionDispatchService(handlerMap, eventPublisher);
     }
 }

@@ -18,7 +18,7 @@ class TimeWindowEvaluatorTest {
 
     private EvalContext ctxAt(String isoOffset) {
         Instant now = OffsetDateTime.parse(isoOffset).toInstant();
-        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of());
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", ev, null, Map.of(), now);
     }
 

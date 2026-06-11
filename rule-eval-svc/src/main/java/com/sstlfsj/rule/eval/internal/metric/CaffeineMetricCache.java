@@ -5,12 +5,14 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
+import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
 /** 进程内 Caffeine 取数缓存，按 metric 各自 ttlSeconds 过期。 */
 @Component
+@ImportRuntimeHints(CaffeineNativeHints.class)
 public class CaffeineMetricCache implements MetricCache {
 
     private record Entry(MetricValue value, int ttlSeconds) {}

@@ -24,9 +24,18 @@
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-config-svc</artifactId>
         </dependency>
+        <!-- MyBatis-Plus 的 GraalVM native-image 支持（vendored PR #7017，仅 native 构建生效） -->
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-mybatis-native</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-eval-svc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-job-svc</artifactId>
         </dependency>
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
@@ -59,6 +68,43 @@
             <artifactId>archunit-junit5</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- 端到端业务场景测试（com.sstlfsj.rule.example.*Scenario）：嵌入式 SDK 评估需 rule-sdk -->
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-sdk</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.12.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-opentelemetry</artifactId>
@@ -76,6 +122,45 @@
             <artifactId>opentelemetry-logback-appender-1.0</artifactId>
         </dependency>
     </dependencies>
+
+    <profiles>
+        <!-- 按需把 xxl 适配器纳入构建/镜像；默认不引入，保持 in-process 部署的镜像精简 -->
+        <profile>
+            <id>xxl</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.sstlfsj.rule</groupId>
+                    <artifactId>rule-job-xxl</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- 端到端业务场景测试（*Scenario）：仅 -Pexamples 时由 Failsafe 执行（需 Docker）；
+             日常 mvn test/verify 不激活，Surefire 不匹配 *Scenario 命名，重测试默认不跑 -->
+        <profile>
+            <id>examples</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/*Scenario.java</include>
+                            </includes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>

@@ -67,7 +67,7 @@ class SnapshotAssemblerTest {
         RuleVersionRow r = new RuleVersionRow(1L, "PAY", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"score\",\"params\":{\"threshold\":1}}",
                 "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
-                "[{\"metricCode\":\"m1\",\"metricVersion\":1}]");
+                "[{\"metricCode\":\"m1\",\"metricVersion\":1}]", "[]");
         RuleVersionSnapshot snap = assembler.assemble(r);
         assertEquals(List.of(new MetricDependency("m1", 1)), snap.metricDependencies());
     }
@@ -79,5 +79,26 @@ class SnapshotAssemblerTest {
                 "[]", "[]", "[]", "AST_BOOLEAN");
         RuleVersionSnapshot snap = assembler.assemble(r);
         assertTrue(snap.metricDependencies().isEmpty());
+    }
+
+    @Test
+    void assemble_populatesPayloadDependencies() throws Exception {
+        RuleVersionRow r = new RuleVersionRow(1L, "PAY", 1L,
+                "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"amount\",\"params\":{\"threshold\":1}}",
+                "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
+                "[]",
+                "[{\"name\":\"amount\",\"dataType\":\"DECIMAL\",\"required\":true}]");
+        RuleVersionSnapshot snap = assembler.assemble(r);
+        org.assertj.core.api.Assertions.assertThat(snap.payloadDependencies())
+                .containsExactly(new com.sstlfsj.rule.kernel.api.model.PayloadDependency("amount", "DECIMAL", true));
+    }
+
+    @Test
+    void assemble_nullPayloadDependenciesJson_yieldsEmptyList() throws Exception {
+        RuleVersionRow r = row(1L, "PAY", 1L,
+                "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
+                "[]", "[]", "[]", "AST_BOOLEAN");
+        RuleVersionSnapshot snap = assembler.assemble(r);
+        org.assertj.core.api.Assertions.assertThat(snap.payloadDependencies()).isEmpty();
     }
 }

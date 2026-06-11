@@ -3,6 +3,7 @@ package com.sstlfsj.rule.eval.internal.domain;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.sstlfsj.rule.kernel.api.model.ActionResult;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -22,13 +23,8 @@ public class ActionExecutionEntity {
     private String actionId;
     private String actionType;
     private String decisionCode;
-    private String status;
+    private ActionResult.ActionStatus status;
     private String errorCode;
-    private Boolean retryable;
-    private Integer retryCount;
     private LocalDateTime executedAt;
-    private Boolean compensated;
-    private LocalDateTime compensatedAt;
-    private String compensatedBy;
     private LocalDateTime createdAt;
 }

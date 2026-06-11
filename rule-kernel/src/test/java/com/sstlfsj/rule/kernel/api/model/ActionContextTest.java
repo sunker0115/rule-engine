@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ActionContextTest {
 
     private static EvalContext evalContext() {
-        RuleEvent event = new RuleEvent("t1", "s1", "T", "u1", "e1", Instant.EPOCH, Map.of(), null);
+        RuleEvent event = new RuleEvent("t1", "s1", "T", "u1", "e1", Instant.EPOCH, Map.of(), null, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         Subject subject = new Subject("u1", SubjectType.USER, Map.of());
         return new EvalContext("t1", event, subject, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }

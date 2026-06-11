@@ -24,7 +24,7 @@ class MetricErrorScorecardTest {
                 .ruleVersionId(1L).sceneCode("PAY").tenantId("1").conditionAst(root)
                 .kind("SCORECARD").build();
         EvalContext ctx = new EvalContext("1",
-                new RuleEvent("1", "PAY", "transfer", "u1", "e1", Instant.now(), Map.of(), Map.of()),
+                new RuleEvent("1", "PAY", "transfer", "u1", "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP),
                 new Subject("u1", SubjectType.USER, Map.of()),
                 Map.of("good", new MetricValue(100L, "LONG", "FETCHED"),
                        "broken", MetricValue.error("METRIC_FETCH_FAIL")),

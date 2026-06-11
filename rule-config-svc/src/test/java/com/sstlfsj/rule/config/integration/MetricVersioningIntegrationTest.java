@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,7 +81,7 @@ class MetricVersioningIntegrationTest {
         assertThat(id).isNotNull();
         MetricDefinition row = metricDefinitionMapper.selectById(id);
         assertThat(row.getVersion()).isEqualTo(1);
-        assertThat(row.getStatus()).isEqualTo("ACTIVE");
+        assertThat(row.getStatus()).isEqualTo(MetricStatus.ACTIVE);
         assertThat(row.getMetricCode()).isEqualTo(CODE);
         assertThat(row.getName()).isEqualTo("用户年龄");
 
@@ -90,6 +91,11 @@ class MetricVersioningIntegrationTest {
                 .eq(AuditLog::getAction, "CREATE"));
         assertThat(logs).hasSize(1);
         assertThat(logs.get(0).getTargetId()).isEqualTo(id.toString());
+        // typed 快照经监听器序列化落库：CREATE 类 before/after 同值（容忍 : 后空格）
+        assertThat(logs.get(0).getAfterSnapshot())
+                .contains("\"metricCode\"", CODE)
+                .containsPattern("\"version\"\\s*:\\s*1");
+        assertThat(logs.get(0).getBeforeSnapshot()).isEqualTo(logs.get(0).getAfterSnapshot());
     }
 
     @Test
@@ -111,11 +117,11 @@ class MetricVersioningIntegrationTest {
 
         MetricDefinition v1 = rows.get(0);
         assertThat(v1.getVersion()).isEqualTo(1);
-        assertThat(v1.getStatus()).isEqualTo("SUPERSEDED");
+        assertThat(v1.getStatus()).isEqualTo(MetricStatus.SUPERSEDED);
 
         MetricDefinition v2 = rows.get(1);
         assertThat(v2.getVersion()).isEqualTo(2);
-        assertThat(v2.getStatus()).isEqualTo("ACTIVE");
+        assertThat(v2.getStatus()).isEqualTo(MetricStatus.ACTIVE);
         assertThat(v2.getName()).isEqualTo("用户年龄v2");
 
         // UK uk_tenant_code_version 未冲突（否则 insert 已抛异常）
@@ -135,7 +141,7 @@ class MetricVersioningIntegrationTest {
         // 仍只有一行
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).getVersion()).isEqualTo(1);
-        assertThat(rows.get(0).getStatus()).isEqualTo("ACTIVE");
+        assertThat(rows.get(0).getStatus()).isEqualTo(MetricStatus.ACTIVE);
         assertThat(rows.get(0).getName()).isEqualTo("用户年龄v1改");
     }
 

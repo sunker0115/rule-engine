@@ -29,7 +29,8 @@ class EvalServiceTest {
 
     @Test
     void hasDryRunMethod() throws NoSuchMethodException {
-        var method = EvalService.class.getMethod("dryRun", RuleEvent.class, Long.class);
+        // dry-run 二选一必传：签名为 (event, ruleId, ruleVersionId)
+        var method = EvalService.class.getMethod("dryRun", RuleEvent.class, Long.class, Long.class);
         assertEquals(EvalResult.class, method.getReturnType());
     }
 }

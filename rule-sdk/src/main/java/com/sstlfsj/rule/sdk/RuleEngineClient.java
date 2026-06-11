@@ -2,8 +2,10 @@ package com.sstlfsj.rule.sdk;
 
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
@@ -33,7 +35,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 
 /**
  * 嵌入式规则评估门面。
@@ -74,7 +76,8 @@ public class RuleEngineClient implements AutoCloseable {
                 : new InterpretedExecutor(evaluators);
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
-                Map.of("AST_BOOLEAN", executor));
+                Map.of(RuleKind.AST_BOOLEAN.tag(), executor),
+                false);
 
         // 规则来源：显式 ruleSource() + localSnapshot() 转 DslRuleSource + serverUrl 转 PollingRuleSource
         List<RuleSource> allSources = new ArrayList<>(b.ruleSources);
@@ -122,11 +125,13 @@ public class RuleEngineClient implements AutoCloseable {
         return m;
     }
 
-    /** 对单个事件本地求值，零网络跳转。 */
+    /** 对单个事件本地求值，零网络跳转；渠道由 SDK 入口权威设为 SDK，不信任调用方传入。 */
     public EvalResult evaluate(RuleEvent event) {
-        EvalResult result = evalEngine.evaluate(event);
-        if (evalResultListener != null) evalResultListener.onResult(event, result);
-        if (evalSessionListener != null) evalSessionListener.onSession(event, result);
+        RuleEvent sdkEvent = event.source() == EventSource.SDK
+                ? event : event.toBuilder().source(EventSource.SDK).build();
+        EvalResult result = evalEngine.evaluate(sdkEvent);
+        if (evalResultListener != null) evalResultListener.onResult(sdkEvent, result);
+        if (evalSessionListener != null) evalSessionListener.onSession(sdkEvent, result);
         return result;
     }
 
@@ -158,7 +163,7 @@ public class RuleEngineClient implements AutoCloseable {
         private final List<MetricSourceHandler> metricHandlers = new ArrayList<>();
         private MetricDefinitionResolver metricDefinitionResolver;
         private MetricCache metricCache;
-        private Executor fetchExecutor;
+        private ExecutorService fetchExecutor;
         private final List<MetricDefinitionSource> metricDefinitionSources = new ArrayList<>();
         private final Map<String, List<MetricDescriptor>> localMetrics = new LinkedHashMap<>();
 
@@ -238,9 +243,9 @@ public class RuleEngineClient implements AutoCloseable {
         /**
          * 注入并发取数线程池（可选，默认 ForkJoinPool.commonPool）。
          *
-         * @param v Executor
+         * @param v ExecutorService
          */
-        public Builder fetchExecutor(Executor v) { this.fetchExecutor = v; return this; }
+        public Builder fetchExecutor(ExecutorService v) { this.fetchExecutor = v; return this; }
 
         /**
          * 添加 metric 定义来源（HTTP/文件/DSL），写入本地定义注册表。

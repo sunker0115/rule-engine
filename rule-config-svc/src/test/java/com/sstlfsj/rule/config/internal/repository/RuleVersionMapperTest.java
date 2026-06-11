@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
+import java.util.Collection;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -40,5 +41,35 @@ class RuleVersionMapperTest {
         Method m = RuleVersionMapper.class.getDeclaredMethod("findActiveVersion", Long.class);
         assertTrue(m.isDefault(), "findActiveVersion 应为 default 方法");
         assertEquals(RuleVersion.class, m.getReturnType());
+    }
+
+    @Test
+    void findByIdAndRule_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod("findByIdAndRule", Long.class, Long.class);
+        assertTrue(m.isDefault(), "findByIdAndRule 应为 default 方法");
+        assertEquals(RuleVersion.class, m.getReturnType());
+    }
+
+    @Test
+    void findActiveWithPayloadByRuleDefIds_defaultMethodExists_withCorrectSignature()
+            throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod(
+                "findActiveWithPayloadByRuleDefIds", Collection.class);
+        assertTrue(m.isDefault(), "findActiveWithPayloadByRuleDefIds 应为 default 方法");
+        assertEquals(java.util.List.class, m.getReturnType());
+    }
+
+    @Test
+    void hasNonDraftVersion_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod("hasNonDraftVersion", Long.class);
+        assertTrue(m.isDefault(), "hasNonDraftVersion 应为 default 方法");
+        assertEquals(boolean.class, m.getReturnType());
+    }
+
+    @Test
+    void deleteByRuleDefinitionId_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod("deleteByRuleDefinitionId", Long.class);
+        assertTrue(m.isDefault(), "deleteByRuleDefinitionId 应为 default 方法");
+        assertEquals(int.class, m.getReturnType());
     }
 }

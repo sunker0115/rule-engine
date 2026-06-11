@@ -57,7 +57,7 @@
 
 ## 二、核心设计决策（已落定，逐条权衡见 [`00-decisions.md`](./00-decisions.md)）
 
-下表与 `00-decisions.md` 的 D1-D30 一一对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
+下表与 `00-decisions.md` 的 D1-D30（及后续关键决策 D55）对应；"选择"列是最终落定，"取舍"列概括为什么这么选。
 
 | # | 决策 | 选择 | 取舍 |
 |---|------|------|------|
@@ -90,7 +90,8 @@
 | D27 | **Action 归属从 Rule 迁移到 Decision** | Action 完全挂到 Decision，Rule 移除 `actions` 字段；仅 `finalDecision.actions` 被派发；幂等键变更为 `(tenantId, eventId, decisionCode, actionId)`；PULL Scene Decision 不配 Action 约束不变 | 同一决策码行为一致，配置集中；Rule 职责收窄为"判定条件"；Rule 级差异化 Action 留 v2 |
 | D28 | **Decision.actions 变更生效时机** | 快照语义不变；UI 在修改 Decision.actions 时提示引用该 Decision 的已发布规则需重新发布 | 设计最简；运营理解快照语义后无歧义；Decision 独立版本化留 v2 演进 |
 | D29 | **PUSH/HYBRID Scene decisionStrategy 默认值** | PUSH/HYBRID Scene 缺省等价 `HIGHEST_PRIORITY`，消灭 actions 静默不派发问题；PULL Scene 不参与合成 | `HIGHEST_PRIORITY` 覆盖绝大多数场景；消灭整类"漏配静默失效"问题，无配置成本 |
-| D30 | **providedMetrics — 业务方随评估携带指标值** | 评估请求体新增 `providedMetrics` 字段；Metric 注册新增 `allowProvided` 标志（按 sourceType 给推荐默认值，详见 D30）；`PROVIDED` 值优先于 sourceType 取数；只活在本次评估，不持久化 | 消灭注册/换绑等场景的冗余取数；平台按 metric 粒度控制信任边界；引擎不承担业务数据存储职责 |
+| D30 | **providedMetrics — 业务方随评估携带指标值** | 评估请求体新增 `providedMetrics` 字段；Metric 注册新增 `allowProvided` 标志（按 sourceType 给推荐默认值，详见 D30）；`PROVIDED` 值优先于 sourceType 取数；只活在本次评估，不持久化 | 消灭注册/换绑等场景的冗余取数；平台按 metric 粒度控制信任边界；引擎不承担业务数据存储职责。**注：公开侧 `providedMetrics` 已被 D55 退场（HTTP 评估只收 payload），仅内部 SDK/Job 注入链路保留** |
+| D55 | **场景输入参数清单 — 公开评估只收 payload** | 公开评估接口移除 `providedMetrics`（HTTP 调用方只传事件 `payload`）；发布期冻结 `rule_version.payload_dependencies` 随快照下发；新增公开发现接口 `GET /api/v1/rule/scenes/{sceneCode}/input-manifest`；删除 `getProvidedMetrics` 服务/端点；评估期缺必填或类型不符返回 400（`MISSING_REQUIRED_INPUT` / `INPUT_TYPE_MISMATCH`） | 公开侧不暴露 provided metric 概念，输入边界单一（payload）；payload 依赖随快照冻结可发现可校验；信任边界收敛。详见 [`00-decisions.md`](./00-decisions.md) D55 |
 
 > **派生约束**（由上述决策推出、值得单独标注的工程约定，详见 §六设计原则）：
 >
@@ -119,7 +120,7 @@
                                   ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Pre-Gate Chain  (准入闸门, 独立于 AST)                          │
-│  灰度命中 / 频次上限 / 黑白名单 / 互斥规则 — List<Gate>          │
+│  灰度命中 ROLLOUT (v1 唯一, D52) — List<Gate>                    │
 └─────────────────────────────────┬────────────────────────────────┘
                                   ▼
 ┌──────────────────────────────────────────────────────────────────┐
@@ -169,28 +170,28 @@
 | `EvalResult` | 评估输出契约多态：`{satisfied, score?, category?, decision?, finalDecision?, hitDecisions, trace, errorCode?, errorMessage?, failedNodeIds?, partial?}`；D12 多态 + D15 失败槽位 + D26 Decision 合成输出 | ✅ |
 | `Decision` | Tenant 级决策定义（D26 + D27）：`{tenant_id, code, name, priority, description, actions}`；Tenant 内 `code` 唯一；`priority` 数值越小优先级越高（如 REJECT=1, REVIEW=2, PASS=100）；`actions` 为 Action 列表（D27 迁移自 Rule），仅 `finalDecision.actions` 被派发；PULL Scene 下 Decision.actions 必须为空 | — |
 | `RuleDecisionBinding` | Rule 与 Decision 的关联（D26，版本快照化）：`{rule_id, decision_code, score_range_min?, score_range_max?}`；v1 `AST_BOOLEAN` kind 直接 1:1 绑定；score 区间在 D12 SCORECARD kind 时启用；发布时冻结进 `rule_version.decision_bindings`（DDL 落地列名，无 `_snapshot` 后缀） | — |
-| `Scene` | Tenant 内的业务域命名空间 + metric / action 治理白名单 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID）+ 元数据 schema（`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`）+ 决策合成策略（`decisionStrategy`，D26） | — |
+| `Scene` | Tenant 内的业务域命名空间 + Matcher 路由键 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID）+ 元数据 schema（`payloadSchema` / `subjectType` / `defaultParams` / `eventTypes`）+ 决策合成策略（`decisionStrategy`，D26）。metric/action 治理白名单已移除（D54：metric tenant 级可用，action 归 decision） | — |
 | `SceneMetricBinding` | Scene 与 Metric 的可见性绑定，规则只能引用本 Scene 绑定的 metric | — |
 | `SceneActionBinding` | Scene 与 actionType 的可见性绑定（仅 PUSH / HYBRID Scene 需要），规则只能配置本 Scene 绑定的 actionType；含 Scene 级默认参数与速率覆盖 | — |
 | `MetricSource` | 按 `metricCode` 取指标，支持实时 / 预计算 / 外部指标平台（Java SPI 接口名 `MetricSourceHandler`，见 [`04-extension.md`](./04-extension.md) §四） | — |
 | `MetricRegistry` | 注册中心，启动扫 `@MetricSourceType` 注解 + 数据库声明式指标；并发契约：读路径 thread-safe 且不阻塞热路径，评估期内快照稳定（具体并发策略——不可变快照 / ConcurrentHashMap / copy-on-write 等——由实现层选择） | — |
 | `ConditionEvaluator` | 纯函数判定 `(ConditionNode node, EvalContext ctx) → boolean`；`actualValue` 由 AST Evaluator 从 EvalContext 提取后写入 node_trace，不在返回值中（见 [`04-extension.md`](./04-extension.md) §2.1） | — |
 | `ConditionTypeRegistry` | 注册中心，启动扫 `@ConditionType` 注解 | — |
-| `ActionHandler` | 动作执行三件套：`execute` / `compensate` / `dryRun`（仅 PUSH / HYBRID Scene 用到）；`execute` 返回 `ActionResult`，**不返回新事件**（D16 禁止链式）。**注**：v1 仅评估层 dry-run 一等公民，`dryRun` 接口已在签名内，全部 handler 实装在 **v1.5** 补齐（D7） | — |
-| `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（D18：`retryable=true` 入重试队列；`failFast=true` 的 Action 失败后同 **Decision** 内后续 Action 标 SKIPPED） | ✅ |
+| `ActionHandler` | 动作执行两件套：`execute` / `dryRun`（仅 PUSH / HYBRID Scene 用到）；`execute` 返回 `ActionResult`，**不返回新事件**（D16 禁止链式）。`compensate()` SPI 已删（D53 best-effort 化）。**注**：v1 仅评估层 dry-run 一等公民，`dryRun` 接口已在签名内，全部 handler 实装在 **v1.5** 补齐（D7） | — |
+| `ActionResult` | Action 执行结果：`{status, errorCode?, errorMessage?, retryable}`；状态 ∈ `SUCCESS / FAILED / SKIPPED`（`retryable` 保留但 best-effort 化后不再驱动重试，D53；`failFast=true` 的 Action 失败后同 **Decision** 内后续 Action 标 SKIPPED，D18） | ✅ |
 | `ActionRegistry` | 注册中心，启动扫 `@ActionType` 注解 + 声明式动作定义 | — |
 | `RuleEvalVisitor` | 遍历 AST，短路 + 节点级 trace | — |
 | `EvaluationSession` | 一次评估的持久化记录（D23 幂等锚点）：1 行 per event；`status ∈ {HIT/MISS/BLOCKED/ERROR}`（D22 四态）；`(tenant_id, event_id)` DB uk；同步写（D21）；dry-run 写独立 `dry_run_session` 表 | — |
 | `DryRunSession` | 试算评估的隔离记录（D7 + §3.16）：无 UK 约束，同 eventId 可重复 dry-run；不计入生产统计报表；保留期短于生产 | — |
-| `ActionExecution` | 动作执行记录（独立表，支持重试和补偿）：`status ∈ {SUCCESS/FAILED/SKIPPED}`；幂等键 `(tenantId, eventId, decisionCode, actionId)`（D27）；`retryable=true` 进独立重试队列（§3.17）；失败最终态后补偿由外部补偿流水线调用 `ActionHandler.compensate()` | — |
-| `Gate` | 准入闸门接口（频次 / 互斥 / 黑名单 / 灰度命中） | — |
+| `ActionExecution` | 动作执行记录（best-effort 投递，D53）：`status ∈ {SUCCESS/FAILED/SKIPPED}`；幂等键 `(tenantId, eventId, decisionCode, actionId)`（D27，落库去重）；失败即终态，不重试不补偿（retry/补偿列已 V1_21 移除）；可靠投递（MQ）/ 业务补偿（saga）未来另设计 | — |
+| `Gate` | 准入闸门接口（v1 仅灰度命中 ROLLOUT，D52） | — |
 | `IdempotencyGuard` | Redis trySet + DB uk 双兜底 | — |
 | `JobDefinition` | 定时任务配置：cron / 主体查询（SQL / 外部 HTTP / Metric 结果）/ eventType 模板 / payload 模板 / 并发与限流 | — |
 | `JobExecution` | 单次 Job 运行的记录（含 `jobRunId`、主体数、合成事件数、错误明细），与 `EvaluationSession` 关联 | — |
 | `Scheduler` | 调度器抽象接口：`register` / `unregister` / `triggerOnce` / `status`；`XxlJobScheduler` 为首个实现，未来可替换 Quartz / 云调度 | — |
 | `AuditLog` | 操作审计记录（D14）：`{tenant_id, actor, target_type, target_id, action, before_snapshot, after_snapshot, operated_at, trace_id}`；与 `evaluation_session` / `node_trace` / `action_execution` 是不同维度（人的行为 vs 系统行为），严格分离 | ✅ |
 | `RuleVersionWatcher` | 规则变更感知接口（D17 + D20 §4 固化为正式 SPI）：`subscribe(callback) / pull(since) / status`；契约要求实现方满足"最终一致 + 至多一次 callback 重复（消费方幂等）+ 启动期一次性全量拉"。v1 唯一实现 `DbPollingRuleWatcher`（默认 15s）；多 backend（MQ / Nacos / ZK）切换详见 [`08-evolution.md`](./08-evolution.md) §2.14 | — |
-| `SceneWatcher` | Scene 配置变更感知接口（D24，与 `RuleVersionWatcher` 平级）：`subscribe(callback) / pull(since) / status`；监听 `scene`（DDL 落地表名，旧称 `scene_definition`）+ `scene_metric_binding` + `scene_action_binding` 变更，触发 MetricSource/ActionHandler 资源预热/卸载 + Matcher 路由表更新。v1 唯一实现 `DbPollingSceneWatcher`（默认 30s，Scene 变更频率低于规则）；SPI 契约与 `RuleVersionWatcher` 对齐 | — |
+| `SceneWatcher` | Scene 配置变更感知接口（D24，与 `RuleVersionWatcher` 平级）：`subscribe(callback) / pull(since) / status`；监听 `scene`（DDL 落地表名，旧称 `scene_definition`）变更，触发 MetricSource/ActionHandler 资源预热/卸载 + Matcher 路由表更新（D54 后无 scene_metric_binding / scene_action_binding）。v1 唯一实现 `DbPollingSceneWatcher`（默认 30s，Scene 变更频率低于规则）；SPI 契约与 `RuleVersionWatcher` 对齐 | — |
 | `SubjectLoader` | 主体加载 SPI（D25）：`load(subjectId, subjectType, event) → Subject`；v1 唯一实现 `UserProfileLoader`（`subjectType=USER`，查 `user_profile` 表）；与 metric 并行加载进 `EvalContext` | — |
 | `SubjectLoaderRegistry` | `SubjectLoader` 注册中心（D25）：按 `subjectType` 路由到对应实现；与 `MetricRegistry` 同款模式 | — |
 | `RuleVersionExecutor` | 规则版本执行 SPI（D20 §5）：`execute(RuleVersion, EvalContext) → EvalResult`。v1 默认实现 `InterpretedExecutor`（Visitor 树遍历）；v1.5 引入 `CompiledExecutor`（Janino / LambdaMetafactory 编译产物），由 `ExecutorRegistry` 按 RuleVersion 灰度切换。`rule_version.compiled_predicate_ref` 列预留供编译产物引用 | — |

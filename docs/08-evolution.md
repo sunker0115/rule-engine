@@ -69,8 +69,8 @@
 - `rule_version.metric_dependencies` 升为对象数组 `[{"metricCode":"xxx","metricVersion":1}]`，发布期静态收集并冻结当前 ACTIVE 版本号；
 - 发布期冻结：被引用 metric 的当前 ACTIVE 版本号在发布时写入快照；
 - 评估期按版本解析：`resolve(metricCode, metricVersion)` 按绑定版本取定义；档1 `EvalContext` 仍按 metricCode 单值索引，同 code 取最高版本，完整 per-rule 版本投影（二元键）为档2 后续；
-- metric 写服务（注册 `POST /api/v1/metrics`）+ 升版（`PUT /api/v1/metrics/{metricCode}?breakingChange=`）；
-- 影响面查询 API：`GET /api/v1/metrics/{metricCode}/versions/{version}/impact?tenantId=`；
+- metric 写服务（注册 `POST /admin/v1/metrics`）+ 升版（`PUT /admin/v1/metrics/{metricCode}?breakingChange=`）；
+- 影响面查询 API：`GET /admin/v1/metrics/{metricCode}/versions/{version}/impact?tenantId=`；
 - SDK 下发：DECLARED 模式含被引用的 SUPERSEDED 旧版定义，每项 `MetricDescriptor` 带 `metricVersion`。
 
 ### 2.3 跨 Scene 规则复用（来源 #1）
@@ -130,7 +130,7 @@
   - 线上 Incident 排查需要在测试环境精确复现生产规则版本。
 - **演进方向**：
   - **导出格式**：JSON Bundle = `{ruleVersion, metricDefinitions[], actionTypeManifest[], sceneSnapshot}` 自包含包，目标环境无需额外查询即可完整重建；
-  - **导入校验**：Scene 白名单兼容性（目标环境 Scene 是否有相同 `metricCode` / `actionType` 白名单）+ metric 参数安全性（SQL 类型需人工审核标记）+ 版本号重映射（源环境主键 id 不照搬，按 `rule.code` 做 upsert）；
+  - **导入校验**：decisionCode 存在性（目标环境 Tenant 是否已定义引用的 Decision，D54）+ metric 参数安全性（SQL 类型需人工审核标记）+ 版本号重映射（源环境主键 id 不照搬，按 `rule.code` 做 upsert）；
   - **幂等**：重复导入 = 新建草稿版本，不覆盖已发布版本；
   - **权限**：导出需 EXPORT 权限；导入需目标 Scene 的 PUBLISH 权限；
   - **不做**：跨租户实时同步（由 §2.10 规则模板市场解决）。
@@ -138,12 +138,12 @@
 
 **已实装（B7 / 2026-06-06）：**
 
-- **载体**：HTTP 端点——`GET /api/v1/rules/export?tenantId=&ruleIds=&sceneId=`（按条件批量导出 ACTIVE 版本为 **Bundle JSON 文件下载**，`Content-Disposition: attachment`）、`POST /api/v1/rules/import`（**multipart 文件上传**，幂等批量导入）；Service 落 `rule-config-svc`（`RuleBundleService` → `RuleExportService` / `RuleImportService`，进出 `RuleBundle` 对象），Controller 落 `rule-api`（`RuleBundleController`，做对象↔文件转换）。无 DDL。
+- **载体**：HTTP 端点——`GET /admin/v1/rules/export?tenantId=&ruleIds=&sceneId=`（按条件批量导出 ACTIVE 版本为 **Bundle JSON 文件下载**，`Content-Disposition: attachment`）、`POST /admin/v1/rules/import`（**multipart 文件上传**，幂等批量导入）；Service 落 `rule-config-svc`（`RuleBundleService` → `RuleExportService` / `RuleImportService`，进出 `RuleBundle` 对象），Controller 落 `rule-api`（`RuleBundleController`，做对象↔文件转换）。无 DDL。
 - **批量 + 多规则 Bundle**：导出选取优先级 ruleIds → sceneId → 整租户（入参用 sceneId，前端列表已有；Bundle 内 `RuleEntry.sceneCode` 仍用 code，跨环境按 code 关联）；Bundle 统一为多规则结构 `{bundleVersion, exportedAt, sourceTenantId, rules[], scenes[], metricDefinitions[], decisionDefinitions[], actionTypeManifest[]}`，单规则 = rules 长度 1 特例。所有 JSON 列按原始 JSON 字符串无损搬运。**实装较原始字段集多 `decisionDefinitions[]`**：D27 后 Action 落在 tenant 级 decision_definition，随包搬运才能真正自包含重建。
 - **导入幂等**：Scene / metric / decision 按业务键整体 upsert（缺失则建、已存在跳过不覆盖）；规则逐条——code 不存在 → 新建 rule_definition(DRAFT) + rule_version(DRAFT v1)，已存在 → 仅追加 rule_version(DRAFT, maxVersion+1)，不动 rule_definition 状态/currentVersion。把导入草稿提升为 ACTIVE 走发布/回滚流程（D19，尚未实现）。
 - **metric 安全**：`SQL_AGGREGATE` 类缺失 metric 不自动创建，列入 `metricsRequiringReview`，由运营人工审核后建；发布期 PublishService 的"被引用 metric 无 ACTIVE 版本"校验是安全网。
 - **权限**：v1 沿用 `X-Actor-Id` header；EXPORT / PUBLISH 权限校验留 TODO（后续合规批次 §2.8）。
-- **与本地调试格式正交**：B7 Bundle 专做跨环境 DB 迁移；本地 / 离线调试用 `GET /api/v1/sdk/snapshots`（§8.3），两者不打通。
+- **与本地调试格式正交**：B7 Bundle 专做跨环境 DB 迁移；本地 / 离线调试用 `GET /sdk/v1/snapshots`（§8.3），两者不打通。
 
 ### 2.10 规则模板市场（来源 #16）
 
@@ -242,24 +242,24 @@
 
 ### 2.17 ActionHandler dryRun 全量实装（D7 v1.5，已实装）
 
-- **已实装（v1.5，D7）**：`BlockTransactionHandler.dryRun()` 和 `SendAlertHandler.dryRun()` 均已 override，返回 `ActionResult.success()` 预览结果；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。
+- **已实装（v1.5，D7）**：`SendAlertHandler.dryRun()` 已 override，返回 `ActionResult.success()` 预览结果；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。引擎内置 ActionHandler 仅 `SendAlertHandler`；`BlockTransactionHandler` 已删除（D57），`BLOCK_TRANSACTION` 由嵌入方经 `ActionHandler` SPI 实现。
 - **背景**：运营需要在 dry-run 时预览"会发什么短信 / 给什么优惠券"等 Action 输出，而不只是 AST 节点 trace。dry-run 响应体 `actionResults` 含真实预览输出；不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
 
 ### 2.18 规则列表查询 API（来源 10-api-contract.md §4.4）
 
-- **v1 现状**：`GET /api/v1/rules` 在 `10-api-contract.md §4.4` 已定义契约，但 v1 不实现——`rule_definition` 表无 list 查询 Mapper，`RuleController` 无对应端点，`AuditService` list 方法为空骨架。
+- **v1 现状**：`GET /admin/v1/rules` 在 `10-api-contract.md §4.4` 已定义契约，但 v1 不实现——`rule_definition` 表无 list 查询 Mapper，`RuleController` 无对应端点，`AuditService` list 方法为空骨架。
 - **触发条件**：前端规则管理列表页需要展示规则列表（筛选 / 分页 / 按场景过滤）。
 - **演进方向**：
   - `RuleDefinitionMapper` 补充 `findBySceneCode(tenantId, sceneCode, Pageable)` 查询；
   - `ConfigService` 暴露 `listRules(tenantId, sceneCode, page)` 接口；
-  - `RuleController` 实现 `GET /api/v1/rules?sceneCode=&page=&size=`，返回分页结果；
+  - `RuleController` 实现 `GET /admin/v1/rules?sceneCode=&page=&size=`，返回分页结果；
   - 响应体复用 `ApiResponse<Page<RuleVersionVO>>` 结构，无 DDL 变更。
 - **迁移成本**：低（纯查询，不涉及写路径，无状态变更）。
-- **已实装（v2）**：`RuleListItemVO`（`rule-config-svc` api 包）+ `MybatisPlusConfig`（`PaginationInnerInterceptor` + `@ConditionalOnMissingBean`）+ `ConfigService.listRules` + `ConfigServiceImpl` 分页查询实现（先按 sceneCode 解析 sceneId，再 LambdaQueryWrapper 分页查 `rule_definition`）+ `RuleController GET /api/v1/rules` 端点，返回 `ApiResponse<Page<RuleListItemVO>>`；无 DDL 变更。
+- **已实装（v2）**：`RuleListItemVO`（`rule-config-svc` api 包）+ `MybatisPlusConfig`（`PaginationInnerInterceptor` + `@ConditionalOnMissingBean`）+ `ConfigService.listRules` + `ConfigServiceImpl` 分页查询实现（先按 sceneCode 解析 sceneId，再 LambdaQueryWrapper 分页查 `rule_definition`）+ `RuleController GET /admin/v1/rules` 端点，返回 `ApiResponse<Page<RuleListItemVO>>`；无 DDL 变更。
 
 ### 2.19 审计查询 API（来源 10-api-contract.md §6.x）
 
-- **v1 现状**：`GET /api/v1/sessions`（evaluation_session）、`GET /api/v1/traces`（node_trace）、`GET /api/v1/audit-logs`（audit_log）在 `10-api-contract.md §6.x` 已定义契约；`rule-audit-svc` 有 `AuditService` 骨架但 Service 实现为空，v1 跳过。
+- **v1 现状**：`GET /admin/v1/sessions`（evaluation_session）、`GET /admin/v1/traces`（node_trace）、`GET /admin/v1/audit-logs`（audit_log）在 `10-api-contract.md §6.x` 已定义契约；`rule-audit-svc` 有 `AuditService` 骨架但 Service 实现为空，v1 跳过。
 - **触发条件**：运营 / 风控需要在控制台查询历史评估结果、节点 trace 详情、操作审计日志（排障、合规审计场景）。
 - **演进方向**：
   - `AuditService` 补充 `querySession / queryTrace / queryAuditLog` 查询实现，走 `EvaluationSessionMapper` / `NodeTraceMapper` / `AuditLogMapper`；
@@ -267,7 +267,7 @@
   - `node_trace` 数据量大时配合 §2.5 冷热分级同步推进，避免全表扫描；
   - 查询路径与写路径完全隔离（只读 Mapper），不影响评估性能。
 - **迁移成本**：中（需要补 Mapper 查询 + Service 实现 + Controller 端点 + 分页协议，但无 DDL 变更；`node_trace` 量大时需结合 §2.5 存储分层一起评估）。
-- **已实装（v2）**：`rule-audit-svc` 内建 `EvalSessionRow` / `NodeTraceRow` / `AuditLogRow` 只读 entity + 对应三个 `@Mapper` 接口（Modulith 隔离，不引用其他模块 internal）；`AuditServiceImpl` 用 MyBatis-Plus 分页查询实现 `queryAuditLogs` / `queryEvalSessions` / `queryTrace`；`AuditController` 补全 `GET /api/v1/evaluation-sessions/{sessionId}/trace` 扁平端点 + `/trace/tree` 树重建端点（按 `node_path` 点分路径重建嵌套 AST 树，`TraceTreeNode` record，详见 `10-api-contract.md §6.2`）。
+- **已实装（v2）**：`rule-audit-svc` 内建 `EvalSessionRow` / `NodeTraceRow` / `AuditLogRow` 只读 entity + 对应三个 `@Mapper` 接口（Modulith 隔离，不引用其他模块 internal）；`AuditServiceImpl` 用 MyBatis-Plus 分页查询实现 `queryAuditLogs` / `queryEvalSessions` / `queryTrace`；`AuditController` 补全 `GET /admin/v1/evaluation-sessions/{sessionId}/trace` 扁平端点 + `/trace/tree` 树重建端点（按 `node_path` 点分路径重建嵌套 AST 树，`TraceTreeNode` record，详见 `10-api-contract.md §6.2`）。
 
 ### 2.21 XOR 逻辑节点（来源 trae 参考分析 R1）
 
@@ -313,11 +313,11 @@
 
 ### 2.20 规则草稿创建 API（来源 10-api-contract.md §4.1）
 
-- **v1 现状**：`POST /api/v1/rules` 在 `10-api-contract.md §4.1` 已定义契约，但 v1 仅留占位实现（返回 501 NOT_IMPLEMENTED）。
+- **v1 现状**：`POST /admin/v1/rules` 在 `10-api-contract.md §4.1` 已定义契约，但 v1 仅留占位实现（返回 501 NOT_IMPLEMENTED）。
 - **触发条件**：前端规则编辑器需要保存新规则草稿（AST + bindings + preGates），前端在 publish 前先 createDraft 获取 `ruleDefinitionId`。
 - **演进方向**：实装完整的草稿写入路径，事务内插入 `rule_definition`（DRAFT）+ `rule_version`（DRAFT）+ `audit_log`（CREATE）；同 tenant+scene 下 code 唯一性前置校验；返回 201 + `{ruleDefinitionId, ruleVersionId, version, status}`。
 - **迁移成本**：低（纯写路径，无 DDL 变更，无索引热更，无事件发布）。
-- **已实装（v2）**：`DraftCreatedResult`（`rule-config-svc` api 包）+ `CreateRuleRequest` 字段更新（`sceneCode` + 4 个 `JsonNode` 字段）+ `ConfigService.createDraft` + `PublishService.createDraft`（事务、code 唯一性校验）+ `ConfigServiceImpl` 委托 + `RuleController POST /api/v1/rules`（`@Valid` + 201）；无 DDL 变更。
+- **已实装（v2）**：`DraftCreatedResult`（`rule-config-svc` api 包）+ `CreateRuleRequest` 字段更新（`sceneCode` + 4 个 `JsonNode` 字段）+ `ConfigService.createDraft` + `PublishService.createDraft`（事务、code 唯一性校验）+ `ConfigServiceImpl` 委托 + `RuleController POST /admin/v1/rules`（`@Valid` + 201）；无 DDL 变更。
 
 ---
 

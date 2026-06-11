@@ -35,15 +35,18 @@ v1 阶段 10 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个
 | `rule-kernel` | 零 Spring 零 DB，所有 SPI 接口定义 + 纯评估逻辑（含 EvalEngine / SceneRuleIndex / KernelEvaluators） | 库（jar），嵌入式 SDK 核心 |
 | `rule-kernel-polling` | `DbPollingRuleWatcher` / `DbPollingSceneWatcher` 实现，SDK 使用方按需引入 | 可选库（jar），仅 SDK 模式使用 |
 | `rule-config-svc` | 规则/Scene/元数据 CRUD、发布、快照生成 | Spring 模块，内嵌于主服务 |
-| `rule-eval-svc` | 评估入口（PUSH/PULL/dry-run）、metric 预拉、session 落库、调度任务 | Spring 模块，内嵌于主服务 |
+| `rule-eval-svc` | 评估入口（PUSH/PULL/dry-run）、metric 预拉、session 落库 | Spring 模块，内嵌于主服务 |
+| `rule-job-svc` | 定时 Job（D11）：调度注册、JobDefinition CRUD、主体查询合成 RuleEvent 注入、JobExecution 记录 | Spring 模块，内嵌于主服务 |
 | `rule-audit-svc` | 审计查询、dry-run 结果存储、日志聚合 | Spring 模块，内嵌于主服务 |
 | `rule-observability` | TraceWriter DB 实现、Prometheus 指标名常量、告警默认配置 | Spring 模块，内嵌于主服务 |
-| `rule-api` | 所有 HTTP controller、鉴权、限流、API 版本前缀（含 `/api/v1/sdk/snapshots`、`/api/v1/sdk/metric-definitions` 端点） | Spring 模块，内嵌于主服务 |
+| `rule-api` | 所有 HTTP controller、鉴权、限流、API 版本前缀（三类受众前缀 `/admin/v1`、`/api/v1`、`/sdk/v1`） | Spring 模块，内嵌于主服务 |
 | `rule-app` | Spring Boot 启动类，组装所有模块，无业务逻辑 | 可执行 jar（主服务） |
 | `rule-sdk` | 嵌入式 SDK：`RuleEngineClient` 门面 + `SnapshotPoller` HTTP 轮询 + 本地模式（代码定义规则，零网络）+ FETCHED 取数（宿主注入 handler，定义独立下发，D46） | 库（jar），业务方引入，零 Spring |
 | `rule-sdk-spring-boot-starter` | Spring Boot 自动装配胶水层：读 `rule.sdk.*` 配置，注册 `RuleEngineClient` Bean | 库（jar），Spring Boot 业务方引入 |
 
 **`rule-kernel` / `rule-sdk` Native Image 说明**：两者均零 Spring 零 DB，完全兼容 GraalVM Native Image。主服务（`rule-app`）因 MyBatis-Plus 动态代理机制，v1 不支持 Native Image 编译（详见架构设计文档约束 5）。
+
+> **kernel 引入 Lombok（D49）**：`rule-kernel` 自 D49 起引 Lombok（如 `RuleEvent` 的 `@Builder(toBuilder)`）。Lombok 是**编译期注解处理器**，编译后无运行时依赖，不破坏 kernel「运行时零依赖 / GraalVM Native 兼容」承诺。
 
 ---
 
@@ -79,8 +82,22 @@ com.sstlfsj.rule
 │       ├── index                   # 倒排索引维护、RulePublishedEvent / SceneChangedEvent 监听
 │       ├── context                 # EvalContext 装配（Subject 加载 + metric 预拉，Virtual Threads）
 │       ├── session                 # evaluation_session 幂等落库
-│       ├── dispatcher              # Action Dispatcher（自研 BlockingQueue，D20）
-│       └── scheduler              # Scheduler SPI Spring @Scheduled 默认实现
+│       └── dispatcher              # Action Dispatcher（自研 BlockingQueue，D20）
+│
+├── job                             # rule-job-svc 模块（D11 / D48）
+│   ├── api
+│   │   ├── service                 # JobService（管理类：enable/disable/get/list/triggerOnce/recentExecutions）
+│   │   ├── dto                     # JobDefinitionDto / JobExecutionVO
+│   │   ├── annotation              # @RuleJob（注解式 Job 定义）
+│   │   └── JobTarget               # @RuleJob 方法返回元素（subjectId + payload + providedMetrics）
+│   └── internal
+│       ├── domain                  # JobDefinition / JobExecution
+│       ├── repository              # MyBatis-Plus Mapper（JobDefinition / JobExecution）
+│       ├── scheduler               # ThreadPoolSchedulerAdapter（进程内 Scheduler 实现）
+│       ├── subject                 # SubjectQueryRunner ← BeanMethodSubjectQueryRunner + BeanMethodRegistry（反射 @RuleJob 方法取 JobTarget）
+│       ├── runner                  # JobRunner（builder 合成 RuleEvent，source=JOB + acceptEvent 注入）+ EventIdHasher
+│       ├── example                 # DemoFraudJob（@Profile local 注解式 Job 示例）
+│       └── service                 # JobServiceImpl + JobScheduleManager + JobStartupRegistrar + RuleJobScanner（扫描 @RuleJob upsert）
 │
 ├── audit                           # rule-audit-svc 模块
 │   ├── api
@@ -99,7 +116,7 @@ com.sstlfsj.rule
 ├── web                             # rule-api 模块
 │   ├── eval                        # EvalController（PUSH/PULL/dry-run 端点）
 │   ├── config                      # RuleController / SceneController / MetadataController
-│   ├── sdk                         # SdkSnapshotController / SdkMetricDefinitionController（/api/v1/sdk/*）
+│   ├── sdk                         # SdkSnapshotController / SdkMetricDefinitionController（/sdk/v1/*）
 │   ├── audit                       # AuditController
 │   └── filter                     # 鉴权 / 限流 / 版本路由 Filter
 │
@@ -154,8 +171,8 @@ com.sstlfsj.rule
 | `InterpretedExecutor` | `rule-kernel` | v1 默认 RuleVersionExecutor |
 | `TraceWriterDbImpl` | `rule-observability` | 主服务，异步批写 DB |
 | `NoopTraceWriter` | `rule-observability` | SDK 模式 / 测试环境 |
-| `XxlJobScheduler` | `rule-eval-svc` | v1 首个正式 Scheduler 实现，对接 xxl-job 执行器集群（D11） |
-| `SpringSchedulerAdapter` | `rule-eval-svc` | Spring `@Scheduled` 包装，零外部依赖兜底实现 |
+| `ThreadPoolSchedulerAdapter` | `rule-job-svc` | v1 进程内 Scheduler 实现（`ThreadPoolTaskScheduler` + `CronTrigger`，单实例，D11/D47） |
+| `XxlJobScheduler` | `rule-job-svc` | 预留：多实例 / HA 时替换，对接 xxl-job 执行器集群，业务侧 JobDefinition / JobExecution 不变 |
 
 > **单服务模式热加载**：`rule-eval-svc` 内部直接以 `@ApplicationModuleListener` 订阅 `RulePublishedEvent` / `SceneChangedEvent`，不经 `RuleVersionWatcher` / `SceneWatcher` SPI 通道（D17 Modulith 补充段）。这是框架内部机制，不对外暴露为可替换 SPI；替换方向是切到 MQ（加 `@Externalized`），而非换 Watcher 实现。
 
@@ -221,8 +238,12 @@ engine:
     action:
       default-timeout-ms: ...
     retention:
+      enabled: ...
+      cron: ...
+      batch-size: ...
       evaluation-session-days: ...
       node-trace-days: ...
+      action-execution-days: ...
       dry-run-session-days: ...
     observability:
       # 告警阈值，由 rule-observability 模块绑定
@@ -235,7 +256,8 @@ engine:
 | 模块 | AutoConfiguration 类 | 说明 |
 |------|---------------------|------|
 | `rule-observability` | `ObservabilityAutoConfiguration` | 注册 `TraceWriterDbImpl` Bean，绑定 `engine.rule.observability.*` |
-| `rule-eval-svc` | `EvalAutoConfiguration` | 注册 `SpringSchedulerAdapter`；内置 `@ApplicationModuleListener` 订阅 `RulePublishedEvent` / `SceneChangedEvent` 触发索引热更（不经 SPI 通道，见 §四注记） |
+| `rule-eval-svc` | `EvalAutoConfiguration` | 内置 `@ApplicationModuleListener` 订阅 `RulePublishedEvent` / `SceneChangedEvent` 触发索引热更（不经 SPI 通道，见 §四注记） |
+| `rule-job-svc` | `JobAutoConfiguration` | 注册 `ThreadPoolSchedulerAdapter`（`@ConditionalOnMissingBean(Scheduler)`）；启动期把 ACTIVE Job 注册到调度器（D11/D47） |
 | `rule-config-svc` | `ConfigAutoConfiguration` | 注册发布流程 Bean |
 
 Spring Boot 4.0.x 使用 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 注册（替代旧版 `spring.factories`）。
@@ -306,7 +328,7 @@ v1 阶段以下模块暂时合并，v2 触发时按对应演进锚点拆分：
 
 | 暂时合并的内容 | 合并原因 | v2 拆分触发条件 | 演进锚点 |
 |-------------|---------|---------------|---------|
-| `rule-eval-svc` 含调度任务（Scheduler） | v1 评估量不足以独立部署调度服务 | 调度任务资源抢占影响评估 P99 | [`08-evolution.md`](./08-evolution.md) §2.4 |
+| `rule-job-svc` 调度任务（Scheduler）与主服务同进程内嵌 | v1 评估量不足以独立部署调度服务 | 调度任务资源抢占影响评估 P99 | [`08-evolution.md`](./08-evolution.md) §2.4 |
 | `rule-audit-svc` 含 dry-run 结果存储 | v1 审计量小，独立部署成本高 | trace / 审计数据膨胀导致存储独立扩容需求出现 | [`08-evolution.md`](./08-evolution.md) §2.5 |
 | `rule-kernel` 不单独发布到 Maven 仓库 | v1 无外部 SDK 使用方 | 外部业务方需要嵌入式 SDK 接入 | [`08-evolution.md`](./08-evolution.md) §2.14 |
 | `rule-kernel-polling`（独立 artifact）未发布到 Maven 仓库 | v1 无外部 SDK 使用方，无需对外发布 | 外部业务方需要嵌入式 SDK 接入 | [`08-evolution.md`](./08-evolution.md) §2.14 |

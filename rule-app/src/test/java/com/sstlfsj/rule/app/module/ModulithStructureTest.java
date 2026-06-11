@@ -22,6 +22,7 @@ class ModulithStructureTest {
         // 确认 Modulith 能发现核心业务模块
         assertTrue(MODULES.getModuleByName("config").isPresent(), "config 模块应被识别");
         assertTrue(MODULES.getModuleByName("eval").isPresent(), "eval 模块应被识别");
+        assertTrue(MODULES.getModuleByName("job").isPresent(), "job 模块应被识别");
         assertTrue(MODULES.getModuleByName("audit").isPresent(), "audit 模块应被识别");
     }
 }

@@ -1,12 +1,11 @@
 package com.sstlfsj.rule.config.internal.service;
 
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
-import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
+import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.repository.ScenePayloadSchemaHistoryMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +14,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,32 +27,33 @@ import static org.mockito.Mockito.*;
 class SceneServiceImplTest {
 
     @Mock SceneMapper sceneMapper;
-    @Mock AuditLogMapper auditLogMapper;
     @Mock ScenePayloadSchemaHistoryMapper schemaHistoryMapper;
     @Mock ApplicationEventPublisher eventPublisher;
 
     SceneServiceImpl sceneService;
 
+    private static PayloadFieldSpec field(String name) {
+        return new PayloadFieldSpec(name, "NUMBER", true, null, null, null, null, null);
+    }
+
     @BeforeEach
     void setUp() {
-        sceneService = new SceneServiceImpl(sceneMapper, auditLogMapper,
-                schemaHistoryMapper, eventPublisher, JsonMapper.builder().build());
+        sceneService = new SceneServiceImpl(sceneMapper,
+                schemaHistoryMapper, eventPublisher);
     }
 
     @Test
-    void createScene_insertsSceneAndWritesAuditLog() {
+    void createScene_insertsSceneAndPublishesAuditEvent() {
         when(sceneMapper.insert((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
-        // 新签名：10 参数
         sceneService.createScene("1", "PAYMENT", "支付场景",
                 null, null, null, null, null, null, "actor1");
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).insert(sceneCaptor.capture());
         assertThat(sceneCaptor.getValue().getCode()).isEqualTo("PAYMENT");
-        assertThat(sceneCaptor.getValue().getStatus()).isEqualTo("ACTIVE");
-        verify(auditLogMapper).insert((AuditLog) any());
+        assertThat(sceneCaptor.getValue().getStatus()).isEqualTo(SceneStatus.ACTIVE);
+        verify(eventPublisher).publishEvent(any(OperationAuditedEvent.class));
     }
 
     @Test
@@ -61,21 +64,20 @@ class SceneServiceImplTest {
             arg.setId(100L);
             return 1;
         }).when(sceneMapper).insert((SceneDef) any());
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         when(schemaHistoryMapper.insert((ScenePayloadSchemaHistory) any())).thenReturn(1);
 
         sceneService.createScene("1", "PAYMENT", "支付场景",
                 "支付业务场景", "PUSH", "USER",
-                "[\"payment.initiated\"]",
-                "[{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true}]",
-                "{\"timezone\":\"Asia/Shanghai\"}", "actor1");
+                List.of("payment.initiated"),
+                List.of(field("amount")),
+                Map.of("timezone", "Asia/Shanghai"), "actor1");
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).insert(sceneCaptor.capture());
         SceneDef saved = sceneCaptor.getValue();
-        assertThat(saved.getEventTypes()).isEqualTo("[\"payment.initiated\"]");
-        assertThat(saved.getPayloadSchema()).contains("amount");
-        assertThat(saved.getDefaultParams()).contains("Asia/Shanghai");
+        assertThat(saved.getEventTypes()).containsExactly("payment.initiated");
+        assertThat(saved.getPayloadSchema()).extracting(PayloadFieldSpec::name).containsExactly("amount");
+        assertThat(saved.getDefaultParams()).containsEntry("timezone", "Asia/Shanghai");
         assertThat(saved.getPayloadSchemaVersion()).isEqualTo(1);
 
         // 有 payloadSchema 时应写入初始历史快照，且 sceneId 与插入后回填的 id 一致
@@ -89,7 +91,6 @@ class SceneServiceImplTest {
     @Test
     void createScene_withoutPayloadSchema_不写历史快照() {
         when(sceneMapper.insert((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         sceneService.createScene("1", "PAYMENT", "支付场景",
                 null, null, null, null, null, null, "actor1");
@@ -104,21 +105,24 @@ class SceneServiceImplTest {
         scene.setId(5L);
         scene.setTenantId(1L);
         scene.setCode("PAYMENT");
-        scene.setStatus("ACTIVE");
+        scene.setStatus(SceneStatus.ACTIVE);
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         sceneService.disableScene("1", "PAYMENT", "actor1");
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).updateById(sceneCaptor.capture());
-        assertThat(sceneCaptor.getValue().getStatus()).isEqualTo("DISABLED");
+        assertThat(sceneCaptor.getValue().getStatus()).isEqualTo(SceneStatus.DISABLED);
 
+        // disable 现在发两个事件：操作审计事件 + SceneChangedEvent
+        verify(eventPublisher).publishEvent(any(OperationAuditedEvent.class));
         ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(eventPublisher).publishEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue()).isInstanceOf(SceneChangedEvent.class);
-        SceneChangedEvent event = (SceneChangedEvent) eventCaptor.getValue();
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        SceneChangedEvent event = eventCaptor.getAllValues().stream()
+                .filter(SceneChangedEvent.class::isInstance)
+                .map(SceneChangedEvent.class::cast)
+                .findFirst().orElseThrow();
         assertThat(event.sceneCode()).isEqualTo("PAYMENT");
         assertThat(event.active()).isFalse();
     }
@@ -129,16 +133,14 @@ class SceneServiceImplTest {
         existing.setId(10L);
         existing.setTenantId(1L);
         existing.setCode("PAYMENT");
-        existing.setPayloadSchema("[{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true}]");
+        existing.setPayloadSchema(List.of(field("amount")));
         existing.setPayloadSchemaVersion(1);
-        existing.setEventTypes("[]");
+        existing.setEventTypes(List.of());
         when(sceneMapper.findByCode(any(), any())).thenReturn(existing);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
         when(schemaHistoryMapper.insert((ScenePayloadSchemaHistory) any())).thenReturn(1);
 
-        String newSchema = "[{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true},"
-                + "{\"name\":\"currency\",\"type\":\"STRING\",\"required\":true}]";
+        List<PayloadFieldSpec> newSchema = List.of(field("amount"), field("currency"));
         sceneService.updateScene("1", "PAYMENT", null, null, newSchema, null, "actor1");
 
         // 旧版本应写入历史
@@ -146,13 +148,13 @@ class SceneServiceImplTest {
                 ArgumentCaptor.forClass(ScenePayloadSchemaHistory.class);
         verify(schemaHistoryMapper).insert(histCaptor.capture());
         assertThat(histCaptor.getValue().getVersion()).isEqualTo(1);
-        assertThat(histCaptor.getValue().getSchemaJson()).contains("amount");
+        assertThat(histCaptor.getValue().getSchema()).extracting(PayloadFieldSpec::name).containsExactly("amount");
 
         // scene 版本号自增为 2
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).updateById(sceneCaptor.capture());
         assertThat(sceneCaptor.getValue().getPayloadSchemaVersion()).isEqualTo(2);
-        assertThat(sceneCaptor.getValue().getPayloadSchema()).contains("currency");
+        assertThat(sceneCaptor.getValue().getPayloadSchema()).extracting(PayloadFieldSpec::name).contains("currency");
     }
 
     @Test
@@ -161,16 +163,15 @@ class SceneServiceImplTest {
         existing.setId(10L);
         existing.setTenantId(1L);
         existing.setCode("PAYMENT");
-        existing.setPayloadSchema("[{\"name\":\"amount\",\"type\":\"NUMBER\"}]");
+        existing.setPayloadSchema(List.of(field("amount")));
         existing.setPayloadSchemaVersion(2);
-        existing.setEventTypes("[\"payment.initiated\"]");
+        existing.setEventTypes(List.of("payment.initiated"));
         when(sceneMapper.findByCode(any(), any())).thenReturn(existing);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         // 传入与现有相同的 payloadSchema
         sceneService.updateScene("1", "PAYMENT", "新名称", null,
-                "[{\"name\":\"amount\",\"type\":\"NUMBER\"}]", null, "actor1");
+                List.of(field("amount")), null, "actor1");
 
         verify(schemaHistoryMapper, never()).insert((ScenePayloadSchemaHistory) any());
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
@@ -186,13 +187,13 @@ class SceneServiceImplTest {
         scene.setTenantId(1L);
         scene.setCode("PAYMENT");
         scene.setName("支付场景");
-        scene.setDominantMode("PUSH");
-        scene.setSubjectType("USER");
-        scene.setEventTypes("[\"payment.initiated\"]");
-        scene.setPayloadSchema("[{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true}]");
-        scene.setDefaultParams("{\"timezone\":\"Asia/Shanghai\"}");
+        scene.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        scene.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
+        scene.setEventTypes(List.of("payment.initiated"));
+        scene.setPayloadSchema(List.of(field("amount")));
+        scene.setDefaultParams(Map.of("timezone", "Asia/Shanghai"));
         scene.setPayloadSchemaVersion(2);
-        scene.setStatus("ACTIVE");
+        scene.setStatus(SceneStatus.ACTIVE);
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         com.sstlfsj.rule.config.api.dto.SceneDetailDto dto =
@@ -215,9 +216,28 @@ class SceneServiceImplTest {
     }
 
     @Test
-    void constructor_withObjectMapper_springCanInstantiate() {
-        SceneServiceImpl svc = new SceneServiceImpl(sceneMapper, auditLogMapper,
-                schemaHistoryMapper, eventPublisher, JsonMapper.builder().build());
+    void listScenes_映射为精简列表() {
+        SceneDef s = new SceneDef();
+        s.setId(5L);
+        s.setCode("PAYMENT");
+        s.setName("支付场景");
+        s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
+        s.setStatus(SceneStatus.ACTIVE);
+        when(sceneMapper.findByTenantId(1L)).thenReturn(List.of(s));
+
+        var list = sceneService.listScenes("1");
+
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).id()).isEqualTo(5L);
+        assertThat(list.get(0).sceneCode()).isEqualTo("PAYMENT");
+        assertThat(list.get(0).status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void constructor_springCanInstantiate() {
+        SceneServiceImpl svc = new SceneServiceImpl(sceneMapper,
+                schemaHistoryMapper, eventPublisher);
         assertThat(svc).isNotNull();
     }
 }

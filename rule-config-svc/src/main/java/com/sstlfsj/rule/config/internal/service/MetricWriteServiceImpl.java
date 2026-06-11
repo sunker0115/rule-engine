@@ -1,21 +1,23 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import lombok.RequiredArgsConstructor;
-import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
+import com.sstlfsj.rule.config.internal.MetricProperties;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricEnums;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.event.AuditSnapshot;
+import com.sstlfsj.rule.config.internal.event.MetricChangedSnapshot;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,36 +39,36 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MetricWriteServiceImpl implements MetricWriteService {
 
-    private static final TypeReference<List<MetricDependency>> METRIC_DEP_TYPE =
-            new TypeReference<>() {};
-
     private final MetricDefinitionMapper metricDefinitionMapper;
-    private final AuditLogMapper auditLogMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
-    private final ObjectMapper objectMapper;
+    private final MetricProperties metricProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public Long create(Long tenantId, String metricCode, MetricWriteCommand cmd, String actorId) {
+        validateEnums(cmd);
         MetricDefinition m = new MetricDefinition();
         m.setTenantId(tenantId);
         m.setMetricCode(metricCode);
         m.setVersion(1);
         applyCommandFields(m, cmd);
-        m.setStatus("ACTIVE");
+        m.setStatus(MetricStatus.ACTIVE);
         m.setCreatedBy(actorId);
         m.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(m);
 
-        writeAudit(tenantId, actorId, "CREATE", m.getId().toString(),
-                "{\"metricCode\":\"" + metricCode + "\",\"version\":1}");
+        // CREATE 类 before/after 传同一快照实例，审计行始终 before/after 都有值，避免 null 特殊处理
+        MetricChangedSnapshot createSnapshot = new MetricChangedSnapshot(metricCode, 1, null);
+        publishAudit(tenantId, actorId, "CREATE", m.getId().toString(), createSnapshot, createSnapshot);
         return m.getId();
     }
 
     @Override
     public int update(Long tenantId, String metricCode, MetricWriteCommand cmd,
                       boolean breakingChange, String actorId) {
+        validateEnums(cmd);
         MetricDefinition active = metricDefinitionMapper.findActiveByCode(tenantId, metricCode);
         if (active == null) {
             throw new IllegalArgumentException("metric 不存在或无 ACTIVE 版本: " + metricCode);
@@ -85,15 +87,14 @@ public class MetricWriteServiceImpl implements MetricWriteService {
             active.setUpdatedAt(LocalDateTime.now());
             metricDefinitionMapper.updateById(active);
 
-            writeAudit(tenantId, actorId, "UPDATE", active.getId().toString(),
-                    "{\"metricCode\":\"" + metricCode + "\",\"version\":"
-                    + active.getVersion() + ",\"breaking\":false}");
+            publishAudit(tenantId, actorId, "UPDATE", active.getId().toString(),
+                    null, new MetricChangedSnapshot(metricCode, active.getVersion(), false));
             return active.getVersion();
         }
 
         // effectiveBreaking=true：旧行 SUPERSEDED + 插入新版本行
         int newVersion = active.getVersion() + 1;
-        active.setStatus("SUPERSEDED");
+        active.setStatus(MetricStatus.SUPERSEDED);
         active.setUpdatedBy(actorId);
         active.setUpdatedAt(LocalDateTime.now());
         metricDefinitionMapper.updateById(active);
@@ -103,14 +104,13 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         next.setMetricCode(metricCode);
         next.setVersion(newVersion);
         applyCommandFields(next, cmd);
-        next.setStatus("ACTIVE");
+        next.setStatus(MetricStatus.ACTIVE);
         next.setCreatedBy(actorId);
         next.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(next);
 
-        writeAudit(tenantId, actorId, "UPDATE", next.getId().toString(),
-                "{\"metricCode\":\"" + metricCode + "\",\"version\":"
-                + newVersion + ",\"breaking\":true}");
+        publishAudit(tenantId, actorId, "UPDATE", next.getId().toString(),
+                null, new MetricChangedSnapshot(metricCode, newVersion, true));
         return newVersion;
     }
 
@@ -147,27 +147,32 @@ public class MetricWriteServiceImpl implements MetricWriteService {
                 RuleDefinition def = defMap.get(rv.getRuleDefinitionId());
                 String sceneCode = sceneCodeMap.getOrDefault(def.getSceneId(), "");
                 result.add(new RuleRef(def.getId(), def.getCode(), def.getName(),
-                        sceneCode, def.getStatus()));
+                        sceneCode, def.getStatus().name()));
             }
         }
         return result;
     }
 
-    /**
-     * 判断 metric_dependencies JSON 数组是否包含指定 (metricCode, metricVersion)。
-     * 反序列化失败（如 null 或格式异常）视为不包含。
-     */
-    private boolean containsDependency(String metricDependenciesJson,
+    /** 判断 typed metricDependencies 列表是否包含指定 (metricCode, metricVersion)；null 视为不包含。 */
+    private boolean containsDependency(List<MetricDependency> deps,
                                        String metricCode, int metricVersion) {
-        if (metricDependenciesJson == null || metricDependenciesJson.isBlank()) {
+        if (deps == null || deps.isEmpty()) {
             return false;
         }
-        try {
-            List<MetricDependency> deps = objectMapper.readValue(metricDependenciesJson, METRIC_DEP_TYPE);
-            return deps.stream().anyMatch(
-                    d -> metricCode.equals(d.metricCode()) && d.metricVersion() == metricVersion);
-        } catch (Exception e) {
-            return false;
+        return deps.stream().anyMatch(
+                d -> metricCode.equals(d.metricCode()) && d.metricVersion() == metricVersion);
+    }
+
+    /**
+     * 校验 cmd 的枚举列取值（DB ENUM 去除后由 app 兜底，单一真相源 {@link MetricEnums}）。
+     * status 不校验：写路径恒由服务端内部置为 ACTIVE/SUPERSEDED，从不取自 cmd。
+     */
+    private void validateEnums(MetricWriteCommand cmd) {
+        if (!MetricEnums.DATA_TYPES.contains(cmd.dataType())) {
+            throw new IllegalArgumentException("非法 data_type: " + cmd.dataType());
+        }
+        if (!MetricEnums.SOURCE_TYPES.contains(cmd.sourceType())) {
+            throw new IllegalArgumentException("非法 source_type: " + cmd.sourceType());
         }
     }
 
@@ -176,29 +181,17 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setName(cmd.name());
         m.setSourceType(cmd.sourceType());
         m.setDataType(cmd.dataType());
-        try {
-            // params 为 Map 对象，序列化为 JSON 字符串存库；null 时存空对象
-            m.setParams(cmd.params() == null ? "{}" : objectMapper.writeValueAsString(cmd.params()));
-        } catch (JacksonException e) {
-            // Object → JSON 序列化不应失败，属于内部错误
-            throw new IllegalStateException("params 序列化失败", e);
-        }
-        m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null ? 60 : cmd.cacheTtlSeconds());
+        m.setParams(cmd.params() != null ? cmd.params() : Map.of());
+        m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null
+                ? metricProperties.getDefaultCacheTtlSeconds() : cmd.cacheTtlSeconds());
         m.setAllowProvided(cmd.allowProvided());
     }
 
-    /** 写入 audit_log，同事务（D14 约定）。 */
-    private void writeAudit(Long tenantId, String actorId, String action,
-                            String targetId, String afterSnapshot) {
-        AuditLog log = new AuditLog();
-        log.setTenantId(tenantId);
-        log.setActor(actorId);
-        log.setActorType("USER");
-        log.setAction(action);
-        log.setTargetType("metric_definition");
-        log.setTargetId(targetId);
-        log.setAfterSnapshot(afterSnapshot);
-        log.setOperatedAt(LocalDateTime.now());
-        auditLogMapper.insert(log);
+    /** 发布操作审计事件，由集中监听器 BEFORE_COMMIT 同事务落 audit_log（D14 约定）。 */
+    private void publishAudit(Long tenantId, String actorId, String action,
+                            String targetId, AuditSnapshot beforeSnapshot, AuditSnapshot afterSnapshot) {
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, "USER", action, "metric_definition", targetId,
+                beforeSnapshot, afterSnapshot, LocalDateTime.now()));
     }
 }

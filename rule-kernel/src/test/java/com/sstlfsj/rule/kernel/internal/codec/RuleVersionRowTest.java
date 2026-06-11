@@ -28,14 +28,22 @@ class RuleVersionRowTest {
     @Test
     void record_metricDependenciesJson_retained() {
         RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\"]");
+                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\"]", "[\"amount\"]");
         assertThat(row.metricDependenciesJson()).isEqualTo("[\"balance\"]");
     }
 
     @Test
-    void record_legacyConstructor_nullMetricDependenciesJson() {
+    void record_payloadDependenciesJson_retained() {
+        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
+                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\"]", "[\"amount\"]");
+        assertThat(row.payloadDependenciesJson()).isEqualTo("[\"amount\"]");
+    }
+
+    @Test
+    void record_legacyConstructor_nullMetricAndPayloadDependenciesJson() {
         RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
                 "AST_BOOLEAN", "HIGHEST_PRIORITY");
         assertThat(row.metricDependenciesJson()).isNull();
+        assertThat(row.payloadDependenciesJson()).isNull();
     }
 }

@@ -11,6 +11,7 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
 
 engine:
   rule:

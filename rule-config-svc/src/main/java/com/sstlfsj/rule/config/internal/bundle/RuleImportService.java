@@ -2,18 +2,30 @@ package com.sstlfsj.rule.config.internal.bundle;
 
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.dto.RuleImportResult;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.SourceType;
+import com.sstlfsj.rule.kernel.api.model.SubjectType;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
+import com.sstlfsj.rule.config.internal.domain.DecisionStatus;
+import com.sstlfsj.rule.config.internal.domain.DecisionStrategy;
+import com.sstlfsj.rule.config.internal.domain.DominantMode;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricEnums;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
+import com.sstlfsj.rule.config.internal.event.RuleImportedSnapshot;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +51,7 @@ public class RuleImportService {
     private final SceneMapper sceneMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
-    private final AuditLogMapper auditLogMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** 幂等批量导入 Bundle 到目标租户。 */
     @Transactional
@@ -66,14 +78,14 @@ public class RuleImportService {
                 s.setCode(ss.code());
                 s.setName(ss.name());
                 s.setDescription(ss.description());
-                s.setSubjectType(ss.subjectType());
-                s.setDominantMode(ss.dominantMode());
-                s.setDecisionStrategy(ss.decisionStrategy());
+                s.setSubjectType(SubjectType.valueOf(ss.subjectType()));
+                s.setDominantMode(DominantMode.valueOf(ss.dominantMode()));
+                s.setDecisionStrategy(DecisionStrategy.valueOf(ss.decisionStrategy()));
                 s.setEventTypes(ss.eventTypes());
                 s.setPayloadSchema(ss.payloadSchema());
                 s.setDefaultParams(ss.defaultParams());
                 s.setPayloadSchemaVersion(ss.payloadSchemaVersion() == null ? 1 : ss.payloadSchemaVersion());
-                s.setStatus("ACTIVE");
+                s.setStatus(SceneStatus.ACTIVE);
                 s.setCreatedBy(actorId);
                 s.setCreatedAt(LocalDateTime.now());
                 sceneMapper.insert(s);
@@ -93,7 +105,13 @@ public class RuleImportService {
                     metricsSkipped.add(me.metricCode());
                     continue;
                 }
-                if ("SQL_AGGREGATE".equals(me.sourceType())) {
+                // 非法 data_type/source_type 不自动创建(ENUM→VARCHAR 后 DB 不再约束,导入侧由此堵口),交人工 review
+                if (!MetricEnums.DATA_TYPES.contains(me.dataType())
+                        || !MetricEnums.SOURCE_TYPES.contains(me.sourceType())) {
+                    metricsReview.add(me.metricCode());
+                    continue;
+                }
+                if (SourceType.SQL_AGGREGATE.equals(me.sourceType())) {
                     // SQL 类参数含查询语句，需人工审核，不自动创建（发布期 metric 校验是安全网）
                     metricsReview.add(me.metricCode());
                     continue;
@@ -105,10 +123,10 @@ public class RuleImportService {
                 m.setName(me.name());
                 m.setSourceType(me.sourceType());
                 m.setDataType(me.dataType());
-                m.setParams(me.params() == null ? "{}" : me.params());
+                m.setParams(me.params() != null ? me.params() : java.util.Map.of());
                 m.setCacheTtlSeconds(me.cacheTtlSeconds() == null ? 60 : me.cacheTtlSeconds());
                 m.setAllowProvided(Boolean.TRUE.equals(me.allowProvided()));
-                m.setStatus("ACTIVE");
+                m.setStatus(MetricStatus.ACTIVE);
                 m.setCreatedBy(actorId);
                 m.setCreatedAt(LocalDateTime.now());
                 metricDefinitionMapper.insert(m);
@@ -132,8 +150,8 @@ public class RuleImportService {
                 d.setName(de.name());
                 d.setPriority(de.priority());
                 d.setDescription(de.description());
-                d.setActions(de.actions() == null ? "[]" : de.actions());
-                d.setStatus("ACTIVE");
+                d.setActions(de.actions() == null ? List.of() : de.actions());
+                d.setStatus(DecisionStatus.ACTIVE);
                 d.setCreatedBy(actorId);
                 d.setCreatedAt(LocalDateTime.now());
                 decisionDefinitionMapper.insert(d);
@@ -145,7 +163,8 @@ public class RuleImportService {
         List<RuleImportResult.ImportedRule> importedRules = new ArrayList<>();
         for (RuleBundle.RuleEntry rule : bundle.rules()) {
             Long sceneId = resolveSceneId(tenantId, rule.sceneCode(), sceneIdByCode);
-            String kind = (rule.kind() == null || rule.kind().isBlank()) ? "AST_BOOLEAN" : rule.kind();
+            RuleKind kind = (rule.kind() == null || rule.kind().isBlank())
+                    ? RuleKind.AST_BOOLEAN : RuleKind.valueOf(rule.kind());
 
             RuleDefinition rd = ruleDefinitionMapper.findBySceneAndCode(tenantId, sceneId, rule.code());
             boolean ruleExisted = rd != null;
@@ -156,7 +175,7 @@ public class RuleImportService {
                 rd.setSceneId(sceneId);
                 rd.setCode(rule.code());
                 rd.setName(rule.name());
-                rd.setStatus("DRAFT");
+                rd.setStatus(RuleDefinitionStatus.DRAFT);
                 rd.setKind(kind);
                 rd.setCreatedBy(actorId);
                 rd.setCreatedAt(LocalDateTime.now());
@@ -170,27 +189,23 @@ public class RuleImportService {
             RuleVersion rv = new RuleVersion();
             rv.setRuleDefinitionId(rd.getId());
             rv.setVersion(newVersion);
-            rv.setConditionAst(blankTo(rule.conditionAst(), "{}"));
-            rv.setDecisionBindings(blankTo(rule.decisionBindings(), "[]"));
-            rv.setPreGates(blankTo(rule.preGates(), "[]"));
+            rv.setConditionAst(rule.conditionAst() != null ? rule.conditionAst()
+                    : new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null));
+            rv.setDecisionBindings(rule.decisionBindings() != null ? rule.decisionBindings() : java.util.List.of());
+            rv.setPreGates(rule.preGates() != null ? rule.preGates() : java.util.List.of());
             rv.setKind(kind);
-            rv.setTriggerEventTypes(blankTo(rule.triggerEventTypes(), "[]"));
-            rv.setMetricDependencies(metricDepsJson(rule));
-            rv.setStatus("DRAFT");
+            rv.setTriggerEventTypes(rule.triggerEventTypes() != null ? rule.triggerEventTypes() : java.util.List.of());
+            rv.setMetricDependencies(rule.metricDependencies() != null ? rule.metricDependencies() : java.util.List.of());
+            rv.setPayloadDependencies(rule.payloadDependencies() != null ? rule.payloadDependencies() : java.util.List.of());
+            rv.setStatus(RuleVersionStatus.DRAFT);
             rv.setCreatedAt(LocalDateTime.now());
             ruleVersionMapper.insert(rv);
 
-            AuditLog log = new AuditLog();
-            log.setTenantId(tenantId);
-            log.setActor(actorId);
-            log.setActorType("USER");
-            log.setAction("IMPORT");
-            log.setTargetType("rule_definition");
-            log.setTargetId(rd.getId().toString());
-            log.setAfterSnapshot("{\"ruleVersionId\":" + rv.getId() + ",\"version\":" + newVersion
-                    + ",\"ruleExisted\":" + ruleExisted + "}");
-            log.setOperatedAt(LocalDateTime.now());
-            auditLogMapper.insert(log);
+            eventPublisher.publishEvent(new OperationAuditedEvent(
+                    tenantId, actorId, "USER", "IMPORT", "rule_definition", rd.getId().toString(),
+                    null,
+                    new RuleImportedSnapshot(rv.getId(), newVersion, ruleExisted),
+                    LocalDateTime.now()));
 
             importedRules.add(new RuleImportResult.ImportedRule(
                     rd.getId(), rv.getId(), newVersion, rule.code(), rule.sceneCode(), ruleExisted));
@@ -213,25 +228,5 @@ public class RuleImportService {
         }
         sceneIdByCode.put(sceneCode, scene.getId());
         return scene.getId();
-    }
-
-    private static String blankTo(String s, String def) {
-        return (s == null || s.isBlank()) ? def : s;
-    }
-
-    /**
-     * metricDependencies 原文序列化：rule_version 列存 [{metricCode,metricVersion}] 数组。
-     * 手拼 JSON 避免为单一序列化点引入 ObjectMapper 依赖；metricCode 受发布期字符集约束，无需转义。
-     */
-    private static String metricDepsJson(RuleBundle.RuleEntry rule) {
-        if (rule.metricDependencies() == null || rule.metricDependencies().isEmpty()) return "[]";
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < rule.metricDependencies().size(); i++) {
-            var d = rule.metricDependencies().get(i);
-            if (i > 0) sb.append(',');
-            sb.append("{\"metricCode\":\"").append(d.metricCode())
-              .append("\",\"metricVersion\":").append(d.metricVersion()).append('}');
-        }
-        return sb.append(']').toString();
     }
 }

@@ -1,5 +1,8 @@
 package com.sstlfsj.rule.config.internal.publish;
 
+import com.sstlfsj.rule.kernel.api.model.ConditionType;
+import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 
 import java.util.HashMap;
@@ -21,56 +24,58 @@ class AstDataTypeResolver {
 
     static {
         Map<String, Set<String>> m = new HashMap<>();
-        m.put("EQ",           Set.of("LONG", "DOUBLE", "STRING", "BOOLEAN", "DATE", "DATETIME"));
-        m.put("NEQ",          Set.of("LONG", "DOUBLE", "STRING", "BOOLEAN", "DATE", "DATETIME"));
-        m.put("GT",           Set.of("LONG", "DOUBLE"));
-        m.put("GTE",          Set.of("LONG", "DOUBLE"));
-        m.put("LT",           Set.of("LONG", "DOUBLE"));
-        m.put("LTE",          Set.of("LONG", "DOUBLE"));
-        m.put("BETWEEN",      Set.of("LONG", "DOUBLE", "DATE", "DATETIME"));
-        m.put("NOT_BETWEEN",  Set.of("LONG", "DOUBLE", "DATE", "DATETIME"));
-        m.put("IN",           Set.of("LONG", "STRING"));
-        m.put("NOT_IN",       Set.of("LONG", "STRING"));
-        m.put("CONTAINS",     Set.of("LIST"));
-        m.put("NOT_CONTAINS", Set.of("LIST"));
-        m.put("STARTS_WITH",  Set.of("STRING"));
-        m.put("ENDS_WITH",    Set.of("STRING"));
-        m.put("MATCHES",      Set.of("STRING"));
-        m.put("DATE_BEFORE",  Set.of("DATE", "DATETIME"));
-        m.put("DATE_AFTER",   Set.of("DATE", "DATETIME"));
+        m.put(ConditionType.EQ,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.NEQ,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.GT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionType.GTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionType.LT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionType.LTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
+        m.put(ConditionType.BETWEEN,      Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.NOT_BETWEEN,  Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.IN,           Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
+        m.put(ConditionType.NOT_IN,       Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
+        m.put(ConditionType.CONTAINS,     Set.of(DataType.LIST.tag()));
+        m.put(ConditionType.NOT_CONTAINS, Set.of(DataType.LIST.tag()));
+        m.put(ConditionType.STARTS_WITH,  Set.of(DataType.STRING.tag()));
+        m.put(ConditionType.ENDS_WITH,    Set.of(DataType.STRING.tag()));
+        m.put(ConditionType.MATCHES,      Set.of(DataType.STRING.tag()));
+        m.put(ConditionType.DATE_BEFORE,  Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
+        m.put(ConditionType.DATE_AFTER,   Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
         ALLOWED = Map.copyOf(m);
     }
 
     /**
      * 递归遍历 AST，给 ConditionNode 冻结 dataType 并校验算子兼容性，返回重建的新树。
      *
-     * @param root        原始 AST 根节点
-     * @param dataTypeMap metricCode -> dataType 映射（来自 metric_definition 查询结果）
+     * @param root           原始 AST 根节点
+     * @param dataTypeMap    metricCode -> dataType 映射（来自 metric_definition 查询结果）
+     * @param payloadTypeMap payload 字段名 -> dataType 映射（来自 payloadSchema，PayloadDataTypeMapper 产出）
      * @return 含冻结 dataType 的新 AST 树（不可变 record 重建）
      */
-    static AstNode resolve(AstNode root, Map<String, String> dataTypeMap) {
+    static AstNode resolve(AstNode root, Map<String, String> dataTypeMap,
+                           Map<String, String> payloadTypeMap) {
         return switch (root) {
-            case ConditionNode cond -> resolveCondition(cond, dataTypeMap);
+            case ConditionNode cond -> resolveCondition(cond, dataTypeMap, payloadTypeMap);
             case AndNode and -> new AndNode(
-                    resolveList(and.children(), dataTypeMap),
+                    resolveList(and.children(), dataTypeMap, payloadTypeMap),
                     and.displayLabel(), and.weight());
             case OrNode or -> new OrNode(
-                    resolveList(or.children(), dataTypeMap),
+                    resolveList(or.children(), dataTypeMap, payloadTypeMap),
                     or.displayLabel(), or.weight());
-            case NotNode not -> new NotNode(resolve(not.child(), dataTypeMap));
+            case NotNode not -> new NotNode(resolve(not.child(), dataTypeMap, payloadTypeMap));
             case XorNode xor -> new XorNode(
-                    resolveList(xor.children(), dataTypeMap),
+                    resolveList(xor.children(), dataTypeMap, payloadTypeMap),
                     xor.displayLabel());
             case ScorecardRootNode sc -> new ScorecardRootNode(
-                    resolveConditionList(sc.conditions(), dataTypeMap),
+                    resolveConditionList(sc.conditions(), dataTypeMap, payloadTypeMap),
                     sc.threshold());
             case IfNode ifn -> new IfNode(
-                    resolve(ifn.condition(), dataTypeMap),
-                    resolve(ifn.thenBranch(), dataTypeMap),
-                    ifn.elseBranch() != null ? resolve(ifn.elseBranch(), dataTypeMap) : null);
+                    resolve(ifn.condition(), dataTypeMap, payloadTypeMap),
+                    resolve(ifn.thenBranch(), dataTypeMap, payloadTypeMap),
+                    ifn.elseBranch() != null ? resolve(ifn.elseBranch(), dataTypeMap, payloadTypeMap) : null);
             // 决策树终端叶子：无比较、无 metric，永久原样返回（非待办）
             case DecisionLeafNode leaf -> leaf;
-            // 决策表：逐列从 metricCode 冻结 dataType + 校验算子兼容性（B22）
+            // 决策表：逐列从 metricCode 冻结 dataType + 校验算子兼容性（B22）；决策表列本轮不支持 payload
             case DecisionTableNode dt  -> resolveDecisionTable(dt, dataTypeMap);
         };
     }
@@ -99,32 +104,43 @@ class AstDataTypeResolver {
     }
 
     private static ConditionNode resolveCondition(ConditionNode cond,
-                                                   Map<String, String> dataTypeMap) {
-        String dataType = dataTypeMap.get(cond.metricCode());
-        // 校验仅在 dataType 已知（非 null）时执行；ALLOWED 缺席的算子（time.*、自定义）直接放行
-        // DATE_BEFORE/DATE_AFTER 已纳入 ALLOWED（B20），不再绕过校验
-        if (dataType != null) {
-            Set<String> allowed = ALLOWED.get(cond.conditionType());
-            if (allowed != null && !allowed.contains(dataType)) {
-                throw new IllegalArgumentException(
-                        "算子 " + cond.conditionType() + " 不支持 dataType=" + dataType
-                        + "（metric=" + cond.metricCode() + "）");
+                                                   Map<String, String> dataTypeMap,
+                                                   Map<String, String> payloadTypeMap) {
+        String dataType;
+        if (cond.valueRef() == ValueRef.PAYLOAD) {
+            // payload 引用：dataType 来自 payloadSchema 映射；本轮不做算子×dataType 校验，
+            // 查不到则 null（求值期落 DefaultComparisonStrategy 按值推断）
+            dataType = payloadTypeMap.get(cond.metricCode());
+        } else {
+            dataType = dataTypeMap.get(cond.metricCode());
+            // 校验仅在 dataType 已知（非 null）时执行；ALLOWED 缺席的算子（time.*、自定义）直接放行
+            // DATE_BEFORE/DATE_AFTER 已纳入 ALLOWED（B20），不再绕过校验
+            if (dataType != null) {
+                Set<String> allowed = ALLOWED.get(cond.conditionType());
+                if (allowed != null && !allowed.contains(dataType)) {
+                    throw new IllegalArgumentException(
+                            "算子 " + cond.conditionType() + " 不支持 dataType=" + dataType
+                            + "（metric=" + cond.metricCode() + "）");
+                }
             }
         }
-        // 重建 ConditionNode，冻结 dataType（查不到的 metric -> dataType=null，原样不变）。
-        // 不变量：草稿 AST 的 ConditionNode.dataType 一律为 null（DSL 构造路径），
-        // 本次赋值是唯一的写入点，不存在覆盖既有值的情况。
+        // 重建 ConditionNode，冻结 dataType（查不到的 metric/payload 字段 -> dataType=null，原样不变），
+        // 并透传 valueRef（METRIC/PAYLOAD 区分由 7 参规范构造器承载）。
+        // 输入 AST 的 dataType 可能已非空（回退克隆既有版本场景）：本方法一律按当前世界的
+        // dataTypeMap/payloadTypeMap 重算并覆盖，不读取既有 dataType，保证"按当前世界重解析"。
         return new ConditionNode(cond.conditionType(), cond.metricCode(),
-                cond.displayLabel(), cond.params(), cond.weight(), dataType);
+                cond.displayLabel(), cond.params(), cond.weight(), dataType, cond.valueRef());
     }
 
     private static List<AstNode> resolveList(List<AstNode> nodes,
-                                              Map<String, String> dataTypeMap) {
-        return nodes.stream().map(n -> resolve(n, dataTypeMap)).toList();
+                                              Map<String, String> dataTypeMap,
+                                              Map<String, String> payloadTypeMap) {
+        return nodes.stream().map(n -> resolve(n, dataTypeMap, payloadTypeMap)).toList();
     }
 
     private static List<ConditionNode> resolveConditionList(List<ConditionNode> nodes,
-                                                             Map<String, String> dataTypeMap) {
-        return nodes.stream().map(n -> resolveCondition(n, dataTypeMap)).toList();
+                                                             Map<String, String> dataTypeMap,
+                                                             Map<String, String> payloadTypeMap) {
+        return nodes.stream().map(n -> resolveCondition(n, dataTypeMap, payloadTypeMap)).toList();
     }
 }

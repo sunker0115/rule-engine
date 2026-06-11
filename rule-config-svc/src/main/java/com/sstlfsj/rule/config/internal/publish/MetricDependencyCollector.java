@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.publish;
 
+import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 
 import java.util.ArrayList;
@@ -22,11 +23,13 @@ class MetricDependencyCollector {
             case OrNode or   -> or.children().forEach(c -> walk(c, acc));
             case NotNode not -> walk(not.child(), acc);
             case ConditionNode cond -> {
-                if (cond.metricCode() != null) acc.add(cond.metricCode());
+                // payload 字段不是受治理 metric，不计入依赖
+                if (cond.valueRef() != ValueRef.PAYLOAD && cond.metricCode() != null) acc.add(cond.metricCode());
             }
             // ScorecardRootNode：直接遍历叶子条件，收集其 metricCode
             case ScorecardRootNode sc -> sc.conditions().forEach(c -> {
-                if (c.metricCode() != null) acc.add(c.metricCode());
+                // payload 字段不是受治理 metric，不计入依赖
+                if (c.valueRef() != ValueRef.PAYLOAD && c.metricCode() != null) acc.add(c.metricCode());
             });
             // XorNode：遍历全部子节点（全量，不短路）
             case XorNode xor -> xor.children().forEach(c -> walk(c, acc));

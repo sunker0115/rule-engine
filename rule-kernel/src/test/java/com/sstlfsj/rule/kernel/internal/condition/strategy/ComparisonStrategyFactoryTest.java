@@ -9,15 +9,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ComparisonStrategyFactoryTest {
 
     @Test
-    void forType_long_returnsNumeric() {
+    void forType_long_returnsLong() {
         assertThat(ComparisonStrategyFactory.forType("LONG"))
-                .isInstanceOf(NumericComparisonStrategy.class);
+                .isInstanceOf(LongComparisonStrategy.class);
     }
 
     @Test
-    void forType_double_returnsNumeric() {
+    void forType_double_returnsDouble() {
         assertThat(ComparisonStrategyFactory.forType("DOUBLE"))
-                .isInstanceOf(NumericComparisonStrategy.class);
+                .isInstanceOf(DoubleComparisonStrategy.class);
+    }
+
+    @Test
+    void forType_decimal_returnsDecimal() {
+        assertThat(ComparisonStrategyFactory.forType("DECIMAL"))
+                .isInstanceOf(DecimalComparisonStrategy.class);
     }
 
     @Test
@@ -47,6 +53,13 @@ class ComparisonStrategyFactoryTest {
     @Test
     void forType_unknown_returnsDefault() {
         assertThat(ComparisonStrategyFactory.forType("UNKNOWN"))
+                .isInstanceOf(DefaultComparisonStrategy.class);
+    }
+
+    @Test
+    void forType_unrecognized_returnsDefault() {
+        // 未识别字符串经 DataType.fromTag → UNKNOWN，落 DEFAULT（同原 default 分支）
+        assertThat(ComparisonStrategyFactory.forType("INT"))
                 .isInstanceOf(DefaultComparisonStrategy.class);
     }
 

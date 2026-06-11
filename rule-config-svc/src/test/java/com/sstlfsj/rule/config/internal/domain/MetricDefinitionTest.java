@@ -2,6 +2,8 @@ package com.sstlfsj.rule.config.internal.domain;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /** 验证 MetricDefinition Lombok getter/setter 及字段覆盖。 */
@@ -17,10 +19,10 @@ class MetricDefinitionTest {
         metric.setName("年龄");
         metric.setSourceType("ATTRIBUTE");
         metric.setDataType("LONG");
-        metric.setParams("{\"field\":\"age\"}");
+        metric.setParams(Map.of("field", "age"));
         metric.setCacheTtlSeconds(60);
         metric.setAllowProvided(true);
-        metric.setStatus("ACTIVE");
+        metric.setStatus(MetricStatus.ACTIVE);
         metric.setCreatedBy("operator1");
         metric.setUpdatedBy("operator2");
 
@@ -31,10 +33,10 @@ class MetricDefinitionTest {
         assertEquals("年龄", metric.getName());
         assertEquals("ATTRIBUTE", metric.getSourceType());
         assertEquals("LONG", metric.getDataType());
-        assertEquals("{\"field\":\"age\"}", metric.getParams());
+        assertEquals(Map.of("field", "age"), metric.getParams());
         assertEquals(60, metric.getCacheTtlSeconds());
         assertTrue(metric.getAllowProvided());
-        assertEquals("ACTIVE", metric.getStatus());
+        assertEquals(MetricStatus.ACTIVE, metric.getStatus());
         assertEquals("operator1", metric.getCreatedBy());
         assertEquals("operator2", metric.getUpdatedBy());
     }

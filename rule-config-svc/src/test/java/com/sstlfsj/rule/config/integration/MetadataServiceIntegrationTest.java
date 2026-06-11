@@ -3,14 +3,21 @@ package com.sstlfsj.rule.config.integration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
@@ -59,8 +66,7 @@ class MetadataServiceIntegrationTest {
     }
 
     private static final long TENANT = 1L;
-    private static final String AND_NODE =
-            "{\"type\":\"AndNode\",\"children\":[],\"displayLabel\":null,\"weight\":null}";
+    private static final AndNode AND_NODE = new AndNode(List.of(), null, null);
 
     @Autowired private MetadataService metadataService;
     @Autowired private SceneMapper sceneMapper;
@@ -76,9 +82,9 @@ class MetadataServiceIntegrationTest {
         metricDefinitionMapper.delete(new LambdaQueryWrapper<MetricDefinition>().isNotNull(MetricDefinition::getId));
         sceneMapper.delete(new LambdaQueryWrapper<SceneDef>().isNotNull(SceneDef::getId));
 
-        SceneDef fraud = scene("fraud", "[\"login\"]");
+        SceneDef fraud = scene("fraud", List.of("login"));
         sceneMapper.insert(fraud);
-        SceneDef payment = scene("payment", "[\"pay\"]");
+        SceneDef payment = scene("payment", List.of("pay"));
         sceneMapper.insert(payment);
 
         // 三个 ACTIVE metric 定义；user.age 不被任何规则引用
@@ -93,21 +99,21 @@ class MetadataServiceIntegrationTest {
         ruleDefinitionMapper.insert(rdPay);
 
         ruleVersionMapper.insert(ruleVersion(rdFraud.getId(),
-                "[{\"metricCode\":\"risk.score\",\"metricVersion\":1}]"));
+                List.of(new MetricDependency("risk.score", 1))));
         ruleVersionMapper.insert(ruleVersion(rdPay.getId(),
-                "[{\"metricCode\":\"account.balance\",\"metricVersion\":1}]"));
+                List.of(new MetricDependency("account.balance", 1))));
     }
 
-    private SceneDef scene(String code, String eventTypesJson) {
+    private SceneDef scene(String code, List<String> eventTypes) {
         SceneDef s = new SceneDef();
         s.setTenantId(TENANT);
         s.setCode(code);
         s.setName(code);
-        s.setDominantMode("PUSH");
-        s.setDecisionStrategy("HIGHEST_PRIORITY");
-        s.setSubjectType("USER");
-        s.setEventTypes(eventTypesJson);
-        s.setStatus("ACTIVE");
+        s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        s.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
+        s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
+        s.setEventTypes(eventTypes);
+        s.setStatus(SceneStatus.ACTIVE);
         return s;
     }
 
@@ -118,10 +124,10 @@ class MetadataServiceIntegrationTest {
         m.setName(code);
         m.setSourceType(sourceType);
         m.setDataType(dataType);
-        m.setParams("{}");
+        m.setParams(java.util.Map.of());
         m.setCacheTtlSeconds(60);
         m.setAllowProvided(false);
-        m.setStatus("ACTIVE");
+        m.setStatus(MetricStatus.ACTIVE);
         return m;
     }
 
@@ -131,23 +137,29 @@ class MetadataServiceIntegrationTest {
         r.setSceneId(sceneId);
         r.setCode(code);
         r.setName(code);
-        r.setStatus("PUBLISHED");
-        r.setKind("AST_BOOLEAN");
+        r.setStatus(RuleDefinitionStatus.PUBLISHED);
+        r.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         r.setCurrentVersion(1L);
         return r;
     }
 
-    private RuleVersion ruleVersion(Long ruleDefinitionId, String metricDepsJson) {
+    private RuleVersion ruleVersion(Long ruleDefinitionId, List<MetricDependency> metricDeps) {
+        return ruleVersion(ruleDefinitionId, metricDeps, List.of());
+    }
+
+    private RuleVersion ruleVersion(Long ruleDefinitionId, List<MetricDependency> metricDeps,
+                                    List<PayloadDependency> payloadDeps) {
         RuleVersion v = new RuleVersion();
         v.setRuleDefinitionId(ruleDefinitionId);
         v.setVersion(1L);
         v.setConditionAst(AND_NODE);
-        v.setDecisionBindings("[]");
-        v.setPreGates("[]");
-        v.setKind("AST_BOOLEAN");
-        v.setTriggerEventTypes("[\"e\"]");
-        v.setMetricDependencies(metricDepsJson);
-        v.setStatus("ACTIVE");
+        v.setDecisionBindings(List.of());
+        v.setPreGates(List.of());
+        v.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
+        v.setTriggerEventTypes(List.of("e"));
+        v.setMetricDependencies(metricDeps);
+        v.setPayloadDependencies(payloadDeps);
+        v.setStatus(RuleVersionStatus.ACTIVE);
         return v;
     }
 
@@ -175,5 +187,33 @@ class MetadataServiceIntegrationTest {
     @Test
     void declaredMode_unknownScene_returnsEmpty() {
         assertThat(metadataService.listMetricDefinitions("1", List.of("nope"))).isEmpty();
+    }
+
+    /**
+     * input-manifest 场景级并集：fraud 场景下两条 ACTIVE 规则的 payloadDependencies
+     * （rule1: amount；rule2: amount+country）经真 DB 持久化/读回后，按 name 去重并集为 [amount, country]。
+     */
+    @Test
+    void getInputManifest_unionsPayloadDepsAcrossRules_dedupByName() {
+        // fraud 场景已 seed 一条无 payload 依赖的规则；再补两条带 payload 依赖的规则
+        SceneDef fraud = sceneMapper.findByCode(TENANT, "fraud");
+
+        RuleDefinition rd1 = ruleDef(fraud.getId(), "r-pay-amount");
+        ruleDefinitionMapper.insert(rd1);
+        ruleVersionMapper.insert(ruleVersion(rd1.getId(), List.of(),
+                List.of(new PayloadDependency("amount", "DECIMAL", true))));
+
+        RuleDefinition rd2 = ruleDef(fraud.getId(), "r-pay-amount-country");
+        ruleDefinitionMapper.insert(rd2);
+        ruleVersionMapper.insert(ruleVersion(rd2.getId(), List.of(),
+                List.of(new PayloadDependency("amount", "DECIMAL", true),
+                        new PayloadDependency("country", "STRING", true))));
+
+        MetadataService.InputManifestResponse resp =
+                metadataService.getInputManifest("1", "fraud", null);
+
+        assertThat(resp.fields())
+                .extracting(MetadataService.InputFieldSpec::name)
+                .containsExactlyInAnyOrder("amount", "country");
     }
 }

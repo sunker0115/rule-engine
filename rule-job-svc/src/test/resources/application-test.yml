@@ -1,0 +1,14 @@
+spring:
+  flyway:
+    locations: classpath:db/migration
+    enabled: true
+  datasource:
+    url: jdbc:mysql://localhost:3306/rule_engine_test
+    username: test
+    password: test
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler

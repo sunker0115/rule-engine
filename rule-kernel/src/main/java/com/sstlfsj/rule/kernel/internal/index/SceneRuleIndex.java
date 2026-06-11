@@ -4,8 +4,10 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.SceneExecutionStrategy;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -38,12 +40,15 @@ public class SceneRuleIndex {
         if (exact.isEmpty()) return wildcard;
         if (wildcard.isEmpty()) return exact;
 
-        // 合并，使用 ruleVersionId 去重
-        List<RuleVersionSnapshot> merged = new ArrayList<>(exact);
+        // exact 优先入列，wildcard 仅补充未出现过的 ruleVersionId（Set 去重，线性）
+        Set<Long> seen = new HashSet<>(exact.size() * 2);
+        List<RuleVersionSnapshot> merged = new ArrayList<>(exact.size() + wildcard.size());
+        for (RuleVersionSnapshot snap : exact) {
+            seen.add(snap.ruleVersionId());
+            merged.add(snap);
+        }
         for (RuleVersionSnapshot snap : wildcard) {
-            if (exact.stream().noneMatch(s -> s.ruleVersionId().equals(snap.ruleVersionId()))) {
-                merged.add(snap);
-            }
+            if (seen.add(snap.ruleVersionId())) merged.add(snap);
         }
         return List.copyOf(merged);
     }

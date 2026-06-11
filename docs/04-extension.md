@@ -57,33 +57,34 @@ public @interface ConditionType {
 
 Spring Bean + 注解扫描：引擎启动时扫 `@ConditionType` 注解的 Bean，注册到 `ConditionTypeRegistry`（全局唯一 + 重复注册报错）。
 
-### 2.4 实现示例（metric.threshold）
+### 2.4 实现示例（自定义算子 `geo.distance_within`）
+
+> 内置比较算子（`GT` / `IN` / `BETWEEN` …，见 [`03-rule-expression.md`](./03-rule-expression.md) §三）已由 `KernelEvaluators.defaults()` 注册，**算子码即 conditionType**，无需自己写。下例演示注册一个内置清单里没有的**自定义算子**：判断指标坐标点是否在目标点指定半径内。
 
 ```java
 @Component
 @ConditionType(
-    value = "metric.threshold",
-    displayName = "指标阈值比较",
+    value = "geo.distance_within",
+    displayName = "地理半径内",
     paramsSchema = """
         {
           "type": "object",
-          "required": ["operator"],
+          "required": ["centerLat", "centerLng", "radiusKm"],
           "properties": {
-            "operator": { "type": "string", "enum": ["EQ","NEQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
-            "value":    { "type": "number" },
-            "min":      { "type": "number" },
-            "max":      { "type": "number" }
+            "centerLat": { "type": "number" },
+            "centerLng": { "type": "number" },
+            "radiusKm":  { "type": "number" }
           }
         }
     """
 )
-public class MetricThresholdEvaluator implements ConditionEvaluator {
+public class GeoDistanceWithinEvaluator implements ConditionEvaluator {
     @Override
     public boolean evaluate(ConditionNode node, EvalContext ctx) {
         Object metricVal = ctx.getMetric(node.getMetricCode());
         if (metricVal == null) throw new MetricNotFoundException(node.getMetricCode());
-        // 按 node.getParams().get("operator") 做比较
-        return compare(metricVal, node.getParams());
+        // metricVal 为 "lat,lng" 坐标点；按 params 的 center + radiusKm 判定是否在圈内
+        return withinRadius(metricVal, node.getParams());
     }
 }
 ```
@@ -99,6 +100,8 @@ public class MetricThresholdEvaluator implements ConditionEvaluator {
 
 ## 三、加 ActionType
 
+> **引擎内置 handler 仅 `SEND_ALERT`**（HTTP webhook，足够通用）。`BLOCK_TRANSACTION` 等强依赖宿主系统的动作**不内置**（D57：通用引擎无通用"阻断交易"机制）——`actionType` 仍可自由配置，由嵌入方按本节经 `ActionHandler` SPI 自写真实实现;未注册对应 handler 时派发落 `NO_HANDLER` SKIPPED。
+
 ### 3.1 SPI 接口
 
 ```java
@@ -110,14 +113,6 @@ public interface ActionHandler {
      * @return ActionResult（不要抛异常，catch 后归一为 FAILED）
      */
     ActionResult execute(ActionContext ctx);
-
-    /**
-     * 补偿（回滚）。由外部对账任务调用，非引擎自动触发（D18）。
-     * @return ActionResult
-     */
-    default ActionResult compensate(ActionContext ctx) {
-        return ActionResult.notSupported();
-    }
 
     /**
      * dry-run 预览。不发起任何外部副作用（HTTP/MQ/DB 写入），返回预测 ActionResult。
@@ -136,7 +131,7 @@ public interface ActionHandler {
 ActionContext {
     actionId:          String          // Action 实例 id（对应 Decision.actions[n].actionId）
     actionType:        String          // 与 @ActionType.value 对应
-    params:            Map<String,Any> // Action 最终参数：以 scene_action_binding.default_params 为底，Decision.actions[n].params 覆盖合并（Decision 级优先）；发布时快照到 rule_version.decision_bindings
+    params:            Map<String,Any> // Action 参数：取自 Decision.actions[n].params（D54：归 decision，与 scene 无关）；发布时快照到 rule_version.decision_bindings
     evalContext:       EvalContext     // 本次评估上下文（含 eventId / subjectId / payload 等）
     actionExecutionId: Long            // action_execution 表行 id（用于幂等键）
     decisionCode:      String          // 触发本 Action 的 Decision 码（D27）
@@ -145,14 +140,14 @@ ActionContext {
 
 > `ActionContext.evalContext.getEventId()` 是推荐幂等键组成之一，见 §3.5 实现约束。
 
-### 3.2 ActionResult 契约（D16 / D18 派生）
+### 3.2 ActionResult 契约（D16 派生）
 
 ```java
 ActionResult {
-    status:       SUCCESS | FAILED | SKIPPED   // SKIPPED 只由引擎填（PREDECESSOR_FAILED）
+    status:       SUCCESS | FAILED | SKIPPED   // SKIPPED 由引擎填（PREDECESSOR_FAILED / handler 缺失 / 无 webhook URL）
     errorCode:    String?                       // 见 01-concepts §3.7 errorCode 清单
     errorMessage: String?                       // 人类可读错误信息，不作程序判断
-    retryable:    Boolean                       // true = 入重试队列；false = 直接落库 FAILED
+    retryable:    Boolean                       // 保留字段；best-effort 化后不再驱动重试队列（D53），失败即终态
 }
 ```
 
@@ -166,7 +161,6 @@ public @interface ActionType {
     String displayName() default "";
     String paramsSchema() default "{}";   // 前端表单 schema
     int timeoutMs() default 3000;  // Handler 声明的超时预算；引擎据此设置调用上限，超时归 TIMEOUT errorCode
-    boolean compensatable() default false; // 是否声明补偿支持（前端提示）
 }
 ```
 
@@ -188,8 +182,7 @@ public @interface ActionType {
           }
         }
     """,
-    timeoutMs = 3000,
-    compensatable = true
+    timeoutMs = 3000
 )
 public class TicketCreateHandler implements ActionHandler {
     @Override
@@ -202,16 +195,10 @@ public class TicketCreateHandler implements ActionHandler {
             ticketService.create(buildRequest(ctx));
             return ActionResult.success();
         } catch (TimeoutException e) {
-            return ActionResult.failed("TIMEOUT", true);
+            return ActionResult.failed("TIMEOUT", false);
         } catch (BusinessException e) {
             return ActionResult.failed("BUSINESS_REJECTED", false);
         }
-    }
-
-    @Override
-    public ActionResult compensate(ActionContext ctx) {
-        ticketService.close(ctx.getEvalContext().getEventId());
-        return ActionResult.success();
     }
 }
 ```
@@ -221,8 +208,8 @@ public class TicketCreateHandler implements ActionHandler {
 - execute() 内**必须**做幂等检查（幂等键推荐：`tenantId + eventId + decisionCode + actionId`，与 D27 迁移后的幂等键设计对齐）
 - 超时处理分两种场景：
   - **Handler 主动处理**：catch TimeoutException 后返回 `ActionResult.failed("TIMEOUT", true)`（推荐，便于区分业务超时和引擎中断）
-  - **引擎强制中断**：Handler 超过 timeoutMs 仍未返回时，引擎中断调用并归为 `ActionResult { status=FAILED, errorCode=TIMEOUT, retryable=true }`；Handler 无需额外处理，但不会收到任何回调
-- compensate() 如不支持，返回 `ActionResult.notSupported()`（不要抛异常）
+  - **引擎强制中断**：Handler 超过 timeoutMs 仍未返回时，引擎中断调用并归为 `ActionResult { status=FAILED, errorCode=TIMEOUT }`；Handler 无需额外处理，但不会收到任何回调
+- Action 投递 best-effort（D53）：失败即终态、不重试不补偿；可靠投递未来接 MQ
 - Action 失败**不影响** EvalResult.satisfied（D18，评估阶段已结束）
 
 ---
@@ -282,7 +269,7 @@ public @interface MetricSourceType {
 前端进入编辑器时调用：
 
 ```
-GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
+GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 ```
 
 （该接口定义见 `10-api-contract.md` §五，本节只说元数据结构）
@@ -293,32 +280,29 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 {
   "conditionTypes": [
     {
-      "code": "metric.threshold",
-      "displayName": "指标阈值比较",
+      "code": "GT",
+      "displayName": "大于",
       "paramsSchema": {
         "type": "object",
+        "required": ["threshold"],
         "properties": {
-          "operator": { "type": "string", "enum": ["EQ","NEQ","GT","GTE","LT","LTE","BETWEEN","NOT_BETWEEN"] },
-          "value": { "type": "number" },
-          "min": { "type": "number" },
-          "max": { "type": "number" }
+          "threshold": { "type": "number" }
         }
       },
       "requiresMetric": true
     },
     {
-      "code": "event.payload.compare",
-      "displayName": "Payload 字段比较",
-      "paramsSchema": { "type": "object", "properties": { "field": { "type": "string" }, "operator": { "type": "string" }, "value": {} } },
-      "requiresMetric": false
+      "code": "geo.distance_within",
+      "displayName": "地理半径内",
+      "paramsSchema": { "type": "object", "required": ["centerLat", "centerLng", "radiusKm"], "properties": { "centerLat": { "type": "number" }, "centerLng": { "type": "number" }, "radiusKm": { "type": "number" } } },
+      "requiresMetric": true
     }
   ],
   "actionTypes": [
     {
       "code": "ticket.create",
       "displayName": "创建工单",
-      "paramsSchema": { "type": "object", "required": ["title", "assignee"], "properties": { "title": { "type": "string" }, "assignee": { "type": "string" } } },
-      "compensatable": true
+      "paramsSchema": { "type": "object", "required": ["title", "assignee"], "properties": { "title": { "type": "string" }, "assignee": { "type": "string" } } }
     }
   ],
   "availableMetrics": [
@@ -335,7 +319,7 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 5.3 约束
 
-- `availableMetrics` 只返回 Scene.metricBindings 白名单内的 metric，不暴露全局 metric 列表
+- `availableMetrics` 返回 tenant 级全部 ACTIVE metric（D54：metric tenant 级可用，无 scene 白名单）
 - `requiresMetric=true` 的 ConditionType 在前端选择时同时渲染 metric 下拉框（来自 availableMetrics）
 - `paramsSchema` 是 JSON Schema Draft-07 格式，前端按此动态渲染参数表单（不硬编码表单字段）
 - 好处：业务方新注册 `@ConditionType` 后，前端无需改代码，元数据接口自动返回新类型
@@ -362,7 +346,7 @@ GET /api/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 6.3 Bean 生命周期
 
-MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（SceneWatcher 负责感知 Scene 状态变更并通知引擎调度这些回调，不直接调用 init()）。ActionHandler 类似，但 PULL Scene 不预热（只 PUSH/HYBRID Scene 预热，详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
+MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（引擎在 Scene 状态变更时调度这些回调，不由 handler 直接调用 init()）。ActionHandler 类似，但 PULL Scene 不预热（只 PUSH/HYBRID Scene 预热，详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
 
 ---
 

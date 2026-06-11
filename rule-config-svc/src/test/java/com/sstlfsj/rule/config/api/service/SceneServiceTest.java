@@ -1,7 +1,12 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
+import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -12,15 +17,15 @@ class SceneServiceTest {
         @Override
         public Long createScene(String tenantId, String sceneCode, String name,
                                 String description, String dominantMode, String subjectType,
-                                String eventTypesJson, String payloadSchemaJson,
-                                String defaultParamsJson, String actorId) {
+                                List<String> eventTypes, List<PayloadFieldSpec> payloadSchema,
+                                Map<String, Object> defaultParams, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
         public void updateScene(String tenantId, String sceneCode,
-                                String name, String eventTypesJson,
-                                String payloadSchemaJson, String defaultParamsJson,
+                                String name, List<String> eventTypes,
+                                List<PayloadFieldSpec> payloadSchema, Map<String, Object> defaultParams,
                                 String actorId) {
             throw new UnsupportedOperationException("stub");
         }
@@ -32,6 +37,11 @@ class SceneServiceTest {
 
         @Override
         public void disableScene(String tenantId, String sceneCode, String actorId) {
+            throw new UnsupportedOperationException("stub");
+        }
+
+        @Override
+        public List<SceneListItem> listScenes(String tenantId) {
             throw new UnsupportedOperationException("stub");
         }
     };
@@ -59,5 +69,11 @@ class SceneServiceTest {
     void disableScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.disableScene("t1", "SCENE_A", "actor"));
+    }
+
+    @Test
+    void listScenes_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.listScenes("t1"));
     }
 }

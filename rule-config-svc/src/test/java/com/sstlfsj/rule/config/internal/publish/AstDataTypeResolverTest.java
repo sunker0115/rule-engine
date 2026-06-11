@@ -19,9 +19,22 @@ class AstDataTypeResolverTest {
                 Map.of("threshold", 100), 0.0);
         Map<String, String> typeMap = Map.of("amount", "LONG");
 
-        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap, Map.of());
 
         assertThat(result).isInstanceOf(ConditionNode.class);
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("LONG");
+    }
+
+    @Test
+    void resolve_conditionNode_existingDataTypeOverwrittenByCurrentWorld() {
+        // 回退克隆场景：输入 AST 已带 dataType(STRING)，重解析应按当前世界 typeMap 覆盖为 LONG，
+        // 不读取既有值（保证"按当前世界重解析"）。
+        ConditionNode preResolved = new ConditionNode("GT", "amount", null,
+                Map.of("threshold", 100), 0.0, "STRING", com.sstlfsj.rule.kernel.api.model.ValueRef.METRIC);
+        Map<String, String> typeMap = Map.of("amount", "LONG");
+
+        AstNode result = AstDataTypeResolver.resolve(preResolved, typeMap, Map.of());
+
         assertThat(((ConditionNode) result).dataType()).isEqualTo("LONG");
     }
 
@@ -31,7 +44,7 @@ class AstDataTypeResolverTest {
                 Map.of("threshold", 100), 0.0);
         Map<String, String> typeMap = Map.of("amount", "LONG");
 
-        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap, Map.of());
 
         // 查不到的 metric -> 跳过冻结，dataType=null（不报错）
         assertThat(((ConditionNode) result).dataType()).isNull();
@@ -45,7 +58,7 @@ class AstDataTypeResolverTest {
         ), null, null);
         Map<String, String> typeMap = Map.of("amount", "LONG", "status", "STRING");
 
-        AstNode result = AstDataTypeResolver.resolve(and, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(and, typeMap, Map.of());
 
         assertThat(result).isInstanceOf(AndNode.class);
         List<AstNode> children = ((AndNode) result).children();
@@ -59,7 +72,7 @@ class AstDataTypeResolverTest {
                 Map.of("threshold", "true"), 0.0));
         Map<String, String> typeMap = Map.of("flag", "BOOLEAN");
 
-        AstNode result = AstDataTypeResolver.resolve(not, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(not, typeMap, Map.of());
 
         assertThat(result).isInstanceOf(NotNode.class);
         assertThat(((ConditionNode)((NotNode) result).child()).dataType()).isEqualTo("BOOLEAN");
@@ -72,7 +85,7 @@ class AstDataTypeResolverTest {
         ), null, null);
         Map<String, String> typeMap = Map.of("type", "STRING");
 
-        AstNode result = AstDataTypeResolver.resolve(or, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(or, typeMap, Map.of());
 
         assertThat(result).isInstanceOf(OrNode.class);
         assertThat(((ConditionNode)((OrNode) result).children().get(0)).dataType())
@@ -86,7 +99,7 @@ class AstDataTypeResolverTest {
         ), null);
         Map<String, String> typeMap = Map.of("code", "STRING");
 
-        AstNode result = AstDataTypeResolver.resolve(xor, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(xor, typeMap, Map.of());
 
         assertThat(result).isInstanceOf(XorNode.class);
         assertThat(((ConditionNode)((XorNode) result).children().get(0)).dataType())
@@ -100,7 +113,7 @@ class AstDataTypeResolverTest {
         ), 0.6);
         Map<String, String> typeMap = Map.of("score", "DOUBLE");
 
-        AstNode result = AstDataTypeResolver.resolve(sc, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(sc, typeMap, Map.of());
 
         assertThat(result).isInstanceOf(ScorecardRootNode.class);
         assertThat(((ScorecardRootNode) result).conditions().get(0).dataType())
@@ -116,7 +129,7 @@ class AstDataTypeResolverTest {
         );
         Map<String, String> typeMap = Map.of("amount", "LONG");
 
-        AstNode result = AstDataTypeResolver.resolve(ifn, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(ifn, typeMap, Map.of());
 
         assertThat(result).isInstanceOf(IfNode.class);
         IfNode resolved = (IfNode) result;
@@ -134,7 +147,7 @@ class AstDataTypeResolverTest {
         );
         Map<String, String> typeMap = Map.of("amount", "LONG");
 
-        AstNode result = AstDataTypeResolver.resolve(dt, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(dt, typeMap, Map.of());
 
         assertThat(result).isInstanceOf(DecisionTableNode.class);
         DecisionTableNode resolved = (DecisionTableNode) result;
@@ -152,7 +165,7 @@ class AstDataTypeResolverTest {
         );
         Map<String, String> typeMap = Map.of("country", "STRING");
 
-        assertThatThrownBy(() -> AstDataTypeResolver.resolve(dt, typeMap))
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(dt, typeMap, Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("GT");
     }
@@ -162,7 +175,7 @@ class AstDataTypeResolverTest {
         // 决策树终端叶子：无比较、无 metric，原样返回（永久边界，非待办）
         DecisionLeafNode leaf = new DecisionLeafNode("BLOCK", "HIGH");
 
-        AstNode result = AstDataTypeResolver.resolve(leaf, Map.of());
+        AstNode result = AstDataTypeResolver.resolve(leaf, Map.of(), Map.of());
 
         assertThat(result).isSameAs(leaf);
     }
@@ -176,7 +189,7 @@ class AstDataTypeResolverTest {
                 Map.of("threshold", "true"), 0.0);
         Map<String, String> typeMap = Map.of("flag", "BOOLEAN");
 
-        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap, Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("GT")
                 .hasMessageContaining("BOOLEAN");
@@ -189,7 +202,7 @@ class AstDataTypeResolverTest {
                 Map.of("values", List.of("true")), 0.0);
         Map<String, String> typeMap = Map.of("flag", "BOOLEAN");
 
-        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap, Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("IN")
                 .hasMessageContaining("BOOLEAN");
@@ -202,7 +215,7 @@ class AstDataTypeResolverTest {
                 Map.of("threshold", "true"), 0.0);
         Map<String, String> typeMap = Map.of("flag", "BOOLEAN");
 
-        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap, Map.of());
         assertThat(((ConditionNode) result).dataType()).isEqualTo("BOOLEAN");
     }
 
@@ -212,7 +225,7 @@ class AstDataTypeResolverTest {
         ConditionNode cond = new ConditionNode("GT", "unknown", null,
                 Map.of("threshold", 100), 0.0);
         // 不在 typeMap 里
-        AstNode result = AstDataTypeResolver.resolve(cond, Map.of());
+        AstNode result = AstDataTypeResolver.resolve(cond, Map.of(), Map.of());
         assertThat(((ConditionNode) result).dataType()).isNull();
     }
 
@@ -223,7 +236,7 @@ class AstDataTypeResolverTest {
                 Map.of("value", "vip"), 0.0);
         Map<String, String> typeMap = Map.of("tags", "LIST");
 
-        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap, Map.of());
         assertThat(((ConditionNode) result).dataType()).isEqualTo("LIST");
     }
 
@@ -236,7 +249,7 @@ class AstDataTypeResolverTest {
                 Map.of("value", "foo"), 0.0);
         Map<String, String> typeMap = Map.of("name", "STRING");
 
-        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap, Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("CONTAINS")
                 .hasMessageContaining("STRING");
@@ -249,7 +262,7 @@ class AstDataTypeResolverTest {
                 Map.of("threshold", 1), 0.0);
         Map<String, String> typeMap = Map.of("tags", "LIST");
 
-        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap, Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("GT")
                 .hasMessageContaining("LIST");
@@ -262,7 +275,7 @@ class AstDataTypeResolverTest {
                 Map.of("value", "10"), 0.0);
         Map<String, String> typeMap = Map.of("amount", "LONG");
 
-        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap))
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap, Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("STARTS_WITH")
                 .hasMessageContaining("LONG");
@@ -275,8 +288,34 @@ class AstDataTypeResolverTest {
                 Map.of("value", "CN"), 0.0);
         Map<String, String> typeMap = Map.of("code", "STRING");
 
-        AstNode result = AstDataTypeResolver.resolve(cond, typeMap);
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap, Map.of());
         assertThat(((ConditionNode) result).dataType()).isEqualTo("STRING");
+    }
+
+    // ── DECIMAL 数值算子兼容矩阵 ──────────────────────────────────────────────
+
+    @Test
+    void resolve_gteWithDecimal_ok() {
+        // GTE 允许 DECIMAL（精确小数/金额）-> 不报错，dataType 冻结为 DECIMAL
+        ConditionNode cond = new ConditionNode("GTE", "balance", null,
+                Map.of("threshold", "9999.99"), 0.0);
+        Map<String, String> typeMap = Map.of("balance", "DECIMAL");
+
+        AstNode result = AstDataTypeResolver.resolve(cond, typeMap, Map.of());
+        assertThat(((ConditionNode) result).dataType()).isEqualTo("DECIMAL");
+    }
+
+    @Test
+    void resolve_inWithDecimal_throwsIllegalArgument() {
+        // IN 仅允许 LONG/STRING；DECIMAL 不在允许集 -> 报错（DECIMAL 不渗入非数值算子）
+        ConditionNode cond = new ConditionNode("IN", "balance", null,
+                Map.of("values", List.of("9999.99")), 0.0);
+        Map<String, String> typeMap = Map.of("balance", "DECIMAL");
+
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, typeMap, Map.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("IN")
+                .hasMessageContaining("DECIMAL");
     }
 
     // ── B20 时间行 ────────────────────────────────────────────────────────────
@@ -285,7 +324,7 @@ class AstDataTypeResolverTest {
     void resolve_eqWithDate_ok() {
         ConditionNode cond = new ConditionNode("EQ", "joinDate", null,
                 Map.of("threshold", "2026-06-01"), 0.0);
-        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("joinDate", "DATE"));
+        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("joinDate", "DATE"), Map.of());
         assertThat(((ConditionNode) result).dataType()).isEqualTo("DATE");
     }
 
@@ -293,7 +332,7 @@ class AstDataTypeResolverTest {
     void resolve_betweenWithDatetime_ok() {
         ConditionNode cond = new ConditionNode("BETWEEN", "ts", null,
                 Map.of("min", "2026-01-01T00:00:00Z", "max", "2026-06-01T00:00:00Z"), 0.0);
-        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("ts", "DATETIME"));
+        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("ts", "DATETIME"), Map.of());
         assertThat(((ConditionNode) result).dataType()).isEqualTo("DATETIME");
     }
 
@@ -301,7 +340,7 @@ class AstDataTypeResolverTest {
     void resolve_dateBeforeWithDate_ok() {
         ConditionNode cond = new ConditionNode("DATE_BEFORE", "joinDate", null,
                 Map.of("threshold", "2026-06-01"), 0.0);
-        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("joinDate", "DATE"));
+        AstNode result = AstDataTypeResolver.resolve(cond, Map.of("joinDate", "DATE"), Map.of());
         assertThat(((ConditionNode) result).dataType()).isEqualTo("DATE");
     }
 
@@ -310,7 +349,7 @@ class AstDataTypeResolverTest {
         // DATE_BEFORE 现在只允许 DATE/DATETIME，LONG 被拒
         ConditionNode cond = new ConditionNode("DATE_BEFORE", "amount", null,
                 Map.of("threshold", 100), 0.0);
-        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, Map.of("amount", "LONG")))
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, Map.of("amount", "LONG"), Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("DATE_BEFORE")
                 .hasMessageContaining("LONG");
@@ -320,7 +359,7 @@ class AstDataTypeResolverTest {
     void resolve_dateAfterWithString_throwsIllegalArgument() {
         ConditionNode cond = new ConditionNode("DATE_AFTER", "name", null,
                 Map.of("threshold", "x"), 0.0);
-        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, Map.of("name", "STRING")))
+        assertThatThrownBy(() -> AstDataTypeResolver.resolve(cond, Map.of("name", "STRING"), Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("DATE_AFTER")
                 .hasMessageContaining("STRING");

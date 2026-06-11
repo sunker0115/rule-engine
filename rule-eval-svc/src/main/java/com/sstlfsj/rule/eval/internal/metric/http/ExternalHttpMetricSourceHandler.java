@@ -2,8 +2,11 @@ package com.sstlfsj.rule.eval.internal.metric.http;
 
 import com.sstlfsj.rule.eval.internal.metric.DataTypeCoercion;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.SourceType;
+import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -24,10 +27,9 @@ import java.util.regex.Pattern;
  * 200+jsonPath 命中→FETCHED；200 无匹配→null；非 200/超时/连接失败→METRIC_FETCH_FAIL。
  */
 @Component
-@MetricSourceType("EXTERNAL_HTTP")
+@MetricSourceType(SourceType.EXTERNAL_HTTP)
 public class ExternalHttpMetricSourceHandler implements MetricSourceHandler {
 
-    private static final String METRIC_FETCH_FAIL = "METRIC_FETCH_FAIL";
     private static final Pattern PH = Pattern.compile("\\{([a-zA-Z_][\\w.]*)\\}");
 
     private final HttpEndpointRegistry registry;
@@ -45,9 +47,9 @@ public class ExternalHttpMetricSourceHandler implements MetricSourceHandler {
         Object path = p.get("path");
         Object jsonPath = p.get("jsonPath");
         Object dataType = p.get("dataType");
-        if (endpointName == null || path == null || jsonPath == null) return MetricValue.error(METRIC_FETCH_FAIL);
+        if (endpointName == null || path == null || jsonPath == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
         HttpEndpointRegistry.Endpoint ep = registry.get(endpointName.toString());
-        if (ep == null) return MetricValue.error(METRIC_FETCH_FAIL);
+        if (ep == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
         try {
             String rendered = renderPath(path.toString(), query.eventPayload(), castParams(p.get("params")));
             HttpRequest.Builder req = HttpRequest.newBuilder()
@@ -58,13 +60,13 @@ public class ExternalHttpMetricSourceHandler implements MetricSourceHandler {
                 req.header(ep.authHeaderName(), ep.authHeaderValue());
             }
             HttpResponse<String> resp = ep.client().send(req.build(), HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() != 200) return MetricValue.error(METRIC_FETCH_FAIL);
+            if (resp.statusCode() != 200) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
             JsonNode root = objectMapper.readTree(resp.body());
             Object raw = extractJsonPath(root, jsonPath.toString());
             String dt = dataType != null ? dataType.toString() : null;
-            return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, "FETCHED");
+            return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, ValueSource.FETCHED.tag());
         } catch (Exception e) {
-            return MetricValue.error(METRIC_FETCH_FAIL);
+            return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
         }
     }
 

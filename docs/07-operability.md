@@ -123,7 +123,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | 指标名 | 类型 | labels | 说明 |
 |--------|------|--------|------|
 | `rule_engine_eval_total` | Counter | `result`(HIT/MISS/BLOCKED/ERROR) | 评估结果分布 |
-| `rule_engine_eval_blocked_total` | Counter | `gate_type`(ROLLOUT/WHITELIST/BLACKLIST/RATE_LIMIT/MUTEX) | Pre-Gate 按类型拦截计数，对应 `blocked_by` 枚举（D22） |
+| `rule_engine_eval_blocked_total` | Counter | `gate_type`(ROLLOUT) | Pre-Gate 按类型拦截计数，对应 `blocked_by`（D52 收敛后仅 ROLLOUT） |
 | `rule_engine_eval_duration_ms` | Histogram | `scene_code` | 评估 P50/P95/P99 延迟 |
 | `rule_engine_metric_fetch_duration_ms` | Histogram | `source_type`, `metric_code` | MetricSource 取数延迟 |
 | `rule_engine_metric_fetch_errors_total` | Counter | `source_type`, `error_type` | 取数失败计数 |
@@ -162,7 +162,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | MetricSource (EXTERNAL_HTTP) | 取数超时 | D15 单节点降级 false，EvalResult.errorCode=METRIC_FETCH_FAIL |
 | MetricSource (SQL_AGGREGATE) | DB 慢查询 / 连接池耗尽 | 同上；建议对 SQL 指标设 cache_ttl > 0 |
 | TraceWriter 队列满 | trace 行丢弃 | trace 丢弃 + counter 告警；**不影响** EvalResult |
-| ActionHandler 外部系统不可用 | execute() 超时 | TIMEOUT retryable=true，入重试队列 |
+| ActionHandler 外部系统不可用 | execute() 超时 | TIMEOUT，落 FAILED 终态（best-effort 不重试，D53）；队列满则丢弃 + 计数 + WARN |
 
 ### v1 不做的高可用（见 08-evolution）
 
@@ -190,13 +190,17 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `engine.rule.metric.default-cache-ttl-seconds` | 60 | metric 取数结果缓存 TTL（per-metric 可覆盖） |
 | `engine.rule.fetch.timeout-ms` | 800 | **全局 metric 并发取数超时**（`FetchResourceProperties`，单一来源）；超时未完成的 metric 置 `METRIC_FETCH_FAIL` 降级。`engine.rule.fetch.datasources` / `.endpoints` 为命名只读数据源 / HTTP 端点（凭证从环境变量注入，不落配置表） |
 | `engine.rule.action.default-timeout-ms` | 3000 | ActionHandler 默认超时（per-handler 可覆盖） |
-| `engine.rule.retention.evaluation-session-days` | 30 | evaluation_session 保留天数（D9） |
+| `engine.rule.retention.enabled` | true | 数据保留清理总开关（各模块 `@Scheduled` cleaner，关则不清） |
+| `engine.rule.retention.cron` | `0 30 3 * * *` | 清理调度 cron（默认每日 03:30） |
+| `engine.rule.retention.batch-size` | 1000 | 单批 `DELETE ... LIMIT` 上限（分批短事务循环） |
+| `engine.rule.retention.evaluation-session-days` | 90 | evaluation_session 保留天数（D9） |
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |
-| `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session 保留天数 |
-| `engine.rule.action.retry-queue-capacity` | 10000 | Action 重试队列容量（内存，进程重启丢失） |
-| `engine.rule.action.retry-initial-interval-ms` | 1000 | 指数退避初始间隔 |
-| `engine.rule.action.retry-max-interval-ms` | 60000 | 指数退避最大间隔 |
-| `engine.rule.action.retry-max-attempts` | 5 | 最大重试次数，超出后落 FAILED 终态 |
+| `engine.rule.retention.action-execution-days` | 90 | action_execution 保留天数（跟随 evaluation_session 生命周期） |
+| `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session + dry_run_node_trace 保留天数（同管 dry_run 两表） |
+| `engine.rule.action.send-alert.url` | （空） | SEND_ALERT webhook URL；空则不实发（D53 best-effort） |
+| `engine.rule.action.send-alert.timeout-ms` | 2000 | SEND_ALERT webhook 连接+请求超时 |
+
+> Action 投递 best-effort（D53）：原 `engine.rule.action.retry-*` 重试队列参数已移除，失败不重试不补偿。
 
 ---
 
@@ -375,7 +379,7 @@ curl -X POST http://localhost:8080/api/v1/rule/evaluate \
   -H "Content-Type: application/json" \
   -d '{"tenantId":"1","sceneCode":"smoke.scene","eventType":"order.placed",
        "subjectId":"u1","eventId":"evt-1","occurredAt":"2026-06-05T00:00:00Z",
-       "payload":{},"providedMetrics":{"order.amount":200}}'
+       "payload":{"order.amount":200}}'
 ```
 
 **3. 日志是否推送 Loki**

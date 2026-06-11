@@ -22,13 +22,12 @@ import java.util.concurrent.*;
 public class EvalContextAssembler {
 
     private static final Logger log = LoggerFactory.getLogger(EvalContextAssembler.class);
-    private static final String METRIC_FETCH_FAIL = "METRIC_FETCH_FAIL";
 
     private final SubjectLoader subjectLoader;
     private final Map<String, MetricSourceHandler> handlersBySourceType;
     private final MetricDefinitionResolver definitionResolver;
     private final MetricCache cache;
-    private final Executor fetchExecutor;
+    private final ExecutorService fetchExecutor;
     private final long fetchTimeoutMs;
 
     /**
@@ -49,14 +48,14 @@ public class EvalContextAssembler {
      * @param handlersBySourceType sourceType → handler 映射
      * @param definitionResolver   metric 定义解析器（null 时禁用 fetch）
      * @param cache                取数缓存（null 时不缓存）
-     * @param fetchExecutor        并发取数线程池（null 时用 ForkJoinPool.commonPool）
+     * @param fetchExecutor        并发取数 ExecutorService（null 时用 ForkJoinPool.commonPool）
      * @param fetchTimeoutMs       全局取数超时毫秒（&le;0 表示不限）
      */
     public EvalContextAssembler(List<SubjectLoader> subjectLoaders,
                                 Map<String, MetricSourceHandler> handlersBySourceType,
                                 MetricDefinitionResolver definitionResolver,
                                 MetricCache cache,
-                                Executor fetchExecutor,
+                                ExecutorService fetchExecutor,
                                 long fetchTimeoutMs) {
         this.subjectLoader = pickUserLoader(subjectLoaders);
         this.handlersBySourceType =
@@ -96,19 +95,23 @@ public class EvalContextAssembler {
                                 List<RuleVersionSnapshot> candidates,
                                 Instant now) {
         Subject subject = loadSubject(event);
-        Map<String, MetricValue> metrics = new HashMap<>();
 
-        // 无解析器：退化为历史行为——所有 providedMetrics 直接进 context
+        // 无解析器：退化为历史行为——所有 providedMetrics 直接进 context（size 精确已知，预设免扩容）
         if (definitionResolver == null) {
+            Map<String, MetricValue> provided = HashMap.newHashMap(event.providedMetrics().size());
             for (Map.Entry<String, Object> e : event.providedMetrics().entrySet()) {
-                metrics.put(e.getKey(), new MetricValue(e.getValue(), "UNKNOWN", "PROVIDED"));
+                provided.put(e.getKey(), new MetricValue(e.getValue(), DataType.UNKNOWN.tag(), ValueSource.PROVIDED.tag()));
             }
-            return new EvalContext(event.tenantId(), event, subject, metrics, now);
+            injectPayload(event, provided);
+            return new EvalContext(event.tenantId(), event, subject, provided, now);
         }
 
         // 按绑定版本解析：同 code 多版本取最高版本（过渡期确定性策略）
         Map<String, Integer> chosenVersions = collectChosenVersions(candidates);
-        Map<String, MetricDescriptor> descriptors = new HashMap<>();
+        // metrics 上界 = 选定版本指标数 + 候选未引用但仍推送的 provided 指标；descriptors 至多选定版本数。预设免 resize/rehash
+        Map<String, MetricValue> metrics =
+                HashMap.newHashMap(chosenVersions.size() + event.providedMetrics().size());
+        Map<String, MetricDescriptor> descriptors = HashMap.newHashMap(chosenVersions.size());
         Set<String> needFetch = new LinkedHashSet<>();
 
         for (Map.Entry<String, Integer> entry : chosenVersions.entrySet()) {
@@ -120,8 +123,8 @@ public class EvalContextAssembler {
 
             boolean hasProvided = event.providedMetrics().containsKey(code);
             if (hasProvided && (def == null || def.allowProvided())) {
-                String dt = def != null ? def.dataType() : "UNKNOWN";
-                metrics.put(code, new MetricValue(event.providedMetrics().get(code), dt, "PROVIDED"));
+                String dt = def != null ? def.dataType() : DataType.UNKNOWN.tag();
+                metrics.put(code, new MetricValue(event.providedMetrics().get(code), dt, ValueSource.PROVIDED.tag()));
                 continue;
             }
             if (hasProvided) {
@@ -129,7 +132,7 @@ public class EvalContextAssembler {
                 log.warn("metric={} allowProvided=false，忽略 providedMetrics 传值", code);
             }
             if (def == null) {
-                metrics.put(code, MetricValue.error(METRIC_FETCH_FAIL));
+                metrics.put(code, MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL));
                 continue;
             }
             if (cache != null && def.cacheTtlSeconds() > 0) {
@@ -144,14 +147,32 @@ public class EvalContextAssembler {
         // 候选未引用但调用方仍推送的 provided 指标：补入（不影响 allowProvided 语义）
         for (Map.Entry<String, Object> e : event.providedMetrics().entrySet()) {
             if (!chosenVersions.containsKey(e.getKey())) {
-                metrics.putIfAbsent(e.getKey(), new MetricValue(e.getValue(), "UNKNOWN", "PROVIDED"));
+                metrics.putIfAbsent(e.getKey(), new MetricValue(e.getValue(), DataType.UNKNOWN.tag(), ValueSource.PROVIDED.tag()));
             }
         }
 
         if (!needFetch.isEmpty()) {
             fetchConcurrently(event, now, needFetch, descriptors, metrics);
         }
+        injectPayload(event, metrics);
         return new EvalContext(event.tenantId(), event, subject, metrics, now);
+    }
+
+    /**
+     * 把事件 payload 的每个字段以 ValueSource.PAYLOAD 注入值 map（putIfAbsent，
+     * 同名 metric/provided 优先）。payload 字段的 dataType 在比较时由 node.dataType()
+     * （发布期冻结）决定，故此处统一 UNKNOWN。
+     *
+     * @param event  触发事件（payload 来源）
+     * @param target 值 map（degraded 路径为 provided，正常路径为 metrics）
+     */
+    private static void injectPayload(RuleEvent event, Map<String, MetricValue> target) {
+        Map<String, Object> payload = event.payload();
+        if (payload == null) return;
+        for (Map.Entry<String, Object> e : payload.entrySet()) {
+            target.putIfAbsent(e.getKey(),
+                    new MetricValue(e.getValue(), DataType.UNKNOWN.tag(), ValueSource.PAYLOAD.tag()));
+        }
     }
 
     /**
@@ -170,36 +191,47 @@ public class EvalContextAssembler {
     private void fetchConcurrently(RuleEvent event, Instant now, Set<String> codes,
                                    Map<String, MetricDescriptor> descriptors,
                                    Map<String, MetricValue> metrics) {
-        Executor exec = fetchExecutor != null ? fetchExecutor : ForkJoinPool.commonPool();
-        Map<String, CompletableFuture<MetricValue>> futures = new HashMap<>();
-        for (String code : codes) {
+        ExecutorService exec = fetchExecutor != null ? fetchExecutor : ForkJoinPool.commonPool();
+        long timeoutMs = fetchTimeoutMs > 0 ? fetchTimeoutMs : Long.MAX_VALUE;
+
+        List<String> orderedCodes = new ArrayList<>(codes);
+        List<Callable<MetricValue>> tasks = new ArrayList<>(orderedCodes.size());
+        for (String code : orderedCodes) {
             MetricDescriptor def = descriptors.get(code);
             MetricQuery query = new MetricQuery(code, event.tenantId(), event.subjectId(),
                     def.params(), event.payload(), now);
             MetricSourceHandler handler = handlersBySourceType.get(def.sourceType());
-            futures.put(code, CompletableFuture
-                    .supplyAsync(() -> {
-                        if (handler == null) return MetricValue.error(METRIC_FETCH_FAIL);
-                        MetricValue v = handler.fetch(query);
-                        return v != null ? v : MetricValue.error(METRIC_FETCH_FAIL);
-                    }, exec)
-                    .exceptionally(ex -> MetricValue.error(METRIC_FETCH_FAIL)));
+            tasks.add(() -> {
+                if (handler == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
+                try {
+                    MetricValue v = handler.fetch(query);
+                    return v != null ? v : MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
+                } catch (Exception e) {
+                    // 子任务内吞异常→降级（替代旧 .exceptionally）
+                    return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
+                }
+            });
         }
+
+        List<Future<MetricValue>> results;
         try {
-            CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0]))
-                    .get(fetchTimeoutMs > 0 ? fetchTimeoutMs : Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-        } catch (Exception ignored) {
-            // 超时/中断：已完成 future 仍取其值，未完成的下方按 ERROR 处理
+            results = exec.invokeAll(tasks, timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            // 调用线程被中断：恢复中断位并全部降级
+            Thread.currentThread().interrupt();
+            for (String code : orderedCodes) metrics.put(code, MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL));
+            return;
         }
-        for (Map.Entry<String, CompletableFuture<MetricValue>> e : futures.entrySet()) {
-            String code = e.getKey();
-            CompletableFuture<MetricValue> f = e.getValue();
+
+        for (int i = 0; i < orderedCodes.size(); i++) {
+            String code = orderedCodes.get(i);
+            Future<MetricValue> f = results.get(i);
             MetricValue v;
-            if (f.isDone() && !f.isCompletedExceptionally()) {
-                v = f.getNow(MetricValue.error(METRIC_FETCH_FAIL));
+            if (f.isCancelled()) {
+                // 超时未完成：invokeAll 已中断该子任务
+                v = MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
             } else {
-                v = MetricValue.error(METRIC_FETCH_FAIL);
-                f.cancel(true);
+                try { v = f.get(); } catch (Exception e) { v = MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL); }
             }
             metrics.put(code, v);
             if (cache != null && !v.isError()) {

@@ -45,6 +45,14 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadAllActive_sqlContainsPayloadDependencies() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadAllActive");
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rv.payload_dependencies AS payloadDependenciesJson"),
+                "loadAllActive SQL 应选 payload_dependencies 列");
+    }
+
+    @Test
     void loadActiveByScene_hasCorrectParameters() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod(
                 "loadActiveByScene", Long.class, String.class);
@@ -72,6 +80,15 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadActiveByScene_sqlContainsPayloadDependencies() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "loadActiveByScene", Long.class, String.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rv.payload_dependencies AS payloadDependenciesJson"),
+                "loadActiveByScene SQL 应选 payload_dependencies 列");
+    }
+
+    @Test
     void loadById_returnsRuleVersionRow() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
         assertEquals(RuleVersionRow.class, method.getReturnType());
@@ -92,5 +109,41 @@ class RuleVersionReadMapperTest {
         Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
         String sql = method.getAnnotation(Select.class).value()[0];
         assertTrue(sql.contains("s.decision_strategy"), "loadById SQL 应包含 decision_strategy 字段");
+    }
+
+    @Test
+    void loadById_sqlContainsPayloadDependencies() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rv.payload_dependencies AS payloadDependenciesJson"),
+                "loadById SQL 应选 payload_dependencies 列");
+    }
+
+    @Test
+    void latestVersionIdByRule_returnsLong_hasCorrectParameters() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "latestVersionIdByRule", Long.class, Long.class);
+        assertEquals(Long.class, method.getReturnType());
+        assertNotNull(method.getAnnotation(Select.class));
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("#{tenantId}"), "SQL 应包含 tenantId 参数");
+        assertTrue(sql.contains("#{ruleId}"), "SQL 应包含 ruleId 参数");
+    }
+
+    @Test
+    void latestVersionIdByRule_sqlOrdersByVersionDescLimitOne() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "latestVersionIdByRule", Long.class, Long.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("ORDER BY rv.version DESC"), "SQL 应按 version 降序取最新版本");
+        assertTrue(sql.contains("LIMIT 1"), "SQL 应只取一条");
+    }
+
+    @Test
+    void latestVersionIdByRule_sqlMatchesRuleByDefinitionId() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "latestVersionIdByRule", Long.class, Long.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.id = #{ruleId}"), "SQL 应按 rule_definition.id 匹配 ruleId");
     }
 }

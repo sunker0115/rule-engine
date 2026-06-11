@@ -101,6 +101,34 @@ class RuleVersionSnapshotTest {
     }
 
     @Test
+    void decisionAction_fields_areRetained() {
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "BLOCK_TRANSACTION", 0, Map.of("k", "v"));
+        assertEquals("a1", action.actionId());
+        assertEquals("BLOCK_TRANSACTION", action.actionType());
+        assertEquals(0, action.sortOrder());
+        assertEquals(Map.of("k", "v"), action.params());
+    }
+
+    @Test
+    void decisionAction_params_areImmutable() {
+        Map<String, Object> mutable = new java.util.HashMap<>();
+        mutable.put("limit", 10);
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "BLOCK_TRANSACTION", 0, mutable);
+        mutable.put("extra", "x");
+        assertEquals(1, action.params().size(), "构造后修改原始 map 不应影响 DecisionAction.params");
+    }
+
+    @Test
+    void decisionAction_nullParams_defaultToEmpty() {
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "BLOCK_TRANSACTION", 0, null);
+        assertNotNull(action.params());
+        assertTrue(action.params().isEmpty());
+    }
+
+    @Test
     void builder_basicFields_roundtrip() {
         RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
                 .ruleVersionId(99L)
@@ -131,5 +159,32 @@ class RuleVersionSnapshotTest {
                 .addMetricDependency("balance", 1).addMetricDependency("score", 2).build();
         assertEquals(List.of(new MetricDependency("balance", 1), new MetricDependency("score", 2)),
                 built.metricDependencies());
+    }
+
+    @Test
+    void decisionBinding_enrichedFieldsAndCompatCtor() {
+        RuleVersionSnapshot.DecisionAction action =
+                new RuleVersionSnapshot.DecisionAction("a1", "SEND_ALERT", 0, Map.of("ch", "sms"));
+        RuleVersionSnapshot.DecisionBinding enriched =
+                new RuleVersionSnapshot.DecisionBinding("REJECT", "拒绝", 10, List.of(action));
+        assertEquals("REJECT", enriched.decisionCode());
+        assertEquals("拒绝", enriched.name());
+        assertEquals(10, enriched.priority());
+        assertEquals(List.of(action), enriched.actions());
+
+        // 兼容旧 (code, priority) 构造：name=null、actions 空
+        RuleVersionSnapshot.DecisionBinding compat = new RuleVersionSnapshot.DecisionBinding("PASS", 1);
+        assertNull(compat.name());
+        assertTrue(compat.actions().isEmpty());
+    }
+
+    @Test
+    void builder_carriesPayloadDependencies() {
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(1L).sceneCode("s1").tenantId("t1").conditionAst(leaf())
+                .addPayloadDependency("amount", "DECIMAL", true)
+                .build();
+        org.assertj.core.api.Assertions.assertThat(snap.payloadDependencies())
+                .containsExactly(new PayloadDependency("amount", "DECIMAL", true));
     }
 }

@@ -3,6 +3,7 @@ package com.sstlfsj.rule.eval.internal.domain;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -14,23 +15,30 @@ import java.time.LocalDateTime;
 @TableName("evaluation_session")
 public class EvaluationSession {
 
-    @TableId(type = IdType.AUTO)
+    // 客户端赋值（请求线程 snowflake）：异步落库需提前确定 id，供 node_trace/action 关联
+    @TableId(type = IdType.INPUT)
     private Long id;
     private Long tenantId;
     private String eventId;
     private String sceneCode;
     private String eventType;
     private String subjectId;
-    /** 评估触发来源：PUSH / PULL / REPLAY。 */
-    private String source;
+    /** 事件渠道：HTTP / MQ / JOB / SDK / REPLAY（取自 RuleEvent.source）。 */
+    private EventSource source;
+    /** 评估模式：PUSH（异步）/ PULL（同步），由 EvalService 入口判定。 */
+    private EvalMode mode;
     /** 状态：PENDING / HIT / MISS / BLOCKED / ERROR / FAILED。 */
-    private String status;
+    private SessionStatus status;
     private String finalDecision;
     private String hitDecisions;
     private String blockedBy;
     private String errorCode;
     private Integer candidateRuleCount;
     private Integer hitRuleCount;
+    /** SCORECARD 累计分；AST_BOOLEAN 等无分场景为 null。 */
+    private Double score;
+    /** DECISION_TREE 主分类（finalDecision 同源）；其他 kind 为 null。 */
+    private String category;
     private LocalDateTime occurredAt;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;

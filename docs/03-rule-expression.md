@@ -16,7 +16,7 @@
 
 | 章节 | 状态 |
 |------|------|
-| §二 AST 节点结构 | ✅（含 XorNode §2.5） |
+| §二 AST 节点结构 | ✅（含 XorNode §2.5、payload 直接引用 §2.6） |
 | §三 操作符清单 | ✅（含 DATE_BEFORE/DATE_AFTER §3.4） |
 | §四 短路求值规则 | ✅ |
 | §五 节点级 trace | ✅ |
@@ -65,9 +65,10 @@ AST 由五种节点类型组成，每种节点字段如下。
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `type` | `"ConditionNode"` | 是 | 固定值 |
-| `conditionType` | `string` | 是 | ConditionType 注册码，如 `metric.threshold` / `event.payload.compare` / `time.window` |
+| `conditionType` | `string` | 是 | 算子码，如 `GT` / `IN` / `BETWEEN` / `time.window`（内置见 §三 算子清单；= evaluator 注册键） |
 | `displayLabel` | `string` | 否 | UI 显示名 |
-| `metricCode` | `string` | 仅 metric 类需填 | 引用的指标码；`conditionType` 非 metric 类时留 null |
+| `metricCode` | `string` | 仅 metric 类需填 | 值引用名：`valueRef=METRIC`（默认）时为指标码；`valueRef=PAYLOAD` 时为 payload 字段名；`conditionType` 非 metric/payload 类时留 null |
+| `valueRef` | `"METRIC" \| "PAYLOAD"` | 否 | 值来源。缺省 `METRIC`（向后兼容，序列化时可省略）：`metricCode` 引用受治理指标，按 tenant 级 ACTIVE metric 取数 / 注入；`PAYLOAD`：`metricCode` 直接引用事件 payload 字段（须在 `Scene.payloadSchema` 声明），不注册 metric，见 §2.6 |
 | `params` | `object` | 是 | 传给 ConditionEvaluator 的参数对象，结构由各 conditionType 定义 |
 | `weight` | `number` | 否 | SCORECARD kind 专用（D12），v1 AST_BOOLEAN 忽略此字段 |
 
@@ -94,11 +95,43 @@ AST 由五种节点类型组成，每种节点字段如下。
 | 2 个 true | ✅ true | ❌ false |
 | 0 个 true | ❌ false | ❌ false |
 
+### 2.6 payload 直接引用（`valueRef=PAYLOAD`）
+
+ConditionNode 的值默认来自受治理指标（`valueRef=METRIC`）；当判据对象是**事件自带的事实**（如转账金额 `amount`、币种 `currency`）时，可设 `valueRef=PAYLOAD` 直接引用 `RuleEvent.payload` 字段，无需把它注册成 metric、无需走 `providedMetrics` 喂值。
+
+| 维度 | `valueRef=METRIC`（默认） | `valueRef=PAYLOAD` |
+|------|--------------------------|--------------------|
+| `metricCode` 语义 | 指标码 | payload 字段名 |
+| 取值来源 | 取数 / `providedMetrics` 注入 | `event.payload.<字段>` 装配期注入 |
+| 发布期要求 | 须为 tenant 级 ACTIVE metric | 字段须在 `Scene.payloadSchema` 声明（否则发布拒绝，`UNRESOLVED_VARIABLE`，见 10-api-contract §七） |
+| dataType | metric 定义的 dataType | 从 payloadSchema 字段 `type` 冻结：`number→DECIMAL` / `integer→LONG` / `string→STRING` / `boolean→BOOLEAN` / `array→LIST` / 其他→`UNKNOWN` |
+| 是否计入 metric 依赖 | 是（须 ACTIVE） | 否（`MetricDependencyCollector` 跳过） |
+
+**操作符与 params 完全一致**：payload 引用复用 §三 全部比较操作符（GT/GTE/LT/LTE/EQ/NEQ/IN/BETWEEN 等）与同名 `params` 键，写法与 metric 引用唯一差别仅在 `valueRef`。
+
+**示例**：交易金额 > 1000（`amount` 在 payloadSchema 声明为 `number`，冻结为 DECIMAL）：
+
+```json
+{
+  "type": "ConditionNode",
+  "conditionType": "GT",
+  "metricCode": "amount",
+  "valueRef": "PAYLOAD",
+  "params": {
+    "threshold": 1000
+  }
+}
+```
+
+**配置判据（payload 还是 metric）**——"指标身份"测试，任一为 yes 走 metric，全 no 走 payload：需要取数 / 需要权威保护（`allowProvided=false`）/ 跨规则复用同一定义 / 要版本化 / 要下发 SDK / 要影响面查询。`amount` 永远是 payload（这笔交易的事实）；`user.risk.score` 永远是 metric（哪怕这次值由上游注入，身份仍是受治理指标）。详见 [`01-concepts.md`](./01-concepts.md) §3.9。
+
+**SDK DSL**：`Condition` 提供与 metric 工厂对称的 payload 一组工厂 `payloadGt / payloadGte / payloadLt / payloadLte / payloadEq / payloadNeq / payloadIn / payloadBetween`，生成 `valueRef=PAYLOAD` 节点（见 10-api-contract §8.5）。
+
 ---
 
 ## 三、操作符清单
 
-以下操作符由内置 `metric.threshold` 和 `event.payload.compare` ConditionType 使用（通过 `params.operator` 字段传入）。自定义 ConditionType 可定义私有操作符，不受本表约束。
+下表列出内置比较算子。**每个算子的算子码本身就是 `ConditionNode.conditionType`**（如 `GT` / `IN` / `BETWEEN`，无 `params.operator` 间接层）；判据值来源由 `metricCode`（顶层字段）+ `valueRef`（`METRIC` 默认 / `PAYLOAD`）给出，算子参数放 `params`（键见各算子说明，如 GT/GTE/LT/LTE→`threshold`、EQ/NEQ→`value`、IN/NOT_IN→`values`、BETWEEN→`min`/`max`）。自定义 ConditionType 可经 `@ConditionType("...")` 注册任意算子码，不受本表约束。
 
 ### 3.1 通用比较操作符
 
@@ -106,12 +139,12 @@ AST 由五种节点类型组成，每种节点字段如下。
 |----------|------------|------|-----------|
 | `EQ` | LONG / DOUBLE / STRING / BOOLEAN / **DATE / DATETIME** | 相等 | 参数为 null → satisfied=false |
 | `NEQ` | LONG / DOUBLE / STRING / BOOLEAN / **DATE / DATETIME** | 不相等 | 同上 |
-| `GT` | LONG / DOUBLE | 严格大于 | 参数为 null → ERROR |
-| `GTE` | LONG / DOUBLE | 大于等于 | 同上 |
-| `LT` | LONG / DOUBLE | 严格小于 | 同上 |
-| `LTE` | LONG / DOUBLE | 小于等于 | 同上 |
-| `BETWEEN` | LONG / DOUBLE / **DATE / DATETIME** | `min <= value <= max`（双端闭区间） | 参数为 null → ERROR |
-| `NOT_BETWEEN` | LONG / DOUBLE / **DATE / DATETIME** | `value < min 或 value > max`（BETWEEN 取反） | 参数为 null → ERROR |
+| `GT` | LONG / DOUBLE / DECIMAL | 严格大于 | 参数为 null → ERROR |
+| `GTE` | LONG / DOUBLE / DECIMAL | 大于等于 | 同上 |
+| `LT` | LONG / DOUBLE / DECIMAL | 严格小于 | 同上 |
+| `LTE` | LONG / DOUBLE / DECIMAL | 小于等于 | 同上 |
+| `BETWEEN` | LONG / DOUBLE / DECIMAL / **DATE / DATETIME** | `min <= value <= max`（双端闭区间） | 参数为 null → ERROR |
+| `NOT_BETWEEN` | LONG / DOUBLE / DECIMAL / **DATE / DATETIME** | `value < min 或 value > max`（BETWEEN 取反） | 参数为 null → ERROR |
 
 > **B20 新增**：`EQ` / `NEQ` / `BETWEEN` / `NOT_BETWEEN` 已在 B20 扩展支持 `DATE` / `DATETIME` dataType；发布期矩阵（`AstDataTypeResolver`）对应更新，GT/GTE/LT/LTE 仍仅限数值型。
 
@@ -160,10 +193,9 @@ AST 由五种节点类型组成，每种节点字段如下。
 ```json
 {
   "type": "ConditionNode",
-  "conditionType": "metric.threshold",
+  "conditionType": "DATE_BEFORE",
   "metricCode": "account.created_at",
   "params": {
-    "operator": "DATE_BEFORE",
     "threshold": "2024-01-01"
   }
 }
@@ -174,10 +206,9 @@ AST 由五种节点类型组成，每种节点字段如下。
 ```json
 {
   "type": "ConditionNode",
-  "conditionType": "metric.threshold",
+  "conditionType": "DATE_AFTER",
   "metricCode": "user.last_login_at",
   "params": {
-    "operator": "DATE_AFTER",
     "threshold": "$now"
   }
 }
@@ -244,7 +275,7 @@ AST 由五种节点类型组成，每种节点字段如下。
 | `actual_value` | JSON | 节点实际取值；短路跳过的节点为 null |
 | `result` | `1 / 0 / null` | 1=满足 / 0=不满足 / null=短路跳过 |
 | `error_code` | `string` | nullable；`METRIC_FETCH_FAIL` / `CONDITION_EVAL_ERROR` 等 |
-| `value_source` | `PROVIDED / FETCHED / null` | D30：metric 取值来源；非 metric 类节点为 null |
+| `value_source` | `PROVIDED / FETCHED / PAYLOAD / null` | D30：取值来源——`PROVIDED`（调用方注入）/ `FETCHED`（取数）/ `PAYLOAD`（payload 直接引用节点取值，valueRef=PAYLOAD）；非取值类节点为 null |
 
 ### 5.2 Pre-Gate 失败节点
 
@@ -271,7 +302,7 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 | 用户自定义 Java 函数调用（urule FunctionLibrary 风格） | 与闭合校验（D20 §3）、禁止副作用（D16）、metric 只读（§3.9）三条决策正面冲突；已否决（见 [`08-evolution.md §四`](./08-evolution.md)） | 封装为 `@ConditionType` SPI（[`04-extension.md`](./04-extension.md)） | — |
 | `EXPRESSION_SCRIPT` 叶子节点（动态脚本表达式） | D12 占位，v1 发布时拒绝 kind=EXPRESSION_SCRIPT | 用 ConditionNode + 现有 conditionType 组合表达 | [`08-evolution.md §2.1`](./08-evolution.md)（kind 多态） |
 | 跨规则引用 / 子规则调用 | D6 评估即版本快照不可变；跨规则引用违背快照语义（被引用规则可能在引用期间发布新版） | 将共享逻辑提取为 Metric（SQL 或 HTTP）或拆分成多条独立规则 | [`08-evolution.md §2`](./08-evolution.md) |
-| 运行时动态参数绑定（`params` 字段引用 payload 变量） | D20 §3：所有变量类型在发布时已知，不做运行期参数解析 | 用 `event.payload.compare` conditionType（params 直接写死比较值）；动态值走 Metric | — |
+| 运行时动态参数绑定（`params` 字段引用 payload 变量） | D20 §3：所有变量类型在发布时已知，不做运行期参数解析 | 设 `valueRef=PAYLOAD` 直接引用 payload 字段（params 仍写死比较值，不在运行期绑定）；动态值走 Metric | — |
 | 结果聚合函数（SUM/AVG/COUNT over 多节点结果） | AST 是布尔树，不产生数值聚合 | SCORECARD kind（D12，v2 演进）；v1 用 metric 预计算聚合值 | [`08-evolution.md §2`](./08-evolution.md)（SCORECARD） |
 
 ---
@@ -407,17 +438,16 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 }
 ```
 
-**条件侧**（METRIC_COMPARE，与普通阈值条件写法完全一致）：
+**条件侧**（普通比较条件，`valueRef=METRIC` 默认，与任意阈值条件写法完全一致）：
 
 ```json
 {
   "type": "ConditionNode",
-  "conditionType": "metric.threshold",
+  "conditionType": "LT",
   "displayLabel": "近 7 天转账次数 < 3",
   "metricCode": "user.transfer.count.7d",
   "params": {
-    "operator": "LT",
-    "value": 3
+    "threshold": 3
   }
 }
 ```

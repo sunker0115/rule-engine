@@ -40,13 +40,13 @@ RuleEvent
   │  · 无候选：直接返回 EvalResult{satisfied=false}（API 字段名 ruleHit）
   ▼
 ③ Pre-Gate 拦截
-  │  · 按顺序评估每个 Gate（ROLLOUT / WHITELIST / BLACKLIST / RATE_LIMIT / MUTEX）
+  │  · 评估 Pre-Gate（v1 仅 ROLLOUT；未注册 gateType → fail-closed 拦截）
   │  · 任一 Gate 不通过：blocked_by 记录 Gate 类型，跳过后续阶段
   │  · 全通过：继续
   ▼
 ④ EvalContext 构建
   │  · 扫 AST 收集涉及的 metricCode（集合并集）
-  │  · providedMetrics 优先匹配（D30），其余按 sourceType 并发取数（D25）
+  │  · payload 字段直接注入（valueRef=PAYLOAD）；metric 按 provided（SDK/Job 注入）优先 → 其余按 sourceType 并发取数（D25/D55）
   │  · 组装 EvalContext（不可变 POJO）；evaluation_session 行同步写入 DB
   ▼
 ⑤ AST 评估（Visitor 树遍历）
@@ -123,6 +123,8 @@ RuleEvent
 | `POST /api/v1/rule/evaluate` | PULL | 是 | `EvalResult { ... }` |
 | `POST /api/v1/rule/dry-run` | PULL（试算） | 是 | `EvalResult + nodeTrace` |
 
+> **dry-run 试跑目标二选一必传**（D56）：`ruleVersionId`（精确版本）/ `ruleId`（取最新版本，含 DRAFT）二选一，都不传 → 400 `MISSING_DRYRUN_TARGET`。dry-run 结构上恒走"带版本单快照"分支——**不写 `evaluation_session`、不派发 action**（副作用从结构上根除），痕迹按需落 `dry_run_session` / `dry_run_node_trace`。premise A 下草稿即冻结快照，故 dry-run 试跑的 DRAFT 与发布后内容一致。
+
 **异常语义**：
 - 400 系列：schema 校验失败，不进入评估链路；
 - 事件接入失败（MQ 反序列化异常）：消息不 ack，由 MQ 重投，引擎不进入评估链路。
@@ -150,18 +152,15 @@ RuleEvent
 **输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或写 `evaluation_session { status=BLOCKED, blocked_by=<Gate 类型> }` + 返回 `EvalResult { satisfied=false }`（API 字段名 `ruleHit`）
 
 **核心动作**：
-- 对每条候选 RuleVersion，按固定顺序（ROLLOUT → WHITELIST/BLACKLIST → RATE_LIMIT → MUTEX）串行评估 `pre_gates` 中声明的 Gate；
+- 对每条候选 RuleVersion，串行评估 `pre_gates` 中声明的 Gate（v1 仅 `ROLLOUT`）；
 - 任一 Gate 不通过 → 该 RuleVersion **跳过 AST 评估**，trace 落 `node_trace`（节点类型 `PRE_GATE_BLOCKED`，走同一 `TraceWriter`，D21）；
+- **未注册的 gateType → fail-closed 拦截**（D52，运行期兜底；发布期已拒绝非 ROLLOUT 配置）。
 
-**Gate 类型与通过条件**：
+**Gate 类型与通过条件**（Pre-Gate 收敛为仅 ROLLOUT，D52；黑白名单改走 BOOLEAN metric + condition，RATE_LIMIT/MUTEX 已移除）：
 
 | Gate 类型 | 通过条件 | `blocked_by` 值 |
 |-----------|---------|----------------|
-| `ROLLOUT` | `hash(subjectId, ruleVersionId) % 100 < percentage` | `ROLLOUT` |
-| `WHITELIST` | `subjectId` ∈ `listKey` 对应名单 | `WHITELIST` |
-| `BLACKLIST` | `subjectId` ∉ `listKey` 对应名单 | `BLACKLIST` |
-| `RATE_LIMIT` | 按 (tenantId, ruleId, subjectId, 时间窗口) 检查命中次数是否超阈值 | `RATE_LIMIT` |
-| `MUTEX` | 当前 `tenantId+subjectId` 无同 `mutexGroup` 规则正在评估 | `MUTEX` |
+| `ROLLOUT` | `hash(subjectId, experimentId ?? ruleVersionId) % 100` 落入命中区（percentage 或桶区间） | `ROLLOUT` |
 
 **结果语义**：
 - 某条 RuleVersion 被任一 Gate 拦截 → 该 RuleVersion 不进入 EvalContext 构建与 AST 评估；
@@ -176,10 +175,10 @@ RuleEvent
 
 **输出**：不可变 `EvalContext` + `evaluation_session` 行（同步写 DB）
 
-**核心动作（5 步）**（B21 已实装：`EvalContextAssembler` 接线 provided 优先 → 查缓存 → 按 `sourceType` 并发 fetch → 失败降级 `METRIC_FETCH_FAIL`）：
+**核心动作（5 步）**（B21 已实装：`EvalContextAssembler` 接线 provided 优先 → 查缓存 → 按 `sourceType` 并发 fetch → 失败降级 `METRIC_FETCH_FAIL`；并注入 payload 字段）：
 
 1. **收集 metricCode**：扫每条候选 RuleVersion 的 `metric_dependencies`，取并集；
-2. **providedMetrics 优先匹配**（D30）：检查评估请求中 `providedMetrics` 字段，对每个 metric 先查 `providedMetrics`；有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；
+2. **payload 注入 + metric provided 优先**：payload 字段（`valueRef=PAYLOAD`）由 `EvalContextAssembler` 直接注入值 map（`ValueSource.PAYLOAD`，`putIfAbsent` 让同名 metric/provided 优先）；metric 的 `providedMetrics` 来自 SDK/Job 非公开注入（**公开评估请求体已删该字段，D55**；内部 `RuleEvent` 仍持有），有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；
 3. **并发取数**（D25）：Subject 加载（`SubjectLoader.load()`）与剩余 metric 批拉（各 `MetricSource` 自管连接池/HTTP client）并行启动，`CompletableFuture.allOf()` 等待全部完成；
 4. **组装 EvalContext**：将 Subject + metrics + RuleEvent + `now`（评估开始时间）+ traceId 封装为不可变 POJO；
 5. **同步写 evaluation_session**（D21）：INSERT `evaluation_session { status=PENDING（中间状态）, tenant_id, event_id, scene_code, subject_id, ... }`，与 event_id DB uk 构成幂等双兜底下半层。（注：Pre-Gate 全部拦截时在阶段③直接写 `status=BLOCKED`，不经过本步骤）
@@ -223,7 +222,7 @@ RuleEvent
 | `NotNode` | 取反唯一子节点 | 无短路 |
 | `ConditionNode` | 调用对应 `ConditionEvaluator.evaluate()` | 失败时 satisfied=false，整树继续（D15） |
 
-**dry-run 模式**：写 `dry_run_session` 系列表，不写 prod `evaluation_session` / `node_trace` 表；TraceWriter 内部按 `EvalContext.dryRun` 标记路由到不同目标表（D7 / D21）。
+**dry-run 模式**：恒走"带版本单快照"分支（按 `ruleVersionId` / `ruleId` 解析出的单个版本试跑），**结构上不进派发链路、不写 prod `evaluation_session`**——副作用从分支结构根除，而非靠 `isDryRun` 标志逐处门控（D56）。痕迹写 `dry_run_session` / `dry_run_node_trace`，TraceWriter 按 `EvalContext.dryRun` 标记路由到 dry-run 目标表（D7 / D21）。
 
 **EvalResult 输出字段**（D12 多态，v1 仅填 satisfied 部分）：
 
@@ -245,20 +244,19 @@ EvalResult {
 
 ### 3.6 Action Dispatcher
 
-**输入**：`RuleVersion.decision_bindings` 中 `finalDecision` 对应的 actions 列表（D28：Decision 及其 actions 在发布时已快照化进 `decision_bindings`，运行时直读，不再查 rule_definition）。`ActionContext.params` 以 `scene_action_binding.default_params` 为底，Decision 快照中的 `params` 字段覆盖合并（Decision 级优先）
+**输入**：`RuleVersion.decision_bindings` 中 `finalDecision` 对应的 actions 列表（D28：Decision 及其 actions 在发布时已快照化进 `decision_bindings`，运行时直读，不再查 rule_definition）。`ActionContext.params` 取自 `Decision.actions[n].params`（D54：action 触发+参数归 decision，与 scene 无关；scene_action_binding 已移除）
 
 **输出**：`action_execution` 行（异步写 DB）
 
-**核心动作**：
-- 从 `decision_bindings` 取 `finalDecision.actions` 列表，按 `sortOrder` 顺序提交给 ActionExecutor 线程池（D20 §2）；
+**核心动作**（best-effort fire-and-forget，D53）：
+- 从 `decision_bindings` 取 `finalDecision.actions` 列表，按 `sortOrder` 顺序提交给进程内异步队列（D20 §2）；
 - **评估线程不等待 Action 完成**：提交入队即返回 `EvalResult`（PULL 模式同步返回；PUSH 模式调用方收到 accepted=true）；
 - Handler 执行结果写 `action_execution` 表（异步，不阻塞评估线程）；
-- 队列满 → `ActionResult { status=FAILED, errorCode=QUEUE_OVERFLOW, retryable=true }`（D20 §2）。
+- 队列满 → 丢弃 + 累计计数 + WARN 日志（best-effort 可丢，不重试；不再产生 `QUEUE_OVERFLOW` errorCode，D53）。
 
-**失败与重试语义**（D18）：
-- `retryable=true` → 入重试队列（独立调度，不阻塞同 Decision 后续 Action）；
-- `retryable=false` → 直接落 `action_execution.status=FAILED`；
-- `failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 更大的 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`，不进入重试队列。
+**失败语义**（D53 best-effort + D18 failFast）：
+- Handler 失败 → `action_execution.status=FAILED` 终态，**不重试不补偿**（可靠投递未来接 MQ）；
+- `failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 更大的 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`（D18 多 action 失败传播语义不变）。
 
 **缺省 decisionStrategy**（D29）：PUSH/HYBRID Scene 未配 `decisionStrategy` 时，缺省等价 `HIGHEST_PRIORITY`；PULL Scene `decisionStrategy` 无效，`EvalResult` 直接返回调用方不做合成。
 
@@ -363,20 +361,17 @@ EvalResult {
 ActionHandler.execute() → 异常 / timeout
   │ 引擎归一
   ▼
-ActionResult { status=FAILED, errorCode, retryable }
-  │
-  ├─ retryable=true  → 入重试队列（不阻塞同 Decision 后续 Action）
-  └─ retryable=false → 直接落 action_execution.status=FAILED
+ActionResult { status=FAILED, errorCode }
+  │ best-effort：直接落 action_execution.status=FAILED 终态，不重试不补偿（D53）
 
 failFast=true 的 Action 失败时：
   → 同 Decision 内 sortOrder 更大的 Action 全部
-     status=SKIPPED, errorCode=PREDECESSOR_FAILED
-     不进重试队列
+     status=SKIPPED, errorCode=PREDECESSOR_FAILED（D18）
 ```
 
 Action 失败**不影响** `EvalResult.satisfied`（评估阶段已结束，Action 是命中后行为）。
 
-**补偿不自动触发**（D18）：引擎只记录 FAILED 状态，补偿由 D4 补偿流水线外部调度（对账任务 / 运营手动回滚按钮）发起 `ActionHandler.compensate(ActionContext ctx)` 调用。
+**best-effort 投递**（D53）：命中后 action 经进程内队列异步派发，队列满/进程重启会丢、不重试不补偿；引擎只记录最终结果。可靠投递（MQ）/ 业务补偿（saga）未来另设计，不在应用层做重试表/补偿 SPI。
 
 ### 5.3 整体降级矩阵（对账用）
 
@@ -396,7 +391,7 @@ Action 失败**不影响** `EvalResult.satisfied`（评估阶段已结束，Acti
 | 维度 | PUSH 模式 | PULL 模式 |
 |------|-----------|----------|
 | 评估节点失败 | 安静失败，Action 不派发（满足且无 error 才派发）；trace 落 ERROR 状态，触发监控告警 | 返回 `EvalResult { satisfied, errorCode }`，调用方策略自决（fail-secure / fail-open） |
-| Action 失败 | 重试队列 / FAILED 终态，写 action_execution；通过监控告警可见 | N/A（PULL 无 Action） |
+| Action 失败 | FAILED 终态（best-effort 不重试），写 action_execution；通过监控告警可见 | N/A（PULL 无 Action） |
 | 调用方职责 | 接受异步不透明；通过 evaluation_session / node_trace 后验排障 | 必须判断 errorCode 是否非空，按业务策略决策 |
 
 ---

@@ -9,7 +9,7 @@ class SubjectTypeTest {
     @Test
     void allValues_areDefined() {
         SubjectType[] values = SubjectType.values();
-        assertEquals(4, values.length);
+        assertEquals(5, values.length);
     }
 
     @Test
@@ -18,5 +18,6 @@ class SubjectTypeTest {
         assertEquals(SubjectType.ACCOUNT, SubjectType.valueOf("ACCOUNT"));
         assertEquals(SubjectType.DEVICE, SubjectType.valueOf("DEVICE"));
         assertEquals(SubjectType.ORDER, SubjectType.valueOf("ORDER"));
+        assertEquals(SubjectType.CUSTOM, SubjectType.valueOf("CUSTOM"));
     }
 }

@@ -40,4 +40,11 @@ class SceneMapperTest {
         assertTrue(m.isDefault(), "findByIds 应为 default 方法");
         assertEquals(List.class, m.getReturnType());
     }
+
+    @Test
+    void findByTenantId_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = SceneMapper.class.getDeclaredMethod("findByTenantId", Long.class);
+        assertTrue(m.isDefault(), "findByTenantId 应为 default 方法");
+        assertEquals(List.class, m.getReturnType());
+    }
 }

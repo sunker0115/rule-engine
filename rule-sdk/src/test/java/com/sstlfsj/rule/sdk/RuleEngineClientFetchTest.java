@@ -54,7 +54,7 @@ class RuleEngineClientFetchTest {
                 .metricSourceHandler(new TestHandler())
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION", "sub1",
-                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of());
+                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             EvalResult result = client.evaluate(event);
             assertThat(result.ruleHit()).isTrue();
             assertThat(result.finalDecision().code()).isEqualTo("BLOCK");
@@ -69,7 +69,7 @@ class RuleEngineClientFetchTest {
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION", "sub1",
                     UUID.randomUUID().toString(), Instant.now(), Map.of(),
-                    Map.of("risk.score", 90));
+                    Map.of("risk.score", 90), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(event).ruleHit()).isTrue();
         }
     }
@@ -86,7 +86,7 @@ class RuleEngineClientFetchTest {
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION", "sub1",
                     UUID.randomUUID().toString(), Instant.now(), Map.of(),
-                    Map.of("risk.score", 10));
+                    Map.of("risk.score", 10), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             EvalResult result = client.evaluate(event);
             assertThat(result.ruleHit()).isTrue();
             assertThat(result.finalDecision().code()).isEqualTo("BLOCK");
@@ -105,7 +105,7 @@ class RuleEngineClientFetchTest {
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION", "sub1",
                     UUID.randomUUID().toString(), Instant.now(), Map.of(),
-                    Map.of("risk.score", 10));
+                    Map.of("risk.score", 10), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(event).ruleHit()).isFalse();
         }
     }

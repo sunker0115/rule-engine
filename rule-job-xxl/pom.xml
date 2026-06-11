@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.sstlfsj.rule</groupId>
+        <artifactId>rule-engine</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>rule-job-xxl</artifactId>
+
+    <dependencies>
+        <!-- Scheduler SPI（唯一被实现的契约） -->
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-kernel</artifactId>
+        </dependency>
+        <!-- xxl-job 执行器 + IJobHandler + 动态注册 API（Groovy 版本由根 BOM 锁回 4.x） -->
+        <dependency>
+            <groupId>com.xuxueli</groupId>
+            <artifactId>xxl-job-core</artifactId>
+        </dependency>
+        <!-- @AutoConfiguration / @ConditionalOnProperty / @ConfigurationProperties -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <!-- admin 响应 JSON 解析（Jackson 3，版本由 Spring Boot BOM 管理） -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+        <!-- AOT: 编译期生成 AutoConfiguration condition metadata -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

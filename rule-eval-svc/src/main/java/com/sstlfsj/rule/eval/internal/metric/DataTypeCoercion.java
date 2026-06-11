@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.eval.internal.metric;
 
+import com.sstlfsj.rule.kernel.api.model.DataType;
+
 import java.math.BigDecimal;
 
 /** 把取数原始值（ResultSet / JSON）按 metric dataType 强转。null 透传。 */
@@ -17,11 +19,11 @@ public final class DataTypeCoercion {
     public static Object coerce(Object raw, String dataType) {
         if (raw == null || dataType == null) return raw;
         try {
-            return switch (dataType) {
-                case "LONG" -> toLong(raw);
-                case "DOUBLE" -> toDouble(raw);
-                case "BOOLEAN" -> toBoolean(raw);
-                // STRING / DATE / DATETIME：字符串化，交由 evaluator 的 PlaceholderResolver 再解析
+            return switch (DataType.fromTag(dataType)) {
+                case LONG -> toLong(raw);
+                case DOUBLE -> toDouble(raw);
+                case BOOLEAN -> toBoolean(raw);
+                // DECIMAL/STRING/DATE/DATETIME/LIST/UNKNOWN（含未识别）：字符串化，交由 evaluator 的 PlaceholderResolver 再解析
                 default -> raw.toString();
             };
         } catch (Exception e) {

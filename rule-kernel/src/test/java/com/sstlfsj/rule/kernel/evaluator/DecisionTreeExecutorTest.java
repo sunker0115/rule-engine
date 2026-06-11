@@ -22,7 +22,7 @@ class DecisionTreeExecutorTest {
 
     private EvalContext ctx() {
         RuleEvent event = new RuleEvent("t1", "scene", "EVT", "u1",
-                "e1", Instant.now(), Map.of(), Map.of());
+                "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new EvalContext("t1", event, null, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
     }
 
@@ -116,6 +116,20 @@ class DecisionTreeExecutorTest {
 
         assertThat(result.ruleHit()).isTrue();
         assertThat(result.finalDecision().code()).isEqualTo("PASS");
+    }
+
+    @Test
+    void hitLeaf_decisionCarriesLeafCategory() {
+        // 单层决策树:if(GT) then leaf(decisionCode=REVIEW, category=中危),命中后 category 焊到 Decision
+        ConditionNode cond = new ConditionNode(GT, "flag", null, Map.of(), 0.0);
+        DecisionLeafNode then = new DecisionLeafNode("REVIEW", "中危");
+        IfNode tree = new IfNode(cond, then, null);
+
+        EvalResult result = executor(alwaysTrue).execute(snapshot(tree, "REVIEW"), ctx());
+
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.finalDecision().code()).isEqualTo("REVIEW");
+        assertThat(result.finalDecision().category()).isEqualTo("中危");
     }
 
     @Test

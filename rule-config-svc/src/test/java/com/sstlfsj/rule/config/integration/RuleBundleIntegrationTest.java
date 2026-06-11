@@ -6,14 +6,22 @@ import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
@@ -78,24 +86,27 @@ class RuleBundleIntegrationTest {
     private Long seedTwoPublishedRules() {
         SceneDef scene = new SceneDef();
         scene.setTenantId(SRC_TENANT); scene.setCode("risk.transfer"); scene.setName("转账风控");
-        scene.setSubjectType("USER"); scene.setDominantMode("PUSH"); scene.setDecisionStrategy("HIGHEST_PRIORITY");
-        scene.setEventTypes("[\"transfer\"]"); scene.setPayloadSchema("{}"); scene.setDefaultParams("{}");
-        scene.setPayloadSchemaVersion(1); scene.setStatus("ACTIVE"); scene.setCreatedBy("seed");
+        scene.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
+        scene.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        scene.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
+        scene.setEventTypes(java.util.List.of("transfer")); scene.setPayloadSchema(java.util.List.of());
+        scene.setDefaultParams(java.util.Map.of());
+        scene.setPayloadSchemaVersion(1); scene.setStatus(SceneStatus.ACTIVE); scene.setCreatedBy("seed");
         scene.setCreatedAt(LocalDateTime.now());
         sceneMapper.insert(scene);
 
         MetricDefinition metric = new MetricDefinition();
         metric.setTenantId(SRC_TENANT); metric.setMetricCode("account.age"); metric.setVersion(1);
         metric.setName("账户年龄"); metric.setSourceType("ATTRIBUTE"); metric.setDataType("LONG");
-        metric.setParams("{}"); metric.setCacheTtlSeconds(3600); metric.setAllowProvided(true);
-        metric.setStatus("ACTIVE"); metric.setCreatedBy("seed"); metric.setCreatedAt(LocalDateTime.now());
+        metric.setParams(java.util.Map.of()); metric.setCacheTtlSeconds(3600); metric.setAllowProvided(true);
+        metric.setStatus(MetricStatus.ACTIVE); metric.setCreatedBy("seed"); metric.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(metric);
 
         DecisionDefinition decision = new DecisionDefinition();
         decision.setTenantId(SRC_TENANT); decision.setCode("BLOCK"); decision.setName("拦截");
         decision.setPriority(100); decision.setDescription("拦截交易");
-        decision.setActions("[{\"actionId\":\"a1\",\"actionType\":\"BLOCK_TRANSACTION\",\"sortOrder\":0,\"params\":{}}]");
-        decision.setStatus("ACTIVE"); decision.setCreatedBy("seed"); decision.setCreatedAt(LocalDateTime.now());
+        decision.setActions(java.util.List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())));
+        decision.setStatus(com.sstlfsj.rule.config.internal.domain.DecisionStatus.ACTIVE); decision.setCreatedBy("seed"); decision.setCreatedAt(LocalDateTime.now());
         decisionDefinitionMapper.insert(decision);
 
         seedRule(scene.getId(), "rule.night.transfer", "夜间大额转账");
@@ -106,17 +117,19 @@ class RuleBundleIntegrationTest {
     private void seedRule(Long sceneId, String code, String name) {
         RuleDefinition rd = new RuleDefinition();
         rd.setTenantId(SRC_TENANT); rd.setSceneId(sceneId); rd.setCode(code);
-        rd.setName(name); rd.setStatus("PUBLISHED"); rd.setKind("AST_BOOLEAN");
+        rd.setName(name); rd.setStatus(RuleDefinitionStatus.PUBLISHED); rd.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         rd.setCreatedBy("seed"); rd.setCreatedAt(LocalDateTime.now());
         ruleDefinitionMapper.insert(rd);
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(rd.getId()); rv.setVersion(1L);
-        rv.setConditionAst("{\"type\":\"AndNode\",\"children\":[]}");
-        rv.setDecisionBindings("[{\"decisionCode\":\"BLOCK\",\"priority\":100}]");
-        rv.setPreGates("[]"); rv.setKind("AST_BOOLEAN"); rv.setTriggerEventTypes("[\"transfer\"]");
-        rv.setMetricDependencies("[{\"metricCode\":\"account.age\",\"metricVersion\":1}]");
-        rv.setStatus("ACTIVE"); rv.setPublishedBy("seed"); rv.setPublishedAt(LocalDateTime.now());
+        rv.setConditionAst(new AndNode(java.util.List.of(), null, null));
+        rv.setDecisionBindings(java.util.List.of(new DecisionBinding("BLOCK", 100)));
+        rv.setPreGates(java.util.List.of()); rv.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
+        rv.setTriggerEventTypes(java.util.List.of("transfer"));
+        rv.setMetricDependencies(java.util.List.of(new MetricDependency("account.age", 1)));
+        rv.setPayloadDependencies(java.util.List.of());
+        rv.setStatus(RuleVersionStatus.ACTIVE); rv.setPublishedBy("seed"); rv.setPublishedAt(LocalDateTime.now());
         rv.setCreatedAt(LocalDateTime.now());
         ruleVersionMapper.insert(rv);
 
@@ -148,13 +161,14 @@ class RuleBundleIntegrationTest {
                 .eq(SceneDef::getTenantId, DST_TENANT).eq(SceneDef::getCode, "risk.transfer"));
         assertThat(dstScene).isNotNull();
         long draftCount = ruleVersionMapper.selectCount(new LambdaQueryWrapper<RuleVersion>()
-                .eq(RuleVersion::getStatus, "DRAFT")
+                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT)
                 .in(RuleVersion::getRuleDefinitionId,
                         result.rules().stream().map(RuleImportResult.ImportedRule::ruleDefinitionId).toList()));
         assertThat(draftCount).isEqualTo(2);
         RuleVersion anyDraft = ruleVersionMapper.selectById(result.rules().getFirst().ruleVersionId());
-        // MySQL JSON 列读取会规范化空白（添加 ": " 等），用忽略空白比较验证 AST 内容无损搬运
-        assertThat(anyDraft.getConditionAst()).isEqualToIgnoringWhitespace("{\"type\":\"AndNode\",\"children\":[]}");
+        // typed 列经 MySQL JSON 往返后反序列化回 AndNode，验证 AST 内容无损搬运
+        assertThat(anyDraft.getConditionAst()).isInstanceOf(AndNode.class);
+        assertThat(((AndNode) anyDraft.getConditionAst()).children()).isEmpty();
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.sdk;
 
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
@@ -56,7 +57,7 @@ class RuleEngineClientTest {
                 .pollInterval(Duration.ofHours(1))
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "scene1", "ORDER", "sub1",
-                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of());
+                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(event).ruleHit()).isFalse();
         }
     }
@@ -75,7 +76,7 @@ class RuleEngineClientTest {
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of());
+                    Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             EvalResult result = client.evaluate(event);
             assertThat(result.ruleHit()).isTrue();
             assertThat(result.finalDecision().code()).isEqualTo("BLOCK");
@@ -96,12 +97,12 @@ class RuleEngineClientTest {
                 .build()) {
             RuleEvent hit = new RuleEvent("t1", "fraud", "TRANSACTION",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of("amount", 1500));
+                    Instant.now(), Map.of(), Map.of("amount", 1500), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(hit).ruleHit()).isTrue();
 
             RuleEvent miss = new RuleEvent("t1", "fraud", "TRANSACTION",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of("amount", 500));
+                    Instant.now(), Map.of(), Map.of("amount", 500), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(miss).ruleHit()).isFalse();
         }
     }
@@ -127,7 +128,7 @@ class RuleEngineClientTest {
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of());
+                    Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             EvalResult result = client.evaluate(event);
             assertThat(result.ruleHit()).isTrue();
             assertThat(result.hitDecisions()).hasSize(2);
@@ -154,7 +155,7 @@ class RuleEngineClientTest {
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "test", "TEST_EVENT",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of());
+                    Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(event).ruleHit()).isTrue();
         }
     }
@@ -173,7 +174,7 @@ class RuleEngineClientTest {
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "scene", "EV",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of());
+                    Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(event).ruleHit()).isTrue();
         }
     }
@@ -199,12 +200,12 @@ class RuleEngineClientTest {
                 .build()) {
             RuleEvent hit = new RuleEvent("t1", "device", "LOGIN",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of("device_id", "dev-001"));
+                    Instant.now(), Map.of(), Map.of("device_id", "dev-001"), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(hit).ruleHit()).isTrue();
 
             RuleEvent miss = new RuleEvent("t1", "device", "LOGIN",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of("device_id", "dev-999"));
+                    Instant.now(), Map.of(), Map.of("device_id", "dev-999"), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             assertThat(client.evaluate(miss).ruleHit()).isFalse();
         }
     }
@@ -224,7 +225,7 @@ class RuleEngineClientTest {
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "override", "ORDER",
                     "sub1", UUID.randomUUID().toString(),
-                    Instant.now(), Map.of(), Map.of("amount", 1));  // amount=1 < 1000
+                    Instant.now(), Map.of(), Map.of("amount", 1), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);  // amount=1 < 1000
             assertThat(client.evaluate(event).ruleHit()).isTrue();  // 自定义覆盖，应命中
         }
     }
@@ -249,9 +250,26 @@ class RuleEngineClientTest {
                 .evalResultListener((ev, res) -> called[0] = true)
                 .build()) {
             RuleEvent event = new RuleEvent("t1", "scene1", "ORDER", "sub1",
-                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of());
+                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);
             client.evaluate(event);
         }
         assertThat(called[0]).isTrue();
+    }
+
+    @Test
+    void evaluate_forcesSdkSource_evenWhenCallerPassesOtherChannel() {
+        // 调用方即便传入 HTTP，SDK 入口也权威改写为 SDK（不信任外部渠道）
+        EventSource[] seen = {null};
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .serverUrl("http://localhost:19999")
+                .tenantId("t1")
+                .pollInterval(Duration.ofHours(1))
+                .evalResultListener((ev, res) -> seen[0] = ev.source())
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "scene1", "ORDER", "sub1",
+                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of(), EventSource.HTTP);
+            client.evaluate(event);
+        }
+        assertThat(seen[0]).isEqualTo(EventSource.SDK);
     }
 }

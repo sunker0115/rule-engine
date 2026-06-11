@@ -12,11 +12,12 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,15 +36,11 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class RuleExportService {
 
-    private static final TypeReference<List<MetricDependency>> METRIC_DEP_TYPE = new TypeReference<>() {};
-    private static final TypeReference<List<Map<String, Object>>> OBJ_LIST_TYPE = new TypeReference<>() {};
-
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final SceneMapper sceneMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
-    private final ObjectMapper objectMapper;
 
     /** 按条件批量导出规则当前 ACTIVE 版本为 Bundle。 */
     @Transactional(readOnly = true)
@@ -64,7 +61,7 @@ public class RuleExportService {
             exportable.add(rd);
             activeVersions.add(active);
             if (rd.getSceneId() != null) sceneIds.add(rd.getSceneId());
-            metricDeps.addAll(parseDeps(active.getMetricDependencies()));
+            metricDeps.addAll(active.getMetricDependencies() != null ? active.getMetricDependencies() : List.of());
             decisionCodes.addAll(parseDecisionCodes(active.getDecisionBindings()));
         }
         if (exportable.isEmpty()) {
@@ -79,7 +76,7 @@ public class RuleExportService {
         List<RuleBundle.SceneSnapshot> scenes = sceneById.values().stream()
                 .map(s -> new RuleBundle.SceneSnapshot(
                         s.getCode(), s.getName(), s.getDescription(),
-                        s.getSubjectType(), s.getDominantMode(), s.getDecisionStrategy(),
+                        s.getSubjectType().name(), s.getDominantMode().name(), s.getDecisionStrategy().name(),
                         s.getEventTypes(), s.getPayloadSchema(), s.getDefaultParams(),
                         s.getPayloadSchemaVersion()))
                 .toList();
@@ -113,53 +110,33 @@ public class RuleExportService {
             SceneDef scene = sceneById.get(rd.getSceneId());
             rules.add(new RuleBundle.RuleEntry(
                     rd.getCode(), rd.getName(),
-                    rv.getKind() != null ? rv.getKind() : "AST_BOOLEAN",
+                    (rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN).name(),
                     scene != null ? scene.getCode() : null,
                     rv.getConditionAst(), rv.getDecisionBindings(),
                     rv.getPreGates(), rv.getTriggerEventTypes(),
-                    parseDeps(rv.getMetricDependencies())));
+                    rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of(),
+                    rv.getPayloadDependencies() != null ? rv.getPayloadDependencies() : List.of()));
         }
 
         return new RuleBundle(1, Instant.now().toString(), tenantIdStr,
                 rules, scenes, metricEntries, decisionEntries, actionTypes);
     }
 
-    private List<MetricDependency> parseDeps(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        try {
-            return objectMapper.readValue(json, METRIC_DEP_TYPE);
-        } catch (Exception e) {
-            return List.of();
+    private List<String> parseDecisionCodes(List<DecisionBinding> bindings) {
+        if (bindings == null || bindings.isEmpty()) return List.of();
+        Set<String> codes = new LinkedHashSet<>();
+        for (DecisionBinding b : bindings) {
+            if (b.decisionCode() != null) codes.add(b.decisionCode());
         }
-    }
-
-    private List<String> parseDecisionCodes(String decisionBindingsJson) {
-        if (decisionBindingsJson == null || decisionBindingsJson.isBlank()) return List.of();
-        try {
-            List<Map<String, Object>> bindings = objectMapper.readValue(decisionBindingsJson, OBJ_LIST_TYPE);
-            Set<String> codes = new LinkedHashSet<>();
-            for (Map<String, Object> b : bindings) {
-                Object code = b.get("decisionCode");
-                if (code != null) codes.add(String.valueOf(code));
-            }
-            return new ArrayList<>(codes);
-        } catch (Exception e) {
-            return List.of();
-        }
+        return new ArrayList<>(codes);
     }
 
     private List<String> collectActionTypes(List<DecisionDefinition> decisions) {
         Set<String> types = new LinkedHashSet<>();
         for (DecisionDefinition d : decisions) {
-            if (d.getActions() == null || d.getActions().isBlank()) continue;
-            try {
-                List<Map<String, Object>> actions = objectMapper.readValue(d.getActions(), OBJ_LIST_TYPE);
-                for (Map<String, Object> a : actions) {
-                    Object t = a.get("actionType");
-                    if (t != null) types.add(String.valueOf(t));
-                }
-            } catch (Exception ignored) {
-                // actions JSON 异常容错跳过，不阻断导出
+            if (d.getActions() == null) continue;
+            for (DecisionAction a : d.getActions()) {
+                if (a.actionType() != null) types.add(a.actionType());
             }
         }
         return new ArrayList<>(types);

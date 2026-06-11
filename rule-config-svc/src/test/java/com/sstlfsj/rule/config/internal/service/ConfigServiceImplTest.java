@@ -1,24 +1,32 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
-import com.sstlfsj.rule.config.internal.domain.AuditLog;
+import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
-import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -27,8 +35,9 @@ class ConfigServiceImplTest {
 
     @Mock PublishService publishService;
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
-    @Mock AuditLogMapper auditLogMapper;
     @Mock SceneMapper sceneMapper;
+    @Mock RuleVersionMapper ruleVersionMapper;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks ConfigServiceImpl configService;
 
     @Test
@@ -47,22 +56,33 @@ class ConfigServiceImplTest {
     }
 
     @Test
-    void disable_updatesStatusAndWritesAuditLog() {
+    void disable_updatesStatusAndPublishesAuditEvent() {
         RuleDefinition rule = new RuleDefinition();
         rule.setId(10L);
         rule.setTenantId(1L);
-        rule.setStatus("PUBLISHED");
+        rule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         configService.disable("1", 10L, "actor1");
 
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
-        assertThat(rdCaptor.getValue().getStatus()).isEqualTo("DISABLED");
+        assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.DISABLED);
 
-        verify(auditLogMapper).insert((AuditLog) any());
+        ArgumentCaptor<OperationAuditedEvent> evCaptor =
+                ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher).publishEvent(evCaptor.capture());
+        OperationAuditedEvent ev = evCaptor.getValue();
+        assertThat(ev.action()).isEqualTo("DISABLE");
+        assertThat(ev.targetType()).isEqualTo("rule_definition");
+        assertThat(ev.targetId()).isEqualTo("10");
+        assertThat(ev.actorType()).isEqualTo("USER");
+        // before 记禁用前状态(PUBLISHED)，after 记 DISABLED(审计完整性)
+        var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.beforeSnapshot();
+        var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.afterSnapshot();
+        assertThat(before.status()).isEqualTo("PUBLISHED");
+        assertThat(after.status()).isEqualTo("DISABLED");
     }
 
     @Test
@@ -77,7 +97,7 @@ class ConfigServiceImplTest {
         rd.setId(10L);
         rd.setCode("rule.a");
         rd.setName("规则A");
-        rd.setStatus("PUBLISHED");
+        rd.setStatus(RuleDefinitionStatus.PUBLISHED);
         rd.setCurrentVersion(42L);
         rd.setPublishedAt(java.time.LocalDateTime.of(2026, 6, 1, 0, 0));
 
@@ -127,14 +147,122 @@ class ConfigServiceImplTest {
     @Test
     void createDraft_delegatesToPublishService() {
         DraftCreatedResult expected = new DraftCreatedResult(1L, 2L, 1L, "DRAFT");
+        var ast = new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null);
         when(publishService.createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1")).thenReturn(expected);
+                ast, java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", "actor1"))
+                .thenReturn(expected);
 
         DraftCreatedResult result = configService.createDraft("1", "risk.transfer",
-                "rule.a", "规则A", "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1");
+                "rule.a", "规则A", ast, java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                "AST_BOOLEAN", "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(1L);
         verify(publishService).createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                "{}", "[]", "[]", "[]", "AST_BOOLEAN", "actor1");
+                ast, java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", "actor1");
+    }
+
+    @Test
+    void getRuleDetail_组装定义与ACTIVE版本() {
+        RuleDefinition rule = new RuleDefinition();
+        rule.setId(10L);
+        rule.setTenantId(1L);
+        rule.setSceneId(5L);
+        rule.setCode("rule.a");
+        rule.setName("规则A");
+        rule.setStatus(RuleDefinitionStatus.PUBLISHED);
+        rule.setKind(RuleKind.AST_BOOLEAN);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
+
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setCode("risk.transfer");
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+
+        RuleVersion active = new RuleVersion();
+        active.setId(42L);
+        active.setConditionAst(new AndNode(List.of(), null, null));
+        active.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
+        when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(active);
+
+        RuleDetailVO vo = configService.getRuleDetail("1", 10L);
+
+        assertThat(vo.ruleDefinitionId()).isEqualTo(10L);
+        assertThat(vo.code()).isEqualTo("rule.a");
+        assertThat(vo.sceneCode()).isEqualTo("risk.transfer");
+        assertThat(vo.currentVersionId()).isEqualTo(42L);
+        assertThat(vo.conditionAst()).isInstanceOf(AndNode.class);
+        assertThat(vo.decisionBindings()).hasSize(1);
+        assertThat(vo.decisionBindings().get(0).decisionCode()).isEqualTo("BLOCK");
+        assertThat(vo.decisionBindings().get(0).priority()).isEqualTo(100);
+    }
+
+    @Test
+    void getRuleDetail_规则不存在_抛IllegalArgument() {
+        when(ruleDefinitionMapper.selectById(99L)).thenReturn(null);
+        assertThatThrownBy(() -> configService.getRuleDetail("1", 99L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("规则不存在");
+    }
+
+    @Test
+    void editDraft_validKind_delegatesWithParsedRuleKind() {
+        when(publishService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new DraftCreatedResult(10L, 20L, 1L, "DRAFT"));
+
+        configService.editDraft("1", 10L, "名", "AST_BOOLEAN",
+                null, null, null, null, "actor");
+
+        // kind 字符串 "AST_BOOLEAN" 解析为枚举后透传 publishService
+        verify(publishService).editDraft(eq(1L), eq(10L), eq("名"), eq(RuleKind.AST_BOOLEAN),
+                any(), any(), any(), any(), eq("actor"));
+    }
+
+    @Test
+    void editDraft_invalidKind_throwsBeforeDelegating() {
+        // 非法 kind 在 parseKind 阶段即拒，不触达 publishService
+        assertThatThrownBy(() -> configService.editDraft("1", 10L, "名", "BOGUS_KIND",
+                null, null, null, null, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("不支持的规则 kind");
+        verifyNoInteractions(publishService);
+    }
+
+    @Test
+    void newVersion_validKind_delegatesWithParsedRuleKind() {
+        when(publishService.newVersion(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new DraftCreatedResult(10L, 30L, 2L, "DRAFT"));
+
+        configService.newVersion("1", 10L, "名", "AST_BOOLEAN",
+                null, null, null, null, 50L, "actor");
+
+        // kind 字符串 "AST_BOOLEAN" 解析为枚举后透传 publishService，fromVersionId 原样透传
+        verify(publishService).newVersion(eq(1L), eq(10L), eq("名"), eq(RuleKind.AST_BOOLEAN),
+                any(), any(), any(), any(), eq(50L), eq("actor"));
+    }
+
+    @Test
+    void newVersion_invalidKind_throwsBeforeDelegating() {
+        // 非法 kind 在 parseKind 阶段即拒，不触达 publishService
+        assertThatThrownBy(() -> configService.newVersion("1", 10L, "名", "BOGUS_KIND",
+                null, null, null, null, null, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("不支持的规则 kind");
+        verifyNoInteractions(publishService);
+    }
+
+    @Test
+    void deleteRule_delegatesWithTenantIdConvertedToLong() {
+        configService.deleteRule("1", 10L, "actor");
+
+        // tenantId 字符串 "1" 转 Long 后透传 publishService
+        verify(publishService).deleteRule(1L, 10L, "actor");
+    }
+
+    @Test
+    void deleteDraftVersion_delegatesWithTenantIdConvertedToLong() {
+        configService.deleteDraftVersion("1", 10L, 100L, "actor");
+
+        // tenantId 字符串 "1" 转 Long 后透传 publishService，versionId 原样透传
+        verify(publishService).deleteDraftVersion(1L, 10L, 100L, "actor");
     }
 }

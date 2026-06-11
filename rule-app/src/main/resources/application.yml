@@ -13,11 +13,16 @@ spring:
   modulith:
     events:
       republish-outstanding-events-on-restart: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
+    # 实体 status 等 Java enum 字段按 name() 与 varchar 列往返（枚举名 == DB 值）
+    default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
 
 management:
   endpoints:
@@ -47,28 +52,32 @@ management:
 
 engine:
   rule:
-    matcher:
-      cache-refresh-interval-seconds: 30
-    scene:
-      watch-interval-seconds: 60
-    idempotency:
-      redis-ttl-seconds: 86400
+    # SDK 模式快照轮询间隔走 rule.sdk.poll-interval（独立前缀，不在 engine.rule.* 下）；服务端索引为事件驱动，无定时刷新键
     trace:
       enabled: true
       queue-capacity: 10000
-      batch-size: 500
-      flush-interval-ms: 200
-      consumer-threads: 2
+      batch-size: 500        # 每次 drain 最多落库条数
+      flush-interval-ms: 200 # 消费线程刷库间隔（毫秒）
+      # TraceWriter 单虚拟线程批量落库；提吞吐调 batch-size/flush-interval-ms（旁路通道满则丢，不阻塞热路径）
     metric:
       default-cache-ttl-seconds: 60
     action:
+      # 规划中：action 派发超时未实现
       default-timeout-ms: 3000
+      send-alert:
+        # SEND_ALERT webhook（best-effort，失败不重试）；url 为空则不实发（skipped）
+        url:
+        timeout-ms: 2000
+    # 数据保留/清理:各模块 @Scheduled 按保留窗删超期运行/历史行(observability 清 trace 两表、eval-svc 清 session 两表)
     retention:
+      enabled: true
+      cron: "0 30 3 * * *"       # 每日 03:30
+      batch-size: 1000           # 单批删除上限(分批短事务)
       evaluation-session-days: 90
       node-trace-days: 30
-      dry-run-session-days: 7
-    rollout:
-      hash-seed: 42
+      dry-run-session-days: 7    # 同管 dry_run 两张表(dry_run_session + dry_run_node_trace)
+      action-execution-days: 90  # 跟随 evaluation_session 生命周期
+    # 规划中：告警阈值逻辑未实现
     observability:
       eval-error-rate-threshold: 0.05
       trace-queue-full-threshold: 0.8

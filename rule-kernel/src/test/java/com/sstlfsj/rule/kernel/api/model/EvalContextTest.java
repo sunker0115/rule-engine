@@ -13,7 +13,7 @@ class EvalContextTest {
     private static final Instant NOW = Instant.parse("2026-06-01T00:00:00Z");
 
     private static RuleEvent event() {
-        return new RuleEvent("t1", "s1", "LOGIN", "u1", "e1", Instant.EPOCH, Map.of(), null);
+        return new RuleEvent("t1", "s1", "LOGIN", "u1", "e1", Instant.EPOCH, Map.of(), null, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
     }
 
     private static Subject subject() {
@@ -56,21 +56,13 @@ class EvalContextTest {
     }
 
     @Test
-    void getters_returnConstructorValues() {
+    void accessors_returnConstructorValues() {
         RuleEvent ev = event();
         Subject sub = subject();
         EvalContext ctx = new EvalContext("t1", ev, sub, Map.of(), NOW);
-        assertEquals("t1", ctx.getTenantId());
-        assertSame(ev, ctx.getEvent());
-        assertSame(sub, ctx.getSubject());
-    }
-
-    @Test
-    void subject_recordStyleAccessor_returnsSameAsGetSubject() {
-        Subject sub = subject();
-        EvalContext ctx = new EvalContext("t1", event(), sub, Map.of(), NOW);
+        assertEquals("t1", ctx.tenantId());
+        assertSame(ev, ctx.event());
         assertSame(sub, ctx.subject());
-        assertSame(ctx.getSubject(), ctx.subject());
     }
 
     @Test
@@ -88,10 +80,9 @@ class EvalContextTest {
     }
 
     @Test
-    void now_isStoredAndReturnedByBothAccessors() {
+    void now_isStoredAndReturned() {
         Instant fixed = Instant.parse("2026-06-01T00:00:00Z");
         EvalContext ctx = new EvalContext("t1", event(), subject(), Map.of(), fixed);
-        assertSame(fixed, ctx.getNow());
-        assertSame(ctx.getNow(), ctx.now());
+        assertSame(fixed, ctx.now());
     }
 }

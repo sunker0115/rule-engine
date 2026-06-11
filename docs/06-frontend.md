@@ -53,12 +53,12 @@
 
 编辑器不硬编码 ConditionType / ActionType 表单，而是：
 
-1. 进入编辑器时调用 `GET /api/v1/scenes/{sceneCode}/metadata`，拿到：
+1. 进入编辑器时调用 `GET /admin/v1/scenes/{sceneCode}/metadata`，拿到：
    - `conditionTypes[]`（含 paramsSchema）
    - `actionTypes[]`（含 paramsSchema）
    - `availableMetrics[]`
 2. 用户选择节点类型后，按 `paramsSchema`（JSON Schema）动态渲染参数表单
-3. `requiresMetric=true` 的 ConditionType（如 `metric.threshold`）同时渲染 metric 下拉框（来自 availableMetrics）
+3. `requiresMetric=true` 的 ConditionType（如比较算子 `GT`）同时渲染值来源选择：`valueRef=METRIC` 时渲染 metric 下拉框（来自 availableMetrics），`valueRef=PAYLOAD` 时渲染 payload 字段选择（来自 Scene.payloadSchema）
 
 **JSON Schema → 表单组件映射（v1 最小集）：**
 
@@ -77,7 +77,7 @@
 ## 四、dry-run UI
 
 1. 右栏点击"试算"按钮 → 弹出 mockEvent 编辑框（JSON 编辑器，预填 Schema 必填字段）
-2. 可选：指定 `ruleVersionId`（默认当前版本）；填写 `providedMetrics`（D30）
+2. 可选：指定 `ruleVersionId`（默认当前版本）；填写事件 `payload`（事件事实，必填字段可经 `GET /api/v1/rule/scenes/{sceneCode}/input-manifest` 发现，D55 后公开评估只收 payload）
 3. 调用 `POST /api/v1/rule/dry-run` → 返回含 `nodeTrace` 的 Response（见 10-api-contract §3.3）
 4. 右栏渲染 AST trace 树：
    - `result=true` → 节点显示 ✅
@@ -92,10 +92,10 @@
 
 ## 五、灰度配置 UI
 
-在 Rule 编辑器的 Pre-Gate 配置区：
+在 Rule 编辑器的 Pre-Gate 配置区（v1 仅 ROLLOUT，D52；RATE_LIMIT/MUTEX 已移除）：
 - **ROLLOUT Gate**：百分比滑块（0–100%）+ 实时显示"约 X% 流量命中此规则"
-- **WHITELIST / BLACKLIST**：名单 key 下拉框（来自平台预设名单列表）
-- **RATE_LIMIT**：QPS / QPM 数字输入框 + 时间窗口选择
+
+> 黑白名单不再是 Pre-Gate（D52）：改用名单 metric（`sourceType=SQL_AGGREGATE`、`dataType=BOOLEAN`）+ 规则条件 `EQ(in_blacklist, true)` 配置，在条件编辑区而非 Pre-Gate 区。
 
 灰度发布建议工作流显示在侧边面板（仅 ROLLOUT Gate 显示）：
 
@@ -111,11 +111,11 @@
 
 ## 六、审计日志查看 UI
 
-在 Rule 详情页右侧抽屉（通过 `GET /api/v1/audit-logs` 查询）：
+在 Rule 详情页右侧抽屉（通过 `GET /admin/v1/audit-logs` 查询）：
 - 按时间倒序列出 `audit_log` 条目（PUBLISH / DISABLE / UPDATE 等，枚举值同 05-storage DDL `audit_log.action`）
 - 每条目展开 → diff 视图（before_snapshot vs after_snapshot，JSON diff 高亮）
 - 点击"操作人"→ 可按 actor 过滤；同时显示 actorType（USER / SYSTEM / JOB）
-- 发布失败条目（`action=PUBLISH_FAILED`）：红色标记 + `after_snapshot.errorCode` tooltip（`UNRESOLVED_VARIABLE` / `METRIC_NOT_BOUND` 等，完整清单见 10-api-contract §七）
+- 发布失败条目（`action=PUBLISH_FAILED`）：红色标记 + `after_snapshot.errorCode` tooltip（`UNRESOLVED_VARIABLE` / `DECISION_CODE_NOT_FOUND` 等，完整清单见 10-api-contract §七）
 
 ---
 

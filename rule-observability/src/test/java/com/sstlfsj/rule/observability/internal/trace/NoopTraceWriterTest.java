@@ -19,7 +19,7 @@ class NoopTraceWriterTest {
 
     @Test
     void write_doesNotThrow_withNormalInput() {
-        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null);
+        NodeTrace trace = new NodeTrace("LEAF", "AMOUNT_GT", "revenue", true, 100, "DB", null, null, null, null, null);
         assertDoesNotThrow(() -> writer.write("t1", "s1", List.of(trace)));
     }
 
@@ -30,7 +30,7 @@ class NoopTraceWriterTest {
 
     @Test
     void write_doesNotThrow_withNullFields() {
-        NodeTrace trace = new NodeTrace(null, null, null, null, null, null, null, null, null);
+        NodeTrace trace = new NodeTrace(null, null, null, null, null, null, null, null, null, null, null);
         assertDoesNotThrow(() -> writer.write(null, null, List.of(trace)));
     }
 }

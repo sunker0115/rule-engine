@@ -1,15 +1,19 @@
 package com.sstlfsj.rule.config.internal.domain;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.Map;
 
 /** metric_definition 表实体。 */
 @Getter
 @Setter
-@TableName("metric_definition")
+@TableName(value = "metric_definition", autoResultMap = true)
 public class MetricDefinition {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -19,10 +23,12 @@ public class MetricDefinition {
     private String name;
     private String sourceType;
     private String dataType;
-    private String params;
+    /** 依 sourceType 异构的取数参数（开放结构）；JSON 列由 TypeHandler 转换。 */
+    @TableField(typeHandler = Jackson3TypeHandler.class)
+    private Map<String, Object> params;
     private Integer cacheTtlSeconds;
     private Boolean allowProvided;
-    private String status;
+    private MetricStatus status;
     private String createdBy;
     private java.time.LocalDateTime createdAt;
     private String updatedBy;

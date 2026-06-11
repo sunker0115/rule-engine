@@ -4,23 +4,28 @@ import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,34 +46,37 @@ class RuleExportServiceTest {
     @Mock SceneMapper sceneMapper;
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock DecisionDefinitionMapper decisionDefinitionMapper;
-    @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
     @InjectMocks RuleExportService sut;
 
     private RuleDefinition rule(long id, String code) {
         RuleDefinition r = new RuleDefinition();
         r.setId(id); r.setTenantId(1L); r.setSceneId(5L);
-        r.setCode(code); r.setName("规则" + code); r.setKind("AST_BOOLEAN");
-        r.setStatus("PUBLISHED");
+        r.setCode(code); r.setName("规则" + code); r.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
+        r.setStatus(RuleDefinitionStatus.PUBLISHED);
         return r;
     }
 
     private RuleVersion activeVersion(long rdId) {
         RuleVersion v = new RuleVersion();
-        v.setId(100L + rdId); v.setRuleDefinitionId(rdId); v.setVersion(3L); v.setStatus("ACTIVE");
-        v.setKind("AST_BOOLEAN");
-        v.setConditionAst("{\"type\":\"AndNode\",\"children\":[]}");
-        v.setDecisionBindings("[{\"decisionCode\":\"BLOCK\",\"priority\":100}]");
-        v.setPreGates("[]");
-        v.setTriggerEventTypes("[\"transfer\"]");
-        v.setMetricDependencies("[{\"metricCode\":\"account.age\",\"metricVersion\":1}]");
+        v.setId(100L + rdId); v.setRuleDefinitionId(rdId); v.setVersion(3L); v.setStatus(RuleVersionStatus.ACTIVE);
+        v.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
+        v.setConditionAst(new AndNode(List.of(), null, null));
+        v.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
+        v.setPreGates(List.of());
+        v.setTriggerEventTypes(List.of("transfer"));
+        v.setMetricDependencies(List.of(new MetricDependency("account.age", 1)));
+        v.setPayloadDependencies(List.of(new PayloadDependency("amount", "NUMBER", true)));
         return v;
     }
 
     private SceneDef scene() {
         SceneDef s = new SceneDef();
         s.setId(5L); s.setTenantId(1L); s.setCode("risk.transfer"); s.setName("转账风控");
-        s.setSubjectType("USER"); s.setDominantMode("PUSH"); s.setDecisionStrategy("HIGHEST_PRIORITY");
-        s.setEventTypes("[\"transfer\"]"); s.setPayloadSchema("{}"); s.setDefaultParams("{}");
+        s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
+        s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
+        s.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
+        s.setEventTypes(java.util.List.of("transfer")); s.setPayloadSchema(java.util.List.of());
+        s.setDefaultParams(java.util.Map.of());
         s.setPayloadSchemaVersion(1);
         return s;
     }
@@ -76,7 +84,7 @@ class RuleExportServiceTest {
     private MetricDefinition metric() {
         MetricDefinition m = new MetricDefinition();
         m.setMetricCode("account.age"); m.setVersion(1); m.setName("账户年龄");
-        m.setSourceType("ATTRIBUTE"); m.setDataType("LONG"); m.setParams("{}");
+        m.setSourceType("ATTRIBUTE"); m.setDataType("LONG"); m.setParams(java.util.Map.of());
         m.setCacheTtlSeconds(3600); m.setAllowProvided(true);
         return m;
     }
@@ -84,7 +92,7 @@ class RuleExportServiceTest {
     private DecisionDefinition decision() {
         DecisionDefinition d = new DecisionDefinition();
         d.setCode("BLOCK"); d.setName("拦截"); d.setPriority(100); d.setDescription("拦截交易");
-        d.setActions("[{\"actionId\":\"a1\",\"actionType\":\"BLOCK_TRANSACTION\",\"sortOrder\":0,\"params\":{}}]");
+        d.setActions(List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, Map.of())));
         return d;
     }
 
@@ -106,6 +114,8 @@ class RuleExportServiceTest {
         assertThat(b.rules()).hasSize(2);
         assertThat(b.rules()).extracting(RuleBundle.RuleEntry::code).containsExactlyInAnyOrder("a", "b");
         assertThat(b.rules().getFirst().sceneCode()).isEqualTo("risk.transfer");
+        assertThat(b.rules().getFirst().payloadDependencies())
+                .containsExactly(new PayloadDependency("amount", "NUMBER", true));
         assertThat(b.scenes()).hasSize(1);                       // 去重
         assertThat(b.metricDefinitions()).hasSize(1);            // 去重
         assertThat(b.decisionDefinitions()).hasSize(1);          // 去重

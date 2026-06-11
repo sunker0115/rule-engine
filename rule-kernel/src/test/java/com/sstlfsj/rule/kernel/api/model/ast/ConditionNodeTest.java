@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.api.model.ast;
 
+import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -68,5 +69,14 @@ class ConditionNodeTest {
     void fiveArgConstructor_dataTypeIsNull() {
         ConditionNode node = new ConditionNode("EQ", "amount", null, Map.of(), 0.0);
         assertThat(node.dataType()).isNull();
+    }
+
+    @Test
+    void convenienceConstructors_defaultValueRefToMetric() {
+        // 5 参与 6 参便捷构造均默认 valueRef=METRIC，保证旧构造路径语义不变
+        ConditionNode fiveArg = new ConditionNode("EQ", "amount", null, Map.of(), 0.0);
+        ConditionNode sixArg = new ConditionNode("EQ", "amount", null, Map.of(), 0.0, "LONG");
+        assertThat(fiveArg.valueRef()).isEqualTo(ValueRef.METRIC);
+        assertThat(sixArg.valueRef()).isEqualTo(ValueRef.METRIC);
     }
 }
