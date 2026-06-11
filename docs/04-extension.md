@@ -1,10 +1,10 @@
 # 04 — 扩展指南
 
-> **位置定位**：本文档承载"我要加一个新条件 / 动作 / 指标源，怎么落地"的**复制粘贴级指南**——SPI 接口签名 / Bean 注册 / 注解声明 / 元数据契约 / 实现建议（timeout / retry / 熔断 默认值）。
+> **位置定位**：本文档承载"我要加一个新条件 / 指标源，怎么落地"的**复制粘贴级指南**——SPI 接口签名 / Bean 注册 / 注解声明 / 元数据契约 / 实现建议（timeout / retry / 熔断 默认值）。
 >
-> **前置阅读**：[`01-concepts.md`](./01-concepts.md) §3.6 / §3.7 / §3.9、[`09-skeleton.md`](./09-skeleton.md) §四 SPI 接口落点
+> **前置阅读**：[`01-concepts.md`](./01-concepts.md) §3.6 / §3.9、[`09-skeleton.md`](./09-skeleton.md) §四 SPI 接口落点
 >
-> **解决什么疑问**："加一个新 ConditionType 要改哪些文件？""ActionHandler 的返回值契约是什么？""MetricSource 怎么声明缓存策略 / 类型级 params schema？""前端怎么知道我的新条件有哪些参数？"
+> **解决什么疑问**："加一个新 ConditionType 要改哪些文件？""MetricSource 怎么声明缓存策略 / 类型级 params schema？""前端怎么知道我的新条件有哪些参数？"
 >
 > **职责边界**——
 > - ✅ SPI 接口签名 / Bean 注册 / 元数据声明 / 实现建议值
@@ -17,7 +17,6 @@
 | 章节 | 状态 |
 |------|------|
 | §二 加 ConditionType | ✅ 已展开 |
-| §三 加 ActionType | ✅ 已展开 |
 | §四 加 MetricSource | ✅ 已展开 |
 | §五 元数据契约 | ✅ 已展开 |
 | §六 实现指南 | ✅ 已展开 |
@@ -98,122 +97,6 @@ public class GeoDistanceWithinEvaluator implements ConditionEvaluator {
 - 如果 params 缺必填字段 → 抛 `IllegalArgumentException`，引擎归 `CONDITION_EVAL_ERROR`
 - evaluate() 必须无副作用（不能修改 EvalContext，D20 §1 EvalContext 不可变）
 - 单元测试模板：构造 `MockConditionNode`（直接设 params）+ `MockEvalContext`（直接注入 metric 值）→ 断言 evaluate() 返回预期布尔值
-
----
-
-## 三、加 ActionType
-
-> **引擎内置 handler 仅 `SEND_ALERT`**（HTTP webhook，足够通用）。`BLOCK_TRANSACTION` 等强依赖宿主系统的动作**不内置**（D57：通用引擎无通用"阻断交易"机制）——`actionType` 仍可自由配置，由嵌入方按本节经 `ActionHandler` SPI 自写真实实现;未注册对应 handler 时派发落 `NO_HANDLER` SKIPPED。
-
-### 3.1 SPI 接口
-
-```java
-// 包路径 TBD（见 09-skeleton §四）
-public interface ActionHandler {
-    /**
-     * 执行 Action。幂等性由 Handler 自行保证。
-     * @param ctx  含 action 定义（actionId / actionType / params）+ EvalContext + actionExecutionId（用于幂等键）
-     * @return ActionResult（不要抛异常，catch 后归一为 FAILED）
-     */
-    ActionResult execute(ActionContext ctx);
-
-    /**
-     * dry-run 预览。不发起任何外部副作用（HTTP/MQ/DB 写入），返回预测 ActionResult。
-     * v1.5 已全量实装（D7），DRY_RUN_NOT_IMPLEMENTED errorCode 不再产生。
-     * @return ActionResult
-     */
-    default ActionResult dryRun(ActionContext ctx) {
-        return ActionResult.skipped("DRY_RUN_NOT_IMPLEMENTED");
-    }
-}
-```
-
-**ActionContext 字段说明：**
-
-```java
-ActionContext {
-    actionId:          String          // Action 实例 id（对应 Decision.actions[n].actionId）
-    actionType:        String          // 与 @ActionType.value 对应
-    params:            Map<String,Any> // Action 参数：取自 Decision.actions[n].params（D54：归 decision，与 scene 无关）；发布时快照到 rule_version.decision_bindings
-    evalContext:       EvalContext     // 本次评估上下文（含 eventId / subjectId / payload 等）
-    actionExecutionId: Long            // action_execution 表行 id（用于幂等键）
-    decisionCode:      String          // 触发本 Action 的 Decision 码（D27）
-}
-```
-
-> `ActionContext.evalContext.getEventId()` 是推荐幂等键组成之一，见 §3.5 实现约束。
-
-### 3.2 ActionResult 契约（D16 派生）
-
-```java
-ActionResult {
-    status:       SUCCESS | FAILED | SKIPPED   // SKIPPED 由引擎填（PREDECESSOR_FAILED / handler 缺失 / 无 webhook URL）
-    errorCode:    String?                       // 见 01-concepts §3.7 errorCode 清单
-    errorMessage: String?                       // 人类可读错误信息，不作程序判断
-    retryable:    Boolean                       // 保留字段；best-effort 化后不再驱动重试队列（D53），失败即终态
-}
-```
-
-### 3.3 注解声明
-
-```java
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface ActionType {
-    String value();                // 全局唯一，与规则 JSON 中 actionType 字段对应
-    String displayName() default "";
-    String paramsSchema() default "{}";   // 前端表单 schema
-    int timeoutMs() default 3000;  // Handler 声明的超时预算；引擎据此设置调用上限，超时归 TIMEOUT errorCode
-}
-```
-
-### 3.4 实现示例（ticket.create）
-
-```java
-@Component
-@ActionType(
-    value = "ticket.create",
-    displayName = "创建工单",
-    paramsSchema = """
-        {
-          "type": "object",
-          "required": ["title", "assignee"],
-          "properties": {
-            "title":    { "type": "string" },
-            "priority": { "type": "string", "enum": ["LOW","MEDIUM","HIGH"] },
-            "assignee": { "type": "string" }
-          }
-        }
-    """,
-    timeoutMs = 3000
-)
-public class TicketCreateHandler implements ActionHandler {
-    @Override
-    public ActionResult execute(ActionContext ctx) {
-        String eventId = ctx.getEvalContext().getEventId();
-        if (ticketService.existsByEventId(eventId)) {
-            return ActionResult.success();  // 幂等：已建单直接成功
-        }
-        try {
-            ticketService.create(buildRequest(ctx));
-            return ActionResult.success();
-        } catch (TimeoutException e) {
-            return ActionResult.failed("TIMEOUT", false);
-        } catch (BusinessException e) {
-            return ActionResult.failed("BUSINESS_REJECTED", false);
-        }
-    }
-}
-```
-
-### 3.5 实现约束
-
-- execute() 内**必须**做幂等检查（幂等键推荐：`tenantId + eventId + decisionCode + actionId`，与 D27 迁移后的幂等键设计对齐）
-- 超时处理分两种场景：
-  - **Handler 主动处理**：catch TimeoutException 后返回 `ActionResult.failed("TIMEOUT", true)`（推荐，便于区分业务超时和引擎中断）
-  - **引擎强制中断**：Handler 超过 timeoutMs 仍未返回时，引擎中断调用并归为 `ActionResult { status=FAILED, errorCode=TIMEOUT }`；Handler 无需额外处理，但不会收到任何回调
-- Action 投递 best-effort（D53）：失败即终态、不重试不补偿；可靠投递未来接 MQ
-- Action 失败**不影响** EvalResult.satisfied（D18，评估阶段已结束）
 
 ---
 
@@ -301,13 +184,6 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
       "requiresMetric": true
     }
   ],
-  "actionTypes": [
-    {
-      "code": "ticket.create",
-      "displayName": "创建工单",
-      "paramsSchema": { "type": "object", "required": ["title", "assignee"], "properties": { "title": { "type": "string" }, "assignee": { "type": "string" } } }
-    }
-  ],
   "availableMetrics": [
     {
       "metricCode": "user.account.age.days",
@@ -333,10 +209,9 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 6.1 通用原则
 
-1. 不改 EvalContext：三种 SPI 实现均不能修改传入的 EvalContext（不可变合约，D20 §1）
+1. 不改 EvalContext：各 SPI 实现均不能修改传入的 EvalContext（不可变合约，D20 §1）
 2. 异常归一：实现方可抛任意 RuntimeException；引擎在边界处 catch 并按类型归一为 errorCode
-3. 幂等自管：ActionHandler 自行保证 execute() 幂等（引擎不提供幂等包装）
-4. 无状态 Bean：Handler / Evaluator 应设计为无状态 Spring singleton，不在实例字段存评估中间状态
+3. 无状态 Bean：Evaluator / MetricSourceHandler 应设计为无状态 Spring singleton，不在实例字段存评估中间状态
 
 ### 6.2 超时与熔断建议
 
@@ -349,7 +224,7 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 6.3 Bean 生命周期
 
-MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（引擎在 Scene 状态变更时调度这些回调，不由 handler 直接调用 init()）。ActionHandler 类似，但 PULL Scene 不预热（只 PUSH/HYBRID Scene 预热，详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
+MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（引擎在 Scene 状态变更时调度这些回调，不由 handler 直接调用 init()）。PULL Scene 不预热，只 PUSH/HYBRID Scene 预热（详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
 
 ---
 
@@ -386,7 +261,7 @@ public class AccountLoader implements SubjectLoader {
 }
 ```
 
-> **注**：`SubjectLoader` 通过 `supportedTypes()` 方法注册（无需额外注解），与 `@ConditionType` / `@ActionType` / `@MetricSourceType` 注解风格略有不同。
+> **注**：`SubjectLoader` 通过 `supportedTypes()` 方法注册（无需额外注解），与 `@ConditionType` / `@MetricSourceType` 注解风格略有不同。
 
 `SubjectLoaderRegistry` 启动时扫描所有 `SubjectLoader` Bean，按 `supportedTypes()` 建索引；运行时由 `EvalContext` 构建阶段按 `Scene.subjectType` 路由。
 
@@ -408,7 +283,7 @@ public class AccountLoader implements SubjectLoader {
 
 ## 九、代码定义规则（`@RuleDef` 注解模式）
 
-> 扩展入口：前述 §二~§四 是为引擎补**算子 / 动作 / 取数**能力；本节是另一类扩展——用 **Java 代码直接定义规则本身**（嵌入式 SDK 场景，D40 / D59）。规则不再经 admin API 配置 + 数据库存储，而是标注在代码类上，由 SDK 启动时扫描装载到评估索引。适用单测 / 演示 / 离线部署 / 把规则当代码版本管理的场景。
+> 扩展入口：前述 §二~§四 是为引擎补**算子 / 取数**能力；本节是另一类扩展——用 **Java 代码直接定义规则本身**（嵌入式 SDK 场景，D40 / D59）。规则不再经 admin API 配置 + 数据库存储，而是标注在代码类上，由 SDK 启动时扫描装载到评估索引。适用单测 / 演示 / 离线部署 / 把规则当代码版本管理的场景。
 
 ### 9.1 `@RuleDef` 注解（`rule-kernel`）
 

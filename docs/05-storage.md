@@ -34,7 +34,7 @@
 | `metric_definition` | 指标元数据（sourceType / params / cacheTtl / allowProvided） | 同步事务 | 永久 |
 | `rule_definition` | 规则主记录（code / name / status） | 同步事务 | 永久 |
 | `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
-| `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级 / actions（D26/D27） | 同步事务 | 永久 |
+| `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级（D26） | 同步事务 | 永久 |
 | `rule_decision_binding` | 规则与 Decision 的绑定关系（支持可选 score 区间，D26 SCORECARD 占位） | 同步事务 | 永久 |
 | `job_definition` | 定时触发规则配置（§3.10），调度器到点合成 RuleEvent | 同步事务 | 永久 |
 | `job_execution` | Job 每次运行记录（§3.10） | 异步 | 永久 |
@@ -46,7 +46,6 @@
 |---|---|---|---|
 | `evaluation_session` | 每次评估主记录 / 幂等锚点（D11 / D21 同步写） | **同步**（session 行） | 30 天 TTL（D9） |
 | `node_trace` | AST 各节点求值 trace（D7 / D21 异步批写） | **异步批写** | 30 天 TTL（D9） |
-| `action_execution` | Action 派发执行记录（D4） | 异步 | 30 天 TTL |
 | `dry_run_session` | dry-run 评估主记录（与 prod 隔离，D7） | 同步 | 7 天 TTL |
 | `dry_run_node_trace` | dry-run 节点 trace | 异步批写 | 7 天 TTL |
 
@@ -154,7 +153,7 @@ CREATE TABLE rule_version (
   rule_definition_id    BIGINT       NOT NULL COMMENT '关联 rule_definition.id',
   version               BIGINT       NOT NULL COMMENT '单调递增，per rule_definition（Long 型，匹配概念层 RuleVersion.version）',
   condition_ast         JSON         NOT NULL COMMENT '完整 AST 节点树，不可变',
-  decision_bindings     JSON         NOT NULL COMMENT 'D27/D28：含 actions 快照的 Decision 绑定',
+  decision_bindings     JSON         NOT NULL COMMENT 'Decision 绑定快照（含 code/name/priority；D26）',
   pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表（v1 仅 ROLLOUT，D52；RATE_LIMIT/MUTEX 已移除，黑白名单改走 BOOLEAN metric+condition）；灰度由 ROLLOUT 项承载，params 含 percentage / bucketStart / bucketEnd / experimentId（详见 10-api-contract）',
   kind                  VARCHAR(32) NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT '取值: AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE/EXPRESSION_SCRIPT；D12：规则形态冻结；v1 仅 AST_BOOLEAN 实装，其他占位',
   trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
@@ -171,7 +170,7 @@ CREATE TABLE rule_version (
 
 > **已废弃列 `rollout`**：D6 初版曾设独立 `rollout JSON` 列存灰度快照，但 ROLLOUT 改由 `pre_gates` 承载后该列只写不读，已于迁移 `V1_4__drop_rollout.sql` 删除。灰度配置（percentage / 桶区间 / experimentId）统一在 `pre_gates` 的 ROLLOUT 项。
 
-**decision_definition**（D26/D27）
+**decision_definition**（D26）
 
 ```sql
 CREATE TABLE decision_definition (
@@ -181,15 +180,16 @@ CREATE TABLE decision_definition (
   name        VARCHAR(128) NOT NULL COMMENT '决策名称，如"拒绝"/"人工审核"/"放行"',
   priority    INT          NOT NULL COMMENT '优先级，值越小越高（D26：HIGHEST_PRIORITY 策略取 priority 最小的命中决策）',
   description TEXT         COMMENT '给运营/风控看的业务说明',
-  actions     JSON         NOT NULL DEFAULT '[]' COMMENT 'D27：Action 列表（命中此 Decision 时派发），含 actionId/actionType/sortOrder/failFast/params',
   status      VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED',
   created_by  VARCHAR(64)  COMMENT '创建人（D14）',
   created_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_by  VARCHAR(64)  COMMENT '最近修改人（D14）',
   updated_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_code (tenant_id, code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Decision 实体（D26，Tenant 级）；actions 字段在发布时快照到 rule_version.decision_bindings（D28）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Decision 实体（D26，Tenant 级）；D60 起引擎纯决策化，actions 列已 V1_27 移除';
 ```
+
+> **已移除列 `actions`（D60，V1_27）**：D60 引擎纯决策化，删除整个动作子系统，`decision_definition.actions` 列随迁移 V1_27 DROP；Decision 仅承载决策码 / 名称 / 优先级。"命中后做什么"归消费方 / 流程引擎。
 
 **rule_decision_binding**（D26：规则绑定 Decision，支持 score 区间占位）
 
@@ -206,7 +206,7 @@ CREATE TABLE rule_decision_binding (
 ```
 
 > **scene_metric_binding 已移除（D54，V1_22）**：metric 在 tenant 级对所有 scene 可用，不再有 scene 级 metric 白名单。
-> **scene_action_binding 已移除（D54，V1_23）**：action 触发源唯一 = decision（tenant 级，与 scene 无关，D27 实装），不再有 scene 级 actionType 白名单 + `default_params`；D50 写 API 作废。actionType 合法性降级为运行期 NO_HANDLER skip（D53 best-effort）。
+> **scene_action_binding 已移除（D54，V1_23）**：曾用于 scene 级 actionType 白名单；D60 起整个动作子系统移除，引擎纯决策化，已无 action 概念。
 
 **job_definition**（定时触发规则，非一等公民）
 
@@ -327,27 +327,7 @@ CREATE TABLE node_trace (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AST 节点求值 trace（D7/D21，异步批写）';
 ```
 
-**action_execution**
-
-```sql
-CREATE TABLE action_execution (
-  id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
-  evaluation_session_id BIGINT       NOT NULL COMMENT '关联 evaluation_session.id',
-  tenant_id             BIGINT       NOT NULL,
-  event_id              VARCHAR(128) NOT NULL COMMENT '来自 evaluation_session.event_id 的冗余字段，用于幂等 UK（D27）',
-  action_id             VARCHAR(128) NOT NULL COMMENT 'Decision.actions[n].actionId',
-  action_type           VARCHAR(64)  NOT NULL,
-  decision_code         VARCHAR(64)  NOT NULL COMMENT '触发本 Action 的 Decision 码（D27）',
-  status                VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT '取值: PENDING/SUCCESS/FAILED/SKIPPED',
-  error_code            VARCHAR(64)  COMMENT 'NO_WEBHOOK_URL / ALERT_DELIVERY_FAILED / PREDECESSOR_FAILED 等',
-  executed_at           TIMESTAMP(3)  COMMENT '最后一次执行时间',
-  created_at            TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_idempotency (tenant_id, event_id, decision_code, action_id) COMMENT 'D27 幂等 UK：DB 层最终防重（落库去重）',
-  KEY idx_session_id (evaluation_session_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Action 派发执行记录（D4/D27；best-effort 投递 D53，retry/补偿列已 V1_21 移除）';
-```
-
-> **best-effort 化（D53，V1_21）**：原 `retryable`/`retry_count`/`compensated`/`compensated_at`/`compensated_by` 列 + `idx_status_retryable` 索引已移除。Action 投递为 best-effort fire-and-forget，不重试不补偿；重复防护仅靠 `uk_idempotency` 落库去重。可靠投递（MQ）/ 业务补偿（saga）未来另设计。
+> **action_execution 表已移除（D60，V1_27）**：D60 引擎纯决策化，删除整个动作子系统——动作派发与 `action_execution` 落库一并移除，该表随迁移 V1_27 DROP。引擎只产出决策，"命中后做什么"归消费方 / 流程引擎，其执行记录由下游编排层自行承载。
 
 **dry_run_session**（共享 evaluation_session 主体字段，追加 dry-run 专有列，7 天 TTL，D7）
 
@@ -422,7 +402,6 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `evaluation_session` | `idx_scene_subject (scene_code, subject_id)` | 按用户查历史评估记录 |
 | `evaluation_session` | （无专用索引）按规则查历史 session 走 `node_trace.rule_version_id` IN 该规则所有版本 id → 取 `evaluation_session_id` → JOIN evaluation_session；不在 evaluation_session 加规则外键索引以避免写热点，JOIN 量小可接受（见 10-api-contract §6.4） | |
 | `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
-| `action_execution` | UK `uk_idempotency (tenant_id, event_id, decision_code, action_id)`<br>`idx_session_id (evaluation_session_id)` | Action 派发幂等检查（D27 DB 层最终防重，best-effort 落库去重）<br>按 session 查 action 执行记录 |
 | `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |
 | `rule_version` | UK `uk_def_version (rule_definition_id, version)` | 版本唯一性约束 + 按规则查所有版本 |
 | `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)`<br>`idx_operated_at (operated_at)` | 查某个规则/Scene 的所有变更记录<br>按时间范围查审计日志 |
@@ -444,19 +423,18 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 `rule_version` 行一旦发布（`published_at` 非 null）永不 UPDATE / DELETE：
 
 - 修改规则 = 创建新 version（version 单调递增，per rule_definition）
-- 旧 version `status` 改为 `SUPERSEDED`（仍可被 `node_trace.rule_version_id` 引用，历史评估节点 trace 可追溯至对应版本；同时可通过 `action_execution.decision_code` 关联 `rule_version.decision_bindings`，追溯 Action 派发时所绑定的 Decision 快照）
+- 旧 version `status` 改为 `SUPERSEDED`（仍可被 `node_trace.rule_version_id` 引用，历史评估节点 trace 可追溯至对应版本）
 - 新 version INSERT，Matcher 倒排索引热更指向新 version（≤15s 全实例收敛，D17）
 - 回滚 = 用旧 version 的 `condition_ast` / `decision_bindings` 内容新建草稿 → 走标准发布流程产出新 version 号，不是直接切回旧 version（避免 current_version 倒退造成审计断层）
 
 ### 数据保留策略（D9：v1 全 MySQL；各模块 `@Scheduled` 定时清理）
 
-各属主模块各一个 `@Scheduled` 清理 bean（observability 清 trace 两表、eval-svc 清 session/action 三表），按 `engine.rule.retention.*` 配置（`cron` 默认每日 03:30、`batch-size` 默认 1000、`enabled` 总开关）分批 `DELETE ... LIMIT batch-size` 循环删超期行（短事务、幂等、可恢复）。无 FK,删除顺序为逻辑安全。
+各属主模块各一个 `@Scheduled` 清理 bean（observability 清 trace 两表、eval-svc 清 session 两表），按 `engine.rule.retention.*` 配置（`cron` 默认每日 03:30、`batch-size` 默认 1000、`enabled` 总开关）分批 `DELETE ... LIMIT batch-size` 循环删超期行（短事务、幂等、可恢复）。无 FK,删除顺序为逻辑安全。
 
 | 表 | 保留期(默认) | age 列 | 配置键 |
 |---|---|---|---|
 | `evaluation_session` | 90 天 | `started_at` | `evaluation-session-days` |
 | `node_trace` | 30 天 | `evaluated_at` | `node-trace-days` |
-| `action_execution` | 90 天（跟随 evaluation_session 生命周期） | `created_at` | `action-execution-days` |
 | `dry_run_session` | 7 天 | `started_at` | `dry-run-session-days` |
 | `dry_run_node_trace` | 7 天 | `evaluated_at` | `dry-run-session-days`（同管 dry_run 两表） |
 | `audit_log` | **永久** | — | 不清理 |
