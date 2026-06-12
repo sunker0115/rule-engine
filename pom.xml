@@ -159,6 +159,14 @@
                 <version>${guava.version}</version>
             </dependency>
 
+            <!-- protobuf-java：dev.cel 0.13.0 gencode 为 4.33.x，需运行时 ≥ 4.33；
+                 覆盖 Spring Boot 4 BOM 的 4.26.1（唯一消费方是 dev.cel，否则脚本编译期类初始化报版本不兼容） -->
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>4.33.5</version>
+            </dependency>
+
             <!-- Lombok 1.18.44+：支持 Java 25，可与 record 共存；不加在 record 类上 -->
             <dependency>
                 <groupId>org.projectlombok</groupId>
