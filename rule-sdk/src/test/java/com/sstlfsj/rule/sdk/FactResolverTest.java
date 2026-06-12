@@ -49,4 +49,24 @@ class FactResolverTest {
         Object[] args = new FactResolver().resolve(m.getParameters(), ctx, null);
         assertThat(args[1]).isNull();
     }
+
+    static class FiredHolder {
+        public void m(@Fact("fromRuleCode") String fromRuleCode,
+                      @Fact("fromRuleVersion") Long fromRuleVersion,
+                      @Fact("decisionCode") String decisionCode) {}
+    }
+
+    @Test
+    void resolves_ruleProvenance_fromFiredEvent() throws Exception {
+        Method m = FiredHolder.class.getMethod("m", String.class, Long.class, String.class);
+        EvalContext ctx = ctx(Map.of(), Map.of());
+        DecisionFiredEvent fired =
+                new DecisionFiredEvent("REVIEW", 50, null, "large-trade", 3L, ctx.event(), ctx);
+
+        Object[] args = new FactResolver().resolve(m.getParameters(), ctx, fired);
+
+        assertThat(args[0]).isEqualTo("large-trade");  // fromRuleCode 元数据
+        assertThat(args[1]).isEqualTo(3L);             // fromRuleVersion 元数据
+        assertThat(args[2]).isEqualTo("REVIEW");       // decisionCode 元数据
+    }
 }

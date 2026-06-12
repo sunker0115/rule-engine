@@ -24,8 +24,8 @@ public final class DecisionDispatcher implements DecisionContextListener {
     public void onEvaluated(RuleEvent event, EvalResult result, EvalContext context) {
         if (result == null || result.hitDecisions().isEmpty()) return;
         for (Decision d : result.hitDecisions()) {
-            DecisionFiredEvent fired =
-                    new DecisionFiredEvent(d.code(), d.priority(), d.category(), event, context);
+            DecisionFiredEvent fired = new DecisionFiredEvent(d.code(), d.priority(), d.category(),
+                    d.fromRuleCode(), d.fromRuleVersion(), event, context);
             for (DecisionSink sink : sinks) {
                 try {
                     sink.accept(fired);

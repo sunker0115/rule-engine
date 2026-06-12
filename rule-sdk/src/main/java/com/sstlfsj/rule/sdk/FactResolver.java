@@ -66,9 +66,11 @@ public final class FactResolver {
         }
         if (fired != null) {
             switch (name) {
-                case "decisionCode": return fired.decisionCode();
-                case "priority":     return fired.priority();
-                case "category":     return fired.category();
+                case "decisionCode":    return fired.decisionCode();
+                case "priority":        return fired.priority();
+                case "category":        return fired.category();
+                case "fromRuleCode":    return fired.fromRuleCode();
+                case "fromRuleVersion": return fired.fromRuleVersion();
                 default: break;
             }
         }

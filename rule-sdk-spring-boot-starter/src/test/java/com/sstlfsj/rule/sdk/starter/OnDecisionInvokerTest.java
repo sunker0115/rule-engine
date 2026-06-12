@@ -29,7 +29,7 @@ class OnDecisionInvokerTest {
                 .subjectId("u").eventId("e1").occurredAt(Instant.now())
                 .payload(Map.of("number", 7)).source(EventSource.SDK).build();
         EvalContext ctx = new EvalContext("t", e, null, Map.of(), Instant.now());
-        return new DecisionFiredEvent(code, 1, null, e, ctx);
+        return new DecisionFiredEvent(code, 1, null, "r", 1L, e, ctx);
     }
 
     @Test

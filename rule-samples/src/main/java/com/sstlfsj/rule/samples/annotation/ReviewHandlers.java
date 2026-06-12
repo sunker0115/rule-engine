@@ -28,11 +28,11 @@ public class ReviewHandlers {
         }
     }
 
-    /** 乙:仅订阅 REVIEW,注入命中事件的 amount。 */
+    /** 乙:仅订阅 REVIEW,注入命中事件的 amount 与产出该决策的规则编码(fromRuleCode 元数据)。 */
     @OnDecision("REVIEW")
-    public void onReview(@Fact("amount") Integer amount) {
+    public void onReview(@Fact("amount") Integer amount, @Fact("fromRuleCode") String fromRule) {
         onDecisionCount.incrementAndGet();
-        System.out.println("[annotation][乙 @OnDecision] 复核大额交易 amount=" + amount);
+        System.out.println("[annotation][乙 @OnDecision] 复核大额交易 amount=" + amount + " 来自规则=" + fromRule);
     }
 
     /** 甲路径累计触发次数(供集成测试断言)。 */
