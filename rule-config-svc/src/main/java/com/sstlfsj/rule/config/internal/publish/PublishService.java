@@ -373,50 +373,13 @@ public class PublishService {
 
         // metric 收集 + ACTIVE 冻结 + 安全校验
         List<String> metricCodes = MetricDependencyCollector.collect(ast);
-        List<MetricDependency> metricDeps = new ArrayList<>();
         Map<String, String> dataTypeMap = new HashMap<>();
-        if (!metricCodes.isEmpty()) {
-            List<MetricDefinition> metricDefs = metricDefinitionMapper.findActiveByCodes(tenantId, metricCodes);
-            Map<String, MetricDefinition> activeByCode = new HashMap<>();
-            for (MetricDefinition m : metricDefs) {
-                MetricDefinition prev = activeByCode.putIfAbsent(m.getMetricCode(), m);
-                if (prev != null) {
-                    throw new IllegalArgumentException("metric 存在多个 ACTIVE 版本，数据异常: " + m.getMetricCode());
-                }
-            }
-            for (String code : metricCodes) {
-                MetricDefinition m = activeByCode.get(code);
-                if (m == null) {
-                    throw new IllegalArgumentException("被引用的 metric 无 ACTIVE 版本: " + code);
-                }
-                int ver = m.getVersion() == null ? 1 : m.getVersion();
-                metricDeps.add(new MetricDependency(code, ver));
-            }
-            dataTypeMap.putAll(activeByCode.values().stream()
-                    .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
-            java.util.Set<String> dsNames = metricResourceCatalog != null ? metricResourceCatalog.datasourceNames() : null;
-            java.util.Set<String> epNames = metricResourceCatalog != null ? metricResourceCatalog.endpointNames() : null;
-            new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
-        }
+        List<MetricDependency> metricDeps = freezeMetricDeps(tenantId, metricCodes, dataTypeMap);
 
         // payload 收集 + scene.payloadSchema 声明校验 + 冻结依赖
         List<String> payloadFields = PayloadFieldCollector.collect(ast);
         Map<String, String> payloadTypeMap = new HashMap<>();
-        List<PayloadDependency> payloadDeps = new ArrayList<>();
-        if (!payloadFields.isEmpty()) {
-            List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null ? scene.getPayloadSchema() : List.of();
-            Map<String, PayloadFieldSpec> specByName = new HashMap<>();
-            for (PayloadFieldSpec f : schema) specByName.put(f.name(), f);
-            for (String field : payloadFields) {
-                PayloadFieldSpec spec = specByName.get(field);
-                if (spec == null) {
-                    throw new IllegalArgumentException("规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
-                }
-                String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
-                payloadTypeMap.put(field, dataTypeTag);
-                payloadDeps.add(new PayloadDependency(field, dataTypeTag, spec.required()));
-            }
-        }
+        List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, payloadFields, payloadTypeMap);
 
         AstNode resolvedAst = (metricCodes.isEmpty() && payloadFields.isEmpty())
                 ? ast : AstDataTypeResolver.resolve(ast, dataTypeMap, payloadTypeMap);
@@ -424,6 +387,65 @@ public class PublishService {
         List<RuleVersionSnapshot.DecisionBinding> frozenBindings = freezeDecisionBindings(tenantId, scene, bindings);
 
         return new ResolvedDraft(kind, resolvedAst, frozenBindings, gates, triggers, metricDeps, payloadDeps);
+    }
+
+    /**
+     * 按 metricCode 列表查 ACTIVE 定义,冻结 (code, version) 依赖,并产出 code→dataType 映射 + 安全校验。
+     *
+     * @param tenantId    租户 id
+     * @param metricCodes 被引用的 metric code(去重)
+     * @param dataTypeMap [出参] 填充 code→dataType(供 AST 路径 AstDataTypeResolver 用;script 路径可忽略)
+     * @return 冻结的 metric 依赖
+     */
+    private List<MetricDependency> freezeMetricDeps(Long tenantId, List<String> metricCodes,
+                                                    Map<String, String> dataTypeMap) {
+        List<MetricDependency> metricDeps = new ArrayList<>();
+        if (metricCodes.isEmpty()) return metricDeps;
+        List<MetricDefinition> metricDefs = metricDefinitionMapper.findActiveByCodes(tenantId, metricCodes);
+        Map<String, MetricDefinition> activeByCode = new HashMap<>();
+        for (MetricDefinition m : metricDefs) {
+            if (activeByCode.putIfAbsent(m.getMetricCode(), m) != null) {
+                throw new IllegalArgumentException("metric 存在多个 ACTIVE 版本，数据异常: " + m.getMetricCode());
+            }
+        }
+        for (String code : metricCodes) {
+            MetricDefinition m = activeByCode.get(code);
+            if (m == null) throw new IllegalArgumentException("被引用的 metric 无 ACTIVE 版本: " + code);
+            metricDeps.add(new MetricDependency(code, m.getVersion() == null ? 1 : m.getVersion()));
+        }
+        dataTypeMap.putAll(activeByCode.values().stream()
+                .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
+        java.util.Set<String> dsNames = metricResourceCatalog != null ? metricResourceCatalog.datasourceNames() : null;
+        java.util.Set<String> epNames = metricResourceCatalog != null ? metricResourceCatalog.endpointNames() : null;
+        new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
+        return metricDeps;
+    }
+
+    /**
+     * 按 payload 字段列表查 scene.payloadSchema 声明,冻结依赖,并产出 field→dataType 映射。
+     *
+     * @param scene          所属场景
+     * @param payloadFields  被引用的 payload 字段(去重)
+     * @param payloadTypeMap [出参] 填充 field→dataType
+     * @return 冻结的 payload 依赖
+     */
+    private List<PayloadDependency> freezePayloadDeps(SceneDef scene, List<String> payloadFields,
+                                                      Map<String, String> payloadTypeMap) {
+        List<PayloadDependency> payloadDeps = new ArrayList<>();
+        if (payloadFields.isEmpty()) return payloadDeps;
+        List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null ? scene.getPayloadSchema() : List.of();
+        Map<String, PayloadFieldSpec> specByName = new HashMap<>();
+        for (PayloadFieldSpec f : schema) specByName.put(f.name(), f);
+        for (String field : payloadFields) {
+            PayloadFieldSpec spec = specByName.get(field);
+            if (spec == null) {
+                throw new IllegalArgumentException("规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
+            }
+            String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
+            payloadTypeMap.put(field, dataTypeTag);
+            payloadDeps.add(new PayloadDependency(field, dataTypeTag, spec.required()));
+        }
+        return payloadDeps;
     }
 
     /** kind 结构校验（从 publish 抽取，逻辑原样）。 */
