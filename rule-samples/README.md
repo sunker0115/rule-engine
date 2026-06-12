@@ -10,7 +10,7 @@
 | HTTP 远程 | `httpclient/HttpClientDemo` | 是 | 跨语言 / 规则集中服务端 / 不嵌 SDK |
 | SDK 轮询嵌入 | `sdkpolling/SdkPollingDemo` | 是 | Java 接入,要本地低延迟评估 + 服务端集中管理 |
 | SDK 本地 JSON | `sdklocal/SdkLocalDemo` | 否 | 离线 / 边缘,规则随应用发布 |
-| 注解规则即代码 | `annotation/AnnotationDemoApplication` | 否 | 规则随代码演进,要强类型 + 重构友好 |
+| 注解规则即代码(Easy Rules 风格) | `annotation/AnnotationDemoApplication` | 否 | 规则随代码演进,要强类型 + 重构友好;`@Condition` 布尔方法写条件、`@OnDecision`/`@EventListener` 接动作 |
 
 ## 特性 demo
 
