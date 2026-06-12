@@ -77,7 +77,7 @@ public final class AnnotatedRuleScanner {
             }
             for (Parameter p : condition.getParameters()) {
                 Metric m = p.getAnnotation(Metric.class);
-                if (m != null) b.addMetricDependency(m.value(), m.version());
+                if (m != null) b.addMetricDependency(FactResolver.metricName(p, m), m.version());
             }
             snapshots.add(b.build());
         }

@@ -10,8 +10,8 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface Metric {
-    /** metric 编码。 */
-    String value();
+    /** metric 编码;留空则回退方法参数名(需编译期 -parameters)。 */
+    String value() default "";
     /** metric 版本,SDK 默认 1。 */
     int version() default 1;
 }

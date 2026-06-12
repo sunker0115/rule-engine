@@ -32,10 +32,20 @@ public final class FactResolver {
         return args;
     }
 
+    /** @Fact 名:注解 value 非空用之,否则回退参数名。 */
+    public static String factName(Parameter p, Fact fact) {
+        return fact.value().isEmpty() ? p.getName() : fact.value();
+    }
+
+    /** @Metric 名:注解 value 非空用之,否则回退参数名。 */
+    public static String metricName(Parameter p, Metric metric) {
+        return metric.value().isEmpty() ? p.getName() : metric.value();
+    }
+
     private Object resolveOne(Parameter p, EvalContext ctx, DecisionFiredEvent fired) {
         Metric metric = p.getAnnotation(Metric.class);
         if (metric != null) {
-            MetricValue mv = ctx == null ? null : ctx.getMetric(metric.value());
+            MetricValue mv = ctx == null ? null : ctx.getMetric(metricName(p, metric));
             if (mv == null || mv.isError()) return null;
             return coerce(mv.value(), p.getType());
         }
@@ -44,7 +54,7 @@ public final class FactResolver {
             throw new IllegalStateException(
                     "@Condition/@OnDecision 参数必须标注 @Fact 或 @Metric: " + p);
         }
-        String name = fact.value();
+        String name = factName(p, fact);
         RuleEvent event = ctx == null ? null : ctx.event();
         if (event != null && event.payload().containsKey(name)) {
             return coerce(event.payload().get(name), p.getType());

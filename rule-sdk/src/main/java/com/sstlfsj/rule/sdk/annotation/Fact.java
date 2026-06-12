@@ -7,6 +7,6 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface Fact {
-    /** payload 字段名 / 元数据键名。 */
-    String value();
+    /** payload 字段名 / 元数据键名;留空则回退方法参数名(需编译期 -parameters)。 */
+    String value() default "";
 }
