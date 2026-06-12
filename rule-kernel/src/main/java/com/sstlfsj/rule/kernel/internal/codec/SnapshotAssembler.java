@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +39,9 @@ public class SnapshotAssembler {
      * @throws JacksonException JSON 反序列化失败时抛出
      */
     public RuleVersionSnapshot assemble(RuleVersionRow row) throws JacksonException {
-        AstNode conditionAst = codec.deserializeAst(row.conditionAstJson());
+        // 脚本规则 condition_ast 为 null:跳过 AST 反序列化(脚本载体走 script 字段)
+        AstNode conditionAst = (row.conditionAstJson() == null || row.conditionAstJson().isBlank())
+                ? null : codec.deserializeAst(row.conditionAstJson());
         List<RuleVersionSnapshot.PreGateConfig> preGates =
                 codec.deserializePreGates(row.preGatesJson());
         List<RuleVersionSnapshot.DecisionBinding> decisionBindings =
@@ -49,6 +52,7 @@ public class SnapshotAssembler {
                 row.metricDependenciesJson() == null ? "[]" : row.metricDependenciesJson());
         List<PayloadDependency> payloadDependencies = codec.deserializePayloadDependencies(
                 row.payloadDependenciesJson() == null ? "[]" : row.payloadDependenciesJson());
+        ScriptSource script = codec.deserializeScriptSource(row.scriptSourceJson());
 
         return new RuleVersionSnapshot(
                 row.ruleVersionId(),
@@ -62,7 +66,8 @@ public class SnapshotAssembler {
                 row.code(),
                 row.version(),
                 metricDependencies,
-                payloadDependencies
+                payloadDependencies,
+                script
         );
     }
 
