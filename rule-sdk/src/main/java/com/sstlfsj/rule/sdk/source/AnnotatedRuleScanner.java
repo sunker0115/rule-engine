@@ -57,6 +57,7 @@ public final class AnnotatedRuleScanner {
                 throw new IllegalStateException("注解规则坐标重复: " + condType);
             }
 
+            factResolver.validate(condition.getParameters());
             evaluators.put(condType, wrap(bean, condition));
 
             RuleVersionSnapshot.Builder b = RuleVersionSnapshot.builder()

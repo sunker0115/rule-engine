@@ -35,6 +35,16 @@ public final class FactResolver {
         return args;
     }
 
+    /** 启动期校验:每个参数必须标 @Fact 或 @Metric,否则抛 IllegalStateException(带方法+参数名)。 */
+    public void validate(Parameter[] params) {
+        for (Parameter p : params) {
+            if (p.getAnnotation(Fact.class) == null && p.getAnnotation(Metric.class) == null) {
+                throw new IllegalStateException(
+                        "参数必须标注 @Fact 或 @Metric: " + p.getDeclaringExecutable() + " 的 " + p);
+            }
+        }
+    }
+
     /** @Fact 名:注解 value 非空用之,否则回退参数名。 */
     public static String factName(Parameter p, Fact fact) {
         return fact.value().isEmpty() ? p.getName() : fact.value();

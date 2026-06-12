@@ -31,6 +31,7 @@ public final class OnDecisionInvoker implements DecisionSink {
                 OnDecision ann = m.getAnnotation(OnDecision.class);
                 if (ann == null) continue;
                 m.setAccessible(true);
+                factResolver.validate(m.getParameters());
                 for (String code : ann.value()) {
                     byCode.computeIfAbsent(code, k -> new ArrayList<>())
                             .add(new Handler(bean, m, ann.fromRuleCode()));
