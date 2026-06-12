@@ -4,7 +4,6 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.sdk.RuleEngineClient;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -26,7 +25,6 @@ import java.util.UUID;
  * <p>运行前提:无,直接跑。
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.annotation.AnnotationDemoApplication"}
  */
-@Slf4j
 @SpringBootApplication
 public class AnnotationDemoApplication {
 
