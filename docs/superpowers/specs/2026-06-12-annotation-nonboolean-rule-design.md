@@ -1,6 +1,6 @@
 # 注解表达非 boolean 规则与多决策 — 设计
 
-> 状态:设计待评审 · 日期:2026-06-12 · 关联决策:D64(草案,见文末) · 前置:D61(Easy Rules 风格注解规则)
+> 状态:已实现 · 日期:2026-06-12 · 关联决策:D64(草案,见文末) · 前置:D61(Easy Rules 风格注解规则)
 > 范围拆分:本 spec 收**触碰引擎 executor/kind 选择**的扩展(E 非 boolean 规则、F 多决策);易用性与防呆见姊妹 spec `2026-06-12-annotation-ergonomics-safety-design.md`(A/B/C/D/G/H)。
 
 ## 1. 背景与动机
