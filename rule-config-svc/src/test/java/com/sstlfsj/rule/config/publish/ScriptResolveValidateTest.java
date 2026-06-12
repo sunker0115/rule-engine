@@ -115,4 +115,15 @@ class ScriptResolveValidateTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("无对应表达式引擎");
     }
+
+    @Test
+    void constructor_duplicateLangEngines_throwsIllegalState() {
+        // 引擎路由 fail-fast 对齐 eval-svc：同 lang 重复声明应在装配期拒，而非静默覆盖
+        ExpressionEngine dup = new CelExpressionEngine();
+        List<ExpressionEngine> engines = List.of(new CelExpressionEngine(), dup);
+        assertThatThrownBy(() -> new PublishService(ruleDefinitionMapper, sceneMapper, ruleVersionMapper,
+                eventPublisher, metricDefinitionMapper, decisionDefinitionMapper, engines))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CEL");
+    }
 }

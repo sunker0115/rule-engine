@@ -74,7 +74,11 @@ public class PublishService {
         this.decisionDefinitionMapper = decisionDefinitionMapper;
         Map<String, ExpressionEngine> byLang = new HashMap<>();
         if (expressionEngines != null) {
-            for (ExpressionEngine e : expressionEngines) byLang.put(e.lang(), e);
+            for (ExpressionEngine e : expressionEngines) {
+                if (byLang.putIfAbsent(e.lang(), e) != null) {
+                    throw new IllegalStateException("多个 ExpressionEngine 声明同一 lang=" + e.lang());
+                }
+            }
         }
         this.expressionEngines = byLang;
     }
@@ -462,14 +466,16 @@ public class PublishService {
         } catch (com.sstlfsj.rule.kernel.api.spi.expression.ExpressionCompileException e) {
             throw new IllegalArgumentException("脚本编译失败: " + e.getMessage(), e);
         }
+        // 校验顺序对齐 AST 路径：先 trigger/preGate 校验，再冻 metric/payload 依赖（同款输入报错顺序一致）
+        validateTriggerEventTypes(triggers, scene.getEventTypes());
+        validatePreGateParams(gates);
+
         // referencedVariables 形如 metrics.x / payload.y / subject.z；按前缀拆（subject.* 开放，不校验/不冻）
         List<String> metricCodes = stripPrefix(refVars, "metrics.");
         List<String> payloadFields = stripPrefix(refVars, "payload.");
         List<MetricDependency> metricDeps = freezeMetricDeps(tenantId, metricCodes, new HashMap<>());
         List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, payloadFields, new HashMap<>());
 
-        validateTriggerEventTypes(triggers, scene.getEventTypes());
-        validatePreGateParams(gates);
         List<RuleVersionSnapshot.DecisionBinding> frozenBindings = freezeDecisionBindings(tenantId, scene, bindings);
         // resolvedAst=null：脚本规则不进 AST；script 原样冻入
         return new ResolvedDraft(RuleKind.EXPRESSION_SCRIPT, null, frozenBindings, gates, triggers,
