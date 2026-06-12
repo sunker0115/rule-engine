@@ -17,6 +17,7 @@ public interface ExpressionEngine {
      * 编译源码(含语法/类型检查);失败抛 {@link ExpressionCompileException}。
      * @param source 表达式源码
      * @return 编译产物(实现可缓存)
+     * @throws ExpressionCompileException 语法错、未知变量、类型不符等编译/类型检查失败
      */
     CompiledExpression compile(String source);
 
