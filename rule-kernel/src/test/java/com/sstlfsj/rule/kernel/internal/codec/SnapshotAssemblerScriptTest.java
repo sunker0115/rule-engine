@@ -1,9 +1,7 @@
-package com.sstlfsj.rule.kernel.codec;
+package com.sstlfsj.rule.kernel.internal.codec;
 
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
-import com.sstlfsj.rule.kernel.internal.codec.RuleVersionRow;
-import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

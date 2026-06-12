@@ -1,7 +1,6 @@
-package com.sstlfsj.rule.kernel.codec;
+package com.sstlfsj.rule.kernel.internal.codec;
 
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
-import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
