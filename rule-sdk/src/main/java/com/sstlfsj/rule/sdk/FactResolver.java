@@ -126,7 +126,7 @@ public final class FactResolver {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Object coerce(Object v, Class<?> t) {
+    static Object coerce(Object v, Class<?> t) {
         if (v == null || t.isInstance(v)) return v;
         if (v instanceof Number n) {
             if (t == Integer.class || t == int.class)       return n.intValue();
