@@ -14,7 +14,7 @@ class RuleDefTest {
              decisions = @DecisionBinding(code = "BLOCK", priority = 100))
     static class FullRule {}
 
-    @RuleDef(code = "minimal", sceneCode = "scene")
+    @RuleDef(code = "minimal")
     static class MinimalRule {}
 
     @Test
@@ -35,6 +35,8 @@ class RuleDefTest {
         RuleDef ann = MinimalRule.class.getAnnotation(RuleDef.class);
         assertEquals("minimal", ann.code());
         assertEquals("", ann.tenantId());
+        assertEquals("default", ann.sceneCode());          // 缺省 = DEFAULT_SCENE
+        assertEquals(RuleDef.DEFAULT_SCENE, ann.sceneCode());
         assertEquals(1L, ann.version());
         assertEquals(0, ann.trigger().length);
         assertEquals(0, ann.decisions().length);
