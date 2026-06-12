@@ -1,8 +1,10 @@
 package com.sstlfsj.rule.samples.metric;
 
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +23,6 @@ public class RecentTxnCountHandler implements MetricSourceHandler {
     @Override
     public MetricValue fetch(MetricQuery query) {
         int count = COUNT_BY_SUBJECT.getOrDefault(query.subjectId(), 1);
-        return new MetricValue(count, "LONG", "FETCHED");
+        return new MetricValue(count, DataType.LONG.tag(), ValueSource.FETCHED.tag());
     }
 }

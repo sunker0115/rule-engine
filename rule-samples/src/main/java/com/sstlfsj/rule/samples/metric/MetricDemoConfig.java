@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.samples.metric;
 
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.sdk.source.DslMetricDefinitionSource;
 import com.sstlfsj.rule.sdk.source.MetricDefinitionSource;
@@ -23,7 +24,7 @@ public class MetricDemoConfig {
     MetricDefinitionSource recentTxnCountDefinition(
             @Value("${rule.sdk.tenant-id:}") String tenant) {
         MetricDescriptor descriptor = new MetricDescriptor(
-                "recent_txn_count", "DEMO_COUNTER", "LONG", false, 60, Map.of());
+                "recent_txn_count", "DEMO_COUNTER", DataType.LONG.tag(), false, 60, Map.of());
         return new DslMetricDefinitionSource(tenant, List.of(descriptor));
     }
 }

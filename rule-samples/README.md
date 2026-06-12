@@ -1,7 +1,7 @@
 # rule-samples — 接入姿势示例库
 
 面向**接入方开发者**的"使用指南即代码":每种接入姿势一个能跑的最小 demo,可直接复制进自己工程。
-与 [`docs/examples/`](../docs/examples/)(声明式配置 + curl)、`rule-app/src/test` 端到端测试(验正确性)互补——本模块是 **Java 接入代码**,裸 `main()` 跑、打印结果、不带断言、不在 CI 执行,仅参与编译以校验公开 API 不漂移。
+与 [`docs/examples/`](../docs/examples/)(声明式配置 + curl)、`rule-app/src/test` 端到端测试(验正确性)互补——本模块是 **Java 接入代码**:接入姿势 demo 用裸 `main()` 跑、打印结果(不带断言);注解特性示例则配端到端 IT 断言(在 CI 执行),作可运行参考。
 
 ## 四种接入姿势怎么选
 
@@ -12,6 +12,21 @@
 | SDK 本地 JSON | `sdklocal/SdkLocalDemo` | 否 | 离线 / 边缘,规则随应用发布 |
 | 注解规则即代码(Easy Rules 风格) | `annotation/AnnotationDemoApplication` | 否 | 规则随代码演进,要强类型 + 重构友好;`@Condition` 布尔方法写条件、`@OnDecision`/`@EventListener` 接动作 |
 
+## 注解规则:判定原语与消费方式
+
+注解姿势(`annotation` 包)下,一条 `@RuleDef` 规则用**三选一的判定原语**写逻辑;命中的决策可被**推/拉**两种方式消费。各示例都配端到端 IT 作可运行参考:
+
+| 原语 / 能力 | 样例 | 说明 |
+|---|---|---|
+| `@Condition` 布尔条件 + 动作 | `annotation/LargeTradeRule` | 命中后甲 `@EventListener` / 乙 `@OnDecision` 双动作路径(`AnnotationDemoIT`) |
+| `@Fact` 嵌套路径 | `annotation/NestedOrderRule` | `@Fact("order.amount")` 下钻 payload(`NestedOrderRuleIT`) |
+| `@Score` + `@ScoreBand` | `annotation/CreditScoreRule` | 返回分 → 阈值分档映射决策,带回 `EvalResult.score`(`NonBooleanRuleIT`) |
+| `@Decide` | `annotation/RiskDecideRule` | Java 多分支直接产出决策码,返回 `List` 可一次多决策(`NonBooleanRuleIT`) |
+| `@Metric` 取数注入 | `metric/VelocityRule` | 声明依赖 + 注入引擎预拉的派生指标(`VelocityRuleIT`;stub 取数见 `RecentTxnCountHandler`、定义见 `MetricDemoConfig`) |
+| 消费·拉(业务方法读结果) | `service/OrderService` | `@Service` 注入 client → evaluate → 按决策码走业务分支(`OrderServiceIT`) |
+
+推 = 规则上挂 `@OnDecision`/`@EventListener`,命中后在评估调用栈内自动跑副作用(慢处理器可加 `@OnDecision(async=true)`);拉 = 业务方法读 `EvalResult` 自己分支。两者可并存。`@OnDecision(fromRuleCode="x")` 可把处理器精确绑到某条规则。
+
 ## 特性 demo
 
 按接入姿势之外,单独演示某类规则能力(均零依赖、`main()` 直接跑):
@@ -19,6 +34,7 @@
 | demo | 演示能力 |
 |---|---|
 | `timecondition/TimeConditionDemo` | 内置时间条件:`time.occurred_at`(事件时间 BEFORE/AFTER/BETWEEN,确定性)+ `time.window`(营业时段,结果随运行时刻变化)。kernel 默认注册,无需自定义算子。 |
+| `metric/MetricDemoApplication` | `@Metric` 取数注入:规则依赖派生指标 `recent_txn_count`,stub handler 模拟取数;同样大额交易,近期交易数高的命中、低的不命中——决策由预拉 metric 驱动。 |
 
 ## 运行前提
 
@@ -44,6 +60,7 @@
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.sdklocal.SdkLocalDemo"
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.annotation.AnnotationDemoApplication"
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.timecondition.TimeConditionDemo"
+$MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.metric.MetricDemoApplication"
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.httpclient.HttpClientDemo"
 $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.sdkpolling.SdkPollingDemo"
 ```
