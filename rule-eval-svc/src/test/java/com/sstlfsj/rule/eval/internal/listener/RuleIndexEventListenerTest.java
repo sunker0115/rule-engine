@@ -4,6 +4,7 @@ import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
+import com.sstlfsj.rule.eval.internal.snapshot.ScriptWarmer;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ class RuleIndexEventListenerTest {
 
     @Mock SceneRuleIndex index;
     @Mock SceneSnapshotLoader loader;
+    @Mock ScriptWarmer scriptWarmer;
     @InjectMocks RuleIndexEventListener ruleListener;
     @InjectMocks SceneIndexEventListener sceneListener;
 

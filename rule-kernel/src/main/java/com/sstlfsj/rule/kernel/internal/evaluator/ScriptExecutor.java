@@ -11,7 +11,10 @@ import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -21,6 +24,8 @@ import java.util.Map;
  * 脚本不是 AST,trace 为单节点扁平 SCRIPT(记输出值),受 {@link TraceScope#COLLECT} 守卫。
  */
 public class ScriptExecutor implements RuleVersionExecutor {
+
+    private static final Logger log = LoggerFactory.getLogger(ScriptExecutor.class);
 
     private final Map<String, ExpressionEngine> engines;
 
@@ -59,6 +64,32 @@ public class ScriptExecutor implements RuleVersionExecutor {
                     null, n.doubleValue(), null, null);
             default -> EvalResult.error(EvalErrorCode.SCRIPT_EVAL_ERROR, scriptTrace(false, "TYPE", snapshot));
         };
+    }
+
+    /**
+     * 预编译给定快照中的脚本规则,把编译产物预热进各引擎缓存(加载期预热模式调用)。
+     * 仅处理 script 非空的快照(非脚本规则 script 为 null,跳过);lang 无对应引擎或编译失败时
+     * 记 warn 跳过,不向外抛——预热失败不应拖垮索引加载,运行期评估会按需重试并暴露错误码。
+     *
+     * @param snapshots 待预热的规则版本快照
+     */
+    public void warmUp(Collection<RuleVersionSnapshot> snapshots) {
+        for (RuleVersionSnapshot snapshot : snapshots) {
+            ScriptSource script = snapshot.script();
+            if (script == null) {
+                continue;
+            }
+            ExpressionEngine engine = engines.get(script.lang());
+            if (engine == null) {
+                log.warn("脚本规则预热跳过:无 lang={} 引擎, ruleVersionId={}", script.lang(), snapshot.ruleVersionId());
+                continue;
+            }
+            try {
+                engine.compile(script.source());
+            } catch (Exception e) {
+                log.warn("脚本规则预热编译失败, ruleVersionId={}: {}", snapshot.ruleVersionId(), e.getMessage());
+            }
+        }
     }
 
     /** String 返回:决策码须 ∈ decisionBindings,否则 INVALID_DECISION_CODE。 */

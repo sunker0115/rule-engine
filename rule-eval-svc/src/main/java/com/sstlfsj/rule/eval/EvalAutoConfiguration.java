@@ -47,6 +47,7 @@ import java.util.concurrent.Executors;
         com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
         com.sstlfsj.rule.eval.internal.TraceProperties.class,
         com.sstlfsj.rule.eval.internal.async.AuditProperties.class,
+        com.sstlfsj.rule.eval.internal.snapshot.ScriptPrecompileProperties.class,
         RetentionProperties.class})
 public class EvalAutoConfiguration {
 

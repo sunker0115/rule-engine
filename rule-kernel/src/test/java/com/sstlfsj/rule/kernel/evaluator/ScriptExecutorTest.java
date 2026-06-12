@@ -15,14 +15,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ScriptExecutorTest {
 
-    // fake engine:compile 返回固定产物,evaluate 返回预设值(或抛错)
+    // fake engine:compile 计数并返回固定产物(可设为抛错),evaluate 返回预设值(或抛错)
     private static final class FakeEngine implements ExpressionEngine {
         private final Object result;
         private final boolean throwOnEval;
-        FakeEngine(Object result) { this(result, false); }
-        FakeEngine(Object result, boolean throwOnEval) { this.result = result; this.throwOnEval = throwOnEval; }
+        private final boolean throwOnCompile;
+        private int compileCount;
+        FakeEngine(Object result) { this(result, false, false); }
+        FakeEngine(Object result, boolean throwOnEval) { this(result, throwOnEval, false); }
+        FakeEngine(Object result, boolean throwOnEval, boolean throwOnCompile) {
+            this.result = result; this.throwOnEval = throwOnEval; this.throwOnCompile = throwOnCompile;
+        }
         public String lang() { return "CEL"; }
-        public CompiledExpression compile(String source) { return Set::of; }
+        public CompiledExpression compile(String source) {
+            compileCount++;
+            if (throwOnCompile) throw new RuntimeException("compile boom");
+            return Set::of;
+        }
         public Object evaluate(CompiledExpression c, Map<String, Object> b) {
             if (throwOnEval) throw new RuntimeException("boom");
             return result;
@@ -138,5 +147,36 @@ class ScriptExecutorTest {
                 List.of(), List.of(), new ScriptSource("expr", "CEL"));
         EvalResult r = executor(new FakeEngine(List.of("x"))).execute(snap, ctx());
         assertThat(r.errorCode()).isEqualTo(EvalErrorCode.SCRIPT_EVAL_ERROR.name());
+    }
+
+    private RuleVersionSnapshot scriptSnap(String lang) {
+        return new RuleVersionSnapshot(1L, "scene", "t1", null,
+                List.of(), List.of(), List.of(), RuleKind.EXPRESSION_SCRIPT.tag(), "R1", 1L,
+                List.of(), List.of(), new ScriptSource("expr", lang));
+    }
+
+    private RuleVersionSnapshot astSnap() {
+        return new RuleVersionSnapshot(2L, "scene", "t1", null,
+                List.of(), List.of(), List.of(), RuleKind.AST_BOOLEAN.tag(), "R2", 1L,
+                List.of(), List.of(), null);
+    }
+
+    @Test
+    void warmUpPrecompilesOnlyScriptSnapshots() {
+        // 预热:只对 script 非空快照预编译(AST 快照 script=null 跳过)
+        FakeEngine engine = new FakeEngine(Boolean.TRUE);
+        ScriptExecutor exec = executor(engine);
+        exec.warmUp(List.of(scriptSnap("CEL"), astSnap(), scriptSnap("CEL")));
+        assertThat(engine.compileCount).isEqualTo(2);
+    }
+
+    @Test
+    void warmUpToleratesUnknownLangAndCompileFailure() {
+        // 无对应 lang 引擎 / compile 抛错 → 记日志跳过,不向外抛
+        FakeEngine engine = new FakeEngine(Boolean.TRUE, false, true); // compile 抛错
+        ScriptExecutor exec = executor(engine);
+        org.assertj.core.api.Assertions.assertThatCode(
+                () -> exec.warmUp(List.of(scriptSnap("CEL"), scriptSnap("LUA"))))
+                .doesNotThrowAnyException();
     }
 }

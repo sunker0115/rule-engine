@@ -46,7 +46,7 @@ D42 当年搁置的两个顾虑——**沙箱安全 + 性能代价**——本设
 |---|---|
 | `rule-kernel` | `ExpressionEngine` SPI、`CompiledExpression` 接口、`ScriptExecutor`(持注入 engine,**不依赖 CEL**)、脚本载体 `ScriptSource`(typed record,非 AstNode)、`RuleVersionSnapshot.script` 字段、`SCRIPT_*` 错误码、`NodeType.SCRIPT`、`INVALID_DECISION_CODE` 提升 |
 | `rule-expression-cel`(**新模块**,带 CEL 依赖) | `CelExpressionEngine implements ExpressionEngine`(编译/类型检查/变量抽取/求值 + Caffeine 预编译缓存) |
-| `rule-eval-svc` | `EvalAutoConfiguration` 建 `CelExpressionEngine` + `ScriptExecutor` bean,注册进 kind→executor map;索引热更时预热编译缓存 |
+| `rule-eval-svc` | `EvalAutoConfiguration` 建 `ScriptExecutor` bean(`CelExpressionEngine` 由 cel starter 自注册),注册进 kind→executor map;`ScriptWarmer` 按 `engine.rule.script.precompile.mode`(LAZY 默认 / EAGER)在快照加载期预热编译缓存 |
 | `rule-config-svc` | `resolveAndValidate` 加 `EXPRESSION_SCRIPT` 分支(发布期编译 + 类型检查 + 决策码校验 + 依赖抽取冻结) |
 | `rule-sdk(-spring-boot-starter)` | `RuleEngineClient.Builder` 始终注册 kernel `ScriptExecutor`;CEL **引擎**为 opt-in(可选依赖);引擎未注册时该规则优雅 `SCRIPT_NO_ENGINE`(不触发 AST_BOOLEAN 回退) |
 | `rule-api` / `10-api-contract.md` | 补 EXPRESSION_SCRIPT 规则的请求/响应 schema(脚本源码字段 + kind) |
@@ -145,7 +145,10 @@ dry-run 同此:走带版本单快照分支(D56),输出脚本输入绑定 + 输�
 ### 5.6 预编译缓存
 
 - **位置/key**:`CelExpressionEngine` 内 **Caffeine**,**以脚本源码内容哈希为 key**(项目已用 Caffeine:`DbMetricDefinitionResolver`/`CaffeineMetricCache`)。
-- **编译时机 = 快照加载期预热,不在 eval 热路径**:对齐 AST"装配期反序列化一次"的做法——eval-svc 收 `RulePublishedEvent` 重载快照时 / SDK poll 到新 snapshot 时调 `engine.compile()` 预热(本就异步、离请求热路径)。
+- **编译时机 = 统一配置项 `engine.rule.script.precompile.mode`(`LAZY` 默认 / `EAGER`)**:
+  - `LAZY`(默认):首次评估时 `ScriptExecutor` 调 `engine.compile()` 入缓存,后续命中。零启动成本、最小惊讶。
+  - `EAGER`(预加热):快照加载期(启动全量 `IndexStartupLoader` / 发布热更 `RuleIndexEventListener` / 场景变更 `SceneIndexEventListener`)由 `ScriptWarmer.warmUpIfEager` 委托 `ScriptExecutor.warmUp()` 预编译,首次评估即命中。对齐 AST"装配期反序列化一次"的做法(离请求热路径)。
+  - 预热失败(lang 无引擎 / compile 抛错)记 warn 跳过,**不阻断索引加载**——运行期评估按需重试并暴露错误码。
 - **失效 = 内容寻址,无显式 invalidate**:改脚本 = 新版本(premise A)= 新源码 = 新 hash = 新条目;旧版本 supersede、索引重载后不再引用,旧条目靠 size/TTL 淘汰。
 - **附带去重**:多规则/多版本同源脚本共享一份编译产物。
 - **双端各持各的**:eval-svc `CelExpressionEngine` 单例 bean 一份缓存;SDK `RuleEngineClient` 一实例一份。
@@ -212,7 +215,7 @@ RuleVersionSnapshot rule = RuleVersionSnapshot.builder()
 - **kernel**:`ScriptExecutorTest`——Boolean/String/Number 三种返回派发;决策码 ∉ bindings(`INVALID_DECISION_CODE`);`script()` 为 null(`SCRIPT_SOURCE_MISSING`);无 engine(`SCRIPT_NO_ENGINE`);求值抛错(`SCRIPT_EVAL_ERROR`);trace collect on/off 零分配。用 fake `ExpressionEngine`(不依赖 CEL)覆盖派发逻辑。
 - **rule-expression-cel**:`CelExpressionEngineTest`——编译/类型检查/变量抽取/求值;预编译缓存命中(同源去重)、内容变更换 key;**安全验证**:尝试 I/O/反射/类加载的表达式编译即拒(safe-by-design 断言)。
 - **config-svc**:发布校验——编译失败拒、未声明变量拒、依赖正确冻结、决策码静态校验。
-- **eval-svc**:端到端——配 EXPRESSION_SCRIPT 规则 → 评估出决策/分 + SCRIPT trace 落库;索引热更预热编译。
+- **eval-svc**:端到端——配 EXPRESSION_SCRIPT 规则 → 评估出决策/分 + SCRIPT trace 落库;`ScriptWarmer` EAGER 模式委托预热、LAZY 模式 no-op。
 - **SDK**:opt-in CEL 引擎后执行;未注册引擎时该规则 `SCRIPT_NO_ENGINE` 且不影响其它规则(验证不走 AST_BOOLEAN 回退)。
 - 跨模块改动带 `-am`,最终 `$MVN clean test` 兜底(CLAUDE.md 测试纪律)。
 

@@ -2,6 +2,7 @@ package com.sstlfsj.rule.eval.internal.listener;
 
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
+import com.sstlfsj.rule.eval.internal.snapshot.ScriptWarmer;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,7 @@ class IndexStartupLoaderTest {
 
     @Mock SceneRuleIndex index;
     @Mock SceneSnapshotLoader loader;
+    @Mock ScriptWarmer scriptWarmer;
     @InjectMocks IndexStartupLoader startupLoader;
 
     /** loadAll 返回空 Map 时，不调用 index.update。 */
