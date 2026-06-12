@@ -474,6 +474,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -493,15 +494,17 @@ public final class ScriptBindings {
      * @return 不可变绑定 map
      */
     public static Map<String, Object> from(EvalContext ctx) {
+        // 取数失败时 MetricValue.value() 为 null,子 map 须容忍 null value(Map.copyOf/Map.of 会拒 null)
         Map<String, Object> metrics = HashMap.newHashMap(ctx.metrics().size());
         for (Map.Entry<String, MetricValue> e : ctx.metrics().entrySet()) {
-            // 取数失败时 value 为 null,原样暴露(引擎/脚本自行处理 null)
             metrics.put(e.getKey(), e.getValue().value());
         }
         Subject subject = ctx.subject();
         Map<String, Object> subjectAttrs = subject == null ? Map.of() : subject.attributes();
+        // 顶层 4 个 value 均非 null(metrics 子 map 非 null、payload 归一化非 null、now 必填),故 Map.of 可用;
+        // 仅 metrics 子 map 内部允许 null value,用 unmodifiableMap(HashMap) 而非 Map.copyOf
         return Map.of(
-                "metrics", Map.copyOf(metrics),
+                "metrics", Collections.unmodifiableMap(metrics),
                 "payload", ctx.event().payload(),
                 "subject", subjectAttrs,
                 "now", ctx.now());
@@ -775,13 +778,13 @@ public class ScriptExecutor implements RuleVersionExecutor {
             return List.of();
         }
         return List.of(new NodeTrace(
-                NodeType.SCRIPT.tag(), null, null, result, output, null, (String) null, List.of(),
+                NodeType.SCRIPT.tag(), null, null, result, output, null, null, List.of(),
                 snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), null, null));
     }
 }
 ```
 
-> 说明:`scriptTrace` 的 errorCode 传 `(String) null` 是为了选中 `NodeTrace` 全参构造的 String errorCode 位(Plan 0 后该字段是 String + 有 EvalErrorCode 重载;全参构造仍是 String)。`actualValue` 承载脚本输出值,满足 §5.5"记输出值";绑定变量明细与源码哈希的富化 trace 留待 Plan 4(届时随真实引擎/绑定补 NodeTrace 字段或子节点)。
+> 说明:`NodeTrace` 只有唯一一个 13 参 canonical 构造器(第 7 位 `String errorCode`),`EvalErrorCode` 变体是静态工厂 `container(...)` 而非构造器重载,故第 7 位直接传 `null` 无歧义(无需强转)。`actualValue` 承载脚本输出值,满足 §5.5"记输出值";绑定变量明细与源码哈希的富化 trace 留待 Plan 4(届时随真实引擎/绑定补 NodeTrace 字段或子节点)。
 
 - [ ] **Step 4: 跑测试确认通过**
 
