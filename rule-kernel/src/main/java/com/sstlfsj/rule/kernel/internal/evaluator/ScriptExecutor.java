@@ -82,7 +82,7 @@ public class ScriptExecutor implements RuleVersionExecutor {
             return List.of();
         }
         return List.of(new NodeTrace(
-                NodeType.SCRIPT.tag(), null, null, result, output, null, (String) null, List.of(),
+                NodeType.SCRIPT.tag(), null, null, result, output, null, null, List.of(),
                 snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), null, null));
     }
 }
