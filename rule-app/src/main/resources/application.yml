@@ -61,6 +61,10 @@ engine:
       # TraceWriter 单虚拟线程批量落库；提吞吐调 batch-size/flush-interval-ms（旁路通道满则丢，不阻塞热路径）
     metric:
       default-cache-ttl-seconds: 60
+    # EXPRESSION_SCRIPT 脚本规则编译产物的加热时机
+    script:
+      precompile:
+        mode: LAZY   # LAZY=首次评估编译(默认); EAGER=快照加载期(启动/发布热更/场景变更)预编译,首次评估即命中
     # 数据保留/清理:各模块 @Scheduled 按保留窗删超期运行/历史行(observability 清 trace 两表、eval-svc 清 session 两表)
     retention:
       enabled: true
