@@ -8,6 +8,7 @@ import com.sstlfsj.rule.sdk.annotation.Metric;
 
 import java.lang.reflect.Parameter;
 import java.math.BigDecimal;
+import java.util.Map;
 
 /**
  * 把方法参数解析成注入值。
@@ -15,6 +16,8 @@ import java.math.BigDecimal;
  * @Fact:先 payload,再元数据(eventId/tenantId/sceneCode/eventType/subjectId/occurredAt + 决策码/priority/category),都无=null。
  */
 public final class FactResolver {
+
+    private static final Object NOT_FOUND = new Object();
 
     /**
      * 解析整组参数。
@@ -56,10 +59,25 @@ public final class FactResolver {
         }
         String name = factName(p, fact);
         RuleEvent event = ctx == null ? null : ctx.event();
-        if (event != null && event.payload().containsKey(name)) {
-            return coerce(event.payload().get(name), p.getType());
+        Object fromPayload = event == null ? NOT_FOUND : lookupPayload(event.payload(), name);
+        if (fromPayload != NOT_FOUND) {
+            return coerce(fromPayload, p.getType());
         }
         return metadata(name, event, fired);
+    }
+
+    /** 在 payload 中按名取值,支持 a.b.c 逐级下钻;缺键/断链返回 NOT_FOUND(区别于"取到 null")。 */
+    private static Object lookupPayload(Map<String, Object> payload, String name) {
+        if (payload == null) return NOT_FOUND;
+        if (name.indexOf('.') < 0) {
+            return payload.containsKey(name) ? payload.get(name) : NOT_FOUND;
+        }
+        Object cur = payload;
+        for (String seg : name.split("\\.")) {
+            if (!(cur instanceof Map<?, ?> m) || !m.containsKey(seg)) return NOT_FOUND;
+            cur = m.get(seg);
+        }
+        return cur;
     }
 
     private static Object metadata(String name, RuleEvent event, DecisionFiredEvent fired) {
