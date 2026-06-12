@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.domain;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
@@ -31,6 +32,7 @@ class RuleVersionTest {
         ver.setTriggerEventTypes(List.of("payment.initiated"));
         ver.setMetricDependencies(List.of(new MetricDependency("user.age", 1)));
         ver.setPayloadDependencies(List.of(new PayloadDependency("amount", "NUMBER", true)));
+        ver.setScriptSource(new ScriptSource("metrics.txn_cnt_1d > 50 ? 'REVIEW' : 'PASS'", "CEL"));
         ver.setStatus(RuleVersionStatus.ACTIVE);
         ver.setPublishedBy("operator1");
 
@@ -44,6 +46,8 @@ class RuleVersionTest {
         assertEquals(List.of("payment.initiated"), ver.getTriggerEventTypes());
         assertEquals("user.age", ver.getMetricDependencies().getFirst().metricCode());
         assertEquals("amount", ver.getPayloadDependencies().getFirst().name());
+        assertEquals("CEL", ver.getScriptSource().lang());
+        assertEquals("metrics.txn_cnt_1d > 50 ? 'REVIEW' : 'PASS'", ver.getScriptSource().source());
         assertEquals(RuleVersionStatus.ACTIVE, ver.getStatus());
         assertEquals("operator1", ver.getPublishedBy());
     }
@@ -53,6 +57,7 @@ class RuleVersionTest {
         RuleVersion ver = new RuleVersion();
         assertNull(ver.getId());
         assertNull(ver.getConditionAst());
+        assertNull(ver.getScriptSource());
         assertNull(ver.getPublishedAt());
         assertNull(ver.getCreatedAt());
     }
