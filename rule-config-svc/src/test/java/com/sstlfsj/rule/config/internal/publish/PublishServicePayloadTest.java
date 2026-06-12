@@ -59,7 +59,7 @@ class PublishServicePayloadTest {
 
         assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.demo", "测试规则",
                 new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD),
-                List.of(), List.of(), List.of(), "AST_BOOLEAN", "actor"))
+                List.of(), List.of(), List.of(), "AST_BOOLEAN", null, "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("amount");
     }
