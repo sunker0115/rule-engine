@@ -19,6 +19,7 @@
 
     <modules>
         <module>rule-kernel</module>
+        <module>rule-kernel-expression-cel</module>
         <module>rule-config-svc</module>
         <module>rule-eval-svc</module>
         <module>rule-job-svc</module>
