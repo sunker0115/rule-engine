@@ -498,7 +498,7 @@ public final class CelExpressionEngine implements ExpressionEngine {
 ```
 
 > 注:`evaluate` 抛 **`ExpressionEvaluateException`**(kernel SPI 包内,与 `ExpressionCompileException` 对称的 typed 异常,code-review I1 补;extends RuntimeException),由上游 `ScriptExecutor` 的 `catch (Exception)` 兜成 `SCRIPT_EVAL_ERROR`(Plan 2 已实现)。
-> `now` 绑定值是 `Instant`——**Unit H 实测:dev.cel 0.13.0 TIMESTAMP 运行期是 protobuf `Timestamp`,不直接吃 `Instant`**(native java.time 是 0.13.0 之后版本的 opt-in)。故 evaluate 入口加 `adaptBindings`:把 `now` 的 `Instant` 转 `com.google.protobuf.Timestamp`(`setSeconds(epochSecond).setNanos(nano)`)、`new HashMap<>(bindings)` 拷贝避免污染不可变入参、其余键透传。protobuf 由 dev.cel 传递依赖提供(版本锁定,故意不在模块 pom 显式声明)。
+> `now` 绑定值是 `Instant`——**Unit H 实测:standardCelRuntime 默认 TIMESTAMP 运行期是 protobuf `Timestamp`,不直接吃 `Instant`**(native java.time 需 opt-in `CelOptions`,非默认)。故 evaluate 入口加 `adaptBindings`:把 `now` 的 `Instant` 转 `com.google.protobuf.Timestamp`(`setSeconds(epochSecond).setNanos(nano)`)、`new HashMap<>(bindings)` 拷贝避免污染不可变入参、其余键透传。protobuf 由 dev.cel 传递依赖提供(版本锁定,故意不在模块 pom 显式声明)。
 
 - [ ] **Step 4: 跑测试确认通过**
 
