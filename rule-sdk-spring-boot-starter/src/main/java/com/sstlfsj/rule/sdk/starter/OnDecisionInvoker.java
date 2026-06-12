@@ -43,6 +43,11 @@ public final class OnDecisionInvoker implements DecisionSink {
     /** @return 是否登记了订阅 code 的处理器(供 starter 启动期 warn 用)。 */
     public boolean hasHandlerFor(String code) { return byCode.containsKey(code); }
 
+    /** @return 所有已登记订阅的 decision code(不可变视图),供启动期 orphan 核对。 */
+    public java.util.Set<String> subscribedCodes() {
+        return java.util.Collections.unmodifiableSet(byCode.keySet());
+    }
+
     @Override
     public void accept(DecisionFiredEvent event) {
         List<Handler> handlers = byCode.get(event.decisionCode());

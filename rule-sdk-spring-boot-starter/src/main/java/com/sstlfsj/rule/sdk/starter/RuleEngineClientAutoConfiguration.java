@@ -31,6 +31,9 @@ import java.util.Optional;
 @EnableConfigurationProperties(SdkProperties.class)
 public class RuleEngineClientAutoConfiguration {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(RuleEngineClientAutoConfiguration.class);
+
     /**
      * 注册 RuleEngineClient Bean。
      * 业务方注册了自定义 RuleEngineClient Bean 时此 Bean 不生效。
@@ -117,6 +120,23 @@ public class RuleEngineClientAutoConfiguration {
         com.sstlfsj.rule.sdk.DecisionSink springSink = eventPublisher::publishEvent;
         builder.decisionContextListener(new com.sstlfsj.rule.sdk.DecisionDispatcher(
                 List.of(springSink, onDecisionInvoker)));
+
+        // orphan @OnDecision 启动核对:订阅了"没有任何本地注解规则产出"的决策码 → warn(疑似拼写)
+        java.util.Set<String> producedCodes = new java.util.HashSet<>();
+        for (Object bean : annotatedRuleBeans) {
+            com.sstlfsj.rule.kernel.api.annotation.RuleDef rd =
+                    bean.getClass().getAnnotation(com.sstlfsj.rule.kernel.api.annotation.RuleDef.class);
+            if (rd != null) {
+                for (com.sstlfsj.rule.kernel.api.annotation.DecisionBinding d : rd.decisions()) {
+                    producedCodes.add(d.code());
+                }
+            }
+        }
+        for (String code : onDecisionInvoker.subscribedCodes()) {
+            if (!producedCodes.contains(code)) {
+                log.warn("@OnDecision 订阅的决策码 '{}' 没有任何本地注解规则产出,疑似拼写错误或依赖服务端规则", code);
+            }
+        }
 
         // Listener Bean 注入
         evalResultListener.ifPresent(builder::evalResultListener);

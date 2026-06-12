@@ -65,4 +65,10 @@ class OnDecisionInvokerTest {
         invoker.accept(firedFrom("REVIEW", "rule-a"));   // 来源匹配 → 触发
         assertThat(h.fromA.get()).isEqualTo(7);
     }
+
+    @Test
+    void subscribedCodes_exposesAllRegisteredCodes() {
+        OnDecisionInvoker invoker = new OnDecisionInvoker(new FactResolver(), List.of(new Handlers()));
+        assertThat(invoker.subscribedCodes()).containsExactly("REVIEW");
+    }
 }
