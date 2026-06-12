@@ -8,6 +8,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
 import java.util.List;
@@ -106,6 +107,17 @@ public class AstJsonCodec {
      */
     public List<PayloadDependency> deserializePayloadDependencies(String json) throws JacksonException {
         return mapper.readValue(json, new TypeReference<>() {});
+    }
+
+    /**
+     * 将 JSON 字符串反序列化为 ScriptSource(rule_version.script_source);null/空白返回 null(非脚本规则)。
+     *
+     * @param json 脚本载体 JSON,形如 {"source":"...","lang":"CEL"};可为 null
+     * @return ScriptSource,或 null
+     */
+    public ScriptSource deserializeScriptSource(String json) throws JacksonException {
+        if (json == null || json.isBlank()) return null;
+        return mapper.readValue(json, ScriptSource.class);
     }
 
 }
