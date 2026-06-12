@@ -14,7 +14,9 @@ import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -94,6 +96,19 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
+    void celExpressionEngine_returnsInstance() {
+        CelExpressionEngine engine = config.celExpressionEngine();
+        assertNotNull(engine);
+    }
+
+    @Test
+    void scriptExecutor_returnsInstance() {
+        ScriptExecutor executor = config.scriptExecutor(config.celExpressionEngine());
+        assertNotNull(executor);
+        assertInstanceOf(ScriptExecutor.class, executor);
+    }
+
+    @Test
     void sceneRuleIndex_returnsNewInstance() {
         SceneRuleIndex index = config.sceneRuleIndex();
         assertNotNull(index);
@@ -128,6 +143,7 @@ class EvalAutoConfigurationTest {
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
+                config.scriptExecutor(config.celExpressionEngine()),
                 new TraceProperties());
         assertNotNull(engine);
     }
@@ -142,6 +158,7 @@ class EvalAutoConfigurationTest {
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
+                config.scriptExecutor(config.celExpressionEngine()),
                 new TraceProperties());
         assertNotNull(engine);
     }

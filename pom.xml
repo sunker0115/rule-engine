@@ -219,6 +219,11 @@
             </dependency>
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-kernel-expression-cel</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-config-svc</artifactId>
                 <version>${project.version}</version>
             </dependency>

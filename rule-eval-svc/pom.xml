@@ -16,6 +16,11 @@
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-kernel</artifactId>
         </dependency>
+        <!-- EXPRESSION_SCRIPT 运行期 CEL 引擎（CelExpressionEngine） -->
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-kernel-expression-cel</artifactId>
+        </dependency>
         <!-- 消费 config-svc 发布的领域事件（RulePublishedEvent / SceneChangedEvent） -->
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>

@@ -17,7 +17,9 @@ import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
@@ -108,6 +110,28 @@ public class EvalAutoConfiguration {
     }
 
     /**
+     * 注册 CEL 表达式引擎（EXPRESSION_SCRIPT 默认引擎，dyn env + 预编译缓存）。
+     *
+     * @return CelExpressionEngine 实例
+     */
+    @Bean
+    public CelExpressionEngine celExpressionEngine() {
+        return new CelExpressionEngine();
+    }
+
+    /**
+     * 注册 ScriptExecutor，供 kind=EXPRESSION_SCRIPT 的规则版本评估使用。
+     * 按 lang 路由引擎；盒内默认仅 CEL。
+     *
+     * @param celExpressionEngine CEL 引擎
+     * @return ScriptExecutor 实例
+     */
+    @Bean
+    public ScriptExecutor scriptExecutor(CelExpressionEngine celExpressionEngine) {
+        return new ScriptExecutor(Map.of(celExpressionEngine.lang(), celExpressionEngine));
+    }
+
+    /**
      * SnapshotAssembler：注入 Spring 全局 ObjectMapper，与 HTTP 层序列化行为一致。
      *
      * @param objectMapper Spring Boot 自动配置的全局 ObjectMapper
@@ -182,6 +206,7 @@ public class EvalAutoConfiguration {
      * @param scorecardExecutor     SCORECARD executor
      * @param decisionTreeExecutor  DECISION_TREE executor
      * @param decisionTableExecutor DECISION_TABLE executor
+     * @param scriptExecutor        EXPRESSION_SCRIPT executor
      * @param traceProperties       全局 NodeTrace 收集开关配置（engine.rule.trace.enabled，默认 true）
      * @return EvalEngine 实例
      */
@@ -194,16 +219,18 @@ public class EvalAutoConfiguration {
             ScorecardExecutor scorecardExecutor,
             DecisionTreeExecutor decisionTreeExecutor,
             DecisionTableExecutor decisionTableExecutor,
+            ScriptExecutor scriptExecutor,
             com.sstlfsj.rule.eval.internal.TraceProperties traceProperties) {
         Map<String, PreGate> gateMap = new HashMap<>();
         if (preGates != null) {
             preGates.forEach(g -> gateMap.put(g.gateType(), g));
         }
         return new EvalEngine(sceneRuleIndex, evalContextAssembler, gateMap,
-                Map.of(RuleKind.AST_BOOLEAN.tag(),    ruleVersionExecutor,
-                       RuleKind.SCORECARD.tag(),      scorecardExecutor,
-                       RuleKind.DECISION_TREE.tag(),  decisionTreeExecutor,
-                       RuleKind.DECISION_TABLE.tag(), decisionTableExecutor),
+                Map.of(RuleKind.AST_BOOLEAN.tag(),       ruleVersionExecutor,
+                       RuleKind.SCORECARD.tag(),         scorecardExecutor,
+                       RuleKind.DECISION_TREE.tag(),     decisionTreeExecutor,
+                       RuleKind.DECISION_TABLE.tag(),    decisionTableExecutor,
+                       RuleKind.EXPRESSION_SCRIPT.tag(), scriptExecutor),
                 traceProperties.isEnabled());
     }
 }
