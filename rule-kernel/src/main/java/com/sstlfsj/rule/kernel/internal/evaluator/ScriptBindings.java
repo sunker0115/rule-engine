@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,7 +32,8 @@ public final class ScriptBindings {
         Subject subject = ctx.subject();
         Map<String, Object> subjectAttrs = subject == null ? Map.of() : subject.attributes();
         return Map.of(
-                "metrics", Map.copyOf(metrics),
+                // metrics 子 map 允许 null value(取数失败),故用 unmodifiableMap 而非 Map.copyOf
+                "metrics", Collections.unmodifiableMap(metrics),
                 "payload", ctx.event().payload(),
                 "subject", subjectAttrs,
                 "now", ctx.now());

@@ -30,6 +30,23 @@ class ScriptBindingsTest {
         assertThat(b.get("now")).isEqualTo(now);
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    void nullMetricValueDoesNotNpe() {
+        Instant now = Instant.parse("2026-06-01T00:00:00Z");
+        RuleEvent event = new RuleEvent("t1", "scene", "TXN", "u1", "e1", now,
+                Map.of(), Map.of(), EventSource.HTTP);
+        java.util.Map<String, MetricValue> metrics = new java.util.HashMap<>();
+        metrics.put("failed", MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL));
+        EvalContext ctx = new EvalContext("t1", event, null, metrics, now);
+
+        Map<String, Object> b = ScriptBindings.from(ctx);
+
+        Map<String, Object> m = (Map<String, Object>) b.get("metrics");
+        assertThat(m.containsKey("failed")).isTrue();
+        assertThat(m.get("failed")).isNull();
+    }
+
     @Test
     void nullSubjectYieldsEmptySubjectMap() {
         Instant now = Instant.parse("2026-06-01T00:00:00Z");
