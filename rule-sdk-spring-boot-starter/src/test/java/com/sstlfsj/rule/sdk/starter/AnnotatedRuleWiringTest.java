@@ -27,7 +27,7 @@ class AnnotatedRuleWiringTest {
     static final AtomicInteger VIA_EVENT = new AtomicInteger();
     static final AtomicInteger VIA_ONDECISION = new AtomicInteger();
 
-    @RuleDef(code = "even", sceneCode = "demo", trigger = "num",
+    @RuleDef(code = "even", sceneCode = "demo", eventTypes = "num",
             decisions = @DecisionBinding(code = "EVEN", priority = 1))
     static class EvenRule {
         @Condition

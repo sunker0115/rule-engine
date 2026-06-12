@@ -78,10 +78,10 @@ public final class AnnotatedRuleScanner {
                     .version(def.version())
                     .conditionAst(Condition.of(key, Map.of()).toAst());
 
-            if (def.trigger().length == 0) {
+            if (def.eventTypes().length == 0) {
                 b.addTriggerEventType("*");
             } else {
-                for (String t : def.trigger()) b.addTriggerEventType(t);
+                for (String t : def.eventTypes()) b.addTriggerEventType(t);
             }
             for (DecisionBinding d : def.decisions()) {
                 b.addDecisionBinding(d.code(), d.priority());

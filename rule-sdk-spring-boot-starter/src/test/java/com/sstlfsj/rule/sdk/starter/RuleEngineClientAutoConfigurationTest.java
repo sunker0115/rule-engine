@@ -87,7 +87,7 @@ class RuleEngineClientAutoConfigurationTest {
     }
 
     @RuleDef(code = "test-inline", tenantId = "t1", sceneCode = "test",
-             trigger = "TEST_EVENT",
+             eventTypes = "TEST_EVENT",
              decisions = @DecisionBinding(code = "PASS", priority = 10))
     static class TestInlineRule implements InlineRuleSpec {
         @Override public Condition condition() { return Condition.always(); }

@@ -43,10 +43,10 @@ public class AnnotationRuleSource implements RuleSource {
                     .version(ann.version())
                     .conditionAst(spec.condition().toAst());
 
-            if (ann.trigger().length == 0) {
+            if (ann.eventTypes().length == 0) {
                 builder.addTriggerEventType("*");
             } else {
-                for (String t : ann.trigger()) {
+                for (String t : ann.eventTypes()) {
                     builder.addTriggerEventType(t);
                 }
             }

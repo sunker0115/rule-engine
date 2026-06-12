@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MetricSourceWiringTest {
 
-    @RuleDef(code = "velocity", sceneCode = "risk", trigger = "txn",
+    @RuleDef(code = "velocity", sceneCode = "risk", eventTypes = "txn",
             decisions = @DecisionBinding(code = "REVIEW", priority = 50))
     static class VelocityRule {
         @Condition

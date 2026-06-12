@@ -24,8 +24,11 @@ public @interface RuleDef {
     String tenantId() default "";
     /** 版本号，代码定义规则默认 1。 */
     long version() default 1L;
-    /** 触发事件类型；空数组表示通配（装载时写入 "*"）。 */
-    String[] trigger() default {};
+    /**
+     * 触发的事件类型（可多个），与 {@code scene.eventTypes} 白名单 / {@code RuleEvent.eventType} 同一套词汇。
+     * 空数组 = 通配（装载时写入 "*"，匹配任意 eventType）。
+     */
+    String[] eventTypes() default {};
     /** Decision 绑定列表。 */
     DecisionBinding[] decisions() default {};
 }

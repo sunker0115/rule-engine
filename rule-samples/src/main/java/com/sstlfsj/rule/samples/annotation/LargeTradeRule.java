@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RuleDef(
         code = "large-trade",
         sceneCode = "merchant-trade",
-        trigger = "trade",
+        eventTypes = "trade",
         decisions = @DecisionBinding(code = "REVIEW", priority = 50))
 @Slf4j
 @Component

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * 完成,metric 定义(走哪个 sourceType / ttl 等)由 {@link MetricDemoConfig} 提供。
  * <p>注意 {@code recentCount} 不来自事件 payload,而是引擎在评估前替你取好的派生指标。
  */
-@RuleDef(code = "velocity", sceneCode = "velocity-demo", trigger = "txn",
+@RuleDef(code = "velocity", sceneCode = "velocity-demo", eventTypes = "txn",
         decisions = @DecisionBinding(code = "REVIEW", priority = 50))
 @Component
 public class VelocityRule {

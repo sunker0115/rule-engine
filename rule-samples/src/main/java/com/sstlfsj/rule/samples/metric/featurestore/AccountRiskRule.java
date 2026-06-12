@@ -7,7 +7,7 @@ import com.sstlfsj.rule.sdk.annotation.Metric;
 import org.springframework.stereotype.Component;
 
 /** 同时消费两个 metric(都来自 FeatureStoreHandler):新账户 + 高风险设备 → 复核。 */
-@RuleDef(code = "account-risk", sceneCode = "onboarding", trigger = "signup",
+@RuleDef(code = "account-risk", sceneCode = "onboarding", eventTypes = "signup",
         decisions = @DecisionBinding(code = "REVIEW", priority = 50))
 @Component
 public class AccountRiskRule {

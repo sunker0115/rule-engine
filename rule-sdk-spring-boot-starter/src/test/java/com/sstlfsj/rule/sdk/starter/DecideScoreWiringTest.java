@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DecideScoreWiringTest {
 
-    @RuleDef(code = "risk", sceneCode = "demo", trigger = "evt", decisions = {
+    @RuleDef(code = "risk", sceneCode = "demo", eventTypes = "evt", decisions = {
             @DecisionBinding(code = "PASS", priority = 10),
             @DecisionBinding(code = "REJECT", priority = 90)})
     static class RiskRule {

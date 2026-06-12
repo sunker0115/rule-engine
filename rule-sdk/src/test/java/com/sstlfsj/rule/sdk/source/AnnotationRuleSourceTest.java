@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AnnotationRuleSourceTest {
 
     @RuleDef(code = "amount-gt-1000", tenantId = "t1", sceneCode = "fraud",
-             trigger = "TRANSACTION",
+             eventTypes = "TRANSACTION",
              decisions = @DecisionBinding(code = "BLOCK", priority = 100))
     static class AmountGt1000 implements InlineRuleSpec {
         @Override public Condition condition() { return Condition.gt("amount", 1000); }
@@ -38,7 +38,7 @@ class AnnotationRuleSourceTest {
     }
 
     @RuleDef(code = "multi-decision", tenantId = "t1", sceneCode = "multi",
-             trigger = "EV",
+             eventTypes = "EV",
              decisions = {@DecisionBinding(code = "A", priority = 50),
                           @DecisionBinding(code = "B", priority = 10)})
     static class MultiDecision implements InlineRuleSpec {

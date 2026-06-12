@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * <p>同址演示"推模式":一条规则产出多个不同决策码,用 {@code @OnDecision} 给每个码挂各自的动作
  * (BLOCK 拦截 / REVIEW 转人工;ALLOW 放行无动作)。{@code fromRuleCode} 限定只接本规则的决策。
  */
-@RuleDef(code = "risk-decide", sceneCode = "risk-demo", trigger = "txn", decisions = {
+@RuleDef(code = "risk-decide", sceneCode = "risk-demo", eventTypes = "txn", decisions = {
         @DecisionBinding(code = "BLOCK", priority = 90),
         @DecisionBinding(code = "REVIEW", priority = 50),
         @DecisionBinding(code = "ALLOW", priority = 10)})
