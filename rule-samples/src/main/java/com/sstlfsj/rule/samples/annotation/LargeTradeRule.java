@@ -6,6 +6,7 @@ import com.sstlfsj.rule.sdk.DecisionFiredEvent;
 import com.sstlfsj.rule.sdk.annotation.Condition;
 import com.sstlfsj.rule.sdk.annotation.Fact;
 import com.sstlfsj.rule.sdk.annotation.OnDecision;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
         sceneCode = "merchant-trade",
         trigger = "trade",
         decisions = @DecisionBinding(code = "REVIEW", priority = 50))
+@Slf4j
 @Component
 public class LargeTradeRule {
 
@@ -43,8 +45,8 @@ public class LargeTradeRule {
     public void onDecisionFired(DecisionFiredEvent e) {
         if (e.decision("REVIEW")) {
             eventCount.incrementAndGet();
-            System.out.println("[annotation][甲 @EventListener] REVIEW 命中,来自规则=" + e.fromRuleCode()
-                    + " priority=" + e.priority());
+            log.info("[annotation][甲 @EventListener] REVIEW 命中,来自规则={} priority={}",
+                    e.fromRuleCode(), e.priority());
         }
     }
 
@@ -52,7 +54,7 @@ public class LargeTradeRule {
     @OnDecision(value = "REVIEW", fromRuleCode = "large-trade")
     public void onReview(@Fact("amount") Integer amount) {
         onDecisionCount.incrementAndGet();
-        System.out.println("[annotation][乙 @OnDecision(fromRuleCode=large-trade)] 复核大额交易 amount=" + amount);
+        log.info("[annotation][乙 @OnDecision(fromRuleCode=large-trade)] 复核大额交易 amount={}", amount);
     }
 
     /** 甲路径累计触发次数(供集成测试断言)。 */

@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.sdk.RuleEngineClient;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -25,6 +26,7 @@ import java.util.UUID;
  * <p>运行前提:无,直接跑。
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.annotation.AnnotationDemoApplication"}
  */
+@Slf4j
 @SpringBootApplication
 public class AnnotationDemoApplication {
 
@@ -39,22 +41,22 @@ public class AnnotationDemoApplication {
             // 1) @Condition + 动作:大额交易且营业时段 → REVIEW(甲/乙处理器各触发,见其日志)
             EvalResult trade = client.evaluate(
                     event("merchant-trade", "trade", Map.of("amount", 8000, "hour", 10)));
-            System.out.println("[annotation][@Condition] 大额交易 amount=8000 hour=10 → " + code(trade));
+            log.info("[annotation][@Condition] 大额交易 amount=8000 hour=10 → {}", code(trade));
 
             // 2) @Condition 嵌套路径:payload.order.amount 经 @Fact("order.amount") 注入
             EvalResult order = client.evaluate(
                     event("order-demo", "order", Map.of("order", Map.of("amount", 20000))));
-            System.out.println("[annotation][嵌套路径] order.amount=20000 → " + code(order));
+            log.info("[annotation][嵌套路径] order.amount=20000 → {}", code(order));
 
             // 3) @Score 评分卡:信用分 72 落在 [60,80) → MANUAL_REVIEW,并带回分值
             EvalResult credit = client.evaluate(
                     event("credit-demo", "apply", Map.of("score", 72)));
-            System.out.println("[annotation][@Score] 信用分 72 → " + code(credit) + " score=" + credit.score());
+            log.info("[annotation][@Score] 信用分 72 → {} score={}", code(credit), credit.score());
 
             // 4) @Decide 多分支风控:金额 99999 → BLOCK
             EvalResult risk = client.evaluate(
                     event("risk-demo", "txn", Map.of("amount", 99999)));
-            System.out.println("[annotation][@Decide] 风控 amount=99999 → " + code(risk));
+            log.info("[annotation][@Decide] 风控 amount=99999 → {}", code(risk));
         };
     }
 
