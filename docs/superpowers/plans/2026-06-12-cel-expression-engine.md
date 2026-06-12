@@ -17,7 +17,7 @@
 ## 关键事实 / 待验证项(实现者必读)
 
 - `mvn-env` skill 先跑(JDK 25),用 `$MVN`。新模块测试 `$MVN -pl rule-kernel-expression-cel -am test`。不得 `-DskipTests`。中文注释,public 写 Javadoc。
-- **依赖版本需在 Maven Central 核实并钉死**:`dev.cel:cel` 取最新稳定版(撰写时 0.13.0,2026-05);**注意**:① 若与项目 protobuf 4.x 冲突,用 `dev.cel:cel:0.9.0-proto3`(protobuf 钉 3.25.5);② 上游仓库 2026-06-16 迁移 `cel-expr/cel-java`,坐标可能变,核实当前 Maven 坐标。Caffeine 复用项目既有版本(parent pom 管理,见 `rule-eval-svc` 的 `CaffeineMetricCache` 依赖)。
+- **依赖版本(Unit G 已核实钉死)**:`dev.cel:cel:0.10.1`(聚合 jar,含 compiler/runtime/common,Central 当前最新稳定;计划初稿写的 0.13.0 不存在)。protobuf 4.31.0 与 Spring Boot 4 同主版本线、**无冲突**,proto3 兜底不需要。仅 `sun.misc.Unsafe` 弃用 WARNING(非错误)。Caffeine/junit/assertj 由 Spring Boot BOM 管理(pom 省 version),只 `dev.cel:cel` 显式写版本。parent version 用 `${revision}`(与 `rule-kernel` 一致)。
 - **dev.cel 核心 API**(基于官方文档,**按钉死版本核实方法名**——0.x 有 API 漂移):
   - 编译器:`CelCompilerFactory.standardCelCompilerBuilder().addVar(name, CelType)...build()` → `CelCompiler`;`compiler.compile(expr)` → `CelValidationResult`;`.hasError()` / `.getErrorString()` / `.getAst()`(`getAst()` 在有错时抛 `CelValidationException`)。
   - 运行时:`CelRuntimeFactory.standardCelRuntimeBuilder().build()` → `CelRuntime`;`runtime.createProgram(ast)` → `CelRuntime.Program`;`program.eval(Map<String,?>)` → `Object`(抛 `CelEvaluationException`)。
@@ -50,7 +50,7 @@
     <parent>
         <groupId>com.sstlfsj.rule</groupId>
         <artifactId>rule-engine</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
     <artifactId>rule-kernel-expression-cel</artifactId>
 
@@ -60,11 +60,11 @@
             <artifactId>rule-kernel</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- 版本在 Maven Central 核实钉死;proto 冲突则换 0.9.0-proto3(见关键事实) -->
+        <!-- Unit G 核实:0.10.1 是 Central 当前最新稳定聚合包;protobuf 4.31.0 无冲突 -->
         <dependency>
             <groupId>dev.cel</groupId>
             <artifactId>cel</artifactId>
-            <version>0.13.0</version>
+            <version>0.10.1</version>
         </dependency>
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -489,15 +489,16 @@ public final class CelExpressionEngine implements ExpressionEngine {
         CelCompiledExpression cel = (CelCompiledExpression) compiled;
         try {
             // 运行期对 dyn env 求值;ScriptExecutor 捕获异常转 SCRIPT_EVAL_ERROR
-            return runtime.createProgram(cel.ast()).eval(bindings);
+            return runtime.createProgram(cel.ast()).eval(adaptBindings(bindings));
         } catch (CelEvaluationException e) {
-            throw new RuntimeException("CEL 求值失败: " + e.getMessage(), e);
+            throw new ExpressionEvaluateException("CEL 求值失败: " + e.getMessage(), e);
         }
     }
 }
 ```
 
-> 注:`evaluate` 抛 `RuntimeException` 由上游 `ScriptExecutor` 的 `catch (Exception)` 兜成 `SCRIPT_EVAL_ERROR`(Plan 2 已实现)。`now` 绑定值是 `Instant`——若 dev.cel TIMESTAMP 不直接吃 `Instant`,在 evaluate 入口把 `bindings` 的 `now` 转成 dev.cel 接受的时间类型(按钉死版本核实;Task 1 冒烟已可顺带验证 timestamp 绑定)。
+> 注:`evaluate` 抛 **`ExpressionEvaluateException`**(kernel SPI 包内,与 `ExpressionCompileException` 对称的 typed 异常,code-review I1 补;extends RuntimeException),由上游 `ScriptExecutor` 的 `catch (Exception)` 兜成 `SCRIPT_EVAL_ERROR`(Plan 2 已实现)。
+> `now` 绑定值是 `Instant`——**Unit H 实测:dev.cel 0.10.1 TIMESTAMP 运行期是 protobuf `Timestamp`,不直接吃 `Instant`**(native java.time 是 0.10.1 之后版本的 opt-in)。故 evaluate 入口加 `adaptBindings`:把 `now` 的 `Instant` 转 `com.google.protobuf.Timestamp`(`setSeconds(epochSecond).setNanos(nano)`)、`new HashMap<>(bindings)` 拷贝避免污染不可变入参、其余键透传。protobuf 由 dev.cel 传递依赖提供(版本锁定,故意不在模块 pom 显式声明)。
 
 - [ ] **Step 4: 跑测试确认通过**
 
