@@ -9,7 +9,7 @@
         <artifactId>rule-engine</artifactId>
         <version>${revision}</version>
     </parent>
-    <artifactId>rule-expression-cel</artifactId>
+    <artifactId>rule-expression-groovy</artifactId>
 
     <dependencies>
         <dependency>
@@ -17,10 +17,18 @@
             <artifactId>rule-kernel</artifactId>
         </dependency>
 
-        <!-- Google CEL-Java：聚合 jar（compiler/runtime/common）；版本由根 pom 统一管理 -->
+        <!-- Apache Groovy 核心(非 groovy-all：仅需脚本求值，不引 json/xml/sql 等模块)；版本由根 pom 统一管理 -->
         <dependency>
-            <groupId>dev.cel</groupId>
-            <artifactId>cel</artifactId>
+            <groupId>org.apache.groovy</groupId>
+            <artifactId>groovy</artifactId>
+        </dependency>
+
+        <!-- groovy-sandbox：运行期逐调用拦截(SandboxTransformer + GroovyValueFilter)，safe-by-design 的运行期闸。
+             用 craftercms 维护分支(包名仍 org.kohsuke.groovy.sandbox)；它传递的 org.apache.groovy:groovy
+             由根 pom dependencyManagement 统一钉到 ${groovy.version}，无需排除。版本由根 pom 统一管理 -->
+        <dependency>
+            <groupId>org.craftercms</groupId>
+            <artifactId>groovy-sandbox</artifactId>
         </dependency>
 
         <!-- Caffeine 预编译缓存；版本由 Spring Boot BOM 管理 -->

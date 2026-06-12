@@ -21,6 +21,16 @@
         <module>rule-kernel</module>
         <module>rule-expression-cel</module>
         <module>rule-expression-cel-spring-boot-starter</module>
+        <module>rule-expression-aviator</module>
+        <module>rule-expression-aviator-spring-boot-starter</module>
+        <module>rule-expression-qlexpress</module>
+        <module>rule-expression-qlexpress-spring-boot-starter</module>
+        <module>rule-expression-jsonlogic</module>
+        <module>rule-expression-jsonlogic-spring-boot-starter</module>
+        <module>rule-expression-jexl</module>
+        <module>rule-expression-jexl-spring-boot-starter</module>
+        <module>rule-expression-groovy</module>
+        <module>rule-expression-groovy-spring-boot-starter</module>
         <module>rule-config-svc</module>
         <module>rule-eval-svc</module>
         <module>rule-job-svc</module>
@@ -52,6 +62,15 @@
         <springdoc.version>3.0.3</springdoc.version>
         <!-- xxl-job-core 3.4.0：稳定版（2026-04-05），自身基于 Spring Boot 4.0.5 构建，无 javax 引用 -->
         <xxl-job.version>3.4.0</xxl-job.version>
+        <!-- EXPRESSION_SCRIPT 各表达式引擎库版本（parent BOM 未管理，集中钉死于此） -->
+        <cel.version>0.13.0</cel.version>
+        <aviator.version>5.4.3</aviator.version>
+        <qlexpress.version>3.3.4</qlexpress.version>
+        <json-logic.version>1.1.0</json-logic.version>
+        <commons-jexl.version>3.6.2</commons-jexl.version>
+        <groovy.version>5.0.6</groovy.version>
+        <!-- craftercms 维护分支(kohsuke 原版停更于 2018 的 1.19),面向现代 Groovy,包名仍 org.kohsuke.groovy.sandbox -->
+        <groovy-sandbox.version>4.3.2</groovy-sandbox.version>
     </properties>
 
     <build>
@@ -220,6 +239,43 @@
                 <version>${xxl-job.version}</version>
             </dependency>
 
+            <!-- EXPRESSION_SCRIPT 表达式引擎库（各 rule-expression-* 模块引用，版本集中于此） -->
+            <dependency>
+                <groupId>dev.cel</groupId>
+                <artifactId>cel</artifactId>
+                <version>${cel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.googlecode.aviator</groupId>
+                <artifactId>aviator</artifactId>
+                <version>${aviator.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>QLExpress</artifactId>
+                <version>${qlexpress.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.jamsesso</groupId>
+                <artifactId>json-logic-java</artifactId>
+                <version>${json-logic.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-jexl3</artifactId>
+                <version>${commons-jexl.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.groovy</groupId>
+                <artifactId>groovy</artifactId>
+                <version>${groovy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.craftercms</groupId>
+                <artifactId>groovy-sandbox</artifactId>
+                <version>${groovy-sandbox.version}</version>
+            </dependency>
+
             <!-- 内部模块版本管理 -->
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
@@ -234,6 +290,56 @@
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-expression-cel-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-aviator</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-aviator-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-qlexpress</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-qlexpress-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-jsonlogic</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-jsonlogic-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-jexl</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-jexl-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-groovy</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-groovy-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

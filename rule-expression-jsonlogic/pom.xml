@@ -9,7 +9,7 @@
         <artifactId>rule-engine</artifactId>
         <version>${revision}</version>
     </parent>
-    <artifactId>rule-expression-cel</artifactId>
+    <artifactId>rule-expression-jsonlogic</artifactId>
 
     <dependencies>
         <dependency>
@@ -17,10 +17,16 @@
             <artifactId>rule-kernel</artifactId>
         </dependency>
 
-        <!-- Google CEL-Java：聚合 jar（compiler/runtime/common）；版本由根 pom 统一管理 -->
+        <!-- JsonLogic Java 实现：纯 JSON 规则引擎，无代码执行能力；版本由根 pom 统一管理 -->
         <dependency>
-            <groupId>dev.cel</groupId>
-            <artifactId>cel</artifactId>
+            <groupId>io.github.jamsesso</groupId>
+            <artifactId>json-logic-java</artifactId>
+        </dependency>
+
+        <!-- Gson：json-logic-java 传递依赖（2.8.5），此处显式声明以可控；用于编译期解析 JSON 规则提取 var 路径 -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
         </dependency>
 
         <!-- Caffeine 预编译缓存；版本由 Spring Boot BOM 管理 -->

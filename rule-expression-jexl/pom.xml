@@ -9,7 +9,7 @@
         <artifactId>rule-engine</artifactId>
         <version>${revision}</version>
     </parent>
-    <artifactId>rule-expression-cel</artifactId>
+    <artifactId>rule-expression-jexl</artifactId>
 
     <dependencies>
         <dependency>
@@ -17,10 +17,10 @@
             <artifactId>rule-kernel</artifactId>
         </dependency>
 
-        <!-- Google CEL-Java：聚合 jar（compiler/runtime/common）；版本由根 pom 统一管理 -->
+        <!-- Apache Commons JEXL：弱类型表达式引擎；版本由根 pom 统一管理 -->
         <dependency>
-            <groupId>dev.cel</groupId>
-            <artifactId>cel</artifactId>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-jexl3</artifactId>
         </dependency>
 
         <!-- Caffeine 预编译缓存；版本由 Spring Boot BOM 管理 -->
