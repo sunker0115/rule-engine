@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.sdk.RuleEngineClient;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -14,13 +15,18 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 接入姿势四:注解规则即代码(Easy Rules 风格,Spring Boot starter)。规则与动作同写在
- * {@link LargeTradeRule} 一个类里({@code @RuleDef}+{@code @Condition} 是条件、{@code @EventListener}/
- * {@code @OnDecision} 是动作),starter 自动扫描装配规则并把命中决策派发回这些处理器,完全不连服务端。
- * <p>适合谁:规则随应用代码演进、要强类型 + IDE 重构友好的接入方。
+ * 接入姿势四:注解规则即代码(Easy Rules 风格,Spring Boot starter)。本包下的规则类都用注解声明,
+ * starter 自动扫描装配、把命中决策派发回各自的处理器,完全不连服务端。本 runner 逐一评估,演示四种判定原语:
+ * <ul>
+ *   <li>{@link LargeTradeRule} — {@code @Condition} 布尔条件 + 动作(甲 {@code @EventListener}/乙 {@code @OnDecision});</li>
+ *   <li>{@link NestedOrderRule} — {@code @Condition} + {@code @Fact("order.amount")} 嵌套路径注入;</li>
+ *   <li>{@link CreditScoreRule} — {@code @Score} + {@code @ScoreBand} 评分卡分档;</li>
+ *   <li>{@link RiskDecideRule} — {@code @Decide} Java 多分支直接产出决策码。</li>
+ * </ul>
  * <p>运行前提:无,直接跑。
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.annotation.AnnotationDemoApplication"}
  */
+@Slf4j
 @SpringBootApplication
 public class AnnotationDemoApplication {
 
@@ -28,28 +34,38 @@ public class AnnotationDemoApplication {
         SpringApplication.run(AnnotationDemoApplication.class, args);
     }
 
-    /** 容器就绪后评估命中 / 不命中各一例;命中时甲、乙两种动作处理器各被触发一次(见控制台输出)。 */
+    /** 容器就绪后,对四条注解规则各发一个事件并打印决策;LargeTradeRule 命中时甲/乙处理器另有日志输出。 */
     @Bean
     CommandLineRunner demoRunner(RuleEngineClient client) {
         return args -> {
-            // 大额 + 营业时段 → 命中 REVIEW,甲 @EventListener / 乙 @OnDecision 各触发
-            EvalResult hit = client.evaluate(trade(8000, 10));
-            System.out.println("[annotation] amount=8000 hour=10 ruleHit=" + hit.ruleHit()
-                    + " finalDecision=" + code(hit));
+            // 1) @Condition + 动作:大额交易且营业时段 → REVIEW(甲/乙处理器各触发,见其日志)
+            EvalResult trade = client.evaluate(
+                    event("merchant-trade", "trade", Map.of("amount", 8000, "hour", 10)));
+            System.out.println("[annotation][@Condition] 大额交易 amount=8000 hour=10 → " + code(trade));
 
-            // 大额但非营业时段 → 不命中,动作不触发
-            EvalResult miss = client.evaluate(trade(8000, 3));
-            System.out.println("[annotation] amount=8000 hour=3  ruleHit=" + miss.ruleHit()
-                    + " finalDecision=" + code(miss));
+            // 2) @Condition 嵌套路径:payload.order.amount 经 @Fact("order.amount") 注入
+            EvalResult order = client.evaluate(
+                    event("order-demo", "order", Map.of("order", Map.of("amount", 20000))));
+            System.out.println("[annotation][嵌套路径] order.amount=20000 → " + code(order));
+
+            // 3) @Score 评分卡:信用分 72 落在 [60,80) → MANUAL_REVIEW,并带回分值
+            EvalResult credit = client.evaluate(
+                    event("credit-demo", "apply", Map.of("score", 72)));
+            System.out.println("[annotation][@Score] 信用分 72 → " + code(credit) + " score=" + credit.score());
+
+            // 4) @Decide 多分支风控:金额 99999 → BLOCK
+            EvalResult risk = client.evaluate(
+                    event("risk-demo", "txn", Map.of("amount", 99999)));
+            System.out.println("[annotation][@Decide] 风控 amount=99999 → " + code(risk));
         };
     }
 
-    private static RuleEvent trade(int amount, int hour) {
+    private static RuleEvent event(String scene, String type, Map<String, Object> payload) {
         return RuleEvent.builder()
-                .tenantId("9001").sceneCode("merchant-trade").eventType("trade")
-                .subjectId("merchant-1").eventId(UUID.randomUUID().toString())
+                .tenantId("9001").sceneCode(scene).eventType(type)
+                .subjectId("subject-1").eventId(UUID.randomUUID().toString())
                 .occurredAt(Instant.now())
-                .payload(Map.of("amount", amount, "hour", hour))
+                .payload(payload)
                 .source(EventSource.SDK).build();
     }
 
