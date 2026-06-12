@@ -118,6 +118,18 @@ public class RuleEngineClientAutoConfiguration {
             builder.ruleSource(new com.sstlfsj.rule.sdk.source.DslRuleSource(scan.snapshots()));
         }
 
+        // @MetricSource 方法式取数:扫描所有 bean → 合成 handler + 自动 descriptor
+        java.util.List<Object> metricSourceBeans = beansWith(ctx,
+                com.sstlfsj.rule.sdk.annotation.MetricSource.class);
+        if (!metricSourceBeans.isEmpty()) {
+            com.sstlfsj.rule.sdk.source.AnnotatedMetricScanner.ScanResult scan =
+                    new com.sstlfsj.rule.sdk.source.AnnotatedMetricScanner(
+                            new com.sstlfsj.rule.sdk.MetricQueryResolver(), props.getTenantId())
+                            .scan(metricSourceBeans);
+            scan.handlers().forEach(builder::addMetricSourceHandler);
+            scan.descriptors().forEach(d -> builder.localMetric(scan.tenantId(), d));
+        }
+
         // 动作派发:Spring 事件 sink(甲) + @OnDecision sink(乙),装进 DecisionDispatcher
         java.util.concurrent.Executor onDecisionExecutor = new java.util.concurrent.ThreadPoolExecutor(
                 1, 4, 60L, java.util.concurrent.TimeUnit.SECONDS,
@@ -125,7 +137,9 @@ public class RuleEngineClientAutoConfiguration {
                 r -> { Thread t = new Thread(r, "ondecision-async"); t.setDaemon(true); return t; },
                 new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
         OnDecisionInvoker onDecisionInvoker = new OnDecisionInvoker(
-                factResolver, new ArrayList<>(beansWithOnDecision(ctx)), onDecisionExecutor);
+                factResolver,
+                new ArrayList<>(beansWith(ctx, com.sstlfsj.rule.sdk.annotation.OnDecision.class)),
+                onDecisionExecutor);
         com.sstlfsj.rule.sdk.DecisionSink springSink = eventPublisher::publishEvent;
         builder.decisionContextListener(new com.sstlfsj.rule.sdk.DecisionDispatcher(
                 List.of(springSink, onDecisionInvoker)));
@@ -160,11 +174,20 @@ public class RuleEngineClientAutoConfiguration {
         return builder.build();
     }
 
-    private static List<Object> beansWithOnDecision(ApplicationContext ctx) {
+    /**
+     * 扫描容器中所有 bean,挑出"至少有一个方法标了指定方法注解"的 bean。
+     * 供 @OnDecision / @MetricSource 等方法式注解的 bean 收集复用。
+     *
+     * @param ctx             Spring 容器
+     * @param methodAnnotation 目标方法注解类型
+     * @return 命中的 bean 列表(去重由容器单例保证)
+     */
+    private static List<Object> beansWith(ApplicationContext ctx,
+            Class<? extends java.lang.annotation.Annotation> methodAnnotation) {
         List<Object> result = new ArrayList<>();
         for (Object bean : ctx.getBeansOfType(Object.class).values()) {
             for (java.lang.reflect.Method m : bean.getClass().getMethods()) {
-                if (m.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.OnDecision.class)) {
+                if (m.isAnnotationPresent(methodAnnotation)) {
                     result.add(bean);
                     break;
                 }
