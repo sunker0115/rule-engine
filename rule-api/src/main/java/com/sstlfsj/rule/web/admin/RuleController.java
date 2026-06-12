@@ -48,7 +48,7 @@ public class RuleController {
                 req.tenantId(), req.sceneCode(), req.code(), req.name(),
                 req.conditionAst(), bindings,
                 req.preGates(), req.triggerEventTypes(),
-                req.kind(), actorId));
+                req.kind(), req.script(), actorId));
     }
 
     /**
@@ -72,7 +72,7 @@ public class RuleController {
         return ApiResponse.ok(configService.editDraft(
                 req.tenantId(), ruleId, req.name(), req.kind(),
                 req.conditionAst(), bindings,
-                req.preGates(), req.triggerEventTypes(), actorId));
+                req.preGates(), req.triggerEventTypes(), req.script(), actorId));
     }
 
     /**
@@ -98,7 +98,7 @@ public class RuleController {
                 req.tenantId(), ruleId, req.name(), req.kind(),
                 req.conditionAst(), bindings,
                 req.preGates(), req.triggerEventTypes(),
-                req.fromVersionId(), actorId));
+                req.fromVersionId(), req.script(), actorId));
     }
 
     /**
