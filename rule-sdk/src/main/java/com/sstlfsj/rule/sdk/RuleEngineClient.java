@@ -57,14 +57,16 @@ public class RuleEngineClient implements AutoCloseable {
 
         // metric 取数装配：注入 handler 才启用 fetch（默认仅 providedMetrics，行为不变）
         MetricDefinitionRegistry metricRegistry = new MetricDefinitionRegistry();
-        boolean fetchEnabled = !b.metricHandlers.isEmpty();
+        Map<String, MetricSourceHandler> sourceMap = new HashMap<>(toSourceTypeMap(b.metricHandlers));
+        sourceMap.putAll(b.explicitSourceHandlers);
+        boolean fetchEnabled = !sourceMap.isEmpty();
         EvalContextAssembler assembler;
         if (fetchEnabled) {
             MetricDefinitionResolver resolver = b.metricDefinitionResolver != null
                     ? b.metricDefinitionResolver
                     : new SnapshotMetricDefinitionResolver(metricRegistry);
             assembler = new EvalContextAssembler(List.of(),
-                    toSourceTypeMap(b.metricHandlers),
+                    sourceMap,
                     resolver, b.metricCache, b.fetchExecutor, 0L);
         } else {
             assembler = new EvalContextAssembler(List.of(), List.of());
@@ -183,6 +185,7 @@ public class RuleEngineClient implements AutoCloseable {
         private final Map<String, com.sstlfsj.rule.sdk.source.AnnotatedDecideExecutor.Invocation> decideInvocations = new HashMap<>();
         private final Map<String, com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor.Invocation> scoreInvocations = new HashMap<>();
         private final List<MetricSourceHandler> metricHandlers = new ArrayList<>();
+        private final Map<String, MetricSourceHandler> explicitSourceHandlers = new HashMap<>();
         private MetricDefinitionResolver metricDefinitionResolver;
         private MetricCache metricCache;
         private ExecutorService fetchExecutor;
@@ -266,6 +269,11 @@ public class RuleEngineClient implements AutoCloseable {
             metricHandlers.addAll(Arrays.asList(v)); return this;
         }
 
+        /** 按显式 sourceType 注册 handler(供 @MetricSource 合成 handler 用;无 @MetricSourceType 注解)。 */
+        public Builder addMetricSourceHandler(String sourceType, MetricSourceHandler handler) {
+            explicitSourceHandlers.put(sourceType, handler); return this;
+        }
+
         /**
          * 覆盖默认的 metric 定义解析器（默认 SnapshotMetricDefinitionResolver 读本地下发缓存）。
          *
@@ -331,7 +339,7 @@ public class RuleEngineClient implements AutoCloseable {
                     || metricDefinitionResolver != null
                     || metricCache != null
                     || fetchExecutor != null;
-            if (hasFetchConfig && metricHandlers.isEmpty())
+            if (hasFetchConfig && metricHandlers.isEmpty() && explicitSourceHandlers.isEmpty())
                 throw new IllegalArgumentException(
                         "配置了取数相关项（metric 定义来源 / resolver / cache / executor）但未注入 metricSourceHandler，无法启用 fetch");
             return new RuleEngineClient(this);
