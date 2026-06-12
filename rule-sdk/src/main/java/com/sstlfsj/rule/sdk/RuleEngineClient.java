@@ -10,6 +10,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
@@ -18,6 +19,7 @@ import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.sdk.metric.MetricDefinitionRegistry;
 import com.sstlfsj.rule.sdk.metric.SnapshotMetricDefinitionResolver;
@@ -89,6 +91,9 @@ public class RuleEngineClient implements AutoCloseable {
             executors.put(com.sstlfsj.rule.sdk.source.AnnotatedRuleScanner.KIND_SCORE,
                     new com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor(b.scoreInvocations));
         }
+        // ScriptExecutor 始终注册:避开 EvalEngine 对未知 kind 回退 AST_BOOLEAN 的陷阱(脚本规则 conditionAst=null)。
+        // 引擎才是 opt-in——未注入任何 ExpressionEngine 时 engines 为空,碰脚本规则优雅返回 SCRIPT_NO_ENGINE,不连累其它规则。
+        executors.put(RuleKind.EXPRESSION_SCRIPT.tag(), new ScriptExecutor(byLang(b.expressionEngines)));
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
                 executors,
@@ -141,6 +146,18 @@ public class RuleEngineClient implements AutoCloseable {
         return m;
     }
 
+    /** 表达式引擎按 lang 建路由表,同 lang 重复声明 fail-fast(对齐 eval-svc / config-svc)。 */
+    private static Map<String, ExpressionEngine> byLang(List<ExpressionEngine> engines) {
+        Map<String, ExpressionEngine> byLang = new HashMap<>();
+        for (ExpressionEngine engine : engines) {
+            ExpressionEngine prev = byLang.putIfAbsent(engine.lang(), engine);
+            if (prev != null) {
+                throw new IllegalStateException("多个 ExpressionEngine 声明同一 lang=" + engine.lang());
+            }
+        }
+        return byLang;
+    }
+
     /** 对单个事件本地求值，零网络跳转；渠道由 SDK 入口权威设为 SDK，不信任调用方传入。 */
     public EvalResult evaluate(RuleEvent event) {
         RuleEvent sdkEvent = event.source() == EventSource.SDK
@@ -186,6 +203,7 @@ public class RuleEngineClient implements AutoCloseable {
         private final Map<String, com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor.Invocation> scoreInvocations = new HashMap<>();
         private final List<MetricSourceHandler> metricHandlers = new ArrayList<>();
         private final Map<String, MetricSourceHandler> explicitSourceHandlers = new HashMap<>();
+        private final List<ExpressionEngine> expressionEngines = new ArrayList<>();
         private MetricDefinitionResolver metricDefinitionResolver;
         private MetricCache metricCache;
         private ExecutorService fetchExecutor;
@@ -272,6 +290,16 @@ public class RuleEngineClient implements AutoCloseable {
         /** 按显式 sourceType 注册 handler(供 @MetricSource 合成 handler 用;无 @MetricSourceType 注解)。 */
         public Builder addMetricSourceHandler(String sourceType, MetricSourceHandler handler) {
             explicitSourceHandlers.put(sourceType, handler); return this;
+        }
+
+        /**
+         * 启用 EXPRESSION_SCRIPT 脚本规则执行:注入表达式引擎(如 CelExpressionEngine)。
+         * 不注入则脚本规则评估返回 SCRIPT_NO_ENGINE(graceful,不连累其它规则)。同 lang 重复注入装配期 fail-fast。
+         *
+         * @param v 表达式引擎实现
+         */
+        public Builder expressionEngine(ExpressionEngine v) {
+            expressionEngines.add(v); return this;
         }
 
         /**

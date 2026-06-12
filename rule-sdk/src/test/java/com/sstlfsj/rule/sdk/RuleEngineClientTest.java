@@ -1,11 +1,16 @@
 package com.sstlfsj.rule.sdk;
 
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.sdk.source.DslRuleSource;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import org.junit.jupiter.api.Test;
@@ -29,6 +34,12 @@ class RuleEngineClientTest {
         return new AndNode(List.of(
                 new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0)
         ), null, null);
+    }
+
+    /** 测试用假引擎:compile 返回固定产物,evaluate 恒返回预设结果(免 CEL 依赖)。 */
+    private record FakeEngine(String lang, Object result) implements ExpressionEngine {
+        public CompiledExpression compile(String source) { return java.util.Set::of; }
+        public Object evaluate(CompiledExpression c, Map<String, Object> b) { return result; }
     }
 
     @Test
@@ -227,6 +238,50 @@ class RuleEngineClientTest {
                     "sub1", UUID.randomUUID().toString(),
                     Instant.now(), Map.of(), Map.of("amount", 1), com.sstlfsj.rule.kernel.api.model.EventSource.SDK);  // amount=1 < 1000
             assertThat(client.evaluate(event).ruleHit()).isTrue();  // 自定义覆盖，应命中
+        }
+    }
+
+    @Test
+    void scriptRule_withEngine_evaluatesDecision() {
+        // opt-in 表达式引擎 → 脚本规则正常评估,返回决策码
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(20L).tenantId("t1").sceneCode("scripted")
+                .kind(RuleKind.EXPRESSION_SCRIPT.tag())
+                .script(new ScriptSource("expr", "FAKE"))
+                .addTriggerEventType("TXN")
+                .addDecisionBinding("REVIEW", 10)
+                .build();
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .localSnapshot(snap)
+                .expressionEngine(new FakeEngine("FAKE", "REVIEW"))
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "scripted", "TXN", "sub1",
+                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of(), EventSource.SDK);
+            EvalResult r = client.evaluate(event);
+            assertThat(r.ruleHit()).isTrue();
+            assertThat(r.finalDecision().code()).isEqualTo("REVIEW");
+        }
+    }
+
+    @Test
+    void scriptRule_noEngine_gracefulNoEngineError_notAstFallback() {
+        // 未 opt-in 任何引擎:ScriptExecutor 始终注册,脚本规则优雅返回 SCRIPT_NO_ENGINE,
+        // 不被 EvalEngine 错误回退给 AST_BOOLEAN 解释器(conditionAst=null)
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(21L).tenantId("t1").sceneCode("scripted")
+                .kind(RuleKind.EXPRESSION_SCRIPT.tag())
+                .script(new ScriptSource("expr", "CEL"))
+                .addTriggerEventType("TXN")
+                .addDecisionBinding("REVIEW", 10)
+                .build();
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .localSnapshot(snap)
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "scripted", "TXN", "sub1",
+                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of(), EventSource.SDK);
+            EvalResult r = client.evaluate(event);
+            assertThat(r.ruleHit()).isFalse();
+            assertThat(r.errorCode()).isEqualTo(EvalErrorCode.SCRIPT_NO_ENGINE.name());
         }
     }
 

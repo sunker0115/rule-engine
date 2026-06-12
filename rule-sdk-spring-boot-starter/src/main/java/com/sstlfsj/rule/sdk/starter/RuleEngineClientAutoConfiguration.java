@@ -2,6 +2,7 @@ package com.sstlfsj.rule.sdk.starter;
 
 import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
@@ -59,7 +60,8 @@ public class RuleEngineClientAutoConfiguration {
             ObjectProvider<MetricSourceHandler> metricHandlers,
             ObjectProvider<MetricDefinitionResolver> metricDefinitionResolver,
             ObjectProvider<MetricCache> metricCache,
-            ObjectProvider<MetricDefinitionSource> metricDefinitionSources) {
+            ObjectProvider<MetricDefinitionSource> metricDefinitionSources,
+            ObjectProvider<ExpressionEngine> expressionEngines) {
 
         RuleEngineClient.Builder builder = RuleEngineClient.builder();
 
@@ -170,6 +172,10 @@ public class RuleEngineClientAutoConfiguration {
         metricDefinitionResolver.ifAvailable(builder::metricDefinitionResolver);
         metricCache.ifAvailable(builder::metricCache);
         metricDefinitionSources.forEach(builder::metricDefinitionSource);
+
+        // 表达式引擎自动收集:classpath 上有 CEL starter(注册 CelExpressionEngine bean)即被纳入,
+        // 启用 EXPRESSION_SCRIPT 脚本规则执行;无则脚本规则优雅 SCRIPT_NO_ENGINE。本 starter 不依赖任何具体引擎。
+        expressionEngines.forEach(builder::expressionEngine);
 
         return builder.build();
     }

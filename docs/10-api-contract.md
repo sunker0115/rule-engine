@@ -231,8 +231,9 @@ POST /admin/v1/rules
 | `sceneCode`     | String | 是   | 规则所属场景编码 |
 | `code`          | String | 是   | 规则业务编码，同 tenantId + sceneCode 下唯一 |
 | `name`          | String | 是   | 规则显示名称 |
-| `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` |
-| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST。ConditionNode 字段语义见 [`03-rule-expression.md`](./03-rule-expression.md) §2.4；其中 `valueRef`（枚举 `METRIC` \| `PAYLOAD`，缺省 `METRIC`）选值来源：`PAYLOAD` 时 `metricCode` 为 payload 字段名（须在 `Scene.payloadSchema` 声明），不注册 metric，详见 §2.6 |
+| `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT` |
+| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST。ConditionNode 字段语义见 [`03-rule-expression.md`](./03-rule-expression.md) §2.4；其中 `valueRef`（枚举 `METRIC` \| `PAYLOAD`，缺省 `METRIC`）选值来源：`PAYLOAD` 时 `metricCode` 为 payload 字段名（须在 `Scene.payloadSchema` 声明），不注册 metric，详见 §2.6。`kind=EXPRESSION_SCRIPT` 时该字段为 `null`（条件逻辑走 `script`，二者互斥） |
+| `script`        | Object | 否   | **仅 `kind=EXPRESSION_SCRIPT` 必填**，与 `conditionAst` 互斥。脚本载体 `{ "source": "<表达式>", "lang": "CEL" }`。发布期校验：①语法编译；②引用的 `metrics.<code>` 须 ACTIVE、`payload.<field>` 须在 `Scene.payloadSchema` 声明（`subject.*` 开放不校验），据此冻 metric/payload 依赖；③typed 类型检查（string 字段参与数值比较等类型不符发布期即拒）。返回值按运行时类型派发：Boolean→命中、String→决策码（须 ∈ `decisionBindings`）、Number→评分。详见 [`03-rule-expression.md`](./03-rule-expression.md) |
 | `decisionBindings` | Array | 否 | 命中决策绑定列表，缺省空数组 |
 | `preGates`      | Array  | 否   | 前置门列表，缺省空数组；每项 `{ gateType, params }`。ROLLOUT 灰度门的 params 见下 |
 | `triggerEventTypes` | Array | 否 | 触发事件类型白名单，缺省空数组 |
