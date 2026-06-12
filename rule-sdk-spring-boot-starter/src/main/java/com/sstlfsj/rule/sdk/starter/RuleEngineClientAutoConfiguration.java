@@ -115,8 +115,13 @@ public class RuleEngineClientAutoConfiguration {
         }
 
         // 动作派发:Spring 事件 sink(甲) + @OnDecision sink(乙),装进 DecisionDispatcher
+        java.util.concurrent.Executor onDecisionExecutor = new java.util.concurrent.ThreadPoolExecutor(
+                1, 4, 60L, java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.LinkedBlockingQueue<>(1024),
+                r -> { Thread t = new Thread(r, "ondecision-async"); t.setDaemon(true); return t; },
+                new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
         OnDecisionInvoker onDecisionInvoker = new OnDecisionInvoker(
-                factResolver, new ArrayList<>(beansWithOnDecision(ctx)));
+                factResolver, new ArrayList<>(beansWithOnDecision(ctx)), onDecisionExecutor);
         com.sstlfsj.rule.sdk.DecisionSink springSink = eventPublisher::publishEvent;
         builder.decisionContextListener(new com.sstlfsj.rule.sdk.DecisionDispatcher(
                 List.of(springSink, onDecisionInvoker)));
