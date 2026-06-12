@@ -38,6 +38,18 @@ class CelExpressionEngineTest {
     }
 
     @Test
+    void evaluatesJsonSourcedNumericTypes() {
+        // 真实 JSON payload 的数值常是 Integer(小整数)/ Double / BigDecimal,而非 Long;
+        // CEL int 比较需 Long、double 需 Double——绑定面须规整,否则 "no matching overload"。
+        CompiledExpression gt = engine.compile("payload.amount > 10000 ? 'REVIEW' : 'PASS'");
+        assertThat(engine.evaluate(gt, bindings(Map.of(), Map.of("amount", 12000)))).isEqualTo("REVIEW");        // Integer
+        assertThat(engine.evaluate(gt, bindings(Map.of(), Map.of("amount", 5000)))).isEqualTo("PASS");          // Integer
+        assertThat(engine.evaluate(gt, bindings(Map.of(), Map.of("amount", new java.math.BigDecimal("12000"))))).isEqualTo("REVIEW"); // BigDecimal
+        assertThat(engine.evaluate(engine.compile("metrics.score > 50.0"),
+                bindings(Map.of("score", 72.5f), Map.of()))).isEqualTo(true);   // Float→double
+    }
+
+    @Test
     void evaluatesBooleanAndNumber() {
         assertThat(engine.evaluate(engine.compile("metrics.cnt > 50"),
                 bindings(Map.of("cnt", 53L), Map.of()))).isEqualTo(true);

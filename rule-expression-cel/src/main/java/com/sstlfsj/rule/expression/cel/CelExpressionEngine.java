@@ -89,19 +89,60 @@ public final class CelExpressionEngine implements ExpressionEngine {
     }
 
     /**
-     * dev.cel TIMESTAMP 运行期表示为 protobuf {@link Timestamp},不直接吃 {@link Instant};
-     * 把绑定面 now(Instant)转成 protobuf Timestamp,其余键原样透传。
+     * 绑定面规整,让真实数据源(JSON / DB)的值对齐 dev.cel 运行期期望的类型:
+     * <ul>
+     *   <li>{@code now}(Instant)→ protobuf {@link Timestamp}(CEL TIMESTAMP 运行期表示,不直接吃 Instant);</li>
+     *   <li>{@code metrics}/{@code payload}/{@code subject} 命名空间内的数值规整为 CEL 数值类型——
+     *       CEL int 仅有 {@code int64} 重载、double 仅有 {@code double} 重载且二者不互转。JSON 小整数是
+     *       {@code Integer}、十进制是 {@code BigDecimal}/{@code Double},不规整会报 "no matching overload"。
+     *       整型(Integer/Long/BigInteger 及无小数 BigDecimal)→ {@code Long};带小数(Float/Double/BigDecimal)→ {@code Double}。</li>
+     * </ul>
      */
     private static Map<String, Object> adaptBindings(Map<String, Object> bindings) {
-        Object now = bindings.get("now");
-        if (!(now instanceof Instant instant)) {
-            return bindings;
-        }
         Map<String, Object> adapted = new HashMap<>(bindings);
-        adapted.put("now", Timestamp.newBuilder()
-                .setSeconds(instant.getEpochSecond())
-                .setNanos(instant.getNano())
-                .build());
+        Object now = bindings.get("now");
+        if (now instanceof Instant instant) {
+            adapted.put("now", Timestamp.newBuilder()
+                    .setSeconds(instant.getEpochSecond())
+                    .setNanos(instant.getNano())
+                    .build());
+        }
+        for (String ns : new String[]{"metrics", "payload", "subject"}) {
+            if (bindings.get(ns) instanceof Map<?, ?> nsMap) {
+                adapted.put(ns, normalizeNumerics(nsMap));
+            }
+        }
         return adapted;
+    }
+
+    /** 规整命名空间 map 内各值的数值类型(键透传),非数值原样保留。 */
+    private static Map<String, Object> normalizeNumerics(Map<?, ?> nsMap) {
+        Map<String, Object> out = HashMap.newHashMap(nsMap.size());
+        for (Map.Entry<?, ?> e : nsMap.entrySet()) {
+            out.put(String.valueOf(e.getKey()), normalizeNumber(e.getValue()));
+        }
+        return out;
+    }
+
+    /** 整型数值 → Long(CEL int64);带小数数值 → Double;非数值/ null 原样返回。 */
+    private static Object normalizeNumber(Object v) {
+        switch (v) {
+            case null -> { return null; }
+            case Long ignored -> { return v; }
+            case Double ignored -> { return v; }
+            case java.math.BigDecimal bd -> {
+                // if/else 而非三元:三元混 long/double 会触发数值提升,把整型分支也变成 double
+                if (bd.stripTrailingZeros().scale() <= 0) {
+                    return bd.longValue();
+                }
+                return bd.doubleValue();
+            }
+            case Float f -> { return f.doubleValue(); }
+            case java.math.BigInteger bi -> { return bi.longValue(); }
+            case Integer i -> { return i.longValue(); }
+            case Short s -> { return s.longValue(); }
+            case Byte b -> { return b.longValue(); }
+            default -> { return v; }
+        }
     }
 }
