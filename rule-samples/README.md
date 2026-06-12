@@ -22,7 +22,8 @@
 | `@Fact` 嵌套路径 | `annotation/NestedOrderRule` | `@Fact("order.amount")` 下钻 payload(`NestedOrderRuleIT`) |
 | `@Score` + `@ScoreBand` | `annotation/CreditScoreRule` | 返回分 → 阈值分档映射决策,带回 `EvalResult.score`(`NonBooleanRuleIT`) |
 | `@Decide` | `annotation/RiskDecideRule` | Java 多分支直接产出决策码,返回 `List` 可一次多决策(`NonBooleanRuleIT`) |
-| `@Metric` 取数注入 | `metric/VelocityRule` | 声明依赖 + 注入引擎预拉的派生指标(`VelocityRuleIT`;stub 取数见 `RecentTxnCountHandler`、定义见 `MetricDemoConfig`) |
+| `@Metric` 取数注入 + `@MetricSource` 供给 | `metric/VelocityRule` + `metric/VelocityMetrics` | 消费侧 `@Metric` 声明依赖+注入;供给侧 `@MetricSource` 一个方法即"取数逻辑+定义"(免实现接口、免写 descriptor)(`VelocityRuleIT`) |
+| 一 handler 多 metric(接口式,配置驱动) | `metric/featurestore/*` | 一个 `MetricSourceHandler` 按 `metricCode` 服务多个 metric(共享后端、加特征只加定义不改码);适合 SQL/HTTP/特征库这类形态(`FeatureStoreIT`) |
 | 消费·拉(业务方法读结果) | `service/OrderService` | `@Service` 注入 client → evaluate → 按决策码走业务分支(`OrderServiceIT`) |
 
 推 = 规则上挂 `@OnDecision`/`@EventListener`,命中后在评估调用栈内自动跑副作用(慢处理器可加 `@OnDecision(async=true)`);拉 = 业务方法读 `EvalResult` 自己分支。两者可并存。`@OnDecision(fromRuleCode="x")` 可把处理器精确绑到某条规则。
