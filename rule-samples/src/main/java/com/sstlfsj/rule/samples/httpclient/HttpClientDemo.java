@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.samples.httpclient;
 
 import com.sstlfsj.rule.samples.support.DemoConfig;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
@@ -14,6 +15,7 @@ import java.util.UUID;
  * <p>运行前提:rule-app 已在 localhost:8080 启动,且租户 (9001,'samples') 已存在(见 README)。
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.httpclient.HttpClientDemo"}
  */
+@Slf4j
 public final class HttpClientDemo {
 
     private HttpClientDemo() {
@@ -44,6 +46,6 @@ public final class HttpClientDemo {
                 .toEntity(Map.class)
                 .getBody();
 
-        System.out.println("[http-client] /api/v1/rule/evaluate response = " + resp);
+        log.info("[http-client] /api/v1/rule/evaluate response = {}", resp);
     }
 }

@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.sdk.RuleEngineClient;
 import com.sstlfsj.rule.samples.support.DemoConfig;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -18,6 +19,7 @@ import java.util.UUID;
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.sdkpolling.SdkPollingDemo"}
  * <p>starter 等价写法见 README(application.yml 配 rule.sdk.serverUrl/tenantId/pollInterval)。
  */
+@Slf4j
 public final class SdkPollingDemo {
 
     private SdkPollingDemo() {
@@ -37,10 +39,10 @@ public final class SdkPollingDemo {
             Thread.sleep(4000);
 
             RuleEvent big = event(8000);
-            System.out.println("[sdk-polling] amount=8000 ruleHit=" + client.evaluate(big).ruleHit());
+            log.info("[sdk-polling] amount=8000 ruleHit={}", client.evaluate(big).ruleHit());
 
             RuleEvent small = event(100);
-            System.out.println("[sdk-polling] amount=100  ruleHit=" + client.evaluate(small).ruleHit());
+            log.info("[sdk-polling] amount=100  ruleHit={}", client.evaluate(small).ruleHit());
         }
     }
 

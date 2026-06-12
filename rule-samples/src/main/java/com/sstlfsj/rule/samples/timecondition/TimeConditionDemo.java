@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.sdk.RuleEngineClient;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Instant;
 import java.util.Map;
@@ -20,6 +21,7 @@ import java.util.UUID;
  * <p>两个时间算子由 kernel 默认注册,SDK 本地评估直接可用,无需自定义算子。
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.timecondition.TimeConditionDemo"}
  */
+@Slf4j
 public final class TimeConditionDemo {
 
     private TimeConditionDemo() {
@@ -33,13 +35,13 @@ public final class TimeConditionDemo {
             // 1) time.occurred_at:事件发生时间是否落在 2026 全年区间(BETWEEN)——确定性
             EvalResult in2026 = client.evaluate(login(Instant.parse("2026-06-11T10:00:00Z")));
             EvalResult in2025 = client.evaluate(login(Instant.parse("2025-06-11T10:00:00Z")));
-            System.out.println("[time] occurred_at occurredAt=2026-06-11 → hit=" + in2026.ruleHit());
-            System.out.println("[time] occurred_at occurredAt=2025-06-11 → hit=" + in2025.ruleHit());
+            log.info("[time] occurred_at occurredAt=2026-06-11 → hit={}", in2026.ruleHit());
+            log.info("[time] occurred_at occurredAt=2025-06-11 → hit={}", in2025.ruleHit());
 
             // 2) time.window:营业时段(周一~五 09:00-18:00 Asia/Shanghai)——取决于当前运行时刻
             EvalResult window = client.evaluate(access());
-            System.out.println("[time] time.window now=" + Instant.now() + " → hit=" + window.ruleHit()
-                    + " (工作日 09:00-18:00 之外为 false)");
+            log.info("[time] time.window now={} → hit={} (工作日 09:00-18:00 之外为 false)",
+                    Instant.now(), window.ruleHit());
         }
     }
 

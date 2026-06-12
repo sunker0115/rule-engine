@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.sdk.RuleEngineClient;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Instant;
 import java.util.Map;
@@ -15,6 +16,7 @@ import java.util.UUID;
  * <p>运行前提:无,直接跑。
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.sdklocal.SdkLocalDemo"}
  */
+@Slf4j
 public final class SdkLocalDemo {
 
     private SdkLocalDemo() {
@@ -31,7 +33,7 @@ public final class SdkLocalDemo {
                     Map.of("amount", 8000), Map.of(), EventSource.SDK);
 
             EvalResult result = client.evaluate(event);
-            System.out.println("[sdk-local] amount=8000 ruleHit=" + result.ruleHit());
+            log.info("[sdk-local] amount=8000 ruleHit={}", result.ruleHit());
         }
     }
 }
