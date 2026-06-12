@@ -100,7 +100,9 @@ public class RuleEngineClientAutoConfiguration {
         ctx.getBeansWithAnnotation(com.sstlfsj.rule.kernel.api.annotation.RuleDef.class)
            .forEach((name, bean) -> {
                for (java.lang.reflect.Method m : bean.getClass().getMethods()) {
-                   if (m.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.Condition.class)) {
+                   if (m.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.Condition.class)
+                           || m.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.Decide.class)
+                           || m.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.Score.class)) {
                        annotatedRuleBeans.add(bean);
                        break;
                    }
@@ -111,6 +113,8 @@ public class RuleEngineClientAutoConfiguration {
                     new com.sstlfsj.rule.sdk.source.AnnotatedRuleScanner(factResolver, props.getTenantId())
                             .scan(annotatedRuleBeans);
             scan.evaluators().forEach(builder::addEvaluator);
+            builder.addDecideInvocations(scan.decideInvocations());
+            builder.addScoreInvocations(scan.scoreInvocations());
             builder.ruleSource(new com.sstlfsj.rule.sdk.source.DslRuleSource(scan.snapshots()));
         }
 

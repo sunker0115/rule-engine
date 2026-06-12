@@ -76,9 +76,20 @@ public class RuleEngineClient implements AutoCloseable {
         RuleVersionExecutor executor = b.executor != null
                 ? b.executor
                 : new InterpretedExecutor(evaluators);
+        // executors 按 kind tag 分派:AST_BOOLEAN 走解释器,@Decide/@Score 走对应合成执行器(有注册才装)
+        Map<String, RuleVersionExecutor> executors = new HashMap<>();
+        executors.put(RuleKind.AST_BOOLEAN.tag(), executor);
+        if (!b.decideInvocations.isEmpty()) {
+            executors.put(com.sstlfsj.rule.sdk.source.AnnotatedRuleScanner.KIND_DECIDE,
+                    new com.sstlfsj.rule.sdk.source.AnnotatedDecideExecutor(b.decideInvocations));
+        }
+        if (!b.scoreInvocations.isEmpty()) {
+            executors.put(com.sstlfsj.rule.sdk.source.AnnotatedRuleScanner.KIND_SCORE,
+                    new com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor(b.scoreInvocations));
+        }
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
-                Map.of(RuleKind.AST_BOOLEAN.tag(), executor),
+                executors,
                 false);
 
         // 规则来源：显式 ruleSource() + localSnapshot() 转 DslRuleSource + serverUrl 转 PollingRuleSource
@@ -169,6 +180,8 @@ public class RuleEngineClient implements AutoCloseable {
         private final List<RuleVersionSnapshot> localSnapshots = new ArrayList<>();
         private final List<RuleSource> ruleSources = new ArrayList<>();
         private final Map<String, ConditionEvaluator> extraEvaluators = new HashMap<>();
+        private final Map<String, com.sstlfsj.rule.sdk.source.AnnotatedDecideExecutor.Invocation> decideInvocations = new HashMap<>();
+        private final Map<String, com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor.Invocation> scoreInvocations = new HashMap<>();
         private final List<MetricSourceHandler> metricHandlers = new ArrayList<>();
         private MetricDefinitionResolver metricDefinitionResolver;
         private MetricCache metricCache;
@@ -218,6 +231,22 @@ public class RuleEngineClient implements AutoCloseable {
          */
         public Builder addEvaluator(String conditionType, ConditionEvaluator evaluator) {
             extraEvaluators.put(conditionType, evaluator); return this;
+        }
+        /**
+         * 注册 @Decide 规则调用(key=注解规则坐标键)。
+         *
+         * @param m 坐标键 → @Decide 调用三元组
+         */
+        public Builder addDecideInvocations(Map<String, com.sstlfsj.rule.sdk.source.AnnotatedDecideExecutor.Invocation> m) {
+            decideInvocations.putAll(m); return this;
+        }
+        /**
+         * 注册 @Score 规则调用(key=注解规则坐标键)。
+         *
+         * @param m 坐标键 → @Score 调用信息(方法 + 分档表)
+         */
+        public Builder addScoreInvocations(Map<String, com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor.Invocation> m) {
+            scoreInvocations.putAll(m); return this;
         }
         /**
          * 从 classpath 加载 JSON 规则文件（文件模式快捷入口）。
