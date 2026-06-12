@@ -2,6 +2,7 @@ package com.sstlfsj.rule.eval;
 
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
@@ -19,7 +20,6 @@ import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
-import com.sstlfsj.rule.kernel.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
@@ -110,25 +110,23 @@ public class EvalAutoConfiguration {
     }
 
     /**
-     * 注册 CEL 表达式引擎（EXPRESSION_SCRIPT 默认引擎，dyn env + 预编译缓存）。
-     *
-     * @return CelExpressionEngine 实例
-     */
-    @Bean
-    public CelExpressionEngine celExpressionEngine() {
-        return new CelExpressionEngine();
-    }
-
-    /**
      * 注册 ScriptExecutor，供 kind=EXPRESSION_SCRIPT 的规则版本评估使用。
-     * 按 lang 路由引擎；盒内默认仅 CEL。
+     * 按 lang 路由引擎：自动收集所有 {@link ExpressionEngine} bean（盒内默认仅 CEL，
+     * opt-in 引擎模块注册各自的 bean 即被纳入，无需改本配置），按 lang() 建路由表。
      *
-     * @param celExpressionEngine CEL 引擎
+     * @param expressionEngines 所有已注册的表达式引擎（Spring 自动收集）
      * @return ScriptExecutor 实例
      */
     @Bean
-    public ScriptExecutor scriptExecutor(CelExpressionEngine celExpressionEngine) {
-        return new ScriptExecutor(Map.of(celExpressionEngine.lang(), celExpressionEngine));
+    public ScriptExecutor scriptExecutor(List<ExpressionEngine> expressionEngines) {
+        Map<String, ExpressionEngine> byLang = new HashMap<>();
+        for (ExpressionEngine engine : expressionEngines) {
+            ExpressionEngine prev = byLang.putIfAbsent(engine.lang(), engine);
+            if (prev != null) {
+                throw new IllegalStateException("多个 ExpressionEngine 声明同一 lang=" + engine.lang());
+            }
+        }
+        return new ScriptExecutor(byLang);
     }
 
     /**

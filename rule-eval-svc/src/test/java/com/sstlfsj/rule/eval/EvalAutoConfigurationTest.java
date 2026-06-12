@@ -96,14 +96,9 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
-    void celExpressionEngine_returnsInstance() {
-        CelExpressionEngine engine = config.celExpressionEngine();
-        assertNotNull(engine);
-    }
-
-    @Test
     void scriptExecutor_returnsInstance() {
-        ScriptExecutor executor = config.scriptExecutor(config.celExpressionEngine());
+        // CelExpressionEngine 现由 CEL 模块的 @AutoConfiguration 注册;此处直接 new 模拟容器收集的引擎
+        ScriptExecutor executor = config.scriptExecutor(List.of(new CelExpressionEngine()));
         assertNotNull(executor);
         assertInstanceOf(ScriptExecutor.class, executor);
     }
@@ -143,7 +138,7 @@ class EvalAutoConfigurationTest {
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
-                config.scriptExecutor(config.celExpressionEngine()),
+                config.scriptExecutor(List.of(new CelExpressionEngine())),
                 new TraceProperties());
         assertNotNull(engine);
     }
@@ -158,7 +153,7 @@ class EvalAutoConfigurationTest {
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
-                config.scriptExecutor(config.celExpressionEngine()),
+                config.scriptExecutor(List.of(new CelExpressionEngine())),
                 new TraceProperties());
         assertNotNull(engine);
     }
