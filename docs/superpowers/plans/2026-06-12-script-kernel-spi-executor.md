@@ -10,7 +10,7 @@
 
 **前置依赖:** Plan 0(EvalErrorCode 枚举,已含 `SCRIPT_SOURCE_MISSING`/`SCRIPT_NO_ENGINE`/`SCRIPT_EVAL_ERROR`)已完成(commit `b0dc96c`/`3476fe9`)。设计见 `docs/superpowers/specs/2026-06-12-expression-script-rule-design.md` §5.1/§5.2/§5.4/§5.5。
 
-**plan 序列定位:** 第 2 个 plan。前置 Plan 0 ✅;本 plan 产出 kernel 骨架(fake engine 可测);后续 Plan 3(`rule-expression-cel` CEL 实现 + Caffeine 缓存)/ Plan 4(eval-svc 装配 + config-svc 发布校验 + `script_source` 列 + score 分档 carrier + 端到端)/ Plan 5(SDK opt-in + API)。
+**plan 序列定位:** 第 2 个 plan。前置 Plan 0 ✅;本 plan 产出 kernel 骨架(fake engine 可测);后续 Plan 3(`rule-kernel-expression-cel` CEL 实现 + Caffeine 缓存)/ Plan 4(eval-svc 装配 + config-svc 发布校验 + `script_source` 列 + score 分档 carrier + 端到端)/ Plan 5(SDK opt-in + API)。
 
 ---
 
