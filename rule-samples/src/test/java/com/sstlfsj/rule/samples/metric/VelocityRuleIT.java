@@ -15,7 +15,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Metric 注入端到端:{@code @Metric} 声明依赖 → 引擎评估前经 {@link RecentTxnCountHandler} 预拉 →
+ * Metric 注入端到端:{@code @Metric} 声明依赖 → 引擎评估前经 {@link VelocityMetrics} 预拉 →
  * 注入条件参数 → 驱动决策。frequent-user 近期交易数 5(≥3)命中 REVIEW;normal-user 为 1 不命中,
  * 证明决策确由预拉的 metric 驱动(而非事件 payload)。
  */
@@ -27,8 +27,7 @@ class VelocityRuleIT {
                 .withConfiguration(AutoConfigurations.of(
                         com.sstlfsj.rule.sdk.starter.RuleEngineClientAutoConfiguration.class))
                 .withBean(VelocityRule.class)
-                .withBean(RecentTxnCountHandler.class)
-                .withUserConfiguration(MetricDemoConfig.class)
+                .withBean(VelocityMetrics.class)
                 .run(ctx -> {
                     RuleEngineClient client = ctx.getBean(RuleEngineClient.class);
 

@@ -16,7 +16,7 @@ import java.util.UUID;
 
 /**
  * Metric 特性 demo:演示 {@code @Metric} 注入派生指标驱动决策(规则放本地注解,取数走 stub handler,零服务依赖)。
- * {@link VelocityRule} 依赖 recent_txn_count(由 {@link RecentTxnCountHandler} 模拟取数):同样大额交易,
+ * {@link VelocityRule} 依赖 recent_txn_count(由 {@link VelocityMetrics} 模拟取数):同样大额交易,
  * frequent-user 近期交易数 5 → 命中复核,normal-user 为 1 → 不命中,证明决策由预拉 metric 驱动。
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.metric.MetricDemoApplication"}
  */
