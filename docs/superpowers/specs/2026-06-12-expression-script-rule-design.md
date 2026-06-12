@@ -87,6 +87,9 @@ public interface ExpressionEngine {
     CompiledExpression compile(String source);
     /** 对编译产物按只读变量绑定求值,返回 Boolean/String/Number 之一(或 null=不命中)。 */
     Object evaluate(CompiledExpression compiled, Map<String, Object> bindings);
+
+    /** 发布期类型检查:按声明类型环境编译校验(只 check 不 eval)。强类型引擎捕获类型不符;弱引擎 default no-op。 */
+    default void typeCheck(String source, ScriptTypeEnv typeEnv) { /* no-op */ }
 }
 
 /** 编译产物;referencedVariables 供发布期依赖抽取与校验(点路径,如 "metrics.txn_cnt_1d")。 */
@@ -157,9 +160,9 @@ dry-run 同此:走带版本单快照分支(D56),输出脚本输入绑定 + 输�
 ### 5.7 发布期校验(config-svc `resolveAndValidate` 加 EXPRESSION_SCRIPT 分支)
 
 草稿 create/edit/newVersion 时(D56 premise A)即跑:
-1. **编译**:`engine.compile(source)` 失败(语法/类型) → 拒,返回编译错误位置。
-2. **变量声明校验**:`compiled.referencedVariables()` 里的 `metrics.*` 须在 scene 可用且 metric ACTIVE;`payload.*` 须在 `scene.payloadSchema` 声明(对齐现有 AST 的 payload 依赖校验)。
-3. **依赖冻结**:从引用变量抽取 → 写 `metricDependencies`(metric+version)/ `payloadDependencies`(name/dataType/required)进草稿快照。
+1. **语法编译**:`engine.compile(source)` 失败(语法) → 拒;同时取 `referencedVariables()` 供依赖抽取。
+2. **变量声明校验 + 依赖冻结**:引用变量按前缀拆——`metrics.*` 须 metric ACTIVE(冻 metric+version)、`payload.*` 须在 `scene.payloadSchema` 声明(冻 name/dataType/required);`subject.*` 开放不冻。
+3. **typed 类型检查**:`engine.typeCheck(source, ScriptTypeEnv)` —— 按被引用变量的声明类型(metric dataType + payload schema type)构造 typed env(CEL 以点号变量 `addVar("metrics.x", 类型)` 实现 k8s 风格字段级类型),编译捕获 string 字段参与数值比较等类型不符。`ScriptTypeEnv`/`typeCheck` 是 `ExpressionEngine` SPI 的 default no-op(弱引擎降级);**DataType→CelType 与运行期数值规整对齐**:LONG→INT、DOUBLE→DOUBLE(精确捕获 int/double 误用)、DECIMAL→DYN(运行期按值在 Long/Double 间浮动,不可定型,放行避免误拒)、STRING→STRING、BOOL→BOOL、DATE/DATETIME→TIMESTAMP、LIST/UNKNOWN→DYN。
 4. **决策码静态校验**:CEL 能静态枚举返回的字符串字面量时,校验 ⊆ `decisionBindings`;无法静态枚举的(动态拼串)→ 运行期 `INVALID_DECISION_CODE` 兜底(同 D64 `@Decide` 策略)。
 
 ### 5.8 SDK opt-in 执行

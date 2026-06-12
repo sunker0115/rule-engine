@@ -28,4 +28,18 @@ public interface ExpressionEngine {
      * @return Boolean / String / Number 之一,或 null(不命中)
      */
     Object evaluate(CompiledExpression compiled, Map<String, Object> bindings);
+
+    /**
+     * 发布期类型检查:按被引用变量的声明类型环境编译校验源码(只 check 不 eval)。
+     *
+     * <p>强类型引擎(如 CEL)据此捕获类型不符(如 string 字段参与数值比较);无类型系统的弱引擎
+     * 默认 no-op,仅靠 {@link #compile} 的语法检查兜底。
+     *
+     * @param source  表达式源码
+     * @param typeEnv 被引用变量的声明类型环境
+     * @throws ExpressionCompileException 类型检查失败(类型不符等)
+     */
+    default void typeCheck(String source, ScriptTypeEnv typeEnv) {
+        // 默认 no-op:无类型系统的弱引擎降级,仅靠 compile 的语法检查
+    }
 }

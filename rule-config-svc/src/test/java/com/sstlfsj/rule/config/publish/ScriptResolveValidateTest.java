@@ -106,6 +106,19 @@ class ScriptResolveValidateTest {
     }
 
     @Test
+    void scriptBranch_typeMismatch_throwsIllegalArgument() {
+        // STRING payload 字段参与数值比较 → typed 类型检查在发布期拒(运行期才报会太晚)
+        scene.setPayloadSchema(List.of(
+                new PayloadFieldSpec("country", "STRING", true, null, null, null, null, null)));
+        ScriptSource bad = new ScriptSource("payload.country > 100 ? 'REVIEW' : 'PASS'", "CEL");
+        assertThatThrownBy(() -> publishService.resolveAndValidate(
+                1L, scene, RuleKind.EXPRESSION_SCRIPT,
+                null, List.of(), List.of(), List.of(), bad))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("脚本类型检查失败");
+    }
+
+    @Test
     void scriptBranch_noEngineForLang_throwsIllegalArgument() {
         // lang=JS 无对应引擎 → 发布期拒
         ScriptSource js = new ScriptSource("payload.amount > 0", "JS");

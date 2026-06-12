@@ -9,6 +9,7 @@ import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
 import com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -16,6 +17,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
+import com.sstlfsj.rule.kernel.api.spi.expression.ScriptTypeEnv;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -438,8 +440,8 @@ public class PublishService {
     }
 
     /**
-     * EXPRESSION_SCRIPT 分支：引擎无关层校验。语法 compile + referencedVariables 冻依赖，conditionAst=null。
-     * typed 类型检查在 Plan 4c（发布期 typeCheck）。
+     * EXPRESSION_SCRIPT 分支：引擎无关层校验。语法 compile + referencedVariables 冻依赖 + typed 类型检查，
+     * conditionAst=null。typeCheck 按被引用变量声明类型捕获 string 参与数值比较等类型不符(强引擎)。
      *
      * @param tenantId 租户 id
      * @param scene    所属场景
@@ -473,8 +475,18 @@ public class PublishService {
         // referencedVariables 形如 metrics.x / payload.y / subject.z；按前缀拆（subject.* 开放，不校验/不冻）
         List<String> metricCodes = stripPrefix(refVars, "metrics.");
         List<String> payloadFields = stripPrefix(refVars, "payload.");
-        List<MetricDependency> metricDeps = freezeMetricDeps(tenantId, metricCodes, new HashMap<>());
-        List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, payloadFields, new HashMap<>());
+        Map<String, String> metricTypeMap = new HashMap<>();
+        Map<String, String> payloadTypeMap = new HashMap<>();
+        List<MetricDependency> metricDeps = freezeMetricDeps(tenantId, metricCodes, metricTypeMap);
+        List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, payloadFields, payloadTypeMap);
+
+        // typed 类型检查：按被引用变量的声明类型构造 env，引擎(强类型则)捕获 string 参与数值比较等类型不符
+        try {
+            engine.typeCheck(script.source(), new ScriptTypeEnv(
+                    toDataTypeMap(metricTypeMap), toDataTypeMap(payloadTypeMap)));
+        } catch (com.sstlfsj.rule.kernel.api.spi.expression.ExpressionCompileException e) {
+            throw new IllegalArgumentException("脚本类型检查失败: " + e.getMessage(), e);
+        }
 
         List<RuleVersionSnapshot.DecisionBinding> frozenBindings = freezeDecisionBindings(tenantId, scene, bindings);
         // resolvedAst=null：脚本规则不进 AST；script 原样冻入
@@ -489,6 +501,13 @@ public class PublishService {
             if (v.startsWith(prefix)) out.add(v.substring(prefix.length()));
         }
         return new ArrayList<>(out);
+    }
+
+    /** dataType tag map（field→tag）转 DataType enum map，供 typed 类型检查环境构造。 */
+    private static Map<String, DataType> toDataTypeMap(Map<String, String> tagMap) {
+        Map<String, DataType> out = HashMap.newHashMap(tagMap.size());
+        tagMap.forEach((k, tag) -> out.put(k, DataType.fromTag(tag)));
+        return out;
     }
 
     /**

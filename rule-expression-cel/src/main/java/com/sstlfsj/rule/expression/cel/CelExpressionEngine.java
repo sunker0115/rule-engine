@@ -2,18 +2,22 @@ package com.sstlfsj.rule.expression.cel;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.ExpressionLang;
 import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionCompileException;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEvaluateException;
+import com.sstlfsj.rule.kernel.api.spi.expression.ScriptTypeEnv;
 import com.google.protobuf.Timestamp;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelValidationException;
 import dev.cel.common.CelValidationResult;
+import dev.cel.common.types.CelType;
 import dev.cel.common.types.MapType;
 import dev.cel.common.types.SimpleType;
 import dev.cel.compiler.CelCompiler;
+import dev.cel.compiler.CelCompilerBuilder;
 import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
@@ -86,6 +90,44 @@ public final class CelExpressionEngine implements ExpressionEngine {
         } catch (CelEvaluationException e) {
             throw new ExpressionEvaluateException("CEL 求值失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 发布期类型检查:按被引用变量的声明类型构造 typed env(k8s 风格:每个 {@code ns.field} 声明为
+     * 带类型的点号变量),编译校验源码,只 check 不 eval。捕获 string 字段参与数值比较等类型不符。
+     * {@code subject.*} 声明为 {@code map(string,dyn)}(运行期动态,不做字段级检查)。
+     */
+    @Override
+    public void typeCheck(String source, ScriptTypeEnv typeEnv) {
+        CelCompilerBuilder builder = CelCompilerFactory.standardCelCompilerBuilder()
+                .addVar("subject", MapType.create(SimpleType.STRING, SimpleType.DYN))
+                .addVar("now", SimpleType.TIMESTAMP);
+        typeEnv.metrics().forEach((code, dt) -> builder.addVar("metrics." + code, celType(dt)));
+        typeEnv.payload().forEach((field, dt) -> builder.addVar("payload." + field, celType(dt)));
+        CelValidationResult result = builder.build().compile(source);
+        if (result.hasError()) {
+            throw new ExpressionCompileException("CEL 类型检查失败: " + result.getErrorString());
+        }
+    }
+
+    /**
+     * kernel {@link DataType} → CEL 类型,与运行期数值规整({@link #normalizeNumber})保持一致:
+     * <ul>
+     *   <li>LONG→INT、DOUBLE→DOUBLE:运行期对应 Long/Double,int/double 误用在发布期即被 CEL 捕获;</li>
+     *   <li>DECIMAL→DYN:运行期按实际值在 Long(无小数)/Double(带小数)间浮动,声明类型不可定,
+     *       退化 dyn 避免误判合法脚本(如 {@code payload.amount > 10000});</li>
+     *   <li>LIST/UNKNOWN→DYN:无精确 CEL 类型,放行不误报。</li>
+     * </ul>
+     */
+    private static CelType celType(DataType dt) {
+        return switch (dt) {
+            case LONG -> SimpleType.INT;
+            case DOUBLE -> SimpleType.DOUBLE;
+            case STRING -> SimpleType.STRING;
+            case BOOLEAN -> SimpleType.BOOL;
+            case DATE, DATETIME -> SimpleType.TIMESTAMP;
+            case DECIMAL, LIST, UNKNOWN -> SimpleType.DYN;
+        };
     }
 
     /**

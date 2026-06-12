@@ -1,8 +1,10 @@
 package com.sstlfsj.rule.expression.cel;
 
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.ExpressionLang;
 import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionCompileException;
+import com.sstlfsj.rule.kernel.api.spi.expression.ScriptTypeEnv;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -88,5 +90,35 @@ class CelExpressionEngineTest {
         // safe-by-design:CEL 无文件/反射/类加载内建,此类标识符编译期即不可解析 → 拒
         assertThatThrownBy(() -> engine.compile("java.lang.Runtime.getRuntime()"))
                 .isInstanceOf(ExpressionCompileException.class);
+    }
+
+    @Test
+    void typeCheckPassesForWellTypedExpression() {
+        // LONG metric + STRING payload,各自类型匹配的用法
+        ScriptTypeEnv env = new ScriptTypeEnv(
+                Map.of("cnt", DataType.LONG),
+                Map.of("country", DataType.STRING));
+        engine.typeCheck("metrics.cnt > 50 && payload.country == 'US'", env);  // 不抛
+    }
+
+    @Test
+    void typeCheckRejectsStringComparedAsNumber() {
+        // STRING 字段参与数值比较 → 类型不符,发布期即拒
+        ScriptTypeEnv env = new ScriptTypeEnv(Map.of(), Map.of("name", DataType.STRING));
+        assertThatThrownBy(() -> engine.typeCheck("payload.name > 10000", env))
+                .isInstanceOf(ExpressionCompileException.class);
+    }
+
+    @Test
+    void typeCheckLenientOnDecimal() {
+        // DECIMAL(number)→DYN:整数字面量比较不误判(对齐运行期数值规整)
+        ScriptTypeEnv env = new ScriptTypeEnv(Map.of(), Map.of("amount", DataType.DECIMAL));
+        engine.typeCheck("payload.amount > 10000 ? 'REVIEW' : 'PASS'", env);  // 不抛
+    }
+
+    @Test
+    void typeCheckSubjectIsOpen() {
+        // subject.* 开放(dyn),任意访问不报类型错
+        engine.typeCheck("subject.level == 'VIP'", new ScriptTypeEnv(Map.of(), Map.of()));
     }
 }
