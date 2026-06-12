@@ -18,7 +18,8 @@ public final class OnDecisionInvoker implements DecisionSink {
 
     private static final Logger log = LoggerFactory.getLogger(OnDecisionInvoker.class);
 
-    private record Handler(Object bean, Method method) {}
+    /** fromRuleCode 为空表示不限来源规则;非空则仅匹配该来源规则的决策。 */
+    private record Handler(Object bean, Method method, String fromRuleCode) {}
 
     private final FactResolver factResolver;
     private final Map<String, List<Handler>> byCode = new HashMap<>();
@@ -31,7 +32,8 @@ public final class OnDecisionInvoker implements DecisionSink {
                 if (ann == null) continue;
                 m.setAccessible(true);
                 for (String code : ann.value()) {
-                    byCode.computeIfAbsent(code, k -> new ArrayList<>()).add(new Handler(bean, m));
+                    byCode.computeIfAbsent(code, k -> new ArrayList<>())
+                            .add(new Handler(bean, m, ann.fromRuleCode()));
                 }
             }
         }
@@ -45,6 +47,10 @@ public final class OnDecisionInvoker implements DecisionSink {
         List<Handler> handlers = byCode.get(event.decisionCode());
         if (handlers == null) return;
         for (Handler h : handlers) {
+            // fromRuleCode 过滤:处理器指定了来源规则时,仅当决策出自该规则才触发
+            if (!h.fromRuleCode().isEmpty() && !h.fromRuleCode().equals(event.fromRuleCode())) {
+                continue;
+            }
             try {
                 Object[] args = factResolver.resolve(h.method().getParameters(), event.context(), event);
                 h.method().invoke(h.bean(), args);

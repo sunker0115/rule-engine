@@ -25,11 +25,15 @@ class OnDecisionInvokerTest {
     }
 
     private DecisionFiredEvent fired(String code) {
+        return firedFrom(code, "r");
+    }
+
+    private DecisionFiredEvent firedFrom(String code, String fromRuleCode) {
         RuleEvent e = RuleEvent.builder().tenantId("t").sceneCode("s").eventType("evt")
                 .subjectId("u").eventId("e1").occurredAt(Instant.now())
                 .payload(Map.of("number", 7)).source(EventSource.SDK).build();
         EvalContext ctx = new EvalContext("t", e, null, Map.of(), Instant.now());
-        return new DecisionFiredEvent(code, 1, null, "r", 1L, e, ctx);
+        return new DecisionFiredEvent(code, 1, null, fromRuleCode, 1L, e, ctx);
     }
 
     @Test
@@ -42,5 +46,23 @@ class OnDecisionInvokerTest {
 
         invoker.accept(fired("OTHER"));    // 无匹配处理器 → no-op
         assertThat(h.reviewed.get()).isEqualTo(7);
+    }
+
+    static class ScopedHandlers {
+        final AtomicInteger fromA = new AtomicInteger();
+        @OnDecision(value = "REVIEW", fromRuleCode = "rule-a")
+        public void onlyFromA(@Fact("number") Integer n) { fromA.addAndGet(n); }
+    }
+
+    @Test
+    void fromRuleCodeFilter_onlyFiresForMatchingSourceRule() {
+        ScopedHandlers h = new ScopedHandlers();
+        OnDecisionInvoker invoker = new OnDecisionInvoker(new FactResolver(), List.of(h));
+
+        invoker.accept(firedFrom("REVIEW", "rule-b"));   // 来源不符 → 跳过
+        assertThat(h.fromA.get()).isZero();
+
+        invoker.accept(firedFrom("REVIEW", "rule-a"));   // 来源匹配 → 触发
+        assertThat(h.fromA.get()).isEqualTo(7);
     }
 }
