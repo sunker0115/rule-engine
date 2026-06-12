@@ -149,16 +149,16 @@ class ConfigServiceImplTest {
         DraftCreatedResult expected = new DraftCreatedResult(1L, 2L, 1L, "DRAFT");
         var ast = new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null);
         when(publishService.createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                ast, java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", "actor1"))
+                ast, java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", null, "actor1"))
                 .thenReturn(expected);
 
         DraftCreatedResult result = configService.createDraft("1", "risk.transfer",
                 "rule.a", "规则A", ast, java.util.List.of(), java.util.List.of(), java.util.List.of(),
-                "AST_BOOLEAN", "actor1");
+                "AST_BOOLEAN", null, "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(1L);
         verify(publishService).createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                ast, java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", "actor1");
+                ast, java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", null, "actor1");
     }
 
     @Test
@@ -206,22 +206,22 @@ class ConfigServiceImplTest {
 
     @Test
     void editDraft_validKind_delegatesWithParsedRuleKind() {
-        when(publishService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(publishService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new DraftCreatedResult(10L, 20L, 1L, "DRAFT"));
 
         configService.editDraft("1", 10L, "名", "AST_BOOLEAN",
-                null, null, null, null, "actor");
+                null, null, null, null, null, "actor");
 
         // kind 字符串 "AST_BOOLEAN" 解析为枚举后透传 publishService
         verify(publishService).editDraft(eq(1L), eq(10L), eq("名"), eq(RuleKind.AST_BOOLEAN),
-                any(), any(), any(), any(), eq("actor"));
+                any(), any(), any(), any(), any(), eq("actor"));
     }
 
     @Test
     void editDraft_invalidKind_throwsBeforeDelegating() {
         // 非法 kind 在 parseKind 阶段即拒，不触达 publishService
         assertThatThrownBy(() -> configService.editDraft("1", 10L, "名", "BOGUS_KIND",
-                null, null, null, null, "actor"))
+                null, null, null, null, null, "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("不支持的规则 kind");
         verifyNoInteractions(publishService);
@@ -229,22 +229,22 @@ class ConfigServiceImplTest {
 
     @Test
     void newVersion_validKind_delegatesWithParsedRuleKind() {
-        when(publishService.newVersion(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(publishService.newVersion(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new DraftCreatedResult(10L, 30L, 2L, "DRAFT"));
 
         configService.newVersion("1", 10L, "名", "AST_BOOLEAN",
-                null, null, null, null, 50L, "actor");
+                null, null, null, null, 50L, null, "actor");
 
         // kind 字符串 "AST_BOOLEAN" 解析为枚举后透传 publishService，fromVersionId 原样透传
         verify(publishService).newVersion(eq(1L), eq(10L), eq("名"), eq(RuleKind.AST_BOOLEAN),
-                any(), any(), any(), any(), eq(50L), eq("actor"));
+                any(), any(), any(), any(), eq(50L), any(), eq("actor"));
     }
 
     @Test
     void newVersion_invalidKind_throwsBeforeDelegating() {
         // 非法 kind 在 parseKind 阶段即拒，不触达 publishService
         assertThatThrownBy(() -> configService.newVersion("1", 10L, "名", "BOGUS_KIND",
-                null, null, null, null, null, "actor"))
+                null, null, null, null, null, null, "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("不支持的规则 kind");
         verifyNoInteractions(publishService);
