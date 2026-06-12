@@ -4,7 +4,7 @@
 
 **Goal:** 打通 EXPRESSION_SCRIPT 的"**存储 → 装配快照 → 运行期求值**"路径:`rule_version.script_source` 列 + `RuleVersionRow`/`SnapshotAssembler` 带 script + eval-svc 注册 `CelExpressionEngine`+`ScriptExecutor`。让"DB 里一条脚本规则行能被索引加载并由 CEL 引擎求值出决策"。
 
-**Architecture:** 不碰写路径(config-svc create/publish 是 Plan 4b)。本 plan 是**读/运行侧**:① DB 加 `script_source` 列(可空);② kernel 装配链路(`RuleVersionRow` 加 `scriptSourceJson`、`SnapshotAssembler` 反序列化进 `RuleVersionSnapshot.script`,conditionAst 为 null 时跳过 AST 反序列化);③ eval-svc 依赖 `rule-kernel-expression-cel`,`EvalAutoConfiguration` 建 `CelExpressionEngine`+`ScriptExecutor` bean 并注册进 kind→executor map。
+**Architecture:** 不碰写路径(config-svc create/publish 是 Plan 4b)。本 plan 是**读/运行侧**:① DB 加 `script_source` 列(可空);② kernel 装配链路(`RuleVersionRow` 加 `scriptSourceJson`、`SnapshotAssembler` 反序列化进 `RuleVersionSnapshot.script`,conditionAst 为 null 时跳过 AST 反序列化);③ eval-svc 依赖 `rule-expression-cel`,`EvalAutoConfiguration` 建 `CelExpressionEngine`+`ScriptExecutor` bean 并注册进 kind→executor map。
 
 **Tech Stack:** Java 25、Maven、MyBatis-Plus、Flyway(`V1_NN__*.sql`)、`dev.cel`(经 expression-cel 模块)、JUnit5 + AssertJ、`$MVN`(mvn-env,JDK 25)。
 
@@ -370,7 +370,7 @@ git commit -m "feat(eval): RuleVersionReadMapper 选 script_source 列"
 ```xml
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
-            <artifactId>rule-kernel-expression-cel</artifactId>
+            <artifactId>rule-expression-cel</artifactId>
         </dependency>
 ```
 
@@ -387,8 +387,8 @@ git commit -m "feat(eval): RuleVersionReadMapper 选 script_source 列"
      * @return CelExpressionEngine 实例
      */
     @Bean
-    public com.sstlfsj.rule.kernel.expression.cel.CelExpressionEngine celExpressionEngine() {
-        return new com.sstlfsj.rule.kernel.expression.cel.CelExpressionEngine();
+    public com.sstlfsj.rule.expression.cel.CelExpressionEngine celExpressionEngine() {
+        return new com.sstlfsj.rule.expression.cel.CelExpressionEngine();
     }
 
     /**
@@ -400,7 +400,7 @@ git commit -m "feat(eval): RuleVersionReadMapper 选 script_source 列"
      */
     @Bean
     public com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor scriptExecutor(
-            com.sstlfsj.rule.kernel.expression.cel.CelExpressionEngine celExpressionEngine) {
+            com.sstlfsj.rule.expression.cel.CelExpressionEngine celExpressionEngine) {
         return new com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor(
                 java.util.Map.of(celExpressionEngine.lang(), celExpressionEngine));
     }

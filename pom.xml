@@ -19,8 +19,8 @@
 
     <modules>
         <module>rule-kernel</module>
-        <module>rule-kernel-expression-cel</module>
-        <module>rule-kernel-expression-cel-spring-boot-starter</module>
+        <module>rule-expression-cel</module>
+        <module>rule-expression-cel-spring-boot-starter</module>
         <module>rule-config-svc</module>
         <module>rule-eval-svc</module>
         <module>rule-job-svc</module>
@@ -220,12 +220,12 @@
             </dependency>
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
-                <artifactId>rule-kernel-expression-cel</artifactId>
+                <artifactId>rule-expression-cel</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
-                <artifactId>rule-kernel-expression-cel-spring-boot-starter</artifactId>
+                <artifactId>rule-expression-cel-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

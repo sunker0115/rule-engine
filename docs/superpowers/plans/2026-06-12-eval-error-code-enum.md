@@ -20,7 +20,7 @@
 **这是更大 spec 的第 1 个 plan。完整 plan 序列:**
 1. **(本 plan)** EvalErrorCode 枚举统一 — 前置重构,独立交付
 2. kernel:`ExpressionEngine`/`CompiledExpression` SPI + `ScriptSource` + `ScriptExecutor` + `RuleVersionSnapshot.script` + `NodeType.SCRIPT` + SCRIPT_* 错误码(用 fake engine 测派发)
-3. `rule-kernel-expression-cel` 新模块:`CelExpressionEngine`(编译/类型检查/变量抽取/求值 + Caffeine 预编译缓存)
+3. `rule-expression-cel` 新模块:`CelExpressionEngine`(编译/类型检查/变量抽取/求值 + Caffeine 预编译缓存)
 4. eval-svc 装配 + config-svc 发布校验 + `rule_version.script_source` 列 + 端到端
 5. SDK opt-in 执行 + API 契约
 

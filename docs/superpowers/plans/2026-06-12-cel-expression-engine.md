@@ -1,8 +1,8 @@
-# rule-kernel-expression-cel:CEL 运行期引擎 Implementation Plan(Plan 3)
+# rule-expression-cel:CEL 运行期引擎 Implementation Plan(Plan 3)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development(推荐)或 superpowers:executing-plans 逐任务实现。步骤用 checkbox(`- [ ]`)跟踪。
 
-**Goal:** 新建 Maven 模块 `rule-kernel-expression-cel`,用 Google `dev.cel` 实现 `ExpressionEngine`(Plan 2 的 kernel SPI):**dyn env** 下 compile + evaluate + 抽取引用变量 + Caffeine 预编译缓存。**仅运行期求值引擎**,不含发布期类型检查(那是 Plan 4)。
+**Goal:** 新建 Maven 模块 `rule-expression-cel`,用 Google `dev.cel` 实现 `ExpressionEngine`(Plan 2 的 kernel SPI):**dyn env** 下 compile + evaluate + 抽取引用变量 + Caffeine 预编译缓存。**仅运行期求值引擎**,不含发布期类型检查(那是 Plan 4)。
 
 **Architecture:** 运行期与发布期分离(对标 k8s:CRD 注册=发布期做 typed 类型检查,admission=运行期求值)。本模块是**运行期引擎**:env 用 dyn(`metrics`/`payload`/`subject` = `map(string, dyn)`、`now` = `timestamp`),scene 无关、全局一份。运行期规则已过发布校验,无需再 typed 检查;dyn 对 Java `Map` 求值是 dev.cel 原生支持,无 StructType↔Map 运行期解析风险。compile 按源码内容缓存(Caffeine,scene 无关 key=source)。**per-scene typed 类型检查(`StructType` from dataType)在 Plan 4 config-svc 发布校验做,只 check 不 eval。**
 
@@ -16,7 +16,7 @@
 
 ## 关键事实 / 待验证项(实现者必读)
 
-- `mvn-env` skill 先跑(JDK 25),用 `$MVN`。新模块测试 `$MVN -pl rule-kernel-expression-cel -am test`。不得 `-DskipTests`。中文注释,public 写 Javadoc。
+- `mvn-env` skill 先跑(JDK 25),用 `$MVN`。新模块测试 `$MVN -pl rule-expression-cel -am test`。不得 `-DskipTests`。中文注释,public 写 Javadoc。
 - **依赖版本(Maven Central 核实钉死)**:`dev.cel:cel:0.13.0`(聚合 jar,含 compiler/runtime/common,Central 当前最新稳定版,metadata `<latest>0.13.0</latest>`)。protobuf 4.33.5 与 Spring Boot 4 同主版本线、**无冲突**,proto3 兜底不需要。仅 `sun.misc.Unsafe` 弃用 WARNING(非错误)。Caffeine/junit/assertj 由 Spring Boot BOM 管理(pom 省 version),只 `dev.cel:cel` 显式写版本。parent version 用 `${revision}`(与 `rule-kernel` 一致)。
 - **dev.cel 核心 API**(基于官方文档,**按钉死版本核实方法名**——0.x 有 API 漂移):
   - 编译器:`CelCompilerFactory.standardCelCompilerBuilder().addVar(name, CelType)...build()` → `CelCompiler`;`compiler.compile(expr)` → `CelValidationResult`;`.hasError()` / `.getErrorString()` / `.getAst()`(`getAst()` 在有错时抛 `CelValidationException`)。
@@ -28,18 +28,18 @@
 
 ---
 
-## Task 1: 新建模块 `rule-kernel-expression-cel` + dev.cel 冒烟验证
+## Task 1: 新建模块 `rule-expression-cel` + dev.cel 冒烟验证
 
 **Files:**
-- Create: `rule-kernel-expression-cel/pom.xml`
+- Create: `rule-expression-cel/pom.xml`
 - Modify: `pom.xml`(根 reactor,`<modules>` 加新模块)
-- Test: `rule-kernel-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelSmokeTest.java`
+- Test: `rule-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelSmokeTest.java`
 
 - [ ] **Step 1: 根 pom 注册模块 + 新模块 pom**
 
-根 `pom.xml` 的 `<modules>` 块加一行 `<module>rule-kernel-expression-cel</module>`(放在 `rule-kernel` 之后)。
+根 `pom.xml` 的 `<modules>` 块加一行 `<module>rule-expression-cel</module>`(放在 `rule-kernel` 之后)。
 
-新建 `rule-kernel-expression-cel/pom.xml`(参照 `rule-kernel/pom.xml` 的 parent/groupId/version 写法,依赖 rule-kernel + dev.cel + caffeine + 测试):
+新建 `rule-expression-cel/pom.xml`(参照 `rule-kernel/pom.xml` 的 parent/groupId/version 写法,依赖 rule-kernel + dev.cel + caffeine + 测试):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -52,7 +52,7 @@
         <artifactId>rule-engine</artifactId>
         <version>${revision}</version>
     </parent>
-    <artifactId>rule-kernel-expression-cel</artifactId>
+    <artifactId>rule-expression-cel</artifactId>
 
     <dependencies>
         <dependency>
@@ -89,7 +89,7 @@
 - [ ] **Step 2: 写冒烟测试(验证 dev.cel 在 classpath + dyn env + Map 求值)**
 
 ```java
-package com.sstlfsj.rule.kernel.expression.cel;
+package com.sstlfsj.rule.expression.cel;
 
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.types.MapType;
@@ -127,15 +127,15 @@ class CelSmokeTest {
 
 - [ ] **Step 3: 跑冒烟测试**
 
-Run: `$MVN -pl rule-kernel-expression-cel -am test -Dtest=CelSmokeTest -Dsurefire.failIfNoSpecifiedTests=false`
+Run: `$MVN -pl rule-expression-cel -am test -Dtest=CelSmokeTest -Dsurefire.failIfNoSpecifiedTests=false`
 Expected: PASS。**若编译/依赖解析失败**:核实 dev.cel 坐标/版本(见关键事实的迁移与 proto3 备注),调整 pom 后重试。**若 API 方法名不符**(如 `getAst()`/`standardCelCompilerBuilder()`),按钉死版本的实际 API 修正本测试与后续任务的调用——这是本 plan 的"地基验证",务必在此关把 dev.cel 真实 API 对齐。
 
 - [ ] **Step 4: 提交**
 
 ```bash
-git add pom.xml rule-kernel-expression-cel/pom.xml \
-        rule-kernel-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelSmokeTest.java
-git commit -m "feat(expression-cel): 新建 rule-kernel-expression-cel 模块 + dev.cel 冒烟验证"
+git add pom.xml rule-expression-cel/pom.xml \
+        rule-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelSmokeTest.java
+git commit -m "feat(expression-cel): 新建 rule-expression-cel 模块 + dev.cel 冒烟验证"
 ```
 
 ---
@@ -143,14 +143,14 @@ git commit -m "feat(expression-cel): 新建 rule-kernel-expression-cel 模块 + 
 ## Task 2: `CelCompiledExpression`(包装 AST + 引用变量)
 
 **Files:**
-- Create: `rule-kernel-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelCompiledExpression.java`
+- Create: `rule-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelCompiledExpression.java`
 
 > 实现 Plan 2 的 `CompiledExpression` SPI,持有 dev.cel 的 `CelAbstractSyntaxTree` 与预抽取的引用变量集。无独立测试,由 Task 5 间接覆盖。
 
 - [ ] **Step 1: 实现**
 
 ```java
-package com.sstlfsj.rule.kernel.expression.cel;
+package com.sstlfsj.rule.expression.cel;
 
 import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
 import dev.cel.common.CelAbstractSyntaxTree;
@@ -186,13 +186,13 @@ public final class CelCompiledExpression implements CompiledExpression {
 
 - [ ] **Step 2: 编译确认**
 
-Run: `$MVN -pl rule-kernel-expression-cel -am test-compile`
+Run: `$MVN -pl rule-expression-cel -am test-compile`
 Expected: BUILD SUCCESS。
 
 - [ ] **Step 3: 提交**
 
 ```bash
-git add rule-kernel-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelCompiledExpression.java
+git add rule-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelCompiledExpression.java
 git commit -m "feat(expression-cel): CelCompiledExpression(包装 AST + 引用变量)"
 ```
 
@@ -201,15 +201,15 @@ git commit -m "feat(expression-cel): CelCompiledExpression(包装 AST + 引用�
 ## Task 3: 引用变量抽取 `CelReferencedVariables`
 
 **Files:**
-- Create: `rule-kernel-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelReferencedVariables.java`
-- Test: `rule-kernel-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelReferencedVariablesTest.java`
+- Create: `rule-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelReferencedVariables.java`
+- Test: `rule-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelReferencedVariablesTest.java`
 
 > 从 checked AST 抽取形如 `metrics.<x>` / `payload.<x>` / `subject.<x>` 的引用点路径(发布期冻 metricDependencies/payloadDependencies 用)。**CelNavigableAst API 版本敏感**,本 Task 测试即为验证关。
 
 - [ ] **Step 1: 写失败测试**
 
 ```java
-package com.sstlfsj.rule.kernel.expression.cel;
+package com.sstlfsj.rule.expression.cel;
 
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.types.MapType;
@@ -251,13 +251,13 @@ class CelReferencedVariablesTest {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `$MVN -pl rule-kernel-expression-cel -am test -Dtest=CelReferencedVariablesTest -Dsurefire.failIfNoSpecifiedTests=false`
+Run: `$MVN -pl rule-expression-cel -am test -Dtest=CelReferencedVariablesTest -Dsurefire.failIfNoSpecifiedTests=false`
 Expected: 编译失败(`CelReferencedVariables` 不存在)。
 
 - [ ] **Step 3: 实现(按钉死版本核实 CelNavigableAst API)**
 
 ```java
-package com.sstlfsj.rule.kernel.expression.cel;
+package com.sstlfsj.rule.expression.cel;
 
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.ast.CelExpr;
@@ -302,14 +302,14 @@ public final class CelReferencedVariables {
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `$MVN -pl rule-kernel-expression-cel -am test -Dtest=CelReferencedVariablesTest -Dsurefire.failIfNoSpecifiedTests=false`
+Run: `$MVN -pl rule-expression-cel -am test -Dtest=CelReferencedVariablesTest -Dsurefire.failIfNoSpecifiedTests=false`
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
 
 ```bash
-git add rule-kernel-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelReferencedVariables.java \
-        rule-kernel-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelReferencedVariablesTest.java
+git add rule-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelReferencedVariables.java \
+        rule-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelReferencedVariablesTest.java
 git commit -m "feat(expression-cel): CelReferencedVariables(从 AST 抽 metrics/payload/subject 引用)"
 ```
 
@@ -318,15 +318,15 @@ git commit -m "feat(expression-cel): CelReferencedVariables(从 AST 抽 metrics/
 ## Task 4: `CelExpressionEngine`(SPI 实现 + Caffeine 预编译缓存)
 
 **Files:**
-- Create: `rule-kernel-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelExpressionEngine.java`
-- Test: `rule-kernel-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelExpressionEngineTest.java`
+- Create: `rule-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelExpressionEngine.java`
+- Test: `rule-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelExpressionEngineTest.java`
 
 > dyn env、单例线程安全、按 source 内容缓存编译产物。`lang()` 返回 `ExpressionLang.CEL.tag()`。
 
 - [ ] **Step 1: 写失败测试**
 
 ```java
-package com.sstlfsj.rule.kernel.expression.cel;
+package com.sstlfsj.rule.expression.cel;
 
 import com.sstlfsj.rule.kernel.api.model.ExpressionLang;
 import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
@@ -403,13 +403,13 @@ class CelExpressionEngineTest {
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `$MVN -pl rule-kernel-expression-cel -am test -Dtest=CelExpressionEngineTest -Dsurefire.failIfNoSpecifiedTests=false`
+Run: `$MVN -pl rule-expression-cel -am test -Dtest=CelExpressionEngineTest -Dsurefire.failIfNoSpecifiedTests=false`
 Expected: 编译失败(`CelExpressionEngine` 不存在)。
 
 - [ ] **Step 3: 实现**
 
 ```java
-package com.sstlfsj.rule.kernel.expression.cel;
+package com.sstlfsj.rule.expression.cel;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -502,19 +502,19 @@ public final class CelExpressionEngine implements ExpressionEngine {
 
 - [ ] **Step 4: 跑测试确认通过**
 
-Run: `$MVN -pl rule-kernel-expression-cel -am test -Dtest=CelExpressionEngineTest -Dsurefire.failIfNoSpecifiedTests=false`
+Run: `$MVN -pl rule-expression-cel -am test -Dtest=CelExpressionEngineTest -Dsurefire.failIfNoSpecifiedTests=false`
 Expected: PASS(7 用例)。若 `ioAndReflectionNotExpressible` 行为与预期不符(CEL 对未声明标识符的报错形式),按实际:未声明变量/函数 → 编译错 → `ExpressionCompileException`,断言成立即可。
 
 - [ ] **Step 5: 模块全量绿**
 
-Run: `$MVN -pl rule-kernel-expression-cel -am test`
+Run: `$MVN -pl rule-expression-cel -am test`
 Expected: BUILD SUCCESS。
 
 - [ ] **Step 6: 提交**
 
 ```bash
-git add rule-kernel-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelExpressionEngine.java \
-        rule-kernel-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelExpressionEngineTest.java
+git add rule-expression-cel/src/main/java/com/sstlfsj/rule/kernel/expression/cel/CelExpressionEngine.java \
+        rule-expression-cel/src/test/java/com/sstlfsj/rule/kernel/expression/cel/CelExpressionEngineTest.java
 git commit -m "feat(expression-cel): CelExpressionEngine(dyn env + Caffeine 预编译缓存,实现 ExpressionEngine SPI)"
 ```
 
@@ -527,12 +527,12 @@ git commit -m "feat(expression-cel): CelExpressionEngine(dyn env + Caffeine 预�
 - [ ] **Step 1: 全量 clean test**
 
 Run: `$MVN clean test`
-Expected: BUILD SUCCESS(新增 rule-kernel-expression-cel 模块在 reactor 内全绿;其它模块不受影响——本 plan 未碰它们)。
+Expected: BUILD SUCCESS(新增 rule-expression-cel 模块在 reactor 内全绿;其它模块不受影响——本 plan 未碰它们)。
 
 - [ ] **Step 2: 确认未越界**
 
-Run: `git diff --name-only a20816b..HEAD | grep -v '^rule-kernel-expression-cel/' | grep -v '^docs/' | grep -E '^rule-' || echo "仅 expression-cel + docs 改动(根 pom 除外)"`
-Expected: 仅根 `pom.xml`(加模块)+ `rule-kernel-expression-cel/**`;不应碰 kernel/eval-svc/config-svc/sdk 源码。
+Run: `git diff --name-only a20816b..HEAD | grep -v '^rule-expression-cel/' | grep -v '^docs/' | grep -E '^rule-' || echo "仅 expression-cel + docs 改动(根 pom 除外)"`
+Expected: 仅根 `pom.xml`(加模块)+ `rule-expression-cel/**`;不应碰 kernel/eval-svc/config-svc/sdk 源码。
 
 ---
 

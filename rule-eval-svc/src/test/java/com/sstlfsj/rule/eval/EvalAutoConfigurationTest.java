@@ -16,7 +16,7 @@ import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
-import com.sstlfsj.rule.kernel.expression.cel.CelExpressionEngine;
+import com.sstlfsj.rule.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;

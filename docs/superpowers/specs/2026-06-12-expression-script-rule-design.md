@@ -45,7 +45,7 @@ D42 当年搁置的两个顾虑——**沙箱安全 + 性能代价**——本设
 | 模块 | 新增/改动 |
 |---|---|
 | `rule-kernel` | `ExpressionEngine` SPI、`CompiledExpression` 接口、`ScriptExecutor`(持注入 engine,**不依赖 CEL**)、脚本载体 `ScriptSource`(typed record,非 AstNode)、`RuleVersionSnapshot.script` 字段、`SCRIPT_*` 错误码、`NodeType.SCRIPT`、`INVALID_DECISION_CODE` 提升 |
-| `rule-kernel-expression-cel`(**新模块**,带 CEL 依赖) | `CelExpressionEngine implements ExpressionEngine`(编译/类型检查/变量抽取/求值 + Caffeine 预编译缓存) |
+| `rule-expression-cel`(**新模块**,带 CEL 依赖) | `CelExpressionEngine implements ExpressionEngine`(编译/类型检查/变量抽取/求值 + Caffeine 预编译缓存) |
 | `rule-eval-svc` | `EvalAutoConfiguration` 建 `CelExpressionEngine` + `ScriptExecutor` bean,注册进 kind→executor map;索引热更时预热编译缓存 |
 | `rule-config-svc` | `resolveAndValidate` 加 `EXPRESSION_SCRIPT` 分支(发布期编译 + 类型检查 + 决策码校验 + 依赖抽取冻结) |
 | `rule-sdk(-spring-boot-starter)` | `RuleEngineClient.Builder` 始终注册 kernel `ScriptExecutor`;CEL **引擎**为 opt-in(可选依赖);引擎未注册时该规则优雅 `SCRIPT_NO_ENGINE`(不触发 AST_BOOLEAN 回退) |
@@ -163,7 +163,7 @@ dry-run 同此:走带版本单快照分支(D56),输出脚本输入绑定 + 输�
 
 **关键约束**:`EvalEngine:254-255` 对未知 kind 会**回退到默认 AST_BOOLEAN 执行器**。若 SDK 不注册 `ScriptExecutor`,EXPRESSION_SCRIPT snapshot 会被错误地丢给布尔解释器(且 `conditionAst=null`)。规避方式——**`ScriptExecutor` 是 kernel 类、无 CEL 依赖,SDK 始终注册它进 kind map**;真正 opt-in 的只是 **CEL 引擎**:
 
-- `rule-sdk-spring-boot-starter` 对 `rule-kernel-expression-cel` 为**可选依赖**;
+- `rule-sdk-spring-boot-starter` 对 `rule-expression-cel` 为**可选依赖**;
 - `RuleEngineClient.Builder` 始终把 kernel `ScriptExecutor` 注册进本地 kind→executor map(对标 D64 多 kind 注册);`enableExpressionScript(ExpressionEngine)` / classpath 自动检测决定**往 `ScriptExecutor` 的 engines map 里注入哪个引擎**;
 - **CEL 引擎未 opt-in 时**:`ScriptExecutor` 在(空 engines map)碰 EXPRESSION_SCRIPT 规则返回 `SCRIPT_NO_ENGINE`(graceful),**不触发 AST_BOOLEAN 回退、不连累 client 其它规则**。
 
@@ -210,7 +210,7 @@ RuleVersionSnapshot rule = RuleVersionSnapshot.builder()
 ## 8. 测试计划
 
 - **kernel**:`ScriptExecutorTest`——Boolean/String/Number 三种返回派发;决策码 ∉ bindings(`INVALID_DECISION_CODE`);`script()` 为 null(`SCRIPT_SOURCE_MISSING`);无 engine(`SCRIPT_NO_ENGINE`);求值抛错(`SCRIPT_EVAL_ERROR`);trace collect on/off 零分配。用 fake `ExpressionEngine`(不依赖 CEL)覆盖派发逻辑。
-- **rule-kernel-expression-cel**:`CelExpressionEngineTest`——编译/类型检查/变量抽取/求值;预编译缓存命中(同源去重)、内容变更换 key;**安全验证**:尝试 I/O/反射/类加载的表达式编译即拒(safe-by-design 断言)。
+- **rule-expression-cel**:`CelExpressionEngineTest`——编译/类型检查/变量抽取/求值;预编译缓存命中(同源去重)、内容变更换 key;**安全验证**:尝试 I/O/反射/类加载的表达式编译即拒(safe-by-design 断言)。
 - **config-svc**:发布校验——编译失败拒、未声明变量拒、依赖正确冻结、决策码静态校验。
 - **eval-svc**:端到端——配 EXPRESSION_SCRIPT 规则 → 评估出决策/分 + SCRIPT trace 落库;索引热更预热编译。
 - **SDK**:opt-in CEL 引擎后执行;未注册引擎时该规则 `SCRIPT_NO_ENGINE` 且不影响其它规则(验证不走 AST_BOOLEAN 回退)。
@@ -218,4 +218,4 @@ RuleVersionSnapshot rule = RuleVersionSnapshot.builder()
 
 ## 9. 决策日志条目(待追加 00-decisions,D66 草案)
 
-> D66. `EXPRESSION_SCRIPT` 表达式脚本规则(补完 RuleKind 第五形态)。定位**服务端 config-driven**(SDK 仅执行不编写)。**受限表达式语言 safe-by-design**(非图灵完备,对标 CEL/FEEL/Rego),不做全功能脚本沙箱(化解 D42 搁置的沙箱安全顾虑)。`ExpressionEngine` SPI + 盒内单一默认 **CEL** 实现(`rule-kernel-expression-cel` 模块,kernel 不依赖 CEL),其它引擎(Aviator/Lua)降级 opt-in 插件。**脚本载体 `ScriptSource`(typed record,与 AST 平级、非 AstNode)**——开源对标(DMN `LiteralExpression` 是 `DecisionTable` 兄弟、Drools consequence 独立、Easy Rules 表达式头等字段)+ 脚本不可遍历(依赖从 `engine.referencedVariables()` 出),都指向不进 sealed `AstNode`;EXPRESSION_SCRIPT 规则 `conditionAst=null` + 新列 `rule_version.script_source`,`AstNode` 体系零改动。`ScriptExecutor` 注册进 kind→executor map(对标 D42),`EvalEngine` 零改动。返回类型派发复用 D64(Boolean/String/Number)。**预编译缓存**:源码内容哈希为 key 的 Caffeine,快照加载期预热、内容寻址天然失效。发布期编译 + 类型检查 + 变量抽取冻依赖 + 决策码校验。trace 为单节点扁平 `SCRIPT`(input/output,非节点树)。SDK 始终注册 kernel `ScriptExecutor`(避开 `EvalEngine` 对未知 kind 回退 AST_BOOLEAN 的陷阱),CEL 引擎才是 opt-in,未注册引擎该规则优雅 `SCRIPT_NO_ENGINE`。**前置重构**:`EvalErrorCode` 从 String 常量类改造成真 enum 作**单一真相源**(纳入 SDK 散落码 + `METRIC_SOURCE_EVAL_ERROR` + 新 `SCRIPT_*`);各错误工厂加 enum 重载(内部 `.name()`)。**errorCode 字段保持 String**——因 metric provider(`MetricSourceHandler` SPI)经 `MetricValue.errorCode` 可带开放码,errorCode 非封闭集,按 §数据类型规范开放集用 String;持久层/`ConditionEvaluation` 不动,零行为变更。留缝:方案 B(`expression.*` ConditionEvaluator)、`@ExpressionRule` 注解、其它引擎,均靠 `ExpressionEngine` SPI 加法补。
+> D66. `EXPRESSION_SCRIPT` 表达式脚本规则(补完 RuleKind 第五形态)。定位**服务端 config-driven**(SDK 仅执行不编写)。**受限表达式语言 safe-by-design**(非图灵完备,对标 CEL/FEEL/Rego),不做全功能脚本沙箱(化解 D42 搁置的沙箱安全顾虑)。`ExpressionEngine` SPI + 盒内单一默认 **CEL** 实现(`rule-expression-cel` 模块,kernel 不依赖 CEL),其它引擎(Aviator/Lua)降级 opt-in 插件。**脚本载体 `ScriptSource`(typed record,与 AST 平级、非 AstNode)**——开源对标(DMN `LiteralExpression` 是 `DecisionTable` 兄弟、Drools consequence 独立、Easy Rules 表达式头等字段)+ 脚本不可遍历(依赖从 `engine.referencedVariables()` 出),都指向不进 sealed `AstNode`;EXPRESSION_SCRIPT 规则 `conditionAst=null` + 新列 `rule_version.script_source`,`AstNode` 体系零改动。`ScriptExecutor` 注册进 kind→executor map(对标 D42),`EvalEngine` 零改动。返回类型派发复用 D64(Boolean/String/Number)。**预编译缓存**:源码内容哈希为 key 的 Caffeine,快照加载期预热、内容寻址天然失效。发布期编译 + 类型检查 + 变量抽取冻依赖 + 决策码校验。trace 为单节点扁平 `SCRIPT`(input/output,非节点树)。SDK 始终注册 kernel `ScriptExecutor`(避开 `EvalEngine` 对未知 kind 回退 AST_BOOLEAN 的陷阱),CEL 引擎才是 opt-in,未注册引擎该规则优雅 `SCRIPT_NO_ENGINE`。**前置重构**:`EvalErrorCode` 从 String 常量类改造成真 enum 作**单一真相源**(纳入 SDK 散落码 + `METRIC_SOURCE_EVAL_ERROR` + 新 `SCRIPT_*`);各错误工厂加 enum 重载(内部 `.name()`)。**errorCode 字段保持 String**——因 metric provider(`MetricSourceHandler` SPI)经 `MetricValue.errorCode` 可带开放码,errorCode 非封闭集,按 §数据类型规范开放集用 String;持久层/`ConditionEvaluation` 不动,零行为变更。留缝:方案 B(`expression.*` ConditionEvaluator)、`@ExpressionRule` 注解、其它引擎,均靠 `ExpressionEngine` SPI 加法补。
