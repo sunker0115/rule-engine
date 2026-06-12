@@ -41,9 +41,15 @@ public record NodeTrace(
         return new NodeTrace(type.tag(), null, null, result, null, null, null, children, ruleVersionId, ruleCode, ruleVersion, null, null);
     }
 
-    /** 容器节点 + 错误码（取数失败中止时，容器仍记录 errorCode 与已收集子节点）。 */
+    /** 容器节点 + 错误码（取数失败中止时，容器仍记录 errorCode 与已收集子节点；provider 开放码经此原样穿透）。 */
     public static NodeTrace container(NodeType type, Boolean result, String errorCode,
                                       List<NodeTrace> children, Long ruleVersionId) {
         return new NodeTrace(type.tag(), null, null, result, null, null, errorCode, children, ruleVersionId, null, 0L, null, null);
+    }
+
+    /** 容器节点 + 规范错误码。errorCode 字段以 {@link EvalErrorCode#name()} 落 String。 */
+    public static NodeTrace container(NodeType type, Boolean result, EvalErrorCode errorCode,
+                                      List<NodeTrace> children, Long ruleVersionId) {
+        return container(type, result, errorCode == null ? null : errorCode.name(), children, ruleVersionId);
     }
 }

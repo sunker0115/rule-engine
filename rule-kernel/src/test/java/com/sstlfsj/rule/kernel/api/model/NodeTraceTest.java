@@ -90,6 +90,15 @@ class NodeTraceTest {
     }
 
     @Test
+    void containerFactory_withEnumErrorCode_storesEnumName() {
+        // enum 重载：errorCode 字段以 EvalErrorCode.name() 落 String
+        NodeTrace trace = NodeTrace.container(NodeType.DECISION_TABLE_ROW, false,
+                EvalErrorCode.METRIC_FETCH_FAIL, List.of(), 7L);
+        assertEquals("METRIC_FETCH_FAIL", trace.errorCode());
+        assertNull(trace.metricCode());
+    }
+
+    @Test
     void elevenArgConstructor_storesExpectedValueAndDisplayLabel() {
         NodeTrace trace = new NodeTrace("CONDITION", "GT", "score",
                 true, 100, "PROVIDED", null, null, 42L,

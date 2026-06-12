@@ -44,7 +44,7 @@ public record EvalResult(
     /**
      * 不命中 + 错误码，无 trace（AST 类型不符等早退场景）。
      *
-     * @param errorCode 错误码
+     * @param errorCode 错误码（provider 开放码经此路径原样穿透）
      * @return 错误结果
      */
     public static EvalResult error(String errorCode) {
@@ -54,11 +54,32 @@ public record EvalResult(
     /**
      * 不命中 + 错误码，携带已收集 trace（条件求值出错中止）。
      *
-     * @param errorCode 错误码
+     * @param errorCode 错误码（provider 开放码经此路径原样穿透）
      * @param nodeTrace 已收集的 NodeTrace 列表
      * @return 错误结果
      */
     public static EvalResult error(String errorCode, List<NodeTrace> nodeTrace) {
         return new EvalResult(false, null, List.of(), nodeTrace, errorCode, null, null, null);
+    }
+
+    /**
+     * 不命中 + 规范错误码，无 trace。字段以 {@link EvalErrorCode#name()} 落 String。
+     *
+     * @param errorCode 规范错误码
+     * @return 错误结果
+     */
+    public static EvalResult error(EvalErrorCode errorCode) {
+        return error(errorCode.name());
+    }
+
+    /**
+     * 不命中 + 规范错误码，携带已收集 trace。字段以 {@link EvalErrorCode#name()} 落 String。
+     *
+     * @param errorCode 规范错误码
+     * @param nodeTrace 已收集的 NodeTrace 列表
+     * @return 错误结果
+     */
+    public static EvalResult error(EvalErrorCode errorCode, List<NodeTrace> nodeTrace) {
+        return error(errorCode.name(), nodeTrace);
     }
 }

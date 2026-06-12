@@ -60,6 +60,23 @@ class EvalResultTest {
     }
 
     @Test
+    void errorEnumOverload_storesEnumName() {
+        EvalResult r = EvalResult.error(EvalErrorCode.DECISION_TABLE_AST_TYPE_MISMATCH);
+        assertFalse(r.ruleHit());
+        assertEquals("DECISION_TABLE_AST_TYPE_MISMATCH", r.errorCode());
+        assertTrue(r.nodeTrace().isEmpty());
+    }
+
+    @Test
+    void errorEnumOverloadWithTrace_storesEnumNameAndTrace() {
+        NodeTrace leaf = new NodeTrace("CONDITION", "GT", "score",
+                false, 1, "PROVIDED", "METRIC_FETCH_FAIL", null, 7L, null, 0L, null, null);
+        EvalResult r = EvalResult.error(EvalErrorCode.METRIC_FETCH_FAIL, List.of(leaf));
+        assertEquals("METRIC_FETCH_FAIL", r.errorCode());
+        assertEquals(1, r.nodeTrace().size());
+    }
+
+    @Test
     void nullLists_defaultToEmpty() {
         EvalResult r = new EvalResult(true, null, null, null, null, null, null, null);
         assertNotNull(r.hitDecisions());

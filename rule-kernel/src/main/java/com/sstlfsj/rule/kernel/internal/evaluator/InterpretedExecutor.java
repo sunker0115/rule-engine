@@ -179,7 +179,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
     }
 
     /**
-     * ConditionNode 叶子节点：查找对应 evaluator 求值；无注册 evaluator 时 result=false，errorCode="NO_EVALUATOR"。
+     * ConditionNode 叶子节点：查找对应 evaluator 求值；无注册 evaluator 时 result=false，errorCode 为 NO_EVALUATOR。
      */
     private boolean evalCondition(ConditionNode node, EvalContext ctx, List<NodeTrace> sink) {
         ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);

@@ -199,7 +199,8 @@ public class EvalEngine {
                             : Math.max(aggregatedScore, r.score());
                 }
             } catch (Exception e) {
-                if (errorCode == null) errorCode = EvalErrorCode.CONDITION_EVAL_ERROR;
+                // errorCode 局部为 String（容纳上游 provider 开放码），规范码以 .name() 落库字符串
+                if (errorCode == null) errorCode = EvalErrorCode.CONDITION_EVAL_ERROR.name();
             }
         }
 

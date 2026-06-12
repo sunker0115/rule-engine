@@ -32,6 +32,16 @@ class ConditionEvaluationTest {
     }
 
     @Test
+    void providerOpenErrorCode_passesThroughVerbatim() {
+        // provider 开放码（非 EvalErrorCode 枚举值）应原样穿透到 ConditionOutcome.errorCode
+        ConditionOutcome out = ConditionEvaluation.evaluate(gt("balance", 100),
+                ctx(Map.of("balance", MetricValue.error("METRIC_SOURCE_EVAL_ERROR"))),
+                KernelEvaluators.defaults());
+        assertThat(out.isError()).isTrue();
+        assertThat(out.errorCode()).isEqualTo("METRIC_SOURCE_EVAL_ERROR");
+    }
+
+    @Test
     void satisfied() {
         ConditionOutcome out = ConditionEvaluation.evaluate(gt("balance", 100),
                 ctx(Map.of("balance", new MetricValue(200L, "LONG", "FETCHED"))),

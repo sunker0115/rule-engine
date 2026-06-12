@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.evaluator;
 
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,6 +40,21 @@ class ConditionOutcomeTest {
     @Test
     void leafError_carriesCodeValueAndSource() {
         ConditionOutcome o = ConditionOutcome.error("METRIC_FETCH_FAIL", null, "FETCHED");
+        assertTrue(o.isError());
+        assertEquals("METRIC_FETCH_FAIL", o.errorCode());
+        assertEquals("FETCHED", o.valueSource());
+    }
+
+    @Test
+    void errorEnumOverload_storesEnumName() {
+        ConditionOutcome o = ConditionOutcome.error(EvalErrorCode.NO_EVALUATOR);
+        assertTrue(o.isError());
+        assertEquals("NO_EVALUATOR", o.errorCode());
+    }
+
+    @Test
+    void leafErrorEnumOverload_storesEnumNameValueAndSource() {
+        ConditionOutcome o = ConditionOutcome.error(EvalErrorCode.METRIC_FETCH_FAIL, null, "FETCHED");
         assertTrue(o.isError());
         assertEquals("METRIC_FETCH_FAIL", o.errorCode());
         assertEquals("FETCHED", o.valueSource());

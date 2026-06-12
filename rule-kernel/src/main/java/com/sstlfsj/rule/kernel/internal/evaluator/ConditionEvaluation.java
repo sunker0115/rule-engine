@@ -35,8 +35,9 @@ final class ConditionEvaluation {
             // 先捕获实际值/来源，再判断取数是否失败，保证 ERROR 也带出来源
             if (mv != null) { actual = mv.value(); source = mv.valueSource(); }
             if (mv != null && mv.isError()) {
+                // provider 开放码原样穿透；缺码时落规范码 .name()，整条 ternary 保持 String 走 String 重载
                 return ConditionOutcome.error(
-                        mv.errorCode() != null ? mv.errorCode() : EvalErrorCode.METRIC_FETCH_FAIL, actual, source);
+                        mv.errorCode() != null ? mv.errorCode() : EvalErrorCode.METRIC_FETCH_FAIL.name(), actual, source);
             }
         }
         ConditionEvaluator evaluator = evaluators.get(node.conditionType());

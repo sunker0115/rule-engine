@@ -40,4 +40,12 @@ class MetricValueTest {
         assertNull(mv.value());
         assertEquals("FETCHED", mv.valueSource());
     }
+
+    @Test
+    void errorEnumOverload_storesEnumName() {
+        MetricValue mv = MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
+        assertTrue(mv.isError());
+        assertEquals("METRIC_FETCH_FAIL", mv.errorCode());
+        assertEquals("FETCHED", mv.valueSource());
+    }
 }
