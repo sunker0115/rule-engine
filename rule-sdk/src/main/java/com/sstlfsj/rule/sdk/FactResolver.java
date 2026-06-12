@@ -77,14 +77,28 @@ public final class FactResolver {
         return null;
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static Object coerce(Object v, Class<?> t) {
         if (v == null || t.isInstance(v)) return v;
-        if (v instanceof Number) {
-            Number n = (Number) v;
+        if (v instanceof Number n) {
             if (t == Integer.class || t == int.class)       return n.intValue();
             if (t == Long.class    || t == long.class)      return n.longValue();
             if (t == Double.class  || t == double.class)    return n.doubleValue();
             if (t == BigDecimal.class)                      return new BigDecimal(n.toString());
+        }
+        if (v instanceof String s) {
+            try {
+                if (t == Integer.class || t == int.class)     return Integer.valueOf(s);
+                if (t == Long.class    || t == long.class)    return Long.valueOf(s);
+                if (t == Double.class  || t == double.class)  return Double.valueOf(s);
+                if (t == BigDecimal.class)                    return new BigDecimal(s);
+                if (t == Boolean.class || t == boolean.class) return Boolean.valueOf(s);
+                if (t == String.class)                        return s;
+                if (t.isEnum())                               return Enum.valueOf((Class) t, s);
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException(
+                        "无法把 \"" + s + "\" 解析为 " + t.getName(), ex);
+            }
         }
         return v;
     }
