@@ -17,11 +17,11 @@
             <artifactId>rule-kernel</artifactId>
         </dependency>
 
-        <!-- Google CEL-Java：聚合 jar（compiler/runtime/common）。0.10.1 为 Maven Central 当前最新稳定版（撰写时 0.13.0 尚未发布）。版本 parent 未管理，此处显式钉死 -->
+        <!-- Google CEL-Java：聚合 jar（compiler/runtime/common）。0.13.0 为 Maven Central 当前最新稳定版。版本 parent 未管理，此处显式钉死 -->
         <dependency>
             <groupId>dev.cel</groupId>
             <artifactId>cel</artifactId>
-            <version>0.10.1</version>
+            <version>0.13.0</version>
         </dependency>
 
         <!-- Caffeine 预编译缓存；版本由 Spring Boot BOM 管理 -->
