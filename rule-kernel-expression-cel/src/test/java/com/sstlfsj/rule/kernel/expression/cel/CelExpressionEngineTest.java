@@ -47,7 +47,7 @@ class CelExpressionEngineTest {
 
     @Test
     void evaluatesNowAsTimestamp() {
-        // now 绑定为 java.time.Instant:验证 dev.cel TIMESTAMP 接受 Instant
+        // 验证 now(Instant)经 adaptBindings 转 protobuf Timestamp 后可参与时间比较
         CompiledExpression c = engine.compile("now > timestamp('2020-01-01T00:00:00Z')");
         assertThat(engine.evaluate(c, bindings(Map.of(), Map.of()))).isEqualTo(true);
     }

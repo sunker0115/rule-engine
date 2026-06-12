@@ -6,6 +6,7 @@ import com.sstlfsj.rule.kernel.api.model.ExpressionLang;
 import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionCompileException;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEvaluateException;
 import com.google.protobuf.Timestamp;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelValidationException;
@@ -83,7 +84,7 @@ public final class CelExpressionEngine implements ExpressionEngine {
             // 运行期对 dyn env 求值;ScriptExecutor 捕获异常转 SCRIPT_EVAL_ERROR
             return runtime.createProgram(cel.ast()).eval(adaptBindings(bindings));
         } catch (CelEvaluationException e) {
-            throw new RuntimeException("CEL 求值失败: " + e.getMessage(), e);
+            throw new ExpressionEvaluateException("CEL 求值失败: " + e.getMessage(), e);
         }
     }
 
