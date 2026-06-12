@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.sdk.source;
 
 import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ValueSource;
@@ -70,7 +71,7 @@ public final class AnnotatedMetricScanner {
                 Object ret = method.invoke(bean, args);
                 return new MetricValue(ret, dataType, ValueSource.FETCHED.tag());
             } catch (Exception e) {
-                return MetricValue.error("METRIC_SOURCE_EVAL_ERROR");
+                return MetricValue.error(EvalErrorCode.METRIC_SOURCE_EVAL_ERROR);
             }
         };
     }

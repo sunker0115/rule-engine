@@ -2,6 +2,7 @@ package com.sstlfsj.rule.sdk.source;
 
 import com.sstlfsj.rule.kernel.api.model.Decision;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -36,7 +37,7 @@ public final class AnnotatedDecideExecutor implements RuleVersionExecutor {
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         String key = ((ConditionNode) snapshot.conditionAst()).conditionType();
         Invocation inv = byKey.get(key);
-        if (inv == null) return EvalResult.error("ANNO_DECIDE_UNREGISTERED");
+        if (inv == null) return EvalResult.error(EvalErrorCode.ANNO_DECIDE_UNREGISTERED);
 
         List<String> codes;
         try {
@@ -44,23 +45,24 @@ public final class AnnotatedDecideExecutor implements RuleVersionExecutor {
             Object[] args = inv.factResolver().resolve(inv.method().getParameters(), ctx, null);
             codes = toCodes(inv.method().invoke(inv.bean(), args));
         } catch (Exception e) {
-            return EvalResult.error("DECIDE_EVAL_ERROR");
+            return EvalResult.error(EvalErrorCode.DECIDE_EVAL_ERROR);
         }
         if (codes.isEmpty()) return EvalResult.miss();
 
         List<Decision> hits = new ArrayList<>();
-        String errorCode = null;
+        EvalErrorCode errorCode = null;
         for (String code : codes) {
             RuleVersionSnapshot.DecisionBinding b = findBinding(snapshot, code);
-            if (b == null) { errorCode = "INVALID_DECISION_CODE"; continue; }
+            if (b == null) { errorCode = EvalErrorCode.INVALID_DECISION_CODE; continue; }
             hits.add(new Decision(b.decisionCode(), b.name(), b.priority(),
                     snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), null));
         }
         if (hits.isEmpty()) {
-            return EvalResult.error(errorCode == null ? "ANNO_DECIDE_NO_HIT" : errorCode);
+            return EvalResult.error(errorCode == null ? EvalErrorCode.ANNO_DECIDE_NO_HIT : errorCode);
         }
         Decision finalD = Collections.max(hits, BY_PRIORITY);
-        return new EvalResult(true, finalD, hits, List.of(), errorCode, null, finalD.category(), finalD.code());
+        // EvalResult.errorCode 字段为 String,enum 转回 name() 保持落库值不变
+        return new EvalResult(true, finalD, hits, List.of(), errorCode == null ? null : errorCode.name(), null, finalD.category(), finalD.code());
     }
 
     private static List<String> toCodes(Object ret) {

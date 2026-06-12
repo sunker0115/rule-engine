@@ -2,6 +2,7 @@ package com.sstlfsj.rule.sdk.source;
 
 import com.sstlfsj.rule.kernel.api.model.Decision;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -33,7 +34,7 @@ public final class AnnotatedScoreExecutor implements RuleVersionExecutor {
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
         String key = ((ConditionNode) snapshot.conditionAst()).conditionType();
         Invocation inv = byKey.get(key);
-        if (inv == null) return EvalResult.error("ANNO_SCORE_UNREGISTERED");
+        if (inv == null) return EvalResult.error(EvalErrorCode.ANNO_SCORE_UNREGISTERED);
 
         double score;
         try {
@@ -42,7 +43,7 @@ public final class AnnotatedScoreExecutor implements RuleVersionExecutor {
             Object ret = inv.method().invoke(inv.bean(), args);
             score = ((Number) ret).doubleValue();
         } catch (Exception e) {
-            return EvalResult.error("SCORE_EVAL_ERROR");
+            return EvalResult.error(EvalErrorCode.SCORE_EVAL_ERROR);
         }
 
         Band best = null;
@@ -54,7 +55,7 @@ public final class AnnotatedScoreExecutor implements RuleVersionExecutor {
         }
         RuleVersionSnapshot.DecisionBinding bind = findBinding(snapshot, best.decision());
         if (bind == null) {
-            return new EvalResult(false, null, List.of(), List.of(), "INVALID_DECISION_CODE", score, null, null);
+            return new EvalResult(false, null, List.of(), List.of(), EvalErrorCode.INVALID_DECISION_CODE.name(), score, null, null);
         }
         Decision d = new Decision(bind.decisionCode(), bind.name(), bind.priority(),
                 snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), null);
