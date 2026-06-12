@@ -91,6 +91,18 @@ public final class AnnotatedRuleScanner {
                 if (m != null) b.addMetricDependency(FactResolver.metricName(p, m), m.version());
             }
 
+            // 扫描期校验:@ScoreBand 引用的决策码须 ⊆ @RuleDef.decisions(@Decide 返回码运行期产出,不在此校验)
+            java.util.Set<String> declared = new java.util.HashSet<>();
+            for (DecisionBinding d : def.decisions()) declared.add(d.code());
+            if (primitive.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.Score.class)) {
+                for (ScoreBand sb : primitive.getAnnotationsByType(ScoreBand.class)) {
+                    if (!declared.contains(sb.decision())) {
+                        throw new IllegalStateException("@ScoreBand 引用了未在 @RuleDef.decisions 声明的决策码: "
+                                + sb.decision() + " (规则 " + bean.getClass().getName() + ")");
+                    }
+                }
+            }
+
             primitive.setAccessible(true);
             if (primitive.isAnnotationPresent(com.sstlfsj.rule.sdk.annotation.Condition.class)) {
                 evaluators.put(key, wrapCondition(bean, primitive));
