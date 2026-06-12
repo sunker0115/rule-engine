@@ -14,9 +14,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 接入姿势四:注解规则即代码(Easy Rules 风格,Spring Boot starter)。规则({@link LargeTradeRule})
- * 与动作处理器({@link ReviewHandlers})都用 Java 类 + 注解声明,starter 自动扫描 {@code @RuleDef}+
- * {@code @Condition} 装配规则、把命中决策派发给 {@code @EventListener} / {@code @OnDecision},完全不连服务端。
+ * 接入姿势四:注解规则即代码(Easy Rules 风格,Spring Boot starter)。规则与动作同写在
+ * {@link LargeTradeRule} 一个类里({@code @RuleDef}+{@code @Condition} 是条件、{@code @EventListener}/
+ * {@code @OnDecision} 是动作),starter 自动扫描装配规则并把命中决策派发回这些处理器,完全不连服务端。
  * <p>适合谁:规则随应用代码演进、要强类型 + IDE 重构友好的接入方。
  * <p>运行前提:无,直接跑。
  * <p>怎么跑:{@code $MVN -pl rule-samples exec:java -Dexec.mainClass="com.sstlfsj.rule.samples.annotation.AnnotationDemoApplication"}

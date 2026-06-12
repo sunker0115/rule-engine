@@ -25,10 +25,9 @@ class AnnotationDemoIT {
                 .withConfiguration(AutoConfigurations.of(
                         com.sstlfsj.rule.sdk.starter.RuleEngineClientAutoConfiguration.class))
                 .withBean(LargeTradeRule.class)
-                .withBean(ReviewHandlers.class)
                 .run(ctx -> {
                     RuleEngineClient client = ctx.getBean(RuleEngineClient.class);
-                    ReviewHandlers h = ctx.getBean(ReviewHandlers.class);
+                    LargeTradeRule h = ctx.getBean(LargeTradeRule.class);
 
                     // 大额 + 营业时段 → 命中 REVIEW
                     EvalResult hit = client.evaluate(trade("t-1", 8000, 10));
