@@ -63,11 +63,20 @@ public final class AnnotatedDecideExecutor implements RuleVersionExecutor {
         return new EvalResult(true, finalD, hits, List.of(), errorCode, null, finalD.category(), finalD.code());
     }
 
-    /** 本 task 仅单 String;多返回值在 Task 2 扩展。 */
     private static List<String> toCodes(Object ret) {
         if (ret == null) return List.of();
         if (ret instanceof String s) return s.isBlank() ? List.of() : List.of(s);
-        throw new IllegalStateException("@Decide 返回类型暂只支持 String: " + ret.getClass());
+        if (ret instanceof String[] arr) {
+            List<String> out = new ArrayList<>();
+            for (String s : arr) if (s != null && !s.isBlank()) out.add(s);
+            return out;
+        }
+        if (ret instanceof java.util.Collection<?> col) {
+            List<String> out = new ArrayList<>();
+            for (Object o : col) if (o != null && !o.toString().isBlank()) out.add(o.toString());
+            return out;
+        }
+        throw new IllegalStateException("@Decide 返回类型须是 String / String[] / Collection<String>: " + ret.getClass());
     }
 
     private static RuleVersionSnapshot.DecisionBinding findBinding(RuleVersionSnapshot snap, String code) {
