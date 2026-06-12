@@ -63,7 +63,17 @@ public final class FactResolver {
         if (fromPayload != NOT_FOUND) {
             return coerce(fromPayload, p.getType());
         }
-        return metadata(name, event, fired);
+        Object meta = metadata(name, event, fired);
+        if (meta != null) {
+            return coerce(meta, p.getType());
+        }
+        if (!fact.defaultValue().isEmpty()) {
+            return coerce(fact.defaultValue(), p.getType());
+        }
+        if (fact.required()) {
+            throw new MissingFactException(name, p);
+        }
+        return null;
     }
 
     /** 在 payload 中按名取值,支持 a.b.c 逐级下钻;缺键/断链返回 NOT_FOUND(区别于"取到 null")。 */
