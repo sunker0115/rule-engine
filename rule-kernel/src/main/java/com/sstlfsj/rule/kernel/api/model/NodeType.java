@@ -13,7 +13,9 @@ public enum NodeType {
     CONDITION("ConditionNode"),
     DECISION_LEAF("DecisionLeafNode"),
     DECISION_TABLE_ROW("DecisionTableRow"),
-    SCORECARD_ROOT("ScorecardRoot");
+    SCORECARD_ROOT("ScorecardRoot"),
+    /** EXPRESSION_SCRIPT 规则的扁平单节点 trace 类型。 */
+    SCRIPT("ScriptNode");
 
     private final String tag;
 
