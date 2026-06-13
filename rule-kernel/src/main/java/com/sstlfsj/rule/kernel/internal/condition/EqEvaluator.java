@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.internal.condition;
 
 import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
@@ -20,7 +21,7 @@ import java.time.ZoneId;
  * DATE/DATETIME 先走解析段把 actual/operand 解析为 java.time 值再比较；
  * 其余 dataType 直通原始值（恒等段）。dataType=null（DSL）走 DefaultComparisonStrategy。
  */
-@ConditionType(value = ConditionTypes.EQ, displayName = "等于", schema = com.sstlfsj.rule.kernel.api.operator.ParamSpec.ANY_TYPE)
+@ConditionType(value = ConditionTypes.EQ, displayName = "等于", schema = ParamSpec.ANY_TYPE)
 public class EqEvaluator implements ConditionEvaluator {
 
     @Override
