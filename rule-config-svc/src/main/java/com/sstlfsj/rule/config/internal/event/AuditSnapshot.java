@@ -7,5 +7,5 @@ package com.sstlfsj.rule.config.internal.event;
  * <p>用 marker 接口而非裸 Object，既避免手拼 JSON 字符串，又把序列化下沉到单一落库处。
  */
 public sealed interface AuditSnapshot
-        permits DraftCreatedSnapshot, RulePublishedSnapshot, RuleStatusSnapshot, RuleImportedSnapshot, MetricChangedSnapshot {
+        permits DraftCreatedSnapshot, RulePublishedSnapshot, RuleStatusSnapshot, RuleImportedSnapshot, MetricChangedSnapshot, SceneSnapshot {
 }
