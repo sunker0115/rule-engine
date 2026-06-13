@@ -137,6 +137,11 @@ class AuditServiceImpl implements AuditService {
         return new PageResult<>(items, total, page, limit);
     }
 
+    @Override
+    public String getSessionSceneCode(String tenantId, Long sessionId) {
+        return evalSessionMapper.findSceneCode(sessionId, Long.valueOf(tenantId));
+    }
+
     /** 返回点分路径的父路径；根节点（不含 "."）返回 null。 */
     private static String parentPath(String path) {
         int dot = path.lastIndexOf('.');

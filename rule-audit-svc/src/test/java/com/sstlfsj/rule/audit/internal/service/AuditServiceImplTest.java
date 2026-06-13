@@ -254,4 +254,21 @@ class AuditServiceImplTest {
         assertThat(result.size()).isEqualTo(10);
         assertThat(result.total()).isEqualTo(25L);
     }
+
+    @Test
+    void getSessionSceneCode_returnsSceneCode() {
+        EvalSessionRow row = new EvalSessionRow();
+        row.setId(1L);
+        row.setTenantId(100L);
+        row.setSceneCode("risk.transfer");
+        when(evalSessionMapper.findSceneCode(1L, 100L)).thenReturn("risk.transfer");
+
+        assertThat(service.getSessionSceneCode("100", 1L)).isEqualTo("risk.transfer");
+    }
+
+    @Test
+    void getSessionSceneCode_sessionNotFound_returnsNull() {
+        when(evalSessionMapper.findSceneCode(999L, 100L)).thenReturn(null);
+        assertThat(service.getSessionSceneCode("100", 999L)).isNull();
+    }
 }
