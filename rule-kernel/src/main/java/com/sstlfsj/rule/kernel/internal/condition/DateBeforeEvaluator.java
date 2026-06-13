@@ -1,11 +1,13 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
 import java.util.Optional;
@@ -16,6 +18,7 @@ import java.util.Set;
  * 解析段把 actual/threshold 解析为 LocalDate（DATE）或 Instant（DATETIME，含 dataType=null 的 DSL 默认），
  * 再交给对应纯策略比较。支持 $now/$today、带 offset 字符串、裸日期 + params.timezone。
  */
+@ConditionType(value = ConditionTypes.DATE_BEFORE, displayName = "早于", schema = ParamSpec.DATE_COMPARE)
 public class DateBeforeEvaluator implements ConditionEvaluator {
 
     @Override

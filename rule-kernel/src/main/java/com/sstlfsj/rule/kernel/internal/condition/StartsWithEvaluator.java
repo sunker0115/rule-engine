@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
@@ -7,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
 import java.util.Optional;
@@ -15,6 +17,7 @@ import java.util.Set;
 /**
  * STARTS_WITH 条件算子：字符串前缀匹配。params 格式：{"prefix": "..."}
  */
+@ConditionType(value = ConditionTypes.STARTS_WITH, displayName = "前缀匹配", schema = ParamSpec.STRING_PREFIX)
 public class StartsWithEvaluator implements ConditionEvaluator {
 
     @Override

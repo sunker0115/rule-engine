@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
@@ -7,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
 import com.google.re2j.Pattern;
@@ -22,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 回溯引擎在病态正则下会被拖垮，RE2J 保证线性时间。不支持反向引用/前后向断言（现有规则未用）。
  * 编译产物按 regex 串缓存（正则来自不可变规则配置，distinct 数有限），避免每次评估重编译。
  */
+@ConditionType(value = ConditionTypes.MATCHES, displayName = "正则匹配", schema = ParamSpec.STRING_REGEX)
 public class MatchesEvaluator implements ConditionEvaluator {
 
     /** regex 串 → 编译产物；非法正则缓存为 empty（负缓存，避免重复编译已知非法正则）。 */

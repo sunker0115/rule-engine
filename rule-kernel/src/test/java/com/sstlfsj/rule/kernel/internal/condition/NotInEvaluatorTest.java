@@ -72,10 +72,12 @@ class NotInEvaluatorTest {
     }
 
     @Test
-    void spec_describesOperator() {
-        var spec = evaluator.spec().orElseThrow();
-        assertThat(spec.code()).isEqualTo(ConditionTypes.NOT_IN);
-        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.VALUES));
-        assertThat(spec.requiresMetric()).isTrue();
+    void annotation_describesOperator() {
+        var ann = NotInEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.NOT_IN);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.VALUES));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

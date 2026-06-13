@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
@@ -8,6 +9,7 @@ import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategy;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
@@ -22,6 +24,7 @@ import java.util.Set;
  * NOT_BETWEEN 条件算子：value &lt; min 或 value &gt; max（BETWEEN 取反）。
  * params 格式：{"min": ..., "max": ...}。DATE/DATETIME 先走解析段再比较。
  */
+@ConditionType(value = ConditionTypes.NOT_BETWEEN, displayName = "区间外", schema = ParamSpec.BETWEEN_RANGE)
 public class NotBetweenEvaluator implements ConditionEvaluator {
 
     @Override

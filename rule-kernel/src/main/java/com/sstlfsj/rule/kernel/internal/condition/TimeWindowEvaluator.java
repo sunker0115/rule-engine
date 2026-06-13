@@ -1,11 +1,13 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
 
@@ -22,6 +24,7 @@ import java.util.Set;
  * 过滤序：datesExclude（节假日，整条件 false）→ daysOfWeek（允许列表）→ [start,end] 闭区间（支持跨午夜）。
  * 无 metricCode，不读 metric。
  */
+@ConditionType(value = ConditionTypes.TIME_WINDOW, displayName = "时间窗口", schema = ParamSpec.TIME_WINDOW_OP)
 public class TimeWindowEvaluator implements ConditionEvaluator {
 
     @Override

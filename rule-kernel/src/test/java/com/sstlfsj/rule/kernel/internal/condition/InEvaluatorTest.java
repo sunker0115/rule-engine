@@ -72,10 +72,12 @@ class InEvaluatorTest {
     }
 
     @Test
-    void spec_describesOperator() {
-        var spec = evaluator.spec().orElseThrow();
-        assertThat(spec.code()).isEqualTo(ConditionTypes.IN);
-        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.VALUES));
-        assertThat(spec.requiresMetric()).isTrue();
+    void annotation_describesOperator() {
+        var ann = InEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.IN);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.VALUES));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

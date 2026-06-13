@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
@@ -8,6 +9,7 @@ import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
 import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
@@ -22,6 +24,7 @@ import java.util.Set;
  * DATE/DATETIME 先走解析段；解析失败时不命中返回 false（与 BETWEEN/NOT_BETWEEN 一致，脏数据不触发规则）。
  * 其余 dataType 直通原始值。dataType=null（DSL）走 DefaultComparisonStrategy。
  */
+@ConditionType(value = ConditionTypes.NEQ, displayName = "不等于", schema = ParamSpec.ANY_TYPE)
 public class NeqEvaluator implements ConditionEvaluator {
 
     @Override

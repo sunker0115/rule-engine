@@ -59,11 +59,13 @@ class GtEvaluatorTest {
     }
 
     @Test
-    void spec_describesOperator() {
-        var spec = evaluator.spec().orElseThrow();
-        assertThat(spec.code()).isEqualTo(ConditionTypes.GT);
-        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.THRESHOLD));
-        assertThat(spec.requiresMetric()).isTrue();
+    void annotation_describesOperator() {
+        var ann = GtEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.GT);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.THRESHOLD));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 
     @Test

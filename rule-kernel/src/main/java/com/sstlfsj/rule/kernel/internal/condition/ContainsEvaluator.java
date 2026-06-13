@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
@@ -7,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
 import java.util.Collection;
@@ -17,6 +19,7 @@ import java.util.Set;
  * CONTAINS 条件算子：LIST 类型 metric 中包含指定元素。
  * metric 值需为 Collection；params 格式：{"element": ...}
  */
+@ConditionType(value = ConditionTypes.CONTAINS, displayName = "集合包含", schema = ParamSpec.LIST_MEMBERSHIP)
 public class ContainsEvaluator implements ConditionEvaluator {
 
     @Override

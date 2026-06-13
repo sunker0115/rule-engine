@@ -1,11 +1,13 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
 import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
@@ -21,6 +23,7 @@ import java.util.Set;
  * value/start/end 支持 ISO-8601 与 $now；$today 不适用（时间点语义）→ 抛 IllegalArgumentException。
  * 无 metricCode，不读 metric。
  */
+@ConditionType(value = ConditionTypes.TIME_OCCURRED_AT, displayName = "事件发生时间", schema = ParamSpec.TIME_OCCURRED_OP)
 public class OccurredAtEvaluator implements ConditionEvaluator {
 
     @Override

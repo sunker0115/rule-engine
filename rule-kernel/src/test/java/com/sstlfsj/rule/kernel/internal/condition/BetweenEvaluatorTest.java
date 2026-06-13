@@ -123,10 +123,12 @@ class BetweenEvaluatorTest {
     }
 
     @Test
-    void spec_describesOperator() {
-        var spec = evaluator.spec().orElseThrow();
-        assertThat(spec.code()).isEqualTo(ConditionTypes.BETWEEN);
-        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.MIN, ConditionParams.MAX));
-        assertThat(spec.requiresMetric()).isTrue();
+    void annotation_describesOperator() {
+        var ann = BetweenEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.BETWEEN);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.MIN, ConditionParams.MAX));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

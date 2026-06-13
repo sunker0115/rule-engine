@@ -51,10 +51,12 @@ class StartsWithEvaluatorTest {
     }
 
     @Test
-    void spec_describesOperator() {
-        var spec = evaluator.spec().orElseThrow();
-        assertThat(spec.code()).isEqualTo(ConditionTypes.STARTS_WITH);
-        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.PREFIX));
-        assertThat(spec.requiresMetric()).isTrue();
+    void annotation_describesOperator() {
+        var ann = StartsWithEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.STARTS_WITH);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.PREFIX));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }
