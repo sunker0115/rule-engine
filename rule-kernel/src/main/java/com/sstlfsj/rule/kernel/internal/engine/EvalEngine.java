@@ -121,6 +121,32 @@ public class EvalEngine {
     public EvalOutcome evaluateWithContext(RuleEvent event, List<RuleVersionSnapshot> candidates,
                                            SceneExecutionStrategy strategy, Instant now,
                                            boolean collectTrace) {
+        return evaluate0(event, candidates, strategy, now, collectTrace, contextAssembler);
+    }
+
+    /**
+     * 忠实重放入口：用 degraded {@link EvalContextAssembler}（无取数）+ {@code frozenMetrics}
+     * 作为 {@code providedMetrics} 回灌评估，跳过取数；与 dry-run 重新取数相反——重现历史 metric。
+     * 锁定历史候选（调用方按 id 加载），强制收集 trace，场景策略取当前索引值。
+     *
+     * @param event         重放事件（payload 来自历史 session，source=REPLAY）
+     * @param candidates    历史候选快照（调用方按 candidate_rule_version_ids 加载）
+     * @param frozenMetrics 历史 metric 原值（来自 context_snapshot 的 {@code metrics}）
+     * @param evalNow       历史评估时刻（来自 context_snapshot 的 {@code evalNow}）
+     * @return 与历史一致的评估结果与上下文
+     */
+    public EvalOutcome evaluateReplay(RuleEvent event, List<RuleVersionSnapshot> candidates,
+                                      Map<String, Object> frozenMetrics, Instant evalNow) {
+        RuleEvent replayEvent = event.toBuilder().providedMetrics(frozenMetrics).build();
+        SceneExecutionStrategy strategy = index.getStrategy(event.tenantId(), event.sceneCode());
+        EvalContextAssembler noFetch = new EvalContextAssembler(List.of(), List.of());
+        return evaluate0(replayEvent, candidates, strategy, evalNow, true, noFetch);
+    }
+
+    /** evaluateWithContext / evaluateReplay 共享的评估核心；assembler 决定取数（常规）还是回灌（重放）。 */
+    private EvalOutcome evaluate0(RuleEvent event, List<RuleVersionSnapshot> candidates,
+                                  SceneExecutionStrategy strategy, Instant now,
+                                  boolean collectTrace, EvalContextAssembler assembler) {
         if (candidates.isEmpty()) return new EvalOutcome(EvalResult.miss(), null);
 
         List<RuleVersionSnapshot> passed = new ArrayList<>();
@@ -134,7 +160,7 @@ public class EvalEngine {
         if (passed.isEmpty()) return new EvalOutcome(EvalResult.miss(), null, firstBlockedBy);
 
         EvalEnv env = new EvalEnv(now, index.getDefaultParams(event.tenantId(), event.sceneCode()));
-        EvalContext ctx = contextAssembler.assemble(event, passed, env);
+        EvalContext ctx = assembler.assemble(event, passed, env);
 
         // 仅执行器调用绑定 COLLECT：执行器读 TraceScope.COLLECT 决定是否构建 trace
         EvalResult result;
