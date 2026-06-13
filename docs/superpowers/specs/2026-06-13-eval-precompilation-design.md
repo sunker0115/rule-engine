@@ -75,9 +75,9 @@ Predicate<EvalContext> compile(AstNode n) {
 
 | 组件 | 包 | 职责 |
 |---|---|---|
-| `CompiledPredicateEvictor` | `internal/listener` | 监听索引热更(`SceneChangedEvent` / `RulePublishedEvent`),按新活跃索引的 ruleVersionId 集合调 `cache.retainOnly(activeIds)`,清掉已下线版本(精确 set diff,非全清)。 |
+| `CompiledPredicateEvictor` | `internal/listener` | 监听索引热更(`RulePublishedEvent` / `SceneChangedEvent`),调 `cache.evictAll()` 清空编译产物。 |
 
-**缓存键不可变免脏(判断点 A)**:键用 `ruleVersionId`。发布版本不可变,同 id 永远同 AST,缓存**永不脏**——失效纯属内存卫生(清已下线版本),非正确性问题。
+**缓存键不可变免脏(判断点 A)**:键用 `ruleVersionId`。发布版本不可变,同 id 永远同 AST,缓存**永不脏**——失效纯属内存卫生(清已下线版本释放内存),非正确性问题。正因永不脏,失效用 **`evictAll()` 全清**即可(发布事件低频 + lazy 重编译,下次评估按需重编),无需给 kernel 索引加"枚举活跃 id"方法做精确 set diff。
 
 ## 5. CompiledExecutor 执行逻辑
 
@@ -101,20 +101,24 @@ execute(snapshot, ctx):
 
 ```yaml
 engine.rule.eval.compiled-executor:
-  enabled: false          # 默认关 = 行为与今天逐字节一致(永远委托解释器)
-  rule-code-whitelist: [] # enabled 且空 = 全量编译;非空 = 仅列出的 code 走编译
+  enabled: false           # 默认关 = 行为与今天逐字节一致(永远委托解释器)
+  rule-code-whitelist: []  # enabled 且空 = 全量编译;非空 = 仅列出的 code 走编译
+  on-compile-error: FALLBACK  # FALLBACK = WARN+回落解释器;FAIL = 抛异常中止(见 §7)
 ```
 
 绑定 `@ConfigurationProperties("engine.rule.eval.compiled-executor")`。回退 = `enabled: false`,瞬时,不动数据/索引。
 
 **灰度流程**:先 `enabled: true` + 少量 code 白名单 → 对比 trace 输出与解释器逐行一致 → 清空白名单全量切。出问题关开关退回解释器。
 
-## 7. 错误处理 —— 编译版永不劣于解释器
+## 7. 错误处理 —— 由 `on-compile-error` 配置决定
 
-- **编译期**异常(结构性,罕见):`compileOrFallback` catch → WARN 日志 → 该 `ruleVersionId` 缓存一个"永久委托解释器"的哨兵 predicate,单条坏规则不拖垮评估。
-- **求值期**异常:不 catch,与解释器逐字节同行为(同一套 evaluator,异常传播路径一致)。
+**编译期**异常(结构性,罕见)按配置处置:
+- `FALLBACK`(默认):WARN 日志 → 该 `ruleVersionId` 缓存一个回落哨兵,永久委托解释器,单条坏规则不拖垮评估。"编译版永不劣于解释器"。
+- `FAIL`:抛 `IllegalStateException`(带 ruleVersionId/code)中止。语义是"AST 编译失败本应被发布期拦住,运行期遇到宁可炸不静默"。
 
-安全性质:开了编译开关,最坏退回解释器,**绝不比今天更糟**。
+**求值期**异常:两种策略下都不 catch,与解释器逐字节同行为(同一套 evaluator,异常传播路径一致)。
+
+安全性质:默认 `FALLBACK` 下开编译开关,最坏退回解释器,**绝不比今天更糟**;需要"编译失败即暴露"时切 `FAIL`。
 
 ## 8. 测试
 
