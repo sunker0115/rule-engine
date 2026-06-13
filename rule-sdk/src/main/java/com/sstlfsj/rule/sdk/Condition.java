@@ -42,11 +42,12 @@ public final class Condition {
     }
 
     public static Condition eq(String metric, Object value) {
-        return leaf("EQ", metric, Map.of("value", value));
+        // 参数键须对齐 evaluator：EqEvaluator/NeqEvaluator 读 params.get("threshold")
+        return leaf("EQ", metric, Map.of("threshold", value));
     }
 
     public static Condition neq(String metric, Object value) {
-        return leaf("NEQ", metric, Map.of("value", value));
+        return leaf("NEQ", metric, Map.of("threshold", value));
     }
 
     public static Condition in(String metric, Object... values) {
@@ -62,7 +63,8 @@ public final class Condition {
     }
 
     public static Condition contains(String metric, String value) {
-        return leaf("CONTAINS", metric, Map.of("value", value));
+        // 参数键须对齐 evaluator：ContainsEvaluator 读 params.get("element")
+        return leaf("CONTAINS", metric, Map.of("element", value));
     }
 
     public static Condition matches(String metric, String pattern) {
@@ -71,11 +73,13 @@ public final class Condition {
     }
 
     public static Condition startsWith(String metric, String value) {
-        return leaf("STARTS_WITH", metric, Map.of("value", value));
+        // 参数键须对齐 evaluator：StartsWithEvaluator 读 params.get("prefix")
+        return leaf("STARTS_WITH", metric, Map.of("prefix", value));
     }
 
     public static Condition endsWith(String metric, String value) {
-        return leaf("ENDS_WITH", metric, Map.of("value", value));
+        // 参数键须对齐 evaluator：EndsWithEvaluator 读 params.get("suffix")
+        return leaf("ENDS_WITH", metric, Map.of("suffix", value));
     }
 
     /** 自定义算子（需配合 RuleEngineClient.Builder.addEvaluator() 注册）。 */
