@@ -86,14 +86,16 @@ public class EvalContextAssembler {
     /**
      * 装配一次评估的 EvalContext。
      *
-     * @param event      触发事件
-     * @param candidates 已过 Pre-Gate 的候选快照（取其 metricDependencies 并集为取数范围）
-     * @param now        本次评估统一时刻
+     * @param event              触发事件
+     * @param candidates         已过 Pre-Gate 的候选快照（取其 metricDependencies 并集为取数范围）
+     * @param now                本次评估统一时刻
+     * @param sceneDefaultParams 场景默认参数（注入 EvalContext，供规则引用）
      * @return 不可变 EvalContext
      */
     public EvalContext assemble(RuleEvent event,
                                 List<RuleVersionSnapshot> candidates,
-                                Instant now) {
+                                Instant now,
+                                Map<String, Object> sceneDefaultParams) {
         Subject subject = loadSubject(event);
 
         // 无解析器：退化为历史行为——所有 providedMetrics 直接进 context（size 精确已知，预设免扩容）
@@ -103,7 +105,7 @@ public class EvalContextAssembler {
                 provided.put(e.getKey(), new MetricValue(e.getValue(), DataType.UNKNOWN.tag(), ValueSource.PROVIDED.tag()));
             }
             injectPayload(event, provided);
-            return new EvalContext(event.tenantId(), event, subject, provided, now);
+            return new EvalContext(event.tenantId(), event, subject, provided, now, sceneDefaultParams);
         }
 
         // 按绑定版本解析：同 code 多版本取最高版本（过渡期确定性策略）
@@ -155,7 +157,7 @@ public class EvalContextAssembler {
             fetchConcurrently(event, now, needFetch, descriptors, metrics);
         }
         injectPayload(event, metrics);
-        return new EvalContext(event.tenantId(), event, subject, metrics, now);
+        return new EvalContext(event.tenantId(), event, subject, metrics, now, sceneDefaultParams);
     }
 
     /**

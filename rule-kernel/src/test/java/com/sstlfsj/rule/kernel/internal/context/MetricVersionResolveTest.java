@@ -37,7 +37,7 @@ class MetricVersionResolveTest {
                 .addMetricDependency("account.age", 3).build();
 
         // account.age 有 provided 值且 allowProvided=true，直接采信，resolver 仅被调用验证版本号
-        asm.assemble(event(Map.of("account.age", 5)), List.of(rule), NOW);
+        asm.assemble(event(Map.of("account.age", 5)), List.of(rule), NOW, java.util.Map.of());
 
         assertThat(seenVersion.get()).isEqualTo(3);
     }
@@ -53,7 +53,7 @@ class MetricVersionResolveTest {
                 .ruleVersionId(1L).tenantId("1").sceneCode("PAY").conditionAst(null)
                 .addMetricDependency("account.age", 3).build();
 
-        EvalContext ctx = asm.assemble(event(Map.of("account.age", 5)), List.of(rule), NOW);
+        EvalContext ctx = asm.assemble(event(Map.of("account.age", 5)), List.of(rule), NOW, java.util.Map.of());
 
         assertThat(ctx.hasMetric("account.age")).isTrue();
     }
@@ -75,7 +75,7 @@ class MetricVersionResolveTest {
                 .ruleVersionId(2L).tenantId("1").sceneCode("PAY").conditionAst(null)
                 .addMetricDependency("account.age", 2).build();
 
-        asm.assemble(event(Map.of("account.age", 5)), List.of(ruleA, ruleB), NOW);
+        asm.assemble(event(Map.of("account.age", 5)), List.of(ruleA, ruleB), NOW, java.util.Map.of());
 
         // 同 code 两个版本（1 和 2），取最高版本 2 解析
         assertThat(seenVersion.get()).isEqualTo(2);

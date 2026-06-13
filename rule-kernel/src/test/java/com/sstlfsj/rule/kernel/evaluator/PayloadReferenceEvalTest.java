@@ -35,7 +35,7 @@ class PayloadReferenceEvalTest {
         RuleEvent event = new RuleEvent(
                 "t1", "PAY", "transfer", "u1", "evt-1", Instant.now(),
                 payload, Map.of(), EventSource.HTTP);
-        return assembler.assemble(event, List.of(), Instant.now());
+        return assembler.assemble(event, List.of(), Instant.now(), java.util.Map.of());
     }
 
     private boolean evaluateAmountGt(Map<String, Object> payload) {

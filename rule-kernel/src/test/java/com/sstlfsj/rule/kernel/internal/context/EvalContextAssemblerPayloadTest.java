@@ -18,7 +18,7 @@ class EvalContextAssemblerPayloadTest {
                 Instant.now(), Map.of("amount", 5000, "currency", "CNY"), Map.of(),
                 EventSource.HTTP);
 
-        EvalContext ctx = assembler.assemble(event, List.of(), Instant.now());
+        EvalContext ctx = assembler.assemble(event, List.of(), Instant.now(), java.util.Map.of());
 
         MetricValue amount = ctx.getMetric("amount");
         assertNotNull(amount);
@@ -33,7 +33,7 @@ class EvalContextAssemblerPayloadTest {
                 Instant.now(), Map.of("amount", 5000), Map.of("amount", 99),
                 EventSource.HTTP);
 
-        EvalContext ctx = assembler.assemble(event, List.of(), Instant.now());
+        EvalContext ctx = assembler.assemble(event, List.of(), Instant.now(), java.util.Map.of());
 
         assertEquals(99, ctx.getMetric("amount").value());
         assertEquals(ValueSource.PROVIDED.tag(), ctx.getMetric("amount").valueSource());

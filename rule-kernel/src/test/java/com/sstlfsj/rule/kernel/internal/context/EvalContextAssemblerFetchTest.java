@@ -49,7 +49,7 @@ class EvalContextAssemblerFetchTest {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
-        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
+        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW, java.util.Map.of());
 
         MetricValue mv = ctx.getMetric("balance");
         assertThat(mv.value()).isEqualTo(999L);
@@ -65,7 +65,7 @@ class EvalContextAssemblerFetchTest {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
-        EvalContext ctx = asm.assemble(event(Map.of("balance", 7L)), List.of(snapWithDep("balance")), NOW);
+        EvalContext ctx = asm.assemble(event(Map.of("balance", 7L)), List.of(snapWithDep("balance")), NOW, java.util.Map.of());
 
         assertThat(ctx.getMetric("balance").value()).isEqualTo(7L);
         assertThat(ctx.getMetric("balance").valueSource()).isEqualTo("PROVIDED");
@@ -79,7 +79,7 @@ class EvalContextAssemblerFetchTest {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
-        EvalContext ctx = asm.assemble(event(Map.of("balance", 7L)), List.of(snapWithDep("balance")), NOW);
+        EvalContext ctx = asm.assemble(event(Map.of("balance", 7L)), List.of(snapWithDep("balance")), NOW, java.util.Map.of());
 
         assertThat(ctx.getMetric("balance").value()).isEqualTo(42L);
         assertThat(ctx.getMetric("balance").valueSource()).isEqualTo("FETCHED");
@@ -92,7 +92,7 @@ class EvalContextAssemblerFetchTest {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
-        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
+        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW, java.util.Map.of());
 
         MetricValue mv = ctx.getMetric("balance");
         assertThat(mv.isError()).isTrue();
@@ -105,7 +105,7 @@ class EvalContextAssemblerFetchTest {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of(), resolver, null, EXEC,1000L);
 
-        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
+        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW, java.util.Map.of());
 
         assertThat(ctx.getMetric("balance").isError()).isTrue();
     }
@@ -123,7 +123,7 @@ class EvalContextAssemblerFetchTest {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, cache, EXEC,1000L);
 
-        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
+        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW, java.util.Map.of());
 
         assertThat(ctx.getMetric("balance").value()).isEqualTo(500L);
         assertThat(calls.get()).isZero();
@@ -137,7 +137,7 @@ class EvalContextAssemblerFetchTest {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC,1000L);
 
-        asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
+        asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW, java.util.Map.of());
 
         assertThat(seen[0]).isEqualTo(NOW);
     }
@@ -153,7 +153,7 @@ class EvalContextAssemblerFetchTest {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of("SQL_AGGREGATE", slow), resolver, null, EXEC, 50L);
 
-        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW);
+        EvalContext ctx = asm.assemble(event(Map.of()), List.of(snapWithDep("balance")), NOW, java.util.Map.of());
 
         MetricValue mv = ctx.getMetric("balance");
         assertThat(mv.isError()).isTrue();
@@ -174,7 +174,7 @@ class EvalContextAssemblerFetchTest {
                 List.of(), Map.of("SQL_AGGREGATE", handler), resolver, null, EXEC, 50L);
 
         EvalContext ctx = asm.assemble(event(Map.of()),
-                List.of(snapWithDep("fast"), snapWithDep("slow")), NOW);
+                List.of(snapWithDep("fast"), snapWithDep("slow")), NOW, java.util.Map.of());
 
         assertThat(ctx.getMetric("fast").value()).isEqualTo(1L);
         assertThat(ctx.getMetric("fast").isError()).isFalse();
