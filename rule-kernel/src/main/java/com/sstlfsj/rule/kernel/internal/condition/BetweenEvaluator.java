@@ -8,7 +8,6 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
-import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategy;
@@ -17,8 +16,6 @@ import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
 import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
 
 import java.time.ZoneId;
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * BETWEEN 条件算子：min &lt;= actual &lt;= max（双端闭区间）。
@@ -56,14 +53,5 @@ public class BetweenEvaluator implements ConditionEvaluator {
         if (cmpMin == Integer.MAX_VALUE || cmpMax == Integer.MAX_VALUE) return false;
         // min <= actual <= max
         return cmpMin >= 0 && cmpMax <= 0;
-    }
-
-    @Override
-    public Optional<OperatorSpec> spec() {
-        return Optional.of(OperatorSpec.builder().code(ConditionTypes.BETWEEN).displayName("区间内")
-                .requiredParamKeys(Set.of(ConditionParams.MIN, ConditionParams.MAX))
-                .allowedDataTypes(Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(),
-                        DataType.DATE.tag(), DataType.DATETIME.tag()))
-                .requiresMetric(true).build());
     }
 }

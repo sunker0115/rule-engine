@@ -6,7 +6,6 @@ import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
-import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
@@ -15,8 +14,6 @@ import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * time.occurred_at 内置条件：对 event.occurredAt() 做 BEFORE/AFTER/BETWEEN 区间比较（B20 §4）。
@@ -49,14 +46,6 @@ public class OccurredAtEvaluator implements ConditionEvaluator {
             }
             default: throw new IllegalArgumentException("time.occurred_at 未知 operator: " + operator);
         }
-    }
-
-    @Override
-    public Optional<OperatorSpec> spec() {
-        return Optional.of(OperatorSpec.builder().code(ConditionTypes.TIME_OCCURRED_AT).displayName("事件发生时间")
-                .requiredParamKeys(Set.of(ConditionParams.OPERATOR))
-                .allowedDataTypes(Set.of())
-                .requiresMetric(false).build());
     }
 
     /**

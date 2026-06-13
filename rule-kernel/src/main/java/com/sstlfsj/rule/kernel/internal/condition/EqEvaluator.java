@@ -8,15 +8,12 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
-import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
 import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
 import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
 
 import java.time.ZoneId;
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * EQ（等于）条件算子：按 node.dataType() 选策略后调用 strategy.equals()。
@@ -42,14 +39,5 @@ public class EqEvaluator implements ConditionEvaluator {
             if (actual == null || threshold == null) return false;
         }
         return ComparisonStrategyFactory.forType(dt).equals(actual, threshold);
-    }
-
-    @Override
-    public Optional<OperatorSpec> spec() {
-        return Optional.of(OperatorSpec.builder().code(ConditionTypes.EQ).displayName("等于")
-                .requiredParamKeys(Set.of(ConditionParams.THRESHOLD))
-                .allowedDataTypes(Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(),
-                        DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()))
-                .requiresMetric(true).build());
     }
 }

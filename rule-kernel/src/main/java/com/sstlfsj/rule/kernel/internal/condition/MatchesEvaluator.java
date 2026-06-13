@@ -2,12 +2,10 @@ package com.sstlfsj.rule.kernel.internal.condition;
 
 import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
-import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
-import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
@@ -15,7 +13,6 @@ import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -38,14 +35,6 @@ public class MatchesEvaluator implements ConditionEvaluator {
         if (regex == null) return false;
         Optional<Pattern> pattern = patternCache.computeIfAbsent(String.valueOf(regex), MatchesEvaluator::compileQuietly);
         return pattern.isPresent() && pattern.get().matcher(String.valueOf(mv.value())).matches();
-    }
-
-    @Override
-    public Optional<OperatorSpec> spec() {
-        return Optional.of(OperatorSpec.builder().code(ConditionTypes.MATCHES).displayName("正则匹配")
-                .requiredParamKeys(Set.of(ConditionParams.REGEX))
-                .allowedDataTypes(Set.of(DataType.STRING.tag()))
-                .requiresMetric(true).build());
     }
 
     /** 编译正则；非法时返回 empty（语义同原 {@code PatternSyntaxException → false}）。 */

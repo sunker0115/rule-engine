@@ -6,7 +6,6 @@ import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
-import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
@@ -16,8 +15,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * time.window 内置条件：判断 ctx.now() 投影到解析时区后的墙上时间是否落在生效时段（B20 §3）。
@@ -59,14 +56,6 @@ public class TimeWindowEvaluator implements ConditionEvaluator {
             return !t.isBefore(start) || !t.isAfter(end);
         }
         return !t.isBefore(start) && !t.isAfter(end);
-    }
-
-    @Override
-    public Optional<OperatorSpec> spec() {
-        return Optional.of(OperatorSpec.builder().code(ConditionTypes.TIME_WINDOW).displayName("时间窗口")
-                .requiredParamKeys(Set.of(ConditionParams.START, ConditionParams.END))
-                .allowedDataTypes(Set.of())
-                .requiresMetric(false).build());
     }
 
     @SuppressWarnings("unchecked")

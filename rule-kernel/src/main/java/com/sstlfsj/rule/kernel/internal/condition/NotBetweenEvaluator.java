@@ -8,7 +8,6 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
-import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategy;
@@ -17,8 +16,6 @@ import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
 import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
 
 import java.time.ZoneId;
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * NOT_BETWEEN 条件算子：value &lt; min 或 value &gt; max（BETWEEN 取反）。
@@ -56,14 +53,5 @@ public class NotBetweenEvaluator implements ConditionEvaluator {
         if (cmpMin == Integer.MAX_VALUE || cmpMax == Integer.MAX_VALUE) return false;
         // actual < min 或 actual > max
         return cmpMin < 0 || cmpMax > 0;
-    }
-
-    @Override
-    public Optional<OperatorSpec> spec() {
-        return Optional.of(OperatorSpec.builder().code(ConditionTypes.NOT_BETWEEN).displayName("区间外")
-                .requiredParamKeys(Set.of(ConditionParams.MIN, ConditionParams.MAX))
-                .allowedDataTypes(Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(),
-                        DataType.DATE.tag(), DataType.DATETIME.tag()))
-                .requiresMetric(true).build());
     }
 }
