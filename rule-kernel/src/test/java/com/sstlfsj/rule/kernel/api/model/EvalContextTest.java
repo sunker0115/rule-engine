@@ -85,4 +85,19 @@ class EvalContextTest {
         EvalContext ctx = new EvalContext("t1", event(), subject(), Map.of(), fixed);
         assertSame(fixed, ctx.now());
     }
+
+    @Test
+    void sceneDefaultParams_carriedAndImmutable() {
+        EvalContext ctx = new EvalContext("t1", event(), subject(), Map.of(), NOW,
+                Map.of("timezone", "Asia/Shanghai"));
+        assertEquals("Asia/Shanghai", ctx.sceneDefaultParams().get("timezone"));
+        assertThrows(UnsupportedOperationException.class,
+                () -> ctx.sceneDefaultParams().put("x", "y"));
+    }
+
+    @Test
+    void compatConstructor_defaultsEmptySceneParams() {
+        EvalContext ctx = new EvalContext("t1", event(), subject(), Map.of(), NOW);
+        assertTrue(ctx.sceneDefaultParams().isEmpty());
+    }
 }
