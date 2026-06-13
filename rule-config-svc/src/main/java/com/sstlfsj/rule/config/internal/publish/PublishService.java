@@ -418,6 +418,9 @@ public class PublishService {
         // 结构校验：SCORECARD 根/权重、DECISION_TREE 结构、DECISION_TABLE 行列一致
         validateKindStructure(kindTag, ast);
 
+        // param 键校验：遍历 AST 校每个 ConditionNode 的必填 param 键齐全
+        ConditionParamValidator.validate(ast);
+
         validateTriggerEventTypes(triggers, scene.getEventTypes());
         validatePreGateParams(gates);
 

@@ -208,6 +208,23 @@ class PublishServiceTest {
     }
 
     @Test
+    void editDraft_conditionMissingRequiredParamKey_rejected() {
+        // 草稿保存期接入 ConditionParamValidator：GT 算子缺必填 threshold 键应被拦下
+        draftRule.setKind(RuleKind.AST_BOOLEAN);
+        draftVersion.setVersion(1L);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);
+
+        assertThatThrownBy(() -> publishService.editDraft(1L, 10L, "名", RuleKind.AST_BOOLEAN,
+                new ConditionNode("GT", "amount", null, Map.of(), 0.0),
+                List.of(), List.of(), List.of(), null, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("缺少必填参数键");
+        verify(ruleVersionMapper, never()).updateById((RuleVersion) any());
+    }
+
+    @Test
     void editDraft_noDraft_throws() {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
