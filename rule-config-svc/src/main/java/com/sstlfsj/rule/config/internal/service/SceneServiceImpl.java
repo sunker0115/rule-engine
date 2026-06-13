@@ -14,6 +14,7 @@ import com.sstlfsj.rule.config.internal.event.SceneSnapshot;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.domain.DominantMode;
 import com.sstlfsj.rule.config.internal.domain.DecisionStrategy;
+import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -49,6 +50,7 @@ class SceneServiceImpl implements SceneService {
         scene.setEventTypes(eventTypes != null ? eventTypes : List.of());
         validatePayloadSchemaTypes(payloadSchema);
         scene.setPayloadSchema(payloadSchema);
+        validateDefaultParams(defaultParams);
         scene.setDefaultParams(defaultParams);
         scene.setStatus(SceneStatus.ACTIVE);
         scene.setCreatedBy(actorId);
@@ -71,7 +73,10 @@ class SceneServiceImpl implements SceneService {
 
         if (name != null) scene.setName(name);
         if (eventTypes != null) scene.setEventTypes(eventTypes);
-        if (defaultParams != null) scene.setDefaultParams(defaultParams);
+        if (defaultParams != null) {
+            validateDefaultParams(defaultParams);
+            scene.setDefaultParams(defaultParams);
+        }
         if (payloadSchema != null) {
             validatePayloadSchemaTypes(payloadSchema);
             scene.setPayloadSchema(payloadSchema);
@@ -124,6 +129,20 @@ class SceneServiceImpl implements SceneService {
         if (payloadSchema == null) return;
         for (PayloadFieldSpec f : payloadSchema) {
             PayloadFieldType.fromTag(f.type()); // 非法 type 抛 IllegalArgumentException
+        }
+    }
+
+    /** authoring 期 fail-fast：default_params.timezone 须为合法 IANA 时区名，否则抛 IllegalArgumentException。 */
+    private void validateDefaultParams(Map<String, Object> defaultParams) {
+        if (defaultParams == null) return;
+        Object tz = defaultParams.get(SceneDefaultParams.TIMEZONE);
+        if (tz != null) {
+            try {
+                java.time.ZoneId.of(tz.toString());
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException("非法 scene default_params.timezone=" + tz
+                        + "（须为合法 IANA 时区名，如 Asia/Shanghai）");
+            }
         }
     }
 
