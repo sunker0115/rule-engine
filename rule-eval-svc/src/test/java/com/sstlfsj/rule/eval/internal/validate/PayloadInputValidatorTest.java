@@ -32,4 +32,44 @@ class PayloadInputValidatorTest {
         var deps = List.of(new PayloadDependency("note", "STRING", false));
         assertThatCode(() -> PayloadInputValidator.validate(deps, Map.of())).doesNotThrowAnyException();
     }
+
+    @Test
+    void enumViolation_throws() {
+        var deps = List.of(PayloadDependency.builder()
+                .name("channel").dataType("STRING").required(true).enumValues(List.of("APP", "WEB")).build());
+        assertThatThrownBy(() -> PayloadInputValidator.validate(deps, Map.of("channel", "SMS")))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("INPUT_ENUM_VIOLATION");
+    }
+
+    @Test
+    void enumOk_passes() {
+        var deps = List.of(PayloadDependency.builder()
+                .name("channel").dataType("STRING").required(true).enumValues(List.of("APP", "WEB")).build());
+        assertThatCode(() -> PayloadInputValidator.validate(deps, Map.of("channel", "APP")))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rangeViolation_throws() {
+        var deps = List.of(PayloadDependency.builder()
+                .name("amount").dataType("DECIMAL").required(true).minimum(0.0).maximum(100.0).build());
+        assertThatThrownBy(() -> PayloadInputValidator.validate(deps, Map.of("amount", 200)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("INPUT_RANGE_VIOLATION");
+    }
+
+    @Test
+    void patternViolation_throws() {
+        var deps = List.of(PayloadDependency.builder()
+                .name("phone").dataType("STRING").required(true).pattern("\\d{11}").build());
+        assertThatThrownBy(() -> PayloadInputValidator.validate(deps, Map.of("phone", "abc")))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("INPUT_PATTERN_VIOLATION");
+    }
+
+    @Test
+    void patternOk_passes() {
+        var deps = List.of(PayloadDependency.builder()
+                .name("phone").dataType("STRING").required(true).pattern("\\d{11}").build());
+        assertThatCode(() -> PayloadInputValidator.validate(deps, Map.of("phone", "13800138000")))
+                .doesNotThrowAnyException();
+    }
 }
