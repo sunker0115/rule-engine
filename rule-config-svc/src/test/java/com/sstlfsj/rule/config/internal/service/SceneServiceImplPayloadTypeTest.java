@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class SceneServiceImplPayloadTypeTest {
 
     // 校验在任何 mapper 调用之前执行，故 collaborator 传 null 即可触发并断言。
-    private final SceneServiceImpl service = new SceneServiceImpl(null, null, null);
+    private final SceneServiceImpl service = new SceneServiceImpl(null, null);
 
     private static PayloadFieldSpec field(String type) {
         return new PayloadFieldSpec("amount", type, false, null, null, null, null, null);

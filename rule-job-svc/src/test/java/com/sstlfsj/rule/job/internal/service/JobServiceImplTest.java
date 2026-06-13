@@ -49,7 +49,7 @@ class JobServiceImplTest {
 
     private SceneDetailDto scene(String mode) {
         return new SceneDetailDto(1L, "1", "s1", "name", null, mode, "USER",
-                List.of(), List.of(), Map.of(), 1, "ACTIVE");
+                List.of(), List.of(), Map.of(), "ACTIVE");
     }
 
     private JobDefinition job(JobStatus status) {
