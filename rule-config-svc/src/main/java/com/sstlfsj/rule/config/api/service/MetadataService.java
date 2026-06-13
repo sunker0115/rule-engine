@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+
 /** 场景元数据查询：可用条件类型及指标列表。 */
 public interface MetadataService {
 
@@ -34,7 +36,7 @@ public interface MetadataService {
     InputManifestResponse getInputManifest(String tenantId, String sceneCode, String eventType);
 
     record MetadataResponse(
-            java.util.List<ConditionTypeMeta> conditionTypes,
+            java.util.List<OperatorSpec> conditionTypes,
             java.util.List<MetricMeta> availableMetrics
     ) {}
 
@@ -44,8 +46,6 @@ public interface MetadataService {
     /** 单个输入字段契约：名 + 类型标签 + 是否必填。 */
     record InputFieldSpec(String name, String dataType, boolean required) {}
 
-    record ConditionTypeMeta(String code, String displayName,
-                              java.util.Map<String, Object> paramsSchema, boolean requiresMetric) {}
     record MetricMeta(String metricCode, String name,
                       String dataType, String sourceType, boolean allowProvided) {}
 }

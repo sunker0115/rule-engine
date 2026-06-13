@@ -5,7 +5,7 @@ import java.util.Set;
 
 /**
  * 算子规格:必填 param 键 + 允许 dataType + 元数据,供发布期校验与元数据暴露使用。
- * 由 {@link com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator#spec()} 声明,
+ * 由 {@link com.sstlfsj.rule.kernel.api.annotation.ConditionType} 注解或 {@code @Bean OperatorSpec} 声明,
  * 算子契约与实现共同演进(单一真相源)。
  *
  * @param code             conditionType 编码
