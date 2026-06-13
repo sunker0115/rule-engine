@@ -158,14 +158,11 @@
 - **演进方向**：定义标准化指标获取协议（参考 OpenTelemetry / OpenFeature 模型），引入 `MetricFetcher` 通用 SDK + 协议测试套件。
 - **迁移成本**：中。
 
-### 2.12 Scene schema 演进（来源 D13，v2 阶段已实装基础设施）
+### 2.12 Scene schema 演进（来源 D13；D69 收口）
 
-- **v1 现状**：`Scene.payloadSchema` 在 Scene 表上，发布期校验 RuleEvent.payload 字段合法性；变更 schema = 直接覆盖。
-- **触发条件**：业务侧调整 payload 字段（新增 / 重命名 / 类型变更），存量规则可能引用了旧字段。
-- **演进方向**：引入 `Scene.payloadSchemaVersion` + 历史版本表 `scene_payload_schema_history`；发布 RuleVersion 时锁定当时的 `(sceneId, payloadSchemaVersion)` 引用；schema 变更走"新版本号 + 影响规则清单 + 灰度切换"流程；与 D20 §3 输入闭合校验联动——校验集合按当时锁定的 schema 版本而非"最新"求解。
-- **迁移成本**：中（schema 历史表 + 引用解析逻辑）。
-
-- **v2 实装（2026-06-04）**：`PayloadFieldSpec` JSON Schema 完整子集（enum/min/max/pattern）、`scene_payload_schema_history` 历史表、`scene.payload_schema_version` 版本号字段已落地。Scene 创建/更新 API 现可持久化 payloadSchema，发布时 triggerEventTypes ⊆ Scene.eventTypes 校验已启用。AST payload 字段引用校验留到 v3（需约定 ConditionNode.params 的字段引用编码规范）。
+- **现状（D69 落地）**：`Scene.payloadSchema`（`List<PayloadFieldSpec>`：name/type/required/enum/min/max/pattern）在 Scene 表上，是输入契约的单一真相源。type 受 `PayloadFieldType` 封闭集校验（创建/更新期 fail-fast）。**模型 2 冻结**：发布期把规则引用字段的完整约束冻进 `rule_version.payload_dependencies`，运行期 `PayloadInputValidator` 强制 required+类型+enum/min/max/pattern。
+- **schema 变更兼容（已解决）**：D69 选模型 2——约束随规则发布冻结，运营事后改 scene payloadSchema **不影响已发布规则**（可复现）。故原"版本号 + 历史表 + 影响规则清单 + 灰度切换"那套**不再需要**：`scene.payload_schema_version` 列与 `scene_payload_schema_history` 表已于 `V1_30` 删除，scene 变更历史改走 `audit_log` 前后快照（`SceneSnapshot`）。
+- **仍未做（v3+）**：AST payload 字段引用校验（ConditionNode.params 字段引用编码规范）；payloadSchema 嵌套对象 / JSON Schema 完整子集（oneOf/$ref）；`scene.default_params`（timezone/currency 等）接入评估（当前运营能设能存、但 eval 侧未加载，仅条件级 `params.timezone` 生效，见 D69 后续①）。
 
 ### 2.13 评估期预编译（纯编译版已落地 2026-06-13，见 D67）
 
