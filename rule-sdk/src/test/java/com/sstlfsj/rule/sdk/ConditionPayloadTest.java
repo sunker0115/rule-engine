@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.sdk;
 
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,7 @@ class ConditionPayloadTest {
         assertEquals(ValueRef.PAYLOAD, n.valueRef());
         assertEquals("GT", n.conditionType());
         assertEquals("amount", n.metricCode());
-        assertEquals(1000, n.params().get("threshold"));
+        assertEquals(1000, n.params().get(ConditionParams.THRESHOLD));
     }
 
     @Test
@@ -25,7 +26,7 @@ class ConditionPayloadTest {
         ConditionNode n = (ConditionNode) Condition.payloadEq("channel", "APP").toAst();
         assertEquals(ValueRef.PAYLOAD, n.valueRef());
         assertEquals("EQ", n.conditionType());
-        assertEquals("APP", n.params().get("threshold"));
+        assertEquals("APP", n.params().get(ConditionParams.THRESHOLD));
     }
 
     @Test
@@ -33,7 +34,7 @@ class ConditionPayloadTest {
         ConditionNode n = (ConditionNode) Condition.payloadIn("city", "BJ", "SH").toAst();
         assertEquals(ValueRef.PAYLOAD, n.valueRef());
         assertEquals("IN", n.conditionType());
-        assertEquals(List.of("BJ", "SH"), n.params().get("values"));
+        assertEquals(List.of("BJ", "SH"), n.params().get(ConditionParams.VALUES));
     }
 
     @Test
@@ -41,8 +42,8 @@ class ConditionPayloadTest {
         ConditionNode n = (ConditionNode) Condition.payloadBetween("amount", 10, 100).toAst();
         assertEquals(ValueRef.PAYLOAD, n.valueRef());
         assertEquals("BETWEEN", n.conditionType());
-        assertEquals(10, n.params().get("min"));
-        assertEquals(100, n.params().get("max"));
+        assertEquals(10, n.params().get(ConditionParams.MIN));
+        assertEquals(100, n.params().get(ConditionParams.MAX));
     }
 
     @Test

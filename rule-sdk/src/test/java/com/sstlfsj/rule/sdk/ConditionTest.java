@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.sdk;
 
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,7 @@ class ConditionTest {
         ConditionNode node = (ConditionNode) ast;
         assertThat(node.conditionType()).isEqualTo("GT");
         assertThat(node.metricCode()).isEqualTo("amount");
-        assertThat(node.params().get("threshold")).isEqualTo(1000);
+        assertThat(node.params().get(ConditionParams.THRESHOLD)).isEqualTo(1000);
         assertThat(node.weight()).isEqualTo(0.0);
         assertThat(node.displayLabel()).isNull();
     }
@@ -28,7 +29,7 @@ class ConditionTest {
         AstNode ast = Condition.matches("phone", "\\d{11}").toAst();
         ConditionNode node = (ConditionNode) ast;
         assertThat(node.conditionType()).isEqualTo("MATCHES");
-        assertThat(node.params().get("regex")).isEqualTo("\\d{11}");
+        assertThat(node.params().get(ConditionParams.REGEX)).isEqualTo("\\d{11}");
         assertThat(node.params()).doesNotContainKey("pattern");
     }
 
@@ -37,7 +38,7 @@ class ConditionTest {
         AstNode ast = Condition.in("country", "CN", "HK").toAst();
         ConditionNode node = (ConditionNode) ast;
         assertThat(node.conditionType()).isEqualTo("IN");
-        assertThat(node.params().get("values")).isEqualTo(List.of("CN", "HK"));
+        assertThat(node.params().get(ConditionParams.VALUES)).isEqualTo(List.of("CN", "HK"));
     }
 
     @Test
@@ -45,8 +46,8 @@ class ConditionTest {
         AstNode ast = Condition.between("age", 18, 65).toAst();
         ConditionNode node = (ConditionNode) ast;
         assertThat(node.conditionType()).isEqualTo("BETWEEN");
-        assertThat(node.params().get("min")).isEqualTo(18);
-        assertThat(node.params().get("max")).isEqualTo(65);
+        assertThat(node.params().get(ConditionParams.MIN)).isEqualTo(18);
+        assertThat(node.params().get(ConditionParams.MAX)).isEqualTo(65);
     }
 
     @Test
