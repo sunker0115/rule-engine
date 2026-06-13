@@ -4,6 +4,7 @@ import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
 import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -40,8 +41,9 @@ class EvalServiceImplScorecardTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Counter errorCounter = Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL).register(registry);
         Counter totalCounter = Counter.builder(RuleMetrics.EVAL_TOTAL).register(registry);
+        EvalInstrumentation instrumentation = new EvalInstrumentation(totalCounter, errorCounter, registry);
         impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, ruleVersionReadMapper,
-                errorCounter, totalCounter, registry);
+                instrumentation);
     }
 
     private RuleEvent event() {

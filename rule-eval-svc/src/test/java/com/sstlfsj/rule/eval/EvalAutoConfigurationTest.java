@@ -21,7 +21,7 @@ import com.sstlfsj.rule.eval.internal.CompiledExecutorProperties;
 import com.sstlfsj.rule.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
-import io.micrometer.core.instrument.Counter;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterAll;
@@ -172,12 +172,10 @@ class EvalAutoConfigurationTest {
     }
 
     @Test
-    void evalCounterBeans_registered() {
+    void evalInstrumentationBean_registered_withCounters() {
         MeterRegistry registry = new SimpleMeterRegistry();
-        Counter errorCounter = config.evalErrorCounter(registry);
-        Counter totalCounter = config.evalTotalCounter(registry);
-        assertNotNull(errorCounter);
-        assertNotNull(totalCounter);
+        EvalInstrumentation instrumentation = config.evalInstrumentation(registry);
+        assertNotNull(instrumentation);
         assertNotNull(registry.find(RuleMetrics.EVAL_ERROR_TOTAL).counter());
         assertNotNull(registry.find(RuleMetrics.EVAL_TOTAL).counter());
     }

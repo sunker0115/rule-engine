@@ -30,6 +30,7 @@ import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
 import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
 import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
 import io.micrometer.core.instrument.Counter;
@@ -263,28 +264,17 @@ public class EvalAutoConfiguration {
     }
 
     /**
-     * 评估错误计数器（errorCode 非 null 时 increment）。
+     * eval-svc 侧可观测性埋点，封装 Counter/Gauge 注册，使 EvalServiceImpl 专注评估协调。
      *
      * @param meterRegistry Spring Boot 自动装配的 Micrometer 注册表
-     * @return Counter 实例
+     * @return EvalInstrumentation 实例
      */
     @Bean
-    public Counter evalErrorCounter(MeterRegistry meterRegistry) {
-        return Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL)
-                .description("评估错误总数（errorCode 非空）")
-                .register(meterRegistry);
-    }
-
-    /**
-     * 评估总次数计数器（每次 doEvaluate 入口 increment）。
-     *
-     * @param meterRegistry Spring Boot 自动装配的 Micrometer 注册表
-     * @return Counter 实例
-     */
-    @Bean
-    public Counter evalTotalCounter(MeterRegistry meterRegistry) {
-        return Counter.builder(RuleMetrics.EVAL_TOTAL)
-                .description("评估总次数")
-                .register(meterRegistry);
+    public EvalInstrumentation evalInstrumentation(MeterRegistry meterRegistry) {
+        Counter evalTotal = Counter.builder(RuleMetrics.EVAL_TOTAL)
+                .description("评估总次数").register(meterRegistry);
+        Counter evalError = Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL)
+                .description("评估错误总数（errorCode 非空）").register(meterRegistry);
+        return new EvalInstrumentation(evalTotal, evalError, meterRegistry);
     }
 }

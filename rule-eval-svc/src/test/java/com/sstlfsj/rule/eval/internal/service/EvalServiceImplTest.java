@@ -8,6 +8,7 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
 import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -45,8 +46,9 @@ class EvalServiceImplTest {
         meterRegistry = new SimpleMeterRegistry();
         evalErrorCounter = Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL).register(meterRegistry);
         evalTotalCounter = Counter.builder(RuleMetrics.EVAL_TOTAL).register(meterRegistry);
+        EvalInstrumentation instrumentation = new EvalInstrumentation(evalTotalCounter, evalErrorCounter, meterRegistry);
         impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, ruleVersionReadMapper,
-                evalErrorCounter, evalTotalCounter, meterRegistry);
+                instrumentation);
     }
 
     private RuleEvent event() {
