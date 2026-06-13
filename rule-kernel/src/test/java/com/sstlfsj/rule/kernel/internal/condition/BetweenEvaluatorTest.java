@@ -5,11 +5,14 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -117,5 +120,13 @@ class BetweenEvaluatorTest {
                 Map.of("d", new MetricValue("2026-12-01", "DATE", "PROVIDED")),
                 Instant.parse("2026-12-01T00:00:00Z"));
         assertThat(new BetweenEvaluator().evaluate(node, ctx)).isFalse();
+    }
+
+    @Test
+    void spec_describesOperator() {
+        var spec = evaluator.spec().orElseThrow();
+        assertThat(spec.code()).isEqualTo(ConditionTypes.BETWEEN);
+        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.MIN, ConditionParams.MAX));
+        assertThat(spec.requiresMetric()).isTrue();
     }
 }

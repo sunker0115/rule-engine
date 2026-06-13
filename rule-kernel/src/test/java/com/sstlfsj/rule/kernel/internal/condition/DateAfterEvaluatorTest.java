@@ -5,11 +5,14 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,5 +54,13 @@ class DateAfterEvaluatorTest {
         Subject subject = new Subject("sub1", SubjectType.USER, Map.of());
         EvalContext emptyCtx = new EvalContext("t1", event, subject, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(evaluator.evaluate(node("d", "2020-01-01"), emptyCtx)).isFalse();
+    }
+
+    @Test
+    void spec_describesOperator() {
+        var spec = evaluator.spec().orElseThrow();
+        assertThat(spec.code()).isEqualTo(ConditionTypes.DATE_AFTER);
+        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.THRESHOLD));
+        assertThat(spec.requiresMetric()).isTrue();
     }
 }

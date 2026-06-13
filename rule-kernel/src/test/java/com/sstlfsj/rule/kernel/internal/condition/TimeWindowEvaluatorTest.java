@@ -3,6 +3,8 @@ package com.sstlfsj.rule.kernel.internal.condition;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalEnv;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +12,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -79,5 +82,13 @@ class TimeWindowEvaluatorTest {
         assertThat(evaluator.evaluate(node(p), ctxAtWithSceneTz("2026-06-01T02:00:00Z", "Asia/Shanghai"))).isTrue();
         // 无 scene timezone（默认 UTC）同一时刻为 02:00，落在窗口外 → 不命中
         assertThat(evaluator.evaluate(node(p), ctxAt("2026-06-01T02:00:00Z"))).isFalse();
+    }
+
+    @Test
+    void spec_describesOperator() {
+        var spec = evaluator.spec().orElseThrow();
+        assertThat(spec.code()).isEqualTo(ConditionTypes.TIME_WINDOW);
+        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.START, ConditionParams.END));
+        assertThat(spec.requiresMetric()).isFalse();
     }
 }

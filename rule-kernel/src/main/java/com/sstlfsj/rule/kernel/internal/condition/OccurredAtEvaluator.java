@@ -1,9 +1,11 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
 import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
@@ -11,6 +13,8 @@ import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * time.occurred_at 内置条件：对 event.occurredAt() 做 BEFORE/AFTER/BETWEEN 区间比较（B20 §4）。
@@ -25,23 +29,31 @@ public class OccurredAtEvaluator implements ConditionEvaluator {
         if (occurred == null) return false;
 
         Map<String, Object> params = node.params();
-        String operator = (String) params.get("operator");
+        String operator = (String) params.get(ConditionParams.OPERATOR);
         if (operator == null) return false;
 
         ZoneId zone = TimeZoneResolver.resolve((String) params.get(ConditionParams.TIMEZONE),
                 (String) ctx.sceneDefaultParams().get(SceneDefaultParams.TIMEZONE));
 
         switch (operator) {
-            case "BEFORE": return occurred.isBefore(required(params.get("value"), ctx, zone));
-            case "AFTER":  return occurred.isAfter(required(params.get("value"), ctx, zone));
+            case "BEFORE": return occurred.isBefore(required(params.get(ConditionParams.VALUE), ctx, zone));
+            case "AFTER":  return occurred.isAfter(required(params.get(ConditionParams.VALUE), ctx, zone));
             case "BETWEEN": {
-                Instant start = required(params.get("start"), ctx, zone);
-                Instant end   = required(params.get("end"), ctx, zone);
+                Instant start = required(params.get(ConditionParams.START), ctx, zone);
+                Instant end   = required(params.get(ConditionParams.END), ctx, zone);
                 // 闭区间两端均包含
                 return !occurred.isBefore(start) && !occurred.isAfter(end);
             }
             default: throw new IllegalArgumentException("time.occurred_at 未知 operator: " + operator);
         }
+    }
+
+    @Override
+    public Optional<OperatorSpec> spec() {
+        return Optional.of(OperatorSpec.builder().code(ConditionTypes.TIME_OCCURRED_AT).displayName("事件发生时间")
+                .requiredParamKeys(Set.of(ConditionParams.OPERATOR))
+                .allowedDataTypes(Set.of())
+                .requiresMetric(false).build());
     }
 
     /**

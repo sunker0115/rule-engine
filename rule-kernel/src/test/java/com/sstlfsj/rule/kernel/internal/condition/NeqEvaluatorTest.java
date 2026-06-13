@@ -5,11 +5,14 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -100,5 +103,13 @@ class NeqEvaluatorTest {
                 Map.of("d", new MetricValue("not-a-date", "DATE", "PROVIDED")),
                 Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(new NeqEvaluator().evaluate(node, ctx)).isFalse();
+    }
+
+    @Test
+    void spec_describesOperator() {
+        var spec = evaluator.spec().orElseThrow();
+        assertThat(spec.code()).isEqualTo(ConditionTypes.NEQ);
+        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.THRESHOLD));
+        assertThat(spec.requiresMetric()).isTrue();
     }
 }

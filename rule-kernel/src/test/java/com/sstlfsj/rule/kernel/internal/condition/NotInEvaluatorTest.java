@@ -5,12 +5,15 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -66,5 +69,13 @@ class NotInEvaluatorTest {
                 Map.of("values", java.util.List.of("100")), 0.0, "STRING");
         EvalContext c = ctx("code", "100");
         assertThat(ev.evaluate(n, c)).isFalse();
+    }
+
+    @Test
+    void spec_describesOperator() {
+        var spec = evaluator.spec().orElseThrow();
+        assertThat(spec.code()).isEqualTo(ConditionTypes.NOT_IN);
+        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.VALUES));
+        assertThat(spec.requiresMetric()).isTrue();
     }
 }

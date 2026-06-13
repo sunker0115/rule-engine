@@ -2,11 +2,14 @@ package com.sstlfsj.rule.kernel.internal.condition;
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -70,5 +73,13 @@ class OccurredAtEvaluatorTest {
         EvalContext c = new EvalContext("t1", ev, null, Map.of(), Instant.EPOCH);
         ConditionNode n = node(Map.of("operator", "BEFORE", "value", "$now"));
         assertThat(evaluator.evaluate(n, c)).isFalse();
+    }
+
+    @Test
+    void spec_describesOperator() {
+        var spec = evaluator.spec().orElseThrow();
+        assertThat(spec.code()).isEqualTo(ConditionTypes.TIME_OCCURRED_AT);
+        assertThat(spec.requiredParamKeys()).isEqualTo(Set.of(ConditionParams.OPERATOR));
+        assertThat(spec.requiresMetric()).isFalse();
     }
 }

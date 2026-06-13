@@ -1,14 +1,19 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategy;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
 
 import java.util.Collection;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * NOT_IN 条件算子：actual 不在 params.values 列表中（按 node.dataType() 选策略做 equals 判定）。
@@ -25,5 +30,13 @@ public class NotInEvaluator implements ConditionEvaluator {
         if (!(valuesObj instanceof Collection<?> values)) return true;
         ComparisonStrategy strategy = ComparisonStrategyFactory.forType(node.dataType());
         return values.stream().noneMatch(v -> strategy.equals(mv.value(), v));
+    }
+
+    @Override
+    public Optional<OperatorSpec> spec() {
+        return Optional.of(OperatorSpec.builder().code(ConditionTypes.NOT_IN).displayName("不属于集合")
+                .requiredParamKeys(Set.of(ConditionParams.VALUES))
+                .allowedDataTypes(Set.of(DataType.LONG.tag(), DataType.STRING.tag()))
+                .requiresMetric(true).build());
     }
 }
