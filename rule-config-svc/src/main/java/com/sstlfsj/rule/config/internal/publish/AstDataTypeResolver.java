@@ -1,11 +1,8 @@
 package com.sstlfsj.rule.config.internal.publish;
 
-import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
-import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,35 +11,9 @@ import java.util.Set;
  * 发布期 AST 遍历器：给每个 ConditionNode 与决策表列冻结 dataType，并校验算子×dataType 兼容性。
  * 遍历方式仿 MetricDependencyCollector，但需重建不可变 record 树（ConditionNode / Column 新增 dataType）。
  * 决策表列 dataType 冻结 + 发布校验已落地（B22）。
+ * 允许 dataType 来源：{@link ConditionTypeCatalog}（单一真相源，目录缺席的算子即放行）。
  */
 class AstDataTypeResolver {
-
-    // 算子允许的 dataType 集合（权威来源：spec §5 / 03-rule-expression §3.1-3.4）。
-    // DATE_BEFORE/DATE_AFTER 已纳入矩阵（B20 §7），仅允许 DATE/DATETIME；
-    // 剩余 time.* 内置路径与自定义算子仍 ALLOWED 缺席即放行。
-    private static final Map<String, Set<String>> ALLOWED;
-
-    static {
-        Map<String, Set<String>> m = new HashMap<>();
-        m.put(ConditionTypes.EQ,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionTypes.NEQ,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.STRING.tag(), DataType.BOOLEAN.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionTypes.GT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put(ConditionTypes.GTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put(ConditionTypes.LT,           Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put(ConditionTypes.LTE,          Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag()));
-        m.put(ConditionTypes.BETWEEN,      Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionTypes.NOT_BETWEEN,  Set.of(DataType.LONG.tag(), DataType.DOUBLE.tag(), DataType.DECIMAL.tag(), DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionTypes.IN,           Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
-        m.put(ConditionTypes.NOT_IN,       Set.of(DataType.LONG.tag(), DataType.STRING.tag()));
-        m.put(ConditionTypes.CONTAINS,     Set.of(DataType.LIST.tag()));
-        m.put(ConditionTypes.NOT_CONTAINS, Set.of(DataType.LIST.tag()));
-        m.put(ConditionTypes.STARTS_WITH,  Set.of(DataType.STRING.tag()));
-        m.put(ConditionTypes.ENDS_WITH,    Set.of(DataType.STRING.tag()));
-        m.put(ConditionTypes.MATCHES,      Set.of(DataType.STRING.tag()));
-        m.put(ConditionTypes.DATE_BEFORE,  Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
-        m.put(ConditionTypes.DATE_AFTER,   Set.of(DataType.DATE.tag(), DataType.DATETIME.tag()));
-        ALLOWED = Map.copyOf(m);
-    }
 
     /**
      * 递归遍历 AST，给 ConditionNode 冻结 dataType 并校验算子兼容性，返回重建的新树。
@@ -93,7 +64,8 @@ class AstDataTypeResolver {
         String dataType = dataTypeMap.get(col.metricCode());
         // 校验同 resolveCondition：dataType 已知且算子在 ALLOWED 内才校验；缺席算子放行
         if (dataType != null) {
-            Set<String> allowed = ALLOWED.get(col.operator());
+            ConditionTypeCatalog.Spec spec = ConditionTypeCatalog.spec(col.operator());
+            Set<String> allowed = spec != null ? spec.allowedDataTypes() : null;
             if (allowed != null && !allowed.contains(dataType)) {
                 throw new IllegalArgumentException(
                         "算子 " + col.operator() + " 不支持 dataType=" + dataType
@@ -116,7 +88,8 @@ class AstDataTypeResolver {
             // 校验仅在 dataType 已知（非 null）时执行；ALLOWED 缺席的算子（time.*、自定义）直接放行
             // DATE_BEFORE/DATE_AFTER 已纳入 ALLOWED（B20），不再绕过校验
             if (dataType != null) {
-                Set<String> allowed = ALLOWED.get(cond.conditionType());
+                ConditionTypeCatalog.Spec spec = ConditionTypeCatalog.spec(cond.conditionType());
+                Set<String> allowed = spec != null ? spec.allowedDataTypes() : null;
                 if (allowed != null && !allowed.contains(dataType)) {
                     throw new IllegalArgumentException(
                             "算子 " + cond.conditionType() + " 不支持 dataType=" + dataType
