@@ -567,7 +567,11 @@ public class PublishService {
             }
             String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
             payloadTypeMap.put(field, dataTypeTag);
-            payloadDeps.add(new PayloadDependency(field, dataTypeTag, spec.required()));
+            payloadDeps.add(PayloadDependency.builder()
+                    .name(field).dataType(dataTypeTag).required(spec.required())
+                    .enumValues(spec.enumValues()).minimum(spec.minimum())
+                    .maximum(spec.maximum()).pattern(spec.pattern())
+                    .build());
         }
         return payloadDeps;
     }
