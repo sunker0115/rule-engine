@@ -20,11 +20,12 @@ class ConditionPayloadTest {
     }
 
     @Test
-    void payloadEq_usesValueParamKey() {
+    void payloadEq_usesThresholdParamKey() {
+        // 键须为 "threshold"(EqEvaluator 消费端)；旧用例断言 "value" 固化了"永不命中"的 bug
         ConditionNode n = (ConditionNode) Condition.payloadEq("channel", "APP").toAst();
         assertEquals(ValueRef.PAYLOAD, n.valueRef());
         assertEquals("EQ", n.conditionType());
-        assertEquals("APP", n.params().get("value"));
+        assertEquals("APP", n.params().get("threshold"));
     }
 
     @Test

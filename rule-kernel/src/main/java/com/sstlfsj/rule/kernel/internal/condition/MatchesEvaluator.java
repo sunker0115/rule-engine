@@ -6,15 +6,17 @@ import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
+
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * MATCHES 条件算子：正则全串匹配。正则非法时返回 false，不抛异常。params 格式：{"regex": "..."}
- * 正则来自不可变规则配置（distinct 数有限），编译产物按 regex 串缓存，避免每次评估重编译
- * （{@code Pattern.matches} 每次调用都重新编译，是 MATCHES 的主要成本）。
+ * 底层用 RE2J（线性时间，杜绝 ReDoS 灾难性回溯）——规则正则来自多方配置、输入来自 metric，
+ * 回溯引擎在病态正则下会被拖垮，RE2J 保证线性时间。不支持反向引用/前后向断言（现有规则未用）。
+ * 编译产物按 regex 串缓存（正则来自不可变规则配置，distinct 数有限），避免每次评估重编译。
  */
 public class MatchesEvaluator implements ConditionEvaluator {
 

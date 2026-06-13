@@ -8,10 +8,12 @@ import com.sstlfsj.rule.kernel.api.model.SubjectType;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class MatchesEvaluatorTest {
 
@@ -58,6 +60,15 @@ class MatchesEvaluatorTest {
         ConditionNode n = node("v", "[invalid");
         assertThat(evaluator.evaluate(n, ctx("v", "test"))).isFalse();
         assertThat(evaluator.evaluate(n, ctx("v", "other"))).isFalse();
+    }
+
+    @Test
+    void redos_pathologicalPattern_completesLinearly() {
+        // 病态正则 + 不匹配长输入：回溯引擎(java.util.regex)会灾难性回溯卡死，RE2J 线性时间秒回 false
+        String evil = "(a+)+$";
+        String input = "a".repeat(40) + "!";
+        assertTimeoutPreemptively(Duration.ofSeconds(2),
+                () -> assertThat(evaluator.evaluate(node("v", evil), ctx("v", input))).isFalse());
     }
 
     @Test

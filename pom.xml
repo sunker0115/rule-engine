@@ -71,6 +71,8 @@
         <groovy.version>5.0.6</groovy.version>
         <!-- craftercms 维护分支(kohsuke 原版停更于 2018 的 1.19),面向现代 Groovy,包名仍 org.kohsuke.groovy.sandbox -->
         <groovy-sandbox.version>4.3.2</groovy-sandbox.version>
+        <!-- RE2J:线性时间正则(防 ReDoS),MATCHES 算子底层引擎 -->
+        <re2j.version>1.8</re2j.version>
     </properties>
 
     <build>
@@ -176,6 +178,13 @@
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
                 <version>${guava.version}</version>
+            </dependency>
+
+            <!-- RE2J (only for rule-kernel: MATCHES 算子线性时间正则，防 ReDoS) -->
+            <dependency>
+                <groupId>com.google.re2j</groupId>
+                <artifactId>re2j</artifactId>
+                <version>${re2j.version}</version>
             </dependency>
 
             <!-- protobuf-java：dev.cel 0.13.0 gencode 为 4.33.x，需运行时 ≥ 4.33；

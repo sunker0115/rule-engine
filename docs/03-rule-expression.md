@@ -163,7 +163,7 @@ ConditionNode 的值默认来自受治理指标（`valueRef=METRIC`）；当判�
 |----------|------------|------|-----------|
 | `STARTS_WITH` | STRING | 前缀匹配 | value 为 null → satisfied=false |
 | `ENDS_WITH` | STRING | 后缀匹配 | 同上 |
-| `MATCHES` | STRING | 正则匹配（Java `Pattern.matches`）| value 为 null → satisfied=false |
+| `MATCHES` | STRING | 正则全串匹配（RE2J 线性时间，防 ReDoS；不支持反向引用/前后向断言）；param 键 `regex` | value 为 null / 正则非法 → satisfied=false |
 
 ### 3.4 日期操作符
 
