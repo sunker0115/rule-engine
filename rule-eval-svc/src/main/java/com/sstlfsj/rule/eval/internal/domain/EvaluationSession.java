@@ -45,4 +45,8 @@ public class EvaluationSession {
     private Integer evalDurationMs;
     /** EvalContext metrics 取数快照（JSON 文本），构建失败时为 null。 */
     private String contextSnapshot;
+    /** 评估事件原始 payload(JSON 文本);忠实重放用,未捕获时 null。 */
+    private String payload;
+    /** 当时候选规则版本 id 列表(JSON 文本);忠实重放用,未捕获时 null。 */
+    private String candidateRuleVersionIds;
 }
