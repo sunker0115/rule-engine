@@ -1,0 +1,12 @@
+{
+  "tenantId": "9100",
+  "sceneCode": "tzdemo.win",
+  "name": "时段促活",
+  "dominantMode": "PULL",
+  "subjectType": "USER",
+  "eventTypes": ["LOGIN"],
+  "payloadSchema": [
+    { "name": "action_type", "type": "STRING", "required": false }
+  ],
+  "defaultParams": { "timezone": "Asia/Shanghai" }
+}
