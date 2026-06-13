@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.internal.condition;
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
@@ -14,7 +15,7 @@ public class StartsWithEvaluator implements ConditionEvaluator {
     public boolean evaluate(ConditionNode node, EvalContext ctx) {
         MetricValue mv = ctx.getMetric(node.metricCode());
         if (mv == null) return false;
-        Object prefix = node.params().get("prefix");
+        Object prefix = node.params().get(ConditionParams.PREFIX);
         if (prefix == null) return false;
         return String.valueOf(mv.value()).startsWith(String.valueOf(prefix));
     }

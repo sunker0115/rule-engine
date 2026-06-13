@@ -92,4 +92,13 @@ class ConditionDslEvaluationRoundTripTest {
         assertThat(hits(Condition.endsWith("m", "fix"), "m", "prefix")).isTrue();
         assertThat(hits(Condition.endsWith("m", "fix"), "m", "prepend")).isFalse();
     }
+
+    @Test
+    void payloadEq_payloadNeq() {
+        // payload 变体走同一 evaluator(键 threshold)，求值期 payload 已注入 metrics，故同 hits 助手可验
+        assertThat(hits(Condition.payloadEq("f", 100), "f", 100)).isTrue();
+        assertThat(hits(Condition.payloadEq("f", 100), "f", 101)).isFalse();
+        assertThat(hits(Condition.payloadNeq("f", 100), "f", 200)).isTrue();
+        assertThat(hits(Condition.payloadNeq("f", 100), "f", 100)).isFalse();
+    }
 }

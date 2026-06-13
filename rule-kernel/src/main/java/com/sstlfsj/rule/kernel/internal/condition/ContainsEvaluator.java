@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.internal.condition;
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 
@@ -18,7 +19,7 @@ public class ContainsEvaluator implements ConditionEvaluator {
         MetricValue mv = ctx.getMetric(node.metricCode());
         if (mv == null) return false;
         if (!(mv.value() instanceof Collection<?> list)) return false;
-        Object element = node.params().get("element");
+        Object element = node.params().get(ConditionParams.ELEMENT);
         if (element == null) return false;
         String target = String.valueOf(element);
         return list.stream().anyMatch(v -> target.equals(String.valueOf(v)));
