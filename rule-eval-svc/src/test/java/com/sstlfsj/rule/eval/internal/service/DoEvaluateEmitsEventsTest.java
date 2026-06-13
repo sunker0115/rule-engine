@@ -10,6 +10,9 @@ import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -35,8 +38,12 @@ class DoEvaluateEmitsEventsTest {
     }
 
     private EvalServiceImpl service(EvalEngine engine, DomainEventPublisher publisher) {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Counter errorCounter = Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL).register(registry);
+        Counter totalCounter = Counter.builder(RuleMetrics.EVAL_TOTAL).register(registry);
         return new EvalServiceImpl(engine, mock(SceneSnapshotLoader.class), publisher,
-                mock(com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper.class));
+                mock(com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper.class),
+                errorCounter, totalCounter, registry);
     }
 
     @Test

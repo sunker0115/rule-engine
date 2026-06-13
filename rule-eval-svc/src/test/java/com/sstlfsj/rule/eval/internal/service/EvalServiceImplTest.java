@@ -8,6 +8,9 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,10 +36,17 @@ class EvalServiceImplTest {
     @Mock RuleVersionReadMapper ruleVersionReadMapper;
 
     EvalServiceImpl impl;
+    SimpleMeterRegistry meterRegistry;
+    Counter evalErrorCounter;
+    Counter evalTotalCounter;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, ruleVersionReadMapper);
+        meterRegistry = new SimpleMeterRegistry();
+        evalErrorCounter = Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL).register(meterRegistry);
+        evalTotalCounter = Counter.builder(RuleMetrics.EVAL_TOTAL).register(meterRegistry);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, ruleVersionReadMapper,
+                evalErrorCounter, evalTotalCounter, meterRegistry);
     }
 
     private RuleEvent event() {
@@ -307,6 +317,35 @@ class EvalServiceImplTest {
                 () -> impl.evaluate(eventWithPayload(Map.of("country", "CN"))));
         assertTrue(ex.getMessage().contains("MISSING_REQUIRED_INPUT"));
         verify(evalEngine, never()).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
+    }
+
+    @Test
+    void evaluate_incrementsTotalCounter() {
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        impl.evaluate(event());
+
+        assertEquals(1.0, evalTotalCounter.count());
+    }
+
+    @Test
+    void evaluate_errorResult_incrementsErrorCounter() {
+        EvalResult engineResult = new EvalResult(false, null, List.of(), List.of(),
+                "FETCH_TIMEOUT", null, null, null);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
+
+        impl.evaluate(event());
+
+        assertEquals(1.0, evalErrorCounter.count());
+    }
+
+    @Test
+    void evaluate_okResult_doesNotIncrementErrorCounter() {
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        impl.evaluate(event());
+
+        assertEquals(0.0, evalErrorCounter.count());
     }
 
     @Test

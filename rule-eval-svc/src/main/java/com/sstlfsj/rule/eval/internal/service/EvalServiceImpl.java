@@ -12,6 +12,10 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.eval.internal.validate.PayloadInputValidator;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
@@ -30,14 +34,23 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     private final DomainEventPublisher eventPublisher;
     private final RuleVersionReadMapper ruleVersionReadMapper;
     private final PushEventDispatcher dispatcher;
+    private final Counter evalErrorCounter;
+    private final Counter evalTotalCounter;
+    private final MeterRegistry meterRegistry;
 
     EvalServiceImpl(EvalEngine evalEngine, SceneSnapshotLoader snapshotLoader,
                     DomainEventPublisher eventPublisher,
-                    RuleVersionReadMapper ruleVersionReadMapper) {
+                    RuleVersionReadMapper ruleVersionReadMapper,
+                    Counter evalErrorCounter,
+                    Counter evalTotalCounter,
+                    MeterRegistry meterRegistry) {
         this.evalEngine = evalEngine;
         this.snapshotLoader = snapshotLoader;
         this.eventPublisher = eventPublisher;
         this.ruleVersionReadMapper = ruleVersionReadMapper;
+        this.evalErrorCounter = evalErrorCounter;
+        this.evalTotalCounter = evalTotalCounter;
+        this.meterRegistry = meterRegistry;
         // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
         this.dispatcher = new PushEventDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null, null));
     }
@@ -45,6 +58,12 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     @Override
     public void afterPropertiesSet() {
         dispatcher.start();
+        Gauge.builder(RuleMetrics.TRACE_QUEUE_SIZE, dispatcher,
+                d -> d.queueCapacity() > 0
+                        ? (double) d.queueSize() / d.queueCapacity()
+                        : 0.0)
+                .description("trace 队列利用率（queueSize/capacity，0~1）")
+                .register(meterRegistry);
     }
 
     @Override
@@ -97,6 +116,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     }
 
     private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId, Instant asOf) {
+        evalTotalCounter.increment();
         Instant evalNow = asOf != null ? asOf : Instant.now();
         // dry-run 路径下 specificVersionId 已由 resolveDryRunVersionId 保证非空；此处 != null 为防御性守卫，
         // 防止未来出现"isDryRun=true 但无版本 id"的新调用路径误落候选分支（有副作用）。
@@ -114,6 +134,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             eventPublisher.publish(new DryRunRecordedEvent(
                     dryRunId, event, specificVersionId, snap.code(), snap.version(),
                     outcome.result(), outcome.context(), durationMs));
+            if (outcome.result().errorCode() != null) { evalErrorCounter.increment(); }
             return outcome.result();
         }
 
@@ -139,6 +160,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
         eventPublisher.publish(new AuditRecordedEvent(
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs));
+        if (result.errorCode() != null) { evalErrorCounter.increment(); }
         return result;
     }
 

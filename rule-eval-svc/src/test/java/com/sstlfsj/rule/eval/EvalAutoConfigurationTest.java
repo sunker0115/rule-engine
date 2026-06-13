@@ -20,6 +20,10 @@ import com.sstlfsj.rule.kernel.internal.evaluator.RuleVersionCache;
 import com.sstlfsj.rule.eval.internal.CompiledExecutorProperties;
 import com.sstlfsj.rule.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -165,6 +169,17 @@ class EvalAutoConfigurationTest {
                 config.scriptExecutor(List.of(new CelExpressionEngine())),
                 new TraceProperties());
         assertNotNull(engine);
+    }
+
+    @Test
+    void evalCounterBeans_registered() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        Counter errorCounter = config.evalErrorCounter(registry);
+        Counter totalCounter = config.evalTotalCounter(registry);
+        assertNotNull(errorCounter);
+        assertNotNull(totalCounter);
+        assertNotNull(registry.find(RuleMetrics.EVAL_ERROR_TOTAL).counter());
+        assertNotNull(registry.find(RuleMetrics.EVAL_TOTAL).counter());
     }
 
     @Test
