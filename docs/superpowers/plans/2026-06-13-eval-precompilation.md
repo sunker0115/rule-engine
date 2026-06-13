@@ -148,11 +148,12 @@ git commit -m "perf(benchmark): Phase 0 闸 — 量 InterpretedExecutor 纯 AST 
 ## Task 2: AstCompiler(AST→闭包,与解释器平价)
 
 **Files:**
-- Modify: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/ConditionEvaluation.java`(加 `satisfiesBoolean` 无分配布尔快路径)
+- Modify: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/ConditionEvaluation.java`(加 `satisfiesBoolean` 无分配布尔快路径,单一真相源)
+- Modify: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/InterpretedExecutor.java`(非 trace 叶子改调 `satisfiesBoolean`,与编译版共用)
 - Create: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/AstCompiler.java`
 - Test: `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/evaluator/AstCompilerTest.java`
 
-> 叶子设计(Phase 0 修正):编译期解析并捕获 `ConditionEvaluator`(巨态分派下比每次查 map 稳),叶子闭包调 `ConditionEvaluation.satisfiesBoolean(node, ctx, ev)` —— 镜像解释器叶子的布尔投影(metric ERROR / 无算子 → false),不分配 `ConditionOutcome`。平价测试保证与解释器布尔逐条一致(若两处 ERROR→false 语义漂移,平价测试即红)。
+> 架构层共用(非编译器内联):`ConditionEvaluation.satisfiesBoolean(node, ctx, evaluator)` 是布尔投影(metric ERROR / 无算子 → false)的**单一真相源**,不分配 `ConditionOutcome`。**解释器非 trace 叶子**与**编译版叶子**都调它——前者每次查 map 解析 evaluator,后者编译期绑定 evaluator(巨态分派更稳)。trace 路径仍走 `evaluate`(需 resolvedValue/source 建 NodeTrace)。平价测试 + 既有 InterpretedExecutorTest 双重保证语义不漂移。
 
 - [ ] **Step 1: 写失败测试**
 
