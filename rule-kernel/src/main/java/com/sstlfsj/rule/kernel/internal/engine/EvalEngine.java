@@ -133,8 +133,8 @@ public class EvalEngine {
         // 候选全被 Pre-Gate 拦截：BLOCKED 第四态（D22），blockedBy 记首个阻断 gate；区别于评估后 MISS
         if (passed.isEmpty()) return new EvalOutcome(EvalResult.miss(), null, firstBlockedBy);
 
-        Map<String, Object> sceneDefaults = index.getDefaultParams(event.tenantId(), event.sceneCode());
-        EvalContext ctx = contextAssembler.assemble(event, passed, now, sceneDefaults);
+        EvalEnv env = new EvalEnv(now, index.getDefaultParams(event.tenantId(), event.sceneCode()));
+        EvalContext ctx = contextAssembler.assemble(event, passed, env);
 
         // 仅执行器调用绑定 COLLECT：执行器读 TraceScope.COLLECT 决定是否构建 trace
         EvalResult result;

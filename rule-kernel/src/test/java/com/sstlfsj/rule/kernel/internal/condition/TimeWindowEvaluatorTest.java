@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.EvalEnv;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ class TimeWindowEvaluatorTest {
     private EvalContext ctxAtWithSceneTz(String isoOffset, String sceneTimezone) {
         Instant now = OffsetDateTime.parse(isoOffset).toInstant();
         RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
-        return new EvalContext("t1", ev, null, Map.of(), now, Map.of("timezone", sceneTimezone));
+        return new EvalContext("t1", ev, null, Map.of(), new EvalEnv(now, Map.of("timezone", sceneTimezone)));
     }
 
     private ConditionNode node(Map<String, Object> params) {

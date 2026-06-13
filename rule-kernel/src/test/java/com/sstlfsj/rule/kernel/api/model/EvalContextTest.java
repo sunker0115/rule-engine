@@ -88,8 +88,8 @@ class EvalContextTest {
 
     @Test
     void sceneDefaultParams_carriedAndImmutable() {
-        EvalContext ctx = new EvalContext("t1", event(), subject(), Map.of(), NOW,
-                Map.of("timezone", "Asia/Shanghai"));
+        EvalContext ctx = new EvalContext("t1", event(), subject(), Map.of(),
+                new EvalEnv(NOW, Map.of("timezone", "Asia/Shanghai")));
         assertEquals("Asia/Shanghai", ctx.sceneDefaultParams().get("timezone"));
         assertThrows(UnsupportedOperationException.class,
                 () -> ctx.sceneDefaultParams().put("x", "y"));
