@@ -54,8 +54,29 @@ class MetadataServiceImplTest {
 
         assertThat(response.availableMetrics()).hasSize(1);
         assertThat(response.availableMetrics().get(0).metricCode()).isEqualTo("user.age");
-        // conditionType v1 返回空列表
-        assertThat(response.conditionTypes()).isEmpty();
+        // conditionType 来自内置算子目录，非空
+        assertThat(response.conditionTypes()).isNotEmpty();
+    }
+
+    @Test
+    void getSceneMetadata_returnsConditionTypesFromCatalog() {
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setTenantId(1L);
+        scene.setCode("PAYMENT");
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
+        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of());
+
+        MetadataService.MetadataResponse resp = metadataService.getSceneMetadata("1", "PAYMENT");
+
+        assertThat(resp.conditionTypes()).isNotEmpty();
+        MetadataService.ConditionTypeMeta gt = resp.conditionTypes().stream()
+                .filter(c -> c.code().equals("GT")).findFirst().orElseThrow();
+        assertThat(gt.displayName()).isEqualTo("大于");
+        assertThat(gt.requiresMetric()).isTrue();
+        @SuppressWarnings("unchecked")
+        List<String> required = (List<String>) gt.paramsSchema().get("required");
+        assertThat(required).contains("threshold");
     }
 
     @Test

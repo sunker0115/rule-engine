@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.publish.ConditionTypeCatalog;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
@@ -53,8 +54,14 @@ class MetadataServiceImpl implements MetadataService {
                         Boolean.TRUE.equals(m.getAllowProvided())))
                 .toList();
 
-        // conditionType 来自注册的 SPI Bean，v1 返回空列表
-        return new MetadataResponse(List.of(), metricMetas);
+        // conditionType 来自内置算子目录（ConditionTypeCatalog 单一真相源）
+        List<ConditionTypeMeta> conditionTypes = ConditionTypeCatalog.all().stream()
+                .map(s -> new ConditionTypeMeta(
+                        s.code(), s.displayName(),
+                        Map.of("required", List.copyOf(s.requiredParamKeys())),
+                        s.requiresMetric()))
+                .toList();
+        return new MetadataResponse(conditionTypes, metricMetas);
     }
 
     @Override
