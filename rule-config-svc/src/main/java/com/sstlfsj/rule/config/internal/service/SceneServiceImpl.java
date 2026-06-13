@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
+import com.sstlfsj.rule.config.api.dto.PayloadFieldType;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
@@ -47,6 +48,7 @@ class SceneServiceImpl implements SceneService {
         scene.setDecisionStrategy(DecisionStrategy.HIGHEST_PRIORITY);
         scene.setSubjectType(SubjectType.valueOf(subjectType != null ? subjectType : "USER"));
         scene.setEventTypes(eventTypes != null ? eventTypes : List.of());
+        validatePayloadSchemaTypes(payloadSchema);
         scene.setPayloadSchema(payloadSchema);
         scene.setDefaultParams(defaultParams);
         scene.setPayloadSchemaVersion(1);
@@ -76,6 +78,7 @@ class SceneServiceImpl implements SceneService {
         if (eventTypes != null) scene.setEventTypes(eventTypes);
         if (defaultParams != null) scene.setDefaultParams(defaultParams);
 
+        validatePayloadSchemaTypes(payloadSchema);
         // payloadSchema 变更时快照旧版本并自增版本号
         if (payloadSchema != null && !payloadSchema.equals(scene.getPayloadSchema())) {
             int oldVersion = scene.getPayloadSchemaVersion() != null
@@ -126,6 +129,13 @@ class SceneServiceImpl implements SceneService {
             throw new IllegalArgumentException("Scene 不存在: " + sceneCode);
         }
         return scene;
+    }
+
+    private void validatePayloadSchemaTypes(List<PayloadFieldSpec> payloadSchema) {
+        if (payloadSchema == null) return;
+        for (PayloadFieldSpec f : payloadSchema) {
+            PayloadFieldType.fromTag(f.type()); // 非法 type 抛 IllegalArgumentException
+        }
     }
 
     private void snapshotSchema(Long sceneId, int version, List<PayloadFieldSpec> schema, String actorId) {

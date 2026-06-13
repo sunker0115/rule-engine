@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PayloadDataTypeMapperTest {
     @Test
@@ -12,7 +13,16 @@ class PayloadDataTypeMapperTest {
         assertEquals("BOOLEAN", PayloadDataTypeMapper.toDataTypeTag("BOOLEAN"));
         assertEquals("LIST", PayloadDataTypeMapper.toDataTypeTag("ARRAY"));
         assertEquals("UNKNOWN", PayloadDataTypeMapper.toDataTypeTag("OBJECT"));
-        assertEquals("UNKNOWN", PayloadDataTypeMapper.toDataTypeTag(null));
+    }
+
+    @Test
+    void nullTypeThrows() {
+        assertThrows(IllegalArgumentException.class, () -> PayloadDataTypeMapper.toDataTypeTag(null));
+    }
+
+    @Test
+    void illegalTypeThrows() {
+        assertThrows(IllegalArgumentException.class, () -> PayloadDataTypeMapper.toDataTypeTag("FOO"));
     }
 
     @Test

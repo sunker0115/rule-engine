@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.List;
  * 以 JSON 数组形式存入 scene.payload_schema 列，每个元素对应此 record。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record PayloadFieldSpec(
         /** 字段名，对应 RuleEvent.payload 的 key。 */
         String name,
