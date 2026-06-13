@@ -20,6 +20,7 @@ public class SceneRuleIndex {
 
     private final Map<String, List<RuleVersionSnapshot>> index = new ConcurrentHashMap<>();
     private final Map<String, SceneExecutionStrategy> strategies = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, Object>> defaultParams = new ConcurrentHashMap<>();
 
     /**
      * 返回给定租户、场景和事件类型对应的活跃规则版本快照列表。
@@ -76,6 +77,7 @@ public class SceneRuleIndex {
     public void remove(String tenantId, String sceneCode) {
         index.keySet().removeIf(k -> k.startsWith(tenantId + ":" + sceneCode + ":"));
         strategies.remove(tenantId + ":" + sceneCode);
+        defaultParams.remove(tenantId + ":" + sceneCode);
     }
 
     /**
@@ -99,5 +101,27 @@ public class SceneRuleIndex {
     public SceneExecutionStrategy getStrategy(String tenantId, String sceneCode) {
         return strategies.getOrDefault(tenantId + ":" + sceneCode,
                 SceneExecutionStrategy.HIGHEST_PRIORITY);
+    }
+
+    /**
+     * 设置场景默认参数(scene.default_params)。
+     *
+     * @param tenantId  租户标识
+     * @param sceneCode 场景编码
+     * @param params    默认参数 map(不可变拷贝)
+     */
+    public void setDefaultParams(String tenantId, String sceneCode, Map<String, Object> params) {
+        defaultParams.put(tenantId + ":" + sceneCode, params == null ? Map.of() : Map.copyOf(params));
+    }
+
+    /**
+     * 获取场景默认参数,未设置返回空 map。
+     *
+     * @param tenantId  租户标识
+     * @param sceneCode 场景编码
+     * @return 默认参数 map(不可变)
+     */
+    public Map<String, Object> getDefaultParams(String tenantId, String sceneCode) {
+        return defaultParams.getOrDefault(tenantId + ":" + sceneCode, Map.of());
     }
 }
