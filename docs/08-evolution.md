@@ -167,19 +167,14 @@
 
 - **v2 实装（2026-06-04）**：`PayloadFieldSpec` JSON Schema 完整子集（enum/min/max/pattern）、`scene_payload_schema_history` 历史表、`scene.payload_schema_version` 版本号字段已落地。Scene 创建/更新 API 现可持久化 payloadSchema，发布时 triggerEventTypes ⊆ Scene.eventTypes 校验已启用。AST payload 字段引用校验留到 v3（需约定 ConditionNode.params 的字段引用编码规范）。
 
-### 2.13 评估期预编译完全切换（来源 D20 v1 不做的"完整预编译"）
+### 2.13 评估期预编译（纯编译版已落地 2026-06-13，见 D67）
 
-- **v1 现状**：D20 已落地 `RuleVersionExecutor` SPI + `InterpretedExecutor` 默认实现（Visitor 树遍历），`rule_version.compiled_predicate_ref` 字段预留为空。
-- **触发条件**：PUSH 模式单机 TPS 触及 Visitor 模式的虚调用 + 多态分发瓶颈（参考量级 5–10 μs / 规则）。
-- **演进方向（v1.5）**：
-  - 引入 `CompiledExecutor`，发布期把 AST 编译为单一 `Predicate<EvalContext>` lambda（Janino 字节码 / LambdaMetafactory invokedynamic）；
-  - 编译产物缓存在 `RuleVersionCache` 按版本 id 引用，发布 / DISABLE / ENABLE 触发 evict + recompile；
-  - 与 D20 §3 输入契约校验联动——强类型变量引用闭合后才能确定编译槽位偏移；
-  - `ExecutorRegistry` 按 RuleVersion 灰度配置切换两类执行器（"编译版先选少量规则灰度验证 → 全量切"）。
-- **alpha 节点共享（跨 RuleVersion 条件去重）作为扩展讨论**：编译期可顺带做 ConditionNode hash 去重，**同 `EvalContext` 内同条件只算一次**，结果缓存在 `EvaluationSession.conditionResultCache`；与预编译切换同期落地为最佳，v1 阶段接受重复评估开销。
-- **节点级 trace 兼容性**：trace 仍按 RuleVersion 的视图展开，底层求值是否共享对运营透明（D7 不变）。
-- **迁移成本**：中（编译期 + 缓存 + 灰度切换）。
-- **预期收益**：单条规则评估开销从 5–10 μs 降至 0.3–1 μs（基于 Aviator / Janino 公开 benchmark 量级）。
+- **已落地（纯编译版）**：`AstCompiler` 把 `AST_BOOLEAN` 布尔 AST（And/Or/Not/Xor/Condition）编译为嵌套 `Predicate<EvalContext>` 闭包；`CompiledExecutor`（包 `InterpretedExecutor`）按不可变 ruleVersionId 缓存（`RuleVersionCache`），**非 trace 快路径**直接 `predicate.test(ctx)`，开 trace / 灰度未命中 / 关开关时回落解释器。
+- **编译技术**：闭包组合（非 Janino 字节码 / 非 LambdaMetafactory——零依赖、零类加载、可调试），组合节点编译期收数组、求值期下标循环避免 Iterator 分配。叶子经 `ConditionEvaluation.satisfiesBoolean`（布尔投影单一真相源，**解释器非 trace 路径与编译版共用**，编译版编译期绑定 evaluator）。
+- **trace 兼容**：trace 永远走解释器（编译版只服务非 trace 快路径），故每条 RuleVersion 的 NodeTrace 仍逐行展开，切换前后 trace 逐行一致（D7 不变）天然成立。
+- **灰度**：`engine.rule.eval.compiled-executor.*`（`enabled` / `rule-code-whitelist` / `on-compile-error`=FALLBACK\|FAIL），默认 `enabled=false` 逐字节等同解释器，`EvalEngine` 零改动；`CompiledPredicateEvictor` 监听 `RulePublishedEvent`/`SceneChangedEvent` 调 `evictAll`（键不可变免脏，纯内存卫生）。
+- **实测收益（替代原预测）**：Phase 0（冻结 LONG）AST 求值亚微秒（50 条件 865ns），JIT 逃逸分析已使解释器非 trace 路径近零分配（72–120 B/op）——故原"5–10μs→0.3–1μs"预测与"零分配"目标均不成立。A/B 实测编译版速度收益温和（20–50 条件 ~10–17%，5 条件持平）、分配≤解释器（50 条件 72B vs 120B）。默认关，作为架构层可切换能力落地，待生产 profiling（高 QPS + 高条件数 + 巨态分派）达标再灰度开。
+- **后续轮（未做）**：alpha/CSE 跨规则条件去重（同 `(sceneCode,eventType)` 下 ConditionNode hash 去重，同 `EvalContext` 内同条件只算一次）独立评估。`rule_version.compiled_predicate_ref` 列保持预留留空（lazy 编译，无需持久化编译产物引用）。
 
 ### 2.14 嵌入式 SDK 模式（来源 D20 v1 不做的"嵌入式 SDK"）
 

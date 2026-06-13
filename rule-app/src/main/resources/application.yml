@@ -53,6 +53,11 @@ management:
 engine:
   rule:
     # SDK 模式快照轮询间隔走 rule.sdk.poll-interval（独立前缀，不在 engine.rule.* 下）；服务端索引为事件驱动，无定时刷新键
+    eval:
+      compiled-executor:
+        enabled: false           # 编译执行器灰度开关；false=全部走解释器(默认，与解释器逐字节一致)
+        rule-code-whitelist: []  # enabled 且为空=全量编译；非空=仅列出的 code 走编译
+        on-compile-error: FALLBACK  # FALLBACK=WARN+回落解释器；FAIL=抛异常中止
     trace:
       enabled: true
       queue-capacity: 10000
