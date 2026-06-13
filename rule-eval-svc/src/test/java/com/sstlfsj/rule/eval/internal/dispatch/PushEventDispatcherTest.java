@@ -10,6 +10,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PushEventDispatcherTest {
@@ -88,5 +89,14 @@ class PushEventDispatcherTest {
 
         assertTrue(allProcessed, "stop 前投递的 " + total + " 个事件应全部被处理");
         assertEquals(total, processed.size());
+    }
+
+    @Test
+    void queueSize_and_capacity_exposed() {
+        PushEventDispatcher dispatcher = new PushEventDispatcher(100, e -> {});
+        dispatcher.start();
+        assertThat(dispatcher.queueCapacity()).isEqualTo(100);
+        assertThat(dispatcher.queueSize()).isZero();
+        dispatcher.stop();
     }
 }

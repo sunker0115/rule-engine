@@ -37,6 +37,12 @@ public class PushEventDispatcher {
         return queue.offer(event);
     }
 
+    /** trace 队列当前积压数（Gauge 注册用）。 */
+    public int queueSize() { return queue != null ? queue.size() : 0; }
+
+    /** trace 队列最大容量（Gauge 注册用）。 */
+    public int queueCapacity() { return capacity; }
+
     private void consumeLoop() {
         while (running || !queue.isEmpty()) {
             try {
