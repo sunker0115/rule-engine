@@ -15,7 +15,9 @@ import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
-import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.CompiledExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.RuleVersionCache;
+import com.sstlfsj.rule.eval.internal.CompiledExecutorProperties;
 import com.sstlfsj.rule.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import org.junit.jupiter.api.AfterAll;
@@ -60,16 +62,23 @@ class EvalAutoConfigurationTest {
         assertArrayEquals(new String[]{"com.sstlfsj.rule.eval.internal"}, scan.value());
     }
 
+    /** 默认 props（enabled=false），供装配测试复用。 */
+    private static CompiledExecutorProperties defaultProps() {
+        return new CompiledExecutorProperties();
+    }
+
     @Test
-    void ruleVersionExecutor_returnsInterpretedExecutor() {
-        RuleVersionExecutor executor = config.ruleVersionExecutor();
+    void ruleVersionExecutor_returnsCompiledExecutor() {
+        // AST_BOOLEAN executor 现为 CompiledExecutor(默认关，逐字节等同解释器)
+        RuleVersionExecutor executor = config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps());
         assertNotNull(executor);
-        assertInstanceOf(InterpretedExecutor.class, executor);
+        assertInstanceOf(CompiledExecutor.class, executor);
     }
 
     @Test
     void ruleVersionExecutor_hasPrimaryAnnotation() throws Exception {
-        var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor");
+        var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor",
+                RuleVersionCache.class, CompiledExecutorProperties.class);
         assertNotNull(method.getAnnotation(Primary.class),
                 "ruleVersionExecutor 必须标注 @Primary，否则与 ScorecardExecutor 并存时 Spring 无法消歧义");
     }
@@ -134,7 +143,7 @@ class EvalAutoConfigurationTest {
                 config.sceneRuleIndex(),
                 config.evalContextAssembler(null, null, null, null, EXEC, fetchProps()),
                 null,
-                config.ruleVersionExecutor(),
+                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps()),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
@@ -149,7 +158,7 @@ class EvalAutoConfigurationTest {
                 config.sceneRuleIndex(),
                 config.evalContextAssembler(null, null, null, null, EXEC, fetchProps()),
                 List.of(),
-                config.ruleVersionExecutor(),
+                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps()),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),

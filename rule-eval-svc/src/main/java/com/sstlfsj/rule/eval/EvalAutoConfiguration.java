@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval;
 
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
@@ -20,6 +21,10 @@ import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.AstCompiler;
+import com.sstlfsj.rule.kernel.internal.evaluator.CompiledExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.RuleVersionCache;
+import com.sstlfsj.rule.eval.internal.CompiledExecutorProperties;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
@@ -37,6 +42,7 @@ import org.springframework.context.annotation.Primary;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,6 +54,7 @@ import java.util.concurrent.Executors;
         com.sstlfsj.rule.eval.internal.TraceProperties.class,
         com.sstlfsj.rule.eval.internal.async.AuditProperties.class,
         com.sstlfsj.rule.eval.internal.snapshot.ScriptPrecompileProperties.class,
+        com.sstlfsj.rule.eval.internal.CompiledExecutorProperties.class,
         RetentionProperties.class})
 public class EvalAutoConfiguration {
 
@@ -69,15 +76,34 @@ public class EvalAutoConfiguration {
     }
 
     /**
-     * 默认使用 InterpretedExecutor（AST 树形解释执行，按 TraceScope.COLLECT 守卫收集 NodeTrace）。
+     * 编译产物缓存 bean，供 CompiledExecutor 与 CompiledPredicateEvictor 共享。
+     *
+     * @return RuleVersionCache 实例
+     */
+    @Bean
+    public RuleVersionCache ruleVersionCache() {
+        return new RuleVersionCache();
+    }
+
+    /**
+     * AST_BOOLEAN executor：默认 CompiledExecutor 包裹 InterpretedExecutor。
+     * compiled-executor.enabled=false(默认)时逐字节等同解释器(永远委托)；
+     * 开启后非 trace 快路径走编译闭包，开 trace / 灰度未命中时回落解释器。
      * 外部可注册自定义 RuleVersionExecutor Bean 覆盖此默认值。
      *
-     * @return InterpretedExecutor 实例
+     * @param ruleVersionCache 编译产物缓存
+     * @param props            编译执行器灰度配置
+     * @return CompiledExecutor 实例(对外仍是 RuleVersionExecutor)
      */
     @Bean
     @Primary
-    public RuleVersionExecutor ruleVersionExecutor() {
-        return new InterpretedExecutor(KernelEvaluators.defaults());
+    public RuleVersionExecutor ruleVersionExecutor(RuleVersionCache ruleVersionCache,
+                                                   CompiledExecutorProperties props) {
+        Map<String, ConditionEvaluator> evaluators = KernelEvaluators.defaults();
+        InterpretedExecutor interpreter = new InterpretedExecutor(evaluators);
+        AstCompiler compiler = new AstCompiler(evaluators);
+        return new CompiledExecutor(interpreter, compiler, ruleVersionCache,
+                props.isEnabled(), Set.copyOf(props.getRuleCodeWhitelist()), props.getOnCompileError());
     }
 
     /**
