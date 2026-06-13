@@ -13,7 +13,10 @@ import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
@@ -102,12 +105,39 @@ public class EvalAutoConfiguration {
     @Bean
     @Primary
     public RuleVersionExecutor ruleVersionExecutor(RuleVersionCache ruleVersionCache,
-                                                   CompiledExecutorProperties props) {
-        Map<String, ConditionEvaluator> evaluators = KernelEvaluators.defaults();
+                                                   CompiledExecutorProperties props,
+                                                   List<ConditionEvaluator> customEvaluators) {
+        Map<String, ConditionEvaluator> evaluators = mergeEvaluators(customEvaluators);
         InterpretedExecutor interpreter = new InterpretedExecutor(evaluators);
         AstCompiler compiler = new AstCompiler(evaluators);
         return new CompiledExecutor(interpreter, compiler, ruleVersionCache,
                 props.isEnabled(), Set.copyOf(props.getRuleCodeWhitelist()), props.getOnCompileError());
+    }
+
+    /**
+     * 将 Spring 托管的自定义 {@link ConditionEvaluator} bean 合并进内置算子表。
+     * 内置算子优先级低于自定义（可被覆盖），覆盖时输出 WARN 日志。
+     * 未标注 {@link ConditionType} 的 bean 跳过（WARN），避免无意中污染算子路由。
+     *
+     * @param custom Spring 自动收集的自定义 evaluator（无 bean 时为空列表）
+     * @return 合并后的不可变算子 Map
+     */
+    private static Map<String, ConditionEvaluator> mergeEvaluators(List<ConditionEvaluator> custom) {
+        if (custom == null || custom.isEmpty()) return KernelEvaluators.defaults();
+        Logger log = LoggerFactory.getLogger(EvalAutoConfiguration.class);
+        Map<String, ConditionEvaluator> map = new HashMap<>(KernelEvaluators.defaults());
+        for (ConditionEvaluator ev : custom) {
+            ConditionType ann = ev.getClass().getAnnotation(ConditionType.class);
+            if (ann == null) {
+                log.warn("自定义 ConditionEvaluator {} 未标注 @ConditionType，跳过注册", ev.getClass().getName());
+                continue;
+            }
+            if (map.containsKey(ann.value())) {
+                log.warn("自定义算子 code={} 覆盖内置实现", ann.value());
+            }
+            map.put(ann.value(), ev);
+        }
+        return Map.copyOf(map);
     }
 
     /**

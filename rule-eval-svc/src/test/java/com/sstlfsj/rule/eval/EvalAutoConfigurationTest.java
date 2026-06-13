@@ -73,8 +73,9 @@ class EvalAutoConfigurationTest {
 
     @Test
     void ruleVersionExecutor_returnsCompiledExecutor() {
-        // AST_BOOLEAN executor 现为 CompiledExecutor(默认关，逐字节等同解释器)
-        RuleVersionExecutor executor = config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps());
+        // 无自定义 evaluator，空列表
+        RuleVersionExecutor executor = config.ruleVersionExecutor(
+                config.ruleVersionCache(), defaultProps(), java.util.List.of());
         assertNotNull(executor);
         assertInstanceOf(CompiledExecutor.class, executor);
     }
@@ -82,9 +83,35 @@ class EvalAutoConfigurationTest {
     @Test
     void ruleVersionExecutor_hasPrimaryAnnotation() throws Exception {
         var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor",
-                RuleVersionCache.class, CompiledExecutorProperties.class);
+                RuleVersionCache.class, CompiledExecutorProperties.class, java.util.List.class);
         assertNotNull(method.getAnnotation(Primary.class),
                 "ruleVersionExecutor 必须标注 @Primary，否则与 ScorecardExecutor 并存时 Spring 无法消歧义");
+    }
+
+    @Test
+    void ruleVersionExecutor_customEvaluator_registeredInEngine() throws Exception {
+        // 自定义 @ConditionType 算子能注册进引擎（调用时命中自定义实现）
+        @com.sstlfsj.rule.kernel.api.annotation.ConditionType(
+                value = "test.custom", displayName = "测试算子",
+                schema = com.sstlfsj.rule.kernel.api.operator.ParamSpec.NONE)
+        class CustomEvaluator implements com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator {
+            @Override public boolean evaluate(com.sstlfsj.rule.kernel.api.model.ast.ConditionNode n,
+                                              com.sstlfsj.rule.kernel.api.model.EvalContext c) { return true; }
+        }
+        var executor = config.ruleVersionExecutor(
+                config.ruleVersionCache(), defaultProps(), java.util.List.of(new CustomEvaluator()));
+        assertNotNull(executor);
+    }
+
+    @Test
+    void ruleVersionExecutor_noAnnotation_skipped() {
+        // 未标注 @ConditionType 的自定义 bean 被跳过，不污染算子路由
+        class NoAnnotationEvaluator implements com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator {
+            @Override public boolean evaluate(com.sstlfsj.rule.kernel.api.model.ast.ConditionNode n,
+                                              com.sstlfsj.rule.kernel.api.model.EvalContext c) { return false; }
+        }
+        assertNotNull(config.ruleVersionExecutor(
+                config.ruleVersionCache(), defaultProps(), java.util.List.of(new NoAnnotationEvaluator())));
     }
 
     @Test
@@ -147,7 +174,7 @@ class EvalAutoConfigurationTest {
                 config.sceneRuleIndex(),
                 config.evalContextAssembler(null, null, null, null, EXEC, fetchProps()),
                 null,
-                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps()),
+                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps(), java.util.List.of()),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
@@ -162,7 +189,7 @@ class EvalAutoConfigurationTest {
                 config.sceneRuleIndex(),
                 config.evalContextAssembler(null, null, null, null, EXEC, fetchProps()),
                 List.of(),
-                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps()),
+                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps(), java.util.List.of()),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
