@@ -1,12 +1,17 @@
 package com.sstlfsj.rule.kernel.api.annotation;
 
-import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
+
 import java.lang.annotation.*;
 
 /**
  * 标注 ConditionEvaluator 实现类的条件类型标识与元数据。
  * 供 {@link com.sstlfsj.rule.kernel.internal.condition.ConditionTypeCatalog} 收集，
  * 同时作为自定义算子向元数据接口暴露自身规格的入口。
+ *
+ * <p>参数规格通过 {@link #schema()} 引用 {@link ParamSpec} 枚举常量——具名预设，
+ * 比散落的数组字面量更 DRY、意图更清晰；自定义算子用 {@link ParamSpec#NONE} 或注册
+ * {@code @Bean OperatorSpec}（完全控制）。
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
@@ -16,10 +21,6 @@ public @interface ConditionType {
     String value();
     /** 运营可读名；留空回退到 {@link #value()}。 */
     String displayName() default "";
-    /** 必填 param 键（{@link com.sstlfsj.rule.kernel.api.model.ConditionParams} 常量）。 */
-    String[] requiredParamKeys() default {};
-    /** 允许的 metric/payload dataType（DataType 枚举，编译期常量）。 */
-    DataType[] allowedDataTypes() default {};
-    /** 是否需要绑定 metric/payload 字段（time.* 内置路径为 false）。 */
-    boolean requiresMetric() default true;
+    /** 参数规格预设（必填键 + 允许 dataType + 是否需 metric）；默认 {@link ParamSpec#NONE}。 */
+    ParamSpec schema() default ParamSpec.NONE;
 }
