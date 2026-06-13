@@ -11,6 +11,7 @@ import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -240,6 +241,35 @@ class EvalServiceImplTest {
         EvalResult result = impl.evaluate(event());
 
         assertEquals(60.0, result.score());
+    }
+
+    @Test
+    void evaluate_withAsOf_usesCallerClockAsEvalNow() {
+        // 传固定 asOf：引擎求值时刻必须等于该 Instant，而非 Instant.now()
+        Instant asOf = Instant.parse("2020-01-01T00:00:00Z");
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        impl.evaluate(event(), asOf);
+
+        ArgumentCaptor<Instant> nowCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(), nowCaptor.capture());
+        assertEquals(asOf, nowCaptor.getValue());
+    }
+
+    @Test
+    void evaluate_withoutAsOf_usesNow() {
+        // 不传 asOf（asOf=null）：求值时刻落在调用前后的 Instant.now() 区间内
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        Instant before = Instant.now();
+        impl.evaluate(event(), null);
+        Instant after = Instant.now();
+
+        ArgumentCaptor<Instant> nowCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(), nowCaptor.capture());
+        Instant used = nowCaptor.getValue();
+        assertFalse(used.isBefore(before));
+        assertFalse(used.isAfter(after));
     }
 
     @Test

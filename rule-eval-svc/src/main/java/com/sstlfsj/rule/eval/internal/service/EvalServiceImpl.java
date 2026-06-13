@@ -39,7 +39,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         this.eventPublisher = eventPublisher;
         this.ruleVersionReadMapper = ruleVersionReadMapper;
         // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
-        this.dispatcher = new PushEventDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null));
+        this.dispatcher = new PushEventDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null, null));
     }
 
     @Override
@@ -60,14 +60,20 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     @Override
     public EvalResult evaluate(RuleEvent event) {
-        return doEvaluate(event, EvalMode.PULL, false, null);
+        return doEvaluate(event, EvalMode.PULL, false, null, null);
+    }
+
+    @Override
+    public EvalResult evaluate(RuleEvent event, Instant asOf) {
+        return doEvaluate(event, EvalMode.PULL, false, null, asOf);
     }
 
     @Override
     public EvalResult dryRun(RuleEvent event, Long ruleId, Long ruleVersionId) {
         Long versionId = resolveDryRunVersionId(event, ruleId, ruleVersionId);
         // dry-run 永远先解析出一个版本 id：恒走 doEvaluate 的带版本单快照分支，结构上不落候选分支（根除副作用 bug）
-        return doEvaluate(event, EvalMode.PULL, true, versionId);
+        // dry-run 暂不开放 asOf，传 null 由引擎用 Instant.now()
+        return doEvaluate(event, EvalMode.PULL, true, versionId, null);
     }
 
     /** 解析 dry-run 目标版本 id：ruleVersionId 优先；否则 ruleId 取最新版本；都无则抛 400。 */
@@ -90,8 +96,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         throw new IllegalArgumentException("MISSING_DRYRUN_TARGET: 必须指定 ruleId 或 ruleVersionId");
     }
 
-    private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId) {
-        Instant evalNow = Instant.now();
+    private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId, Instant asOf) {
+        Instant evalNow = asOf != null ? asOf : Instant.now();
         // dry-run 路径下 specificVersionId 已由 resolveDryRunVersionId 保证非空；此处 != null 为防御性守卫，
         // 防止未来出现"isDryRun=true 但无版本 id"的新调用路径误落候选分支（有副作用）。
         if (isDryRun && specificVersionId != null) {

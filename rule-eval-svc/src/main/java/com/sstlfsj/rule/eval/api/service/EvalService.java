@@ -3,6 +3,8 @@ package com.sstlfsj.rule.eval.api.service;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 
+import java.time.Instant;
+
 /** 使用场景规则索引和已注册 SPI 组件对规则事件进行评估。 */
 public interface EvalService {
 
@@ -21,6 +23,15 @@ public interface EvalService {
      * @return 包含决策的完整评估结果
      */
     EvalResult evaluate(RuleEvent event);
+
+    /**
+     * 同步 PULL 模式评估规则事件，使用调用方指定的求值时钟。
+     *
+     * @param event 待评估的规则事件
+     * @param asOf  求值时刻；为 null 时引擎用 {@code Instant.now()}
+     * @return 包含决策的完整评估结果
+     */
+    EvalResult evaluate(RuleEvent event, Instant asOf);
 
     /**
      * 执行 dry-run 评估，返回含节点 trace 的结果，不落 evaluation_session。

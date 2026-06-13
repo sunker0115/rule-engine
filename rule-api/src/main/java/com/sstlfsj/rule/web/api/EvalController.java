@@ -38,7 +38,7 @@ public class EvalController {
      * @return 完整评估结果 */
     @PostMapping("/evaluate")
     public ApiResponse<EvalResult> evaluate(@RequestBody EvalEventRequest req) {
-        return ApiResponse.ok(evalService.evaluate(toEvent(req)));
+        return ApiResponse.ok(evalService.evaluate(toEvent(req), req.asOf()));
     }
 
     /** POST /api/v1/rule/dry-run — dry-run（含 nodeTrace，不派发 Action）

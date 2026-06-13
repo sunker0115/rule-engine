@@ -90,13 +90,48 @@ class EvalControllerTest {
 
     @Test
     void evaluate_returns200_withResult() throws Exception {
-        when(evalService.evaluate(any())).thenReturn(EvalResult.miss());
+        when(evalService.evaluate(any(), any())).thenReturn(EvalResult.miss());
 
         mockMvc.perform(post("/api/v1/rule/evaluate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(EVENT_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void evaluate_passesAsOfThroughToService() throws Exception {
+        // 请求体携带 asOf（ISO-8601）→ controller 透传给 evalService.evaluate 的 asOf 入参
+        when(evalService.evaluate(any(), any())).thenReturn(EvalResult.miss());
+        String jsonWithAsOf = """
+                {"tenantCode":"acme","sceneCode":"PAYMENT","eventType":"ORDER",
+                 "subjectId":"u1","eventId":"evt-1","occurredAt":null,
+                 "payload":{},"asOf":"2020-01-01T00:00:00Z"}
+                """;
+
+        mockMvc.perform(post("/api/v1/rule/evaluate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonWithAsOf))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<java.time.Instant> asOfCaptor = ArgumentCaptor.forClass(java.time.Instant.class);
+        verify(evalService).evaluate(any(RuleEvent.class), asOfCaptor.capture());
+        assertThat(asOfCaptor.getValue()).isEqualTo(java.time.Instant.parse("2020-01-01T00:00:00Z"));
+    }
+
+    @Test
+    void evaluate_nullAsOf_whenOmitted() throws Exception {
+        // 请求体不带 asOf → controller 传 null（引擎降级用 Instant.now()）
+        when(evalService.evaluate(any(), any())).thenReturn(EvalResult.miss());
+
+        mockMvc.perform(post("/api/v1/rule/evaluate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(EVENT_JSON))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<java.time.Instant> asOfCaptor = ArgumentCaptor.forClass(java.time.Instant.class);
+        verify(evalService).evaluate(any(RuleEvent.class), asOfCaptor.capture());
+        assertThat(asOfCaptor.getValue()).isNull();
     }
 
     @Test
