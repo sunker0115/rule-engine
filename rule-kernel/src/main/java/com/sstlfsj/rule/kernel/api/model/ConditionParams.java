@@ -28,4 +28,16 @@ public final class ConditionParams {
     public static final String REGEX = "regex";
     /** 时区（日期/时间类比较，可选）。 */
     public static final String TIMEZONE = "timezone";
+    /** time.window / time.occurred_at 开始时间(HH:mm 或 ISO-8601)。 */
+    public static final String START         = "start";
+    /** time.window / time.occurred_at 结束时间(HH:mm 或 ISO-8601)。 */
+    public static final String END           = "end";
+    /** time.window 排除日期列表(MM-DD 字符串数组,可选)。 */
+    public static final String DATES_EXCLUDE = "datesExclude";
+    /** time.window 生效星期(MON/TUE/... 字符串数组,可选)。 */
+    public static final String DAYS_OF_WEEK  = "daysOfWeek";
+    /** time.occurred_at 比较运算符(BEFORE / AFTER / BETWEEN)。 */
+    public static final String OPERATOR      = "operator";
+    /** time.occurred_at 单端比较目标值(ISO-8601 或 $now)。 */
+    public static final String VALUE         = "value";
 }

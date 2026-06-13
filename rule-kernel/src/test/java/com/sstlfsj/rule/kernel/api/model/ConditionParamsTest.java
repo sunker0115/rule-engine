@@ -19,4 +19,14 @@ class ConditionParamsTest {
         assertThat(ConditionParams.REGEX).isEqualTo("regex");
         assertThat(ConditionParams.TIMEZONE).isEqualTo("timezone");
     }
+
+    @Test
+    void timeWindowKeys() {
+        assertThat(ConditionParams.START).isEqualTo("start");
+        assertThat(ConditionParams.END).isEqualTo("end");
+        assertThat(ConditionParams.DATES_EXCLUDE).isEqualTo("datesExclude");
+        assertThat(ConditionParams.DAYS_OF_WEEK).isEqualTo("daysOfWeek");
+        assertThat(ConditionParams.OPERATOR).isEqualTo("operator");
+        assertThat(ConditionParams.VALUE).isEqualTo("value");
+    }
 }
