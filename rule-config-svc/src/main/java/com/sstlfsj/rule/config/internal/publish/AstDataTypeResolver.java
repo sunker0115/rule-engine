@@ -2,6 +2,8 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
+import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.internal.condition.ConditionTypeCatalog;
 
 import java.util.List;
 import java.util.Map;
@@ -64,7 +66,7 @@ class AstDataTypeResolver {
         String dataType = dataTypeMap.get(col.metricCode());
         // 校验同 resolveCondition：dataType 已知且算子在 ALLOWED 内才校验；缺席算子放行
         if (dataType != null) {
-            ConditionTypeCatalog.Spec spec = ConditionTypeCatalog.spec(col.operator());
+            OperatorSpec spec = ConditionTypeCatalog.spec(col.operator());
             Set<String> allowed = spec != null ? spec.allowedDataTypes() : null;
             if (allowed != null && !allowed.contains(dataType)) {
                 throw new IllegalArgumentException(
@@ -88,7 +90,7 @@ class AstDataTypeResolver {
             // 校验仅在 dataType 已知（非 null）时执行；ALLOWED 缺席的算子（time.*、自定义）直接放行
             // DATE_BEFORE/DATE_AFTER 已纳入 ALLOWED（B20），不再绕过校验
             if (dataType != null) {
-                ConditionTypeCatalog.Spec spec = ConditionTypeCatalog.spec(cond.conditionType());
+                OperatorSpec spec = ConditionTypeCatalog.spec(cond.conditionType());
                 Set<String> allowed = spec != null ? spec.allowedDataTypes() : null;
                 if (allowed != null && !allowed.contains(dataType)) {
                     throw new IllegalArgumentException(

@@ -10,6 +10,8 @@ import com.sstlfsj.rule.kernel.api.model.ast.NotNode;
 import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
+import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.internal.condition.ConditionTypeCatalog;
 
 /**
  * 发布期 param 键校验：遍历 AST，按 {@link ConditionTypeCatalog} 校每个 ConditionNode 的必填 param 键齐全。
@@ -38,7 +40,7 @@ final class ConditionParamValidator {
     }
 
     private static void validateLeaf(ConditionNode c) {
-        ConditionTypeCatalog.Spec spec = ConditionTypeCatalog.spec(c.conditionType());
+        OperatorSpec spec = ConditionTypeCatalog.spec(c.conditionType());
         if (spec == null) return;
         for (String key : spec.requiredParamKeys()) {
             if (!c.params().containsKey(key)) {
