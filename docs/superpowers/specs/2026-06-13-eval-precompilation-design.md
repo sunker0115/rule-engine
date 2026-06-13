@@ -14,9 +14,11 @@
 - 不改 trace 语义、不改灰度以外的任何运行时行为。
 
 **成功判据**:
-1. 编译版热路径 per-eval 额外分配 ≈ 0(JMH `-prof gc` 验证)。
-2. 编译版布尔结果与 trace 输出与解释器**逐条/逐行一致**(平价测试 + 端到端 trace 对比)。
-3. 端到端有可量提升(由 §7 benchmark 闸量化)。
+1. 编译版布尔结果与 trace 输出与解释器**逐条/逐行一致**(平价测试 + 端到端 trace 对比)。
+2. 编译版 per-eval 分配 **≤ 解释器**。说明:Phase 0 实测(冻结 LONG)显示解释器非 trace 快路径已被 JIT 逃逸分析降到 ~72–120 B/op(`ConditionOutcome` 与 Long 装箱被标量替换),故"零分配"不是现实目标;编译版的结构价值在**编译期绑定 evaluator**,在生产巨态分派(多算子/多形状)下逃逸分析退化时,分配与分派比解释器更稳。
+3. 编译版在高条件数场景 AST 求值耗时低于解释器(省节点 `switch` 分派);是否 ship(灰度开)由 §9 的 Task 8 A/B 实测决定。
+
+**Phase 0 闸结论(2026-06-13)**:冻结 LONG 下 AST 求值 79 ns(5 条件)/865 ns(50 条件),分配 72–120 B/op。providedMetrics 主导场景下收益成立但边际,故编译版**默认关**,作为架构层可切换能力落地,实测达标后再灰度开。
 
 ## 2. 范围边界
 
@@ -32,8 +34,10 @@
 Predicate<EvalContext> compile(AstNode n) {
     return switch (n) {
         case ConditionNode c -> {
+            // 编译期解析并捕获 evaluator(巨态分派下比每次查 map 更稳);
+            // satisfiesBoolean 镜像解释器叶子的布尔投影(metric ERROR/无算子 → false),不分配 ConditionOutcome
             ConditionEvaluator ev = evaluators.get(c.conditionType());
-            yield ctx -> ev.evaluate(c, ctx);              // ev、c 编译期捕获,求值期不分配
+            yield ctx -> ConditionEvaluation.satisfiesBoolean(c, ctx, ev);
         }
         case AndNode a -> {
             Predicate<EvalContext>[] ps = compileChildren(a.children());

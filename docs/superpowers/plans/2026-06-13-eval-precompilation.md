@@ -148,8 +148,11 @@ git commit -m "perf(benchmark): Phase 0 闸 — 量 InterpretedExecutor 纯 AST 
 ## Task 2: AstCompiler(AST→闭包,与解释器平价)
 
 **Files:**
+- Modify: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/ConditionEvaluation.java`(加 `satisfiesBoolean` 无分配布尔快路径)
 - Create: `rule-kernel/src/main/java/com/sstlfsj/rule/kernel/internal/evaluator/AstCompiler.java`
 - Test: `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/evaluator/AstCompilerTest.java`
+
+> 叶子设计(Phase 0 修正):编译期解析并捕获 `ConditionEvaluator`(巨态分派下比每次查 map 稳),叶子闭包调 `ConditionEvaluation.satisfiesBoolean(node, ctx, ev)` —— 镜像解释器叶子的布尔投影(metric ERROR / 无算子 → false),不分配 `ConditionOutcome`。平价测试保证与解释器布尔逐条一致(若两处 ERROR→false 语义漂移,平价测试即红)。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -304,10 +307,11 @@ public final class AstCompiler {
      */
     public Predicate<EvalContext> compile(AstNode node) {
         return switch (node) {
-            case ConditionNode c -> ctx -> {
-                ConditionOutcome o = ConditionEvaluation.evaluate(c, ctx, evaluators);
-                return !o.isError() && o.satisfied();
-            };
+            case ConditionNode c -> {
+                // 编译期绑定 evaluator；satisfiesBoolean 镜像解释器布尔投影，不分配 ConditionOutcome
+                ConditionEvaluator ev = evaluators.get(c.conditionType());
+                yield ctx -> ConditionEvaluation.satisfiesBoolean(c, ctx, ev);
+            }
             case AndNode a -> {
                 Predicate<EvalContext>[] ps = compileChildren(a.children());
                 yield ctx -> {
