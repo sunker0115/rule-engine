@@ -14,6 +14,7 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -32,7 +33,11 @@ class MetadataServiceImplTest {
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
-    @InjectMocks MetadataServiceImpl metadataService;
+
+    private MetadataServiceImpl newService(List<OperatorSpec> customSpecs) {
+        return new MetadataServiceImpl(sceneMapper, metricDefinitionMapper,
+                ruleDefinitionMapper, ruleVersionMapper, customSpecs);
+    }
 
     @Test
     void getSceneMetadata_returnsAvailableMetrics() {
@@ -50,7 +55,7 @@ class MetadataServiceImplTest {
         metric.setAllowProvided(false);
         when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(metric));
 
-        MetadataService.MetadataResponse response = metadataService.getSceneMetadata("1", "PAYMENT");
+        MetadataService.MetadataResponse response = newService(List.of()).getSceneMetadata("1", "PAYMENT");
 
         assertThat(response.availableMetrics()).hasSize(1);
         assertThat(response.availableMetrics().get(0).metricCode()).isEqualTo("user.age");
@@ -67,16 +72,14 @@ class MetadataServiceImplTest {
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of());
 
-        MetadataService.MetadataResponse resp = metadataService.getSceneMetadata("1", "PAYMENT");
+        MetadataService.MetadataResponse resp = newService(List.of()).getSceneMetadata("1", "PAYMENT");
 
         assertThat(resp.conditionTypes()).isNotEmpty();
-        MetadataService.ConditionTypeMeta gt = resp.conditionTypes().stream()
+        OperatorSpec gt = resp.conditionTypes().stream()
                 .filter(c -> c.code().equals("GT")).findFirst().orElseThrow();
         assertThat(gt.displayName()).isEqualTo("大于");
         assertThat(gt.requiresMetric()).isTrue();
-        @SuppressWarnings("unchecked")
-        List<String> required = (List<String>) gt.paramsSchema().get("required");
-        assertThat(required).contains("threshold");
+        assertThat(gt.requiredParamKeys()).contains("threshold");
     }
 
     @Test
@@ -91,8 +94,7 @@ class MetadataServiceImplTest {
         row.setParams(java.util.Map.of("window", "30d"));
         when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(row));
 
-        MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
+        MetadataServiceImpl service = newService(List.of());
 
         List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of());
 
@@ -117,8 +119,7 @@ class MetadataServiceImplTest {
         row.setParams(null);
         when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(row));
 
-        MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
+        MetadataServiceImpl service = newService(List.of());
 
         List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of());
         assertThat(defs.get(0).cacheTtlSeconds()).isZero();
@@ -154,8 +155,7 @@ class MetadataServiceImplTest {
         riskScore.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(riskScore);
 
-        MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
+        MetadataServiceImpl service = newService(List.of());
 
         List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of("fraud"));
 
@@ -181,8 +181,7 @@ class MetadataServiceImplTest {
         rv.setMetricDependencies(List.of());   // 规则不引用任何 metric
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
 
-        MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
+        MetadataServiceImpl service = newService(List.of());
 
         // scenes 给了但规则无 metric 依赖 → 空列表（收紧语义，区别于旧的全量返回）
         assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();
@@ -192,8 +191,7 @@ class MetadataServiceImplTest {
     void listMetricDefinitions_unknownScene_returnsEmpty() {
         when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of());   // scene code 不存在
 
-        MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
+        MetadataServiceImpl service = newService(List.of());
 
         assertThat(service.listMetricDefinitions("1", List.of("nope"))).isEmpty();
     }
@@ -238,8 +236,7 @@ class MetadataServiceImplTest {
         // DECLARED 分支按精确 (code,version) 查，不限 status（含 SUPERSEDED）
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(riskV1);
 
-        MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
+        MetadataServiceImpl service = newService(List.of());
 
         List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of("fraud"));
 
@@ -277,8 +274,7 @@ class MetadataServiceImplTest {
         // 定义已被物理删除：selectOne 返回 null
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(null);
 
-        MetadataServiceImpl service = new MetadataServiceImpl(
-                sceneMapper, metricDefinitionMapper, ruleDefinitionMapper, ruleVersionMapper);
+        MetadataServiceImpl service = newService(List.of());
 
         // 容错：跳过缺失定义，不抛异常，返回空列表
         assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();
@@ -315,10 +311,55 @@ class MetadataServiceImplTest {
         when(ruleVersionMapper.findActiveWithPayloadByRuleDefIds(any())).thenReturn(List.of(rv1, rv2));
 
         MetadataService.InputManifestResponse resp =
-                metadataService.getInputManifest("1", "demo.login", null);
+                newService(List.of()).getInputManifest("1", "demo.login", null);
 
         assertThat(resp.fields())
                 .extracting(MetadataService.InputFieldSpec::name)
                 .containsExactlyInAnyOrder("amount", "country");
+    }
+
+    @Test
+    void getSceneMetadata_customSpecBean_appearsInConditionTypes() {
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setTenantId(1L);
+        scene.setCode("PAYMENT");
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
+        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of());
+
+        OperatorSpec custom = OperatorSpec.builder()
+                .code("geo.within").displayName("地理围栏")
+                .requiredParamKeys(java.util.Set.of("lat", "lng", "radius"))
+                .allowedDataTypes(java.util.Set.of())
+                .requiresMetric(false).build();
+
+        MetadataService.MetadataResponse resp =
+                newService(List.of(custom)).getSceneMetadata("1", "PAYMENT");
+
+        assertThat(resp.conditionTypes()).extracting(OperatorSpec::code).contains("geo.within");
+    }
+
+    @Test
+    void getSceneMetadata_customSpec_doesNotOverrideBuiltin() {
+        SceneDef scene = new SceneDef();
+        scene.setId(5L);
+        scene.setTenantId(1L);
+        scene.setCode("PAYMENT");
+        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
+        when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of());
+
+        OperatorSpec fake = OperatorSpec.builder()
+                .code("GT").displayName("fake")
+                .requiredParamKeys(java.util.Set.of())
+                .allowedDataTypes(java.util.Set.of())
+                .requiresMetric(false).build();
+
+        MetadataService.MetadataResponse resp =
+                newService(List.of(fake)).getSceneMetadata("1", "PAYMENT");
+
+        // 内置优先：自定义 GT 不覆盖内置 GT
+        OperatorSpec gt = resp.conditionTypes().stream()
+                .filter(s -> "GT".equals(s.code())).findFirst().orElseThrow();
+        assertThat(gt.displayName()).isEqualTo("大于");
     }
 }
