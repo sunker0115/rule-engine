@@ -84,7 +84,6 @@ public class RuleImportService {
                 s.setEventTypes(ss.eventTypes());
                 s.setPayloadSchema(ss.payloadSchema());
                 s.setDefaultParams(ss.defaultParams());
-                s.setPayloadSchemaVersion(ss.payloadSchemaVersion() == null ? 1 : ss.payloadSchemaVersion());
                 s.setStatus(SceneStatus.ACTIVE);
                 s.setCreatedBy(actorId);
                 s.setCreatedAt(LocalDateTime.now());

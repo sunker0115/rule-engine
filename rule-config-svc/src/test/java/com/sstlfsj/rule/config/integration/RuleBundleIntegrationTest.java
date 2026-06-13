@@ -90,7 +90,7 @@ class RuleBundleIntegrationTest {
         scene.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
         scene.setEventTypes(java.util.List.of("transfer")); scene.setPayloadSchema(java.util.List.of());
         scene.setDefaultParams(java.util.Map.of());
-        scene.setPayloadSchemaVersion(1); scene.setStatus(SceneStatus.ACTIVE); scene.setCreatedBy("seed");
+        scene.setStatus(SceneStatus.ACTIVE); scene.setCreatedBy("seed");
         scene.setCreatedAt(LocalDateTime.now());
         sceneMapper.insert(scene);
 

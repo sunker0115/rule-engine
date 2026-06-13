@@ -76,8 +76,7 @@ public class RuleExportService {
                 .map(s -> new RuleBundle.SceneSnapshot(
                         s.getCode(), s.getName(), s.getDescription(),
                         s.getSubjectType().name(), s.getDominantMode().name(), s.getDecisionStrategy().name(),
-                        s.getEventTypes(), s.getPayloadSchema(), s.getDefaultParams(),
-                        s.getPayloadSchemaVersion()))
+                        s.getEventTypes(), s.getPayloadSchema(), s.getDefaultParams()))
                 .toList();
 
         // 3. metrics（去重，精确版本）

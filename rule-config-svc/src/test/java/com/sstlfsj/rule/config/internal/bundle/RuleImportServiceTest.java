@@ -69,7 +69,7 @@ class RuleImportServiceTest {
                 java.util.Arrays.stream(ruleCodes).map(this::ruleEntry).toList(),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", "d", "USER",
                         "PUSH", "HIGHEST_PRIORITY", java.util.List.of("transfer"),
-                        java.util.List.of(), java.util.Map.of(), 1)),
+                        java.util.List.of(), java.util.Map.of())),
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
                         metricSourceType, "LONG", java.util.Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易")));
@@ -149,7 +149,7 @@ class RuleImportServiceTest {
                 List.of(ruleEntry("rule.a")),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", "d", "USER",
                         "PUSH", "HIGHEST_PRIORITY", java.util.List.of("transfer"),
-                        java.util.List.of(), java.util.Map.of(), 1)),
+                        java.util.List.of(), java.util.Map.of())),
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
                         "ATTRIBUTE", "FLOAT", java.util.Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易")));

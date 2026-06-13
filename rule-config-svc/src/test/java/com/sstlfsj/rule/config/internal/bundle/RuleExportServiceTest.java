@@ -75,7 +75,6 @@ class RuleExportServiceTest {
         s.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
         s.setEventTypes(java.util.List.of("transfer")); s.setPayloadSchema(java.util.List.of());
         s.setDefaultParams(java.util.Map.of());
-        s.setPayloadSchemaVersion(1);
         return s;
     }
 

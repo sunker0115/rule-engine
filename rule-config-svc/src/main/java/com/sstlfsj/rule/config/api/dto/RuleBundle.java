@@ -59,8 +59,7 @@ public record RuleBundle(
             String decisionStrategy,
             List<String> eventTypes,
             List<PayloadFieldSpec> payloadSchema,
-            Map<String, Object> defaultParams,
-            Integer payloadSchemaVersion
+            Map<String, Object> defaultParams
     ) {}
 
     /** metric 定义快照，对应 metric_definition 表的精确版本行。 */

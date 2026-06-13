@@ -38,7 +38,7 @@ class RuleBundleTest {
                         "risk.transfer", "转账风控", "desc", "USER", "PUSH", "HIGHEST_PRIORITY",
                         List.of("transfer"),
                         List.of(new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null)),
-                        Map.of(), 1)),
+                        Map.of())),
                 List.of(new RuleBundle.MetricEntry(
                         "account.age", 1, "账户年龄", "ATTRIBUTE", "LONG", Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry(

@@ -52,7 +52,7 @@ class RuleBundleControllerTest {
                         List.of(new MetricDependency("account.age", 1)), java.util.List.of())),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", null, "USER",
                         "PUSH", "HIGHEST_PRIORITY", java.util.List.of(), java.util.List.of(),
-                        java.util.Map.of(), 1)),
+                        java.util.Map.of())),
                 List.of(), List.of());
     }
 
@@ -112,7 +112,7 @@ class RuleBundleControllerTest {
                  "scenes":[{"code":"risk.transfer","name":"转账风控","description":null,
                           "subjectType":"USER","dominantMode":"PUSH",
                           "decisionStrategy":"HIGHEST_PRIORITY","eventTypes":[],
-                          "payloadSchema":[],"defaultParams":{},"payloadSchemaVersion":1}],
+                          "payloadSchema":[],"defaultParams":{}}],
                  "metricDefinitions":[],"decisionDefinitions":[]}
                 """;
         MockMultipartFile file = new MockMultipartFile(

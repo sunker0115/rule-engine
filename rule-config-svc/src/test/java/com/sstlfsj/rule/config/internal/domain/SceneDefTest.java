@@ -55,13 +55,4 @@ class SceneDefTest {
         assertNull(scene.getCreatedAt());
         assertNull(scene.getUpdatedAt());
     }
-
-    @Test
-    void payloadSchemaVersion_getterSetter() {
-        SceneDef scene = new SceneDef();
-        // 默认为 null，DB 层由 DEFAULT 1 填充
-        assertNull(scene.getPayloadSchemaVersion());
-        scene.setPayloadSchemaVersion(3);
-        assertEquals(3, scene.getPayloadSchemaVersion());
-    }
 }

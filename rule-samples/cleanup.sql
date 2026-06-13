@@ -17,7 +17,6 @@ DELETE FROM dry_run_session       WHERE tenant_id = @tid;
 DELETE FROM rule_version          WHERE rule_definition_id IN (SELECT id FROM rule_definition WHERE tenant_id = @tid);
 DELETE FROM rule_definition       WHERE tenant_id = @tid;
 DELETE FROM decision_definition   WHERE tenant_id = @tid;
-DELETE FROM scene_payload_schema_history WHERE scene_id IN (SELECT id FROM scene WHERE tenant_id = @tid);
 DELETE FROM scene                 WHERE tenant_id = @tid;
 DELETE FROM audit_log             WHERE tenant_id = @tid;
 
