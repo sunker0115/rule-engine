@@ -27,6 +27,10 @@
             <artifactId>rule-kernel</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-eval-svc</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.openjdk.jmh</groupId>
             <artifactId>jmh-core</artifactId>
             <version>${jmh.version}</version>
