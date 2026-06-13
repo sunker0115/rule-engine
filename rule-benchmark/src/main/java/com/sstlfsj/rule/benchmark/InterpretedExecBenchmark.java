@@ -23,8 +23,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Phase 0 闸：仅量 InterpretedExecutor.execute() 纯 AST 求值耗时（非 trace 快路径）。
- * AST = AND(N 个 GT 条件)，全部 provided metric 命中。产出 ns/op 对照生产端到端时延，
- * 估算 AST 求值占比，决定 §2.13 是否值得做。
+ * AST = AND(N 个 GT 条件)，dataType 冻结为 LONG（代表生产发布期冻结后的类型，走 LongComparisonStrategy
+ * 整型快路径，而非 DSL 未冻结的 BigDecimal 路径），全部 provided metric 命中。
+ * 产出 ns/op + 每 op 分配，对照生产端到端时延估算 AST 求值占比，决定 §2.13 是否值得做。
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -48,7 +49,7 @@ public class InterpretedExecBenchmark {
         Map<String, MetricValue> metrics = new HashMap<>();
         for (int i = 0; i < n; i++) {
             String mc = "m" + i;
-            conds.add(new ConditionNode(ConditionTypes.GT, mc, null, Map.of("threshold", 0L), 0.0));
+            conds.add(new ConditionNode(ConditionTypes.GT, mc, null, Map.of("threshold", 0L), 0.0, "LONG"));
             metrics.put(mc, new MetricValue(1L, "LONG", "PROVIDED"));
         }
         AstNode ast = new AndNode(conds, null, null);
