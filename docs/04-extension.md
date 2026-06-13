@@ -31,7 +31,7 @@
 ### 2.1 SPI 接口
 
 ```java
-// 包路径 TBD（见 09-skeleton §四）
+// com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator
 public interface ConditionEvaluator {
     /**
      * @param node  规则 AST 中的 ConditionNode（含 conditionType + params）
@@ -107,7 +107,7 @@ public class GeoDistanceWithinEvaluator implements ConditionEvaluator {
 ### 4.1 SPI 接口
 
 ```java
-// 包路径 TBD（见 09-skeleton §四）
+// com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler
 public interface MetricSourceHandler {
     /**
      * 取单个 metric 值。引擎在 EvalContext 构建阶段并发调用（D20）。
