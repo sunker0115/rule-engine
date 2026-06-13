@@ -146,17 +146,26 @@ class SceneServiceImplTest {
         assertThat(sceneCaptor.getValue().getPayloadSchema())
                 .extracting(PayloadFieldSpec::name).contains("currency");
 
-        // UPDATE 审计：before 为旧 schema 快照，after 为新 schema 快照
-        ArgumentCaptor<OperationAuditedEvent> auditCaptor =
-                ArgumentCaptor.forClass(OperationAuditedEvent.class);
-        verify(eventPublisher).publishEvent(auditCaptor.capture());
-        OperationAuditedEvent audit = auditCaptor.getValue();
+        // update 现发两个事件：UPDATE 审计(前后快照)+ SceneChangedEvent(active=true,触发 eval 索引 live 重载)
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+
+        OperationAuditedEvent audit = eventCaptor.getAllValues().stream()
+                .filter(OperationAuditedEvent.class::isInstance)
+                .map(OperationAuditedEvent.class::cast).findFirst().orElseThrow();
         assertThat(audit.action()).isEqualTo("UPDATE");
         SceneSnapshot before = (SceneSnapshot) audit.beforeSnapshot();
         SceneSnapshot after = (SceneSnapshot) audit.afterSnapshot();
         assertThat(before.payloadSchema()).extracting(PayloadFieldSpec::name).containsExactly("amount");
         assertThat(after.payloadSchema()).extracting(PayloadFieldSpec::name)
                 .containsExactly("amount", "currency");
+
+        SceneChangedEvent changed = eventCaptor.getAllValues().stream()
+                .filter(SceneChangedEvent.class::isInstance)
+                .map(SceneChangedEvent.class::cast).findFirst().orElseThrow();
+        assertThat(changed.tenantId()).isEqualTo("1");
+        assertThat(changed.sceneCode()).isEqualTo("PAYMENT");
+        assertThat(changed.active()).isTrue();
     }
 
     @Test

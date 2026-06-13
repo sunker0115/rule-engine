@@ -87,6 +87,9 @@ class SceneServiceImpl implements SceneService {
         sceneMapper.updateById(scene);
         publishAudit(Long.valueOf(tenantId), actorId, "UPDATE", "scene",
                 scene.getId().toString(), before, snapshotOf(scene));
+        // 场景仍 ACTIVE：发 SceneChangedEvent(active=true) 触发 eval 索引重载，
+        // 使 payloadSchema / eventTypes / defaultParams(含 timezone)变更 live 生效(不必等规则 republish)。
+        eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, true));
     }
 
     @Override
