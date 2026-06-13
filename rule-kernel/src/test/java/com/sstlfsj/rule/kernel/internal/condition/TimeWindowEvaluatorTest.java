@@ -22,6 +22,12 @@ class TimeWindowEvaluatorTest {
         return new EvalContext("t1", ev, null, Map.of(), now);
     }
 
+    private EvalContext ctxAtWithSceneTz(String isoOffset, String sceneTimezone) {
+        Instant now = OffsetDateTime.parse(isoOffset).toInstant();
+        RuleEvent ev = new RuleEvent("t1", "s1", "E", "u1", "e1", now, Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
+        return new EvalContext("t1", ev, null, Map.of(), now, Map.of("timezone", sceneTimezone));
+    }
+
     private ConditionNode node(Map<String, Object> params) {
         return new ConditionNode("time.window", null, "", params, 0.0);
     }
@@ -63,5 +69,14 @@ class TimeWindowEvaluatorTest {
         Map<String, Object> p = Map.of("start", "09:00", "end", "17:00");
         // 10:00Z 在 UTC 命中
         assertThat(evaluator.evaluate(node(p), ctxAt("2026-06-01T10:00:00Z"))).isTrue();
+    }
+
+    @Test
+    void sceneTimezone_usedWhenParamsAbsent() {
+        // 条件不带 timezone；scene 默认 Asia/Shanghai。02:00Z 投影到上海为 10:00，落在 09:00-22:00 内 → 命中
+        Map<String, Object> p = Map.of("start", "09:00", "end", "22:00");
+        assertThat(evaluator.evaluate(node(p), ctxAtWithSceneTz("2026-06-01T02:00:00Z", "Asia/Shanghai"))).isTrue();
+        // 无 scene timezone（默认 UTC）同一时刻为 02:00，落在窗口外 → 不命中
+        assertThat(evaluator.evaluate(node(p), ctxAt("2026-06-01T02:00:00Z"))).isFalse();
     }
 }

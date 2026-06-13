@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
 import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
@@ -23,7 +24,8 @@ final class DateComparisonSupport {
         if (threshold == null) return false;
         // dataType=null（DSL 默认）→ DATETIME（保持旧 toInstant UTC Instant 语义）；DATE → LocalDate 比较
         String effectiveType = DataType.DATE.tag().equals(node.dataType()) ? DataType.DATE.tag() : DataType.DATETIME.tag();
-        ZoneId zone = TimeZoneResolver.resolve((String) node.params().get(ConditionParams.TIMEZONE), null);
+        ZoneId zone = TimeZoneResolver.resolve((String) node.params().get(ConditionParams.TIMEZONE),
+                (String) ctx.sceneDefaultParams().get(SceneDefaultParams.TIMEZONE));
         Object actual = PlaceholderResolver.resolveTyped(effectiveType, mv.value(), ctx, zone);
         Object operand = PlaceholderResolver.resolveTyped(effectiveType, threshold, ctx, zone);
         if (actual == null || operand == null) return false;

@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.time.TimeZoneResolver;
@@ -25,7 +27,8 @@ public class TimeWindowEvaluator implements ConditionEvaluator {
         Object endRaw = params.get("end");
         if (startRaw == null || endRaw == null) return false;
 
-        ZoneId zone = TimeZoneResolver.resolve((String) params.get("timezone"), null);
+        ZoneId zone = TimeZoneResolver.resolve((String) params.get(ConditionParams.TIMEZONE),
+                (String) ctx.sceneDefaultParams().get(SceneDefaultParams.TIMEZONE));
         ZonedDateTime zdt = ctx.now().atZone(zone);
 
         // 1. datesExclude（MM-DD）优先短路

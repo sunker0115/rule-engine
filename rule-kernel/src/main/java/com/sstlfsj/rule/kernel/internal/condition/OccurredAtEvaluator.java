@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.time.PlaceholderResolver;
@@ -26,7 +28,8 @@ public class OccurredAtEvaluator implements ConditionEvaluator {
         String operator = (String) params.get("operator");
         if (operator == null) return false;
 
-        ZoneId zone = TimeZoneResolver.resolve((String) params.get("timezone"), null);
+        ZoneId zone = TimeZoneResolver.resolve((String) params.get(ConditionParams.TIMEZONE),
+                (String) ctx.sceneDefaultParams().get(SceneDefaultParams.TIMEZONE));
 
         switch (operator) {
             case "BEFORE": return occurred.isBefore(required(params.get("value"), ctx, zone));
