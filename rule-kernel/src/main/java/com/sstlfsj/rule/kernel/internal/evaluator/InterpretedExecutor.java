@@ -182,6 +182,10 @@ public class InterpretedExecutor implements RuleVersionExecutor {
      * ConditionNode 叶子节点：查找对应 evaluator 求值；无注册 evaluator 时 result=false，errorCode 为 NO_EVALUATOR。
      */
     private boolean evalCondition(ConditionNode node, EvalContext ctx, List<NodeTrace> sink) {
+        if (sink == null) {
+            // 非 trace 快路径：与编译执行器共用 satisfiesBoolean(单一真相源,不分配 ConditionOutcome)
+            return ConditionEvaluation.satisfiesBoolean(node, ctx, evaluators.get(node.conditionType()));
+        }
         ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
         if (outcome.isError()) {
             // ERROR(取数失败/无算子)：节点不命中，trace 标错码，整树继续(D15)

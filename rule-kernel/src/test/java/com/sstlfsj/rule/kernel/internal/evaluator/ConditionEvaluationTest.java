@@ -65,4 +65,38 @@ class ConditionEvaluationTest {
         assertThat(out.isError()).isTrue();
         assertThat(out.errorCode()).isEqualTo("NO_EVALUATOR");
     }
+
+    // ---- satisfiesBoolean：布尔快路径，与 evaluate 布尔投影逐一致 ----
+
+    private com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator gtEvaluator() {
+        return KernelEvaluators.defaults().get("GT");
+    }
+
+    @Test
+    void satisfiesBoolean_satisfied_true() {
+        boolean r = ConditionEvaluation.satisfiesBoolean(gt("balance", 100),
+                ctx(Map.of("balance", new MetricValue(200L, "LONG", "FETCHED"))), gtEvaluator());
+        assertThat(r).isTrue();
+    }
+
+    @Test
+    void satisfiesBoolean_notSatisfied_false() {
+        boolean r = ConditionEvaluation.satisfiesBoolean(gt("balance", 100),
+                ctx(Map.of("balance", new MetricValue(50L, "LONG", "FETCHED"))), gtEvaluator());
+        assertThat(r).isFalse();
+    }
+
+    @Test
+    void satisfiesBoolean_metricError_false() {
+        boolean r = ConditionEvaluation.satisfiesBoolean(gt("balance", 100),
+                ctx(Map.of("balance", MetricValue.error("METRIC_FETCH_FAIL"))), gtEvaluator());
+        assertThat(r).isFalse();
+    }
+
+    @Test
+    void satisfiesBoolean_nullEvaluator_false() {
+        boolean r = ConditionEvaluation.satisfiesBoolean(gt("balance", 100),
+                ctx(Map.of("balance", new MetricValue(200L, "LONG", "FETCHED"))), null);
+        assertThat(r).isFalse();
+    }
 }

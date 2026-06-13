@@ -410,4 +410,19 @@ class InterpretedExecutorTest {
         assertThat(collected.nodeTrace()).isNotEmpty();
         assertThat(skipped.ruleHit()).isEqualTo(collected.ruleHit());
     }
+
+    @Test
+    void collectFalse_noEvaluator_isMiss_sameAsTrace() throws Exception {
+        // 非 trace 快路径(satisfiesBoolean)：无算子 → ERROR → 不命中，与 trace 模式 ruleHit 一致
+        AstNode ast = new ConditionNode("UNKNOWN_TYPE", "metric1", null, Map.of(), 0.0);
+        InterpretedExecutor executor = executorWith(Map.of());
+
+        EvalResult collected = executor.execute(snapshot(ast), minimalContext());
+        EvalResult skipped = ScopedValue.where(TraceScope.COLLECT, false)
+                .call(() -> executor.execute(snapshot(ast), minimalContext()));
+
+        assertThat(collected.ruleHit()).isFalse();
+        assertThat(skipped.ruleHit()).isFalse();
+        assertThat(skipped.nodeTrace()).isEmpty();
+    }
 }
