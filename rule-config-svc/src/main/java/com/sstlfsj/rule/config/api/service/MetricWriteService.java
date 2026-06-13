@@ -1,5 +1,8 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
+
 import java.util.List;
 import java.util.Map;
 
@@ -28,8 +31,11 @@ public interface MetricWriteService {
             Map<String, Object> params,
             Integer cacheTtlSeconds,
             boolean allowProvided,
-            /** 是否敏感 metric：true 时其值在 trace 展示出口被读时脱敏（D71，租户级 D54）；默认 false。 */
-            boolean sensitive) {
+            /**
+             * 是否敏感 metric：true 时其值在 trace 展示出口被读时脱敏（D71，租户级 D54）；默认 false。
+             * 请求体缺该键时落 false（Jackson 3 FAIL_ON_NULL_FOR_PRIMITIVES 兜底，与 PayloadFieldSpec.sensitive 一致）。
+             */
+            @JsonSetter(nulls = Nulls.AS_EMPTY) boolean sensitive) {
 
         /** 兼容既有 6 参调用点；sensitive 默认 false。 */
         public MetricWriteCommand(String name, String sourceType, String dataType,
