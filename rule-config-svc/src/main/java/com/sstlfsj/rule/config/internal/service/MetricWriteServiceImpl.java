@@ -185,6 +185,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         m.setCacheTtlSeconds(cmd.cacheTtlSeconds() == null
                 ? metricProperties.getDefaultCacheTtlSeconds() : cmd.cacheTtlSeconds());
         m.setAllowProvided(cmd.allowProvided());
+        m.setSensitive(cmd.sensitive());
     }
 
     /** 发布操作审计事件，由集中监听器 BEFORE_COMMIT 同事务落 audit_log（D14 约定）。 */
