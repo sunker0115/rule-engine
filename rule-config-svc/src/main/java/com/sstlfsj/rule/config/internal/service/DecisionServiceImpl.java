@@ -6,7 +6,6 @@ import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.DecisionStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,7 @@ public class DecisionServiceImpl implements DecisionService {
     @Override
     @Transactional
     public Long create(Long tenantId, String code, String name, Integer priority,
-                       String description, List<DecisionAction> actions, String actorId) {
+                       String description, String actorId) {
         if (mapper.findByCode(tenantId, code) != null) {
             throw new IllegalArgumentException("decision 编码已存在: code=" + code);
         }
@@ -38,7 +37,6 @@ public class DecisionServiceImpl implements DecisionService {
         d.setName(name);
         d.setPriority(priority);
         d.setDescription(description);
-        d.setActions(actions != null ? actions : List.of());
         d.setStatus(DecisionStatus.ACTIVE);
         d.setCreatedBy(actorId);
         d.setCreatedAt(LocalDateTime.now());
@@ -50,12 +48,11 @@ public class DecisionServiceImpl implements DecisionService {
     @Override
     @Transactional
     public void update(Long tenantId, String code, String name, Integer priority,
-                       String description, List<DecisionAction> actions, String actorId) {
+                       String description, String actorId) {
         DecisionDefinition d = requireDecision(tenantId, code);
         d.setName(name);
         d.setPriority(priority);
         d.setDescription(description);
-        d.setActions(actions != null ? actions : List.of());
         d.setUpdatedBy(actorId);
         d.setUpdatedAt(LocalDateTime.now());
         mapper.updateById(d);

@@ -16,8 +16,6 @@ public class RetentionProperties {
     private int evaluationSessionDays = 90;
     /** dry_run_session 保留天数。 */
     private int dryRunSessionDays = 7;
-    /** action_execution 保留天数(跟随 evaluation_session 生命周期,默认 90)。 */
-    private int actionExecutionDays = 90;
     /** 单批删除上限。 */
     private int batchSize = 1000;
 }

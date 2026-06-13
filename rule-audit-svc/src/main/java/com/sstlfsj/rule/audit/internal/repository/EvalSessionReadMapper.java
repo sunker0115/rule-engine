@@ -48,4 +48,13 @@ public interface EvalSessionReadMapper extends BaseMapper<EvalSessionRow> {
     long countByRuleDefinitionId(
             @Param("ruleDefinitionId") Long ruleDefinitionId,
             @Param("status") String status);
+
+    /** 查指定 (会话, 租户) 的 scene_code，不存在返回 null。 */
+    default String findSceneCode(Long sessionId, Long tenantId) {
+        EvalSessionRow row = selectOne(new LambdaQueryWrapper<EvalSessionRow>()
+                .select(EvalSessionRow::getSceneCode)
+                .eq(EvalSessionRow::getId, sessionId)
+                .eq(EvalSessionRow::getTenantId, tenantId));
+        return row != null ? row.getSceneCode() : null;
+    }
 }

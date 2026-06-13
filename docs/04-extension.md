@@ -1,10 +1,10 @@
 # 04 — 扩展指南
 
-> **位置定位**：本文档承载"我要加一个新条件 / 动作 / 指标源，怎么落地"的**复制粘贴级指南**——SPI 接口签名 / Bean 注册 / 注解声明 / 元数据契约 / 实现建议（timeout / retry / 熔断 默认值）。
+> **位置定位**：本文档承载"我要加一个新条件 / 指标源，怎么落地"的**复制粘贴级指南**——SPI 接口签名 / Bean 注册 / 注解声明 / 元数据契约 / 实现建议（timeout / retry / 熔断 默认值）。
 >
-> **前置阅读**：[`01-concepts.md`](./01-concepts.md) §3.6 / §3.7 / §3.9、[`09-skeleton.md`](./09-skeleton.md) §四 SPI 接口落点
+> **前置阅读**：[`01-concepts.md`](./01-concepts.md) §3.6 / §3.9、[`09-skeleton.md`](./09-skeleton.md) §四 SPI 接口落点
 >
-> **解决什么疑问**："加一个新 ConditionType 要改哪些文件？""ActionHandler 的返回值契约是什么？""MetricSource 怎么声明缓存策略 / 类型级 params schema？""前端怎么知道我的新条件有哪些参数？"
+> **解决什么疑问**："加一个新 ConditionType 要改哪些文件？""MetricSource 怎么声明缓存策略 / 类型级 params schema？""前端怎么知道我的新条件有哪些参数？"
 >
 > **职责边界**——
 > - ✅ SPI 接口签名 / Bean 注册 / 元数据声明 / 实现建议值
@@ -17,10 +17,12 @@
 | 章节 | 状态 |
 |------|------|
 | §二 加 ConditionType | ✅ 已展开 |
-| §三 加 ActionType | ✅ 已展开 |
 | §四 加 MetricSource | ✅ 已展开 |
 | §五 元数据契约 | ✅ 已展开 |
 | §六 实现指南 | ✅ 已展开 |
+| §七 SubjectLoader 实现指南 | ✅ 已展开 |
+| §八 维护原则 | ✅ 已展开 |
+| §九 代码定义规则（`@RuleDef` 注解模式） | ✅ 已展开 |
 
 ---
 
@@ -29,7 +31,7 @@
 ### 2.1 SPI 接口
 
 ```java
-// 包路径 TBD（见 09-skeleton §四）
+// com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator
 public interface ConditionEvaluator {
     /**
      * @param node  规则 AST 中的 ConditionNode（含 conditionType + params）
@@ -98,122 +100,6 @@ public class GeoDistanceWithinEvaluator implements ConditionEvaluator {
 
 ---
 
-## 三、加 ActionType
-
-> **引擎内置 handler 仅 `SEND_ALERT`**（HTTP webhook，足够通用）。`BLOCK_TRANSACTION` 等强依赖宿主系统的动作**不内置**（D57：通用引擎无通用"阻断交易"机制）——`actionType` 仍可自由配置，由嵌入方按本节经 `ActionHandler` SPI 自写真实实现;未注册对应 handler 时派发落 `NO_HANDLER` SKIPPED。
-
-### 3.1 SPI 接口
-
-```java
-// 包路径 TBD（见 09-skeleton §四）
-public interface ActionHandler {
-    /**
-     * 执行 Action。幂等性由 Handler 自行保证。
-     * @param ctx  含 action 定义（actionId / actionType / params）+ EvalContext + actionExecutionId（用于幂等键）
-     * @return ActionResult（不要抛异常，catch 后归一为 FAILED）
-     */
-    ActionResult execute(ActionContext ctx);
-
-    /**
-     * dry-run 预览。不发起任何外部副作用（HTTP/MQ/DB 写入），返回预测 ActionResult。
-     * v1.5 已全量实装（D7），DRY_RUN_NOT_IMPLEMENTED errorCode 不再产生。
-     * @return ActionResult
-     */
-    default ActionResult dryRun(ActionContext ctx) {
-        return ActionResult.skipped("DRY_RUN_NOT_IMPLEMENTED");
-    }
-}
-```
-
-**ActionContext 字段说明：**
-
-```java
-ActionContext {
-    actionId:          String          // Action 实例 id（对应 Decision.actions[n].actionId）
-    actionType:        String          // 与 @ActionType.value 对应
-    params:            Map<String,Any> // Action 参数：取自 Decision.actions[n].params（D54：归 decision，与 scene 无关）；发布时快照到 rule_version.decision_bindings
-    evalContext:       EvalContext     // 本次评估上下文（含 eventId / subjectId / payload 等）
-    actionExecutionId: Long            // action_execution 表行 id（用于幂等键）
-    decisionCode:      String          // 触发本 Action 的 Decision 码（D27）
-}
-```
-
-> `ActionContext.evalContext.getEventId()` 是推荐幂等键组成之一，见 §3.5 实现约束。
-
-### 3.2 ActionResult 契约（D16 派生）
-
-```java
-ActionResult {
-    status:       SUCCESS | FAILED | SKIPPED   // SKIPPED 由引擎填（PREDECESSOR_FAILED / handler 缺失 / 无 webhook URL）
-    errorCode:    String?                       // 见 01-concepts §3.7 errorCode 清单
-    errorMessage: String?                       // 人类可读错误信息，不作程序判断
-    retryable:    Boolean                       // 保留字段；best-effort 化后不再驱动重试队列（D53），失败即终态
-}
-```
-
-### 3.3 注解声明
-
-```java
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface ActionType {
-    String value();                // 全局唯一，与规则 JSON 中 actionType 字段对应
-    String displayName() default "";
-    String paramsSchema() default "{}";   // 前端表单 schema
-    int timeoutMs() default 3000;  // Handler 声明的超时预算；引擎据此设置调用上限，超时归 TIMEOUT errorCode
-}
-```
-
-### 3.4 实现示例（ticket.create）
-
-```java
-@Component
-@ActionType(
-    value = "ticket.create",
-    displayName = "创建工单",
-    paramsSchema = """
-        {
-          "type": "object",
-          "required": ["title", "assignee"],
-          "properties": {
-            "title":    { "type": "string" },
-            "priority": { "type": "string", "enum": ["LOW","MEDIUM","HIGH"] },
-            "assignee": { "type": "string" }
-          }
-        }
-    """,
-    timeoutMs = 3000
-)
-public class TicketCreateHandler implements ActionHandler {
-    @Override
-    public ActionResult execute(ActionContext ctx) {
-        String eventId = ctx.getEvalContext().getEventId();
-        if (ticketService.existsByEventId(eventId)) {
-            return ActionResult.success();  // 幂等：已建单直接成功
-        }
-        try {
-            ticketService.create(buildRequest(ctx));
-            return ActionResult.success();
-        } catch (TimeoutException e) {
-            return ActionResult.failed("TIMEOUT", false);
-        } catch (BusinessException e) {
-            return ActionResult.failed("BUSINESS_REJECTED", false);
-        }
-    }
-}
-```
-
-### 3.5 实现约束
-
-- execute() 内**必须**做幂等检查（幂等键推荐：`tenantId + eventId + decisionCode + actionId`，与 D27 迁移后的幂等键设计对齐）
-- 超时处理分两种场景：
-  - **Handler 主动处理**：catch TimeoutException 后返回 `ActionResult.failed("TIMEOUT", true)`（推荐，便于区分业务超时和引擎中断）
-  - **引擎强制中断**：Handler 超过 timeoutMs 仍未返回时，引擎中断调用并归为 `ActionResult { status=FAILED, errorCode=TIMEOUT }`；Handler 无需额外处理，但不会收到任何回调
-- Action 投递 best-effort（D53）：失败即终态、不重试不补偿；可靠投递未来接 MQ
-- Action 失败**不影响** EvalResult.satisfied（D18，评估阶段已结束）
-
----
-
 ## 四、加 MetricSource
 
 > **B21 已实装**：`EvalContextAssembler` 已接线取数管线——按 metric `sourceType` 路由 `MetricSourceHandler`（`@MetricSourceType` 归类）并发 fetch；metric 运行时定义经 **`MetricDefinitionResolver` SPI** 解析（服务端 `DbMetricDefinitionResolver` 读 `metric_definition` 表 + Caffeine 缓存；**数据源无关**，嵌入式 SDK 读下发缓存，见 `specs/2026-06-06-sdk-fetch-design.md`）；取数结果经 **`MetricCache` SPI** 缓存（key = `tenant:metricCode:subjectId:stableHash(params)`，`ttl=0` 不缓存，内核不依赖 Caffeine、由 eval-svc 提供 `CaffeineMetricCache`）。`MetricQuery` 携带 `now`（引擎统一时钟，SQL `:now` 取此值）。SQL_AGGREGATE 走 `MetricDataSourceRegistry` **命名只读源**；EXTERNAL_HTTP 走 `HttpEndpointRegistry` **命名端点**（凭证在 infra 不落 metric）。取数失败统一降级 `METRIC_FETCH_FAIL`（D15 / D45）。发布期 `MetricSafetyValidator` 拒绝 DB 时间函数 / `${}` 拼接 / 未注册资源名。
@@ -221,7 +107,7 @@ public class TicketCreateHandler implements ActionHandler {
 ### 4.1 SPI 接口
 
 ```java
-// 包路径 TBD（见 09-skeleton §四）
+// com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler
 public interface MetricSourceHandler {
     /**
      * 取单个 metric 值。引擎在 EvalContext 构建阶段并发调用（D20）。
@@ -298,13 +184,6 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
       "requiresMetric": true
     }
   ],
-  "actionTypes": [
-    {
-      "code": "ticket.create",
-      "displayName": "创建工单",
-      "paramsSchema": { "type": "object", "required": ["title", "assignee"], "properties": { "title": { "type": "string" }, "assignee": { "type": "string" } } }
-    }
-  ],
   "availableMetrics": [
     {
       "metricCode": "user.account.age.days",
@@ -330,10 +209,9 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 6.1 通用原则
 
-1. 不改 EvalContext：三种 SPI 实现均不能修改传入的 EvalContext（不可变合约，D20 §1）
+1. 不改 EvalContext：各 SPI 实现均不能修改传入的 EvalContext（不可变合约，D20 §1）
 2. 异常归一：实现方可抛任意 RuntimeException；引擎在边界处 catch 并按类型归一为 errorCode
-3. 幂等自管：ActionHandler 自行保证 execute() 幂等（引擎不提供幂等包装）
-4. 无状态 Bean：Handler / Evaluator 应设计为无状态 Spring singleton，不在实例字段存评估中间状态
+3. 无状态 Bean：Evaluator / MetricSourceHandler 应设计为无状态 Spring singleton，不在实例字段存评估中间状态
 
 ### 6.2 超时与熔断建议
 
@@ -346,7 +224,7 @@ GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 
 ### 6.3 Bean 生命周期
 
-MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（引擎在 Scene 状态变更时调度这些回调，不由 handler 直接调用 init()）。ActionHandler 类似，但 PULL Scene 不预热（只 PUSH/HYBRID Scene 预热，详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
+MetricSourceHandler 可实现可选的生命周期接口（`init()` / `destroy()`）。引擎在 Scene 激活时调用 `init()`，Scene 卸载时调用 `destroy()`，用于 JDBC 连接池 / HTTP client 资源管理（引擎在 Scene 状态变更时调度这些回调，不由 handler 直接调用 init()）。PULL Scene 不预热，只 PUSH/HYBRID Scene 预热（详见 01-concepts §3.2 Scene 字段 dominantMode 说明）。
 
 ---
 
@@ -383,7 +261,7 @@ public class AccountLoader implements SubjectLoader {
 }
 ```
 
-> **注**：`SubjectLoader` 通过 `supportedTypes()` 方法注册（无需额外注解），与 `@ConditionType` / `@ActionType` / `@MetricSourceType` 注解风格略有不同。
+> **注**：`SubjectLoader` 通过 `supportedTypes()` 方法注册（无需额外注解），与 `@ConditionType` / `@MetricSourceType` 注解风格略有不同。
 
 `SubjectLoaderRegistry` 启动时扫描所有 `SubjectLoader` Bean，按 `supportedTypes()` 建索引；运行时由 `EvalContext` 构建阶段按 `Scene.subjectType` 路由。
 
@@ -400,3 +278,99 @@ public class AccountLoader implements SubjectLoader {
 - 本文档只描述**SPI 接口契约 + 注册指南**，不重复 SPI 模块归属（→ 09-skeleton §四）、不写运维参数默认值（→ 07-operability §九）。
 - 新增第四类 SPI（如未来进一步开放给业务方实现的扩展点）必须在本文档增章节 + 同步 09-skeleton §四 SPI 落点表。
 - 实现建议值（§六）只列**建议**，不列默认值；默认值由 07-operability 集中管理。
+
+---
+
+## 九、代码定义规则（`@RuleDef` 注解模式）
+
+> 扩展入口：前述 §二~§四 是为引擎补**算子 / 取数**能力；本节是另一类扩展——用 **Java 代码直接定义规则本身**（嵌入式 SDK 场景，D40 / D59）。规则不再经 admin API 配置 + 数据库存储，而是标注在代码类上，由 SDK 启动时扫描装载到评估索引。适用单测 / 演示 / 离线部署 / 把规则当代码版本管理的场景。
+
+### 9.1 `@RuleDef` 注解（`rule-kernel`）
+
+在 `InlineRuleSpec` 实现类上标注 `@RuleDef` 声明规则的身份与触发 / 决策绑定：
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface RuleDef {
+    /** 业务规则码（逻辑身份，D59）；与 (tenant, sceneCode) 共同作用域内唯一。 */
+    String code();
+    /** 场景编码。 */
+    String sceneCode();
+    /** 租户 ID；默认空（继承范围见 §9.1 说明：仅 Spring starter 或显式双参构造时继承，单参构造留空得空租户）。 */
+    String tenantId() default "";
+    /** 版本号（逻辑身份的一部分，D59）。 */
+    long version() default 1;
+    /** 触发事件类型；空数组表示通配（等价于装载时写入 "*"）。 */
+    String[] trigger() default {};
+    /** Decision 绑定列表。 */
+    DecisionBinding[] decisions() default {};
+}
+```
+
+`@DecisionBinding`（嵌套注解，`rule-kernel`）声明命中后绑定的 Decision 码与优先级：
+
+```java
+@Target({})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface DecisionBinding {
+    String code();
+    int priority() default 0;
+}
+```
+
+> **身份模型（D59）**：规则逻辑身份 = `(tenant, sceneCode, code, version)`（人可读、名字驱动）；代理键 `ruleVersionId` 不由开发者手填，而由 `AnnotationRuleSource` 按 `(tenant, scene, code)` 稳定哈希派生（确定性投影，保证幂等装载）。
+>
+> **`tenantId()` 留空继承的精确范围**：继承仅在 **(a) Spring starter 自动装配**（AutoConfiguration 调双参构造，回落到 `rule.sdk.tenant-id`）或 **(b) 显式用双参构造 `new AnnotationRuleSource(specs, tenant)`** 时生效。**非 Spring 用单参 `new AnnotationRuleSource(specs)` 时留空 `tenantId` 会得到空租户 `""`**（单参构造的 `defaultTenantId` 为 `""`，而 `RuleEngineClient.Builder.tenantId(...)` 不会注入到 rule source——builder 把 `RuleSource` 当不透明对象），空租户不会匹配真实租户下的事件。此场景应在 `@RuleDef` 显式写 `tenantId`，或改用双参构造。
+
+### 9.2 `InlineRuleSpec` 接口（`rule-sdk`）
+
+规则类实现 `InlineRuleSpec`，`condition()` 返回 `Condition` DSL 表达式（D36 隐藏 AST 构造细节），由 `AnnotationRuleSource` 调 `toAst()` 转为 AST：
+
+```java
+public interface InlineRuleSpec {
+    /** 返回规则条件，由 AnnotationRuleSource 调用 toAst() 转为 AST。 */
+    Condition condition();
+}
+```
+
+### 9.3 实现示例
+
+```java
+@RuleDef(code = "amount-fraud", sceneCode = "fraud",
+         trigger = "TRANSACTION",
+         decisions = @DecisionBinding(code = "BLOCK", priority = 100))
+public class AmountFraudRule implements InlineRuleSpec {
+    @Override
+    public Condition condition() {
+        return Condition.gt("amount", 1000)
+                        .and(Condition.in("country", "CN", "HK"));
+    }
+}
+```
+
+> **无绑定 metric 的自定义算子**：`Condition.of(conditionType, params)` 双参重载用于直接指定 `conditionType` + 参数 Map，**不绑定具体 metric**（适用于不依赖单个指标值的自定义算子，与 §2.4 注册的 `@ConditionType` 配合）。常规带 metric 的比较算子仍用 `Condition.gt` / `Condition.in` 等便捷工厂。
+
+### 9.4 装载方式
+
+- **非 Spring（直接使用）**：把规则实例列表传给 `AnnotationRuleSource`，再交给 `RuleEngineClient.Builder.ruleSource(...)`：
+
+```java
+try (RuleEngineClient client = RuleEngineClient.builder()
+        .tenantId("t1")
+        // 非 Spring 必须用双参构造把租户传给 rule source：单参 new AnnotationRuleSource(List.of(...)) 时
+        // @RuleDef 留空的 tenantId 会得到空租户 ""（builder.tenantId 不注入 rule source），不会继承此处的 "t1"。
+        .ruleSource(new AnnotationRuleSource(List.of(new AmountFraudRule()), "t1"))
+        .build()) {
+    EvalResult result = client.evaluate(event);
+}
+```
+
+- **Spring Boot（自动装配）**：规则类加 `@Component`，`rule-sdk-spring-boot-starter` 的 AutoConfiguration 自动收集容器内所有 `InlineRuleSpec` Bean，构造 `AnnotationRuleSource` 装载，`@Autowired RuleEngineClient` 即可使用，无需手动注册。
+
+### 9.5 实现约束
+
+- `@RuleDef` 与 `InlineRuleSpec` 必须同类标注 + 实现；`AnnotationRuleSource` 跳过未标注 `@RuleDef` 的 spec。
+- `code` 在 `(tenant, sceneCode)` 作用域内须唯一且稳定——它参与代理键 `ruleVersionId` 的哈希派生，改 `code` = 换一条规则身份。
+- `condition()` 应为纯函数（无副作用、不依赖外部可变状态），与 §2.5 ConditionEvaluator 的无状态约束一致。

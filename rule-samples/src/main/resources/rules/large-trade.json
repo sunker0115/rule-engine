@@ -1,0 +1,20 @@
+[
+  {
+    "ruleVersionId": 9001,
+    "code": "large-trade",
+    "version": 1,
+    "sceneCode": "merchant-trade",
+    "tenantId": "9001",
+    "kind": "AST_BOOLEAN",
+    "triggerEventTypes": ["trade"],
+    "decisionBindings": [{"decisionCode": "REVIEW", "priority": 50}],
+    "preGates": [],
+    "conditionAst": {
+      "type": "ConditionNode",
+      "conditionType": "GT",
+      "metricCode": "amount",
+      "params": {"threshold": 5000},
+      "valueRef": "PAYLOAD"
+    }
+  }
+]

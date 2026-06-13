@@ -2,14 +2,13 @@ package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.config.api.service.DecisionService;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/** Decision tenant 级写 API（D26/D27：Decision 与 scene 无关，CRUD + actions）。 */
+/** Decision tenant 级写 API（D26/D27：Decision 与 scene 无关，CRUD）。 */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/v1/decisions")
@@ -23,7 +22,7 @@ public class DecisionController {
                                     @RequestHeader("X-Actor-Id") String actorId,
                                     @RequestBody DecisionRequest req) {
         return ApiResponse.ok(decisionService.create(tenantId, req.code(), req.name(),
-                req.priority(), req.description(), req.actions(), actorId));
+                req.priority(), req.description(), actorId));
     }
 
     /** PUT /admin/v1/decisions/{code}?tenantId=xxx — 更新 decision。 */
@@ -33,7 +32,7 @@ public class DecisionController {
                                     @RequestHeader("X-Actor-Id") String actorId,
                                     @RequestBody DecisionRequest req) {
         decisionService.update(tenantId, code, req.name(), req.priority(),
-                req.description(), req.actions(), actorId);
+                req.description(), actorId);
         return ApiResponse.ok(null);
     }
 
@@ -52,7 +51,7 @@ public class DecisionController {
         return ApiResponse.ok(decisionService.list(tenantId));
     }
 
-    /** decision 写请求体（typed，actions 复用 kernel DecisionAction）。 */
+    /** decision 写请求体（typed）。 */
     public record DecisionRequest(String code, String name, Integer priority,
-                                  String description, List<DecisionAction> actions) {}
+                                  String description) {}
 }

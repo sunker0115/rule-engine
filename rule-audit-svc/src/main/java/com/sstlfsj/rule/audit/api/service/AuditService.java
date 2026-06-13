@@ -66,7 +66,9 @@ public interface AuditService {
             String actualValue,
             Boolean result,
             String errorCode,
-            String valueSource
+            String valueSource,
+            String ruleCode,
+            Long ruleVersion
     ) {}
 
     /**
@@ -91,6 +93,8 @@ public interface AuditService {
             Boolean result,
             String errorCode,
             String valueSource,
+            String ruleCode,
+            Long ruleVersion,
             List<TraceTreeNode> children
     ) {}
 
@@ -128,4 +132,13 @@ public interface AuditService {
      */
     PageResult<RuleSessionEntry> querySessionsByRuleDefinition(
             Long ruleDefinitionId, String status, int limit, int offset);
+
+    /**
+     * 查询评估会话所属场景编码（供 trace / replay 展示出口解析敏感集，D71）。
+     *
+     * @param tenantId  租户标识（数字字符串）
+     * @param sessionId 评估会话 ID
+     * @return 场景编码；会话不存在返回 null
+     */
+    String getSessionSceneCode(String tenantId, Long sessionId);
 }

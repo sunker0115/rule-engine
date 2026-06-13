@@ -1,10 +1,6 @@
 package com.sstlfsj.rule.config.internal.domain;
 
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,8 +16,6 @@ class DecisionDefinitionTest {
         dd.setName("拒绝");
         dd.setPriority(1);
         dd.setDescription("高风险直接拒绝");
-        List<DecisionAction> actions = List.of(new DecisionAction("a1", "BLOCK", 0, Map.of()));
-        dd.setActions(actions);
         dd.setStatus(DecisionStatus.ACTIVE);
         dd.setCreatedBy("admin");
         dd.setUpdatedBy("admin2");
@@ -32,7 +26,6 @@ class DecisionDefinitionTest {
         assertEquals("拒绝", dd.getName());
         assertEquals(1, dd.getPriority());
         assertEquals("高风险直接拒绝", dd.getDescription());
-        assertEquals(List.of(new DecisionAction("a1", "BLOCK", 0, Map.of())), dd.getActions());
         assertEquals(DecisionStatus.ACTIVE, dd.getStatus());
         assertEquals("admin", dd.getCreatedBy());
         assertEquals("admin2", dd.getUpdatedBy());

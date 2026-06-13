@@ -16,6 +16,11 @@
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-kernel</artifactId>
         </dependency>
+        <!-- EXPRESSION_SCRIPT 运行期 CEL 引擎:经 starter 自动装配 CelExpressionEngine bean(纯引擎模块经此传递引入) -->
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-expression-cel-spring-boot-starter</artifactId>
+        </dependency>
         <!-- 消费 config-svc 发布的领域事件（RulePublishedEvent / SceneChangedEvent） -->
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>

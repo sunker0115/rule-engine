@@ -7,6 +7,7 @@ import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
 import java.util.List;
@@ -65,7 +66,8 @@ public interface ConfigService {
      * @param decisionBindings      决策绑定列表（草稿期 priority 占位，发布时回填），null 视为空
      * @param preGates              前置门列表，null 视为空
      * @param triggerEventTypes     触发事件类型列表，null 视为空
-     * @param kind                  规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
+     * @param kind                  规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT），null 时默认 AST_BOOLEAN
+     * @param script                EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
      * @param actorId               操作人 ID
      * @return 新建草稿的 ID 信息
      */
@@ -73,7 +75,7 @@ public interface ConfigService {
             String code, String name,
             AstNode conditionAst, List<DecisionBinding> decisionBindings,
             List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            String kind, String actorId);
+            String kind, ScriptSource script, String actorId);
 
     /**
      * 原地编辑规则最新 DRAFT 版本（不增版本）：重跑 resolveAndValidate 冻结新内容到同一草稿行。
@@ -86,12 +88,14 @@ public interface ConfigService {
      * @param decisionBindings  新决策绑定列表（草稿期 priority 占位，发布时回填），null 视为空
      * @param preGates          新前置门列表，null 视为空
      * @param triggerEventTypes 新触发事件类型列表，null 视为空
+     * @param script            EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
      * @param actorId           操作人 ID
      * @return 被更新草稿的 ID 信息（version 不变）
      */
     DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
             AstNode conditionAst, List<DecisionBinding> decisionBindings,
-            List<PreGateConfig> preGates, List<String> triggerEventTypes, String actorId);
+            List<PreGateConfig> preGates, List<String> triggerEventTypes,
+            ScriptSource script, String actorId);
 
     /**
      * 给已发布规则出新版本草稿（v_max+1, DRAFT）：要求当前无未发布 DRAFT。
@@ -106,13 +110,14 @@ public interface ConfigService {
      * @param preGates          新前置门列表（fromVersionId 非空时忽略），null 视为空
      * @param triggerEventTypes 新触发事件类型列表（fromVersionId 非空时忽略），null 视为空
      * @param fromVersionId     回退源版本 ID，非空时克隆其内容；null 时按入参建新草稿
+     * @param script            EXPRESSION_SCRIPT 脚本载体（fromVersionId 非空时忽略），其它 kind 传 null
      * @param actorId           操作人 ID
      * @return 新建草稿的 ID 信息（version = v_max+1）
      */
     DraftCreatedResult newVersion(String tenantId, Long ruleId, String name, String kind,
             AstNode conditionAst, List<DecisionBinding> decisionBindings,
             List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            Long fromVersionId, String actorId);
+            Long fromVersionId, ScriptSource script, String actorId);
 
     /**
      * 删整条未发布规则（级联删 rule_definition + 全部 rule_version）：仅当从未发布过。

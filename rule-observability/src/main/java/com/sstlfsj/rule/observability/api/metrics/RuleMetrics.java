@@ -14,10 +14,6 @@ public final class RuleMetrics {
     public static final String METRIC_CACHE_HIT_TOTAL  = "rule_metric_cache_hit_total";
     public static final String METRIC_CACHE_MISS_TOTAL = "rule_metric_cache_miss_total";
 
-    // Action 派发
-    public static final String ACTION_DISPATCH_TOTAL   = "rule_action_dispatch_total";
-    public static final String ACTION_DISPATCH_FAILED  = "rule_action_dispatch_failed_total";
-
     // TraceWriter 队列
     public static final String TRACE_QUEUE_SIZE        = "rule_trace_queue_size";
     public static final String TRACE_WRITE_BATCH_TOTAL = "rule_trace_write_batch_total";

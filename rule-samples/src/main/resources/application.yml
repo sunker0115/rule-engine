@@ -1,0 +1,9 @@
+# annotation demo:纯本地注解规则源,不连服务端(不设 rule.sdk.server-url)
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
+# 租户 id:@RuleDef 未写 tenantId 时,规则装载到该租户(演示"继承 client 租户")
+rule:
+  sdk:
+    tenant-id: "9001"

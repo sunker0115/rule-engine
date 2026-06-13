@@ -150,7 +150,7 @@ class SceneControllerTest {
                         java.util.List.of("payment.initiated"),
                         java.util.List.of(),
                         java.util.Map.of("timezone", "Asia/Shanghai"),
-                        1, "ACTIVE");
+                        "ACTIVE");
         when(sceneService.getScene("t1", "payment")).thenReturn(dto);
 
         mockMvc.perform(get("/admin/v1/scenes/payment")
@@ -158,7 +158,6 @@ class SceneControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.sceneCode").value("payment"))
-                .andExpect(jsonPath("$.data.payloadSchemaVersion").value(1))
                 .andExpect(jsonPath("$.data.eventTypes[0]").value("payment.initiated"));
     }
 

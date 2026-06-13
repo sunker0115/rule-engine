@@ -44,9 +44,9 @@
 
 **`EvalResult` 是稳定多态**：PULL 模式调用方拿到的对象 shape 是 `{satisfied, score?, category?, decision?, trace}`——SCORECARD 多填 `score`（D12），DECISION_TREE 填 `category`（D42），DECISION_TABLE 填 `decision`（D42），PULL API 签名始终不变；节点 trace 跨 kind 统一，运营自助排障的能力 100% 复用。
 
-**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；`ALL_HITS` / `FIRST_HIT` 已实装（D41）。Action 编排（决策流）由 D4 工作流引擎扩展点承载，两者都是 Rule 层级之外。
+**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；`ALL_HITS` / `FIRST_HIT` 已实装（D41）。命中后的编排（决策流）由消费方 / 流程引擎承载（D60），在 Rule 层级之外。
 
-**为什么不另起表**：评分卡 / 决策树仍需要 Rule 的全部公共属性（触发 / 准入 / 灰度 / Action / 版本快照），独立表会复制 80% 的列且数据散布、跨形态报表困难；用 `kind` 字段 + 多态 JSON 列在同一张表里，公共能力天然共享。
+**为什么不另起表**：评分卡 / 决策树仍需要 Rule 的全部公共属性（触发 / 准入 / 灰度 / 决策绑定 / 版本快照），独立表会复制 80% 的列且数据散布、跨形态报表困难；用 `kind` 字段 + 多态 JSON 列在同一张表里，公共能力天然共享。
 
 **演进路径**：按需逐个实现 evaluator——SCORECARD 启用 `ConditionNode.weight`；DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT 各自的内部 JSON 结构与 evaluator；`Scene.executionStrategy` 配合决策集。
 
@@ -88,9 +88,9 @@
 
 ### 2.4 规则间依赖与编排（来源 #3）
 
-- **v1 现状**：D16 显式禁止 Action 产引擎事件；规则间不存在内置依赖与顺序保证；业务需要顺序走外部 MQ 编排。
-- **触发条件**："先反欺诈再合规"类顺序依赖需求，或"Rule A 命中后才触发 Rule B"的流程依赖，目前只能通过外部 MQ 手工编排，依赖关系对运营不可见，排障成本高。
-- **演进方向**：v2 接 Camunda / Flowable 工作流引擎（D4 已说明），把"Rule 命中 → 触发下一 Rule"作为工作流节点而非 Rule 内能力。引擎仍保持单事件单评估，工作流引擎做编排。
+- **v1 现状**：引擎纯决策（D60），规则间不存在内置依赖与顺序保证；业务需要顺序走外部 MQ / 流程引擎编排。
+- **触发条件**："先反欺诈再合规"类顺序依赖需求，或"Rule A 命中后才触发 Rule B"的流程依赖，目前只能通过外部编排，依赖关系对运营不可见，排障成本高。
+- **演进方向**：接 Flowable / Camunda 流程引擎（D60），把"Rule 命中 → 触发下一 Rule"作为工作流节点而非 Rule 内能力。引擎仍保持单事件单评估，流程引擎做编排。
 - **迁移成本**：高（引入新组件、运维形态变化）。
 
 ### 2.5 节点级 trace 冷热分级（来源 #5，并入 [`05-storage.md`](./05-storage.md) TODO）
@@ -104,7 +104,7 @@
 
 - **v1 现状**：顶层架构旁路提到 `Metric Aggregator → Prometheus`，v1 已在 `07-operability.md` 完整定义指标清单与告警阈值。
 - **触发条件**：无（已完成）。
-- **演进方向**：已迁入 [`07-operability.md §六 Prometheus 指标清单`](./07-operability.md) 与 [`§七 告警阈值`](./07-operability.md)，包含评估耗时分位、命中率、Action 成功率、ERROR 率、trace 队列深度等核心指标及建议告警阈值。
+- **演进方向**：已迁入 [`07-operability.md §六 Prometheus 指标清单`](./07-operability.md) 与 [`§七 告警阈值`](./07-operability.md)，包含评估耗时分位、命中率、ERROR 率、trace 队列深度等核心指标及建议告警阈值。
 
 ### 2.7 灰度发布的验证与回退（来源 #12）
 
@@ -118,7 +118,7 @@
 - **演进方向**：
   - **字段级加密**：sensitive 字段在 Scene `payloadSchema` 标记后，引擎写入持久层前自动加密；读取按权限解密；
   - **审计 hash chain**：`audit_log` 加 `prev_hash` 列，链式不可篡改；与 WORM 存储或区块链化扩展二选一；
-  - **数据保留与右遗忘**：GDPR 配套——按主体 ID 物理清除 `evaluation_session` / `node_trace` / `action_execution` / `audit_log` 中对应数据，需要分库分表的清除工具。
+  - **数据保留与右遗忘**：GDPR 配套——按主体 ID 物理清除 `evaluation_session` / `node_trace` / `audit_log` 中对应数据，需要分库分表的清除工具。
 - **迁移成本**：高（涉及所有持久化对象）。
 
 ### 2.9 规则导出 / 导入（来源 #15）
@@ -129,7 +129,7 @@
   - 租户入驻时需要批量导入模板规则；
   - 线上 Incident 排查需要在测试环境精确复现生产规则版本。
 - **演进方向**：
-  - **导出格式**：JSON Bundle = `{ruleVersion, metricDefinitions[], actionTypeManifest[], sceneSnapshot}` 自包含包，目标环境无需额外查询即可完整重建；
+  - **导出格式**：JSON Bundle = `{ruleVersion, metricDefinitions[], decisionDefinitions[], sceneSnapshot}` 自包含包，目标环境无需额外查询即可完整重建；
   - **导入校验**：decisionCode 存在性（目标环境 Tenant 是否已定义引用的 Decision，D54）+ metric 参数安全性（SQL 类型需人工审核标记）+ 版本号重映射（源环境主键 id 不照搬，按 `rule.code` 做 upsert）；
   - **幂等**：重复导入 = 新建草稿版本，不覆盖已发布版本；
   - **权限**：导出需 EXPORT 权限；导入需目标 Scene 的 PUBLISH 权限；
@@ -139,7 +139,7 @@
 **已实装（B7 / 2026-06-06）：**
 
 - **载体**：HTTP 端点——`GET /admin/v1/rules/export?tenantId=&ruleIds=&sceneId=`（按条件批量导出 ACTIVE 版本为 **Bundle JSON 文件下载**，`Content-Disposition: attachment`）、`POST /admin/v1/rules/import`（**multipart 文件上传**，幂等批量导入）；Service 落 `rule-config-svc`（`RuleBundleService` → `RuleExportService` / `RuleImportService`，进出 `RuleBundle` 对象），Controller 落 `rule-api`（`RuleBundleController`，做对象↔文件转换）。无 DDL。
-- **批量 + 多规则 Bundle**：导出选取优先级 ruleIds → sceneId → 整租户（入参用 sceneId，前端列表已有；Bundle 内 `RuleEntry.sceneCode` 仍用 code，跨环境按 code 关联）；Bundle 统一为多规则结构 `{bundleVersion, exportedAt, sourceTenantId, rules[], scenes[], metricDefinitions[], decisionDefinitions[], actionTypeManifest[]}`，单规则 = rules 长度 1 特例。所有 JSON 列按原始 JSON 字符串无损搬运。**实装较原始字段集多 `decisionDefinitions[]`**：D27 后 Action 落在 tenant 级 decision_definition，随包搬运才能真正自包含重建。
+- **批量 + 多规则 Bundle**：导出选取优先级 ruleIds → sceneId → 整租户（入参用 sceneId，前端列表已有；Bundle 内 `RuleEntry.sceneCode` 仍用 code，跨环境按 code 关联）；Bundle 统一为多规则结构 `{bundleVersion, exportedAt, sourceTenantId, rules[], scenes[], metricDefinitions[], decisionDefinitions[]}`，单规则 = rules 长度 1 特例。所有 JSON 列按原始 JSON 字符串无损搬运。**实装含 `decisionDefinitions[]`**：rule 经 `RuleDecisionBinding` 引用 tenant 级 decision_definition，随包搬运才能真正自包含重建。
 - **导入幂等**：Scene / metric / decision 按业务键整体 upsert（缺失则建、已存在跳过不覆盖）；规则逐条——code 不存在 → 新建 rule_definition(DRAFT) + rule_version(DRAFT v1)，已存在 → 仅追加 rule_version(DRAFT, maxVersion+1)，不动 rule_definition 状态/currentVersion。把导入草稿提升为 ACTIVE 走发布/回滚流程（D19，尚未实现）。
 - **metric 安全**：`SQL_AGGREGATE` 类缺失 metric 不自动创建，列入 `metricsRequiringReview`，由运营人工审核后建；发布期 PublishService 的"被引用 metric 无 ACTIVE 版本"校验是安全网。
 - **权限**：v1 沿用 `X-Actor-Id` header；EXPORT / PUBLISH 权限校验留 TODO（后续合规批次 §2.8）。
@@ -158,47 +158,39 @@
 - **演进方向**：定义标准化指标获取协议（参考 OpenTelemetry / OpenFeature 模型），引入 `MetricFetcher` 通用 SDK + 协议测试套件。
 - **迁移成本**：中。
 
-### 2.12 Scene schema 演进（来源 D13，v2 阶段已实装基础设施）
+### 2.12 Scene schema 演进（来源 D13；D69 收口）
 
-- **v1 现状**：`Scene.payloadSchema` 在 Scene 表上，发布期校验 RuleEvent.payload 字段合法性；变更 schema = 直接覆盖。
-- **触发条件**：业务侧调整 payload 字段（新增 / 重命名 / 类型变更），存量规则可能引用了旧字段。
-- **演进方向**：引入 `Scene.payloadSchemaVersion` + 历史版本表 `scene_payload_schema_history`；发布 RuleVersion 时锁定当时的 `(sceneId, payloadSchemaVersion)` 引用；schema 变更走"新版本号 + 影响规则清单 + 灰度切换"流程；与 D20 §3 输入闭合校验联动——校验集合按当时锁定的 schema 版本而非"最新"求解。
-- **迁移成本**：中（schema 历史表 + 引用解析逻辑）。
+- **现状（D69 落地）**：`Scene.payloadSchema`（`List<PayloadFieldSpec>`：name/type/required/enum/min/max/pattern）在 Scene 表上，是输入契约的单一真相源。type 受 `PayloadFieldType` 封闭集校验（创建/更新期 fail-fast）。**模型 2 冻结**：发布期把规则引用字段的完整约束冻进 `rule_version.payload_dependencies`，运行期 `PayloadInputValidator` 强制 required+类型+enum/min/max/pattern。
+- **schema 变更兼容（已解决）**：D69 选模型 2——约束随规则发布冻结，运营事后改 scene payloadSchema **不影响已发布规则**（可复现）。故原"版本号 + 历史表 + 影响规则清单 + 灰度切换"那套**不再需要**：`scene.payload_schema_version` 列与 `scene_payload_schema_history` 表已于 `V1_30` 删除，scene 变更历史改走 `audit_log` 前后快照（`SceneSnapshot`）。
+- **仍未做（v3+）**：AST payload 字段引用校验（ConditionNode.params 字段引用编码规范）；payloadSchema 嵌套对象 / JSON Schema 完整子集（oneOf/$ref）；`scene.default_params`（timezone/currency 等）接入评估（当前运营能设能存、但 eval 侧未加载，仅条件级 `params.timezone` 生效，见 D69 后续①）。
 
-- **v2 实装（2026-06-04）**：`PayloadFieldSpec` JSON Schema 完整子集（enum/min/max/pattern）、`scene_payload_schema_history` 历史表、`scene.payload_schema_version` 版本号字段已落地。Scene 创建/更新 API 现可持久化 payloadSchema，发布时 triggerEventTypes ⊆ Scene.eventTypes 校验已启用。AST payload 字段引用校验留到 v3（需约定 ConditionNode.params 的字段引用编码规范）。
+### 2.13 评估期预编译（纯编译版已落地 2026-06-13，见 D67）
 
-### 2.13 评估期预编译完全切换（来源 D20 v1 不做的"完整预编译"）
-
-- **v1 现状**：D20 已落地 `RuleVersionExecutor` SPI + `InterpretedExecutor` 默认实现（Visitor 树遍历），`rule_version.compiled_predicate_ref` 字段预留为空。
-- **触发条件**：PUSH 模式单机 TPS 触及 Visitor 模式的虚调用 + 多态分发瓶颈（参考量级 5–10 μs / 规则）。
-- **演进方向（v1.5）**：
-  - 引入 `CompiledExecutor`，发布期把 AST 编译为单一 `Predicate<EvalContext>` lambda（Janino 字节码 / LambdaMetafactory invokedynamic）；
-  - 编译产物缓存在 `RuleVersionCache` 按版本 id 引用，发布 / DISABLE / ENABLE 触发 evict + recompile；
-  - 与 D20 §3 输入契约校验联动——强类型变量引用闭合后才能确定编译槽位偏移；
-  - `ExecutorRegistry` 按 RuleVersion 灰度配置切换两类执行器（"编译版先选少量规则灰度验证 → 全量切"）。
-- **alpha 节点共享（跨 RuleVersion 条件去重）作为扩展讨论**：编译期可顺带做 ConditionNode hash 去重，**同 `EvalContext` 内同条件只算一次**，结果缓存在 `EvaluationSession.conditionResultCache`；与预编译切换同期落地为最佳，v1 阶段接受重复评估开销。
-- **节点级 trace 兼容性**：trace 仍按 RuleVersion 的视图展开，底层求值是否共享对运营透明（D7 不变）。
-- **迁移成本**：中（编译期 + 缓存 + 灰度切换）。
-- **预期收益**：单条规则评估开销从 5–10 μs 降至 0.3–1 μs（基于 Aviator / Janino 公开 benchmark 量级）。
+- **已落地（纯编译版）**：`AstCompiler` 把 `AST_BOOLEAN` 布尔 AST（And/Or/Not/Xor/Condition）编译为嵌套 `Predicate<EvalContext>` 闭包；`CompiledExecutor`（包 `InterpretedExecutor`）按不可变 ruleVersionId 缓存（`RuleVersionCache`），**非 trace 快路径**直接 `predicate.test(ctx)`，开 trace / 灰度未命中 / 关开关时回落解释器。
+- **编译技术**：闭包组合（非 Janino 字节码 / 非 LambdaMetafactory——零依赖、零类加载、可调试），组合节点编译期收数组、求值期下标循环避免 Iterator 分配。叶子经 `ConditionEvaluation.satisfiesBoolean`（布尔投影单一真相源，**解释器非 trace 路径与编译版共用**，编译版编译期绑定 evaluator）。
+- **trace 兼容**：trace 永远走解释器（编译版只服务非 trace 快路径），故每条 RuleVersion 的 NodeTrace 仍逐行展开，切换前后 trace 逐行一致（D7 不变）天然成立。
+- **灰度**：`engine.rule.eval.compiled-executor.*`（`enabled` / `rule-code-whitelist` / `on-compile-error`=FALLBACK\|FAIL），默认 `enabled=false` 逐字节等同解释器，`EvalEngine` 零改动；`CompiledPredicateEvictor` 监听 `RulePublishedEvent`/`SceneChangedEvent` 调 `evictAll`（键不可变免脏，纯内存卫生）。
+- **实测收益（替代原预测）**：Phase 0（冻结 LONG）AST 求值亚微秒（50 条件 865ns），JIT 逃逸分析已使解释器非 trace 路径近零分配（72–120 B/op）——故原"5–10μs→0.3–1μs"预测与"零分配"目标均不成立。A/B 实测编译版速度收益温和（20–50 条件 ~10–17%，5 条件持平）、分配≤解释器（50 条件 72B vs 120B）。默认关，作为架构层可切换能力落地，待生产 profiling（高 QPS + 高条件数 + 巨态分派）达标再灰度开。
+- **后续轮（未做）**：alpha/CSE 跨规则条件去重（同 `(sceneCode,eventType)` 下 ConditionNode hash 去重，同 `EvalContext` 内同条件只算一次）独立评估。`rule_version.compiled_predicate_ref` 列保持预留留空（lazy 编译，无需持久化编译产物引用）。
 
 ### 2.14 嵌入式 SDK 模式（来源 D20 v1 不做的"嵌入式 SDK"）
 
 - **v1 现状**：评估走中心服务（PUSH / PULL / HYBRID 三模式都基于 RPC）；D17 / D20 §4 的 `RuleVersionWatcher` SPI 已为多 backend 预留，但 v1 仅 `DbPollingRuleWatcher` 一种实现。
 - **触发条件**：业务方对评估 RPC 延迟敏感（如风控前置链路 P99 < 5ms）且自带运维能力，愿意承担 SDK 版本管控成本。
 - **演进方向（v2 范畴）**：
-  - 把 RuleVersion 缓存 + 评估引擎打包成 jar，业务方进程内嵌入直接评估，仅 Action 派发回写中心；
+  - 把 RuleVersion 缓存 + 评估引擎打包成 jar，业务方进程内嵌入直接评估，决策输出在本地返回，评估观测数据回写中心；
   - 配套 `MqRuleWatcher`（Kafka / Pulsar 变更主题）/ `NacosRuleWatcher` / `ZkRuleWatcher` 实现，把 D17 的"15s 最终一致窗口"压到 < 1s；
   - **保留中台严肃治理**：`RuleDefinition` + 不可变快照 + D14 审计 + D6 灰度桶一致性算法都不变，嵌入式 SDK 只是评估执行位置下沉；
-  - 与 ice 项目嵌入式形态的差异：不允许业务方在 SDK 端写 / 改规则，配置只读拉取；Action 派发仍走中心（保留 D18 重试 / 补偿语义）。
+  - 与 ice 项目嵌入式形态的差异：不允许业务方在 SDK 端写 / 改规则，配置只读拉取；引擎纯决策（D60），命中后的执行由嵌入方自行编排。
 - **依赖**：需先在 v1.5 完成 §2.13 预编译切换以降低 SDK 体积与启动开销。
-- **迁移成本**：高（SDK 版本管控 + Action 反向回写通道 + 多 backend Watcher 完整实现 + 跨实例灰度桶审计闭环）。
+- **迁移成本**：高（SDK 版本管控 + 评估观测数据回写通道 + 多 backend Watcher 完整实现 + 跨实例灰度桶审计闭环）。
 - **优先级**：中。
 
 ### 2.15 evaluation_session 异步化路径（来源 D21 派生 / 高吞吐讨论）
 
 > **本节是触发条件达成后的重构方向，v1 阶段无任何专项准备动作，标准工程实践即可**——避免读者把"演进路径"误读为"v1 待办"。
 
-- **v1 现状**：每次评估 1 行同步写，承担三层角色：①**幂等收口**（DB uk on `event_id`，与 Redis trySet 形成双兜底，D11 / §3.10）；②**对账分母**（HIT / MISS / BLOCKED / ERROR 四态统计源，D15 + D22）；③**外键时序**（`node_trace` / `action_execution` 引用 `session_id`）。单行同步 insert 1–3 ms，对 D8 千级 QPS 目标是零头，故 D21 仅把 `node_trace`（50–1000 行 / 次）异步化，**`evaluation_session` 保持同步**。
+- **v1 现状**：每次评估 1 行同步写，承担三层角色：①**幂等收口**（DB uk on `event_id`，与 Redis trySet 形成双兜底，D11 / §3.10）；②**对账分母**（HIT / MISS / BLOCKED / ERROR 四态统计源，D15 + D22）；③**外键时序**（`node_trace` 引用 `session_id`）。单行同步 insert 1–3 ms，对 D8 千级 QPS 目标是零头，故 D21 仅把 `node_trace`（50–1000 行 / 次）异步化，**`evaluation_session` 保持同步**。
 - **触发条件**：
   - profile 显示 `evaluation_session` 同步 insert 进入热路径 P99；或
   - v2 整体演进路径触达——比如转 event sourcing（RuleEvent → MQ → 评估服务消费）时 `evaluation_session` 表的语义会被 MQ + 消费 offset 取代，本节方案废弃。
@@ -239,11 +231,6 @@
   - 发布期校验（`PublishService.validatePreGateParams`，仅单规则）：`percentage∈[0,100]`、桶区间 `0<=bucketStart<bucketEnd<=100` 且成对出现、`experimentId` 非空白；越界抛 `IllegalArgumentException`（映射 `INVALID_ARGUMENT`）。
   - `RolloutPreGateTest` 覆盖区间互斥（同实验不相交区间 → 每 subject `a^b`）/ 一致分桶 / 百分比向后兼容；`PublishServiceTest` + `RolloutParamsTest` 覆盖发布期校验。
 - **迁移成本**：低（已完成，仅 `RolloutPreGate` hash/命中逻辑 + 发布期校验，无 DDL）。
-
-### 2.17 ActionHandler dryRun 全量实装（D7 v1.5，已实装）
-
-- **已实装（v1.5，D7）**：`SendAlertHandler.dryRun()` 已 override，返回 `ActionResult.success()` 预览结果；`DRY_RUN_NOT_IMPLEMENTED` errorCode 不再产生。引擎内置 ActionHandler 仅 `SendAlertHandler`；`BlockTransactionHandler` 已删除（D57），`BLOCK_TRANSACTION` 由嵌入方经 `ActionHandler` SPI 实现。
-- **背景**：运营需要在 dry-run 时预览"会发什么短信 / 给什么优惠券"等 Action 输出，而不只是 AST 节点 trace。dry-run 响应体 `actionResults` 含真实预览输出；不影响生产路径（`execute()` 与 `dryRun()` 完全隔离）。
 
 ### 2.18 规则列表查询 API（来源 10-api-contract.md §4.4）
 
@@ -353,6 +340,7 @@ D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔�
 | D21 确立 | trace 异步批写 / session 同步写 | 双轨写入架构基础；P99 延迟保障；trace 成旁路观察通道 |
 | D27 确立 | Action 从 Rule 迁移到 Decision | 最大单次重构；同一 Decision 的所有命中共享 Action 配置 |
 | D30 确立 | providedMetrics allowProvided per sourceType | 调用方数据权威性最晚才表态；per-sourceType 粒度是 D30 讨论时才浮现的需求 |
+| D60 确立 | 规则引擎纯决策化，移除动作子系统 | 引擎收敛为纯决策（只产出 Decision）；动作子系统（ActionHandler SPI / 派发 / `action_execution` / 配置）整体移除，编排交流程引擎；作废 D4 / D16 / D18 / D27 / D28 / D57。上文 D4–D30 时间线中的动作相关条目为当时的历史记录，其结论已被 D60 取代 |
 
 ---
 

@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.sdk;
 
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 import org.junit.jupiter.api.Test;
 
@@ -17,9 +18,19 @@ class ConditionTest {
         ConditionNode node = (ConditionNode) ast;
         assertThat(node.conditionType()).isEqualTo("GT");
         assertThat(node.metricCode()).isEqualTo("amount");
-        assertThat(node.params().get("threshold")).isEqualTo(1000);
+        assertThat(node.params().get(ConditionParams.THRESHOLD)).isEqualTo(1000);
         assertThat(node.weight()).isEqualTo(0.0);
         assertThat(node.displayLabel()).isNull();
+    }
+
+    @Test
+    void matches_usesRegexParamKey() {
+        // 回归：param 键必须是 "regex"(MatchesEvaluator 读 "regex"，旧 "pattern" 键会永不命中)
+        AstNode ast = Condition.matches("phone", "\\d{11}").toAst();
+        ConditionNode node = (ConditionNode) ast;
+        assertThat(node.conditionType()).isEqualTo("MATCHES");
+        assertThat(node.params().get(ConditionParams.REGEX)).isEqualTo("\\d{11}");
+        assertThat(node.params()).doesNotContainKey("pattern");
     }
 
     @Test
@@ -27,7 +38,7 @@ class ConditionTest {
         AstNode ast = Condition.in("country", "CN", "HK").toAst();
         ConditionNode node = (ConditionNode) ast;
         assertThat(node.conditionType()).isEqualTo("IN");
-        assertThat(node.params().get("values")).isEqualTo(List.of("CN", "HK"));
+        assertThat(node.params().get(ConditionParams.VALUES)).isEqualTo(List.of("CN", "HK"));
     }
 
     @Test
@@ -35,8 +46,8 @@ class ConditionTest {
         AstNode ast = Condition.between("age", 18, 65).toAst();
         ConditionNode node = (ConditionNode) ast;
         assertThat(node.conditionType()).isEqualTo("BETWEEN");
-        assertThat(node.params().get("min")).isEqualTo(18);
-        assertThat(node.params().get("max")).isEqualTo(65);
+        assertThat(node.params().get(ConditionParams.MIN)).isEqualTo(18);
+        assertThat(node.params().get(ConditionParams.MAX)).isEqualTo(65);
     }
 
     @Test
@@ -85,6 +96,15 @@ class ConditionTest {
         ConditionNode node = (ConditionNode) ast;
         assertThat(node.conditionType()).isEqualTo("BLACKLIST_HIT");
         assertThat(node.params().get("list")).isEqualTo(List.of("dev-001"));
+    }
+
+    @Test
+    void of_twoArg_customOperator_hasNullMetric() {
+        AstNode ast = Condition.of("BUSINESS_HOURS", Map.of("tz", "Asia/Shanghai")).toAst();
+        ConditionNode node = (ConditionNode) ast;
+        assertThat(node.conditionType()).isEqualTo("BUSINESS_HOURS");
+        assertThat(node.metricCode()).isNull();
+        assertThat(node.params().get("tz")).isEqualTo("Asia/Shanghai");
     }
 
     @Test

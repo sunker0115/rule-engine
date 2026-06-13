@@ -1,9 +1,14 @@
 package com.sstlfsj.rule.kernel.internal.condition;
 
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.operator.ParamSpec;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategy;
 import com.sstlfsj.rule.kernel.internal.condition.strategy.ComparisonStrategyFactory;
@@ -16,19 +21,21 @@ import java.time.ZoneId;
  * NOT_BETWEEN 条件算子：value &lt; min 或 value &gt; max（BETWEEN 取反）。
  * params 格式：{"min": ..., "max": ...}。DATE/DATETIME 先走解析段再比较。
  */
+@ConditionType(value = ConditionTypes.NOT_BETWEEN, displayName = "区间外", schema = ParamSpec.BETWEEN_RANGE)
 public class NotBetweenEvaluator implements ConditionEvaluator {
 
     @Override
     public boolean evaluate(ConditionNode node, EvalContext ctx) {
         MetricValue mv = ctx.getMetric(node.metricCode());
         if (mv == null) return false;
-        Object min = node.params().get("min");
-        Object max = node.params().get("max");
+        Object min = node.params().get(ConditionParams.MIN);
+        Object max = node.params().get(ConditionParams.MAX);
         if (min == null || max == null) return false;
         String dt = node.dataType();
         Object actual = mv.value();
         if (DataType.DATE.tag().equals(dt) || DataType.DATETIME.tag().equals(dt)) {
-            ZoneId zone = TimeZoneResolver.resolve((String) node.params().get("timezone"), null);
+            ZoneId zone = TimeZoneResolver.resolve((String) node.params().get(ConditionParams.TIMEZONE),
+                    (String) ctx.sceneDefaultParams().get(SceneDefaultParams.TIMEZONE));
             actual = PlaceholderResolver.resolveTyped(dt, actual, ctx, zone);
             min    = PlaceholderResolver.resolveTyped(dt, min, ctx, zone);
             max    = PlaceholderResolver.resolveTyped(dt, max, ctx, zone);

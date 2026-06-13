@@ -81,7 +81,9 @@ class AuditServiceImpl implements AuditService {
                         r.getActualValue(),
                         r.getResult(),
                         r.getErrorCode(),
-                        r.getValueSource()
+                        r.getValueSource(),
+                        r.getRuleCode(),
+                        r.getRuleVersion()
                 ))
                 .toList();
     }
@@ -135,6 +137,11 @@ class AuditServiceImpl implements AuditService {
         return new PageResult<>(items, total, page, limit);
     }
 
+    @Override
+    public String getSessionSceneCode(String tenantId, Long sessionId) {
+        return evalSessionMapper.findSceneCode(sessionId, Long.valueOf(tenantId));
+    }
+
     /** 返回点分路径的父路径；根节点（不含 "."）返回 null。 */
     private static String parentPath(String path) {
         int dot = path.lastIndexOf('.');
@@ -152,6 +159,7 @@ class AuditServiceImpl implements AuditService {
             return new TraceTreeNode(
                     entry.nodeType(), entry.conditionType(), entry.metricCode(),
                     entry.actualValue(), entry.result(), entry.errorCode(), entry.valueSource(),
+                    entry.ruleCode(), entry.ruleVersion(),
                     children.stream().map(TraceTreeNodeBuilder::build).toList()
             );
         }

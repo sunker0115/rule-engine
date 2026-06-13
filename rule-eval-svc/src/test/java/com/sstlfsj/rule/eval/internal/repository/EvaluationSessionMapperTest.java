@@ -40,6 +40,19 @@ class EvaluationSessionMapperTest {
         assertTrue(sql.contains("evalDurationMs"), "VALUES 应绑定 #{s.evalDurationMs}");
     }
 
+    // 防回归：忠实重放需 payload + candidate_rule_version_ids 落库；断言 SQL 同时含列与绑定。
+    @Test
+    void insertBatch_sql_persistsReplayColumns() throws Exception {
+        Insert insert = EvaluationSessionMapper.class
+                .getMethod("insertBatch", List.class)
+                .getAnnotation(Insert.class);
+        String sql = String.join("", insert.value());
+        assertTrue(sql.contains("payload"), "INSERT 列清单应含 payload");
+        assertTrue(sql.contains("candidate_rule_version_ids"), "INSERT 列清单应含 candidate_rule_version_ids");
+        assertTrue(sql.contains("s.payload"), "VALUES 应绑定 #{s.payload}");
+        assertTrue(sql.contains("candidateRuleVersionIds"), "VALUES 应绑定 #{s.candidateRuleVersionIds}");
+    }
+
     @Test
     void purgeOlderThan_methodExists_returningIntForCutoffAndBatch() throws Exception {
         // 数据保留清理入口：default 方法 purgeOlderThan(LocalDateTime, int) -> int

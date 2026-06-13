@@ -4,13 +4,11 @@ import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.DecisionStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,21 +23,19 @@ class DecisionServiceImplTest {
 
     @Test
     void create_persistsActiveAndAudits() {
-        List<DecisionAction> actions = List.of(new DecisionAction("a1", "SEND_ALERT", 0, Map.of()));
-        svc.create(9001L, "REJECT", "拒绝", 10, "高风险拒绝", actions, "actor");
+        svc.create(9001L, "REJECT", "拒绝", 10, "高风险拒绝", "actor");
 
         ArgumentCaptor<DecisionDefinition> cap = ArgumentCaptor.forClass(DecisionDefinition.class);
         verify(mapper).insert(cap.capture());
         assertThat(cap.getValue().getCode()).isEqualTo("REJECT");
         assertThat(cap.getValue().getStatus()).isEqualTo(DecisionStatus.ACTIVE);
-        assertThat(cap.getValue().getActions()).hasSize(1);
         verify(publisher).publishEvent(any(OperationAuditedEvent.class));
     }
 
     @Test
     void create_rejectsDuplicateCode() {
         when(mapper.findByCode(9001L, "REJECT")).thenReturn(new DecisionDefinition());
-        assertThatThrownBy(() -> svc.create(9001L, "REJECT", "拒绝", 10, null, List.of(), "actor"))
+        assertThatThrownBy(() -> svc.create(9001L, "REJECT", "拒绝", 10, null, "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("已存在");
     }
@@ -61,7 +57,7 @@ class DecisionServiceImplTest {
     @Test
     void update_rejectsWhenNotFound() {
         when(mapper.findByCode(9001L, "X")).thenReturn(null);
-        assertThatThrownBy(() -> svc.update(9001L, "X", "n", 1, null, List.of(), "actor"))
+        assertThatThrownBy(() -> svc.update(9001L, "X", "n", 1, null, "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("不存在");
     }

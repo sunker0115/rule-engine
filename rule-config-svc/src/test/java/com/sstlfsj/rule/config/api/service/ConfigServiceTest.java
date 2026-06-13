@@ -7,6 +7,7 @@ import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +39,7 @@ class ConfigServiceTest {
                 String code, String name,
                 AstNode conditionAst, List<DecisionBinding> decisionBindings,
                 List<PreGateConfig> preGates, List<String> triggerEventTypes,
-                String kind, String actorId) {
+                String kind, ScriptSource script, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -50,7 +51,8 @@ class ConfigServiceTest {
         @Override
         public DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
                 AstNode conditionAst, List<DecisionBinding> decisionBindings,
-                List<PreGateConfig> preGates, List<String> triggerEventTypes, String actorId) {
+                List<PreGateConfig> preGates, List<String> triggerEventTypes,
+                ScriptSource script, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -58,7 +60,7 @@ class ConfigServiceTest {
         public DraftCreatedResult newVersion(String tenantId, Long ruleId, String name, String kind,
                 AstNode conditionAst, List<DecisionBinding> decisionBindings,
                 List<PreGateConfig> preGates, List<String> triggerEventTypes,
-                Long fromVersionId, String actorId) {
+                Long fromVersionId, ScriptSource script, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -95,7 +97,7 @@ class ConfigServiceTest {
     void createDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.createDraft("t1", "SCENE_A", "RULE_001", "规则名",
-                        null, null, null, null, null, "actor"));
+                        null, null, null, null, null, null, "actor"));
     }
 
     @Test
@@ -108,14 +110,14 @@ class ConfigServiceTest {
     void editDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.editDraft("t1", 1L, "名", "AST_BOOLEAN",
-                        null, null, null, null, "actor"));
+                        null, null, null, null, null, "actor"));
     }
 
     @Test
     void newVersion_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.newVersion("t1", 1L, "名", "AST_BOOLEAN",
-                        null, null, null, null, null, "actor"));
+                        null, null, null, null, null, null, "actor"));
     }
 
     @Test

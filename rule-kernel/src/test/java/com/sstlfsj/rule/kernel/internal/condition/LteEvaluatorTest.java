@@ -5,11 +5,14 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,5 +52,15 @@ class LteEvaluatorTest {
         ConditionNode node = new ConditionNode("LTE", "amount", null,
                 Map.of("threshold", 9007199254740993L), 0.0, "LONG");
         assertThat(evaluator.evaluate(node, ctx("amount", 9007199254740993L))).isTrue();
+    }
+
+    @Test
+    void annotation_describesOperator() {
+        var ann = LteEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.LTE);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.THRESHOLD));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

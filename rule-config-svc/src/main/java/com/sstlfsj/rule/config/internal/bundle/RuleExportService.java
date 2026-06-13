@@ -13,7 +13,6 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,7 +29,7 @@ import java.util.Set;
 /**
  * 规则批量导出：按条件查规则集合，组装多规则自包含 Bundle（B7）。
  * <p>选取优先级 ruleIds → sceneId → 整租户；每条仅导当前 ACTIVE rule_version（无则跳过）。
- * scenes / metrics / decisions / actionTypeManifest 跨规则去重。</p>
+ * scenes / metrics / decisions 跨规则去重。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -77,8 +76,7 @@ public class RuleExportService {
                 .map(s -> new RuleBundle.SceneSnapshot(
                         s.getCode(), s.getName(), s.getDescription(),
                         s.getSubjectType().name(), s.getDominantMode().name(), s.getDecisionStrategy().name(),
-                        s.getEventTypes(), s.getPayloadSchema(), s.getDefaultParams(),
-                        s.getPayloadSchemaVersion()))
+                        s.getEventTypes(), s.getPayloadSchema(), s.getDefaultParams()))
                 .toList();
 
         // 3. metrics（去重，精确版本）
@@ -94,13 +92,12 @@ public class RuleExportService {
             }
         }
 
-        // 4. decisions（去重）+ actionTypeManifest
+        // 4. decisions（去重）
         List<DecisionDefinition> decisions = decisionDefinitionMapper.findByCodes(tid, decisionCodes);
         List<RuleBundle.DecisionEntry> decisionEntries = decisions.stream()
                 .map(d -> new RuleBundle.DecisionEntry(
-                        d.getCode(), d.getName(), d.getPriority(), d.getDescription(), d.getActions()))
+                        d.getCode(), d.getName(), d.getPriority(), d.getDescription()))
                 .toList();
-        List<String> actionTypes = collectActionTypes(decisions);
 
         // 5. rules
         List<RuleBundle.RuleEntry> rules = new ArrayList<>();
@@ -119,7 +116,7 @@ public class RuleExportService {
         }
 
         return new RuleBundle(1, Instant.now().toString(), tenantIdStr,
-                rules, scenes, metricEntries, decisionEntries, actionTypes);
+                rules, scenes, metricEntries, decisionEntries);
     }
 
     private List<String> parseDecisionCodes(List<DecisionBinding> bindings) {
@@ -129,16 +126,5 @@ public class RuleExportService {
             if (b.decisionCode() != null) codes.add(b.decisionCode());
         }
         return new ArrayList<>(codes);
-    }
-
-    private List<String> collectActionTypes(List<DecisionDefinition> decisions) {
-        Set<String> types = new LinkedHashSet<>();
-        for (DecisionDefinition d : decisions) {
-            if (d.getActions() == null) continue;
-            for (DecisionAction a : d.getActions()) {
-                if (a.actionType() != null) types.add(a.actionType());
-            }
-        }
-        return new ArrayList<>(types);
     }
 }

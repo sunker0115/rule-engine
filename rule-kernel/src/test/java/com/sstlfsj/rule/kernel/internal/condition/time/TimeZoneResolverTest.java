@@ -28,4 +28,22 @@ class TimeZoneResolverTest {
     void utc_whenParamsBlank() {
         assertThat(TimeZoneResolver.resolve("  ", null)).isEqualTo(ZoneOffset.UTC);
     }
+
+    @Test
+    void sceneDefault_usedWhenParamsAbsent() {
+        assertThat(TimeZoneResolver.resolve(null, "Asia/Shanghai"))
+                .isEqualTo(ZoneId.of("Asia/Shanghai"));
+    }
+
+    @Test
+    void paramsOverridesScene() {
+        assertThat(TimeZoneResolver.resolve("UTC", "Asia/Shanghai"))
+                .isEqualTo(ZoneId.of("UTC"));
+    }
+
+    @Test
+    void illegalSceneDefault_fallsBackUtc() {
+        assertThat(TimeZoneResolver.resolve(null, "Asia/Xxx"))
+                .isEqualTo(ZoneOffset.UTC);
+    }
 }

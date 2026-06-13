@@ -35,8 +35,6 @@ public class SceneDef {
     /** Scene 默认参数（开放结构）；JSON 列由 TypeHandler 转换。 */
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private Map<String, Object> defaultParams;
-    /** payloadSchema 当前版本号，初始为 1，每次更新自增（D13 演进）。 */
-    private Integer payloadSchemaVersion;
     private SceneStatus status;
     private String createdBy;
     private java.time.LocalDateTime createdAt;

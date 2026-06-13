@@ -77,7 +77,7 @@ class AuditServiceTest {
     void traceNodeEntry_字段赋值与读取正确() {
         TraceNodeEntry entry = new TraceNodeEntry(
                 "0.1", "CONDITION", "GT", "amount",
-                "500.00", true, null, "EVENT"
+                "500.00", true, null, "EVENT", "RC-1", 3L
         );
 
         assertThat(entry.nodePath()).isEqualTo("0.1");
@@ -88,13 +88,16 @@ class AuditServiceTest {
         assertThat(entry.result()).isTrue();
         assertThat(entry.errorCode()).isNull();
         assertThat(entry.valueSource()).isEqualTo("EVENT");
+        // 规则身份冗余键随 trace 行读出
+        assertThat(entry.ruleCode()).isEqualTo("RC-1");
+        assertThat(entry.ruleVersion()).isEqualTo(3L);
     }
 
     @Test
     void traceNodeEntry_result和errorCode允许为null() {
         TraceNodeEntry entry = new TraceNodeEntry(
                 "0", "AND", null, null,
-                null, null, "EVAL_ERROR", null
+                null, null, "EVAL_ERROR", null, null, null
         );
 
         assertThat(entry.result()).isNull();
@@ -105,8 +108,8 @@ class AuditServiceTest {
     @Test
     void traceNodeEntry_nodePath字典序语义_多位节点编号() {
         // "0.1.10" 字典序排在 "0.1.2" 之前，验证 record 存储格式与排序说明一致
-        TraceNodeEntry a = new TraceNodeEntry("0.1.10", "CONDITION", null, null, null, null, null, null);
-        TraceNodeEntry b = new TraceNodeEntry("0.1.2", "CONDITION", null, null, null, null, null, null);
+        TraceNodeEntry a = new TraceNodeEntry("0.1.10", "CONDITION", null, null, null, null, null, null, null, null);
+        TraceNodeEntry b = new TraceNodeEntry("0.1.2", "CONDITION", null, null, null, null, null, null, null, null);
 
         assertThat(a.nodePath().compareTo(b.nodePath())).isLessThan(0);
     }

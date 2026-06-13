@@ -1,10 +1,10 @@
 # 02 — 运行时全链路
 
-> **位置定位**：本文档承载"一个 RuleEvent 进来到 Action 落地"的**全链路时序**——Trigger 接入 / Matcher 检索 / Pre-Gate 拦截 / EvalContext 装配 / AST 评估 / Action 派发各阶段衔接。
+> **位置定位**：本文档承载"一个 RuleEvent 进来到决策产出"的**全链路时序**——Trigger 接入 / Matcher 检索 / Pre-Gate 拦截 / EvalContext 装配 / AST 评估 / 决策合成各阶段衔接。
 >
-> **前置阅读**：[`README.md`](./README.md)、[`01-concepts.md`](./01-concepts.md)、[`00-decisions.md`](./00-decisions.md) D6 / D17 / D20 / D21
+> **前置阅读**：[`README.md`](./README.md)、[`01-concepts.md`](./01-concepts.md)、[`00-decisions.md`](./00-decisions.md) D6 / D17 / D20 / D21 / D60
 >
-> **解决什么疑问**："事件进来后引擎内部依次发生了什么？""evaluation_session 在哪一步开始 / 结束？""metric 在哪一步预拉？Action 在哪一步派发？"
+> **解决什么疑问**："事件进来后引擎内部依次发生了什么？""evaluation_session 在哪一步开始 / 结束？""metric 在哪一步预拉？决策在哪一步合成？"
 >
 > **职责边界**——
 > - ✅ 阶段时序 / 各阶段输入输出契约 / evaluation_session 生命周期 / 失败语义聚合
@@ -17,9 +17,9 @@
 | 章节 | 状态 |
 |------|------|
 | §二 整体时序 | ✅ 已展开 |
-| §三 各阶段细节 | ✅ 已展开（Trigger / Matcher / Pre-Gate / EvalContext / Evaluator / Dispatcher） |
+| §三 各阶段细节 | ✅ 已展开（Trigger / Matcher / Pre-Gate / EvalContext / Evaluator / 决策合成） |
 | §四 evaluation_session 生命周期 | ✅ 已展开 |
-| §五 失败语义聚合 | ✅ 已展开（汇总 D15 单节点 / 单规则 / Action 失败的传播规则） |
+| §五 失败语义聚合 | ✅ 已展开（汇总 D15 单节点 / 单规则 失败的传播规则） |
 
 ---
 
@@ -55,11 +55,11 @@ RuleEvent
   │  · 单节点失败：节点 satisfied=false，整树继续短路求值（D15）
   │  · 评估结束：EvalResult 出树，node_trace 批量 submit 入 TraceWriter 队列（异步，D21）
   ▼
-⑥ Action 派发（Dispatcher）
-  · PULL 模式：不派发，EvalResult 同步返回给调用方
-  · PUSH/HYBRID 模式：按 finalDecision.actions 排序异步派发
-  · 评估线程不等待 Action 完成
-  · ActionResult 由 Handler 执行后写 action_execution 表
+⑥ 决策合成（decisionStrategy）
+  · 命中规则绑定的 Decision 经 decisionStrategy 合成 finalDecision（D26/D29）
+  · PULL：EvalResult{finalDecision, hitDecisions, ...} 同步返回调用方
+  · PUSH/HYBRID：异步评估完即落库 evaluation_session，不派发动作（D60）
+  · "命中后做什么"归消费方 / 流程引擎
 ```
 
 **关键约束**：
@@ -68,7 +68,7 @@ RuleEvent
 |------|------|
 | 阶段①→③ 串行 | Trigger 校验 → Matcher 路由 → Pre-Gate 拦截依次串行，快速短路 |
 | 阶段④内部并发 | Subject 加载与 metric 批拉 `CompletableFuture.allOf()` 并行（D25） |
-| 阶段⑥与评估线程异步解耦 | Action 派发入队后评估线程即返回 EvalResult，不等待 Handler 完成（D20 §2） |
+| 引擎纯决策化 | 引擎只产出决策，不派发动作（D60）；"命中后做什么"归消费方 / 流程引擎 |
 | `evaluation_session` 同步写 | 阶段④结束时同步写入（量小延迟可忽略，且对账需该行作锚 + 与 event_id DB uk 是 D11 幂等双兜底的下半层，D21） |
 | `node_trace` 异步批写 | 阶段⑤结束时入 TraceWriter 队列，旁路观察通道，失败降级丢弃，不影响热路径（D21） |
 
@@ -87,15 +87,11 @@ RuleEvent
                                               │         │
                                               │         └──▶ TraceWriter 队列（异步批写）
                                               │
-                             PULL 模式：EvalResult ◀──── 同步返回
-                             PUSH/HYBRID 模式：ActionInstance list 入队
+                                         ⑥ 决策合成 finalDecision
                                               │
+                             PULL 模式：EvalResult ◀──── 同步返回
+                             PUSH/HYBRID 模式：异步评估完落库即止（不派发动作，D60）
   ──────────────────────────────────────────────────────
-  Dispatcher 线程池（异步）
-  ──────────────────────────────────────────────────────
-                               ActionHandler.execute()
-                                    │
-                              write action_execution（异步）
 ```
 
 ---
@@ -123,7 +119,7 @@ RuleEvent
 | `POST /api/v1/rule/evaluate` | PULL | 是 | `EvalResult { ... }` |
 | `POST /api/v1/rule/dry-run` | PULL（试算） | 是 | `EvalResult + nodeTrace` |
 
-> **dry-run 试跑目标二选一必传**（D56）：`ruleVersionId`（精确版本）/ `ruleId`（取最新版本，含 DRAFT）二选一，都不传 → 400 `MISSING_DRYRUN_TARGET`。dry-run 结构上恒走"带版本单快照"分支——**不写 `evaluation_session`、不派发 action**（副作用从结构上根除），痕迹按需落 `dry_run_session` / `dry_run_node_trace`。premise A 下草稿即冻结快照，故 dry-run 试跑的 DRAFT 与发布后内容一致。
+> **dry-run 试跑目标二选一必传**（D56）：`ruleVersionId`（精确版本）/ `ruleId`（取最新版本，含 DRAFT）二选一，都不传 → 400 `MISSING_DRYRUN_TARGET`。dry-run 结构上恒走"带版本单快照"分支——**不写 `evaluation_session`**，痕迹按需落 `dry_run_session` / `dry_run_node_trace`。premise A 下草稿即冻结快照，故 dry-run 试跑的 DRAFT 与发布后内容一致。
 
 **异常语义**：
 - 400 系列：schema 校验失败，不进入评估链路；
@@ -138,7 +134,7 @@ RuleEvent
 **核心动作**：
 - 按 `(tenantId, sceneCode, eventType)` 三元组查内存倒排索引（`ConcurrentHashMap`）；
 - 倒排索引 value = `List<RuleVersion>`（仅含 `PUBLISHED` 状态规则的当前版本快照，`DISABLED` 规则已从索引中剔除）；
-- 每个 `RuleVersion` 快照包含：完整预解析的 AST 节点树（`condition_ast`）+ `decision_bindings`（含 Decision.actions）+ `pre_gates`（含 ROLLOUT 灰度）+ `metric_dependencies` + `triggerEventTypes`；
+- 每个 `RuleVersion` 快照包含：完整预解析的 AST 节点树（`condition_ast`）+ `decision_bindings`（含 Decision 的 code / name / priority）+ `pre_gates`（含 ROLLOUT 灰度）+ `metric_dependencies` + `triggerEventTypes`；
 - 倒排索引分桶规则：`RuleVersion.triggerEventTypes` 为空时归入通配桶（key = `"*"`），非空时按实际值逐一建桶；查询时取精确桶与通配桶的并集（精确匹配优先，去重）；
 - 索引在规则发布/禁用时增量热更（D17）：单服务模式由 Modulith `RulePublishedEvent` 触发（近实时）；嵌入式 SDK 模式由 `DbPollingRuleWatcher` 轮询触发（15s 最终一致）；Scene 变更同理（D24，单服务 `SceneChangedEvent` / SDK 模式 `DbPollingSceneWatcher` 30s）。
 
@@ -242,25 +238,20 @@ EvalResult {
 }
 ```
 
-### 3.6 Action Dispatcher
+### 3.6 决策合成（decisionStrategy）
 
-**输入**：`RuleVersion.decision_bindings` 中 `finalDecision` 对应的 actions 列表（D28：Decision 及其 actions 在发布时已快照化进 `decision_bindings`，运行时直读，不再查 rule_definition）。`ActionContext.params` 取自 `Decision.actions[n].params`（D54：action 触发+参数归 decision，与 scene 无关；scene_action_binding 已移除）
+**输入**：命中规则（AST=true）绑定的 Decision 列表（`RuleVersion.decision_bindings` 在发布时已快照化，运行时直读，含 code / name / priority）
 
-**输出**：`action_execution` 行（异步写 DB）
+**输出**：`EvalResult { finalDecision, hitDecisions, ... }`
 
-**核心动作**（best-effort fire-and-forget，D53）：
-- 从 `decision_bindings` 取 `finalDecision.actions` 列表，按 `sortOrder` 顺序提交给进程内异步队列（D20 §2）；
-- **评估线程不等待 Action 完成**：提交入队即返回 `EvalResult`（PULL 模式同步返回；PUSH 模式调用方收到 accepted=true）；
-- Handler 执行结果写 `action_execution` 表（异步，不阻塞评估线程）；
-- 队列满 → 丢弃 + 累计计数 + WARN 日志（best-effort 可丢，不重试；不再产生 `QUEUE_OVERFLOW` errorCode，D53）。
+**核心动作**（D26/D29，引擎纯决策化，D60）：
+- 把所有命中规则绑定的 Decision 收集为 `hitDecisions`（始终填充，按 priority 排序）；
+- 按 Scene 的 `decisionStrategy` 合成 `finalDecision`（v1 仅 `HIGHEST_PRIORITY`，取 priority 最小者）；
+- **不派发任何动作**：引擎到此产出决策即止，"命中后做什么"（发券 / 拦截 / 通知 / 调外部系统）归消费方 / 流程引擎（对标 OPA 的 PEP、Camunda 的 BPMN，预期搭档 Flowable）。
 
-**失败语义**（D53 best-effort + D18 failFast）：
-- Handler 失败 → `action_execution.status=FAILED` 终态，**不重试不补偿**（可靠投递未来接 MQ）；
-- `failFast=true` 的 Action 失败后，同 Decision 内 `sortOrder` 更大的 Action 全部 `status=SKIPPED, errorCode=PREDECESSOR_FAILED`（D18 多 action 失败传播语义不变）。
+**缺省 decisionStrategy**（D29）：PUSH/HYBRID Scene 未配 `decisionStrategy` 时，缺省等价 `HIGHEST_PRIORITY`，不会因漏配导致 `finalDecision` 静默为空；PULL Scene 不参与合成（`finalDecision` 始终 null），`hitDecisions` 仍返回供调用方自行处理。
 
-**缺省 decisionStrategy**（D29）：PUSH/HYBRID Scene 未配 `decisionStrategy` 时，缺省等价 `HIGHEST_PRIORITY`；PULL Scene `decisionStrategy` 无效，`EvalResult` 直接返回调用方不做合成。
-
-**PULL 模式**：`Scene.dominantMode=PULL` 时，Dispatcher 不派发任何 Action（Decision.actions 发布校验已要求为空，D27），`EvalResult` 同步返回给调用方。
+**PUSH vs PULL**：PUSH/HYBRID 模式异步评估完即落库 `evaluation_session`（含 `final_decision` / `hit_decisions`）；PULL 模式同步把 `EvalResult` 返回调用方。两种模式都不在引擎内执行副作用。
 
 ---
 
@@ -301,7 +292,6 @@ EvalResult {
 | `INSERT (status=PENDING)` | EvalContext 构建完毕，AST 评估开始前 | **同步**（D21） |
 | `UPDATE (status=HIT/MISS/ERROR)` | EvalResult 出树后，用实际四态值直接 UPDATE（不经过 COMPLETED 中间态） | **同步**（同一链路，D21） |
 | `node_trace` batch INSERT | EvalResult 出树后入 TraceWriter 队列 | **异步**（D21） |
-| `action_execution` INSERT | ActionHandler.execute() 完成后 | **异步**（D20 §2） |
 
 **幂等处理**（D11 / D23）：
 
@@ -351,29 +341,7 @@ EvalResult {
 
 **规则间隔离**：单条 Rule 评估失败**不影响**同 `(scene + eventType)` 下其他候选 Rule 的评估；引擎逐条 try/catch。
 
-### 5.2 单 Action 失败（ActionHandler 层）
-
-**触发条件**：`ActionHandler.execute()` 抛异常 / 超时（D18）
-
-**传播规则**：
-
-```
-ActionHandler.execute() → 异常 / timeout
-  │ 引擎归一
-  ▼
-ActionResult { status=FAILED, errorCode }
-  │ best-effort：直接落 action_execution.status=FAILED 终态，不重试不补偿（D53）
-
-failFast=true 的 Action 失败时：
-  → 同 Decision 内 sortOrder 更大的 Action 全部
-     status=SKIPPED, errorCode=PREDECESSOR_FAILED（D18）
-```
-
-Action 失败**不影响** `EvalResult.satisfied`（评估阶段已结束，Action 是命中后行为）。
-
-**best-effort 投递**（D53）：命中后 action 经进程内队列异步派发，队列满/进程重启会丢、不重试不补偿；引擎只记录最终结果。可靠投递（MQ）/ 业务补偿（saga）未来另设计，不在应用层做重试表/补偿 SPI。
-
-### 5.3 整体降级矩阵（对账用）
+### 5.2 整体降级矩阵（对账用）
 
 | 情形 | `evaluation_session.status` | `EvalResult.errorCode` | 计入对账桶 |
 |------|----------------------------|----------------------|-----------|
@@ -386,12 +354,11 @@ Action 失败**不影响** `EvalResult.satisfied`（评估阶段已结束，Acti
 
 **分母定义**（D22）：命中率 = `HIT / (HIT + MISS)`；`BLOCKED` 和 `ERROR` 均**不**计入命中率分母，各自独立监控指标。
 
-### 5.4 PUSH vs PULL 的失败可见性
+### 5.3 PUSH vs PULL 的失败可见性
 
 | 维度 | PUSH 模式 | PULL 模式 |
 |------|-----------|----------|
-| 评估节点失败 | 安静失败，Action 不派发（满足且无 error 才派发）；trace 落 ERROR 状态，触发监控告警 | 返回 `EvalResult { satisfied, errorCode }`，调用方策略自决（fail-secure / fail-open） |
-| Action 失败 | FAILED 终态（best-effort 不重试），写 action_execution；通过监控告警可见 | N/A（PULL 无 Action） |
+| 评估节点失败 | 安静失败；trace 落 ERROR 状态，触发监控告警 | 返回 `EvalResult { satisfied, errorCode }`，调用方策略自决（fail-secure / fail-open） |
 | 调用方职责 | 接受异步不透明；通过 evaluation_session / node_trace 后验排障 | 必须判断 errorCode 是否非空，按业务策略决策 |
 
 ---

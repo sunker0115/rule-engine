@@ -19,6 +19,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -111,29 +112,30 @@ class ConfigServiceImpl implements ConfigService {
             String code, String name,
             AstNode conditionAst, List<DecisionBinding> decisionBindings,
             List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            String kind, String actorId) {
+            String kind, ScriptSource script, String actorId) {
         return publishService.createDraft(Long.valueOf(tenantId), sceneCode,
                 code, name,
                 conditionAst, decisionBindings,
                 preGates, triggerEventTypes,
-                kind, actorId);
+                kind, script, actorId);
     }
 
     @Override
     public DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
             AstNode conditionAst, List<DecisionBinding> decisionBindings,
-            List<PreGateConfig> preGates, List<String> triggerEventTypes, String actorId) {
+            List<PreGateConfig> preGates, List<String> triggerEventTypes,
+            ScriptSource script, String actorId) {
         return publishService.editDraft(Long.valueOf(tenantId), ruleId, name, parseKind(kind),
-                conditionAst, decisionBindings, preGates, triggerEventTypes, actorId);
+                conditionAst, decisionBindings, preGates, triggerEventTypes, script, actorId);
     }
 
     @Override
     public DraftCreatedResult newVersion(String tenantId, Long ruleId, String name, String kind,
             AstNode conditionAst, List<DecisionBinding> decisionBindings,
             List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            Long fromVersionId, String actorId) {
+            Long fromVersionId, ScriptSource script, String actorId) {
         return publishService.newVersion(Long.valueOf(tenantId), ruleId, name, parseKind(kind),
-                conditionAst, decisionBindings, preGates, triggerEventTypes, fromVersionId, actorId);
+                conditionAst, decisionBindings, preGates, triggerEventTypes, fromVersionId, script, actorId);
     }
 
     @Override

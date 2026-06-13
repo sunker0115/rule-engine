@@ -53,6 +53,11 @@ management:
 engine:
   rule:
     # SDK 模式快照轮询间隔走 rule.sdk.poll-interval（独立前缀，不在 engine.rule.* 下）；服务端索引为事件驱动，无定时刷新键
+    eval:
+      compiled-executor:
+        enabled: false           # 编译执行器灰度开关；false=全部走解释器(默认，与解释器逐字节一致)
+        rule-code-whitelist: []  # enabled 且为空=全量编译；非空=仅列出的 code 走编译
+        on-compile-error: FALLBACK  # FALLBACK=WARN+回落解释器；FAIL=抛异常中止
     trace:
       enabled: true
       queue-capacity: 10000
@@ -60,14 +65,10 @@ engine:
       flush-interval-ms: 200 # 消费线程刷库间隔（毫秒）
       # TraceWriter 单虚拟线程批量落库；提吞吐调 batch-size/flush-interval-ms（旁路通道满则丢，不阻塞热路径）
     metric:
-      default-cache-ttl-seconds: 60
-    action:
-      # 规划中：action 派发超时未实现
-      default-timeout-ms: 3000
-      send-alert:
-        # SEND_ALERT webhook（best-effort，失败不重试）；url 为空则不实发（skipped）
-        url:
-        timeout-ms: 2000
+      default-cache-ttl-seconds: 60   # metric 取数缓存默认 TTL(秒);建 metric 未指定 cacheTtlSeconds 时取此值,各 metric 可单独定制覆盖
+    script:
+      precompile:
+        mode: LAZY   # EXPRESSION_SCRIPT 脚本编译加热: LAZY=首次评估编译(默认); EAGER=快照加载期(启动/发布热更/场景变更)预编译
     # 数据保留/清理:各模块 @Scheduled 按保留窗删超期运行/历史行(observability 清 trace 两表、eval-svc 清 session 两表)
     retention:
       enabled: true
@@ -76,7 +77,6 @@ engine:
       evaluation-session-days: 90
       node-trace-days: 30
       dry-run-session-days: 7    # 同管 dry_run 两张表(dry_run_session + dry_run_node_trace)
-      action-execution-days: 90  # 跟随 evaluation_session 生命周期
     # 规划中：告警阈值逻辑未实现
     observability:
       eval-error-rate-threshold: 0.05

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.sdk;
 
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
+import com.sstlfsj.rule.kernel.api.model.EvalOutcome;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
@@ -9,6 +10,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
@@ -17,6 +19,7 @@ import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.sdk.metric.MetricDefinitionRegistry;
 import com.sstlfsj.rule.sdk.metric.SnapshotMetricDefinitionResolver;
@@ -49,20 +52,23 @@ public class RuleEngineClient implements AutoCloseable {
     private final List<PollingMetricDefinitionSource> metricPollingSources;
     private final EvalResultListener evalResultListener;
     private final EvalSessionListener evalSessionListener;
+    private final DecisionContextListener decisionContextListener;
 
     private RuleEngineClient(Builder b) {
         SceneRuleIndex index = new SceneRuleIndex();
 
         // metric 取数装配：注入 handler 才启用 fetch（默认仅 providedMetrics，行为不变）
         MetricDefinitionRegistry metricRegistry = new MetricDefinitionRegistry();
-        boolean fetchEnabled = !b.metricHandlers.isEmpty();
+        Map<String, MetricSourceHandler> sourceMap = new HashMap<>(toSourceTypeMap(b.metricHandlers));
+        sourceMap.putAll(b.explicitSourceHandlers);
+        boolean fetchEnabled = !sourceMap.isEmpty();
         EvalContextAssembler assembler;
         if (fetchEnabled) {
             MetricDefinitionResolver resolver = b.metricDefinitionResolver != null
                     ? b.metricDefinitionResolver
                     : new SnapshotMetricDefinitionResolver(metricRegistry);
             assembler = new EvalContextAssembler(List.of(),
-                    toSourceTypeMap(b.metricHandlers),
+                    sourceMap,
                     resolver, b.metricCache, b.fetchExecutor, 0L);
         } else {
             assembler = new EvalContextAssembler(List.of(), List.of());
@@ -74,9 +80,23 @@ public class RuleEngineClient implements AutoCloseable {
         RuleVersionExecutor executor = b.executor != null
                 ? b.executor
                 : new InterpretedExecutor(evaluators);
+        // executors 按 kind tag 分派:AST_BOOLEAN 走解释器,@Decide/@Score 走对应合成执行器(有注册才装)
+        Map<String, RuleVersionExecutor> executors = new HashMap<>();
+        executors.put(RuleKind.AST_BOOLEAN.tag(), executor);
+        if (!b.decideInvocations.isEmpty()) {
+            executors.put(com.sstlfsj.rule.sdk.source.AnnotatedRuleScanner.KIND_DECIDE,
+                    new com.sstlfsj.rule.sdk.source.AnnotatedDecideExecutor(b.decideInvocations));
+        }
+        if (!b.scoreInvocations.isEmpty()) {
+            executors.put(com.sstlfsj.rule.sdk.source.AnnotatedRuleScanner.KIND_SCORE,
+                    new com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor(b.scoreInvocations));
+        }
+        // ScriptExecutor 始终注册:避开 EvalEngine 对未知 kind 回退 AST_BOOLEAN 的陷阱(脚本规则 conditionAst=null)。
+        // 引擎才是 opt-in——未注入任何 ExpressionEngine 时 engines 为空,碰脚本规则优雅返回 SCRIPT_NO_ENGINE,不连累其它规则。
+        executors.put(RuleKind.EXPRESSION_SCRIPT.tag(), new ScriptExecutor(byLang(b.expressionEngines)));
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
-                Map.of(RuleKind.AST_BOOLEAN.tag(), executor),
+                executors,
                 false);
 
         // 规则来源：显式 ruleSource() + localSnapshot() 转 DslRuleSource + serverUrl 转 PollingRuleSource
@@ -113,6 +133,7 @@ public class RuleEngineClient implements AutoCloseable {
 
         this.evalResultListener = b.evalResultListener;
         this.evalSessionListener = b.evalSessionListener;
+        this.decisionContextListener = b.decisionContextListener;
     }
 
     /** 把 handler 列表按 @MetricSourceType 归类为 sourceType → handler 映射。 */
@@ -125,13 +146,30 @@ public class RuleEngineClient implements AutoCloseable {
         return m;
     }
 
+    /** 表达式引擎按 lang 建路由表,同 lang 重复声明 fail-fast(对齐 eval-svc / config-svc)。 */
+    private static Map<String, ExpressionEngine> byLang(List<ExpressionEngine> engines) {
+        Map<String, ExpressionEngine> byLang = new HashMap<>();
+        for (ExpressionEngine engine : engines) {
+            ExpressionEngine prev = byLang.putIfAbsent(engine.lang(), engine);
+            if (prev != null) {
+                throw new IllegalStateException("多个 ExpressionEngine 声明同一 lang=" + engine.lang());
+            }
+        }
+        return byLang;
+    }
+
     /** 对单个事件本地求值，零网络跳转；渠道由 SDK 入口权威设为 SDK，不信任调用方传入。 */
     public EvalResult evaluate(RuleEvent event) {
         RuleEvent sdkEvent = event.source() == EventSource.SDK
                 ? event : event.toBuilder().source(EventSource.SDK).build();
-        EvalResult result = evalEngine.evaluate(sdkEvent);
+        EvalOutcome outcome = evalEngine.evaluateWithContext(
+                sdkEvent, evalEngine.match(sdkEvent), java.time.Instant.now());
+        EvalResult result = outcome.result();
         if (evalResultListener != null) evalResultListener.onResult(sdkEvent, result);
         if (evalSessionListener != null) evalSessionListener.onSession(sdkEvent, result);
+        if (decisionContextListener != null) {
+            decisionContextListener.onEvaluated(sdkEvent, result, outcome.context());
+        }
         return result;
     }
 
@@ -155,12 +193,17 @@ public class RuleEngineClient implements AutoCloseable {
         private Duration pollInterval = Duration.ofSeconds(30);
         private EvalResultListener evalResultListener;
         private EvalSessionListener evalSessionListener;
+        private DecisionContextListener decisionContextListener;
         private RuleVersionExecutor executor;
         private Map<String, PreGate> preGates;
         private final List<RuleVersionSnapshot> localSnapshots = new ArrayList<>();
         private final List<RuleSource> ruleSources = new ArrayList<>();
         private final Map<String, ConditionEvaluator> extraEvaluators = new HashMap<>();
+        private final Map<String, com.sstlfsj.rule.sdk.source.AnnotatedDecideExecutor.Invocation> decideInvocations = new HashMap<>();
+        private final Map<String, com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor.Invocation> scoreInvocations = new HashMap<>();
         private final List<MetricSourceHandler> metricHandlers = new ArrayList<>();
+        private final Map<String, MetricSourceHandler> explicitSourceHandlers = new HashMap<>();
+        private final List<ExpressionEngine> expressionEngines = new ArrayList<>();
         private MetricDefinitionResolver metricDefinitionResolver;
         private MetricCache metricCache;
         private ExecutorService fetchExecutor;
@@ -181,6 +224,10 @@ public class RuleEngineClient implements AutoCloseable {
         public Builder evalResultListener(EvalResultListener v)  { this.evalResultListener = v; return this; }
         /** @param v 审计回调（可选） */
         public Builder evalSessionListener(EvalSessionListener v) { this.evalSessionListener = v; return this; }
+        /** @param v 带 context 的评估回调(可选),用于注解动作派发 */
+        public Builder decisionContextListener(DecisionContextListener v) {
+            this.decisionContextListener = v; return this;
+        }
         /** @param v 自定义 executor，不传则使用 InterpretedExecutor（内置全量算子） */
         public Builder executor(RuleVersionExecutor v)  { this.executor = v; return this; }
         /** @param v 自定义 Pre-Gate 映射（可选） */
@@ -207,6 +254,22 @@ public class RuleEngineClient implements AutoCloseable {
             extraEvaluators.put(conditionType, evaluator); return this;
         }
         /**
+         * 注册 @Decide 规则调用(key=注解规则坐标键)。
+         *
+         * @param m 坐标键 → @Decide 调用三元组
+         */
+        public Builder addDecideInvocations(Map<String, com.sstlfsj.rule.sdk.source.AnnotatedDecideExecutor.Invocation> m) {
+            decideInvocations.putAll(m); return this;
+        }
+        /**
+         * 注册 @Score 规则调用(key=注解规则坐标键)。
+         *
+         * @param m 坐标键 → @Score 调用信息(方法 + 分档表)
+         */
+        public Builder addScoreInvocations(Map<String, com.sstlfsj.rule.sdk.source.AnnotatedScoreExecutor.Invocation> m) {
+            scoreInvocations.putAll(m); return this;
+        }
+        /**
          * 从 classpath 加载 JSON 规则文件（文件模式快捷入口）。
          *
          * @param classpathPath classpath 相对路径，如 "rules/fraud.json"
@@ -222,6 +285,21 @@ public class RuleEngineClient implements AutoCloseable {
          */
         public Builder metricSourceHandler(MetricSourceHandler... v) {
             metricHandlers.addAll(Arrays.asList(v)); return this;
+        }
+
+        /** 按显式 sourceType 注册 handler(供 @MetricSource 合成 handler 用;无 @MetricSourceType 注解)。 */
+        public Builder addMetricSourceHandler(String sourceType, MetricSourceHandler handler) {
+            explicitSourceHandlers.put(sourceType, handler); return this;
+        }
+
+        /**
+         * 启用 EXPRESSION_SCRIPT 脚本规则执行:注入表达式引擎(如 CelExpressionEngine)。
+         * 不注入则脚本规则评估返回 SCRIPT_NO_ENGINE(graceful,不连累其它规则)。同 lang 重复注入装配期 fail-fast。
+         *
+         * @param v 表达式引擎实现
+         */
+        public Builder expressionEngine(ExpressionEngine v) {
+            expressionEngines.add(v); return this;
         }
 
         /**
@@ -289,7 +367,7 @@ public class RuleEngineClient implements AutoCloseable {
                     || metricDefinitionResolver != null
                     || metricCache != null
                     || fetchExecutor != null;
-            if (hasFetchConfig && metricHandlers.isEmpty())
+            if (hasFetchConfig && metricHandlers.isEmpty() && explicitSourceHandlers.isEmpty())
                 throw new IllegalArgumentException(
                         "配置了取数相关项（metric 定义来源 / resolver / cache / executor）但未注入 metricSourceHandler，无法启用 fetch");
             return new RuleEngineClient(this);

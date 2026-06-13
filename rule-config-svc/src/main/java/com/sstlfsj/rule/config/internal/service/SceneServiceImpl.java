@@ -1,18 +1,20 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
+import com.sstlfsj.rule.config.api.dto.PayloadFieldType;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.SceneStatus;
-import com.sstlfsj.rule.config.internal.domain.ScenePayloadSchemaHistory;
+import com.sstlfsj.rule.config.internal.event.AuditSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
+import com.sstlfsj.rule.config.internal.event.SceneSnapshot;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.domain.DominantMode;
 import com.sstlfsj.rule.config.internal.domain.DecisionStrategy;
-import com.sstlfsj.rule.config.internal.repository.ScenePayloadSchemaHistoryMapper;
+import com.sstlfsj.rule.kernel.api.model.SceneDefaultParams;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -22,15 +24,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-/** SceneService 实现：Scene CRUD + payloadSchema 演进快照 + SceneChangedEvent（D13）。 */
+/** SceneService 实现：Scene CRUD + 变更走 audit_log 前后快照 + SceneChangedEvent（D13/D14）。 */
 @Service
 @RequiredArgsConstructor
 class SceneServiceImpl implements SceneService {
 
     private final SceneMapper sceneMapper;
-    private final ScenePayloadSchemaHistoryMapper schemaHistoryMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper metricDefinitionMapper;
 
     @Override
     @Transactional
@@ -47,20 +51,17 @@ class SceneServiceImpl implements SceneService {
         scene.setDecisionStrategy(DecisionStrategy.HIGHEST_PRIORITY);
         scene.setSubjectType(SubjectType.valueOf(subjectType != null ? subjectType : "USER"));
         scene.setEventTypes(eventTypes != null ? eventTypes : List.of());
+        validatePayloadSchemaTypes(payloadSchema);
         scene.setPayloadSchema(payloadSchema);
+        validateDefaultParams(defaultParams);
         scene.setDefaultParams(defaultParams);
-        scene.setPayloadSchemaVersion(1);
         scene.setStatus(SceneStatus.ACTIVE);
         scene.setCreatedBy(actorId);
         sceneMapper.insert(scene);
 
-        // 有 payloadSchema 时写入初始历史快照（version=1）
-        if (payloadSchema != null) {
-            snapshotSchema(scene.getId(), 1, payloadSchema, actorId);
-        }
-
         publishAudit(Long.valueOf(tenantId), actorId, "CREATE", "scene",
-                scene.getId() != null ? scene.getId().toString() : sceneCode);
+                scene.getId() != null ? scene.getId().toString() : sceneCode,
+                null, snapshotOf(scene));
         return scene.getId();
     }
 
@@ -71,27 +72,27 @@ class SceneServiceImpl implements SceneService {
                             List<PayloadFieldSpec> payloadSchema, Map<String, Object> defaultParams,
                             String actorId) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
+        SceneSnapshot before = snapshotOf(scene);
 
         if (name != null) scene.setName(name);
         if (eventTypes != null) scene.setEventTypes(eventTypes);
-        if (defaultParams != null) scene.setDefaultParams(defaultParams);
-
-        // payloadSchema 变更时快照旧版本并自增版本号
-        if (payloadSchema != null && !payloadSchema.equals(scene.getPayloadSchema())) {
-            int oldVersion = scene.getPayloadSchemaVersion() != null
-                    ? scene.getPayloadSchemaVersion() : 1;
-            // 旧版本不为 null 时才写历史（创建时已写 version=1 快照）
-            if (scene.getPayloadSchema() != null) {
-                snapshotSchema(scene.getId(), oldVersion, scene.getPayloadSchema(), actorId);
-            }
+        if (defaultParams != null) {
+            validateDefaultParams(defaultParams);
+            scene.setDefaultParams(defaultParams);
+        }
+        if (payloadSchema != null) {
+            validatePayloadSchemaTypes(payloadSchema);
             scene.setPayloadSchema(payloadSchema);
-            scene.setPayloadSchemaVersion(oldVersion + 1);
         }
 
         scene.setUpdatedBy(actorId);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        publishAudit(Long.valueOf(tenantId), actorId, "UPDATE", "scene", scene.getId().toString());
+        publishAudit(Long.valueOf(tenantId), actorId, "UPDATE", "scene",
+                scene.getId().toString(), before, snapshotOf(scene));
+        // 场景仍 ACTIVE：发 SceneChangedEvent(active=true) 触发 eval 索引重载，
+        // 使 payloadSchema / eventTypes / defaultParams(含 timezone)变更 live 生效(不必等规则 republish)。
+        eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, true));
     }
 
     @Override
@@ -112,12 +113,33 @@ class SceneServiceImpl implements SceneService {
     @Transactional
     public void disableScene(String tenantId, String sceneCode, String actorId) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
+        SceneSnapshot before = snapshotOf(scene);
         scene.setStatus(SceneStatus.DISABLED);
         scene.setUpdatedBy(actorId);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        publishAudit(Long.valueOf(tenantId), actorId, "DISABLE", "scene", scene.getId().toString());
+        publishAudit(Long.valueOf(tenantId), actorId, "DISABLE", "scene",
+                scene.getId().toString(), before, snapshotOf(scene));
         eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, false));
+    }
+
+    @Override
+    public SensitiveRefs getSensitiveRefs(String tenantId, String sceneCode) {
+        Long tid = Long.valueOf(tenantId);
+        // scene 不存在直接抛——调用方(rule-api)捕获后 fail-closed 全抹
+        SceneDef scene = findScene(tid, sceneCode);
+        List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null
+                ? scene.getPayloadSchema() : List.of();
+        Set<String> payloadFields = schema.stream()
+                .filter(PayloadFieldSpec::sensitive)
+                .map(PayloadFieldSpec::name)
+                .collect(Collectors.toSet());
+        // metric 敏感性租户级共享(D54)：取该租户全部 ACTIVE metric 中 sensitive=true 的码
+        Set<String> metricCodes = metricDefinitionMapper.findActiveByTenant(tid).stream()
+                .filter(m -> Boolean.TRUE.equals(m.getSensitive()))
+                .map(com.sstlfsj.rule.config.internal.domain.MetricDefinition::getMetricCode)
+                .collect(Collectors.toSet());
+        return new SensitiveRefs(payloadFields, metricCodes);
     }
 
     private SceneDef findScene(Long tenantId, String sceneCode) {
@@ -128,14 +150,25 @@ class SceneServiceImpl implements SceneService {
         return scene;
     }
 
-    private void snapshotSchema(Long sceneId, int version, List<PayloadFieldSpec> schema, String actorId) {
-        ScenePayloadSchemaHistory hist = new ScenePayloadSchemaHistory();
-        hist.setSceneId(sceneId);
-        hist.setVersion(version);
-        hist.setSchema(schema);
-        hist.setCreatedBy(actorId);
-        hist.setCreatedAt(LocalDateTime.now());
-        schemaHistoryMapper.insert(hist);
+    private void validatePayloadSchemaTypes(List<PayloadFieldSpec> payloadSchema) {
+        if (payloadSchema == null) return;
+        for (PayloadFieldSpec f : payloadSchema) {
+            PayloadFieldType.fromTag(f.type()); // 非法 type 抛 IllegalArgumentException
+        }
+    }
+
+    /** authoring 期 fail-fast：default_params.timezone 须为合法 IANA 时区名，否则抛 IllegalArgumentException。 */
+    private void validateDefaultParams(Map<String, Object> defaultParams) {
+        if (defaultParams == null) return;
+        Object tz = defaultParams.get(SceneDefaultParams.TIMEZONE);
+        if (tz != null) {
+            try {
+                java.time.ZoneId.of(tz.toString());
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException("非法 scene default_params.timezone=" + tz
+                        + "（须为合法 IANA 时区名，如 Asia/Shanghai）");
+            }
+        }
     }
 
     private SceneDetailDto toDto(SceneDef scene) {
@@ -144,7 +177,6 @@ class SceneServiceImpl implements SceneService {
                 ? scene.getPayloadSchema() : List.of();
         Map<String, Object> defaultParams = scene.getDefaultParams() != null
                 ? scene.getDefaultParams() : Map.of();
-        int version = scene.getPayloadSchemaVersion() != null ? scene.getPayloadSchemaVersion() : 1;
         return new SceneDetailDto(
                 scene.getId(),
                 String.valueOf(scene.getTenantId()),
@@ -156,15 +188,22 @@ class SceneServiceImpl implements SceneService {
                 eventTypes,
                 payloadSchema,
                 defaultParams,
-                version,
                 scene.getStatus().name()
         );
     }
 
+    private static SceneSnapshot snapshotOf(SceneDef s) {
+        return SceneSnapshot.builder()
+                .name(s.getName()).eventTypes(s.getEventTypes()).payloadSchema(s.getPayloadSchema())
+                .defaultParams(s.getDefaultParams())
+                .status(s.getStatus() != null ? s.getStatus().name() : null)
+                .build();
+    }
+
     private void publishAudit(Long tenantId, String actor, String action,
-                              String targetType, String targetId) {
+                              String targetType, String targetId,
+                              AuditSnapshot before, AuditSnapshot after) {
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actor, "USER", action, targetType, targetId,
-                null, null, LocalDateTime.now()));
+                tenantId, actor, "USER", action, targetType, targetId, before, after, LocalDateTime.now()));
     }
 }

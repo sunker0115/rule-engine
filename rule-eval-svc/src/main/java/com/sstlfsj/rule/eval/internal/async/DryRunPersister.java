@@ -45,6 +45,8 @@ public class DryRunPersister {
         s.setEventType(ev.eventType());
         s.setSubjectId(ev.subjectId());
         s.setRuleVersionId(e.ruleVersionId());
+        s.setRuleCode(e.ruleCode());
+        s.setRuleVersion(e.ruleVersion());
         s.setStatus(r.errorCode() != null ? SessionStatus.ERROR
                 : (r.ruleHit() ? SessionStatus.HIT : SessionStatus.MISS));
         s.setFinalDecision(r.finalDecision() != null ? r.finalDecision().code() : null);

@@ -6,8 +6,9 @@ import com.sstlfsj.rule.kernel.api.model.SceneExecutionStrategy;
 import com.sstlfsj.rule.kernel.internal.codec.RuleVersionRow;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
-import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,15 +20,17 @@ import java.util.Map;
  * 返回值按 eventType 分组，key = eventType，value = 该 eventType 对应的快照列表。
  */
 @Component
-@ImportRuntimeHints(AstNativeHints.class)
 public class SceneSnapshotLoader {
 
     private final RuleVersionReadMapper mapper;
     private final SnapshotAssembler assembler;
+    private final ObjectMapper objectMapper;
 
-    public SceneSnapshotLoader(RuleVersionReadMapper mapper, SnapshotAssembler assembler) {
+    public SceneSnapshotLoader(RuleVersionReadMapper mapper, SnapshotAssembler assembler,
+                               ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.assembler = assembler;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -95,6 +98,18 @@ public class SceneSnapshotLoader {
                     ? parseStrategy(strategyStr)
                     : SceneExecutionStrategy.HIGHEST_PRIORITY;
             index.setStrategy(String.valueOf(row.tenantId()), row.sceneCode(), strategy);
+            index.setDefaultParams(String.valueOf(row.tenantId()), row.sceneCode(),
+                    parseDefaultParams(row.defaultParamsJson()));
+        }
+    }
+
+    /** 解析 scene.default_params JSON 为 Map;null/空/非法 → 空 map(不阻断索引加载)。 */
+    private Map<String, Object> parseDefaultParams(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return Map.of();
         }
     }
 

@@ -1,20 +1,12 @@
 package com.sstlfsj.rule.eval;
 
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.TraceProperties;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
 import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
-import com.sstlfsj.rule.kernel.api.annotation.ActionType;
-import com.sstlfsj.rule.kernel.api.model.ActionContext;
-import com.sstlfsj.rule.kernel.api.model.ActionResult;
-import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
@@ -22,8 +14,16 @@ import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
-import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.CompiledExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.RuleVersionCache;
+import com.sstlfsj.rule.eval.internal.CompiledExecutorProperties;
+import com.sstlfsj.rule.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
+import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -66,18 +66,52 @@ class EvalAutoConfigurationTest {
         assertArrayEquals(new String[]{"com.sstlfsj.rule.eval.internal"}, scan.value());
     }
 
+    /** 默认 props（enabled=false），供装配测试复用。 */
+    private static CompiledExecutorProperties defaultProps() {
+        return new CompiledExecutorProperties();
+    }
+
     @Test
-    void ruleVersionExecutor_returnsInterpretedExecutor() {
-        RuleVersionExecutor executor = config.ruleVersionExecutor();
+    void ruleVersionExecutor_returnsCompiledExecutor() {
+        // 无自定义 evaluator，空列表
+        RuleVersionExecutor executor = config.ruleVersionExecutor(
+                config.ruleVersionCache(), defaultProps(), java.util.List.of());
         assertNotNull(executor);
-        assertInstanceOf(InterpretedExecutor.class, executor);
+        assertInstanceOf(CompiledExecutor.class, executor);
     }
 
     @Test
     void ruleVersionExecutor_hasPrimaryAnnotation() throws Exception {
-        var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor");
+        var method = EvalAutoConfiguration.class.getMethod("ruleVersionExecutor",
+                RuleVersionCache.class, CompiledExecutorProperties.class, java.util.List.class);
         assertNotNull(method.getAnnotation(Primary.class),
                 "ruleVersionExecutor 必须标注 @Primary，否则与 ScorecardExecutor 并存时 Spring 无法消歧义");
+    }
+
+    @Test
+    void ruleVersionExecutor_customEvaluator_registeredInEngine() throws Exception {
+        // 自定义 @ConditionType 算子能注册进引擎（调用时命中自定义实现）
+        @com.sstlfsj.rule.kernel.api.annotation.ConditionType(
+                value = "test.custom", displayName = "测试算子",
+                schema = com.sstlfsj.rule.kernel.api.operator.ParamSpec.NONE)
+        class CustomEvaluator implements com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator {
+            @Override public boolean evaluate(com.sstlfsj.rule.kernel.api.model.ast.ConditionNode n,
+                                              com.sstlfsj.rule.kernel.api.model.EvalContext c) { return true; }
+        }
+        var executor = config.ruleVersionExecutor(
+                config.ruleVersionCache(), defaultProps(), java.util.List.of(new CustomEvaluator()));
+        assertNotNull(executor);
+    }
+
+    @Test
+    void ruleVersionExecutor_noAnnotation_skipped() {
+        // 未标注 @ConditionType 的自定义 bean 被跳过，不污染算子路由
+        class NoAnnotationEvaluator implements com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator {
+            @Override public boolean evaluate(com.sstlfsj.rule.kernel.api.model.ast.ConditionNode n,
+                                              com.sstlfsj.rule.kernel.api.model.EvalContext c) { return false; }
+        }
+        assertNotNull(config.ruleVersionExecutor(
+                config.ruleVersionCache(), defaultProps(), java.util.List.of(new NoAnnotationEvaluator())));
     }
 
     @Test
@@ -99,6 +133,14 @@ class EvalAutoConfigurationTest {
         DecisionTableExecutor executor = config.decisionTableExecutor();
         assertNotNull(executor);
         assertInstanceOf(DecisionTableExecutor.class, executor);
+    }
+
+    @Test
+    void scriptExecutor_returnsInstance() {
+        // CelExpressionEngine 现由 CEL 模块的 @AutoConfiguration 注册;此处直接 new 模拟容器收集的引擎
+        ScriptExecutor executor = config.scriptExecutor(List.of(new CelExpressionEngine()));
+        assertNotNull(executor);
+        assertInstanceOf(ScriptExecutor.class, executor);
     }
 
     @Test
@@ -132,10 +174,11 @@ class EvalAutoConfigurationTest {
                 config.sceneRuleIndex(),
                 config.evalContextAssembler(null, null, null, null, EXEC, fetchProps()),
                 null,
-                config.ruleVersionExecutor(),
+                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps(), java.util.List.of()),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
+                config.scriptExecutor(List.of(new CelExpressionEngine())),
                 new TraceProperties());
         assertNotNull(engine);
     }
@@ -146,38 +189,22 @@ class EvalAutoConfigurationTest {
                 config.sceneRuleIndex(),
                 config.evalContextAssembler(null, null, null, null, EXEC, fetchProps()),
                 List.of(),
-                config.ruleVersionExecutor(),
+                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps(), java.util.List.of()),
                 config.scorecardExecutor(),
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
+                config.scriptExecutor(List.of(new CelExpressionEngine())),
                 new TraceProperties());
         assertNotNull(engine);
     }
 
     @Test
-    void actionDispatchService_nullHandlers_returnsInstance() {
-        ActionDispatchService svc = config.actionDispatchService(
-                null,
-                mock(DomainEventPublisher.class));
-        assertNotNull(svc);
-    }
-
-    @Test
-    void actionDispatchService_withAnnotatedHandler_buildsHandlerMap() {
-        ActionHandler handler = new BlockTxStub();
-        ActionDispatchService svc = config.actionDispatchService(
-                List.of(handler),
-                mock(DomainEventPublisher.class));
-        assertNotNull(svc);
-    }
-
-    @Test
-    void actionDispatchService_handlerWithoutAnnotation_isIgnored() {
-        ActionHandler noAnnotation = ctx -> ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
-        ActionDispatchService svc = config.actionDispatchService(
-                List.of(noAnnotation),
-                mock(DomainEventPublisher.class));
-        assertNotNull(svc);
+    void evalInstrumentationBean_registered_withCounters() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        EvalInstrumentation instrumentation = config.evalInstrumentation(registry);
+        assertNotNull(instrumentation);
+        assertNotNull(registry.find(RuleMetrics.EVAL_ERROR_TOTAL).counter());
+        assertNotNull(registry.find(RuleMetrics.EVAL_TOTAL).counter());
     }
 
     @Test
@@ -185,17 +212,7 @@ class EvalAutoConfigurationTest {
         SessionRetentionCleaner cleaner = config.sessionRetentionCleaner(
                 mock(EvaluationSessionMapper.class),
                 mock(DryRunSessionMapper.class),
-                mock(ActionExecutionMapper.class),
                 new RetentionProperties());
         assertNotNull(cleaner);
-    }
-
-    /** 测试用 stub，带 @ActionType 注解。 */
-    @ActionType("BLOCK_TX")
-    private static class BlockTxStub implements ActionHandler {
-        @Override
-        public ActionResult execute(ActionContext ctx) {
-            return ActionResult.skipped(ctx.actionId(), ctx.actionType(), "STUB");
-        }
     }
 }

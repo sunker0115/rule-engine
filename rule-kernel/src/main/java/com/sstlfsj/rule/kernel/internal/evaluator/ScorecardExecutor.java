@@ -42,6 +42,8 @@ public class ScorecardExecutor implements RuleVersionExecutor {
         List<NodeTrace> factorTraces = collect ? new ArrayList<>() : null;
         double score = 0.0;
         Long rvId = snapshot.ruleVersionId();
+        String code = snapshot.code();
+        long version = snapshot.version();
 
         for (ConditionNode node : root.conditions()) {
             ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
@@ -50,10 +52,10 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                 if (collect) {
                     factorTraces.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                             false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), rvId,
-                            node.params(), node.displayLabel()));
+                            code, version, node.params(), node.displayLabel()));
                 }
                 return EvalResult.error(outcome.errorCode(),
-                        scorecardRoot(collect, false, factorTraces, rvId));
+                        scorecardRoot(collect, false, factorTraces, rvId, code, version));
             }
             boolean met = outcome.satisfied();
             if (met && node.weight() != null) {
@@ -62,14 +64,14 @@ public class ScorecardExecutor implements RuleVersionExecutor {
             if (collect) {
                 factorTraces.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                         met, outcome.resolvedValue(), outcome.valueSource(), null, List.of(), rvId,
-                        node.params(), node.displayLabel()));
+                        code, version, node.params(), node.displayLabel()));
             }
         }
 
         boolean hit = score >= root.threshold();
         return new EvalResult(hit, null, List.of(),
-                scorecardRoot(collect, hit, factorTraces, rvId),
-                null, List.of(), score, null, null);
+                scorecardRoot(collect, hit, factorTraces, rvId, code, version),
+                null, score, null, null);
     }
 
     /**
@@ -79,10 +81,13 @@ public class ScorecardExecutor implements RuleVersionExecutor {
      * @param result  评分卡整体命中结果
      * @param factors 各因子（ConditionNode）trace
      * @param rvId    规则版本 ID
+     * @param code    规则逻辑编码
+     * @param version 规则版本号
      * @return 含单个 ScorecardRoot 的列表，或空列表
      */
-    private static List<NodeTrace> scorecardRoot(boolean collect, boolean result, List<NodeTrace> factors, Long rvId) {
+    private static List<NodeTrace> scorecardRoot(boolean collect, boolean result, List<NodeTrace> factors,
+                                                 Long rvId, String code, long version) {
         if (!collect) return List.of();
-        return List.of(NodeTrace.container(NodeType.SCORECARD_ROOT, result, factors, rvId));
+        return List.of(NodeTrace.container(NodeType.SCORECARD_ROOT, result, factors, rvId, code, version));
     }
 }

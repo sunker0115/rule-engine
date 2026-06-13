@@ -44,6 +44,11 @@ class SceneServiceTest {
         public List<SceneListItem> listScenes(String tenantId) {
             throw new UnsupportedOperationException("stub");
         }
+
+        @Override
+        public SensitiveRefs getSensitiveRefs(String tenantId, String sceneCode) {
+            throw new UnsupportedOperationException("stub");
+        }
     };
 
     @Test

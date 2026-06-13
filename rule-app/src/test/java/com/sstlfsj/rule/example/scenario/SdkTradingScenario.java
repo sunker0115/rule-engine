@@ -29,7 +29,7 @@ class SdkTradingScenario extends ScenarioSupport {
         // 无需取数源（SDK 是 zero-network 离线评估，没有 SQL/HTTP handler）
         createScene("merchant-trade", "商户交易风控", "PULL", "USER", List.of("trade"),
                 List.of(Map.of("name", "amount", "type", "NUMBER", "required", true)));
-        createDecision("REVIEW", "人工审核", 50, List.of());
+        createDecision("REVIEW", "人工审核", 50);
 
         Map<String, Object> conditionAst = Map.of(
                 "type", "AndNode",

@@ -18,7 +18,6 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
@@ -70,12 +69,10 @@ class RuleImportServiceTest {
                 java.util.Arrays.stream(ruleCodes).map(this::ruleEntry).toList(),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", "d", "USER",
                         "PUSH", "HIGHEST_PRIORITY", java.util.List.of("transfer"),
-                        java.util.List.of(), java.util.Map.of(), 1)),
+                        java.util.List.of(), java.util.Map.of())),
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
                         metricSourceType, "LONG", java.util.Map.of(), 3600, true)),
-                List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
-                        List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())))),
-                List.of("BLOCK_TRANSACTION"));
+                List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易")));
     }
 
     /** 模拟 MyBatis insert 回填自增主键（rule_version 用递增序列）。 */
@@ -152,12 +149,10 @@ class RuleImportServiceTest {
                 List.of(ruleEntry("rule.a")),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", "d", "USER",
                         "PUSH", "HIGHEST_PRIORITY", java.util.List.of("transfer"),
-                        java.util.List.of(), java.util.Map.of(), 1)),
+                        java.util.List.of(), java.util.Map.of())),
                 List.of(new RuleBundle.MetricEntry("account.age", 1, "账户年龄",
                         "ATTRIBUTE", "FLOAT", java.util.Map.of(), 3600, true)),
-                List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易",
-                        List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())))),
-                List.of("BLOCK_TRANSACTION"));
+                List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易")));
 
         RuleImportResult r = sut.importBundle("1", bad, "dev");
 
@@ -205,7 +200,7 @@ class RuleImportServiceTest {
     @Test
     void import_rejectsEmptyRules() {
         RuleBundle bad = new RuleBundle(1, "t", "1", List.of(),
-                List.of(), List.of(), List.of(), List.of());
+                List.of(), List.of(), List.of());
         assertThatThrownBy(() -> sut.importBundle("1", bad, "dev"))
                 .isInstanceOf(IllegalArgumentException.class);
     }

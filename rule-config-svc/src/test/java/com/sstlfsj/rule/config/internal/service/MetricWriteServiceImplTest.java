@@ -427,6 +427,38 @@ class MetricWriteServiceImplTest {
         assertThat(result).isEmpty();
     }
 
+    // ── sensitive 列（D71 读时脱敏声明位）─────────────────────────────────────
+
+    @Test
+    void create_persistsSensitiveFlag() {
+        MetricWriteCommand sensitiveCmd =
+                new MetricWriteCommand("身份证号", "ATTRIBUTE", "STRING", Map.of(), 60, false, true);
+        ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
+        doAnswer(inv -> {
+            inv.<MetricDefinition>getArgument(0).setId(500L);
+            return 1;
+        }).when(metricDefinitionMapper).insert(captor.capture());
+
+        sut.create(TENANT, "user.idno", sensitiveCmd, ACTOR);
+
+        assertThat(captor.getValue().getSensitive()).isTrue();
+    }
+
+    @Test
+    void create_defaultsSensitiveFalse() {
+        ArgumentCaptor<MetricDefinition> captor = ArgumentCaptor.forClass(MetricDefinition.class);
+        doAnswer(inv -> {
+            inv.<MetricDefinition>getArgument(0).setId(501L);
+            return 1;
+        }).when(metricDefinitionMapper).insert(captor.capture());
+
+        // 6 参兼容构造器 sensitive 默认 false
+        sut.create(TENANT, "user.age",
+                new MetricWriteCommand("用户年龄", "ATTRIBUTE", "LONG", Map.of(), 60, false), ACTOR);
+
+        assertThat(captor.getValue().getSensitive()).isFalse();
+    }
+
     // ── 辅助 ──────────────────────────────────────────────────────────────────
 
     private MetricDefinition activeRow(int version) {

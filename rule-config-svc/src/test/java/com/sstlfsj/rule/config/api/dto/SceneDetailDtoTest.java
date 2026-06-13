@@ -21,7 +21,7 @@ class SceneDetailDtoTest {
                 1L, "t1", "PAYMENT", "支付场景",
                 "描述", "PUSH", "USER",
                 List.of("payment.initiated"),
-                schema, params, 2, "ACTIVE"
+                schema, params, "ACTIVE"
         );
 
         assertThat(dto.id()).isEqualTo(1L);
@@ -35,7 +35,6 @@ class SceneDetailDtoTest {
         assertThat(dto.payloadSchema()).hasSize(1);
         assertThat(dto.payloadSchema().get(0).name()).isEqualTo("amount");
         assertThat(dto.defaultParams()).containsEntry("timezone", "Asia/Shanghai");
-        assertThat(dto.payloadSchemaVersion()).isEqualTo(2);
         assertThat(dto.status()).isEqualTo("ACTIVE");
     }
 }

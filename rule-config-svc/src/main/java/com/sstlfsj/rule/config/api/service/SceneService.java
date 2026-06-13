@@ -6,6 +6,7 @@ import com.sstlfsj.rule.config.api.dto.SceneListItem;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** 场景生命周期管理：创建、更新、查询、禁用。 */
 public interface SceneService {
@@ -71,4 +72,21 @@ public interface SceneService {
      * @param actorId   禁用操作人 ID
      */
     void disableScene(String tenantId, String sceneCode, String actorId);
+
+    /**
+     * 读时脱敏所需的 live 敏感集（D71）。
+     *
+     * @param payloadFields 该 scene payloadSchema 中 sensitive=true 的字段名集合
+     * @param metricCodes   该租户 metric 定义中 sensitive=true 的 metric 码集合
+     */
+    record SensitiveRefs(Set<String> payloadFields, Set<String> metricCodes) {}
+
+    /**
+     * 查询指定 (租户, 场景) 的 live 敏感集，供 trace 展示出口读时脱敏。
+     *
+     * @param tenantId  租户 ID
+     * @param sceneCode 场景编码
+     * @return 敏感 payload 字段集 + 敏感 metric 码集；场景不存在抛 IllegalArgumentException
+     */
+    SensitiveRefs getSensitiveRefs(String tenantId, String sceneCode);
 }

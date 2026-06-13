@@ -3,6 +3,8 @@ package com.sstlfsj.rule.observability;
 import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.NoopDryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import com.sstlfsj.rule.observability.internal.alarm.ObservabilityAlarmChecker;
+import com.sstlfsj.rule.observability.internal.alarm.ObservabilityAlarmListener;
 import com.sstlfsj.rule.observability.internal.repository.DryRunNodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.retention.RetentionProperties;
@@ -11,6 +13,8 @@ import com.sstlfsj.rule.observability.internal.trace.DryRunTraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterProperties;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -38,6 +42,11 @@ class ObservabilityAutoConfigurationTest {
         @Bean
         ObjectMapper objectMapper() {
             return new ObjectMapper();
+        }
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 
@@ -67,7 +76,7 @@ class ObservabilityAutoConfigurationTest {
     @Test
     void noopTraceWriter_registeredWhenDisabled() {
         // 关 retention 避免清理 bean 在无 mapper 的精简 runner 中尝试注入
-        runner.withPropertyValues("engine.rule.trace.enabled=false", "engine.rule.retention.enabled=false")
+        runnerWithMapper.withPropertyValues("engine.rule.trace.enabled=false", "engine.rule.retention.enabled=false")
                 .run(ctx -> {
                     assertThat(ctx).hasSingleBean(TraceWriter.class);
                     assertThat(ctx.getBean(TraceWriter.class)).isInstanceOf(NoopTraceWriter.class);
@@ -94,7 +103,7 @@ class ObservabilityAutoConfigurationTest {
     @Test
     void noopDryRunTraceWriter_registeredWhenDisabled() {
         // 关 retention 避免清理 bean 在无 mapper 的精简 runner 中尝试注入
-        runner.withPropertyValues("engine.rule.trace.enabled=false", "engine.rule.retention.enabled=false")
+        runnerWithMapper.withPropertyValues("engine.rule.trace.enabled=false", "engine.rule.retention.enabled=false")
                 .run(ctx -> {
                     assertThat(ctx).hasSingleBean(DryRunTraceWriter.class);
                     assertThat(ctx.getBean(DryRunTraceWriter.class)).isInstanceOf(NoopDryRunTraceWriter.class);
@@ -120,6 +129,16 @@ class ObservabilityAutoConfigurationTest {
     void traceRetentionCleaner_notRegisteredWhenDisabled() {
         runnerWithMapper.withPropertyValues("engine.rule.retention.enabled=false")
                 .run(ctx -> assertThat(ctx).doesNotHaveBean(TraceRetentionCleaner.class));
+    }
+
+    @Test
+    void observabilityAlarmChecker_registeredByDefault() {
+        runnerWithMapper.run(ctx -> assertThat(ctx).hasSingleBean(ObservabilityAlarmChecker.class));
+    }
+
+    @Test
+    void observabilityAlarmListener_registeredByDefault() {
+        runnerWithMapper.run(ctx -> assertThat(ctx).hasSingleBean(ObservabilityAlarmListener.class));
     }
 
     @Test

@@ -26,7 +26,7 @@ class MetadataControllerTest {
     @Test
     void getMetadata_returns200_withResponse() throws Exception {
         MetadataService.MetadataResponse resp = new MetadataService.MetadataResponse(
-                List.of(), List.of(), List.of());
+                List.of(), List.of());
         when(metadataService.getSceneMetadata("t1", "PAYMENT")).thenReturn(resp);
 
         mockMvc.perform(get("/admin/v1/scenes/PAYMENT/metadata")

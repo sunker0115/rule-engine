@@ -1,10 +1,13 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
+import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,14 +32,18 @@ class EvalServiceImplScorecardTest {
     @Mock EvalEngine evalEngine;
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock DomainEventPublisher eventPublisher;
-    @Mock ActionCommandChannel actionDelivery;
     @Mock com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper ruleVersionReadMapper;
 
     EvalServiceImpl impl;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery, ruleVersionReadMapper);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Counter errorCounter = Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL).register(registry);
+        Counter totalCounter = Counter.builder(RuleMetrics.EVAL_TOTAL).register(registry);
+        EvalInstrumentation instrumentation = new EvalInstrumentation(totalCounter, errorCounter, registry);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, ruleVersionReadMapper,
+                instrumentation);
     }
 
     private RuleEvent event() {
@@ -65,7 +72,7 @@ class EvalServiceImplScorecardTest {
     @Test
     void scorecard_result_score_isPropagated() {
         Decision d = new Decision("HIGH_RISK", "", 10, 1L);
-        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
+        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, 60.0, null, null);
         stubPull(engineResult);
 
         EvalResult result = impl.evaluate(event());

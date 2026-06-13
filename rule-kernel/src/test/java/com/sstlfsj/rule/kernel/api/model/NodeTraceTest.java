@@ -12,14 +12,14 @@ class NodeTraceTest {
     @Test
     void children_defaultToEmptyWhenNull() {
         NodeTrace trace = new NodeTrace("CONDITION", "AMOUNT_GT", "balance",
-                true, 100, "FETCHED", null, null, null, null, null);
+                true, 100, "FETCHED", null, null, null, null, 0L, null, null);
         assertNotNull(trace.children());
         assertTrue(trace.children().isEmpty());
     }
 
     @Test
     void children_areImmutable() {
-        NodeTrace leaf = new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null, null, null, null);
+        NodeTrace leaf = new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null, null, null, 0L, null, null);
         List<NodeTrace> mutable = new ArrayList<>(List.of(leaf));
         NodeTrace parent = NodeTrace.container(NodeType.AND, true, mutable, null);
         mutable.add(leaf);
@@ -31,7 +31,7 @@ class NodeTraceTest {
         NodeTrace trace = NodeTrace.container(NodeType.AND, true, List.of(), null);
         assertThrows(UnsupportedOperationException.class,
                 () -> trace.children().add(
-                        new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null, null, null, null)));
+                        new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null, null, null, 0L, null, null)));
     }
 
     @Test
@@ -46,7 +46,7 @@ class NodeTraceTest {
 
     @Test
     void nestedChildren_areRetained() {
-        NodeTrace leaf = new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null, null, null, null);
+        NodeTrace leaf = new NodeTrace("CONDITION", "T", "m", true, 1, "FETCHED", null, null, null, null, 0L, null, null);
         NodeTrace parent = NodeTrace.container(NodeType.AND, true, List.of(leaf), null);
         assertEquals(1, parent.children().size());
         assertEquals(leaf, parent.children().get(0));
@@ -55,7 +55,7 @@ class NodeTraceTest {
     @Test
     void ruleVersionId_stored() {
         NodeTrace trace = new NodeTrace("CONDITION", "GT", "score",
-                true, 100, "PROVIDED", null, null, 42L, null, null);
+                true, 100, "PROVIDED", null, null, 42L, null, 0L, null, null);
         assertEquals(42L, trace.ruleVersionId());
     }
 
@@ -90,10 +90,19 @@ class NodeTraceTest {
     }
 
     @Test
+    void containerFactory_withEnumErrorCode_storesEnumName() {
+        // enum 重载：errorCode 字段以 EvalErrorCode.name() 落 String
+        NodeTrace trace = NodeTrace.container(NodeType.DECISION_TABLE_ROW, false,
+                EvalErrorCode.METRIC_FETCH_FAIL, List.of(), 7L);
+        assertEquals("METRIC_FETCH_FAIL", trace.errorCode());
+        assertNull(trace.metricCode());
+    }
+
+    @Test
     void elevenArgConstructor_storesExpectedValueAndDisplayLabel() {
         NodeTrace trace = new NodeTrace("CONDITION", "GT", "score",
                 true, 100, "PROVIDED", null, null, 42L,
-                List.of("threshold", 0), "score>=0");
+                null, 0L, List.of("threshold", 0), "score>=0");
         assertEquals(List.of("threshold", 0), trace.expectedValue());
         assertEquals("score>=0", trace.displayLabel());
     }

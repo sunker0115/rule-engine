@@ -5,12 +5,15 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -66,5 +69,15 @@ class InEvaluatorTest {
                 Map.of("values", java.util.List.of(100, 200)), 0.0, "LONG");
         EvalContext c = ctx("score", 100L);
         assertThat(ev.evaluate(n, c)).isTrue();
+    }
+
+    @Test
+    void annotation_describesOperator() {
+        var ann = InEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.IN);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.VALUES));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

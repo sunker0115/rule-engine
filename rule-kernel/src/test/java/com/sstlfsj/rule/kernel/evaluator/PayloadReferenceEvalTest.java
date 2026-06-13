@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.evaluator;
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
+import com.sstlfsj.rule.kernel.api.model.EvalEnv;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
@@ -35,7 +36,7 @@ class PayloadReferenceEvalTest {
         RuleEvent event = new RuleEvent(
                 "t1", "PAY", "transfer", "u1", "evt-1", Instant.now(),
                 payload, Map.of(), EventSource.HTTP);
-        return assembler.assemble(event, List.of(), Instant.now());
+        return assembler.assemble(event, List.of(), new EvalEnv(Instant.now(), java.util.Map.of()));
     }
 
     private boolean evaluateAmountGt(Map<String, Object> payload) {

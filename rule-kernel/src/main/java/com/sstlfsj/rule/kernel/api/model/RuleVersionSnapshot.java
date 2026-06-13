@@ -18,10 +18,16 @@ public record RuleVersionSnapshot(
         List<String> triggerEventTypes,
         /** 规则类型，默认 AST_BOOLEAN；SCORECARD 时由 ScorecardExecutor 求值。 */
         String kind,
+        /** 逻辑规则编码(= rule_definition.code,(tenant,scene) 内唯一);本地/旧构造默认 null。 */
+        String code,
+        /** 版本号(= rule_version.version,per code 单调);本地/旧构造默认 0。 */
+        long version,
         /** AST 引用的 (metricCode, metricVersion) 依赖，发布期冻结。 */
         List<MetricDependency> metricDependencies,
         /** AST 引用的 payload 字段依赖，发布期从 scene.payloadSchema 冻结。 */
-        List<PayloadDependency> payloadDependencies
+        List<PayloadDependency> payloadDependencies,
+        /** EXPRESSION_SCRIPT 规则的脚本载体;其它 kind 为 null。 */
+        ScriptSource script
 ) {
     public RuleVersionSnapshot {
         preGates = preGates == null ? List.of() : List.copyOf(preGates);
@@ -30,6 +36,30 @@ public record RuleVersionSnapshot(
         kind = kind == null ? RuleKind.AST_BOOLEAN.tag() : kind;
         metricDependencies = metricDependencies == null ? List.of() : List.copyOf(metricDependencies);
         payloadDependencies = payloadDependencies == null ? List.of() : List.copyOf(payloadDependencies);
+    }
+
+    /**
+     * 兼容旧 12 参调用点(无 script,默认 null)。
+     *
+     * @param ruleVersionId       规则版本 id
+     * @param sceneCode           场景编码
+     * @param tenantId            租户 id
+     * @param conditionAst        条件 AST 根节点
+     * @param preGates            Pre-Gate 配置列表
+     * @param decisionBindings    Decision 绑定列表
+     * @param triggerEventTypes   监听事件类型列表
+     * @param kind                规则类型
+     * @param code                逻辑规则编码
+     * @param version             版本号
+     * @param metricDependencies  metric 依赖
+     * @param payloadDependencies payload 依赖
+     */
+    public RuleVersionSnapshot(Long ruleVersionId, String sceneCode, String tenantId, AstNode conditionAst,
+                               List<PreGateConfig> preGates, List<DecisionBinding> decisionBindings,
+                               List<String> triggerEventTypes, String kind, String code, long version,
+                               List<MetricDependency> metricDependencies, List<PayloadDependency> payloadDependencies) {
+        this(ruleVersionId, sceneCode, tenantId, conditionAst, preGates, decisionBindings,
+                triggerEventTypes, kind, code, version, metricDependencies, payloadDependencies, null);
     }
 
     /**
@@ -48,7 +78,7 @@ public record RuleVersionSnapshot(
                                List<PreGateConfig> preGates, List<DecisionBinding> decisionBindings,
                                List<String> triggerEventTypes, String kind) {
         this(ruleVersionId, sceneCode, tenantId, conditionAst, preGates, decisionBindings,
-                triggerEventTypes, kind, List.of(), List.of());
+                triggerEventTypes, kind, null, 0L, List.of(), List.of());
     }
 
     /** Pre-Gate 配置快照。 */
@@ -59,35 +89,16 @@ public record RuleVersionSnapshot(
     }
 
     /**
-     * Decision 绑定配置快照。发布期从 decision_definition 冻结 name/actions 进来（方案甲，守 D6 不可变 + 评估零额外查询）。
+     * Decision 绑定配置快照。发布期从 decision_definition 冻结 name 进来（方案甲，守 D6 不可变 + 评估零额外查询）。
      *
      * @param decisionCode decision 编码
      * @param name         decision 名称（发布期冻结；旧兼容构造为 null）
      * @param priority     绑定优先级，越大越优先
-     * @param actions      decision 的 action 列表（发布期冻结；旧兼容构造为空）
      */
-    public record DecisionBinding(String decisionCode, String name, int priority, List<DecisionAction> actions) {
-        public DecisionBinding {
-            actions = actions == null ? List.of() : List.copyOf(actions);
-        }
-
-        /** 兼容旧调用点：仅 (decisionCode, priority)，name=null、actions 空。 */
+    public record DecisionBinding(String decisionCode, String name, int priority) {
+        /** 兼容旧调用点：仅 (decisionCode, priority)，name=null。 */
         public DecisionBinding(String decisionCode, int priority) {
-            this(decisionCode, null, priority, List.of());
-        }
-    }
-
-    /**
-     * Decision 内单个 action 项，对应 decision_definition.actions JSON 数组元素。
-     *
-     * @param actionId   action 实例标识
-     * @param actionType actionType 路由键
-     * @param sortOrder  执行顺序，升序
-     * @param params     依 actionType 异构的开放参数（结构无定义，故为 Map）
-     */
-    public record DecisionAction(String actionId, String actionType, int sortOrder, Map<String, Object> params) {
-        public DecisionAction {
-            params = params == null ? Map.of() : Map.copyOf(params);
+            this(decisionCode, null, priority);
         }
     }
 
@@ -100,7 +111,10 @@ public record RuleVersionSnapshot(
         private String sceneCode;
         private String tenantId;
         private AstNode conditionAst;
+        private ScriptSource script;
         private String kind = RuleKind.AST_BOOLEAN.tag();
+        private String code;
+        private long version;
         private final List<PreGateConfig> preGates = new ArrayList<>();
         private final List<DecisionBinding> decisionBindings = new ArrayList<>();
         private final List<String> triggerEventTypes = new ArrayList<>();
@@ -115,8 +129,14 @@ public record RuleVersionSnapshot(
         public Builder tenantId(String v)     { this.tenantId = v; return this; }
         /** 条件 AST 根节点。 */
         public Builder conditionAst(AstNode v){ this.conditionAst = v; return this; }
+        /** EXPRESSION_SCRIPT 脚本载体。 */
+        public Builder script(ScriptSource v) { this.script = v; return this; }
         /** 规则类型，默认 AST_BOOLEAN。 */
         public Builder kind(String v)         { this.kind = v; return this; }
+        /** 逻辑规则编码。 */
+        public Builder code(String v)    { this.code = v; return this; }
+        /** 版本号。 */
+        public Builder version(long v)   { this.version = v; return this; }
         /** 追加一个监听的事件类型。 */
         public Builder addTriggerEventType(String v) { triggerEventTypes.add(v); return this; }
         /** 追加一个 Decision 绑定。 */
@@ -140,7 +160,8 @@ public record RuleVersionSnapshot(
         /** 构建 RuleVersionSnapshot。 */
         public RuleVersionSnapshot build() {
             return new RuleVersionSnapshot(ruleVersionId, sceneCode, tenantId, conditionAst,
-                    preGates, decisionBindings, triggerEventTypes, kind, metricDependencies, payloadDependencies);
+                    preGates, decisionBindings, triggerEventTypes, kind, code, version,
+                    metricDependencies, payloadDependencies, script);
         }
     }
 }

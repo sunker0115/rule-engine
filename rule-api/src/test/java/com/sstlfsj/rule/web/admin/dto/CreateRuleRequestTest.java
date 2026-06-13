@@ -39,8 +39,24 @@ class CreateRuleRequestTest {
                 new AndNode(java.util.List.of(), null, null),
                 java.util.List.of(new DecisionBindingInput("REVIEW")),
                 java.util.List.of(),
-                java.util.List.of("login"));
+                java.util.List.of("login"),
+                null);
         String out = mapper.writeValueAsString(req.decisionBindings());
         assertThat(out).isEqualTo("[{\"decisionCode\":\"REVIEW\"}]");
+    }
+
+    @Test
+    void bindsScriptSource_conditionAstNull() {
+        // EXPRESSION_SCRIPT 规则：conditionAst 缺省、script 经 {source,lang} 绑定
+        String json = """
+            {"tenantId":"1","sceneCode":"s","code":"c","name":"n","kind":"EXPRESSION_SCRIPT",
+             "script":{"source":"payload.amount > 0 ? 'REVIEW' : 'PASS'","lang":"CEL"}}
+            """;
+        CreateRuleRequest req = mapper.readValue(json, CreateRuleRequest.class);
+
+        assertThat(req.conditionAst()).isNull();
+        assertThat(req.script()).isNotNull();
+        assertThat(req.script().source()).isEqualTo("payload.amount > 0 ? 'REVIEW' : 'PASS'");
+        assertThat(req.script().lang()).isEqualTo("CEL");
     }
 }

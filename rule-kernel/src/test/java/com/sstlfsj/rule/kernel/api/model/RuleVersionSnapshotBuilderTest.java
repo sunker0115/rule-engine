@@ -64,4 +64,14 @@ class RuleVersionSnapshotBuilderTest {
         assertThat(root.children()).hasSize(1);
         assertThat(((ConditionNode) root.children().get(0)).conditionType()).isEqualTo("GT");
     }
+
+    @Test
+    void builderCarriesCodeAndVersion() {
+        RuleVersionSnapshot s = RuleVersionSnapshot.builder()
+                .ruleVersionId(100L).sceneCode("scene").tenantId("t1")
+                .code("large-trade").version(3L)
+                .build();
+        assertThat(s.code()).isEqualTo("large-trade");
+        assertThat(s.version()).isEqualTo(3L);
+    }
 }

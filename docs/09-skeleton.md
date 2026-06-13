@@ -44,9 +44,7 @@ v1 阶段 10 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个
 | `rule-sdk` | 嵌入式 SDK：`RuleEngineClient` 门面 + `SnapshotPoller` HTTP 轮询 + 本地模式（代码定义规则，零网络）+ FETCHED 取数（宿主注入 handler，定义独立下发，D46） | 库（jar），业务方引入，零 Spring |
 | `rule-sdk-spring-boot-starter` | Spring Boot 自动装配胶水层：读 `rule.sdk.*` 配置，注册 `RuleEngineClient` Bean | 库（jar），Spring Boot 业务方引入 |
 
-**`rule-kernel` / `rule-sdk` Native Image 说明**：两者均零 Spring 零 DB，完全兼容 GraalVM Native Image。主服务（`rule-app`）因 MyBatis-Plus 动态代理机制，v1 不支持 Native Image 编译（详见架构设计文档约束 5）。
-
-> **kernel 引入 Lombok（D49）**：`rule-kernel` 自 D49 起引 Lombok（如 `RuleEvent` 的 `@Builder(toBuilder)`）。Lombok 是**编译期注解处理器**，编译后无运行时依赖，不破坏 kernel「运行时零依赖 / GraalVM Native 兼容」承诺。
+> **kernel 引入 Lombok（D49）**：`rule-kernel` 自 D49 起引 Lombok（如 `RuleEvent` 的 `@Builder(toBuilder)`）。Lombok 是**编译期注解处理器**，编译后无运行时依赖，保持 kernel「运行时零依赖」。
 
 ---
 
@@ -62,7 +60,7 @@ com.sstlfsj.rule
 │   ├── api                         # 对外公开：SPI 接口、核心数据结构
 │   │   ├── spi                     # 所有 SPI 接口（见 §四）
 │   │   ├── model                   # EvalContext / EvalResult / RuleVersionSnapshot / DryRunResult / AST 节点
-│   │   └── annotation              # @ConditionType / @ActionType / @MetricSourceType
+│   │   └── annotation              # @ConditionType / @MetricSourceType
 │   └── internal
 │       └── evaluator               # InterpretedExecutor（默认 RuleVersionExecutor 实现）
 │
@@ -70,7 +68,7 @@ com.sstlfsj.rule
 │   ├── api
 │   │   └── service                 # ConfigService / SceneService / MetadataService（供 rule-api 调用）
 │   └── internal
-│       ├── domain                  # Scene / Rule / RuleVersion / MetricDefinition / ActionTypeDefinition
+│       ├── domain                  # Scene / Rule / RuleVersion / MetricDefinition / Decision
 │       ├── repository              # MyBatis-Plus Mapper
 │       ├── publish                 # 发布流程、快照生成、输入闭合校验
 │       └── event                  # RulePublishedEvent / SceneChangedEvent（Modulith 事件定义）
@@ -82,7 +80,7 @@ com.sstlfsj.rule
 │       ├── index                   # 倒排索引维护、RulePublishedEvent / SceneChangedEvent 监听
 │       ├── context                 # EvalContext 装配（Subject 加载 + metric 预拉，Virtual Threads）
 │       ├── session                 # evaluation_session 幂等落库
-│       └── dispatcher              # Action Dispatcher（自研 BlockingQueue，D20）
+│       └── dispatcher              # PUSH 评估队列（自研 BlockingQueue，D20；D60 后引擎纯决策，无动作派发）
 │
 ├── job                             # rule-job-svc 模块（D11 / D48）
 │   ├── api
@@ -131,7 +129,6 @@ com.sstlfsj.rule
 | Scene | `config.internal.domain` / `eval.internal.index` |
 | Rule / RuleVersion | `config.internal.domain` / `kernel.api.model` |
 | Condition / AST | `kernel.api.model` |
-| Action / ActionHandler | `kernel.api.spi` / 业务方自实现 |
 | Metric / MetricSource（即 `MetricSourceHandler` 接口） | `kernel.api.spi` / 业务方自实现 |
 | Subject / SubjectLoader | `kernel.api.spi` / 业务方自实现 |
 | Pre-Gate | `kernel.api.spi` |
@@ -148,7 +145,6 @@ com.sstlfsj.rule
 | SPI 接口 | 包路径 | 决策来源 | 业务方可实现替换 |
 |---------|-------|---------|----------------|
 | `ConditionEvaluator` | `kernel.api.spi.condition` | D12 / §3.6 | ✅ |
-| `ActionHandler` | `kernel.api.spi.action` | D16 / §3.7 | ✅ |
 | `MetricSourceHandler` | `kernel.api.spi.metric` | §3.9 | ✅ |
 | `SubjectLoader` | `kernel.api.spi.subject` | §3.13 | ✅ |
 | `RuleVersionWatcher` | `kernel.api.spi.watcher` | D17 / §3.12 | ✅（SDK 模式） |
@@ -235,15 +231,12 @@ engine:
       consumer-threads: ...
     metric:
       default-cache-ttl-seconds: ...
-    action:
-      default-timeout-ms: ...
     retention:
       enabled: ...
       cron: ...
       batch-size: ...
       evaluation-session-days: ...
       node-trace-days: ...
-      action-execution-days: ...
       dry-run-session-days: ...
     observability:
       # 告警阈值，由 rule-observability 模块绑定
@@ -262,7 +255,7 @@ engine:
 
 Spring Boot 4.0.x 使用 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 注册（替代旧版 `spring.factories`）。
 
-**Spring Boot AOT（JVM 模式）**：各 AutoConfiguration 模块（`rule-config-svc` / `rule-eval-svc` / `rule-audit-svc` / `rule-observability`）加 `spring-boot-autoconfigure-processor`（`optional=true`），编译期生成 condition metadata；`rule-app` 的 `spring-boot-maven-plugin` 配 `process-aot` goal，预生成 BeanDefinition，加速 JVM 启动。此为 JVM 模式加速，与 GraalVM Native Image 无关（主服务 v1 不支持 Native Image，见 §二说明）。
+**Spring Boot AOT（JVM 模式）**：各 AutoConfiguration 模块（`rule-config-svc` / `rule-eval-svc` / `rule-audit-svc` / `rule-observability`）加 `spring-boot-autoconfigure-processor`（`optional=true`），编译期生成 condition metadata；`rule-app` 的 `spring-boot-maven-plugin` 配 `process-aot` goal，预生成 BeanDefinition，加速 JVM 启动。此为纯 JVM 启动优化。
 
 ---
 
@@ -294,7 +287,7 @@ rule-app/src/test/java/com/sstlfsj/rule/app/
 
 ### 7.2 单测策略
 
-- **mock 边界**：只 mock SPI 边界（`MetricSourceHandler`、`ActionHandler`、`SubjectLoader`），不 mock 内部协作类
+- **mock 边界**：只 mock SPI 边界（`MetricSourceHandler`、`SubjectLoader`），不 mock 内部协作类
 - **最低覆盖率**：`rule-kernel`（evaluator / AST / Pre-Gate）≥ 85%；`rule-eval-svc`（index / context / session）≥ 75%；其余模块 ≥ 60%
 - `rule-kernel` 单测不引入任何 Spring Test 依赖（保证零 Spring 约束可验证）
 
@@ -311,7 +304,7 @@ rule-app/src/test/java/com/sstlfsj/rule/app/
 |------|---------|---------|
 | 单次评估 P99（无 metric IO） | ≤ 5ms | JMH |
 | metric 预拉 P99（3 个 metric 并发） | ≤ 50ms | JMH |
-| Action Dispatcher 吞吐 | ≥ 5000 TPS | JMH |
+| PUSH 评估队列吞吐 | ≥ 5000 TPS | JMH |
 
 性能基线测试放 `rule-app/src/test/java/.../perf/`，仅在 CI `performance` profile 下触发，不随每次 PR 全跑。
 

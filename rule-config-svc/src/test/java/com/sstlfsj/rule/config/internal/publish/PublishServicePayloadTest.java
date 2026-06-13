@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.publish;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.repository.*;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -14,9 +15,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -59,8 +63,37 @@ class PublishServicePayloadTest {
 
         assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.demo", "测试规则",
                 new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD),
-                List.of(), List.of(), List.of(), "AST_BOOLEAN", "actor"))
+                List.of(), List.of(), List.of(), "AST_BOOLEAN", null, "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("amount");
+    }
+
+    @Test
+    void freezePayloadDeps_carriesFullConstraintsFromSchema() throws Exception {
+        // 发布期冻结:enum/min/max/pattern 须从 PayloadFieldSpec 完整流入 PayloadDependency
+        scene.setPayloadSchema(List.of(
+                new PayloadFieldSpec("amount", "INTEGER", true, null, 1.0, 1000.0, null, null),
+                new PayloadFieldSpec("channel", "STRING", false, List.of("APP", "WEB"), null, null, "[A-Z]+", null)));
+
+        Method m = PublishService.class.getDeclaredMethod(
+                "freezePayloadDeps", SceneDef.class, List.class, Map.class);
+        m.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<PayloadDependency> deps = (List<PayloadDependency>) m.invoke(
+                publishService, scene, List.of("amount", "channel"), new HashMap<String, String>());
+
+        PayloadDependency amount = deps.stream().filter(d -> d.name().equals("amount")).findFirst().orElseThrow();
+        assertThat(amount.required()).isTrue();
+        assertThat(amount.minimum()).isEqualTo(1.0);
+        assertThat(amount.maximum()).isEqualTo(1000.0);
+        assertThat(amount.enumValues()).isNull();
+        assertThat(amount.pattern()).isNull();
+
+        PayloadDependency channel = deps.stream().filter(d -> d.name().equals("channel")).findFirst().orElseThrow();
+        assertThat(channel.required()).isFalse();
+        assertThat(channel.enumValues()).containsExactly("APP", "WEB");
+        assertThat(channel.pattern()).isEqualTo("[A-Z]+");
+        assertThat(channel.minimum()).isNull();
+        assertThat(channel.maximum()).isNull();
     }
 }

@@ -24,7 +24,7 @@ class EvalContextAssemblerTest {
     @Test
     void noSubjectLoader_buildsMinimalSubject() {
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of("score", 100)), List.of(), NOW);
+        EvalContext ctx = assembler.assemble(event(Map.of("score", 100)), List.of(), new EvalEnv(NOW, java.util.Map.of()));
 
         assertThat(ctx.subject().subjectId()).isEqualTo("sub1");
         assertThat(ctx.subject().subjectType()).isEqualTo(SubjectType.USER);
@@ -33,7 +33,7 @@ class EvalContextAssemblerTest {
     @Test
     void providedMetrics_populatedInContext() {
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of("score", 42, "tag", "vip")), List.of(), NOW);
+        EvalContext ctx = assembler.assemble(event(Map.of("score", 42, "tag", "vip")), List.of(), new EvalEnv(NOW, java.util.Map.of()));
 
         assertThat(ctx.metrics()).containsKey("score");
         assertThat(ctx.metrics().get("score").value()).isEqualTo(42);
@@ -52,7 +52,7 @@ class EvalContextAssemblerTest {
         };
 
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(loader), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
+        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), new EvalEnv(NOW, java.util.Map.of()));
 
         assertThat(ctx.subject().attributes()).containsEntry("level", "gold");
     }
@@ -69,7 +69,7 @@ class EvalContextAssemblerTest {
         };
 
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(failingLoader), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
+        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), new EvalEnv(NOW, java.util.Map.of()));
 
         assertThat(ctx.subject().subjectId()).isEqualTo("sub1");
         assertThat(ctx.subject().attributes()).isEmpty();
@@ -78,7 +78,7 @@ class EvalContextAssemblerTest {
     @Test
     void emptyProvidedMetrics_contextMetricsEmpty() {
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
+        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), new EvalEnv(NOW, java.util.Map.of()));
 
         assertThat(ctx.metrics()).isEmpty();
     }
@@ -86,7 +86,7 @@ class EvalContextAssemblerTest {
     @Test
     void now_isPropagatedToContext() {
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), NOW);
+        EvalContext ctx = assembler.assemble(event(Map.of()), List.of(), new EvalEnv(NOW, java.util.Map.of()));
 
         assertThat(ctx.now()).isEqualTo(NOW);
     }
@@ -100,7 +100,7 @@ class EvalContextAssemblerTest {
                 .addMetricDependency("balance", 1).build();
 
         EvalContextAssembler assembler = new EvalContextAssembler(List.of(), List.of());
-        EvalContext ctx = assembler.assemble(event(Map.of("balance", 500)), List.of(snap), NOW);
+        EvalContext ctx = assembler.assemble(event(Map.of("balance", 500)), List.of(snap), new EvalEnv(NOW, java.util.Map.of()));
 
         assertThat(ctx.metrics()).containsKey("balance");
         assertThat(ctx.metrics().get("balance").value()).isEqualTo(500);
@@ -121,7 +121,7 @@ class EvalContextAssemblerTest {
 
         EvalContextAssembler assembler = new EvalContextAssembler(
                 List.of(), Map.of(), resolver, null, null, 0L);
-        EvalContext ctx = assembler.assemble(event(Map.of("kyc", 99)), List.of(snap), NOW);
+        EvalContext ctx = assembler.assemble(event(Map.of("kyc", 99)), List.of(snap), new EvalEnv(NOW, java.util.Map.of()));
 
         // provided 值 99 被忽略，fetch 无 handler → METRIC_FETCH_FAIL（isError=true）
         assertThat(ctx.metrics()).containsKey("kyc");

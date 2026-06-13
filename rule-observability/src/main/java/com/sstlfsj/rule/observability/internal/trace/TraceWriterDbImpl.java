@@ -120,6 +120,8 @@ public class TraceWriterDbImpl implements TraceWriter, InitializingBean, Disposa
             entity.setErrorCode(trace.errorCode());
             entity.setValueSource(trace.valueSource() == null ? null : com.sstlfsj.rule.kernel.api.model.ValueSource.valueOf(trace.valueSource()));
             entity.setRuleVersionId(trace.ruleVersionId());
+            entity.setRuleCode(trace.ruleCode());
+            entity.setRuleVersion(trace.ruleVersion());
             entity.setEvaluatedAt(LocalDateTime.now());
             out.add(entity);
 

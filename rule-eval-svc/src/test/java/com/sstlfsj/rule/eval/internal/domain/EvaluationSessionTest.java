@@ -62,6 +62,28 @@ class EvaluationSessionTest {
     }
 
     @Test
+    void replayColumns_setAndGet() {
+        EvaluationSession s = new EvaluationSession();
+        assertNull(s.getPayload());                  // 默认 null（未捕获）
+        assertNull(s.getCandidateRuleVersionIds());
+        s.setPayload("{\"amount\":5000}");
+        s.setCandidateRuleVersionIds("[11,22]");
+        assertEquals("{\"amount\":5000}", s.getPayload());
+        assertEquals("[11,22]", s.getCandidateRuleVersionIds());
+    }
+
+    @Test
+    void replayColumns_setNullAllowed() {
+        EvaluationSession s = new EvaluationSession();
+        s.setPayload("{\"k\":1}");
+        s.setPayload(null);
+        s.setCandidateRuleVersionIds("[1]");
+        s.setCandidateRuleVersionIds(null);
+        assertNull(s.getPayload());
+        assertNull(s.getCandidateRuleVersionIds());
+    }
+
+    @Test
     void dryRunSession_settersAndGetters() {
         DryRunSession d = new DryRunSession();
         d.setTenantId(1L);

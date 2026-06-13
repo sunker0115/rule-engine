@@ -24,12 +24,23 @@ public record MetricValue(
 
     /**
      * 构造取数失败的降级结果（value=null，valueSource=FETCHED）。
+     * provider 开放码经此原样穿透（errorCode 字段保持 String）。
      *
      * @param errorCode 失败错误码（如 METRIC_FETCH_FAIL）
      * @return 标记 isError 的 MetricValue
      */
     public static MetricValue error(String errorCode) {
         return new MetricValue(null, DataType.UNKNOWN.tag(), ValueSource.FETCHED.tag(), errorCode);
+    }
+
+    /**
+     * 构造取数失败的降级结果，使用规范错误码。errorCode 以 {@link EvalErrorCode#name()} 落 String。
+     *
+     * @param errorCode 规范错误码
+     * @return 标记 isError 的 MetricValue
+     */
+    public static MetricValue error(EvalErrorCode errorCode) {
+        return error(errorCode.name());
     }
 
     /** @return 是否为取数失败的降级值。 */

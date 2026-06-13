@@ -26,8 +26,7 @@ class RuleImportResultTest {
                 List.of(),
                 List.of("balance.sql"),
                 List.of("BLOCK"),
-                List.of(),
-                List.of("BLOCK_TRANSACTION"));
+                List.of());
 
         String json = mapper.writeValueAsString(result);
         RuleImportResult back = mapper.readValue(json, RuleImportResult.class);
@@ -42,6 +41,5 @@ class RuleImportResultTest {
         assertThat(back.scenesCreated()).containsExactly("risk.transfer");
         assertThat(back.metricsRequiringReview()).containsExactly("balance.sql");
         assertThat(back.decisionsCreated()).containsExactly("BLOCK");
-        assertThat(back.actionTypesReferenced()).containsExactly("BLOCK_TRANSACTION");
     }
 }

@@ -57,4 +57,29 @@ class PayloadFieldSpecTest {
         assertThat(result.get(0).name()).isEqualTo("amount");
         assertThat(result.get(1).enumValues()).containsExactly("CNY", "USD");
     }
+
+    @Test
+    void sensitiveField_serializesAndDeserializes() throws Exception {
+        PayloadFieldSpec field = new PayloadFieldSpec(
+                "phone", "STRING", true, null, null, null, null, null, true);
+        String json = mapper.writeValueAsString(field);
+        assertThat(json).contains("\"sensitive\":true");
+
+        PayloadFieldSpec back = mapper.readValue(json, PayloadFieldSpec.class);
+        assertThat(back.sensitive()).isTrue();
+    }
+
+    @Test
+    void legacyConstructor_defaultsSensitiveToFalse() {
+        PayloadFieldSpec field = new PayloadFieldSpec(
+                "amount", "NUMBER", true, null, null, null, null, null);
+        assertThat(field.sensitive()).isFalse();
+    }
+
+    @Test
+    void missingSensitiveInJson_defaultsToFalse() throws Exception {
+        PayloadFieldSpec back = mapper.readValue(
+                "{\"name\":\"amount\",\"type\":\"NUMBER\",\"required\":true}", PayloadFieldSpec.class);
+        assertThat(back.sensitive()).isFalse();
+    }
 }

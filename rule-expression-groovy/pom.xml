@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.sstlfsj.rule</groupId>
+        <artifactId>rule-engine</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>rule-expression-groovy</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-kernel</artifactId>
+        </dependency>
+
+        <!-- Apache Groovy 核心(非 groovy-all：仅需脚本求值，不引 json/xml/sql 等模块)；版本由根 pom 统一管理 -->
+        <dependency>
+            <groupId>org.apache.groovy</groupId>
+            <artifactId>groovy</artifactId>
+        </dependency>
+
+        <!-- groovy-sandbox：运行期逐调用拦截(SandboxTransformer + GroovyValueFilter)，safe-by-design 的运行期闸。
+             用 craftercms 维护分支(包名仍 org.kohsuke.groovy.sandbox)；它传递的 org.apache.groovy:groovy
+             由根 pom dependencyManagement 统一钉到 ${groovy.version}，无需排除。版本由根 pom 统一管理 -->
+        <dependency>
+            <groupId>org.craftercms</groupId>
+            <artifactId>groovy-sandbox</artifactId>
+        </dependency>
+
+        <!-- Caffeine 预编译缓存；版本由 Spring Boot BOM 管理 -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- 测试：版本由 Spring Boot BOM 管理 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

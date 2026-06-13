@@ -5,12 +5,15 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,5 +54,15 @@ class NotContainsEvaluatorTest {
     @Test
     void metricNotCollection_returnsTrue() {
         assertThat(evaluator.evaluate(node("score", "banned"), ctx("score", 100))).isTrue();
+    }
+
+    @Test
+    void annotation_describesOperator() {
+        var ann = NotContainsEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.NOT_CONTAINS);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.ELEMENT));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

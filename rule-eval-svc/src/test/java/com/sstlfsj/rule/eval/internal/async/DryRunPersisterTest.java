@@ -32,7 +32,7 @@ class DryRunPersisterTest {
         RuleEvent ev = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
                 .subjectId("u1").eventId("e1").source(EventSource.HTTP).occurredAt(Instant.now()).build();
 
-        persister.accept(new DryRunRecordedEvent(77L, ev, 99L, EvalResult.miss(), null, 0));
+        persister.accept(new DryRunRecordedEvent(77L, ev, 99L, "RC-1", 3L, EvalResult.miss(), null, 0));
 
         ArgumentCaptor<DryRunSession> captor = ArgumentCaptor.forClass(DryRunSession.class);
         verify(mapper).insert(captor.capture());
@@ -40,6 +40,9 @@ class DryRunPersisterTest {
         assertThat(s.getId()).isEqualTo(77L);
         assertThat(s.getStatus()).isEqualTo(SessionStatus.MISS);
         assertThat(s.getRuleVersionId()).isEqualTo(99L);
+        // 规则身份冗余键也应写入 dry_run_session
+        assertThat(s.getRuleCode()).isEqualTo("RC-1");
+        assertThat(s.getRuleVersion()).isEqualTo(3L);
         verify(traceWriter).write(eq("1"), eq("77"), any());
     }
 
@@ -54,7 +57,7 @@ class DryRunPersisterTest {
         Instant evalNow = Instant.parse("2026-06-09T01:02:03Z");
         EvalContext ctx = new EvalContext("1", ev, null, Map.of(), evalNow);
 
-        persister.accept(new DryRunRecordedEvent(78L, ev, 99L, EvalResult.miss(), ctx, 42));
+        persister.accept(new DryRunRecordedEvent(78L, ev, 99L, "RC-1", 3L, EvalResult.miss(), ctx, 42));
 
         ArgumentCaptor<DryRunSession> captor = ArgumentCaptor.forClass(DryRunSession.class);
         verify(mapper).insert(captor.capture());

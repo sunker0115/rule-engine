@@ -7,7 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 审计落库相关配置。
  *
- * <p>当前仅含 context_snapshot 回填开关：开启后每会话多一次 JSON 写，默认关。
+ * <p>context_snapshot 开关同时控制忠实重放三件套(payload + 候选版本 id + context_snapshot)的回填：
+ * 开启后每会话多几段 JSON 写，但 session 方可被忠实重放；默认开。
  */
 @Getter
 @Setter
@@ -21,7 +22,7 @@ public class AuditProperties {
     @Getter
     @Setter
     public static class ContextSnapshot {
-        /** 是否回填 context_snapshot（默认 false）。 */
-        private boolean enabled = false;
+        /** 是否回填重放三件套(payload + 候选版本 id + context_snapshot)；默认 true(忠实重放开箱即用)。 */
+        private boolean enabled = true;
     }
 }

@@ -138,8 +138,8 @@ class EvalIntegrationTest {
 
         // Decision 定义（REJECT，priority=100）
         jdbc.execute("""
-                INSERT IGNORE INTO decision_definition (id, tenant_id, code, name, priority, actions, status)
-                VALUES (1, 1, 'REJECT', '拒绝', 100, JSON_ARRAY(), 'ACTIVE')
+                INSERT IGNORE INTO decision_definition (id, tenant_id, code, name, priority, status)
+                VALUES (1, 1, 'REJECT', '拒绝', 100, 'ACTIVE')
                 """);
 
         // 规则主记录（关联 scene_id=1，current_version=1，status=PUBLISHED）

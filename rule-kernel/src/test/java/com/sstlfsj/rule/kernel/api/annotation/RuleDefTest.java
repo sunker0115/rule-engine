@@ -8,21 +8,23 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RuleDefTest {
 
-    @RuleDef(id = 1L, tenantId = "t1", sceneCode = "fraud",
-             trigger = "TRANSACTION",
+    @RuleDef(code = "block-large", tenantId = "t1", sceneCode = "fraud",
+             version = 3L,
+             eventTypes = "TRANSACTION",
              decisions = @DecisionBinding(code = "BLOCK", priority = 100))
     static class FullRule {}
 
-    @RuleDef(id = 2L, tenantId = "t1", sceneCode = "scene")
+    @RuleDef(code = "minimal")
     static class MinimalRule {}
 
     @Test
     void allAttributes_areReadCorrectly() {
         RuleDef ann = FullRule.class.getAnnotation(RuleDef.class);
-        assertEquals(1L, ann.id());
+        assertEquals("block-large", ann.code());
         assertEquals("t1", ann.tenantId());
         assertEquals("fraud", ann.sceneCode());
-        assertArrayEquals(new String[]{"TRANSACTION"}, ann.trigger());
+        assertEquals(3L, ann.version());
+        assertArrayEquals(new String[]{"TRANSACTION"}, ann.eventTypes());
         assertEquals(1, ann.decisions().length);
         assertEquals("BLOCK", ann.decisions()[0].code());
         assertEquals(100, ann.decisions()[0].priority());
@@ -31,8 +33,12 @@ class RuleDefTest {
     @Test
     void defaults_areApplied() {
         RuleDef ann = MinimalRule.class.getAnnotation(RuleDef.class);
-        assertEquals(2L, ann.id());
-        assertEquals(0, ann.trigger().length);
+        assertEquals("minimal", ann.code());
+        assertEquals("", ann.tenantId());
+        assertEquals("default", ann.sceneCode());          // 缺省 = DEFAULT_SCENE
+        assertEquals(RuleDef.DEFAULT_SCENE, ann.sceneCode());
+        assertEquals(1L, ann.version());
+        assertEquals(0, ann.eventTypes().length);
         assertEquals(0, ann.decisions().length);
     }
 

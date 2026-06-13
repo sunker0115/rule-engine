@@ -119,7 +119,7 @@ class JobAnnotationIntegrationTest {
                 + "VALUES (1, 1, 'fraud_check', '欺诈检测', 'PUSH', 'HIGHEST_PRIORITY', "
                 + "'USER', JSON_ARRAY('login'), 'ACTIVE')");
         jdbc.execute("INSERT IGNORE INTO decision_definition (id, tenant_id, code, name, priority, "
-                + "actions, status) VALUES (1, 1, 'REJECT', '拒绝', 100, JSON_ARRAY(), 'ACTIVE')");
+                + "status) VALUES (1, 1, 'REJECT', '拒绝', 100, 'ACTIVE')");
         jdbc.execute("INSERT IGNORE INTO rule_definition (id, tenant_id, scene_id, code, name, "
                 + "status, kind, current_version) VALUES (1, 1, 1, 'fraud-rule-001', '欺诈检测规则', "
                 + "'PUBLISHED', 'AST_BOOLEAN', 1)");

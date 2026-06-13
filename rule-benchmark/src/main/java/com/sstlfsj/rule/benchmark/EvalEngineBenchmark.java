@@ -50,7 +50,7 @@ public class EvalEngineBenchmark {
             snaps.add(new RuleVersionSnapshot((long) i, "scene", "1",
                     new AndNode(List.of(), null, null), List.of(),
                     List.of(new RuleVersionSnapshot.DecisionBinding("D" + i, i)),
-                    List.of(), "AST_BOOLEAN", deps, List.of()));
+                    List.of(), "AST_BOOLEAN", null, 0L, deps, List.of()));
         }
         index.update("1", "scene", "ORDER", snaps);
         index.setStrategy("1", "scene", SceneExecutionStrategy.valueOf(strategy));
@@ -68,7 +68,7 @@ public class EvalEngineBenchmark {
         RuleVersionExecutor exec = (snap, ctx) -> {
             RuleVersionSnapshot.DecisionBinding b = snap.decisionBindings().get(0);
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
-            return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+            return new EvalResult(true, d, List.of(d), List.of(), null, null, null, null);
         };
         engine = new EvalEngine(index, asm, Map.of(), Map.of("AST_BOOLEAN", exec), false);
 

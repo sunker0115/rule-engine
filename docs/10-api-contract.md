@@ -37,8 +37,8 @@
 | admin | 规则管理 | `/admin/v1/rules` | 创建草稿 / 改草稿 / 出新版本 / 发布 / 禁用 / 删草稿 / 查询规则；批量导出 / 导入 Bundle 文件（B7） |
 | admin | Scene 管理 | `/admin/v1/scenes` | 创建 / 更新 / 禁用 Scene |
 | admin | 指标管理 | `/admin/v1/metrics` | 注册 / 更新 / 禁用 Metric |
-| admin | 元数据接口 | `/admin/v1/scenes/{sceneCode}/metadata` | 前端编辑器拉 ConditionType / ActionType 枚举 + tenant 级 ACTIVE metric |
-| admin | 审计与查询 | `/admin/v1/evaluation-sessions`，`/admin/v1/rules/{id}/sessions` | 查 session / trace / action 执行；按规则查历史触发记录 |
+| admin | 元数据接口 | `/admin/v1/scenes/{sceneCode}/metadata` | 前端编辑器拉 ConditionType 枚举 + tenant 级 ACTIVE metric |
+| admin | 审计与查询 | `/admin/v1/evaluation-sessions`，`/admin/v1/rules/{id}/sessions` | 查 session / trace；按规则查历史触发记录 |
 | sdk | SDK 下发接口 | `/sdk/v1/snapshots`，`/sdk/v1/metric-definitions` | 嵌入式 SDK 拉规则快照 / metric 定义元数据（HTTP 模式，见 §8.7） |
 
 **分页约定**：所有 admin 列表接口统一返回 `PageResponse{ items, total, page, size }`——`items` 为当页数据数组，`total` 总记录数，`page` 当前页码（**从 1 起**），`size` 每页条数。查询参数统一用 `page` / `size`。
@@ -99,12 +99,11 @@ POST /api/v1/rule/evaluate
   },
   "hitDecisions": [{"code": "REVIEW", "name": "人工审核", "priority": 2, "fromRuleVersionId": 42}],
   "nodeTrace": [],
-  "errorCode": null,
-  "actionResults": []
+  "errorCode": null
 }
 ```
 
-> **注**：PULL Scene 的 `Decision.actions` 必须为空（发布校验拒绝），`actionResults` 始终为空数组；HYBRID Scene 的 Action **异步**派发（评估线程入队后即返回，不等待 Handler 完成，见 02-runtime §二约束），`actionResults` 为空数组（异步派发进行中时尚无结果）或含 `status=SUCCESS / FAILED / SKIPPED` 的记录（Handler 已执行完毕时）；`PENDING` 仅是 `action_execution` DB 过程态，不出现在 API 响应的 `ActionResult.status` 枚举中。
+> **注**：D60 起引擎纯决策化，响应只承载决策（`finalDecision` / `hitDecisions`），无 `actionResults` 字段；"命中后做什么"归消费方 / 流程引擎。PUSH/HYBRID Scene 异步评估完即落库，不派发动作。
 
 **超时建议**：调用方设 HTTP timeout ≥ 500ms（v1 P99 目标 < 500ms；风控高频场景 < 100ms 目标见 [`07-operability.md`](./07-operability.md) §七）。
 
@@ -134,22 +133,14 @@ POST /api/v1/rule/dry-run
 
 - 两者都不传 → 400 `MISSING_DRYRUN_TARGET`（见 §七）。
 - 两者都传时以 `ruleVersionId` 为准（精确版本优先）。
-- dry-run 恒走"带版本单快照"分支：**不写 `evaluation_session`、不派发 action**（仅返回预览 ActionResult），dry-run 痕迹按需落 `dry_run_session` / `dry_run_node_trace`（与正式评估隔离，D7）。
+- dry-run 恒走"带版本单快照"分支：**不写 `evaluation_session`**，dry-run 痕迹按需落 `dry_run_session` / `dry_run_node_trace`（与正式评估隔离，D7）。
 
-**Response 200：** 同 3.2，但 `nodeTrace` 字段填充真实节点路径（evaluate 时为空数组）；v1.5（D7）已全量实装 `dryRun()`，`actionResults` 返回真实预览 ActionResult（不实际派发）：
+**Response 200：** 同 3.2，但 `nodeTrace` 字段填充真实节点路径（evaluate 时为空数组）；引擎纯决策化后只返回决策预览（`finalDecision` / `hitDecisions`），无 `actionResults`：
 ```json
 {
   "eventId": "evt-dry-001",
   "ruleHit": true,
   "finalDecision": { "code": "REVIEW" },
-  "actionResults": [
-    {
-      "actionId": "act-review-ticket",
-      "actionType": "ticket.create",
-      "status": "SKIPPED",
-      "errorCode": "DRY_RUN_NOT_IMPLEMENTED"
-    }
-  ],
   "nodeTrace": [
     {
       "type": "AndNode",
@@ -240,8 +231,9 @@ POST /admin/v1/rules
 | `sceneCode`     | String | 是   | 规则所属场景编码 |
 | `code`          | String | 是   | 规则业务编码，同 tenantId + sceneCode 下唯一 |
 | `name`          | String | 是   | 规则显示名称 |
-| `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` |
-| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST。ConditionNode 字段语义见 [`03-rule-expression.md`](./03-rule-expression.md) §2.4；其中 `valueRef`（枚举 `METRIC` \| `PAYLOAD`，缺省 `METRIC`）选值来源：`PAYLOAD` 时 `metricCode` 为 payload 字段名（须在 `Scene.payloadSchema` 声明），不注册 metric，详见 §2.6 |
+| `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT` |
+| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST。ConditionNode 字段语义见 [`03-rule-expression.md`](./03-rule-expression.md) §2.4；其中 `valueRef`（枚举 `METRIC` \| `PAYLOAD`，缺省 `METRIC`）选值来源：`PAYLOAD` 时 `metricCode` 为 payload 字段名（须在 `Scene.payloadSchema` 声明），不注册 metric，详见 §2.6。`kind=EXPRESSION_SCRIPT` 时该字段为 `null`（条件逻辑走 `script`，二者互斥） |
+| `script`        | Object | 否   | **仅 `kind=EXPRESSION_SCRIPT` 必填**，与 `conditionAst` 互斥。脚本载体 `{ "source": "<表达式>", "lang": "CEL" }`。发布期校验：①语法编译；②引用的 `metrics.<code>` 须 ACTIVE、`payload.<field>` 须在 `Scene.payloadSchema` 声明（`subject.*` 开放不校验），据此冻 metric/payload 依赖；③typed 类型检查（string 字段参与数值比较等类型不符发布期即拒）。返回值按运行时类型派发：Boolean→命中、String→决策码（须 ∈ `decisionBindings`）、Number→评分。详见 [`03-rule-expression.md`](./03-rule-expression.md) |
 | `decisionBindings` | Array | 否 | 命中决策绑定列表，缺省空数组 |
 | `preGates`      | Array  | 否   | 前置门列表，缺省空数组；每项 `{ gateType, params }`。ROLLOUT 灰度门的 params 见下 |
 | `triggerEventTypes` | Array | 否 | 触发事件类型白名单，缺省空数组 |
@@ -274,7 +266,7 @@ POST /admin/v1/rules
 { "ruleDefinitionId": 1, "ruleVersionId": 1, "version": 1, "status": "DRAFT" }
 ```
 
-> **premise A（D56）**：创建即跑全套 `resolveAndValidate`（解析 + 硬校验：metric 须 ACTIVE、payload 字段须在 `Scene.payloadSchema` 声明、decision 须存在、kind 结构 + 算子×dataType 校验）。校验不过返回 400 `INVALID_ARGUMENT`（语义码携于 message）。落库的 DRAFT 行已是冻结快照（`resolvedAst` 含 dataType、`metricDependencies`/`payloadDependencies` 已冻、`decisionBindings` 含 `name`/`actions`），与发布后内容一致。
+> **premise A（D56）**：创建即跑全套 `resolveAndValidate`（解析 + 硬校验：metric 须 ACTIVE、payload 字段须在 `Scene.payloadSchema` 声明、decision 须存在、kind 结构 + 算子×dataType 校验）。校验不过返回 400 `INVALID_ARGUMENT`（语义码携于 message）。落库的 DRAFT 行已是冻结快照（`resolvedAst` 含 dataType、`metricDependencies`/`payloadDependencies` 已冻、`decisionBindings` 含 `name`），与发布后内容一致。
 
 ### 4.1.1 编辑草稿（editDraft，D56）
 
@@ -476,12 +468,11 @@ GET /admin/v1/rules/export?tenantId={tenantId}&ruleIds={id,id}&sceneId={sceneId}
   ],
   "scenes": [{"code": "risk.transfer", "name": "...", "...": "..."}],
   "metricDefinitions": [{"metricCode": "account.age", "version": 1, "...": "..."}],
-  "decisionDefinitions": [{"code": "BLOCK", "name": "...", "actions": "[...]"}],
-  "actionTypeManifest": ["BLOCK_TRANSACTION"]
+  "decisionDefinitions": [{"code": "BLOCK", "name": "...", "priority": 1}]
 }
 ```
 
-> 所有 JSON 列（conditionAst / decisionBindings / preGates / triggerEventTypes / payloadSchema / eventTypes / defaultParams / actions）以**原始 JSON 字符串**无损搬运。`decisionDefinitions[]` 较 08-evolution §2.9 初设字段集多出，承载 `decisionBindings` 引用的 tenant 级 decision（D27）。
+> 所有 JSON 列（conditionAst / decisionBindings / preGates / triggerEventTypes / payloadSchema / eventTypes / defaultParams）以**原始 JSON 字符串**无损搬运。`decisionDefinitions[]` 承载 `decisionBindings` 引用的 tenant 级 decision（D26）。
 
 ### 4.9 批量导入规则 Bundle（B7）
 
@@ -507,8 +498,7 @@ header `X-Actor-Id`；**`multipart/form-data` 上传 Bundle JSON 文件（字段
     ],
     "scenesCreated": ["risk.transfer"], "scenesSkippedExisting": [],
     "metricsCreated": ["account.age"], "metricsSkippedExisting": [], "metricsRequiringReview": [],
-    "decisionsCreated": ["BLOCK"], "decisionsSkippedExisting": [],
-    "actionTypesReferenced": ["BLOCK_TRANSACTION"]
+    "decisionsCreated": ["BLOCK"], "decisionsSkippedExisting": []
   }
 }
 ```
@@ -541,7 +531,7 @@ GET /admin/v1/metrics?tenantId=demo-tenant
 GET /admin/v1/scenes/{sceneCode}/metadata?tenantId=demo-tenant
 ```
 
-**Response：** 见 `04-extension.md §五` 元数据契约（`conditionTypes` / `actionTypes` / `availableMetrics` 三段）。
+**Response：** 见 `04-extension.md §五` 元数据契约（`conditionTypes` / `availableMetrics` 两段）。
 
 ### 5.2 查询 Scene 列表
 
@@ -669,20 +659,7 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 | `METRIC_FETCH_FAIL` | 200 | 有节点 MetricSource 取数失败（D15） | 查 nodeTrace 定位失败节点；fail-secure → 拒绝，fail-open → 放行 |
 | `CONDITION_EVAL_ERROR` | 200 | ConditionEvaluator 抛异常（D15） | 同上 |
 
-### Action 执行 errorCode（ActionResult.errorCode）
-
-> Action 投递 best-effort（D53）：失败即终态，不重试不补偿；`retryable` 字段保留但不再驱动重试。队列满则丢弃 + 计数 + WARN（不再产生 `QUEUE_OVERFLOW`）。
-
-| errorCode | 含义 |
-|-----------|------|
-| `TIMEOUT` | Handler execute() 超时（D18），FAILED 终态 |
-| `EXTERNAL_SERVICE_ERROR` | 外部系统返回 5xx / 连接失败，FAILED 终态 |
-| `BUSINESS_REJECTED` | 外部系统明确拒绝（如工单系统返回 400） |
-| `PREDECESSOR_FAILED` | failFast 前置 Action 失败（D18），SKIPPED |
-| `HANDLER_EXCEPTION` | ActionHandler.execute() 抛出未捕获异常（D18） |
-| `NO_WEBHOOK_URL` | SEND_ALERT 未配 webhook URL（D53），SKIPPED |
-| `ALERT_DELIVERY_FAILED` / `ALERT_HTTP_<code>` | SEND_ALERT webhook 失败 / 非 2xx（D53），FAILED |
-| `DRY_RUN_NOT_IMPLEMENTED` | ~~v1 占位~~；v1.5 已全量实装（D7），不再产生 |
+> **Action 执行 errorCode 已移除（D60）**：引擎纯决策化，整个动作子系统及 `ActionResult.errorCode` 枚举一并删除；"命中后做什么"归消费方 / 流程引擎，其执行错误码由下游编排层自行定义。
 
 ### 发布期 errorCode（audit_log.after_snapshot.errorCode）
 

@@ -19,6 +19,8 @@ public class NodeTraceEntity {
     private Long evaluationSessionId;
     private Long tenantId;
     private Long ruleVersionId;
+    private String ruleCode;
+    private Long ruleVersion;
     private String nodePath;
     private String nodeType;
     private String conditionType;

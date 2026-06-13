@@ -88,7 +88,7 @@ class LoadTestSeeder {
             DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
                     "lt-rule-" + i, "lt rule " + i,
                     conditionAst(), List.of(new DecisionBinding("PASS", 1)),
-                    List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", ACTOR);
+                    List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", null, ACTOR);
             configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
         }
     }
@@ -118,7 +118,7 @@ class LoadTestSeeder {
         DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
                 "lt-fetch-rule", "lt fetch rule",
                 conditionAstAgg(), List.of(new DecisionBinding("PASS", 1)),
-                List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", ACTOR);
+                List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", null, ACTOR);
         configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
     }
 

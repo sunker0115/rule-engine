@@ -12,10 +12,16 @@
     <artifactId>rule-kernel</artifactId>
 
     <dependencies>
-        <!-- 唯一的非 JDK 依赖：murmur3 hash，用于 ROLLOUT Pre-Gate -->
+        <!-- guava：murmur3 hash，用于 ROLLOUT Pre-Gate -->
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
+        </dependency>
+
+        <!-- RE2J：MATCHES 算子线性时间正则（防 ReDoS），版本由根 pom 管理 -->
+        <dependency>
+            <groupId>com.google.re2j</groupId>
+            <artifactId>re2j</artifactId>
         </dependency>
 
         <!-- 日志门面：版本由 Spring Boot BOM 统一管理，实现由 rule-app 提供 -->
@@ -31,7 +37,7 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Lombok：编译期注解处理器（@Builder），不进运行时，不破坏零运行时依赖 / Native Image -->
+        <!-- Lombok：编译期注解处理器（@Builder），编译后无运行时依赖 -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

@@ -5,11 +5,14 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -104,5 +107,15 @@ class EqEvaluatorTest {
         EvalContext ctx = new EvalContext("t1", ev, null,
                 Map.of("d", new MetricValue(now, "DATETIME", "PROVIDED")), now);
         assertThat(new EqEvaluator().evaluate(node, ctx)).isTrue();
+    }
+
+    @Test
+    void annotation_describesOperator() {
+        var ann = EqEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.EQ);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.THRESHOLD));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

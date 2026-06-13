@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.api.model;
 
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DecisionTest {
@@ -37,15 +38,15 @@ class DecisionTest {
     }
 
     @Test
-    void actions_carriedBySixArgCtor_emptyByCompatCtors() {
-        RuleVersionSnapshot.DecisionAction action =
-                new RuleVersionSnapshot.DecisionAction("a1", "SEND_ALERT", 0, java.util.Map.of());
-        Decision full = new Decision("REJECT", "拒绝", 10, 7L, "CAT", java.util.List.of(action));
-        assertEquals(java.util.List.of(action), full.actions());
+    void category_carriedBySevenArgCtor() {
+        Decision full = new Decision("REJECT", "拒绝", 10, 7L, null, 0L, "CAT");
         assertEquals("CAT", full.category());
+    }
 
-        // 4-arg / 5-arg 兼容构造：actions 空
-        assertTrue(new Decision("PASS", "", 1, 7L).actions().isEmpty());
-        assertTrue(new Decision("R", "n", 2, 7L, "C").actions().isEmpty());
+    @Test
+    void decisionCarriesFromRuleCodeAndVersion() {
+        Decision d = new Decision("REVIEW", "人工审核", 50, 100L, "large-trade", 3L, null);
+        assertThat(d.fromRuleCode()).isEqualTo("large-trade");
+        assertThat(d.fromRuleVersion()).isEqualTo(3L);
     }
 }

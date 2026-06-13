@@ -23,6 +23,10 @@ public class DryRunSession {
     private String subjectId;
     /** 本次 dry-run 测试的规则版本 ID。 */
     private Long ruleVersionId;
+    /** 本次 dry-run 测试规则的逻辑编码(冗余,人类可读)。 */
+    private String ruleCode;
+    /** 本次 dry-run 测试规则的版本号(冗余)。 */
+    private Long ruleVersion;
     private SessionStatus status;
     private String finalDecision;
     private String hitDecisions;

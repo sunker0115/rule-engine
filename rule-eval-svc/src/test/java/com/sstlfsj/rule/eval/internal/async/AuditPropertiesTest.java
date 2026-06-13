@@ -6,7 +6,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 验证 AuditProperties 绑定到 engine.rule.audit.* 命名空间，context-snapshot.enabled 默认 false。 */
+/** 验证 AuditProperties 绑定到 engine.rule.audit.* 命名空间，context-snapshot.enabled 默认 true(忠实重放开箱即用)。 */
 class AuditPropertiesTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -16,15 +16,15 @@ class AuditPropertiesTest {
     static class Config {}
 
     @Test
-    void contextSnapshotEnabled_defaultsToFalse() {
+    void contextSnapshotEnabled_defaultsToTrue() {
         runner.run(ctx -> assertThat(ctx.getBean(AuditProperties.class)
-                .getContextSnapshot().isEnabled()).isFalse());
+                .getContextSnapshot().isEnabled()).isTrue());
     }
 
     @Test
-    void binds_underEngineRuleAuditContextSnapshotPrefix() {
-        runner.withPropertyValues("engine.rule.audit.context-snapshot.enabled=true")
+    void binds_underEngineRuleAuditContextSnapshotPrefix_canOptOut() {
+        runner.withPropertyValues("engine.rule.audit.context-snapshot.enabled=false")
                 .run(ctx -> assertThat(ctx.getBean(AuditProperties.class)
-                        .getContextSnapshot().isEnabled()).isTrue());
+                        .getContextSnapshot().isEnabled()).isFalse());
     }
 }

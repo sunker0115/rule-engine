@@ -19,7 +19,6 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,7 +90,7 @@ class RuleBundleIntegrationTest {
         scene.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
         scene.setEventTypes(java.util.List.of("transfer")); scene.setPayloadSchema(java.util.List.of());
         scene.setDefaultParams(java.util.Map.of());
-        scene.setPayloadSchemaVersion(1); scene.setStatus(SceneStatus.ACTIVE); scene.setCreatedBy("seed");
+        scene.setStatus(SceneStatus.ACTIVE); scene.setCreatedBy("seed");
         scene.setCreatedAt(LocalDateTime.now());
         sceneMapper.insert(scene);
 
@@ -105,7 +104,6 @@ class RuleBundleIntegrationTest {
         DecisionDefinition decision = new DecisionDefinition();
         decision.setTenantId(SRC_TENANT); decision.setCode("BLOCK"); decision.setName("拦截");
         decision.setPriority(100); decision.setDescription("拦截交易");
-        decision.setActions(java.util.List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, java.util.Map.of())));
         decision.setStatus(com.sstlfsj.rule.config.internal.domain.DecisionStatus.ACTIVE); decision.setCreatedBy("seed"); decision.setCreatedAt(LocalDateTime.now());
         decisionDefinitionMapper.insert(decision);
 
@@ -146,7 +144,6 @@ class RuleBundleIntegrationTest {
         assertThat(bundle.scenes()).hasSize(1);
         assertThat(bundle.metricDefinitions()).hasSize(1);    // 去重
         assertThat(bundle.decisionDefinitions()).hasSize(1);  // 去重
-        assertThat(bundle.actionTypeManifest()).containsExactly("BLOCK_TRANSACTION");
 
         RuleImportResult result = ruleBundleService.importBundle(String.valueOf(DST_TENANT), bundle, "dev");
 

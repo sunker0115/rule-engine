@@ -28,6 +28,9 @@ public class MetricDefinition {
     private Map<String, Object> params;
     private Integer cacheTtlSeconds;
     private Boolean allowProvided;
+    /** 是否敏感 metric：true 时其值在 trace 展示出口被读时脱敏（D71）。列名为 MySQL 保留字，反引号包裹。 */
+    @TableField(value = "`sensitive`")
+    private Boolean sensitive;
     private MetricStatus status;
     private String createdBy;
     private java.time.LocalDateTime createdAt;

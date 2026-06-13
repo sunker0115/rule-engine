@@ -89,7 +89,7 @@ class RuleControllerTest {
     @Test
     void editDraft_returns200_andCallsService() throws Exception {
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
-        when(configService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(put("/admin/v1/rules/10/draft")
@@ -114,7 +114,7 @@ class RuleControllerTest {
 
         // version 不变（草稿原地编辑），透传 ruleId / tenantId / name / kind
         verify(configService).editDraft(eq("t1"), eq(10L), eq("改名后"), eq("AST_BOOLEAN"),
-                any(), any(), any(), any(), eq("user1"));
+                any(), any(), any(), any(), any(), eq("user1"));
     }
 
     @Test
@@ -131,7 +131,7 @@ class RuleControllerTest {
     @Test
     void newVersion_returns201_andCallsService() throws Exception {
         DraftCreatedResult result = new DraftCreatedResult(10L, 30L, 3L, "DRAFT");
-        when(configService.newVersion(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.newVersion(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(post("/admin/v1/rules/10/versions")
@@ -153,7 +153,7 @@ class RuleControllerTest {
 
         // 透传 tenantId / ruleId / name / kind / fromVersionId / actorId
         verify(configService).newVersion(eq("t1"), eq(10L), eq("v3"), eq("AST_BOOLEAN"),
-                any(), any(), any(), any(), eq(50L), eq("user1"));
+                any(), any(), any(), any(), eq(50L), any(), eq("user1"));
     }
 
     @Test
@@ -209,7 +209,7 @@ class RuleControllerTest {
     @Test
     void createDraft_returns201_withValidBody() throws Exception {
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
-        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(post("/admin/v1/rules")
@@ -235,14 +235,14 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.status").value("DRAFT"));
 
         verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
-                any(), any(), any(), any(), eq("SCORECARD"), eq("user1"));
+                any(), any(), any(), any(), eq("SCORECARD"), any(), eq("user1"));
     }
 
     @Test
     void createDraft_nullJsonFields_passedAsNull() throws Exception {
         // body 未带 conditionAst/decisionBindings 等字段时，typed 入参为 null，由 service 兜底默认
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
-        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(post("/admin/v1/rules")
@@ -256,7 +256,7 @@ class RuleControllerTest {
 
         // 未传的 typed 字段为 null（不再有 JSON 串默认值），kind 未传也为 null
         verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
-                isNull(), isNull(), isNull(), isNull(), isNull(), eq("user1"));
+                isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), eq("user1"));
     }
 
     @Test

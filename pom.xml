@@ -8,7 +8,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.6</version>
+        <version>4.1.0</version>
         <relativePath/>
     </parent>
 
@@ -19,8 +19,19 @@
 
     <modules>
         <module>rule-kernel</module>
+        <module>rule-expression-cel</module>
+        <module>rule-expression-cel-spring-boot-starter</module>
+        <module>rule-expression-aviator</module>
+        <module>rule-expression-aviator-spring-boot-starter</module>
+        <module>rule-expression-qlexpress</module>
+        <module>rule-expression-qlexpress-spring-boot-starter</module>
+        <module>rule-expression-jsonlogic</module>
+        <module>rule-expression-jsonlogic-spring-boot-starter</module>
+        <module>rule-expression-jexl</module>
+        <module>rule-expression-jexl-spring-boot-starter</module>
+        <module>rule-expression-groovy</module>
+        <module>rule-expression-groovy-spring-boot-starter</module>
         <module>rule-config-svc</module>
-        <module>rule-mybatis-native</module>
         <module>rule-eval-svc</module>
         <module>rule-job-svc</module>
         <module>rule-job-xxl</module>
@@ -31,14 +42,16 @@
         <module>rule-sdk</module>
         <module>rule-sdk-spring-boot-starter</module>
         <module>rule-benchmark</module>
+        <module>rule-samples</module>
     </modules>
 
     <properties>
         <revision>1.0.0-SNAPSHOT</revision>
         <java.version>25</java.version>
-        <spring-modulith.version>2.0.6</spring-modulith.version>
+        <spring-modulith.version>2.1.0</spring-modulith.version>
         <mybatis-plus.version>3.5.16</mybatis-plus.version>
         <archunit.version>1.4.2</archunit.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
         <guava.version>33.2.1-jre</guava.version>
         <lombok.version>1.18.44</lombok.version>
         <mysql-connector-j.version>9.0.0</mysql-connector-j.version>
@@ -50,10 +63,19 @@
         <springdoc.version>3.0.3</springdoc.version>
         <!-- xxl-job-core 3.4.0：稳定版（2026-04-05），自身基于 Spring Boot 4.0.5 构建，无 javax 引用 -->
         <xxl-job.version>3.4.0</xxl-job.version>
-        <!-- 把 xxl-job-core 传递的 Groovy 5 锁回 4.x：GraalVM 内置 GroovySubstitutions 仅适配 Groovy 4，
-             对 Groovy 5 因 IndyInterface.invalidateSwitchPoints() 缺失导致 native 编译失败（GR-60622）。
-             适配器走 glueType=BEAN 不跑脚本，仅需 GroovyClassLoader 可加载，4.x 运行期等价。 -->
-        <groovy.version>4.0.24</groovy.version>
+        <!-- EXPRESSION_SCRIPT 各表达式引擎库版本（parent BOM 未管理，集中钉死于此） -->
+        <cel.version>0.13.0</cel.version>
+        <aviator.version>5.4.3</aviator.version>
+        <qlexpress.version>3.3.4</qlexpress.version>
+        <json-logic.version>1.1.0</json-logic.version>
+        <commons-jexl.version>3.6.2</commons-jexl.version>
+        <groovy.version>5.0.6</groovy.version>
+        <!-- craftercms 维护分支(kohsuke 原版停更于 2018 的 1.19),面向现代 Groovy,包名仍 org.kohsuke.groovy.sandbox -->
+        <groovy-sandbox.version>4.3.2</groovy-sandbox.version>
+        <!-- RE2J:线性时间正则(防 ReDoS),MATCHES 算子底层引擎 -->
+        <re2j.version>1.8</re2j.version>
+        <!-- protobuf-java:覆盖 Spring Boot 4 BOM 的 4.26.1,dev.cel 0.13.0 gencode 需运行时 ≥ 4.33 -->
+        <protobuf.version>4.35.1</protobuf.version>
     </properties>
 
     <build>
@@ -161,6 +183,21 @@
                 <version>${guava.version}</version>
             </dependency>
 
+            <!-- RE2J (only for rule-kernel: MATCHES 算子线性时间正则，防 ReDoS) -->
+            <dependency>
+                <groupId>com.google.re2j</groupId>
+                <artifactId>re2j</artifactId>
+                <version>${re2j.version}</version>
+            </dependency>
+
+            <!-- protobuf-java：dev.cel 0.13.0 gencode 为 4.33.x，需运行时 ≥ 4.33；
+                 覆盖 Spring Boot 4 BOM 的 4.26.1（唯一消费方是 dev.cel，否则脚本编译期类初始化报版本不兼容） -->
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+
             <!-- Lombok 1.18.44+：支持 Java 25，可与 record 共存；不加在 record 类上 -->
             <dependency>
                 <groupId>org.projectlombok</groupId>
@@ -180,7 +217,7 @@
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
-                <version>1.20.4</version>
+                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -213,11 +250,42 @@
                 <artifactId>xxl-job-core</artifactId>
                 <version>${xxl-job.version}</version>
             </dependency>
-            <!-- 强制 Groovy 4.x：覆盖 xxl-job-core 传递的 5.0.5（理由见 groovy.version 属性注释） -->
+
+            <!-- EXPRESSION_SCRIPT 表达式引擎库（各 rule-expression-* 模块引用，版本集中于此） -->
+            <dependency>
+                <groupId>dev.cel</groupId>
+                <artifactId>cel</artifactId>
+                <version>${cel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.googlecode.aviator</groupId>
+                <artifactId>aviator</artifactId>
+                <version>${aviator.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>QLExpress</artifactId>
+                <version>${qlexpress.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.jamsesso</groupId>
+                <artifactId>json-logic-java</artifactId>
+                <version>${json-logic.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-jexl3</artifactId>
+                <version>${commons-jexl.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.apache.groovy</groupId>
                 <artifactId>groovy</artifactId>
                 <version>${groovy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.craftercms</groupId>
+                <artifactId>groovy-sandbox</artifactId>
+                <version>${groovy-sandbox.version}</version>
             </dependency>
 
             <!-- 内部模块版本管理 -->
@@ -228,12 +296,67 @@
             </dependency>
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
-                <artifactId>rule-config-svc</artifactId>
+                <artifactId>rule-expression-cel</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.sstlfsj.rule</groupId>
-                <artifactId>rule-mybatis-native</artifactId>
+                <artifactId>rule-expression-cel-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-aviator</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-aviator-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-qlexpress</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-qlexpress-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-jsonlogic</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-jsonlogic-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-jexl</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-jexl-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-groovy</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-expression-groovy-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sstlfsj.rule</groupId>
+                <artifactId>rule-config-svc</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

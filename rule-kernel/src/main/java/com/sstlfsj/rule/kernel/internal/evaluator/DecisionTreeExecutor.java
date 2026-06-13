@@ -32,25 +32,27 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         }
         boolean collect = TraceScope.COLLECT.orElse(true);
         Long rvId = snapshot.ruleVersionId();
+        String code = snapshot.code();
+        long version = snapshot.version();
         // collect=false 时 sink 为 null，整树跳过 trace 构建（零分配契约）
         List<NodeTrace> sink = collect ? new ArrayList<>() : null;
-        return evaluate(root, snapshot, ctx, sink, rvId);
+        return evaluate(root, snapshot, ctx, sink, rvId, code, version);
     }
 
     private EvalResult evaluate(AstNode node, RuleVersionSnapshot snapshot, EvalContext ctx,
-                                List<NodeTrace> sink, Long rvId) {
+                                List<NodeTrace> sink, Long rvId, String code, long version) {
         return switch (node) {
-            case IfNode ifNode -> evaluateIf(ifNode, snapshot, ctx, sink, rvId);
-            case DecisionLeafNode leaf -> hit(leaf, snapshot, sink, rvId);
+            case IfNode ifNode -> evaluateIf(ifNode, snapshot, ctx, sink, rvId, code, version);
+            case DecisionLeafNode leaf -> hit(leaf, snapshot, sink, rvId, code, version);
             default -> EvalResult.error(EvalErrorCode.DECISION_TREE_UNEXPECTED_NODE);
         };
     }
 
     private EvalResult evaluateIf(IfNode ifNode, RuleVersionSnapshot snapshot, EvalContext ctx,
-                                  List<NodeTrace> sink, Long rvId) {
+                                  List<NodeTrace> sink, Long rvId, String code, long version) {
         // children = [条件子树..., 命中分支节点]；前缀为条件 trace，后缀为走入的分支
         List<NodeTrace> children = sink != null ? new ArrayList<>() : null;
-        ConditionOutcome cond = evaluateCondition(ifNode.condition(), ctx, children, rvId);
+        ConditionOutcome cond = evaluateCondition(ifNode.condition(), ctx, children, rvId, code, version);
         if (cond.isError()) {
             // 取数失败：不静默走 else，整规则置 ERROR + miss（避免命中错误叶子）
             if (sink != null) {
@@ -60,36 +62,38 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
         }
         EvalResult branch;
         if (cond.satisfied()) {
-            branch = evaluate(ifNode.thenBranch(), snapshot, ctx, children, rvId);
+            branch = evaluate(ifNode.thenBranch(), snapshot, ctx, children, rvId, code, version);
         } else if (ifNode.elseBranch() != null) {
-            branch = evaluate(ifNode.elseBranch(), snapshot, ctx, children, rvId);
+            branch = evaluate(ifNode.elseBranch(), snapshot, ctx, children, rvId, code, version);
         } else {
             branch = EvalResult.miss();
         }
         if (sink != null) {
-            sink.add(NodeTrace.container(NodeType.IF, cond.satisfied(), children, rvId));
+            sink.add(NodeTrace.container(NodeType.IF, cond.satisfied(), children, rvId, code, version));
         }
         // 顶层结果挂上含 IfNode 根的完整 trace；命中布尔/决策取自分支求值
         return new EvalResult(branch.ruleHit(), branch.finalDecision(), branch.hitDecisions(),
-                traces(sink), branch.errorCode(), branch.actionResults(),
+                traces(sink), branch.errorCode(),
                 branch.score(), branch.category(), branch.decision());
     }
 
     private ConditionOutcome evaluateCondition(AstNode node, EvalContext ctx,
-                                               List<NodeTrace> sink, Long rvId) {
+                                               List<NodeTrace> sink, Long rvId, String code, long version) {
         return switch (node) {
-            case ConditionNode c -> evalLeafCondition(c, ctx, sink, rvId);
+            case ConditionNode c -> evalLeafCondition(c, ctx, sink, rvId, code, version);
             case AndNode and -> {
                 List<NodeTrace> childTraces = sink != null ? new ArrayList<>() : null;
                 ConditionOutcome result = ConditionOutcome.SATISFIED;
                 for (AstNode child : and.children()) {
-                    ConditionOutcome o = evaluateCondition(child, ctx, childTraces, rvId);
+                    ConditionOutcome o = evaluateCondition(child, ctx, childTraces, rvId, code, version);
                     if (o.isError()) { result = o; break; }              // ERROR 传播
                     if (!o.satisfied()) { result = ConditionOutcome.NOT_SATISFIED; break; } // 短路 false
                 }
                 if (sink != null) {
-                    sink.add(NodeTrace.container(NodeType.AND, result.satisfied(),
-                            result.isError() ? result.errorCode() : null, childTraces, rvId));
+                    // 非错误时走 6 参 container 携带 code/version；错误路径保留 errorCode 容器（与历史一致）
+                    sink.add(result.isError()
+                            ? NodeTrace.container(NodeType.AND, result.satisfied(), result.errorCode(), childTraces, rvId)
+                            : NodeTrace.container(NodeType.AND, result.satisfied(), childTraces, rvId, code, version));
                 }
                 yield result;
             }
@@ -98,7 +102,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                 String errCode = null;
                 ConditionOutcome result = null;
                 for (AstNode child : or.children()) {
-                    ConditionOutcome o = evaluateCondition(child, ctx, childTraces, rvId);
+                    ConditionOutcome o = evaluateCondition(child, ctx, childTraces, rvId, code, version);
                     if (o.satisfied()) { result = ConditionOutcome.SATISFIED; break; } // 命中即短路
                     if (o.isError()) errCode = o.errorCode();
                 }
@@ -107,18 +111,20 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
                     result = errCode != null ? ConditionOutcome.error(errCode) : ConditionOutcome.NOT_SATISFIED;
                 }
                 if (sink != null) {
-                    sink.add(NodeTrace.container(NodeType.OR, result.satisfied(),
-                            result.isError() ? result.errorCode() : null, childTraces, rvId));
+                    sink.add(result.isError()
+                            ? NodeTrace.container(NodeType.OR, result.satisfied(), result.errorCode(), childTraces, rvId)
+                            : NodeTrace.container(NodeType.OR, result.satisfied(), childTraces, rvId, code, version));
                 }
                 yield result;
             }
             case NotNode not -> {
                 List<NodeTrace> childTraces = sink != null ? new ArrayList<>() : null;
-                ConditionOutcome o = evaluateCondition(not.child(), ctx, childTraces, rvId);
+                ConditionOutcome o = evaluateCondition(not.child(), ctx, childTraces, rvId, code, version);
                 ConditionOutcome result = o.isError() ? o : ConditionOutcome.of(!o.satisfied());
                 if (sink != null) {
-                    sink.add(NodeTrace.container(NodeType.NOT, result.satisfied(),
-                            result.isError() ? result.errorCode() : null, childTraces, rvId));
+                    sink.add(result.isError()
+                            ? NodeTrace.container(NodeType.NOT, result.satisfied(), result.errorCode(), childTraces, rvId)
+                            : NodeTrace.container(NodeType.NOT, result.satisfied(), childTraces, rvId, code, version));
                 }
                 yield result;
             }
@@ -130,30 +136,30 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
 
     /** 叶子条件求值并填充 trace（实际值/来源/错误码），镜像 InterpretedExecutor.evalCondition。 */
     private ConditionOutcome evalLeafCondition(ConditionNode node, EvalContext ctx,
-                                               List<NodeTrace> sink, Long rvId) {
+                                               List<NodeTrace> sink, Long rvId, String code, long version) {
         ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
         if (sink != null) {
             sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                     outcome.satisfied(), outcome.resolvedValue(), outcome.valueSource(),
                     outcome.isError() ? outcome.errorCode() : null, List.of(), rvId,
-                    node.params(), node.displayLabel()));
+                    code, version, node.params(), node.displayLabel()));
         }
         return outcome;
     }
 
     private EvalResult hit(DecisionLeafNode leaf, RuleVersionSnapshot snapshot,
-                           List<NodeTrace> sink, Long rvId) {
+                           List<NodeTrace> sink, Long rvId, String code, long version) {
         if (sink != null) {
-            sink.add(NodeTrace.container(NodeType.DECISION_LEAF, true, List.of(), rvId));
+            sink.add(NodeTrace.container(NodeType.DECISION_LEAF, true, List.of(), rvId, code, version));
         }
         Decision decision = snapshot.decisionBindings().stream()
                 .filter(b -> b.decisionCode().equals(leaf.decisionCode()))
                 .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), leaf.category(), b.actions()))
+                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(), snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), leaf.category()))
                 .orElseGet(() -> new Decision(leaf.decisionCode(), "", 0, snapshot.ruleVersionId(), leaf.category()));
         // 叶子命中：trace 由调用方（IfNode/顶层）汇总，这里只返回命中布尔/决策
         return new EvalResult(true, decision, List.of(decision),
-                List.of(), null, List.of(), null, leaf.category(), null);
+                List.of(), null, null, leaf.category(), null);
     }
 
     /** sink 为 null（非收集模式）时返回空列表，否则返回当前 sink 内容。 */

@@ -67,10 +67,6 @@ public abstract class ScenarioSupport {
         registry.add("engine.rule.fetch.endpoints[0].name", () -> "credit-api");
         registry.add("engine.rule.fetch.endpoints[0].base-url",
                 () -> "http://localhost:" + WIREMOCK.port());
-        // SEND_ALERT webhook → WireMock
-        registry.add("engine.rule.action.send-alert.url",
-                () -> "http://localhost:" + WIREMOCK.port() + "/webhook/alert");
-        registry.add("engine.rule.action.send-alert.timeout-ms", () -> "2000");
     }
 
     @BeforeEach
@@ -156,12 +152,10 @@ public abstract class ScenarioSupport {
         return ((Number) data.get("id")).longValue();
     }
 
-    protected Long createDecision(String code, String name, int priority,
-                                   List<Map<String, Object>> actions) {
+    protected Long createDecision(String code, String name, int priority) {
         var body = Map.of(
                 "code", code, "name", name, "priority", priority,
-                "description", "scenario-test",
-                "actions", actions != null ? actions : List.of()
+                "description", "scenario-test"
         );
         var resp = adminPost("/decisions?tenantId=" + TENANT_ID, body);
         return ((Number) resp.get("data")).longValue();

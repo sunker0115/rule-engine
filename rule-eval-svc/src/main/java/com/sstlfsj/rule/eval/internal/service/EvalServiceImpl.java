@@ -2,11 +2,9 @@ package com.sstlfsj.rule.eval.internal.service;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
-import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
-import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
-import com.sstlfsj.rule.eval.internal.dispatch.EvalActionDispatcher;
+import com.sstlfsj.rule.eval.internal.dispatch.PushEventDispatcher;
 import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
@@ -14,6 +12,7 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.eval.internal.validate.PayloadInputValidator;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
@@ -23,33 +22,34 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件、经 ActionCommandChannel 投递 action，自身不做内联持久化。 */
+/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件，自身不做内联持久化、不派发 action。 */
 @Service
 class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     private final EvalEngine evalEngine;
     private final SceneSnapshotLoader snapshotLoader;
     private final DomainEventPublisher eventPublisher;
-    private final ActionCommandChannel actionDelivery;
     private final RuleVersionReadMapper ruleVersionReadMapper;
-    private final EvalActionDispatcher dispatcher;
+    private final PushEventDispatcher dispatcher;
+    private final EvalInstrumentation instrumentation;
 
     EvalServiceImpl(EvalEngine evalEngine, SceneSnapshotLoader snapshotLoader,
                     DomainEventPublisher eventPublisher,
-                    ActionCommandChannel actionDelivery,
-                    RuleVersionReadMapper ruleVersionReadMapper) {
+                    RuleVersionReadMapper ruleVersionReadMapper,
+                    EvalInstrumentation instrumentation) {
         this.evalEngine = evalEngine;
         this.snapshotLoader = snapshotLoader;
         this.eventPublisher = eventPublisher;
-        this.actionDelivery = actionDelivery;
         this.ruleVersionReadMapper = ruleVersionReadMapper;
+        this.instrumentation = instrumentation;
         // 构造器末尾创建 dispatcher，不调用 start；PUSH 异步路径以 mode=PUSH 评估
-        this.dispatcher = new EvalActionDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null));
+        this.dispatcher = new PushEventDispatcher(10000, e -> doEvaluate(e, EvalMode.PUSH, false, null, null));
     }
 
     @Override
     public void afterPropertiesSet() {
         dispatcher.start();
+        instrumentation.registerQueueGauge(dispatcher);
     }
 
     @Override
@@ -65,14 +65,20 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
     @Override
     public EvalResult evaluate(RuleEvent event) {
-        return doEvaluate(event, EvalMode.PULL, false, null);
+        return doEvaluate(event, EvalMode.PULL, false, null, null);
+    }
+
+    @Override
+    public EvalResult evaluate(RuleEvent event, Instant asOf) {
+        return doEvaluate(event, EvalMode.PULL, false, null, asOf);
     }
 
     @Override
     public EvalResult dryRun(RuleEvent event, Long ruleId, Long ruleVersionId) {
         Long versionId = resolveDryRunVersionId(event, ruleId, ruleVersionId);
         // dry-run 永远先解析出一个版本 id：恒走 doEvaluate 的带版本单快照分支，结构上不落候选分支（根除副作用 bug）
-        return doEvaluate(event, EvalMode.PULL, true, versionId);
+        // dry-run 暂不开放 asOf，传 null 由引擎用 Instant.now()
+        return doEvaluate(event, EvalMode.PULL, true, versionId, null);
     }
 
     /** 解析 dry-run 目标版本 id：ruleVersionId 优先；否则 ruleId 取最新版本；都无则抛 400。 */
@@ -95,8 +101,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         throw new IllegalArgumentException("MISSING_DRYRUN_TARGET: 必须指定 ruleId 或 ruleVersionId");
     }
 
-    private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId) {
-        Instant evalNow = Instant.now();
+    private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId, Instant asOf) {
+        Instant evalNow = asOf != null ? asOf : Instant.now();
         // dry-run 路径下 specificVersionId 已由 resolveDryRunVersionId 保证非空；此处 != null 为防御性守卫，
         // 防止未来出现"isDryRun=true 但无版本 id"的新调用路径误落候选分支（有副作用）。
         if (isDryRun && specificVersionId != null) {
@@ -111,7 +117,9 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             long dryRunId = IdWorker.getId();
             int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
             eventPublisher.publish(new DryRunRecordedEvent(
-                    dryRunId, event, specificVersionId, outcome.result(), outcome.context(), durationMs));
+                    dryRunId, event, specificVersionId, snap.code(), snap.version(),
+                    outcome.result(), outcome.context(), durationMs));
+            instrumentation.record(outcome.result().errorCode() != null);
             return outcome.result();
         }
 
@@ -133,16 +141,12 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         EvalOutcome outcome = evalEngine.evaluateWithContext(event, candidates, evalNow);
         EvalResult result = outcome.result();
 
-        // 副作用事件化：审计内存 best-effort（可丢）；action 命中有决策时 best-effort fire-and-forget 派发（队列满/重启丢，不重试；可靠投递未来接 MQ）
+        // 副作用事件化：审计内存 best-effort（可丢）；纯决策，不派发任何 action
         int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
         eventPublisher.publish(new AuditRecordedEvent(
-                sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs));
-        Long tid = parseTenantId(event.tenantId());
-        // D27:仅派发 finalDecision 的 actions(命中且有挂载 action 才投递)
-        if (tid != null && result.finalDecision() != null && !result.finalDecision().actions().isEmpty()) {
-            actionDelivery.deliver(new DispatchActionsCommand(
-                    sessionId, tid, event.eventId(), event.sceneCode(), result.finalDecision()));
-        }
+                sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs,
+                candidates.stream().map(RuleVersionSnapshot::ruleVersionId).toList()));
+        instrumentation.record(result.errorCode() != null);
         return result;
     }
 

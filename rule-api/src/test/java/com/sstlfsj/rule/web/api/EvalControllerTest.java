@@ -1,9 +1,11 @@
 package com.sstlfsj.rule.web.api;
 
+import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.api.service.TenantQueryService;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
+import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +25,7 @@ class EvalControllerTest {
     private MockMvc mockMvc;
     private EvalService evalService;
     private TenantQueryService tenantQueryService;
+    private SceneService sceneService;
 
     private static final String EVENT_JSON = """
             {"tenantCode":"acme","sceneCode":"PAYMENT","eventType":"ORDER",
@@ -34,8 +37,9 @@ class EvalControllerTest {
     void setUp() {
         evalService = mock(EvalService.class);
         tenantQueryService = mock(TenantQueryService.class);
+        sceneService = mock(SceneService.class);
         when(tenantQueryService.resolveIdByCode("acme")).thenReturn(9001L);
-        mockMvc = MockMvcBuilders.standaloneSetup(new EvalController(evalService, tenantQueryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new EvalController(evalService, tenantQueryService, sceneService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -90,13 +94,48 @@ class EvalControllerTest {
 
     @Test
     void evaluate_returns200_withResult() throws Exception {
-        when(evalService.evaluate(any())).thenReturn(EvalResult.miss());
+        when(evalService.evaluate(any(), any())).thenReturn(EvalResult.miss());
 
         mockMvc.perform(post("/api/v1/rule/evaluate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(EVENT_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void evaluate_passesAsOfThroughToService() throws Exception {
+        // 请求体携带 asOf（ISO-8601）→ controller 透传给 evalService.evaluate 的 asOf 入参
+        when(evalService.evaluate(any(), any())).thenReturn(EvalResult.miss());
+        String jsonWithAsOf = """
+                {"tenantCode":"acme","sceneCode":"PAYMENT","eventType":"ORDER",
+                 "subjectId":"u1","eventId":"evt-1","occurredAt":null,
+                 "payload":{},"asOf":"2020-01-01T00:00:00Z"}
+                """;
+
+        mockMvc.perform(post("/api/v1/rule/evaluate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonWithAsOf))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<java.time.Instant> asOfCaptor = ArgumentCaptor.forClass(java.time.Instant.class);
+        verify(evalService).evaluate(any(RuleEvent.class), asOfCaptor.capture());
+        assertThat(asOfCaptor.getValue()).isEqualTo(java.time.Instant.parse("2020-01-01T00:00:00Z"));
+    }
+
+    @Test
+    void evaluate_nullAsOf_whenOmitted() throws Exception {
+        // 请求体不带 asOf → controller 传 null（引擎降级用 Instant.now()）
+        when(evalService.evaluate(any(), any())).thenReturn(EvalResult.miss());
+
+        mockMvc.perform(post("/api/v1/rule/evaluate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(EVENT_JSON))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<java.time.Instant> asOfCaptor = ArgumentCaptor.forClass(java.time.Instant.class);
+        verify(evalService).evaluate(any(RuleEvent.class), asOfCaptor.capture());
+        assertThat(asOfCaptor.getValue()).isNull();
     }
 
     @Test
@@ -108,6 +147,29 @@ class EvalControllerTest {
                         .content(EVENT_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void dryRun_masksSensitivePayloadLeaf() throws Exception {
+        // 敏感 payload 字段 phone 的叶子 actualValue 在 dry-run 出口被脱敏为 "***"，非敏感 amount 保留原值
+        when(sceneService.getSensitiveRefs("9001", "PAYMENT"))
+                .thenReturn(new SceneService.SensitiveRefs(java.util.Set.of("phone"), java.util.Set.of()));
+        NodeTrace sensitiveLeaf = new NodeTrace(
+                "ConditionNode", "EQ", "phone", true, "13800001111", "PAYLOAD",
+                null, java.util.List.of(), 1L, "ruleA", 1L, null, null);
+        NodeTrace plainLeaf = new NodeTrace(
+                "ConditionNode", "GT", "amount", true, "100", "PAYLOAD",
+                null, java.util.List.of(), 1L, "ruleA", 1L, null, null);
+        when(evalService.dryRun(any(), isNull(), eq(1L)))
+                .thenReturn(new EvalResult(true, null, java.util.List.of(),
+                        java.util.List.of(sensitiveLeaf, plainLeaf), null, null, null, null));
+
+        mockMvc.perform(post("/api/v1/rule/dry-run?ruleVersionId=1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(EVENT_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.nodeTrace[0].actualValue").value("***"))
+                .andExpect(jsonPath("$.data.nodeTrace[1].actualValue").value("100"));
     }
 
     @Test

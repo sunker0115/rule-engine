@@ -5,11 +5,14 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -89,5 +92,15 @@ class NotBetweenEvaluatorTest {
                 Map.of("d", new MetricValue("2026-03-01", "DATE", "PROVIDED")),
                 Instant.parse("2026-03-01T00:00:00Z"));
         assertThat(new NotBetweenEvaluator().evaluate(node, ctx)).isFalse();
+    }
+
+    @Test
+    void annotation_describesOperator() {
+        var ann = NotBetweenEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.NOT_BETWEEN);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.MIN, ConditionParams.MAX));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

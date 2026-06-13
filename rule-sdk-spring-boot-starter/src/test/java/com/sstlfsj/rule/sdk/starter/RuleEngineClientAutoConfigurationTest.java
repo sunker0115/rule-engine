@@ -6,6 +6,8 @@ import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.annotation.RuleDef;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
+import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.sdk.Condition;
 import com.sstlfsj.rule.sdk.EvalResultListener;
@@ -86,8 +88,8 @@ class RuleEngineClientAutoConfigurationTest {
                 });
     }
 
-    @RuleDef(id = 10L, tenantId = "t1", sceneCode = "test",
-             trigger = "TEST_EVENT",
+    @RuleDef(code = "test-inline", tenantId = "t1", sceneCode = "test",
+             eventTypes = "TEST_EVENT",
              decisions = @DecisionBinding(code = "PASS", priority = 10))
     static class TestInlineRule implements InlineRuleSpec {
         @Override public Condition condition() { return Condition.always(); }
@@ -128,6 +130,23 @@ class RuleEngineClientAutoConfigurationTest {
     void metricSourceHandlerBean_wiredWithoutError() {
         runner.withPropertyValues("rule.sdk.rule-files=rules/test-rule.json")
                 .withBean(StarterTestHandler.class)
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(RuleEngineClient.class);
+                    ctx.getBean(RuleEngineClient.class).close();
+                });
+    }
+
+    /** classpath 上有 ExpressionEngine bean(如 CEL starter)时被 starter 自动收集,client 构建正常。 */
+    static class StarterFakeEngine implements ExpressionEngine {
+        @Override public String lang() { return "FAKE"; }
+        @Override public CompiledExpression compile(String source) { return java.util.Set::of; }
+        @Override public Object evaluate(CompiledExpression c, java.util.Map<String, Object> b) { return null; }
+    }
+
+    @Test
+    void expressionEngineBean_autoCollected_wiredWithoutError() {
+        runner.withPropertyValues("rule.sdk.rule-files=rules/test-rule.json")
+                .withBean(StarterFakeEngine.class)
                 .run(ctx -> {
                     assertThat(ctx).hasSingleBean(RuleEngineClient.class);
                     ctx.getBean(RuleEngineClient.class).close();

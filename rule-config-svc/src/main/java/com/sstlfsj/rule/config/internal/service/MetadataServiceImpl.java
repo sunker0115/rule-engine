@@ -5,6 +5,8 @@ import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
+import com.sstlfsj.rule.kernel.internal.condition.ConditionTypeCatalog;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
@@ -12,7 +14,6 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -25,9 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** MetadataService 实现：为前端编辑器提供可用的 metric / conditionType / actionType 元数据。 */
+/** MetadataService 实现：为前端编辑器提供可用的 metric / conditionType 元数据。 */
 @Service
-@RequiredArgsConstructor
 class MetadataServiceImpl implements MetadataService {
 
     private static final Logger log = LoggerFactory.getLogger(MetadataServiceImpl.class);
@@ -36,6 +36,26 @@ class MetadataServiceImpl implements MetadataService {
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final RuleVersionMapper ruleVersionMapper;
+    private final List<OperatorSpec> customSpecs;
+
+    /**
+     * @param sceneMapper            场景查询 Mapper
+     * @param metricDefinitionMapper metric 定义查询 Mapper
+     * @param ruleDefinitionMapper   规则定义查询 Mapper
+     * @param ruleVersionMapper      规则版本查询 Mapper
+     * @param customSpecs            自定义 {@code @Bean OperatorSpec} 列表（无声明时 Spring 注入空列表）
+     */
+    MetadataServiceImpl(SceneMapper sceneMapper,
+                        MetricDefinitionMapper metricDefinitionMapper,
+                        RuleDefinitionMapper ruleDefinitionMapper,
+                        RuleVersionMapper ruleVersionMapper,
+                        List<OperatorSpec> customSpecs) {
+        this.sceneMapper = sceneMapper;
+        this.metricDefinitionMapper = metricDefinitionMapper;
+        this.ruleDefinitionMapper = ruleDefinitionMapper;
+        this.ruleVersionMapper = ruleVersionMapper;
+        this.customSpecs = customSpecs != null ? customSpecs : List.of();
+    }
 
     @Override
     public MetadataResponse getSceneMetadata(String tenantId, String sceneCode) {
@@ -53,8 +73,12 @@ class MetadataServiceImpl implements MetadataService {
                         Boolean.TRUE.equals(m.getAllowProvided())))
                 .toList();
 
-        // conditionType / actionType 来自注册的 SPI Bean，v1 返回空列表
-        return new MetadataResponse(List.of(), List.of(), metricMetas);
+        // conditionType = 内置算子目录 + 自定义 @Bean OperatorSpec；内置优先，自定义不得覆盖内置 code
+        Map<String, OperatorSpec> merged = new LinkedHashMap<>();
+        ConditionTypeCatalog.all().forEach(s -> merged.put(s.code(), s));
+        customSpecs.forEach(s -> merged.putIfAbsent(s.code(), s));
+        List<OperatorSpec> conditionTypes = List.copyOf(merged.values());
+        return new MetadataResponse(conditionTypes, metricMetas);
     }
 
     @Override

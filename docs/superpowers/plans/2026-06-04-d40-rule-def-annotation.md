@@ -1,5 +1,7 @@
 # D40 SDK 注解模式 — `@RuleDef` + `AnnotationRuleSource`
 
+> **更新 (2026-06-11)**：本计划描述的 `@RuleDef` 用 `long id()` 直接指定代理键，已被规则身份 `(code, version)` 改造（D59，阶段甲）取代——`id()` 移除，改为 `String code()`（逻辑身份）+ `long version() default 1`，并新增 `String tenantId() default ""`（空 = 继承 client 租户）；代理键 `ruleVersionId` 不再手填，由 `AnnotationRuleSource` 按 `(tenant, scene, code)` 稳定哈希派生。下文 `id()` 相关签名与示例保留为历史记录，最新口径见 [`docs/04-extension.md`](../../04-extension.md) §九 + [`docs/00-decisions.md`](../../00-decisions.md) D59。
+
 > **Goal：** 新增第四种规则来源模式：`@RuleDef` 标注规则类，实现 `InlineRuleSpec.condition()` 返回条件 DSL，`AnnotationRuleSource` 扫描后装载到评估索引。Spring Starter 自动收集容器内的 `InlineRuleSpec` Bean，非 Spring 场景手动传入列表。
 
 ---

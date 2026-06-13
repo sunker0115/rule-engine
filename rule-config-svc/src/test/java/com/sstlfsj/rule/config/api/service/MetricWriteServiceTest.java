@@ -36,6 +36,40 @@ class MetricWriteServiceTest {
         assertNull(cmd.cacheTtlSeconds());
     }
 
+    @Test
+    void metricWriteCommand_sensitiveAccessor() {
+        var cmd = new MetricWriteService.MetricWriteCommand(
+                "身份证号", "ATTRIBUTE", "STRING", Map.of(), 60, false, true);
+        assertTrue(cmd.sensitive());
+    }
+
+    @Test
+    void metricWriteCommand_legacyConstructor_defaultsSensitiveFalse() {
+        var cmd = new MetricWriteService.MetricWriteCommand("x", "ATTRIBUTE", "LONG", null, 60, false);
+        assertFalse(cmd.sensitive());
+    }
+
+    @Test
+    void metricWriteCommand_deserializesMissingSensitiveAsFalse() throws Exception {
+        // 请求体缺 sensitive 键时不得因 Jackson 3 FAIL_ON_NULL_FOR_PRIMITIVES 报错，须落 false
+        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        var cmd = mapper.readValue(
+                "{\"name\":\"账龄\",\"sourceType\":\"ATTRIBUTE\",\"dataType\":\"LONG\","
+                        + "\"params\":{},\"cacheTtlSeconds\":60,\"allowProvided\":false}",
+                MetricWriteService.MetricWriteCommand.class);
+        assertFalse(cmd.sensitive());
+    }
+
+    @Test
+    void metricWriteCommand_deserializesSensitiveTrue() throws Exception {
+        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        var cmd = mapper.readValue(
+                "{\"name\":\"身份证号\",\"sourceType\":\"ATTRIBUTE\",\"dataType\":\"STRING\","
+                        + "\"allowProvided\":false,\"sensitive\":true}",
+                MetricWriteService.MetricWriteCommand.class);
+        assertTrue(cmd.sensitive());
+    }
+
     // ── RuleRef ───────────────────────────────────────────────────────────────
 
     @Test

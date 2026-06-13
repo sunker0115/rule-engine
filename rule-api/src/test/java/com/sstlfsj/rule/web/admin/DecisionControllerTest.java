@@ -2,11 +2,9 @@ package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.config.api.service.DecisionService;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -19,14 +17,13 @@ class DecisionControllerTest {
 
     @Test
     void create_delegatesToService() {
-        List<DecisionAction> actions = List.of(new DecisionAction("a1", "SEND_ALERT", 0, Map.of()));
-        when(service.create(9001L, "REJECT", "拒绝", 10, "desc", actions, "actor")).thenReturn(7L);
+        when(service.create(9001L, "REJECT", "拒绝", 10, "desc", "actor")).thenReturn(7L);
 
         var resp = controller.create(9001L, "actor",
-                new DecisionController.DecisionRequest("REJECT", "拒绝", 10, "desc", actions));
+                new DecisionController.DecisionRequest("REJECT", "拒绝", 10, "desc"));
 
         assertThat(resp.data()).isEqualTo(7L);
-        verify(service).create(9001L, "REJECT", "拒绝", 10, "desc", actions, "actor");
+        verify(service).create(9001L, "REJECT", "拒绝", 10, "desc", "actor");
     }
 
     @Test

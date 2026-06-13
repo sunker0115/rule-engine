@@ -9,12 +9,15 @@ import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
 import com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
-import lombok.RequiredArgsConstructor;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
+import com.sstlfsj.rule.kernel.api.spi.expression.ScriptTypeEnv;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +37,6 @@ import java.util.stream.Collectors;
  * </p>
  */
 @Service
-@RequiredArgsConstructor
 public class PublishService {
 
     private final RuleDefinitionMapper ruleDefinitionMapper;
@@ -43,12 +45,45 @@ public class PublishService {
     private final ApplicationEventPublisher eventPublisher;
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
+    /** lang → 表达式引擎，发布期脚本语法校验 + referencedVariables 冻依赖用；镜像 eval-svc ScriptExecutor 装配。 */
+    private final Map<String, ExpressionEngine> expressionEngines;
 
     /**
      * 已注册取数资源名目录（由 eval-svc 提供）；纯 config 部署时为 null，资源名校验跳过。
      */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.sstlfsj.rule.config.api.spi.MetricResourceCatalog metricResourceCatalog;
+
+    /**
+     * @param ruleDefinitionMapper     规则定义 mapper
+     * @param sceneMapper              场景 mapper
+     * @param ruleVersionMapper        规则版本 mapper
+     * @param eventPublisher           Spring 事件发布器
+     * @param metricDefinitionMapper   metric 定义 mapper
+     * @param decisionDefinitionMapper decision 定义 mapper
+     * @param expressionEngines        已注册表达式引擎（Spring 收集，未 opt-in 引擎时为空），按 lang 建路由 map
+     */
+    public PublishService(RuleDefinitionMapper ruleDefinitionMapper, SceneMapper sceneMapper,
+                          RuleVersionMapper ruleVersionMapper, ApplicationEventPublisher eventPublisher,
+                          MetricDefinitionMapper metricDefinitionMapper,
+                          DecisionDefinitionMapper decisionDefinitionMapper,
+                          List<ExpressionEngine> expressionEngines) {
+        this.ruleDefinitionMapper = ruleDefinitionMapper;
+        this.sceneMapper = sceneMapper;
+        this.ruleVersionMapper = ruleVersionMapper;
+        this.eventPublisher = eventPublisher;
+        this.metricDefinitionMapper = metricDefinitionMapper;
+        this.decisionDefinitionMapper = decisionDefinitionMapper;
+        Map<String, ExpressionEngine> byLang = new HashMap<>();
+        if (expressionEngines != null) {
+            for (ExpressionEngine e : expressionEngines) {
+                if (byLang.putIfAbsent(e.lang(), e) != null) {
+                    throw new IllegalStateException("多个 ExpressionEngine 声明同一 lang=" + e.lang());
+                }
+            }
+        }
+        this.expressionEngines = byLang;
+    }
 
     /**
      * 发布规则：把最新 DRAFT 版本原地激活（DRAFT→ACTIVE），不增版本、不重解析。
@@ -109,7 +144,9 @@ public class PublishService {
         RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
                 draft.getId(), scene.getCode(), String.valueOf(tenantId),
                 draft.getConditionAst(), List.of(), List.of(), List.of(),
-                kind.name(), draft.getMetricDependencies(), draft.getPayloadDependencies());
+                kind.name(), rule.getCode(), draft.getVersion(),
+                draft.getMetricDependencies(), draft.getPayloadDependencies(),
+                draft.getScriptSource());
         eventPublisher.publishEvent(new RulePublishedEvent(
                 String.valueOf(tenantId), scene.getCode(), draft.getId()));
         return snapshot;
@@ -130,13 +167,15 @@ public class PublishService {
      * @param decisionBindings 新决策绑定（仅 decisionCode + 占位 priority），null 视为空
      * @param preGates         新前置门控，null 视为空
      * @param triggerEventTypes 新触发事件类型，null 视为空
+     * @param script           EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
      * @param actorId          操作人
      * @return 被更新草稿的 id 与版本信息（version 不变）
      */
     @Transactional
     public DraftCreatedResult editDraft(Long tenantId, Long ruleDefinitionId, String name, RuleKind kind,
             AstNode conditionAst, List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
-            List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes, String actorId) {
+            List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes,
+            ScriptSource script, String actorId) {
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
@@ -154,7 +193,7 @@ public class PublishService {
         RuleKind effectiveKind = kind != null ? kind
                 : (draft.getKind() != null ? draft.getKind() : RuleKind.AST_BOOLEAN);
         ResolvedDraft resolved = resolveAndValidate(
-                tenantId, scene, effectiveKind, conditionAst, decisionBindings, preGates, triggerEventTypes);
+                tenantId, scene, effectiveKind, conditionAst, decisionBindings, preGates, triggerEventTypes, script);
 
         // 原地更新 DRAFT 行内容（version 不变）
         draft.setConditionAst(resolved.resolvedAst());
@@ -164,6 +203,7 @@ public class PublishService {
         draft.setTriggerEventTypes(resolved.triggerEventTypes());
         draft.setMetricDependencies(resolved.metricDeps());
         draft.setPayloadDependencies(resolved.payloadDeps());
+        draft.setScriptSource(resolved.scriptSource());
         ruleVersionMapper.updateById(draft);
 
         if (name != null && !name.isBlank()) {
@@ -200,6 +240,7 @@ public class PublishService {
      * @param preGates          新前置门控（fromVersionId 非空时忽略），null 视为空
      * @param triggerEventTypes 新触发事件类型（fromVersionId 非空时忽略），null 视为空
      * @param fromVersionId     回退源版本 id，非空时克隆其内容；null 时按入参建新草稿
+     * @param script            EXPRESSION_SCRIPT 脚本载体（fromVersionId 非空时忽略，改用克隆值），其它 kind 传 null
      * @param actorId           操作人
      * @return 新建草稿的 id 与版本信息（version = v_max+1）
      */
@@ -207,7 +248,7 @@ public class PublishService {
     public DraftCreatedResult newVersion(Long tenantId, Long ruleDefinitionId, String name, RuleKind kind,
             AstNode conditionAst, List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
             List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes,
-            Long fromVersionId, String actorId) {
+            Long fromVersionId, ScriptSource script, String actorId) {
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
@@ -227,6 +268,7 @@ public class PublishService {
         List<RuleVersionSnapshot.DecisionBinding> srcBindings = decisionBindings;
         List<RuleVersionSnapshot.PreGateConfig> srcGates = preGates;
         List<String> srcTriggers = triggerEventTypes;
+        ScriptSource srcScript = script;
         if (fromVersionId != null) {
             // 回退：克隆旧版本内容（忽略入参 body 内容字段），按当前世界重解析
             RuleVersion from = ruleVersionMapper.findByIdAndRule(fromVersionId, ruleDefinitionId);
@@ -237,11 +279,12 @@ public class PublishService {
             srcBindings = from.getDecisionBindings();
             srcGates = from.getPreGates();
             srcTriggers = from.getTriggerEventTypes();
+            srcScript = from.getScriptSource();
             effectiveKind = from.getKind() != null ? from.getKind() : effectiveKind;
         }
 
         ResolvedDraft resolved = resolveAndValidate(
-                tenantId, scene, effectiveKind, srcAst, srcBindings, srcGates, srcTriggers);
+                tenantId, scene, effectiveKind, srcAst, srcBindings, srcGates, srcTriggers, srcScript);
         long version = ruleVersionMapper.maxVersion(ruleDefinitionId) + 1;
         RuleVersion rv = buildDraftVersion(ruleDefinitionId, version, resolved);
         ruleVersionMapper.insert(rv);
@@ -319,7 +362,7 @@ public class PublishService {
 
     /**
      * 草稿解析+校验产出：已冻结的 rule_version 内容字段（resolvedAst 含 dataType、
-     * metricDeps/payloadDeps 已冻、decisionBindings 含 name/actions、triggerEventTypes/preGates 规整）。
+     * metricDeps/payloadDeps 已冻、decisionBindings 含 name、triggerEventTypes/preGates 规整）。
      */
     public record ResolvedDraft(
             RuleKind kind,
@@ -328,7 +371,8 @@ public class PublishService {
             List<RuleVersionSnapshot.PreGateConfig> preGates,
             List<String> triggerEventTypes,
             List<MetricDependency> metricDeps,
-            List<PayloadDependency> payloadDeps) {
+            List<PayloadDependency> payloadDeps,
+            ScriptSource scriptSource) {
     }
 
     /**
@@ -342,6 +386,7 @@ public class PublishService {
      * @param rawBindings       草稿决策绑定（仅 decisionCode + 占位 priority），null 视为空
      * @param preGates          前置门控，null 视为空
      * @param triggerEventTypes 触发事件类型，null 视为空
+     * @param script            EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
      * @return 冻结后的版本内容
      */
     public ResolvedDraft resolveAndValidate(
@@ -349,7 +394,8 @@ public class PublishService {
             AstNode conditionAst,
             List<RuleVersionSnapshot.DecisionBinding> rawBindings,
             List<RuleVersionSnapshot.PreGateConfig> preGates,
-            List<String> triggerEventTypes) {
+            List<String> triggerEventTypes,
+            ScriptSource script) {
 
         AstNode ast = conditionAst != null ? conditionAst
                 : new AndNode(List.of(), null, null);
@@ -360,69 +406,174 @@ public class PublishService {
         String kindTag = kind.name();
         java.util.Set<String> validKinds = java.util.Set.of(
                 RuleKind.AST_BOOLEAN.tag(), RuleKind.SCORECARD.tag(),
-                RuleKind.DECISION_TREE.tag(), RuleKind.DECISION_TABLE.tag());
+                RuleKind.DECISION_TREE.tag(), RuleKind.DECISION_TABLE.tag(),
+                RuleKind.EXPRESSION_SCRIPT.tag());
         if (!validKinds.contains(kindTag)) {
             throw new IllegalArgumentException("不支持的规则 kind: " + kindTag);
         }
+        // EXPRESSION_SCRIPT 命中即提前 return：脚本不进 AST，走引擎无关层（compile + refVars 冻依赖）
+        if (RuleKind.EXPRESSION_SCRIPT.tag().equals(kindTag)) {
+            return resolveScriptDraft(tenantId, scene, script, bindings, gates, triggers);
+        }
         // 结构校验：SCORECARD 根/权重、DECISION_TREE 结构、DECISION_TABLE 行列一致
         validateKindStructure(kindTag, ast);
+
+        // param 键校验：遍历 AST 校每个 ConditionNode 的必填 param 键齐全
+        ConditionParamValidator.validate(ast);
 
         validateTriggerEventTypes(triggers, scene.getEventTypes());
         validatePreGateParams(gates);
 
         // metric 收集 + ACTIVE 冻结 + 安全校验
         List<String> metricCodes = MetricDependencyCollector.collect(ast);
-        List<MetricDependency> metricDeps = new ArrayList<>();
         Map<String, String> dataTypeMap = new HashMap<>();
-        if (!metricCodes.isEmpty()) {
-            List<MetricDefinition> metricDefs = metricDefinitionMapper.findActiveByCodes(tenantId, metricCodes);
-            Map<String, MetricDefinition> activeByCode = new HashMap<>();
-            for (MetricDefinition m : metricDefs) {
-                MetricDefinition prev = activeByCode.putIfAbsent(m.getMetricCode(), m);
-                if (prev != null) {
-                    throw new IllegalArgumentException("metric 存在多个 ACTIVE 版本，数据异常: " + m.getMetricCode());
-                }
-            }
-            for (String code : metricCodes) {
-                MetricDefinition m = activeByCode.get(code);
-                if (m == null) {
-                    throw new IllegalArgumentException("被引用的 metric 无 ACTIVE 版本: " + code);
-                }
-                int ver = m.getVersion() == null ? 1 : m.getVersion();
-                metricDeps.add(new MetricDependency(code, ver));
-            }
-            dataTypeMap.putAll(activeByCode.values().stream()
-                    .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
-            java.util.Set<String> dsNames = metricResourceCatalog != null ? metricResourceCatalog.datasourceNames() : null;
-            java.util.Set<String> epNames = metricResourceCatalog != null ? metricResourceCatalog.endpointNames() : null;
-            new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
-        }
+        List<MetricDependency> metricDeps = freezeMetricDeps(tenantId, metricCodes, dataTypeMap);
 
         // payload 收集 + scene.payloadSchema 声明校验 + 冻结依赖
         List<String> payloadFields = PayloadFieldCollector.collect(ast);
         Map<String, String> payloadTypeMap = new HashMap<>();
-        List<PayloadDependency> payloadDeps = new ArrayList<>();
-        if (!payloadFields.isEmpty()) {
-            List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null ? scene.getPayloadSchema() : List.of();
-            Map<String, PayloadFieldSpec> specByName = new HashMap<>();
-            for (PayloadFieldSpec f : schema) specByName.put(f.name(), f);
-            for (String field : payloadFields) {
-                PayloadFieldSpec spec = specByName.get(field);
-                if (spec == null) {
-                    throw new IllegalArgumentException("规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
-                }
-                String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
-                payloadTypeMap.put(field, dataTypeTag);
-                payloadDeps.add(new PayloadDependency(field, dataTypeTag, spec.required()));
-            }
-        }
+        List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, payloadFields, payloadTypeMap);
 
         AstNode resolvedAst = (metricCodes.isEmpty() && payloadFields.isEmpty())
                 ? ast : AstDataTypeResolver.resolve(ast, dataTypeMap, payloadTypeMap);
 
         List<RuleVersionSnapshot.DecisionBinding> frozenBindings = freezeDecisionBindings(tenantId, scene, bindings);
 
-        return new ResolvedDraft(kind, resolvedAst, frozenBindings, gates, triggers, metricDeps, payloadDeps);
+        return new ResolvedDraft(kind, resolvedAst, frozenBindings, gates, triggers, metricDeps, payloadDeps, null);
+    }
+
+    /**
+     * EXPRESSION_SCRIPT 分支：引擎无关层校验。语法 compile + referencedVariables 冻依赖 + typed 类型检查，
+     * conditionAst=null。typeCheck 按被引用变量声明类型捕获 string 参与数值比较等类型不符(强引擎)。
+     *
+     * @param tenantId 租户 id
+     * @param scene    所属场景
+     * @param script   脚本载体（非空、source 非空白）
+     * @param bindings 规整后的决策绑定
+     * @param gates    规整后的前置门控
+     * @param triggers 规整后的触发事件类型
+     * @return 冻结后的脚本规则版本内容（resolvedAst=null，script 原样冻入）
+     */
+    private ResolvedDraft resolveScriptDraft(Long tenantId, SceneDef scene, ScriptSource script,
+            List<RuleVersionSnapshot.DecisionBinding> bindings,
+            List<RuleVersionSnapshot.PreGateConfig> gates, List<String> triggers) {
+        if (script == null || script.source() == null || script.source().isBlank()) {
+            throw new IllegalArgumentException("EXPRESSION_SCRIPT 规则必须提供非空脚本");
+        }
+        ExpressionEngine engine = expressionEngines.get(script.lang());
+        if (engine == null) {
+            throw new IllegalArgumentException("无对应表达式引擎,lang=" + script.lang());
+        }
+        java.util.Set<String> refVars;
+        try {
+            // 语法/编译失败抛 ExpressionCompileException
+            refVars = engine.compile(script.source()).referencedVariables();
+        } catch (com.sstlfsj.rule.kernel.api.spi.expression.ExpressionCompileException e) {
+            throw new IllegalArgumentException("脚本编译失败: " + e.getMessage(), e);
+        }
+        // 校验顺序对齐 AST 路径：先 trigger/preGate 校验，再冻 metric/payload 依赖（同款输入报错顺序一致）
+        validateTriggerEventTypes(triggers, scene.getEventTypes());
+        validatePreGateParams(gates);
+
+        // referencedVariables 形如 metrics.x / payload.y / subject.z；按前缀拆（subject.* 开放，不校验/不冻）
+        List<String> metricCodes = stripPrefix(refVars, "metrics.");
+        List<String> payloadFields = stripPrefix(refVars, "payload.");
+        Map<String, String> metricTypeMap = new HashMap<>();
+        Map<String, String> payloadTypeMap = new HashMap<>();
+        List<MetricDependency> metricDeps = freezeMetricDeps(tenantId, metricCodes, metricTypeMap);
+        List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, payloadFields, payloadTypeMap);
+
+        // typed 类型检查：按被引用变量的声明类型构造 env，引擎(强类型则)捕获 string 参与数值比较等类型不符
+        try {
+            engine.typeCheck(script.source(), new ScriptTypeEnv(
+                    toDataTypeMap(metricTypeMap), toDataTypeMap(payloadTypeMap)));
+        } catch (com.sstlfsj.rule.kernel.api.spi.expression.ExpressionCompileException e) {
+            throw new IllegalArgumentException("脚本类型检查失败: " + e.getMessage(), e);
+        }
+
+        List<RuleVersionSnapshot.DecisionBinding> frozenBindings = freezeDecisionBindings(tenantId, scene, bindings);
+        // resolvedAst=null：脚本规则不进 AST；script 原样冻入
+        return new ResolvedDraft(RuleKind.EXPRESSION_SCRIPT, null, frozenBindings, gates, triggers,
+                metricDeps, payloadDeps, script);
+    }
+
+    /** 从点路径集合按前缀（如 "metrics."）过滤并去前缀，去重保序。 */
+    private static List<String> stripPrefix(java.util.Set<String> refVars, String prefix) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        for (String v : refVars) {
+            if (v.startsWith(prefix)) out.add(v.substring(prefix.length()));
+        }
+        return new ArrayList<>(out);
+    }
+
+    /** dataType tag map（field→tag）转 DataType enum map，供 typed 类型检查环境构造。 */
+    private static Map<String, DataType> toDataTypeMap(Map<String, String> tagMap) {
+        Map<String, DataType> out = HashMap.newHashMap(tagMap.size());
+        tagMap.forEach((k, tag) -> out.put(k, DataType.fromTag(tag)));
+        return out;
+    }
+
+    /**
+     * 按 metricCode 列表查 ACTIVE 定义,冻结 (code, version) 依赖,并产出 code→dataType 映射 + 安全校验。
+     *
+     * @param tenantId    租户 id
+     * @param metricCodes 被引用的 metric code(去重)
+     * @param dataTypeMap [出参] 填充 code→dataType(供 AST 路径 AstDataTypeResolver 用;script 路径可忽略)
+     * @return 冻结的 metric 依赖
+     */
+    private List<MetricDependency> freezeMetricDeps(Long tenantId, List<String> metricCodes,
+                                                    Map<String, String> dataTypeMap) {
+        List<MetricDependency> metricDeps = new ArrayList<>();
+        if (metricCodes.isEmpty()) return metricDeps;
+        List<MetricDefinition> metricDefs = metricDefinitionMapper.findActiveByCodes(tenantId, metricCodes);
+        Map<String, MetricDefinition> activeByCode = new HashMap<>();
+        for (MetricDefinition m : metricDefs) {
+            if (activeByCode.putIfAbsent(m.getMetricCode(), m) != null) {
+                throw new IllegalArgumentException("metric 存在多个 ACTIVE 版本，数据异常: " + m.getMetricCode());
+            }
+        }
+        for (String code : metricCodes) {
+            MetricDefinition m = activeByCode.get(code);
+            if (m == null) throw new IllegalArgumentException("被引用的 metric 无 ACTIVE 版本: " + code);
+            metricDeps.add(new MetricDependency(code, m.getVersion() == null ? 1 : m.getVersion()));
+        }
+        dataTypeMap.putAll(activeByCode.values().stream()
+                .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
+        java.util.Set<String> dsNames = metricResourceCatalog != null ? metricResourceCatalog.datasourceNames() : null;
+        java.util.Set<String> epNames = metricResourceCatalog != null ? metricResourceCatalog.endpointNames() : null;
+        new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
+        return metricDeps;
+    }
+
+    /**
+     * 按 payload 字段列表查 scene.payloadSchema 声明,冻结依赖,并产出 field→dataType 映射。
+     *
+     * @param scene          所属场景
+     * @param payloadFields  被引用的 payload 字段(去重)
+     * @param payloadTypeMap [出参] 填充 field→dataType
+     * @return 冻结的 payload 依赖
+     */
+    private List<PayloadDependency> freezePayloadDeps(SceneDef scene, List<String> payloadFields,
+                                                      Map<String, String> payloadTypeMap) {
+        List<PayloadDependency> payloadDeps = new ArrayList<>();
+        if (payloadFields.isEmpty()) return payloadDeps;
+        List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null ? scene.getPayloadSchema() : List.of();
+        Map<String, PayloadFieldSpec> specByName = new HashMap<>();
+        for (PayloadFieldSpec f : schema) specByName.put(f.name(), f);
+        for (String field : payloadFields) {
+            PayloadFieldSpec spec = specByName.get(field);
+            if (spec == null) {
+                throw new IllegalArgumentException("规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
+            }
+            String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
+            payloadTypeMap.put(field, dataTypeTag);
+            payloadDeps.add(PayloadDependency.builder()
+                    .name(field).dataType(dataTypeTag).required(spec.required())
+                    .enumValues(spec.enumValues()).minimum(spec.minimum())
+                    .maximum(spec.maximum()).pattern(spec.pattern())
+                    .build());
+        }
+        return payloadDeps;
     }
 
     /** kind 结构校验（从 publish 抽取，逻辑原样）。 */
@@ -475,7 +626,8 @@ public class PublishService {
      * @param decisionBindings  决策绑定列表，null 视为空
      * @param preGates          前置门控列表，null 视为空
      * @param triggerEventTypes 触发事件类型列表，null 视为空
-     * @param kind              规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
+     * @param kind              规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT），null 时默认 AST_BOOLEAN
+     * @param script            EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
      * @param actorId           操作人
      * @return 新建草稿的 id 和版本信息
      */
@@ -484,7 +636,7 @@ public class PublishService {
                                           String code, String name,
                                           AstNode conditionAst, java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
                                           java.util.List<RuleVersionSnapshot.PreGateConfig> preGates, java.util.List<String> triggerEventTypes,
-                                          String kind, String actorId) {
+                                          String kind, ScriptSource script, String actorId) {
         // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
         SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
         if (scene == null) {
@@ -501,7 +653,8 @@ public class PublishService {
         String effectiveKind = (kind == null || kind.isBlank()) ? RuleKind.AST_BOOLEAN.tag() : kind;
         java.util.Set<String> validKinds = java.util.Set.of(
                 RuleKind.AST_BOOLEAN.tag(), RuleKind.SCORECARD.tag(),
-                RuleKind.DECISION_TREE.tag(), RuleKind.DECISION_TABLE.tag());
+                RuleKind.DECISION_TREE.tag(), RuleKind.DECISION_TABLE.tag(),
+                RuleKind.EXPRESSION_SCRIPT.tag());
         if (!validKinds.contains(effectiveKind)) {
             throw new IllegalArgumentException("不支持的规则 kind: " + effectiveKind);
         }
@@ -514,7 +667,7 @@ public class PublishService {
         // 5. resolveAndValidate（premise A）：建草稿即冻结快照
         ResolvedDraft resolved = resolveAndValidate(
                 tenantId, scene, effectiveRuleKind,
-                conditionAst, decisionBindings, preGates, triggerEventTypes);
+                conditionAst, decisionBindings, preGates, triggerEventTypes, script);
         RuleVersion rv = buildDraftVersion(rd.getId(), 1L, resolved);
         ruleVersionMapper.insert(rv);
 
@@ -542,13 +695,14 @@ public class PublishService {
         rv.setTriggerEventTypes(r.triggerEventTypes());
         rv.setMetricDependencies(r.metricDeps());
         rv.setPayloadDependencies(r.payloadDeps());
+        rv.setScriptSource(r.scriptSource());
         rv.setStatus(RuleVersionStatus.DRAFT);
         rv.setCreatedAt(LocalDateTime.now());
         return rv;
     }
 
     /**
-     * 把 draft 的 (decisionCode, priority) binding 富化为含 name/actions 的快照 binding（方案甲，守 D6）。
+     * 把 draft 的 (decisionCode, priority) binding 富化为含 name 的快照 binding（方案甲，守 D6）。
      * 引用的 decisionCode 必须在 decision_definition 存在，否则拒绝发布（DECISION_CODE_NOT_FOUND）。
      */
     private List<RuleVersionSnapshot.DecisionBinding> freezeDecisionBindings(
@@ -558,7 +712,6 @@ public class PublishService {
                 .map(RuleVersionSnapshot.DecisionBinding::decisionCode).distinct().toList();
         Map<String, DecisionDefinition> byCode = decisionDefinitionMapper.findByCodes(tenantId, codes).stream()
                 .collect(Collectors.toMap(DecisionDefinition::getCode, d -> d, (a, b) -> a));
-        boolean pullScene = scene.getDominantMode() == DominantMode.PULL;
         List<RuleVersionSnapshot.DecisionBinding> frozen = new ArrayList<>(rawBindings.size());
         for (RuleVersionSnapshot.DecisionBinding b : rawBindings) {
             DecisionDefinition d = byCode.get(b.decisionCode());
@@ -566,17 +719,10 @@ public class PublishService {
                 throw new IllegalArgumentException(
                         "DECISION_CODE_NOT_FOUND: 引用的 decision 不存在: " + b.decisionCode());
             }
-            List<RuleVersionSnapshot.DecisionAction> actions =
-                    d.getActions() != null ? d.getActions() : java.util.List.of();
-            // PULL Scene 下 Decision.actions 必须为空(D27/D54)：PULL 同步返回不派发 action
-            if (pullScene && !actions.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "PULL Scene 的 Decision 不得挂 action(同步返回不派发): decisionCode=" + b.decisionCode());
-            }
             // priority 从 decision_definition 回填(草稿期 binding priority 是 0 占位，DecisionBindingInput 契约)
             int priority = d.getPriority() != null ? d.getPriority() : b.priority();
             frozen.add(new RuleVersionSnapshot.DecisionBinding(
-                    b.decisionCode(), d.getName(), priority, actions));
+                    b.decisionCode(), d.getName(), priority));
         }
         return frozen;
     }

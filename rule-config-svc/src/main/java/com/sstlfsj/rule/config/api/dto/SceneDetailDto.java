@@ -17,6 +17,5 @@ public record SceneDetailDto(
         List<String> eventTypes,
         List<PayloadFieldSpec> payloadSchema,
         Map<String, Object> defaultParams,
-        int payloadSchemaVersion,
         String status
 ) {}

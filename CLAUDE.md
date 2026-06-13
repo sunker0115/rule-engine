@@ -7,7 +7,7 @@
 | 目录 | 职责 | 修改原则 |
 |---|---|---|
 | `docs/` | 产品设计:`00-decisions` / `01-concepts` / ... / `10-api-contract` + `examples/` | 改前用 `doc-consistency-review` skill 扫文档自洽性 |
-| `rule-*/`（Maven 多模块） | 代码实现。核心:`rule-kernel`(纯 Java SPI+模型+求值内核,无 Spring,GraalVM native 硬约束)、`rule-config-svc`(配置写:scene/rule/metric/binding CRUD + 发布)、`rule-eval-svc`(评估+取数+action 派发+异步落库)、`rule-api`(HTTP `/admin·api·sdk/v1`)、`rule-app`(装配 + Modulith 边界 + 启动);辅助:`rule-observability`/`rule-audit-svc`/`rule-job-svc`/`rule-job-xxl`/`rule-sdk(-spring-boot-starter)`/`rule-mybatis-native`/`rule-benchmark` | 改动审查派 `rule-engine-reviewer` agent |
+| `rule-*/`（Maven 多模块） | 代码实现。核心:`rule-kernel`(纯 Java SPI+模型+求值内核,无 Spring)、`rule-config-svc`(配置写:scene/rule/metric/binding CRUD + 发布)、`rule-eval-svc`(评估+取数+action 派发+异步落库)、`rule-api`(HTTP `/admin·api·sdk/v1`)、`rule-app`(装配 + Modulith 边界 + 启动);辅助:`rule-observability`/`rule-audit-svc`/`rule-job-svc`/`rule-job-xxl`/`rule-sdk(-spring-boot-starter)`/`rule-benchmark` | 改动审查派 `rule-engine-reviewer` agent |
 
 ## 专用 review agent(只读)
 

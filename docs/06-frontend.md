@@ -4,7 +4,7 @@
 >
 > **前置阅读**：[`01-concepts.md`](./01-concepts.md)、[`04-extension.md`](./04-extension.md) §五 元数据契约、[`10-api-contract.md`](./10-api-contract.md)
 >
-> **解决什么疑问**："运营怎么自助配规则？""前端怎么知道有哪些 ConditionType / ActionType 可选？""dry-run 怎么交互？""灰度配置 UI 是什么样？"
+> **解决什么疑问**："运营怎么自助配规则？""前端怎么知道有哪些 ConditionType 可选？""dry-run 怎么交互？""灰度配置 UI 是什么样？"
 >
 > **职责边界**——
 > - ✅ 前端布局 / 渲染机制 / 交互流程 / 与后端的契约对齐
@@ -51,11 +51,10 @@
 
 ## 三、元数据驱动渲染机制
 
-编辑器不硬编码 ConditionType / ActionType 表单，而是：
+编辑器不硬编码 ConditionType 表单，而是：
 
 1. 进入编辑器时调用 `GET /admin/v1/scenes/{sceneCode}/metadata`，拿到：
    - `conditionTypes[]`（含 paramsSchema）
-   - `actionTypes[]`（含 paramsSchema）
    - `availableMetrics[]`
 2. 用户选择节点类型后，按 `paramsSchema`（JSON Schema）动态渲染参数表单
 3. `requiresMetric=true` 的 ConditionType（如比较算子 `GT`）同时渲染值来源选择：`valueRef=METRIC` 时渲染 metric 下拉框（来自 availableMetrics），`valueRef=PAYLOAD` 时渲染 payload 字段选择（来自 Scene.payloadSchema）
@@ -85,8 +84,6 @@
    - `result=null`（短路跳过）→ 节点显示 ⏭
    - hover 节点 → tooltip 展示 `actualValue / valueSource / errorCode`
 5. Pre-Gate 失败时：显示 `PRE_GATE_BLOCKED: <gateType>`（大红色提示），AST 部分灰化
-
-**dry-run 不派发 Action**，`actionResults` 中所有 Action 显示 `SKIPPED`（见 10-api-contract §3.3）。
 
 ---
 
@@ -173,7 +170,7 @@ frontend/
 |------|------|
 | `X-Actor-Id` | `api/client.ts` 统一注入，值从 localStorage 读取（无登录，D14） |
 | AST ↔ react-querybuilder 转换 | `ConditionEditor.tsx` 内完成，其他组件只看引擎 AST 格式 |
-| paramsSchema 渲染 | `ParamsSchemaForm` 根据 `conditionType / actionType` 的 schema 动态生成输入控件 |
+| paramsSchema 渲染 | `ParamsSchemaForm` 根据 `conditionType` 的 schema 动态生成输入控件 |
 | dry-run 结果叠加 | `DryRunResult` 用 react-querybuilder 的 `ruleGroupProps` 覆盖，不修改 AST 数据结构 |
 | 前后端跨域 | Vite dev proxy 转发到本地后端；生产由 Nginx 同域反代 |
 

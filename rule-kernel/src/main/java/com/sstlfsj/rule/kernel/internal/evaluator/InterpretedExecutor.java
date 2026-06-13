@@ -56,23 +56,25 @@ public class InterpretedExecutor implements RuleVersionExecutor {
         boolean satisfied = eval(snapshot.conditionAst(), ctx, rawTraces);
         List<NodeTrace> traces;
         if (collect) {
-            // 顶层 trace 打上 ruleVersionId，供 TraceWriter 写库时使用
+            // 顶层 trace 打上 ruleVersionId/code/version，供 TraceWriter 写库时使用
             Long rvId = snapshot.ruleVersionId();
-            traces = rawTraces.stream().map(t -> withRuleVersionId(t, rvId)).toList();
+            String code = snapshot.code();
+            long version = snapshot.version();
+            traces = rawTraces.stream().map(t -> withRuleIdentity(t, rvId, code, version)).toList();
         } else {
             traces = List.of();
         }
-        return new EvalResult(satisfied, null, List.of(), traces, null, List.of(), null, null, null);
+        return new EvalResult(satisfied, null, List.of(), traces, null, null, null, null);
     }
 
-    /** 递归将 ruleVersionId 注入 trace 树（顶层和所有子节点）。 */
-    private static NodeTrace withRuleVersionId(NodeTrace t, Long rvId) {
+    /** 递归将规则身份（ruleVersionId/code/version）注入 trace 树（顶层和所有子节点，同一作用域）。 */
+    private static NodeTrace withRuleIdentity(NodeTrace t, Long rvId, String code, long version) {
         List<NodeTrace> children = t.children().stream()
-                .map(c -> withRuleVersionId(c, rvId))
+                .map(c -> withRuleIdentity(c, rvId, code, version))
                 .toList();
         return new NodeTrace(t.nodeType(), t.conditionType(), t.metricCode(),
                 t.result(), t.actualValue(), t.valueSource(), t.errorCode(), children, rvId,
-                t.expectedValue(), t.displayLabel());
+                code, version, t.expectedValue(), t.displayLabel());
     }
 
     /**
@@ -177,23 +179,27 @@ public class InterpretedExecutor implements RuleVersionExecutor {
     }
 
     /**
-     * ConditionNode 叶子节点：查找对应 evaluator 求值；无注册 evaluator 时 result=false，errorCode="NO_EVALUATOR"。
+     * ConditionNode 叶子节点：查找对应 evaluator 求值；无注册 evaluator 时 result=false，errorCode 为 NO_EVALUATOR。
      */
     private boolean evalCondition(ConditionNode node, EvalContext ctx, List<NodeTrace> sink) {
+        if (sink == null) {
+            // 非 trace 快路径：与编译执行器共用 satisfiesBoolean(单一真相源,不分配 ConditionOutcome)
+            return ConditionEvaluation.satisfiesBoolean(node, ctx, evaluators.get(node.conditionType()));
+        }
         ConditionOutcome outcome = ConditionEvaluation.evaluate(node, ctx, evaluators);
         if (outcome.isError()) {
             // ERROR(取数失败/无算子)：节点不命中，trace 标错码，整树继续(D15)
             if (sink != null) {
                 sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                         false, outcome.resolvedValue(), outcome.valueSource(), outcome.errorCode(), List.of(), null,
-                        node.params(), node.displayLabel()));
+                        null, 0L, node.params(), node.displayLabel()));
             }
             return false;
         }
         if (sink != null) {
             sink.add(new NodeTrace(NodeType.CONDITION.tag(), node.conditionType(), node.metricCode(),
                     outcome.satisfied(), outcome.resolvedValue(), outcome.valueSource(), null, List.of(), null,
-                    node.params(), node.displayLabel()));
+                    null, 0L, node.params(), node.displayLabel()));
         }
         return outcome.satisfied();
     }

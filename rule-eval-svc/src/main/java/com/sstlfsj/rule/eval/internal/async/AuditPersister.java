@@ -143,11 +143,24 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setStartedAt(start);
         s.setFinishedAt(start.plusNanos(e.durationMs() * 1_000_000L));
         s.setEvalDurationMs(e.durationMs());
-        // 开关开启才回填 context_snapshot（每会话多一次 JSON 写，默认关）；context 为 null 时 serializer 返回 null
+        // 开关开启才回填重放三件套(payload + 候选版本 id + context_snapshot;默认见 AuditProperties)；
+        // context 为 null 时 serializer 返回 null，序列化失败 best-effort 写 null
         if (captureContextSnapshot) {
             s.setContextSnapshot(ContextSnapshotSerializer.serialize(objectMapper, e.context()));
+            s.setPayload(serializeJson(ev.payload()));
+            s.setCandidateRuleVersionIds(serializeJson(e.candidateVersionIds()));
         }
         return s;
+    }
+
+    /** best-effort 序列化为 JSON 文本；null 入参或序列化失败返回 null。 */
+    private String serializeJson(Object value) {
+        if (value == null) return null;
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     /** hit_decisions JSON 元素：每条命中决策的码 + 分类 + 来源规则版本。 */

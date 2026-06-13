@@ -5,12 +5,15 @@ import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.Subject;
 import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.kernel.api.model.ConditionParams;
+import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,5 +55,15 @@ class ContainsEvaluatorTest {
         Subject subject = new Subject("sub1", SubjectType.USER, Map.of());
         EvalContext emptyCtx = new EvalContext("t1", event, subject, Map.of(), Instant.parse("2026-06-01T00:00:00Z"));
         assertThat(evaluator.evaluate(node("tags", "vip"), emptyCtx)).isFalse();
+    }
+
+    @Test
+    void annotation_describesOperator() {
+        var ann = ContainsEvaluator.class.getAnnotation(
+                com.sstlfsj.rule.kernel.api.annotation.ConditionType.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo(ConditionTypes.CONTAINS);
+        assertThat(ann.schema().requiredParamKeys).isEqualTo(Set.of(ConditionParams.ELEMENT));
+        assertThat(ann.schema().requiresMetric).isTrue();
     }
 }

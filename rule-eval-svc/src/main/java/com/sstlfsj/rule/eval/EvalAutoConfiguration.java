@@ -1,11 +1,9 @@
 package com.sstlfsj.rule.eval;
 
-import com.sstlfsj.rule.eval.internal.action.ActionDispatchService;
-import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
-import com.sstlfsj.rule.kernel.api.annotation.ActionType;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
-import com.sstlfsj.rule.kernel.api.spi.action.ActionHandler;
+import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
@@ -15,20 +13,31 @@ import com.sstlfsj.rule.kernel.api.spi.subject.SubjectLoader;
 import tools.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.kernel.internal.codec.AstJsonCodec;
 import com.sstlfsj.rule.kernel.internal.codec.SnapshotAssembler;
+import com.sstlfsj.rule.kernel.api.annotation.ConditionType;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.AstCompiler;
+import com.sstlfsj.rule.kernel.internal.evaluator.CompiledExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.RuleVersionCache;
+import com.sstlfsj.rule.eval.internal.CompiledExecutorProperties;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
-import com.sstlfsj.rule.eval.internal.repository.ActionExecutionMapper;
 import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
 import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
+import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -40,6 +49,7 @@ import org.springframework.context.annotation.Primary;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,19 +58,19 @@ import java.util.concurrent.Executors;
 @ComponentScan("com.sstlfsj.rule.eval.internal")
 @org.springframework.boot.context.properties.EnableConfigurationProperties({
         com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties.class,
-        com.sstlfsj.rule.eval.internal.action.SendAlertProperties.class,
         com.sstlfsj.rule.eval.internal.TraceProperties.class,
         com.sstlfsj.rule.eval.internal.async.AuditProperties.class,
+        com.sstlfsj.rule.eval.internal.snapshot.ScriptPrecompileProperties.class,
+        com.sstlfsj.rule.eval.internal.CompiledExecutorProperties.class,
         RetentionProperties.class})
 public class EvalAutoConfiguration {
 
     /**
-     * 注册 session 表数据保留清理调度 bean（evaluation_session / dry_run_session / action_execution）。
+     * 注册 session 表数据保留清理调度 bean（evaluation_session / dry_run_session）。
      * 可通过 engine.rule.retention.enabled=false 关闭。
      *
      * @param evaluationSessionMapper evaluation_session Mapper
      * @param dryRunSessionMapper     dry_run_session Mapper
-     * @param actionExecutionMapper   action_execution Mapper
      * @param retentionProperties     保留清理配置
      * @return SessionRetentionCleaner 实例
      */
@@ -68,21 +78,66 @@ public class EvalAutoConfiguration {
     @ConditionalOnProperty(name = "engine.rule.retention.enabled", matchIfMissing = true)
     public SessionRetentionCleaner sessionRetentionCleaner(EvaluationSessionMapper evaluationSessionMapper,
                                                            DryRunSessionMapper dryRunSessionMapper,
-                                                           ActionExecutionMapper actionExecutionMapper,
                                                            RetentionProperties retentionProperties) {
-        return new SessionRetentionCleaner(evaluationSessionMapper, dryRunSessionMapper, actionExecutionMapper, retentionProperties);
+        return new SessionRetentionCleaner(evaluationSessionMapper, dryRunSessionMapper, retentionProperties);
     }
 
     /**
-     * 默认使用 InterpretedExecutor（AST 树形解释执行，按 TraceScope.COLLECT 守卫收集 NodeTrace）。
+     * 编译产物缓存 bean，供 CompiledExecutor 与 CompiledPredicateEvictor 共享。
+     *
+     * @return RuleVersionCache 实例
+     */
+    @Bean
+    public RuleVersionCache ruleVersionCache() {
+        return new RuleVersionCache();
+    }
+
+    /**
+     * AST_BOOLEAN executor：默认 CompiledExecutor 包裹 InterpretedExecutor。
+     * compiled-executor.enabled=false(默认)时逐字节等同解释器(永远委托)；
+     * 开启后非 trace 快路径走编译闭包，开 trace / 灰度未命中时回落解释器。
      * 外部可注册自定义 RuleVersionExecutor Bean 覆盖此默认值。
      *
-     * @return InterpretedExecutor 实例
+     * @param ruleVersionCache 编译产物缓存
+     * @param props            编译执行器灰度配置
+     * @return CompiledExecutor 实例(对外仍是 RuleVersionExecutor)
      */
     @Bean
     @Primary
-    public RuleVersionExecutor ruleVersionExecutor() {
-        return new InterpretedExecutor(KernelEvaluators.defaults());
+    public RuleVersionExecutor ruleVersionExecutor(RuleVersionCache ruleVersionCache,
+                                                   CompiledExecutorProperties props,
+                                                   List<ConditionEvaluator> customEvaluators) {
+        Map<String, ConditionEvaluator> evaluators = mergeEvaluators(customEvaluators);
+        InterpretedExecutor interpreter = new InterpretedExecutor(evaluators);
+        AstCompiler compiler = new AstCompiler(evaluators);
+        return new CompiledExecutor(interpreter, compiler, ruleVersionCache,
+                props.isEnabled(), Set.copyOf(props.getRuleCodeWhitelist()), props.getOnCompileError());
+    }
+
+    /**
+     * 将 Spring 托管的自定义 {@link ConditionEvaluator} bean 合并进内置算子表。
+     * 内置算子优先级低于自定义（可被覆盖），覆盖时输出 WARN 日志。
+     * 未标注 {@link ConditionType} 的 bean 跳过（WARN），避免无意中污染算子路由。
+     *
+     * @param custom Spring 自动收集的自定义 evaluator（无 bean 时为空列表）
+     * @return 合并后的不可变算子 Map
+     */
+    private static Map<String, ConditionEvaluator> mergeEvaluators(List<ConditionEvaluator> custom) {
+        if (custom == null || custom.isEmpty()) return KernelEvaluators.defaults();
+        Logger log = LoggerFactory.getLogger(EvalAutoConfiguration.class);
+        Map<String, ConditionEvaluator> map = new HashMap<>(KernelEvaluators.defaults());
+        for (ConditionEvaluator ev : custom) {
+            ConditionType ann = ev.getClass().getAnnotation(ConditionType.class);
+            if (ann == null) {
+                log.warn("自定义 ConditionEvaluator {} 未标注 @ConditionType，跳过注册", ev.getClass().getName());
+                continue;
+            }
+            if (map.containsKey(ann.value())) {
+                log.warn("自定义算子 code={} 覆盖内置实现", ann.value());
+            }
+            map.put(ann.value(), ev);
+        }
+        return Map.copyOf(map);
     }
 
     /**
@@ -113,6 +168,26 @@ public class EvalAutoConfiguration {
     @Bean
     public DecisionTableExecutor decisionTableExecutor() {
         return new DecisionTableExecutor(KernelEvaluators.defaults());
+    }
+
+    /**
+     * 注册 ScriptExecutor，供 kind=EXPRESSION_SCRIPT 的规则版本评估使用。
+     * 按 lang 路由引擎：自动收集所有 {@link ExpressionEngine} bean（盒内默认仅 CEL，
+     * opt-in 引擎模块注册各自的 bean 即被纳入，无需改本配置），按 lang() 建路由表。
+     *
+     * @param expressionEngines 所有已注册的表达式引擎（Spring 自动收集）
+     * @return ScriptExecutor 实例
+     */
+    @Bean
+    public ScriptExecutor scriptExecutor(List<ExpressionEngine> expressionEngines) {
+        Map<String, ExpressionEngine> byLang = new HashMap<>();
+        for (ExpressionEngine engine : expressionEngines) {
+            ExpressionEngine prev = byLang.putIfAbsent(engine.lang(), engine);
+            if (prev != null) {
+                throw new IllegalStateException("多个 ExpressionEngine 声明同一 lang=" + engine.lang());
+            }
+        }
+        return new ScriptExecutor(byLang);
     }
 
     /**
@@ -190,6 +265,7 @@ public class EvalAutoConfiguration {
      * @param scorecardExecutor     SCORECARD executor
      * @param decisionTreeExecutor  DECISION_TREE executor
      * @param decisionTableExecutor DECISION_TABLE executor
+     * @param scriptExecutor        EXPRESSION_SCRIPT executor
      * @param traceProperties       全局 NodeTrace 收集开关配置（engine.rule.trace.enabled，默认 true）
      * @return EvalEngine 实例
      */
@@ -202,39 +278,33 @@ public class EvalAutoConfiguration {
             ScorecardExecutor scorecardExecutor,
             DecisionTreeExecutor decisionTreeExecutor,
             DecisionTableExecutor decisionTableExecutor,
+            ScriptExecutor scriptExecutor,
             com.sstlfsj.rule.eval.internal.TraceProperties traceProperties) {
         Map<String, PreGate> gateMap = new HashMap<>();
         if (preGates != null) {
             preGates.forEach(g -> gateMap.put(g.gateType(), g));
         }
         return new EvalEngine(sceneRuleIndex, evalContextAssembler, gateMap,
-                Map.of(RuleKind.AST_BOOLEAN.tag(),    ruleVersionExecutor,
-                       RuleKind.SCORECARD.tag(),      scorecardExecutor,
-                       RuleKind.DECISION_TREE.tag(),  decisionTreeExecutor,
-                       RuleKind.DECISION_TABLE.tag(), decisionTableExecutor),
+                Map.of(RuleKind.AST_BOOLEAN.tag(),       ruleVersionExecutor,
+                       RuleKind.SCORECARD.tag(),         scorecardExecutor,
+                       RuleKind.DECISION_TREE.tag(),     decisionTreeExecutor,
+                       RuleKind.DECISION_TABLE.tag(),    decisionTableExecutor,
+                       RuleKind.EXPRESSION_SCRIPT.tag(), scriptExecutor),
                 traceProperties.isEnabled());
     }
 
     /**
-     * 注册 ActionDispatchService，按 @ActionType.value() 构建 handler 映射。
+     * eval-svc 侧可观测性埋点，封装 Counter/Gauge 注册，使 EvalServiceImpl 专注评估协调。
      *
-     * @param actionHandlers  Spring 容器中所有 ActionHandler bean（可为空）
-     * @param eventPublisher  领域事件发布缝（ActionExecutedEvent 由 persister 异步落库）
-     * @return ActionDispatchService 实例
+     * @param meterRegistry Spring Boot 自动装配的 Micrometer 注册表
+     * @return EvalInstrumentation 实例
      */
     @Bean
-    public ActionDispatchService actionDispatchService(
-            @Autowired(required = false) List<ActionHandler> actionHandlers,
-            DomainEventPublisher eventPublisher) {
-        Map<String, ActionHandler> handlerMap = new HashMap<>();
-        if (actionHandlers != null) {
-            for (ActionHandler handler : actionHandlers) {
-                ActionType ann = handler.getClass().getAnnotation(ActionType.class);
-                if (ann != null) {
-                    handlerMap.put(ann.value(), handler);
-                }
-            }
-        }
-        return new ActionDispatchService(handlerMap, eventPublisher);
+    public EvalInstrumentation evalInstrumentation(MeterRegistry meterRegistry) {
+        Counter evalTotal = Counter.builder(RuleMetrics.EVAL_TOTAL)
+                .description("评估总次数").register(meterRegistry);
+        Counter evalError = Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL)
+                .description("评估错误总数（errorCode 非空）").register(meterRegistry);
+        return new EvalInstrumentation(evalTotal, evalError, meterRegistry);
     }
 }

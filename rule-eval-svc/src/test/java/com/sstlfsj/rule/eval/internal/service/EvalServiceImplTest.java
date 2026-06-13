@@ -1,7 +1,5 @@
 package com.sstlfsj.rule.eval.internal.service;
 
-import com.sstlfsj.rule.eval.internal.async.ActionCommandChannel;
-import com.sstlfsj.rule.eval.internal.async.DispatchActionsCommand;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
 import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
@@ -10,9 +8,14 @@ import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
+import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,21 +27,28 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计、经 ActionCommandChannel 投递 action；dry-run 发 DryRunRecordedEvent 事件。 */
+/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计；dry-run 发 DryRunRecordedEvent 事件。 */
 @ExtendWith(MockitoExtension.class)
 class EvalServiceImplTest {
 
     @Mock EvalEngine evalEngine;
     @Mock SceneSnapshotLoader snapshotLoader;
     @Mock DomainEventPublisher eventPublisher;
-    @Mock ActionCommandChannel actionDelivery;
     @Mock RuleVersionReadMapper ruleVersionReadMapper;
 
     EvalServiceImpl impl;
+    SimpleMeterRegistry meterRegistry;
+    Counter evalErrorCounter;
+    Counter evalTotalCounter;
 
     @BeforeEach
     void setUp() {
-        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, actionDelivery, ruleVersionReadMapper);
+        meterRegistry = new SimpleMeterRegistry();
+        evalErrorCounter = Counter.builder(RuleMetrics.EVAL_ERROR_TOTAL).register(meterRegistry);
+        evalTotalCounter = Counter.builder(RuleMetrics.EVAL_TOTAL).register(meterRegistry);
+        EvalInstrumentation instrumentation = new EvalInstrumentation(evalTotalCounter, evalErrorCounter, meterRegistry);
+        impl = new EvalServiceImpl(evalEngine, snapshotLoader, eventPublisher, ruleVersionReadMapper,
+                instrumentation);
     }
 
     private RuleEvent event() {
@@ -58,7 +68,7 @@ class EvalServiceImplTest {
 
     private EvalResult hitResult(String code, int priority, Long ruleVersionId) {
         Decision d = new Decision(code, "", priority, ruleVersionId);
-        return new EvalResult(true, d, List.of(d), List.of(), null, List.of(), null, null, null);
+        return new EvalResult(true, d, List.of(d), List.of(), null, null, null, null);
     }
 
     private EvalContext ctx() {
@@ -79,12 +89,14 @@ class EvalServiceImplTest {
 
         impl.evaluate(event());
 
-        // 复用引擎组装的上下文发审计事件（异步落 session 快照），不再同步 updateFinal
+        // 复用引擎组装的上下文发审计事件（异步落 session 快照），不再同步 updateFinal；
+        // 候选版本 id 随事件携带（忠实重放用 candidate_rule_version_ids）
         verify(eventPublisher).publish(argThat(o ->
                 o instanceof AuditRecordedEvent a
                         && a.mode() == com.sstlfsj.rule.eval.internal.domain.EvalMode.PULL
                         && a.candidateCount() == 1
-                        && a.context() == engineCtx));
+                        && a.context() == engineCtx
+                        && a.candidateVersionIds().equals(List.of(1L))));
     }
 
     @Test
@@ -95,7 +107,6 @@ class EvalServiceImplTest {
 
         assertFalse(result.ruleHit());
         verifyNoInteractions(eventPublisher);
-        verifyNoInteractions(actionDelivery);
         verify(evalEngine, never()).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
     }
 
@@ -127,7 +138,7 @@ class EvalServiceImplTest {
         Decision highPriority = new Decision("REJECT", "", 20, 2L);
         EvalResult engineResult = new EvalResult(true, highPriority,
                 List.of(new Decision("LOW_RISK", "", 5, 1L), highPriority),
-                List.of(), null, List.of(), null, null, null);
+                List.of(), null, null, null, null);
         stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
 
         EvalResult result = impl.evaluate(event());
@@ -170,63 +181,6 @@ class EvalServiceImplTest {
     }
 
     @Test
-    void dryRun_doesNotDeliverActions() {
-        RuleVersionSnapshot snap = snapshot(42L, "PASS");
-        when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
-                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
-                .thenReturn(new EvalOutcome(EvalResult.miss(), ctx()));
-
-        EvalResult result = impl.dryRun(event(), null, 42L);
-
-        assertFalse(result.ruleHit());
-        verify(eventPublisher).publish(any(DryRunRecordedEvent.class));
-        verifyNoInteractions(actionDelivery);
-    }
-
-    @Test
-    void evaluate_ruleHit_deliversActions() {
-        // D27:仅当 finalDecision 携带 actions 才投递派发命令
-        var action = new com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction(
-                "a1", "SEND_ALERT", 0, java.util.Map.of());
-        Decision d = new Decision("REJECT", "拒绝", 10, 1L, null, java.util.List.of(action));
-        EvalResult r = new EvalResult(true, d, java.util.List.of(d), java.util.List.of(),
-                null, java.util.List.of(), null, null, null);
-        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(r, ctx()));
-
-        impl.evaluate(event());
-
-        verify(actionDelivery).deliver(argThat(o ->
-                o instanceof DispatchActionsCommand ar
-                        && ar.tenantId() == 1L
-                        && ar.eventId().equals("evt-001")
-                        && ar.finalDecision() != null
-                        && "REJECT".equals(ar.finalDecision().code())));
-    }
-
-    @Test
-    void evaluate_ruleMiss_doesNotDeliverActions() {
-        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
-
-        impl.evaluate(event());
-
-        verify(actionDelivery, never()).deliver(any());
-    }
-
-    @Test
-    void dryRun_hit_doesNotDeliverActions() {
-        RuleVersionSnapshot snap = snapshot(42L, "PASS");
-        when(snapshotLoader.loadById(42L)).thenReturn(snap);
-        when(evalEngine.evaluateWithContext(any(RuleEvent.class), anyList(),
-                any(SceneExecutionStrategy.class), any(Instant.class), eq(true)))
-                .thenReturn(new EvalOutcome(hitResult("PASS", 10, 42L), ctx()));
-
-        impl.dryRun(event(), null, 42L);
-
-        verifyNoInteractions(actionDelivery);
-    }
-
-    @Test
     void dryRun_byRuleId_resolvesLatestVersion() {
         RuleVersionSnapshot snap = snapshot(77L, "PASS");
         when(ruleVersionReadMapper.latestVersionIdByRule(1L, 5L)).thenReturn(77L);
@@ -242,9 +196,8 @@ class EvalServiceImplTest {
         verify(snapshotLoader).loadById(77L);
         verify(eventPublisher).publish(argThat(o ->
                 o instanceof DryRunRecordedEvent d && d.ruleVersionId().equals(77L)));
-        // dry-run 永不落候选分支：不走 match、不投递 action
+        // dry-run 永不落候选分支：不走 match
         verify(evalEngine, never()).match(any(RuleEvent.class));
-        verifyNoInteractions(actionDelivery);
     }
 
     @Test
@@ -268,7 +221,6 @@ class EvalServiceImplTest {
 
         assertThrows(IllegalArgumentException.class, () -> impl.dryRun(event(), 999L, null));
         verifyNoInteractions(snapshotLoader);
-        verifyNoInteractions(actionDelivery);
     }
 
     @Test
@@ -277,7 +229,6 @@ class EvalServiceImplTest {
         assertThrows(IllegalArgumentException.class, () -> impl.dryRun(event(), null, null));
         verifyNoInteractions(evalEngine);
         verifyNoInteractions(snapshotLoader);
-        verifyNoInteractions(actionDelivery);
         verifyNoInteractions(eventPublisher);
     }
 
@@ -293,18 +244,46 @@ class EvalServiceImplTest {
         assertTrue(ex.getMessage().contains("INVALID_TENANT"));
         verifyNoInteractions(ruleVersionReadMapper);
         verifyNoInteractions(snapshotLoader);
-        verifyNoInteractions(actionDelivery);
     }
 
     @Test
     void evaluate_scoreFromEngine_isPropagated() {
         Decision d = new Decision("REJECT", "", 10, 1L);
-        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, List.of(), 60.0, null, null);
+        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(), null, 60.0, null, null);
         stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
 
         EvalResult result = impl.evaluate(event());
 
         assertEquals(60.0, result.score());
+    }
+
+    @Test
+    void evaluate_withAsOf_usesCallerClockAsEvalNow() {
+        // 传固定 asOf：引擎求值时刻必须等于该 Instant，而非 Instant.now()
+        Instant asOf = Instant.parse("2020-01-01T00:00:00Z");
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        impl.evaluate(event(), asOf);
+
+        ArgumentCaptor<Instant> nowCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(), nowCaptor.capture());
+        assertEquals(asOf, nowCaptor.getValue());
+    }
+
+    @Test
+    void evaluate_withoutAsOf_usesNow() {
+        // 不传 asOf（asOf=null）：求值时刻落在调用前后的 Instant.now() 区间内
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        Instant before = Instant.now();
+        impl.evaluate(event(), null);
+        Instant after = Instant.now();
+
+        ArgumentCaptor<Instant> nowCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(), nowCaptor.capture());
+        Instant used = nowCaptor.getValue();
+        assertFalse(used.isBefore(before));
+        assertFalse(used.isAfter(after));
     }
 
     @Test
@@ -342,6 +321,35 @@ class EvalServiceImplTest {
                 () -> impl.evaluate(eventWithPayload(Map.of("country", "CN"))));
         assertTrue(ex.getMessage().contains("MISSING_REQUIRED_INPUT"));
         verify(evalEngine, never()).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
+    }
+
+    @Test
+    void evaluate_incrementsTotalCounter() {
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        impl.evaluate(event());
+
+        assertEquals(1.0, evalTotalCounter.count());
+    }
+
+    @Test
+    void evaluate_errorResult_incrementsErrorCounter() {
+        EvalResult engineResult = new EvalResult(false, null, List.of(), List.of(),
+                "FETCH_TIMEOUT", null, null, null);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
+
+        impl.evaluate(event());
+
+        assertEquals(1.0, evalErrorCounter.count());
+    }
+
+    @Test
+    void evaluate_okResult_doesNotIncrementErrorCounter() {
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        impl.evaluate(event());
+
+        assertEquals(0.0, evalErrorCounter.count());
     }
 
     @Test

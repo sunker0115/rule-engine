@@ -9,17 +9,23 @@ public final class EvalContext {
     private final RuleEvent event;
     private final Subject subject;
     private final Map<String, MetricValue> metrics;
-    /** 引擎在评估入口注入一次，整棵 AST 共用；必填，调用方保证非 null。 */
-    private final Instant now;
+    /** 求值环境(ambient 配置)：now + scene 默认参数等;访问器委托此对象。 */
+    private final EvalEnv env;
 
-    public EvalContext(String tenantId, RuleEvent event,
-                       Subject subject, Map<String, MetricValue> metrics, Instant now) {
+    public EvalContext(String tenantId, RuleEvent event, Subject subject,
+                       Map<String, MetricValue> metrics, EvalEnv env) {
         this.tenantId = tenantId;
         this.event = event;
         this.subject = subject;
         // 防御性拷贝：保证 metrics 快照不可变，外部修改原 map 不影响上下文
         this.metrics = Map.copyOf(metrics);
-        this.now = now;
+        this.env = env != null ? env : new EvalEnv(null, Map.of());
+    }
+
+    /** 兼容构造器：仅 now、无 scene 默认参数（SDK 本地模式 / 测试），默认空 map。 */
+    public EvalContext(String tenantId, RuleEvent event,
+                       Subject subject, Map<String, MetricValue> metrics, Instant now) {
+        this(tenantId, event, subject, metrics, new EvalEnv(now, Map.of()));
     }
 
     /** 租户标识。 */
@@ -30,8 +36,12 @@ public final class EvalContext {
     public Subject subject()  { return subject; }
     /** 返回全量 metrics 快照（不可变视图）。 */
     public Map<String, MetricValue> metrics() { return metrics; }
-    /** 返回本次评估的统一时刻。 */
-    public Instant now()      { return now; }
+    /** 返回本次评估的统一时刻（委托 env）。 */
+    public Instant now()      { return env.now(); }
+    /** 场景默认参数（scene.default_params 快照，ambient 配置）；键见 SceneDefaultParams（委托 env）。 */
+    public Map<String, Object> sceneDefaultParams() { return env.sceneDefaultParams(); }
+    /** 求值环境（ambient 配置）载体。 */
+    public EvalEnv env()      { return env; }
 
     /** 返回已预拉的指标值，不存在时返回 null。 */
     public MetricValue getMetric(String metricCode) {

@@ -15,7 +15,6 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionAction;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
@@ -25,7 +24,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -77,7 +75,6 @@ class RuleExportServiceTest {
         s.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
         s.setEventTypes(java.util.List.of("transfer")); s.setPayloadSchema(java.util.List.of());
         s.setDefaultParams(java.util.Map.of());
-        s.setPayloadSchemaVersion(1);
         return s;
     }
 
@@ -92,7 +89,6 @@ class RuleExportServiceTest {
     private DecisionDefinition decision() {
         DecisionDefinition d = new DecisionDefinition();
         d.setCode("BLOCK"); d.setName("拦截"); d.setPriority(100); d.setDescription("拦截交易");
-        d.setActions(List.of(new DecisionAction("a1", "BLOCK_TRANSACTION", 0, Map.of())));
         return d;
     }
 
@@ -119,7 +115,6 @@ class RuleExportServiceTest {
         assertThat(b.scenes()).hasSize(1);                       // 去重
         assertThat(b.metricDefinitions()).hasSize(1);            // 去重
         assertThat(b.decisionDefinitions()).hasSize(1);          // 去重
-        assertThat(b.actionTypeManifest()).containsExactly("BLOCK_TRANSACTION");
     }
 
     @Test
