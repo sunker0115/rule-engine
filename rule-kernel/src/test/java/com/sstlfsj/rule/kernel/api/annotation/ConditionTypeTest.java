@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.api.annotation;
 
+import com.sstlfsj.rule.kernel.api.model.DataType;
 import org.junit.jupiter.api.Test;
 
 import java.lang.annotation.ElementType;
@@ -14,7 +15,12 @@ class ConditionTypeTest {
     @ConditionType("AMOUNT_GT")
     static class MinimalHandler {}
 
-    @ConditionType(value = "AGE_LT", displayName = "年龄小于", paramsSchema = "{}")
+    @ConditionType(
+            value = "AGE_LT",
+            displayName = "年龄小于",
+            requiredParamKeys = {"value"},
+            allowedDataTypes = {DataType.LONG, DataType.DOUBLE},
+            requiresMetric = false)
     static class FullHandler {}
 
     @Test
@@ -32,7 +38,9 @@ class ConditionTypeTest {
     void defaults_areApplied() {
         ConditionType ann = MinimalHandler.class.getAnnotation(ConditionType.class);
         assertEquals("", ann.displayName());
-        assertEquals("{}", ann.paramsSchema());
+        assertEquals(0, ann.requiredParamKeys().length);
+        assertEquals(0, ann.allowedDataTypes().length);
+        assertTrue(ann.requiresMetric());
     }
 
     @Test
@@ -40,7 +48,9 @@ class ConditionTypeTest {
         ConditionType ann = FullHandler.class.getAnnotation(ConditionType.class);
         assertEquals("AGE_LT", ann.value());
         assertEquals("年龄小于", ann.displayName());
-        assertEquals("{}", ann.paramsSchema());
+        assertArrayEquals(new String[]{"value"}, ann.requiredParamKeys());
+        assertArrayEquals(new DataType[]{DataType.LONG, DataType.DOUBLE}, ann.allowedDataTypes());
+        assertFalse(ann.requiresMetric());
     }
 
     @Test
