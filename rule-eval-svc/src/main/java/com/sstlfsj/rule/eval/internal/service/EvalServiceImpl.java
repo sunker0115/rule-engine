@@ -159,7 +159,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         // 副作用事件化：审计内存 best-effort（可丢）；纯决策，不派发任何 action
         int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
         eventPublisher.publish(new AuditRecordedEvent(
-                sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs));
+                sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs,
+                candidates.stream().map(RuleVersionSnapshot::ruleVersionId).toList()));
         if (result.errorCode() != null) { evalErrorCounter.increment(); }
         return result;
     }

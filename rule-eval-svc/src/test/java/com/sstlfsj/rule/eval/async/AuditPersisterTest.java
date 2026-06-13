@@ -43,7 +43,7 @@ class AuditPersisterTest {
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
                 .subjectId("u1").eventId("e1").source(EventSource.HTTP).occurredAt(Instant.now()).build();
-        persister.onAudit(new AuditRecordedEvent(42L, event, EvalMode.PULL,1, EvalResult.miss(), null, null, 0));
+        persister.onAudit(new AuditRecordedEvent(42L, event, EvalMode.PULL,1, EvalResult.miss(), null, null, 0, List.of()));
 
         Thread.sleep(300);   // 等异步消费
         persister.destroy();
@@ -71,7 +71,7 @@ class AuditPersisterTest {
         // 固定 evalNow：started_at 必须取 context.now()（真实评估起点），非落库时刻
         Instant evalNow = Instant.parse("2026-06-09T01:02:03Z");
         EvalContext ctx = new EvalContext("1", event, null, Map.of(), evalNow);
-        persister.onAudit(new AuditRecordedEvent(45L, event, EvalMode.PULL,1, EvalResult.miss(), ctx, null, 42));
+        persister.onAudit(new AuditRecordedEvent(45L, event, EvalMode.PULL,1, EvalResult.miss(), ctx, null, 42, List.of()));
 
         Thread.sleep(300);
         persister.destroy();
@@ -96,7 +96,7 @@ class AuditPersisterTest {
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
                 .subjectId("u1").eventId("e2").source(EventSource.HTTP).occurredAt(Instant.now()).build();
         // 候选被 Pre-Gate 全拦截：result 为 miss 但 blockedBy 非 null → 落 BLOCKED 而非 MISS
-        persister.onAudit(new AuditRecordedEvent(43L, event, EvalMode.PULL,1, EvalResult.miss(), null, "ROLLOUT", 0));
+        persister.onAudit(new AuditRecordedEvent(43L, event, EvalMode.PULL,1, EvalResult.miss(), null, "ROLLOUT", 0, List.of()));
 
         Thread.sleep(300);
         persister.destroy();
@@ -121,7 +121,7 @@ class AuditPersisterTest {
         // SCORECARD 命中：result.score 非 null → 落审计 score 列
         EvalResult scored = new EvalResult(true, null, java.util.List.of(), java.util.List.of(),
                 null, 87.5, null, null);
-        persister.onAudit(new AuditRecordedEvent(44L, event, EvalMode.PULL,1, scored, null, null, 0));
+        persister.onAudit(new AuditRecordedEvent(44L, event, EvalMode.PULL,1, scored, null, null, 0, List.of()));
 
         Thread.sleep(300);
         persister.destroy();
@@ -145,7 +145,7 @@ class AuditPersisterTest {
         Decision amt = new Decision("REVIEW", "", 10, 22L, "大额");
         EvalResult r = new EvalResult(true, dev, java.util.List.of(dev, amt), java.util.List.of(),
                 null, null, "中危", null);
-        persister.onAudit(new AuditRecordedEvent(91L, event, EvalMode.PULL,2, r, null, null, 0));
+        persister.onAudit(new AuditRecordedEvent(91L, event, EvalMode.PULL,2, r, null, null, 0, List.of(11L, 22L)));
 
         Thread.sleep(300);
         persister.destroy();
@@ -172,7 +172,7 @@ class AuditPersisterTest {
         EvalContext ctx = new EvalContext("1", event, null,
                 Map.of("amount", new com.sstlfsj.rule.kernel.api.model.MetricValue(8888, "NUMBER", "PROVIDED")),
                 Instant.parse("2026-06-09T01:02:03Z"));
-        persister.onAudit(new AuditRecordedEvent(46L, event, EvalMode.PULL,1, EvalResult.miss(), ctx, null, 0));
+        persister.onAudit(new AuditRecordedEvent(46L, event, EvalMode.PULL,1, EvalResult.miss(), ctx, null, 0, List.of(101L, 202L)));
 
         Thread.sleep(300);
         persister.destroy();
@@ -198,7 +198,7 @@ class AuditPersisterTest {
         EvalContext ctx = new EvalContext("1", event, null,
                 Map.of("amount", new com.sstlfsj.rule.kernel.api.model.MetricValue(8888, "NUMBER", "PROVIDED")),
                 Instant.parse("2026-06-09T01:02:03Z"));
-        persister.onAudit(new AuditRecordedEvent(47L, event, EvalMode.PULL,1, EvalResult.miss(), ctx, null, 0));
+        persister.onAudit(new AuditRecordedEvent(47L, event, EvalMode.PULL,1, EvalResult.miss(), ctx, null, 0, List.of()));
 
         Thread.sleep(300);
         persister.destroy();
@@ -206,5 +206,55 @@ class AuditPersisterTest {
         ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
         verify(mapper, times(1)).insertBatch(captor.capture());
         assertThat(captor.getValue().get(0).getContextSnapshot()).isNull();
+    }
+
+    @Test
+    void captureEnabled_writesPayloadAndCandidateVersionIds() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        // 捕获开关 ON：重放三件套(payload + 候选版本 id + context_snapshot)一并落库
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, true);
+        persister.afterPropertiesSet();
+
+        RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                .subjectId("u1").eventId("e-replay").source(EventSource.HTTP)
+                .occurredAt(Instant.now()).payload(Map.of("amount", 5000)).build();
+        EvalContext ctx = new EvalContext("1", event, null, Map.of(), Instant.parse("2026-06-09T01:02:03Z"));
+        persister.onAudit(new AuditRecordedEvent(48L, event, EvalMode.PULL, 2, EvalResult.miss(),
+                ctx, null, 0, List.of(11L, 22L)));
+
+        Thread.sleep(300);
+        persister.destroy();
+
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        EvaluationSession s = captor.getValue().get(0);
+        assertThat(s.getPayload()).contains("amount").contains("5000");
+        assertThat(s.getCandidateRuleVersionIds()).contains("11").contains("22");
+    }
+
+    @Test
+    void captureDisabled_leavesReplayColumnsNull() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        persister.afterPropertiesSet();
+
+        RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                .subjectId("u1").eventId("e-replay-off").source(EventSource.HTTP)
+                .occurredAt(Instant.now()).payload(Map.of("amount", 5000)).build();
+        persister.onAudit(new AuditRecordedEvent(49L, event, EvalMode.PULL, 2, EvalResult.miss(),
+                null, null, 0, List.of(11L, 22L)));
+
+        Thread.sleep(300);
+        persister.destroy();
+
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        EvaluationSession s = captor.getValue().get(0);
+        assertThat(s.getPayload()).isNull();
+        assertThat(s.getCandidateRuleVersionIds()).isNull();
     }
 }

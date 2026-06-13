@@ -87,12 +87,14 @@ class EvalServiceImplTest {
 
         impl.evaluate(event());
 
-        // 复用引擎组装的上下文发审计事件（异步落 session 快照），不再同步 updateFinal
+        // 复用引擎组装的上下文发审计事件（异步落 session 快照），不再同步 updateFinal；
+        // 候选版本 id 随事件携带（忠实重放用 candidate_rule_version_ids）
         verify(eventPublisher).publish(argThat(o ->
                 o instanceof AuditRecordedEvent a
                         && a.mode() == com.sstlfsj.rule.eval.internal.domain.EvalMode.PULL
                         && a.candidateCount() == 1
-                        && a.context() == engineCtx));
+                        && a.context() == engineCtx
+                        && a.candidateVersionIds().equals(List.of(1L))));
     }
 
     @Test
