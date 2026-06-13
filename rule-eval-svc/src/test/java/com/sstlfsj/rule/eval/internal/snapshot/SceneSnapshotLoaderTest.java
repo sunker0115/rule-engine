@@ -36,6 +36,9 @@ class SceneSnapshotLoaderTest {
     @Mock
     SnapshotAssembler assembler;
 
+    @Mock
+    tools.jackson.databind.ObjectMapper objectMapper;
+
     @InjectMocks
     SceneSnapshotLoader loader;
 

@@ -19,7 +19,8 @@ class SnapshotAssemblerScriptTest {
                 "[]", "[]", "[]",
                 RuleKind.EXPRESSION_SCRIPT.tag(), "HIGHEST_PRIORITY",
                 "[]", "[]", "R1", 1L,
-                "{\"source\":\"payload.amount > 10000 ? 'REVIEW' : 'PASS'\",\"lang\":\"CEL\"}");
+                "{\"source\":\"payload.amount > 10000 ? 'REVIEW' : 'PASS'\",\"lang\":\"CEL\"}",
+                null);
 
         RuleVersionSnapshot snap = assembler.assembleAll(java.util.List.of(row)).get(0);
 
@@ -36,7 +37,7 @@ class SnapshotAssemblerScriptTest {
                 2L, "scene", 100L,
                 "{\"type\":\"AndNode\",\"children\":[]}",
                 "[]", "[]", "[]", RuleKind.AST_BOOLEAN.tag(), "HIGHEST_PRIORITY",
-                "[]", "[]", "R2", 1L, null);
+                "[]", "[]", "R2", 1L, null, null);
 
         RuleVersionSnapshot snap = assembler.assembleAll(java.util.List.of(row)).get(0);
 

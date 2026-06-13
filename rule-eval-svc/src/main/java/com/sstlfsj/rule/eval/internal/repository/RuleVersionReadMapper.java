@@ -27,7 +27,8 @@ public interface RuleVersionReadMapper {
               rv.payload_dependencies AS payloadDependenciesJson,
               rd.code            AS code,
               rv.version         AS version,
-              rv.script_source   AS scriptSourceJson
+              rv.script_source   AS scriptSourceJson,
+              s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -51,7 +52,8 @@ public interface RuleVersionReadMapper {
               rv.payload_dependencies AS payloadDependenciesJson,
               rd.code            AS code,
               rv.version         AS version,
-              rv.script_source   AS scriptSourceJson
+              rv.script_source   AS scriptSourceJson,
+              s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
@@ -78,7 +80,8 @@ public interface RuleVersionReadMapper {
               rv.payload_dependencies AS payloadDependenciesJson,
               rd.code            AS code,
               rv.version         AS version,
-              rv.script_source   AS scriptSourceJson
+              rv.script_source   AS scriptSourceJson,
+              s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id

@@ -62,4 +62,22 @@ class RuleVersionRowTest {
         assertThat(row.code()).isNull();
         assertThat(row.version()).isEqualTo(0L);
     }
+
+    @Test
+    void record_defaultParamsJson_retained() {
+        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
+                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[]", "[]", "code", 1L,
+                null, "{\"timezone\":\"Asia/Shanghai\"}");
+        assertThat(row.defaultParamsJson()).isEqualTo("{\"timezone\":\"Asia/Shanghai\"}");
+    }
+
+    @Test
+    void record_legacyConstructors_nullDefaultParamsJson() {
+        RuleVersionRow nine = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
+                "AST_BOOLEAN", "HIGHEST_PRIORITY");
+        RuleVersionRow thirteen = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
+                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[]", "[]", "code", 1L);
+        assertThat(nine.defaultParamsJson()).isNull();
+        assertThat(thirteen.defaultParamsJson()).isNull();
+    }
 }

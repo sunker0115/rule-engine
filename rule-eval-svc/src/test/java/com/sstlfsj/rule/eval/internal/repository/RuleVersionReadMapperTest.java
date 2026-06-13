@@ -61,6 +61,14 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadAllActive_sqlContainsDefaultParams() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadAllActive");
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.default_params   AS defaultParamsJson"),
+                "loadAllActive SQL 应选 scene.default_params 列");
+    }
+
+    @Test
     void loadActiveByScene_hasCorrectParameters() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod(
                 "loadActiveByScene", Long.class, String.class);
@@ -106,6 +114,15 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadActiveByScene_sqlContainsDefaultParams() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "loadActiveByScene", Long.class, String.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.default_params   AS defaultParamsJson"),
+                "loadActiveByScene SQL 应选 scene.default_params 列");
+    }
+
+    @Test
     void loadById_returnsRuleVersionRow() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
         assertEquals(RuleVersionRow.class, method.getReturnType());
@@ -142,6 +159,14 @@ class RuleVersionReadMapperTest {
         String sql = method.getAnnotation(Select.class).value()[0];
         assertTrue(sql.contains("rd.code            AS code"), "loadById SQL 应选 rd.code 列");
         assertTrue(sql.contains("rv.version         AS version"), "loadById SQL 应选 rv.version 列");
+    }
+
+    @Test
+    void loadById_sqlContainsDefaultParams() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("s.default_params   AS defaultParamsJson"),
+                "loadById SQL 应选 scene.default_params 列");
     }
 
     @Test

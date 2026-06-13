@@ -24,7 +24,9 @@ public record RuleVersionRow(
         /** rule_version.version 版本号。 */
         long version,
         /** rule_version.script_source JSON(ScriptSource {source,lang});非脚本规则为 null。 */
-        String scriptSourceJson
+        String scriptSourceJson,
+        /** scene.default_params JSON 字符串(scene 级,供 SceneSnapshotLoader 写 SceneRuleIndex);可能为 null。 */
+        String defaultParamsJson
 ) {
     /**
      * 兼容旧调用点的便利构造（无 metricDependenciesJson / payloadDependenciesJson，均默认 null）。
@@ -43,7 +45,7 @@ public record RuleVersionRow(
                           String conditionAstJson, String preGatesJson, String decisionBindingsJson,
                           String triggerEventTypesJson, String kind, String decisionStrategy) {
         this(ruleVersionId, sceneCode, tenantId, conditionAstJson, preGatesJson, decisionBindingsJson,
-                triggerEventTypesJson, kind, decisionStrategy, null, null, null, 0L);
+                triggerEventTypesJson, kind, decisionStrategy, null, null, null, 0L, null, null);
     }
 
     /**
@@ -70,6 +72,6 @@ public record RuleVersionRow(
                           String code, long version) {
         this(ruleVersionId, sceneCode, tenantId, conditionAstJson, preGatesJson, decisionBindingsJson,
                 triggerEventTypesJson, kind, decisionStrategy, metricDependenciesJson, payloadDependenciesJson,
-                code, version, null);
+                code, version, null, null);
     }
 }
