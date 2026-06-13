@@ -1,6 +1,6 @@
 # Trace PII 脱敏(读时遮蔽)— 设计
 
-> 状态:设计待评审 · 日期:2026-06-13 · 关联决策:D71(草案,编号落库前再核)
+> 状态:已落地 · 日期:2026-06-13 · 关联决策:D71(已追加 `docs/00-decisions.md`)
 > 前置:D69(scene payloadSchema typed 约束 + `PayloadDependency`)、D54(metric 租户级共享)、D70(payload 默认落库,raw PII 暴露来源)、D21(node_trace)、D59(trace 带 ruleCode/ruleVersion)
 
 ## 1. 背景与动机
