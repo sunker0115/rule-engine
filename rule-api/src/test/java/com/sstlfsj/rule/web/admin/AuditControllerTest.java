@@ -1,12 +1,14 @@
 package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.audit.api.service.AuditService;
+import com.sstlfsj.rule.config.api.service.SceneService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -16,11 +18,13 @@ class AuditControllerTest {
 
     private MockMvc mockMvc;
     private AuditService auditService;
+    private SceneService sceneService;
 
     @BeforeEach
     void setUp() {
         auditService = mock(AuditService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AuditController(auditService)).build();
+        sceneService = mock(SceneService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new AuditController(auditService, sceneService)).build();
     }
 
     @Test
@@ -103,6 +107,36 @@ class AuditControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void queryTrace_masksSensitiveLeafValues() throws Exception {
+        when(auditService.getSessionSceneCode("100", 1L)).thenReturn("risk.transfer");
+        when(sceneService.getSensitiveRefs("100", "risk.transfer"))
+                .thenReturn(new SceneService.SensitiveRefs(Set.of("phone"), Set.of()));
+        when(auditService.queryTrace("100", 1L)).thenReturn(List.of(
+                new AuditService.TraceNodeEntry(
+                        "0.0", "ConditionNode", "EQ", "phone", "13800001111",
+                        true, null, "PAYLOAD", "ruleA", 1L)));
+
+        mockMvc.perform(get("/admin/v1/evaluation-sessions/1/trace").param("tenantId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].actualValue").value("***"));
+    }
+
+    @Test
+    void queryTrace_configUnavailable_failClosedMasksAll() throws Exception {
+        when(auditService.getSessionSceneCode("100", 1L)).thenReturn("risk.transfer");
+        when(sceneService.getSensitiveRefs("100", "risk.transfer"))
+                .thenThrow(new RuntimeException("config down"));
+        when(auditService.queryTrace("100", 1L)).thenReturn(List.of(
+                new AuditService.TraceNodeEntry(
+                        "0.0", "ConditionNode", "EQ", "amount", "100",
+                        true, null, "PAYLOAD", "ruleA", 1L)));
+
+        mockMvc.perform(get("/admin/v1/evaluation-sessions/1/trace").param("tenantId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].actualValue").value("***"));
     }
 
     @Test

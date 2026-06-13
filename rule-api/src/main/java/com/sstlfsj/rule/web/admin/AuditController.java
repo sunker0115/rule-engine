@@ -1,9 +1,13 @@
 package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.audit.api.service.AuditService;
+import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.common.PageResponse;
+import com.sstlfsj.rule.web.mask.TraceMasker;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,7 +18,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AuditController {
 
+    private static final Logger log = LoggerFactory.getLogger(AuditController.class);
+
     private final AuditService auditService;
+    private final SceneService sceneService;
 
     /** GET /admin/v1/evaluation-sessions — 分页查询评估会话
      * @param tenantId 租户 @param eventId 可选过滤 @param page 页码 @param size 每页大小
@@ -37,7 +44,8 @@ public class AuditController {
     public ApiResponse<List<AuditService.TraceNodeEntry>> queryTrace(
             @PathVariable Long sessionId,
             @RequestParam String tenantId) {
-        return ApiResponse.ok(auditService.queryTrace(tenantId, sessionId));
+        List<AuditService.TraceNodeEntry> trace = auditService.queryTrace(tenantId, sessionId);
+        return ApiResponse.ok(TraceMasker.maskFlat(resolveRefs(tenantId, sessionId), trace));
     }
 
     /** GET /admin/v1/evaluation-sessions/{sessionId}/trace/tree — 嵌套树格式（§6.2 完整契约） */
@@ -45,7 +53,27 @@ public class AuditController {
     public ApiResponse<List<AuditService.TraceTreeNode>> getTraceTree(
             @PathVariable Long sessionId,
             @RequestParam String tenantId) {
-        return ApiResponse.ok(auditService.queryTraceTree(tenantId, sessionId));
+        List<AuditService.TraceTreeNode> tree = auditService.queryTraceTree(tenantId, sessionId);
+        return ApiResponse.ok(TraceMasker.maskTree(resolveRefs(tenantId, sessionId), tree));
+    }
+
+    /**
+     * 解析会话所属场景的 live 敏感集；查询失败返回 null（masker 据此 fail-closed 全抹，D71）。
+     *
+     * @param tenantId  租户标识
+     * @param sessionId 评估会话 ID
+     * @return 场景敏感集；会话/场景缺失或查询异常时返回 null
+     */
+    private SceneService.SensitiveRefs resolveRefs(String tenantId, Long sessionId) {
+        try {
+            String sceneCode = auditService.getSessionSceneCode(tenantId, sessionId);
+            if (sceneCode == null) return null; // 会话/场景缺失 → fail-closed
+            return sceneService.getSensitiveRefs(tenantId, sceneCode);
+        } catch (RuntimeException e) {
+            log.warn("getSensitiveRefs 失败，trace 读时脱敏 fail-closed 全抹: tenantId={}, sessionId={}",
+                    tenantId, sessionId, e);
+            return null;
+        }
     }
 
     /** GET /admin/v1/audit-logs — 分页查询操作审计日志
