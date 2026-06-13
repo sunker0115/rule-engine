@@ -66,7 +66,8 @@ public final class Condition {
     }
 
     public static Condition matches(String metric, String pattern) {
-        return leaf("MATCHES", metric, Map.of("pattern", pattern));
+        // 参数键须为 "regex"：MatchesEvaluator 读 params.get("regex")，旧 "pattern" 键会导致永不命中
+        return leaf("MATCHES", metric, Map.of("regex", pattern));
     }
 
     public static Condition startsWith(String metric, String value) {

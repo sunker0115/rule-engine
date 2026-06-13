@@ -23,6 +23,16 @@ class ConditionTest {
     }
 
     @Test
+    void matches_usesRegexParamKey() {
+        // 回归：param 键必须是 "regex"(MatchesEvaluator 读 "regex"，旧 "pattern" 键会永不命中)
+        AstNode ast = Condition.matches("phone", "\\d{11}").toAst();
+        ConditionNode node = (ConditionNode) ast;
+        assertThat(node.conditionType()).isEqualTo("MATCHES");
+        assertThat(node.params().get("regex")).isEqualTo("\\d{11}");
+        assertThat(node.params()).doesNotContainKey("pattern");
+    }
+
+    @Test
     void in_producesConditionNodeWithValuesList() {
         AstNode ast = Condition.in("country", "CN", "HK").toAst();
         ConditionNode node = (ConditionNode) ast;
