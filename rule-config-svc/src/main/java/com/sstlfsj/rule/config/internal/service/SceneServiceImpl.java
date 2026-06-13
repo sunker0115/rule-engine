@@ -24,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** SceneService 实现：Scene CRUD + 变更走 audit_log 前后快照 + SceneChangedEvent（D13/D14）。 */
 @Service
@@ -32,6 +34,7 @@ class SceneServiceImpl implements SceneService {
 
     private final SceneMapper sceneMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper metricDefinitionMapper;
 
     @Override
     @Transactional
@@ -118,6 +121,25 @@ class SceneServiceImpl implements SceneService {
         publishAudit(Long.valueOf(tenantId), actorId, "DISABLE", "scene",
                 scene.getId().toString(), before, snapshotOf(scene));
         eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, false));
+    }
+
+    @Override
+    public SensitiveRefs getSensitiveRefs(String tenantId, String sceneCode) {
+        Long tid = Long.valueOf(tenantId);
+        // scene 不存在直接抛——调用方(rule-api)捕获后 fail-closed 全抹
+        SceneDef scene = findScene(tid, sceneCode);
+        List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null
+                ? scene.getPayloadSchema() : List.of();
+        Set<String> payloadFields = schema.stream()
+                .filter(PayloadFieldSpec::sensitive)
+                .map(PayloadFieldSpec::name)
+                .collect(Collectors.toSet());
+        // metric 敏感性租户级共享(D54)：取该租户全部 ACTIVE metric 中 sensitive=true 的码
+        Set<String> metricCodes = metricDefinitionMapper.findActiveByTenant(tid).stream()
+                .filter(m -> Boolean.TRUE.equals(m.getSensitive()))
+                .map(com.sstlfsj.rule.config.internal.domain.MetricDefinition::getMetricCode)
+                .collect(Collectors.toSet());
+        return new SensitiveRefs(payloadFields, metricCodes);
     }
 
     private SceneDef findScene(Long tenantId, String sceneCode) {

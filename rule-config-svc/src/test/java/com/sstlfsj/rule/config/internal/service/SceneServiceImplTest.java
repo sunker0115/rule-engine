@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
+import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
@@ -27,6 +28,7 @@ class SceneServiceImplTest {
 
     @Mock SceneMapper sceneMapper;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper metricDefinitionMapper;
 
     SceneServiceImpl sceneService;
 
@@ -36,7 +38,7 @@ class SceneServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        sceneService = new SceneServiceImpl(sceneMapper, eventPublisher);
+        sceneService = new SceneServiceImpl(sceneMapper, eventPublisher, metricDefinitionMapper);
     }
 
     @Test
@@ -222,7 +224,57 @@ class SceneServiceImplTest {
 
     @Test
     void constructor_springCanInstantiate() {
-        SceneServiceImpl svc = new SceneServiceImpl(sceneMapper, eventPublisher);
+        SceneServiceImpl svc = new SceneServiceImpl(sceneMapper, eventPublisher, metricDefinitionMapper);
         assertThat(svc).isNotNull();
+    }
+
+    @Test
+    void getSensitiveRefs_collectsSensitivePayloadFieldsAndMetricCodes() {
+        SceneDef scene = new SceneDef();
+        scene.setId(1L);
+        scene.setTenantId(100L);
+        scene.setCode("risk.transfer");
+        scene.setPayloadSchema(List.of(
+                new PayloadFieldSpec("phone", "STRING", true, null, null, null, null, null, true),
+                new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null, false)));
+        when(sceneMapper.findByCode(100L, "risk.transfer")).thenReturn(scene);
+
+        com.sstlfsj.rule.config.internal.domain.MetricDefinition sensitiveMetric =
+                new com.sstlfsj.rule.config.internal.domain.MetricDefinition();
+        sensitiveMetric.setMetricCode("user.idno");
+        sensitiveMetric.setSensitive(true);
+        com.sstlfsj.rule.config.internal.domain.MetricDefinition plainMetric =
+                new com.sstlfsj.rule.config.internal.domain.MetricDefinition();
+        plainMetric.setMetricCode("user.age");
+        plainMetric.setSensitive(false);
+        when(metricDefinitionMapper.findActiveByTenant(100L))
+                .thenReturn(List.of(sensitiveMetric, plainMetric));
+
+        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs("100", "risk.transfer");
+
+        assertThat(refs.payloadFields()).containsExactly("phone");
+        assertThat(refs.metricCodes()).containsExactly("user.idno");
+    }
+
+    @Test
+    void getSensitiveRefs_noneSensitive_returnsEmptySets() {
+        SceneDef scene = new SceneDef();
+        scene.setTenantId(100L);
+        scene.setCode("s1");
+        scene.setPayloadSchema(List.of(field("amount")));
+        when(sceneMapper.findByCode(100L, "s1")).thenReturn(scene);
+        when(metricDefinitionMapper.findActiveByTenant(100L)).thenReturn(List.of());
+
+        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs("100", "s1");
+
+        assertThat(refs.payloadFields()).isEmpty();
+        assertThat(refs.metricCodes()).isEmpty();
+    }
+
+    @Test
+    void getSensitiveRefs_sceneNotFound_throws() {
+        when(sceneMapper.findByCode(100L, "missing")).thenReturn(null);
+        assertThatThrownBy(() -> sceneService.getSensitiveRefs("100", "missing"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }
