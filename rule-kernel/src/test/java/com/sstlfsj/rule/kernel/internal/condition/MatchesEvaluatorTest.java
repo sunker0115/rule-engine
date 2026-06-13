@@ -44,6 +44,23 @@ class MatchesEvaluatorTest {
     }
 
     @Test
+    void sameRegexReused_acrossEvals_staysCorrect() {
+        // 同一正则多次评估(命中编译缓存)结果不串味
+        ConditionNode n = node("phone", "\\d{11}");
+        assertThat(evaluator.evaluate(n, ctx("phone", "13800138000"))).isTrue();
+        assertThat(evaluator.evaluate(n, ctx("phone", "abc"))).isFalse();
+        assertThat(evaluator.evaluate(n, ctx("phone", "13900139000"))).isTrue();
+    }
+
+    @Test
+    void invalidRegex_reused_staysFalse() {
+        // 非法正则负缓存：多次评估均 false，不抛
+        ConditionNode n = node("v", "[invalid");
+        assertThat(evaluator.evaluate(n, ctx("v", "test"))).isFalse();
+        assertThat(evaluator.evaluate(n, ctx("v", "other"))).isFalse();
+    }
+
+    @Test
     void metricMissing_returnsFalse() {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
                 Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
