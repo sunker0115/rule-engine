@@ -118,7 +118,7 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
-              width={290}
+              width={305}
               dataIndex={`_c${ci}`}
               title={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -144,7 +144,7 @@ export default function DecisionTableEditor({
                   />
                   <Select
                     size="small"
-                    style={{ width: 68 }}
+                    style={{ width: 80 }}
                     value={col.operator || undefined}
                     onChange={(v) => updateColumn(ci, 'operator', v)}
                     options={opOptions}
