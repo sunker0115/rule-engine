@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
@@ -37,7 +39,7 @@ public class AuditController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                auditService.queryEvalSessions(tenantId, sceneCode, status, eventId, page - 1, size);
+                auditService.queryEvalSessions(new EvalSessionQuery(tenantId, sceneCode, status, eventId, page - 1, size));
         return ApiResponse.ok(PageResponse.of(result.items(), result.total(), page, size));
     }
 
@@ -112,7 +114,7 @@ public class AuditController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         AuditService.PageResult<AuditService.AuditLogEntry> result =
-                auditService.queryAuditLogs(tenantId, resourceType, resourceId, action, actorId, from, to, page - 1, size);
+                auditService.queryAuditLogs(new AuditLogQuery(tenantId, resourceType, resourceId, action, actorId, from, to, page - 1, size));
         return ApiResponse.ok(PageResponse.of(result.items(), result.total(), page, size));
     }
 

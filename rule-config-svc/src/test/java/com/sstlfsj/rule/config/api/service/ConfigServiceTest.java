@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.api.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
+import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -33,8 +34,7 @@ class ConfigServiceTest {
         }
 
         @Override
-        public Page<RuleDefinition> listRules(String tenantId, String sceneCode, String status,
-                String from, String to, int page, int size) {
+        public Page<RuleDefinition> listRules(RuleListQuery q) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -101,7 +101,7 @@ class ConfigServiceTest {
     @Test
     void listRules_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.listRules("t1", null, null, null, null, 1, 20));
+                () -> stub.listRules(new RuleListQuery("t1", null, null, null, null, 1, 20)));
     }
 
     @Test

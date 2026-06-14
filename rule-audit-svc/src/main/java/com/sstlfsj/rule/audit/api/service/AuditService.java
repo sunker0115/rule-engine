@@ -1,5 +1,8 @@
 package com.sstlfsj.rule.audit.api.service;
 
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
+
 import java.util.List;
 
 /** 提供审计日志和评估会话的查询能力。 */
@@ -25,16 +28,11 @@ public interface AuditService {
     /**
      * 分页查询审计日志。
      *
-     * @param tenantId     租户标识
-     * @param resourceType 资源类型（如 SCENE、RULE_DEFINITION）
-     * @param resourceId   资源 ID，null 表示不过滤
-     * @param page         页码（从 0 开始）
-     * @param size         每页条数
+     * @param q 封装所有查询条件（tenantId / resourceType / resourceId / action / actorId / from / to / page / size），
+     *          新增筛选字段只需改 AuditLogQuery record
      * @return 分页结果
      */
-    PageResult<AuditLogEntry> queryAuditLogs(String tenantId, String resourceType,
-                                              Long resourceId, String action, String actorId,
-                                              String from, String to, int page, int size);
+    PageResult<AuditLogEntry> queryAuditLogs(AuditLogQuery q);
 
     /** 评估会话条目，记录一次规则评估的基本信息。 */
     record EvalSessionEntry(
@@ -49,15 +47,11 @@ public interface AuditService {
     /**
      * 分页查询评估会话记录。
      *
-     * @param tenantId 租户标识
-     * @param eventId  事件 ID，null 表示不过滤
-     * @param page     页码（从 0 开始）
-     * @param size     每页条数
+     * @param q 封装所有查询条件（tenantId / sceneCode / status / eventId / page / size），
+     *          新增筛选字段只需改 EvalSessionQuery record
      * @return 分页结果
      */
-    PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String sceneCode,
-                                                    String status, String eventId,
-                                                    int page, int size);
+    PageResult<EvalSessionEntry> queryEvalSessions(EvalSessionQuery q);
 
     /** 节点 trace 条目，对应 node_trace 表一行。 */
     record TraceNodeEntry(

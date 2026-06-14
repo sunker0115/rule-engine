@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +33,7 @@ class AuditControllerTest {
     void querySessions_returns200() throws Exception {
         AuditService.PageResult<AuditService.EvalSessionEntry> empty =
                 new AuditService.PageResult<>(List.of(), 0, 0, 20);
-        when(auditService.queryEvalSessions("t1", null, null, null, 0, 20)).thenReturn(empty);
+        when(auditService.queryEvalSessions(new EvalSessionQuery("t1", null, null, null, 0, 20))).thenReturn(empty);
 
         mockMvc.perform(get("/admin/v1/evaluation-sessions").param("tenantId", "t1"))
                 .andExpect(status().isOk())
@@ -40,20 +42,20 @@ class AuditControllerTest {
                 .andExpect(jsonPath("$.data.page").value(1));
 
         // 默认 page=1 → service 收到 0-based 的 0
-        verify(auditService).queryEvalSessions("t1", null, null, null, 0, 20);
+        verify(auditService).queryEvalSessions(new EvalSessionQuery("t1", null, null, null, 0, 20));
     }
 
     @Test
     void queryAuditLogs_returns200() throws Exception {
         AuditService.PageResult<AuditService.AuditLogEntry> empty =
                 new AuditService.PageResult<>(List.of(), 0, 0, 20);
-        when(auditService.queryAuditLogs("t1", null, null, null, null, null, null, 0, 20)).thenReturn(empty);
+        when(auditService.queryAuditLogs(new AuditLogQuery("t1", null, null, null, null, null, null, 0, 20))).thenReturn(empty);
 
         mockMvc.perform(get("/admin/v1/audit-logs").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(auditService).queryAuditLogs("t1", null, null, null, null, null, null, 0, 20);
+        verify(auditService).queryAuditLogs(new AuditLogQuery("t1", null, null, null, null, null, null, 0, 20));
     }
 
     @Test

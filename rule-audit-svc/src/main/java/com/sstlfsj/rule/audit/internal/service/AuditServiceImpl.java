@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.audit.internal.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.audit.internal.domain.AuditLogRow;
 import com.sstlfsj.rule.audit.internal.domain.EvalSessionRow;
@@ -24,16 +26,14 @@ class AuditServiceImpl implements AuditService {
     private final AuditLogReadMapper auditLogMapper;
 
     @Override
-    public PageResult<AuditLogEntry> queryAuditLogs(String tenantId, String resourceType,
-                                                     Long resourceId, String action, String actorId,
-                                                     String from, String to, int page, int size) {
+    public PageResult<AuditLogEntry> queryAuditLogs(AuditLogQuery q) {
         Page<AuditLogRow> mp = auditLogMapper.selectAuditLogPage(
-                new Page<>(page + 1, size), Long.valueOf(tenantId), resourceType, resourceId,
-                action, actorId, from, to);
+                new Page<>(q.page() + 1, q.size()), Long.valueOf(q.tenantId()), q.resourceType(), q.resourceId(),
+                q.action(), q.actorId(), q.from(), q.to());
         List<AuditLogEntry> items = mp.getRecords().stream()
                 .map(r -> new AuditLogEntry(
                         r.getId(),
-                        tenantId,
+                        q.tenantId(),
                         r.getTargetType(),
                         r.getTargetId() != null ? Long.valueOf(r.getTargetId()) : null,
                         r.getAction(),
@@ -45,19 +45,17 @@ class AuditServiceImpl implements AuditService {
                                 ? r.getOperatedAt().toInstant(ZoneOffset.UTC) : null
                 ))
                 .toList();
-        return new PageResult<>(items, mp.getTotal(), page, size);
+        return new PageResult<>(items, mp.getTotal(), q.page(), q.size());
     }
 
     @Override
-    public PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String sceneCode,
-                                                           String status, String eventId,
-                                                           int page, int size) {
+    public PageResult<EvalSessionEntry> queryEvalSessions(EvalSessionQuery q) {
         Page<EvalSessionRow> mp = evalSessionMapper.selectEvalSessionPage(
-                new Page<>(page + 1, size), Long.valueOf(tenantId), sceneCode, status, eventId);
+                new Page<>(q.page() + 1, q.size()), Long.valueOf(q.tenantId()), q.sceneCode(), q.status(), q.eventId());
         List<EvalSessionEntry> items = mp.getRecords().stream()
                 .map(r -> new EvalSessionEntry(
                         String.valueOf(r.getId()),
-                        tenantId,
+                        q.tenantId(),
                         r.getSceneCode(),
                         r.getEventId(),
                         r.getStatus(),
@@ -65,7 +63,7 @@ class AuditServiceImpl implements AuditService {
                                 ? r.getStartedAt().toInstant(ZoneOffset.UTC) : null
                 ))
                 .toList();
-        return new PageResult<>(items, mp.getTotal(), page, size);
+        return new PageResult<>(items, mp.getTotal(), q.page(), q.size());
     }
 
     @Override

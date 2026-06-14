@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
+import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.web.common.ApiResponse;
@@ -195,7 +196,8 @@ public class RuleController {
             @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<RuleDefinition> rdPage = configService.listRules(tenantId, sceneCode, status, from, to, page, size);
+        Page<RuleDefinition> rdPage = configService.listRules(
+                new RuleListQuery(tenantId, sceneCode, status, from, to, page, size));
 
         Map<Long, String> sceneCodeMap = configService.getSceneCodeMap(
                 rdPage.getRecords().stream().map(RuleDefinition::getSceneId).collect(Collectors.toSet()));

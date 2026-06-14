@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
+import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -111,7 +112,7 @@ class ConfigServiceImplTest {
         mockPage.setRecords(java.util.List.of(rd));
         when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any(), any(), any())).thenReturn(mockPage);
 
-        var result = configService.listRules("1", "risk.transfer", "PUBLISHED", null, null, 1, 20);
+        var result = configService.listRules(new RuleListQuery("1", "risk.transfer", "PUBLISHED", null, null, 1, 20));
 
         assertThat(result.getTotal()).isEqualTo(1);
         assertThat(result.getRecords()).hasSize(1);
@@ -129,7 +130,7 @@ class ConfigServiceImplTest {
     void listRules_sceneNotFound_returnsEmptyPage() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(null);
 
-        var result = configService.listRules("1", "nonexistent.scene", null, null, null, 1, 20);
+        var result = configService.listRules(new RuleListQuery("1", "nonexistent.scene", null, null, null, 1, 20));
 
         assertThat(result.getRecords()).isEmpty();
         assertThat(result.getTotal()).isEqualTo(0);
@@ -143,7 +144,7 @@ class ConfigServiceImplTest {
         emptyPage.setRecords(java.util.List.of());
         when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any(), any(), any())).thenReturn(emptyPage);
 
-        var result = configService.listRules("1", null, null, null, null, 1, 20);
+        var result = configService.listRules(new RuleListQuery("1", null, null, null, null, 1, 20));
 
         assertThat(result.getRecords()).isEmpty();
         verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any(), any(), any());

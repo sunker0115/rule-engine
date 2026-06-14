@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
+import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
@@ -77,24 +78,23 @@ class ConfigServiceImpl implements ConfigService {
     }
 
     @Override
-    public Page<RuleDefinition> listRules(String tenantId, String sceneCode, String status,
-            String from, String to, int page, int size) {
+    public Page<RuleDefinition> listRules(RuleListQuery q) {
         Long sceneId = null;
-        if (sceneCode != null && !sceneCode.isBlank()) {
-            SceneDef scene = sceneMapper.findByCode(Long.valueOf(tenantId), sceneCode);
+        if (q.sceneCode() != null && !q.sceneCode().isBlank()) {
+            SceneDef scene = sceneMapper.findByCode(Long.valueOf(q.tenantId()), q.sceneCode());
             if (scene == null) {
-                return new Page<>(page, size);
+                return new Page<>(q.page(), q.size());
             }
             sceneId = scene.getId();
         }
 
-        LocalDate fromDate = from != null && !from.isBlank()
-                ? LocalDate.parse(from) : null;
-        LocalDate toDate = to != null && !to.isBlank()
-                ? LocalDate.parse(to) : null;
+        LocalDate fromDate = q.from() != null && !q.from().isBlank()
+                ? LocalDate.parse(q.from()) : null;
+        LocalDate toDate = q.to() != null && !q.to().isBlank()
+                ? LocalDate.parse(q.to()) : null;
 
         return ruleDefinitionMapper.selectRulePage(
-                new Page<>(page, size), Long.valueOf(tenantId), sceneId, status, fromDate, toDate);
+                new Page<>(q.page(), q.size()), Long.valueOf(q.tenantId()), sceneId, q.status(), fromDate, toDate);
     }
 
     @Override

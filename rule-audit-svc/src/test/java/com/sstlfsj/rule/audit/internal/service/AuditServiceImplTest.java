@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.audit.internal.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.audit.internal.domain.AuditLogRow;
 import com.sstlfsj.rule.audit.internal.domain.EvalSessionRow;
@@ -52,7 +54,7 @@ class AuditServiceImplTest {
         when(evalSessionMapper.selectEvalSessionPage(any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                service.queryEvalSessions("100", null, null, null, 0, 20);
+                service.queryEvalSessions(new EvalSessionQuery("100", null, null, null, 0, 20));
 
         assertThat(result.total()).isEqualTo(1L);
         assertThat(result.items()).hasSize(1);
@@ -70,7 +72,7 @@ class AuditServiceImplTest {
         when(evalSessionMapper.selectEvalSessionPage(any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                service.queryEvalSessions("100", null, null, "evt-xyz", 0, 20);
+                service.queryEvalSessions(new EvalSessionQuery("100", null, null, "evt-xyz", 0, 20));
 
         assertThat(result.total()).isEqualTo(0L);
         assertThat(result.items()).isEmpty();
@@ -95,7 +97,7 @@ class AuditServiceImplTest {
         when(auditLogMapper.selectAuditLogPage(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.AuditLogEntry> result =
-                service.queryAuditLogs("100", "rule_definition", null, null, null, null, null, 0, 20);
+                service.queryAuditLogs(new AuditLogQuery("100", "rule_definition", null, null, null, null, null, 0, 20));
 
         assertThat(result.total()).isEqualTo(1L);
         AuditService.AuditLogEntry entry = result.items().get(0);

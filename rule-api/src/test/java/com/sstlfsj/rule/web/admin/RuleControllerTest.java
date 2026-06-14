@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
+import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
@@ -276,7 +277,7 @@ class RuleControllerTest {
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> page =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 1);
         // Mock domain entity returned by service
-        when(configService.listRules("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20)).thenReturn(page);
+        when(configService.listRules(new RuleListQuery("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20))).thenReturn(page);
 
         mockMvc.perform(get("/admin/v1/rules")
                         .param("tenantId", "t1")
@@ -289,7 +290,7 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.items[0].code").value("rule.a"))
                 .andExpect(jsonPath("$.data.items[0].status").value("PUBLISHED"));
 
-        verify(configService).listRules("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20);
+        verify(configService).listRules(new RuleListQuery("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20));
     }
 
     @Test
@@ -297,7 +298,7 @@ class RuleControllerTest {
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> emptyPage =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
         emptyPage.setRecords(java.util.List.of());
-        when(configService.listRules("t1", null, null, null, null, 1, 20)).thenReturn(emptyPage);
+        when(configService.listRules(new RuleListQuery("t1", null, null, null, null, 1, 20))).thenReturn(emptyPage);
 
         mockMvc.perform(get("/admin/v1/rules")
                         .param("tenantId", "t1"))
@@ -305,6 +306,6 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.total").value(0));
 
-        verify(configService).listRules("t1", null, null, null, null, 1, 20);
+        verify(configService).listRules(new RuleListQuery("t1", null, null, null, null, 1, 20));
     }
 }

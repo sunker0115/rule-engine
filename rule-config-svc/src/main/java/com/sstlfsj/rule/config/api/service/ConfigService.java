@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
+import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -41,17 +42,11 @@ public interface ConfigService {
     /**
      * 查询规则列表，支持按 sceneCode / status / 时间范围 过滤，结果分页返回。
      *
-     * @param tenantId  租户 ID
-     * @param sceneCode Scene 编码（null 或空字符串时不过滤）
-     * @param status    规则状态过滤（null 时不过滤；DRAFT / PUBLISHED / DISABLED）
-     * @param from      发布时间起始（含，ISO 日期字符串如 2026-06-01；null 时不过滤）
-     * @param to        发布时间截止（含，ISO 日期字符串；null 时不过滤）
-     * @param page      页码（从 1 开始）
-     * @param size      每页条数
+     * @param q 封装所有查询条件（tenantId / sceneCode / status / from / to / page / size），
+     *          新增筛选字段只需改 RuleListQuery record
      * @return 分页规则列表
      */
-    Page<RuleDefinition> listRules(String tenantId, String sceneCode, String status,
-            String from, String to, int page, int size);
+    Page<RuleDefinition> listRules(RuleListQuery q);
 
     /**
      * 查询规则详情：定义基本信息 + 当前 ACTIVE 版本的 conditionAst / decisionBindings。
