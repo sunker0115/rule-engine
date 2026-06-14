@@ -156,7 +156,7 @@ export default function DecisionTableEditor({
               render={(val: unknown, _: unknown, ri: number) => (
                 <Input
                   size="small"
-                  style={{ width: 130 }}
+                  style={{ width: 140 }}
                   value={val != null ? String(val) : ''}
                   onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
                   placeholder="-"
@@ -168,7 +168,7 @@ export default function DecisionTableEditor({
 
         <Table.Column
           title={t('editor.decisionTable.decisionCode')}
-          width={90}
+          width={80}
           dataIndex="_decisionCode"
           render={(val: string, _: unknown, ri: number) => (
             <Select
