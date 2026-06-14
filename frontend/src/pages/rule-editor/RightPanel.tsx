@@ -10,7 +10,7 @@ interface Props {
   ruleDetail: RuleDetailType;
 }
 
-export default function RightPanel({ metadata, ruleDetail }: Props) {
+export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
   const { t } = useTranslation('rule');
   const { preGates, decisionBindings, setPreGates, setDecisionBindings } = useRuleStore();
 
