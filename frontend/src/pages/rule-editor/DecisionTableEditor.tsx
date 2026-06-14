@@ -118,7 +118,7 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
-              width={140}
+              width={85}
               dataIndex={`_c${ci}`}
               title={(
                 <div style={{
@@ -126,23 +126,22 @@ export default function DecisionTableEditor({
                   borderLeft: `3px solid ${isPayload ? '#fa8c16' : '#1890ff'}`,
                 }}>
                   <div style={{
-                    fontSize: 11, padding: '2px 6px',
+                    fontSize: 11, padding: '2px 4px',
                     borderBottom: '1px solid #f0f0f0', background: '#fafafa',
-                    borderRadius: '0 6px 0 0', display: 'flex', alignItems: 'center', gap: 4,
+                    borderRadius: '0 6px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   }}>
                     <span style={{ color: '#999' }}>C{ci + 1}</span>
-                    <div style={{ flex: 1 }} />
-                    <Select
-                      size="small"
-                      style={{ width: 68, fontSize: 11 }}
-                      value={col.operator || undefined}
-                      onChange={(v) => updateColumn(ci, 'operator', v)}
-                      options={opOptions}
-                    />
                     <Button type="text" size="small" danger icon={<DeleteOutlined />}
                       onClick={() => removeColumn(ci)} style={{ fontSize: 10, padding: 0, height: 16 }} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 6px 6px' }}>
+                    <Select
+                      size="small"
+                      style={{ width: '100%' }}
+                      value={col.operator || undefined}
+                      onChange={(v) => updateColumn(ci, 'operator', v)}
+                      options={opOptions}
+                    />
                     <Select
                       size="small"
                       style={{ width: '100%' }}
@@ -167,22 +166,13 @@ export default function DecisionTableEditor({
                 </div>
               )}
               render={(val: unknown, _: unknown, ri: number) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Select
-                    size="small"
-                    style={{ width: 74 }}
-                    value={col.operator || undefined}
-                    onChange={(v) => updateColumn(ci, 'operator', v)}
-                    options={opOptions}
-                  />
-                  <Input
-                    size="small"
-                    style={{ flex: 1 }}
-                    value={val != null ? String(val) : ''}
-                    onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
-                    placeholder="-"
-                  />
-                </div>
+                <Input
+                  size="small"
+                  style={{ width: '100%' }}
+                  value={val != null ? String(val) : ''}
+                  onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
+                  placeholder="-"
+                />
               )}
             />
           );
