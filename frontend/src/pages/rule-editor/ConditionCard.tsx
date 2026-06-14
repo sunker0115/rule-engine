@@ -109,7 +109,7 @@ export default function ConditionCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <Select
           size="small"
-          style={{ width: 160 }}
+          style={{ minWidth: 180 }}
           value={node.conditionType || undefined}
           onChange={(code) => {
             const newMeta = findMeta(conditionTypes, code);
@@ -155,7 +155,7 @@ export default function ConditionCard({
         {node.valueRef === 'PAYLOAD' && (
           <Input
             size="small"
-            style={{ flex: 1, minWidth: 160 }}
+            style={{ width: 160 }}
             value={node.metricCode ?? ''}
             onChange={(e) => onChange({ ...node, metricCode: e.target.value })}
             placeholder="payload 字段名"
