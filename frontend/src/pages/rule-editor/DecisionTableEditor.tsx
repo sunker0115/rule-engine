@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Select, Input, Table, Popconfirm, Typography } from 'antd';
+import { Button, Select, Input, Table, Popconfirm, Typography, Tag } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -101,6 +101,63 @@ export default function DecisionTableEditor({
         </div>
       </div>
 
+      {/* 列定义区：每列一张卡片 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        {cols.map((col, ci) => {
+          const isPayload = col.valueRef === 'PAYLOAD';
+          const fieldOptions = isPayload
+            ? payloadFieldNames.map((f) => ({ value: f, label: f }))
+            : availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }));
+          return (
+            <div
+              key={ci}
+              style={{
+                border: '1px solid #d9d9d9',
+                borderRadius: 6,
+                padding: '8px 10px',
+                background: isPayload ? '#fafafa' : '#f0f5ff',
+              }}
+            >
+              <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>C{ci + 1}</Tag>
+                <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                  onClick={() => removeColumn(ci)} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Select
+                  size="small"
+                  style={{ width: 90 }}
+                  value={col.valueRef ?? 'METRIC'}
+                  onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
+                  options={[
+                    { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
+                    { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
+                  ]}
+                />
+                <Select
+                  size="small"
+                  showSearch
+                  style={{ width: 160 }}
+                  value={col.metricCode || undefined}
+                  onChange={(v) => updateColumn(ci, 'metricCode', v)}
+                  placeholder={t('editor.decisionTable.metric')}
+                  popupMatchSelectWidth={false}
+                  options={fieldOptions}
+                />
+                <Select
+                  size="small"
+                  style={{ width: 140 }}
+                  value={col.operator || undefined}
+                  onChange={(v) => updateColumn(ci, 'operator', v)}
+                  options={opOptions}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 数据表格 */}
       <Table
         dataSource={rows.map((r, ri) => {
           const base: Record<string, unknown> = { _key: ri, _decisionCode: r.decisionCode };
@@ -116,68 +173,26 @@ export default function DecisionTableEditor({
           <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addRow} block>{t('editor.decisionTable.addRow')}</Button>
         )}
       >
-        {cols.map((col, ci) => {
-          const isPayload = col.valueRef === 'PAYLOAD';
-          const fieldOptions = isPayload
-            ? payloadFieldNames.map((f) => ({ value: f, label: f }))
-            : availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }));
-          return (
-            <Table.Column
-              key={ci}
-              width={240}
-              dataIndex={`_c${ci}`}
-              title={(
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <Select
-                      size="small"
-                      style={{ flex: 1 }}
-                      value={col.valueRef ?? 'METRIC'}
-                      onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
-                      options={[
-                        { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
-                        { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
-                      ]}
-                    />
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                      onClick={() => removeColumn(ci)} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <Select
-                      size="small"
-                      showSearch
-                      style={{ flex: 1 }}
-                      value={col.metricCode || undefined}
-                      onChange={(v) => updateColumn(ci, 'metricCode', v)}
-                      placeholder={t('editor.decisionTable.metric')}
-                      popupMatchSelectWidth={false}
-                      options={fieldOptions}
-                    />
-                    <Select
-                      size="small"
-                      style={{ width: 110 }}
-                      value={col.operator || undefined}
-                      onChange={(v) => updateColumn(ci, 'operator', v)}
-                      options={opOptions}
-                    />
-                  </div>
-                </div>
-              )}
-              render={(val: unknown, _: unknown, ri: number) => (
-                <Input
-                  size="small"
-                  value={val != null ? String(val) : ''}
-                  onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
-                  placeholder="-"
-                />
-              )}
-            />
-          );
-        })}
+        {cols.map((col, ci) => (
+          <Table.Column
+            key={ci}
+            title={`C${ci + 1}`}
+            width={120}
+            dataIndex={`_c${ci}`}
+            render={(val: unknown, _: unknown, ri: number) => (
+              <Input
+                size="small"
+                value={val != null ? String(val) : ''}
+                onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
+                placeholder="-"
+              />
+            )}
+          />
+        ))}
 
         <Table.Column
           title={t('editor.decisionTable.decisionCode')}
-          width={140}
+          width={130}
           dataIndex="_decisionCode"
           render={(val: string, _: unknown, ri: number) => (
             <Select
