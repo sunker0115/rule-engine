@@ -27,6 +27,17 @@ export default function DecisionTableEditor({
   const columns: DecisionTableColumn[] = node.columns ?? [];
   const rows: DecisionTableRow[] = node.rows ?? [];
 
+  // 空表自动预填一列一行，避免后端校验 "columns 不得为空"
+  useEffect(() => {
+    if (columns.length === 0) {
+      onChange({
+        ...node,
+        columns: [{ metricCode: '', operator: 'EQ', dataType: null }],
+        rows: [{ conditions: [null], decisionCode: '' }],
+      });
+    }
+  }, []);
+
   // 适合决策表的算子（排除 time.* 类）
   const opOptions = conditionTypes
     .filter((ct) => !ct.code.startsWith('time.'))
@@ -46,6 +57,7 @@ export default function DecisionTableEditor({
   };
 
   const removeColumn = (colIndex: number) => {
+    if (columns.length <= 1) return; // 至少保留一列
     const newCols = columns.filter((_, i) => i !== colIndex);
     const newRows = rows.map((r) => ({ ...r, conditions: r.conditions.filter((_, i) => i !== colIndex) }));
     onChange({ ...node, columns: newCols, rows: newRows });
@@ -89,12 +101,7 @@ export default function DecisionTableEditor({
         </div>
       </div>
 
-      {columns.length === 0 ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#ccc' }}>
-          暂无列定义，点击「加列」定义条件维度
-        </div>
-      ) : (
-        <Table
+      <Table
           dataSource={dataSource}
           rowKey="_key"
           size="small"
@@ -170,7 +177,6 @@ export default function DecisionTableEditor({
             )}
           />
         </Table>
-      )}
     </div>
   );
 }

@@ -61,7 +61,7 @@ export default function CenterPanel({ metadata }: Props) {
   if (kind === 'DECISION_TABLE') {
     const tableNode: DecisionTableNode = (ast?.type === 'DecisionTableNode')
       ? ast
-      : { type: 'DecisionTableNode', columns: [], rows: [] };
+      : { type: 'DecisionTableNode', columns: [{ metricCode: '', operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
     return (
       <DecisionTableEditor
         node={tableNode}
