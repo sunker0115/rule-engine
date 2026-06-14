@@ -46,8 +46,8 @@ function fromSchema(schema: unknown): FieldDef[] {
 }
 
 function PayloadSchemaEditor({ value, onChange }: { value?: unknown; onChange?: (v: unknown) => void }) {
-  const [fields, setFields] = useState<FieldDef[]>(() => fromSchema(value));
-  const update = (newFields: FieldDef[]) => { setFields(newFields); onChange?.(toSchema(newFields)); };
+  const fields: FieldDef[] = fromSchema(value);
+  const update = (newFields: FieldDef[]) => { onChange?.(toSchema(newFields)); };
   return (
     <div>
       <Table dataSource={fields.map((f, i) => ({ ...f, _key: i }))} rowKey="_key" size="small" pagination={false} locale={{ emptyText: '暂无字段' }}>
