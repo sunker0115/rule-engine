@@ -19,15 +19,6 @@ export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
 
   const tabItems = [
     {
-      key: 'property',
-      label: t('editor.rightPanel.property'),
-      children: (
-        <div style={{ padding: 16, color: '#999' }}>
-          {t('editor.rightPanel.noSelection')}
-        </div>
-      ),
-    },
-    {
       key: 'pregate',
       label: t('editor.rightPanel.preGate'),
       children: (
