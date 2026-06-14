@@ -7,7 +7,7 @@
 
     <parent>
         <groupId>com.sstlfsj.rule</groupId>
-        <artifactId>rule-engine</artifactId>
+        <artifactId>rule-expression</artifactId>
         <version>${revision}</version>
     </parent>
 

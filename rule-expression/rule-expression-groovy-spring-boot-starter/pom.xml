@@ -7,18 +7,18 @@
 
     <parent>
         <groupId>com.sstlfsj.rule</groupId>
-        <artifactId>rule-engine</artifactId>
+        <artifactId>rule-expression</artifactId>
         <version>${revision}</version>
     </parent>
 
-    <artifactId>rule-expression-jexl-spring-boot-starter</artifactId>
+    <artifactId>rule-expression-groovy-spring-boot-starter</artifactId>
     <packaging>jar</packaging>
 
     <dependencies>
-        <!-- 纯 Java JEXL 引擎(无 Spring);本 starter 提供其 Spring 自动装配 -->
+        <!-- 纯 Java Groovy 引擎(无 Spring);本 starter 提供其 Spring 自动装配 -->
         <dependency>
             <groupId>com.sstlfsj.rule</groupId>
-            <artifactId>rule-expression-jexl</artifactId>
+            <artifactId>rule-expression-groovy</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
