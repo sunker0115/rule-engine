@@ -67,8 +67,6 @@ export default function EvalSessionDetail() {
           <Descriptions.Item label="来源">{session.source || '-'}</Descriptions.Item>
           <Descriptions.Item label="模式">{session.mode || '-'}</Descriptions.Item>
           <Descriptions.Item label="决策结果">{session.finalDecision || '-'}</Descriptions.Item>
-          <Descriptions.Item label="候选规则数">{session.candidateRuleCount}</Descriptions.Item>
-          <Descriptions.Item label="命中规则数">{session.hitRuleCount}</Descriptions.Item>
           {session.blockedBy && <Descriptions.Item label="拦截原因">{session.blockedBy}</Descriptions.Item>}
           {session.errorCode && <Descriptions.Item label="错误码"><Tag color="red">{session.errorCode}</Tag></Descriptions.Item>}
           {session.score != null && <Descriptions.Item label="评分">{session.score}</Descriptions.Item>}

@@ -51,8 +51,6 @@ export default function EvalSessionList() {
     { title: '主体', dataIndex: 'subjectId', key: 'subjectId', width: 100 },
     { title: '来源', dataIndex: 'source', key: 'source', width: 60 },
     { title: '模式', dataIndex: 'mode', key: 'mode', width: 60 },
-    { title: t('session.column.candidateRuleCount'), dataIndex: 'candidateRuleCount', key: 'candidateRuleCount', width: 70 },
-    { title: t('session.column.hitRuleCount'), dataIndex: 'hitRuleCount', key: 'hitRuleCount', width: 70 },
     {
       title: t('session.column.finalDecision'), dataIndex: 'finalDecision', key: 'finalDecision', width: 100,
       render: (v: string) => v || '-',
