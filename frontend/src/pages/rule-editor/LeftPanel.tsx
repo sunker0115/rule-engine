@@ -10,9 +10,10 @@ import type { RuleDetail as RuleDetailType } from '@/types';
 interface Props {
   ruleDetail: RuleDetailType;
   onOpenDryRun: () => void;
+  onUpdated: () => void;
 }
 
-export default function LeftPanel({ ruleDetail, onOpenDryRun }: Props) {
+export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props) {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
@@ -38,16 +39,19 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun }: Props) {
   const handlePublish = async () => {
     await publishRule(tenantId, ruleDetail.ruleDefinitionId);
     message.success(tc('message.updateSuccess'));
+    onUpdated();
   };
 
   const handleDisable = async () => {
     await disableRule(tenantId, ruleDetail.ruleDefinitionId);
     message.success(tc('message.updateSuccess'));
+    onUpdated();
   };
 
   const handleNewVersion = async () => {
     await newVersion(tenantId, ruleDetail.ruleDefinitionId);
     message.success(tc('message.createSuccess'));
+    onUpdated();
   };
 
   const isDraft = ruleDetail.status === 'DRAFT';

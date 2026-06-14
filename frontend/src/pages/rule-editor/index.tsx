@@ -24,30 +24,30 @@ export default function RuleEditor() {
   const [metadata, setMetadata] = useState<SceneMetadataType | null>(null);
   const [dryRunOpen, setDryRunOpen] = useState(false);
 
-  useEffect(() => {
+  const load = async () => {
     if (!currentId || !ruleId) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const detailRes = await getRule(currentId, Number(ruleId));
-        const detail = detailRes.data;
-        if (detail) {
-          setRuleDetail(detail);
-          loadFromDetail(
-            detail.conditionAst ?? null,
-            detail.decisionBindings ?? [],
-            detail.preGates ?? [],
-            detail.triggerEventTypes ?? [],
-            detail.kind,
-          );
-          const metaRes = await getSceneMetadata(currentId, detail.sceneCode);
-          setMetadata(metaRes.data ?? null);
-        }
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    try {
+      const detailRes = await getRule(currentId, Number(ruleId));
+      const detail = detailRes.data;
+      if (detail) {
+        setRuleDetail(detail);
+        loadFromDetail(
+          detail.conditionAst ?? null,
+          detail.decisionBindings ?? [],
+          detail.preGates ?? [],
+          detail.triggerEventTypes ?? [],
+          detail.kind,
+        );
+        const metaRes = await getSceneMetadata(currentId, detail.sceneCode);
+        setMetadata(metaRes.data ?? null);
       }
-    })();
-  }, [currentId, ruleId]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [currentId, ruleId]);
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!ruleDetail) return <div>{t('editor.notFound')}</div>;
@@ -60,7 +60,7 @@ export default function RuleEditor() {
   return (
     <Layout style={{ background: '#fff', height: 'calc(100vh - 64px - 48px)' }}>
       <Sider width={260} style={{ background: '#fafafa', borderRight: '1px solid #f0f0f0', overflow: 'auto' }}>
-        <LeftPanel ruleDetail={ruleDetail} onOpenDryRun={() => setDryRunOpen(true)} />
+        <LeftPanel ruleDetail={ruleDetail} onOpenDryRun={() => setDryRunOpen(true)} onUpdated={load} />
       </Sider>
       <Content style={{ overflow: 'auto', padding: 16 }}>
         <CenterPanel metadata={metadata} />
