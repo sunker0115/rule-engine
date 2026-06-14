@@ -67,7 +67,7 @@ export default function RuleList() {
       } else if (values.kind === 'DECISION_TREE') {
         body.conditionAst = { type: 'IfNode', condition: { type: 'AndNode', children: [] }, thenBranch: { type: 'DecisionLeafNode', decisionCode: '', category: null }, elseBranch: null };
       } else if (values.kind === 'DECISION_TABLE') {
-        body.conditionAst = { type: 'DecisionTableNode', columns: [], rows: [] };
+        body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: '', operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
       }
       await createRule(currentId!, body);
       message.success(tc('message.createSuccess'));

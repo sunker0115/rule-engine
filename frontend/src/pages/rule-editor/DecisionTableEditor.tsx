@@ -143,7 +143,7 @@ export default function DecisionTableEditor({
               render={(val: unknown, _: unknown, ri: number) => (
                 <Input
                   size="small"
-                  style={{ width: '100%' }}
+                  style={{ minWidth: 100 }}
                   value={val != null ? String(val) : ''}
                   onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
                   placeholder="值或留空(通配)"
