@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Descriptions, Button, Form, Input, Select, Switch, message, Space, Popconfirm } from 'antd';
+import { Descriptions, Button, Form, Input, Select, Switch, message, Space, Table } from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
@@ -17,22 +18,11 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
   const tc = useTranslation('common').t;
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toggling, setToggling] = useState(false);
   const [form] = Form.useForm();
 
   const handleSave = async () => {
     const values = await form.validateFields();
     const body: Record<string, unknown> = { ...values, tenantId };
-    try {
-      if (body.payloadSchema && typeof body.payloadSchema === 'string') {
-        body.payloadSchema = JSON.parse(body.payloadSchema as string);
-      }
-    } catch { message.error(`payloadSchema ${tc('validation.jsonFormat')}`); return; }
-    try {
-      if (body.defaultParams && typeof body.defaultParams === 'string') {
-        body.defaultParams = JSON.parse(body.defaultParams as string);
-      }
-    } catch { message.error(`defaultParams ${tc('validation.jsonFormat')}`); return; }
 
     setSaving(true);
     try {
@@ -45,25 +35,11 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
     }
   };
 
-  const handleToggleStatus = async () => {
-    const enable = scene.status !== 'ACTIVE';
-    setToggling(true);
-    try {
-      await apiClient.put(ENDPOINTS.SCENE_TOGGLE_STATUS(scene.sceneCode), null, {
-        params: { tenantId, enable },
-      });
-      message.success(enable ? '已启用' : '已禁用');
-      onUpdated();
-    } finally {
-      setToggling(false);
-    }
-  };
-
   const startEdit = () => {
     form.setFieldsValue({
       ...scene,
-      payloadSchema: scene.payloadSchema ? JSON.stringify(scene.payloadSchema, null, 2) : '',
-      defaultParams: scene.defaultParams ? JSON.stringify(scene.defaultParams, null, 2) : '',
+      payloadSchema: scene.payloadSchema ?? null,
+      defaultParams: scene.defaultParams ?? null,
       eventTypes: scene.eventTypes ?? [],
     });
     setEditing(true);
@@ -85,17 +61,7 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
           </Descriptions.Item>
         </Descriptions>
         <div style={{ marginTop: 16 }}>
-          <Space>
-            <Button type="primary" onClick={startEdit}>{tc('button.edit')}</Button>
-            <Popconfirm
-              title={scene.status === 'ACTIVE' ? '确认禁用该场景？' : '确认启用该场景？'}
-              onConfirm={handleToggleStatus}
-            >
-              <Button loading={toggling} danger={scene.status === 'ACTIVE'}>
-                {scene.status === 'ACTIVE' ? '禁用' : '启用'}
-              </Button>
-            </Popconfirm>
-          </Space>
+          <Button type="primary" onClick={startEdit}>{tc('button.edit')}</Button>
         </div>
       </div>
     );
@@ -134,38 +100,137 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
       <Form.Item name="eventTypes" label={t('form.eventTypes')}>
         <Select mode="tags" placeholder={t('form.eventTypesPlaceholder')} />
       </Form.Item>
-      <Form.Item
-        label={t('form.payloadSchema')}
-        extra={t('form.payloadSchemaExtra')}
-        validateTrigger="onBlur"
-        rules={[{
-          validator: (_, value) => {
-            if (!value) return Promise.resolve();
-            try { JSON.parse(value); return Promise.resolve(); }
-            catch { return Promise.reject('JSON 格式错误'); }
-          },
-        }]}
-      >
-        <Input.TextArea rows={8} style={{ fontFamily: 'monospace' }} placeholder='{"type":"object","properties":{"amount":{"type":"number"}}}' />
+
+      {/* payloadSchema 可视化编辑 */}
+      <Form.Item label={t('form.payloadSchema')} extra={t('form.payloadSchemaExtra')}>
+        <PayloadSchemaEditor
+          value={form.getFieldValue('payloadSchema')}
+          onChange={(v) => form.setFieldValue('payloadSchema', v)}
+        />
       </Form.Item>
-      <Form.Item
-        label={t('form.defaultParams')}
-        extra={t('form.defaultParamsExtra')}
-        validateTrigger="onBlur"
-        rules={[{
-          validator: (_, value) => {
-            if (!value) return Promise.resolve();
-            try { JSON.parse(value); return Promise.resolve(); }
-            catch { return Promise.reject('JSON 格式错误'); }
-          },
-        }]}
-      >
-        <Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} placeholder='{"timezone":"Asia/Shanghai"}' />
+
+      {/* defaultParams 可视化编辑 */}
+      <Form.Item label={t('form.defaultParams')} extra={t('form.defaultParamsExtra')}>
+        <DefaultParamsEditor
+          value={form.getFieldValue('defaultParams')}
+          onChange={(v) => form.setFieldValue('defaultParams', v)}
+        />
       </Form.Item>
+
       <Space>
         <Button type="primary" onClick={handleSave} loading={saving}>{tc('button.save')}</Button>
         <Button onClick={() => setEditing(false)}>{tc('button.cancel')}</Button>
       </Space>
     </Form>
+  );
+}
+
+// ---- payloadSchema 可视化编辑器 ----
+interface FieldDef { name: string; type: string; required: boolean; }
+const TYPE_OPTIONS = ['string', 'number', 'integer', 'boolean'].map(v => ({ value: v, label: v }));
+
+function toSchema(fields: FieldDef[]): Record<string, unknown> | null {
+  if (fields.length === 0) return null;
+  const props: Record<string, unknown> = {};
+  const required: string[] = [];
+  for (const f of fields) {
+    props[f.name] = { type: f.type };
+    if (f.required) required.push(f.name);
+  }
+  return { type: 'object', properties: props, ...(required.length > 0 ? { required } : {}) };
+}
+
+function fromSchema(schema: unknown): FieldDef[] {
+  if (!schema || typeof schema !== 'object') return [];
+  const s = schema as Record<string, unknown>;
+  const props = (s.properties ?? {}) as Record<string, { type?: string }>;
+  const req: string[] = (s.required as string[]) ?? [];
+  return Object.entries(props).map(([name, def]) => ({
+    name,
+    type: def.type ?? 'string',
+    required: req.includes(name),
+  }));
+}
+
+function PayloadSchemaEditor({ value, onChange }: { value: unknown; onChange: (v: Record<string, unknown> | null) => void }) {
+  const [fields, setFields] = useState<FieldDef[]>(() => fromSchema(value));
+
+  const update = (newFields: FieldDef[]) => {
+    setFields(newFields);
+    onChange(toSchema(newFields));
+  };
+
+  return (
+    <div>
+      <Table
+        dataSource={fields}
+        rowKey="name"
+        size="small"
+        pagination={false}
+        locale={{ emptyText: '暂无字段，点击下方添加' }}
+      >
+        <Table.Column title="字段名" dataIndex="name" render={(v: string, _: FieldDef, i: number) => (
+          <Input size="small" value={v} onChange={e => {
+            const next = [...fields]; next[i] = { ...next[i], name: e.target.value }; update(next);
+          }} style={{ width: 120 }} />
+        )} />
+        <Table.Column title="类型" dataIndex="type" width={110} render={(v: string, _: FieldDef, i: number) => (
+          <Select size="small" value={v} onChange={val => {
+            const next = [...fields]; next[i] = { ...next[i], type: val }; update(next);
+          }} options={TYPE_OPTIONS} style={{ width: 100 }} />
+        )} />
+        <Table.Column title="必填" dataIndex="required" width={60} render={(v: boolean, _: FieldDef, i: number) => (
+          <Switch size="small" checked={v} onChange={checked => {
+            const next = [...fields]; next[i] = { ...next[i], required: checked }; update(next);
+          }} />
+        )} />
+        <Table.Column title="" width={40} render={(_: unknown, __: FieldDef, i: number) => (
+          <Button type="text" size="small" icon={<DeleteOutlined />} onClick={() => update(fields.filter((_, j) => j !== i))} />
+        )} />
+      </Table>
+      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => update([...fields, { name: '', type: 'string', required: false }])} style={{ marginTop: 8 }}>
+        添加字段
+      </Button>
+    </div>
+  );
+}
+
+// ---- defaultParams 可视化编辑器 ----
+function DefaultParamsEditor({ value, onChange }: { value: unknown; onChange: (v: Record<string, string> | null) => void }) {
+  const params = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
+  const entries = Object.entries(params);
+
+  const update = (key: string, val: string, oldKey?: string) => {
+    const next = { ...params };
+    if (oldKey !== undefined) delete next[oldKey];
+    if (key) next[key] = val;
+    onChange(Object.keys(next).length > 0 ? next : null);
+  };
+
+  return (
+    <div>
+      {entries.map(([key, val], i) => (
+        <Space key={i} style={{ marginBottom: 6 }}>
+          <Input
+            size="small"
+            placeholder="参数名"
+            value={key}
+            onChange={e => update(e.target.value, val, key)}
+            style={{ width: 140 }}
+          />
+          <Input
+            size="small"
+            placeholder="参数值"
+            value={val}
+            onChange={e => update(key, e.target.value)}
+            style={{ width: 180 }}
+          />
+          <Button type="text" size="small" icon={<DeleteOutlined />} onClick={() => update('', '', key)} />
+        </Space>
+      ))}
+      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => update(`param${entries.length + 1}`, '')}>
+        添加参数
+      </Button>
+    </div>
   );
 }
