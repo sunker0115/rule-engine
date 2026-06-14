@@ -58,6 +58,10 @@ export default function RulesAll() {
       const body: Record<string, unknown> = { ...values, tenantId: values.tenantId ?? currentId! };
       if (values.kind === 'SCORECARD') {
         body.conditionAst = { type: 'ScorecardRootNode', conditions: [], threshold: 0 };
+      } else if (values.kind === 'DECISION_TREE') {
+        body.conditionAst = { type: 'IfNode', condition: { type: 'AndNode', children: [] }, thenBranch: { type: 'DecisionLeafNode', decisionCode: '', category: null }, elseBranch: null };
+      } else if (values.kind === 'DECISION_TABLE') {
+        body.conditionAst = { type: 'DecisionTableNode', columns: [], rows: [] };
       }
       await createRule(values.tenantId ?? currentId!, body);
       message.success(tc('message.createSuccess'));
