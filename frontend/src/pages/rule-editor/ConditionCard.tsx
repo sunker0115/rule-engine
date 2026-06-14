@@ -144,10 +144,11 @@ export default function ConditionCard({
           <Select
             size="small"
             showSearch
-            style={{ width: 180 }}
+            style={{ minWidth: 200 }}
             value={node.metricCode || undefined}
             onChange={(code) => onChange({ ...node, metricCode: code })}
             placeholder="选择指标"
+            popupMatchSelectWidth={false}
             options={availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }))}
           />
         )}
