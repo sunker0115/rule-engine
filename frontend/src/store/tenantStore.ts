@@ -1,6 +1,4 @@
 import { create } from 'zustand';
-import apiClient from '@/api/client';
-import { ENDPOINTS } from '@/constants/api-endpoints';
 
 interface TenantInfo {
   id: number;
