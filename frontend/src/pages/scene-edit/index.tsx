@@ -149,15 +149,6 @@ export default function SceneEdit() {
       <Form form={form} layout="vertical" style={{ maxWidth: 800 }}>
         <Form.Item name="sceneCode" label={t('form.code')}><Input disabled /></Form.Item>
         <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="dominantMode" label={t('form.dominantMode')}>
-          <Select options={[...DOMINANT_MODE_OPTIONS]} />
-        </Form.Item>
-        <Form.Item name="subjectType" label={t('form.subjectType')}>
-          <Select options={[{ value: 'USER', label: 'USER' }, { value: 'ACCOUNT', label: 'ACCOUNT (v2)', disabled: true }]} />
-        </Form.Item>
-        <Form.Item name="decisionStrategy" label={t('form.decisionStrategy')}>
-          <Select options={[{ value: 'HIGHEST_PRIORITY', label: 'HIGHEST_PRIORITY' }]} />
-        </Form.Item>
         <Form.Item name="description" label={t('form.description')}><Input.TextArea rows={2} /></Form.Item>
         <Form.Item name="eventTypes" label={t('form.eventTypes')}>
           <Select mode="tags" placeholder={t('form.eventTypesPlaceholder')} />
