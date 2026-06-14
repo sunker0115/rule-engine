@@ -44,6 +44,7 @@ export function getSceneColumns(t: (key: string) => string, tc: (key: string) =>
       render: (_: unknown, record: SceneListItem) => (
         <Space>
           <Link to={route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })}>详情</Link>
+          <Link to={route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })}>编辑</Link>
           <Link to={route(ROUTES.SCENE_RULES, { sceneCode: record.sceneCode })}>规则</Link>
         </Space>
       ),
