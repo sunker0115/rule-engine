@@ -2,9 +2,11 @@ import apiClient from './client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import type { ApiResponse, PageResponse, RuleListItem, RuleDetail, DraftCreatedResult } from '@/types';
 
-export async function listRules(tenantId: number, sceneCode: string, params?: Record<string, unknown>) {
-  const res = await apiClient.get<ApiResponse<PageResponse<RuleListItem>>>(ENDPOINTS.RULE_LIST, { params: { tenantId, sceneCode, ...params } });
-  return res.data.data; // unwrap ApiResponse → PageResponse
+export async function listRules(tenantId: number, sceneCode?: string, params?: Record<string, unknown>) {
+  const queryParams: Record<string, unknown> = { tenantId, ...params };
+  if (sceneCode) queryParams.sceneCode = sceneCode; // sceneCode 可选，不传查全租户
+  const res = await apiClient.get<ApiResponse<PageResponse<RuleListItem>>>(ENDPOINTS.RULE_LIST, { params: queryParams });
+  return res.data.data;
 }
 
 export async function getRule(tenantId: number, ruleDefinitionId: number) {

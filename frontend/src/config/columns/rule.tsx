@@ -5,12 +5,7 @@ import { colorOf, RULE_STATUS_OPTIONS } from '@/constants/enums';
 import type { RuleListItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
-/** sceneCode + onDetail 由页面注入 */
-interface RuleRow extends RuleListItem {
-  sceneCode?: string;
-}
-
-export function getRuleColumns(onDetail?: (id: number) => void): ColumnsType<RuleRow> {
+export function getRuleColumns(onDetail?: (id: number) => void): ColumnsType<RuleListItem> {
   return [
     { title: 'Code', dataIndex: 'code', key: 'code' },
     { title: 'Name', dataIndex: 'name', key: 'name' },
@@ -22,11 +17,11 @@ export function getRuleColumns(onDetail?: (id: number) => void): ColumnsType<Rul
     { title: 'Published', dataIndex: 'publishedAt', key: 'publishedAt', render: (v: string | null) => v?.slice(0, 19) ?? '-' },
     {
       title: 'Actions', key: 'actions',
-      render: (_: unknown, record: RuleRow) => (
+      render: (_: unknown, record: RuleListItem) => (
         <Space>
           {onDetail && <a onClick={(e) => { e.stopPropagation(); onDetail(record.ruleDefinitionId); }}>详情</a>}
           <Link
-            to={route(ROUTES.RULE_EDITOR, { sceneCode: record.sceneCode ?? '', ruleId: record.ruleDefinitionId })}
+            to={route(ROUTES.RULE_EDITOR, { ruleId: record.ruleDefinitionId })}
             onClick={(e) => e.stopPropagation()}
           >编辑</Link>
         </Space>

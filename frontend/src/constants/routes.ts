@@ -4,7 +4,7 @@ export const ROUTES = {
   SCENE_DETAIL:   '/scenes/:sceneCode',
   SCENE_RULES:    '/scenes/:sceneCode/rules',
   RULES:          '/rules',
-  RULE_EDITOR:    '/scenes/:sceneCode/rules/:ruleId',
+  RULE_EDITOR:    '/rule-editor/:ruleId',
   METRICS:        '/metrics',
   METRIC_DETAIL:  '/metrics/:metricCode',
   DECISIONS:      '/decisions',

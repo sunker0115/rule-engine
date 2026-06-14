@@ -1,23 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Table, Space, Input, Select } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listScenes } from '@/api/scene';
 import { listRules } from '@/api/rule';
 import { getRuleColumns } from '@/config/columns/rule';
 import { RULE_STATUS_OPTIONS } from '@/constants/enums';
 import RuleDetailDrawer from '@/pages/rule-list/RuleDetailDrawer';
 import type { RuleListItem } from '@/types';
 
-interface RuleWithScene extends RuleListItem {
-  sceneCode: string;
-}
-
 export default function RulesAll() {
   const { currentId } = useTenantStore();
   const { t } = useTranslation('rule');
-  const [rules, setRules] = useState<RuleWithScene[]>([]);
+  const [rules, setRules] = useState<RuleListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
@@ -27,26 +22,21 @@ export default function RulesAll() {
     if (!currentId) return;
     setLoading(true);
     try {
-      const scenes = await listScenes(currentId);
-      const sceneList = scenes.data ?? [];
-      if (sceneList.length === 0) { setRules([]); return; }
       const params: Record<string, unknown> = {};
       if (statusFilter) params.status = statusFilter;
-      const results = await Promise.all(
-        sceneList.map(async (s) => {
-          const page = await listRules(currentId, s.sceneCode, params);
-          return (page.items ?? []).map((r) => ({ ...r, sceneCode: s.sceneCode }));
-        }),
-      );
-      setRules(results.flat());
+      // 不传 sceneCode，查全租户规则
+      const data = await listRules(currentId, undefined, params);
+      setRules(data.items ?? []);
     } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [currentId, statusFilter]);
 
-  const dataSource = keyword.trim()
-    ? rules.filter((r) => r.name.includes(keyword) || r.code.includes(keyword))
-    : rules;
+  const dataSource = useMemo(() => {
+    if (!keyword.trim()) return rules;
+    const kw = keyword.toLowerCase();
+    return rules.filter((r) => r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw));
+  }, [rules, keyword]);
 
   return (
     <div>
