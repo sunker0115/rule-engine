@@ -138,6 +138,9 @@ export default function SceneList() {
           <Form.Item name="subjectType" label={t('form.subjectType')} initialValue="USER">
             <Select options={[{ value: 'USER', label: 'USER' }]} />
           </Form.Item>
+          <Form.Item name="decisionStrategy" label={t('form.decisionStrategy')} initialValue="HIGHEST_PRIORITY">
+            <Select options={[{ value: 'HIGHEST_PRIORITY', label: 'HIGHEST_PRIORITY (v1)' }]} />
+          </Form.Item>
           <Form.Item name="description" label={t('form.description')}>
             <Input.TextArea rows={2} />
           </Form.Item>
