@@ -27,6 +27,7 @@ export default function RuleList() {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [keyword, setKeyword] = useState('');
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
@@ -36,12 +37,14 @@ export default function RuleList() {
     try {
       const params: Record<string, unknown> = {};
       if (statusFilter) params.status = statusFilter;
+      if (dateRange?.[0]) params.from = dateRange[0].format('YYYY-MM-DD');
+      if (dateRange?.[1]) params.to = dateRange[1].format('YYYY-MM-DD');
       const data = await listRules(currentId, sceneCode, params);
       setRules(data.items ?? []);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [currentId, sceneCode, statusFilter]);
+  useEffect(() => { load(); }, [currentId, sceneCode, statusFilter, dateRange]);
 
   // 客户端关键词过滤（名称或 code 模糊匹配）
   const filtered = useMemo(() => {
@@ -88,6 +91,12 @@ export default function RuleList() {
         allowClear
         options={[...RULE_STATUS_OPTIONS]}
         style={{ width: 130 }}
+      />
+      <RangePicker
+        value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
+        onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
+        placeholder={['发布时间起', '发布时间止']}
+        style={{ width: 260 }}
       />
     </Space>
     <Table

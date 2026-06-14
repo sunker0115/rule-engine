@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Space, Input, Select } from 'antd';
+import { Table, Space, Input, Select, DatePicker } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -7,7 +7,10 @@ import { listRules } from '@/api/rule';
 import { getRuleColumns } from '@/config/columns/rule';
 import { RULE_STATUS_OPTIONS } from '@/constants/enums';
 import RuleDetailDrawer from '@/pages/rule-list/RuleDetailDrawer';
+import dayjs from 'dayjs';
 import type { RuleListItem } from '@/types';
+
+const { RangePicker } = DatePicker;
 
 export default function RulesAll() {
   const { currentId } = useTenantStore();
@@ -16,6 +19,7 @@ export default function RulesAll() {
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
 
   const load = async () => {
@@ -24,13 +28,14 @@ export default function RulesAll() {
     try {
       const params: Record<string, unknown> = {};
       if (statusFilter) params.status = statusFilter;
-      // 不传 sceneCode，查全租户规则
+      if (dateRange?.[0]) params.from = dateRange[0].format('YYYY-MM-DD');
+      if (dateRange?.[1]) params.to = dateRange[1].format('YYYY-MM-DD');
       const data = await listRules(currentId, undefined, params);
       setRules(data.items ?? []);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [currentId, statusFilter]);
+  useEffect(() => { load(); }, [currentId, statusFilter, dateRange]);
 
   const dataSource = useMemo(() => {
     if (!keyword.trim()) return rules;
@@ -59,6 +64,12 @@ export default function RulesAll() {
           allowClear
           options={[...RULE_STATUS_OPTIONS]}
           style={{ width: 130 }}
+        />
+        <RangePicker
+          value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
+          onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
+          placeholder={['发布时间起', '发布时间止']}
+          style={{ width: 260 }}
         />
       </Space>
       <Table
