@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Alert } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { useSceneStore } from '@/store/sceneStore';
 import { listScenes, createScene } from '@/api/scene';
 import { SCENE_COLUMNS } from '@/config/columns/scene';
 import { ROUTES, route } from '@/constants/routes';
@@ -16,7 +15,6 @@ export default function SceneList() {
   const { t } = useTranslation('scene');
   const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
-  const selectedSceneCode = useSceneStore((s) => s.selectedSceneCode);
   const [scenes, setScenes] = useState<SceneListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -56,14 +54,6 @@ export default function SceneList() {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <h2>{t('title.list')}</h2>
-        {!selectedSceneCode && (
-          <Alert
-            type="info"
-            message="请选择一个场景开始工作"
-            style={{ marginBottom: 16 }}
-            showIcon
-          />
-        )}
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
           {t('action.create')}
         </Button>

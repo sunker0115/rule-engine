@@ -4,9 +4,6 @@ const common: CommonTranslation = {
   app: { title: '规则引擎运营平台' },
   header: { actorLabel: '操作人' },
   tenant: { placeholder: '选择租户' },
-  scene: {
-    selector: { placeholder: '选择场景', notSelected: '请选择一个场景开始工作' },
-  },
   button: {
     back: '返回',
     save: '保存',
