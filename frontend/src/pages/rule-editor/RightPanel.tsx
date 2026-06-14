@@ -14,6 +14,9 @@ export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
   const { t } = useTranslation('rule');
   const { preGates, decisionBindings, setPreGates, setDecisionBindings } = useRuleStore();
 
+  // DECISION_TREE / DECISION_TABLE 的决策码在 AST 中管理，右边不显示绑定 tab
+  const showBinding = ruleDetail.kind !== 'DECISION_TREE' && ruleDetail.kind !== 'DECISION_TABLE';
+
   const tabItems = [
     {
       key: 'property',
@@ -36,7 +39,7 @@ export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
         </div>
       ),
     },
-    {
+    ...(showBinding ? [{
       key: 'binding',
       label: t('editor.rightPanel.decisionBinding'),
       children: (
@@ -48,7 +51,7 @@ export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
           />
         </div>
       ),
-    },
+    }] : []),
   ];
 
   return <Tabs items={tabItems} />;
