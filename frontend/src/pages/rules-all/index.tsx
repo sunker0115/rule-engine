@@ -55,7 +55,11 @@ export default function RulesAll() {
     const values = await createForm.validateFields();
     setCreateLoading(true);
     try {
-      await createRule(values.tenantId ?? currentId!, values);
+      const body: Record<string, unknown> = { ...values, tenantId: values.tenantId ?? currentId! };
+      if (values.kind === 'SCORECARD') {
+        body.conditionAst = { type: 'ScorecardRootNode', conditions: [], threshold: 0 };
+      }
+      await createRule(values.tenantId ?? currentId!, body);
       message.success(tc('message.createSuccess'));
       setCreateOpen(false);
       createForm.resetFields();

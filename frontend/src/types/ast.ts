@@ -1,4 +1,4 @@
-export type AstNode = AndNode | OrNode | NotNode | ConditionNode;
+export type AstNode = AndNode | OrNode | NotNode | ConditionNode | ScorecardRootNode;
 
 export interface AndNode {
   type: 'AndNode';
@@ -28,4 +28,11 @@ export interface ConditionNode {
   valueRef?: 'METRIC' | 'PAYLOAD';
   displayLabel?: string;
   weight?: number;
+}
+
+/** kind=SCORECARD 的规则 conditionAst 顶层节点 */
+export interface ScorecardRootNode {
+  type: 'ScorecardRootNode';
+  conditions: ConditionNode[];
+  threshold: number;
 }

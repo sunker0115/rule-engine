@@ -61,7 +61,11 @@ export default function RuleList() {
     const values = await form.validateFields();
     setConfirmLoading(true);
     try {
-      await createRule(currentId!, { ...values, sceneCode: sceneCode! });
+      const body: Record<string, unknown> = { ...values, sceneCode: sceneCode! };
+      if (values.kind === 'SCORECARD') {
+        body.conditionAst = { type: 'ScorecardRootNode', conditions: [], threshold: 0 };
+      }
+      await createRule(currentId!, body);
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
