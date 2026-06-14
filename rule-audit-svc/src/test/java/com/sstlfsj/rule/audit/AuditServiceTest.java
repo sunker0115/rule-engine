@@ -41,7 +41,8 @@ class AuditServiceTest {
     void evalSessionEntry_字段赋值与读取正确() {
         Instant now = Instant.now();
         EvalSessionEntry entry = new EvalSessionEntry(
-                "sess-001", "t1", "scene-A", "evt-001", "COMPLETED", "HIT", 42, now, now
+                "sess-001", "t1", "scene-A", "evt-001", "COMPLETED", "HIT", 42, now, now,
+                "ORDER", "subj-1", "API", "STANDARD", null, null, 5, 3, 85.5, "HIGH", now, "{\"ast\":{}}"
         );
 
         assertThat(entry.sessionId()).isEqualTo("sess-001");
@@ -53,6 +54,18 @@ class AuditServiceTest {
         assertThat(entry.evalDurationMs()).isEqualTo(42);
         assertThat(entry.startedAt()).isEqualTo(now);
         assertThat(entry.finishedAt()).isEqualTo(now);
+        assertThat(entry.eventType()).isEqualTo("ORDER");
+        assertThat(entry.subjectId()).isEqualTo("subj-1");
+        assertThat(entry.source()).isEqualTo("API");
+        assertThat(entry.mode()).isEqualTo("STANDARD");
+        assertThat(entry.blockedBy()).isNull();
+        assertThat(entry.errorCode()).isNull();
+        assertThat(entry.candidateRuleCount()).isEqualTo(5);
+        assertThat(entry.hitRuleCount()).isEqualTo(3);
+        assertThat(entry.score()).isEqualTo(85.5);
+        assertThat(entry.category()).isEqualTo("HIGH");
+        assertThat(entry.occurredAt()).isEqualTo(now);
+        assertThat(entry.contextSnapshot()).isEqualTo("{\"ast\":{}}");
     }
 
     @Test

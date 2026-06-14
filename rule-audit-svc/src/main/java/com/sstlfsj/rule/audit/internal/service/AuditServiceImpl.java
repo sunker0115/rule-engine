@@ -64,7 +64,20 @@ class AuditServiceImpl implements AuditService {
                         r.getStartedAt() != null
                                 ? r.getStartedAt().toInstant(ZoneOffset.UTC) : null,
                         r.getFinishedAt() != null
-                                ? r.getFinishedAt().toInstant(ZoneOffset.UTC) : null
+                                ? r.getFinishedAt().toInstant(ZoneOffset.UTC) : null,
+                        r.getEventType(),
+                        r.getSubjectId(),
+                        r.getSource(),
+                        r.getMode(),
+                        r.getBlockedBy(),
+                        r.getErrorCode(),
+                        r.getCandidateRuleCount(),
+                        r.getHitRuleCount(),
+                        r.getScore(),
+                        r.getCategory(),
+                        r.getOccurredAt() != null
+                                ? r.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
+                        r.getContextSnapshot()
                 ))
                 .toList();
         return new PageResult<>(items, mp.getTotal(), q.page(), q.size());
@@ -163,7 +176,20 @@ class AuditServiceImpl implements AuditService {
                 row.getStartedAt() != null
                         ? row.getStartedAt().toInstant(ZoneOffset.UTC) : null,
                 row.getFinishedAt() != null
-                        ? row.getFinishedAt().toInstant(ZoneOffset.UTC) : null
+                        ? row.getFinishedAt().toInstant(ZoneOffset.UTC) : null,
+                row.getEventType(),
+                row.getSubjectId(),
+                row.getSource(),
+                row.getMode(),
+                row.getBlockedBy(),
+                row.getErrorCode(),
+                row.getCandidateRuleCount(),
+                row.getHitRuleCount(),
+                row.getScore(),
+                row.getCategory(),
+                row.getOccurredAt() != null
+                        ? row.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
+                row.getContextSnapshot()
         );
     }
 

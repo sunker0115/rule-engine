@@ -44,7 +44,19 @@ public interface AuditService {
             String finalDecision,
             Integer evalDurationMs,
             java.time.Instant startedAt,
-            java.time.Instant finishedAt
+            java.time.Instant finishedAt,
+            String eventType,
+            String subjectId,
+            String source,
+            String mode,
+            String blockedBy,
+            String errorCode,
+            Integer candidateRuleCount,
+            Integer hitRuleCount,
+            Double score,
+            String category,
+            java.time.Instant occurredAt,
+            String contextSnapshot
     ) {}
 
     /**
