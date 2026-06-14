@@ -7,7 +7,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { listScenes, createScene } from '@/api/scene';
 import { SCENE_COLUMNS } from '@/config/columns/scene';
 import { ROUTES, route } from '@/constants/routes';
-import { STATUS_OPTIONS } from '@/constants/enums';
+import { STATUS_OPTIONS, DOMINANT_MODE_OPTIONS } from '@/constants/enums';
 import type { SceneListItem } from '@/types';
 
 export default function SceneList() {
