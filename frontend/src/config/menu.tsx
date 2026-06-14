@@ -1,5 +1,6 @@
 import type { ItemType } from 'antd/es/menu/interface';
 import {
+  TeamOutlined,
   AppstoreOutlined,
   ApartmentOutlined,
   LineChartOutlined,
@@ -12,6 +13,11 @@ import {
 import { ROUTES } from '@/constants/routes';
 
 export const MENU_ITEMS: ItemType[] = [
+  {
+    key: ROUTES.TENANTS,
+    icon: <TeamOutlined />,
+    label: 'Tenant',
+  },
   {
     key: ROUTES.SCENES,
     icon: <AppstoreOutlined />,

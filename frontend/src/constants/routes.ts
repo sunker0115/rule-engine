@@ -1,5 +1,6 @@
 /** 路由路径常量 —— 全应用唯一真相源 */
 export const ROUTES = {
+  TENANTS:        '/tenants',
   SCENES:         '/scenes',
   SCENE_DETAIL:   '/scenes/:sceneCode',
   SCENE_RULES:    '/scenes/:sceneCode/rules',

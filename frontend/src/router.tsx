@@ -5,6 +5,7 @@ import { Spin } from 'antd';
 import { ROUTES } from '@/constants/routes';
 import App from './App';
 
+const TenantList        = lazy(() => import('@/pages/tenant-list'));
 const SceneList          = lazy(() => import('@/pages/scene-list'));
 const SceneDetail        = lazy(() => import('@/pages/scene-detail'));
 const RuleList           = lazy(() => import('@/pages/rule-list'));
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <LazyPage><SceneList /></LazyPage> },
+      { path: ROUTES.TENANTS,        element: <LazyPage><TenantList /></LazyPage> },
       { path: ROUTES.SCENES,         element: <LazyPage><SceneList /></LazyPage> },
       { path: ROUTES.SCENE_DETAIL,   element: <LazyPage><SceneDetail /></LazyPage> },
       { path: ROUTES.SCENE_RULES,    element: <LazyPage><RuleList /></LazyPage> },
