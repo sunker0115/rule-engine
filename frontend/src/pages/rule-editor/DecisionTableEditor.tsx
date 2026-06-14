@@ -118,7 +118,7 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
-              width={160}
+              width={145}
               dataIndex={`_c${ci}`}
               title={(
                 <div style={{
