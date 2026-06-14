@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.api.service;
 
 import com.sstlfsj.rule.config.api.dto.MetricListQuery;
+import com.sstlfsj.rule.config.api.dto.MetricListItemVO;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 
@@ -24,6 +25,9 @@ public interface MetadataService {
 
     /** 查询租户 metric 运行时定义（内部使用，Query 收口）。 */
     java.util.List<MetricDescriptor> listMetricDefinitions(MetricListQuery q);
+
+    /** 管理后台：查询租户 metric 完整信息（含 name/status/时间/tenantId）。 */
+    java.util.List<MetricListItemVO> listMetricItems(String tenantId);
 
     /**
      * 返回指定场景的元数据，包括可用条件类型和指标列表。

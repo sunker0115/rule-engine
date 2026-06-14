@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.sstlfsj.rule.config.api.dto.MetricListItemVO;
 import com.sstlfsj.rule.config.api.dto.MetricListQuery;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
@@ -187,12 +188,25 @@ class MetadataServiceImpl implements MetadataService {
                 m.getSourceType(), m.getDataType(),
                 Boolean.TRUE.equals(m.getAllowProvided()),
                 m.getCacheTtlSeconds() == null ? 0 : m.getCacheTtlSeconds(),
-                params,
-                m.getName(),
-                m.getStatus() != null ? m.getStatus().name() : null,
-                m.getCreatedAt() != null ? m.getCreatedAt().toString() : null,
-                m.getUpdatedAt() != null ? m.getUpdatedAt().toString() : null,
-                String.valueOf(m.getTenantId()));
+                params);
+    }
+
+    @Override
+    public java.util.List<MetricListItemVO> listMetricItems(String tenantId) {
+        return metricDefinitionMapper.findActiveByTenant(Long.valueOf(tenantId)).stream()
+                .map(m -> new MetricListItemVO(
+                        m.getMetricCode(),
+                        m.getVersion() == null ? 1 : m.getVersion(),
+                        m.getSourceType(), m.getDataType(),
+                        Boolean.TRUE.equals(m.getAllowProvided()),
+                        m.getCacheTtlSeconds() == null ? 0 : m.getCacheTtlSeconds(),
+                        m.getParams(),
+                        m.getName(),
+                        m.getStatus() != null ? m.getStatus().name() : null,
+                        String.valueOf(m.getTenantId()),
+                        m.getCreatedAt(),
+                        m.getUpdatedAt()))
+                .toList();
     }
 
 }

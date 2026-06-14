@@ -1,11 +1,10 @@
 package com.sstlfsj.rule.web.admin;
 
-import com.sstlfsj.rule.config.api.dto.MetricListQuery;
+import com.sstlfsj.rule.config.api.dto.MetricListItemVO;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
-import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -30,8 +29,8 @@ public class MetricController {
      * @return metric 定义列表
      */
     @GetMapping
-    public ApiResponse<List<MetricDescriptor>> listMetrics(@RequestParam String tenantId) {
-        return ApiResponse.ok(metadataService.listMetricDefinitions(new MetricListQuery(tenantId, List.of())));
+    public ApiResponse<List<MetricListItemVO>> listMetrics(@RequestParam String tenantId) {
+        return ApiResponse.ok(metadataService.listMetricItems(tenantId));
     }
 
     /**
