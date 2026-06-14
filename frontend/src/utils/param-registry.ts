@@ -1,23 +1,25 @@
+import i18n from '@/i18n';
+
 /** 参数控件类型 */
 export type ParamWidget = 'text' | 'number' | 'array' | 'time-range' | 'operator-select';
 
 /** 已知参数键 → 显示名 + 控件类型 */
 const PARAM_REGISTRY: Record<string, { label: string; widget: ParamWidget }> = {
-  threshold:    { label: '阈值', widget: 'number' },
-  min:          { label: '下限', widget: 'number' },
-  max:          { label: '上限', widget: 'number' },
-  values:       { label: '候选值', widget: 'array' },
-  element:      { label: '元素', widget: 'text' },
-  prefix:       { label: '前缀', widget: 'text' },
-  suffix:       { label: '后缀', widget: 'text' },
-  regex:        { label: '正则', widget: 'text' },
-  operator:     { label: '运算符', widget: 'operator-select' },
-  start:        { label: '开始时间', widget: 'text' },
-  end:          { label: '结束时间', widget: 'text' },
-  value:        { label: '比较值', widget: 'text' },
-  timezone:     { label: '时区', widget: 'text' },
-  datesExclude: { label: '排除日期', widget: 'array' },
-  daysOfWeek:   { label: '生效星期', widget: 'array' },
+  threshold:    { label: i18n.t('rule.param.widget.threshold'), widget: 'number' },
+  min:          { label: i18n.t('rule.param.widget.min'),       widget: 'number' },
+  max:          { label: i18n.t('rule.param.widget.max'),       widget: 'number' },
+  values:       { label: i18n.t('rule.param.widget.values'),    widget: 'array' },
+  element:      { label: i18n.t('rule.param.widget.element'),   widget: 'text' },
+  prefix:       { label: i18n.t('rule.param.widget.prefix'),    widget: 'text' },
+  suffix:       { label: i18n.t('rule.param.widget.suffix'),    widget: 'text' },
+  regex:        { label: i18n.t('rule.param.widget.regex'),     widget: 'text' },
+  operator:     { label: i18n.t('rule.param.widget.operator'),  widget: 'operator-select' },
+  start:        { label: i18n.t('rule.param.widget.start'),     widget: 'text' },
+  end:          { label: i18n.t('rule.param.widget.end'),       widget: 'text' },
+  value:        { label: i18n.t('rule.param.widget.value'),     widget: 'text' },
+  timezone:     { label: i18n.t('rule.param.widget.timezone'),  widget: 'text' },
+  datesExclude: { label: i18n.t('rule.param.widget.datesExclude'), widget: 'array' },
+  daysOfWeek:   { label: i18n.t('rule.param.widget.daysOfWeek'),   widget: 'array' },
 };
 
 /** 获取参数显示名 */

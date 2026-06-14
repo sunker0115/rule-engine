@@ -54,7 +54,7 @@ export default function SceneList() {
       params: { tenantId, enable: enabled },
       headers: { 'X-Actor-Id': localStorage.getItem('actorId') || 'anonymous' },
     });
-    message.success(enabled ? '已启用' : '已禁用');
+    message.success(enabled ? tc('message.enabled') : tc('message.disabled'));
     load();
   };
 

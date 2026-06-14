@@ -53,6 +53,17 @@ const common: CommonTranslation = {
   title: {
     tenantList: '租户列表',
   },
+  menu: {
+    tenants: '租户管理',
+    scenes: '场景管理',
+    rules: '规则管理',
+    metrics: '指标管理',
+    decisions: '决策管理',
+    sessions: '评估会话',
+    auditLogs: '审计日志',
+    jobs: 'Job 管理',
+    importExport: '导入导出',
+  },
 };
 
 export default common;

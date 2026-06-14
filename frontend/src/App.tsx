@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Typography, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { MENU_ITEMS } from '@/config/menu';
+import { getMenuItems } from '@/config/menu';
 import { useTenantStore } from '@/store/tenantStore';
 
 const { Header, Sider, Content } = Layout;
@@ -59,7 +59,7 @@ export default function App() {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            items={MENU_ITEMS}
+            items={getMenuItems(t)}
             onClick={({ key }) => navigate(key)}
             style={{ height: '100%', borderRight: 0 }}
           />

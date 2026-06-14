@@ -25,6 +25,12 @@ const evalLoc: EvalTranslation = {
       nodeTrace: '节点 Trace',
     },
   },
+  enum: {
+    sessionStatus: {
+      HIT: '命中', MISS: '未命中', BLOCKED: '被拦截',
+      ERROR: '错误', PENDING: '进行中', FAILED: '失败',
+    },
+  },
   session: {
     column: {
       sessionId: 'Session ID',

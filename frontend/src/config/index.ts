@@ -1,1 +1,1 @@
-export { MENU_ITEMS } from './menu';
+export { getMenuItems } from './menu';

@@ -58,6 +58,12 @@ export interface CommonTranslation {
   title: {
     tenantList: string;
   };
+  menu: {
+    tenants: string; scenes: string; rules: string;
+    metrics: string; decisions: string;
+    sessions: string; auditLogs: string;
+    jobs: string; importExport: string;
+  };
 }
 
 // ===== scene 命名空间 =====
@@ -258,6 +264,7 @@ export interface RuleTranslation {
     };
     script: {
       placeholder: string;
+      syntaxHints: Record<string, string>;
     };
     createModal: {
       code: string; name: string; kind: string;
@@ -324,6 +331,12 @@ export interface EvalTranslation {
     result: {
       hit: string; miss: string; blocked: string;
       hitDecisions: string; finalDecision: string; nodeTrace: string;
+    };
+  };
+  enum: {
+    sessionStatus: {
+      HIT: string; MISS: string; BLOCKED: string;
+      ERROR: string; PENDING: string; FAILED: string;
     };
   };
   session: {
