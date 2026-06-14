@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Tag } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Table, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listScenes } from '@/api/scene';
 import { listRules } from '@/api/rule';
-import { colorOf, RULE_STATUS_OPTIONS, RULE_KIND_OPTIONS } from '@/constants/enums';
+import { colorOf, RULE_STATUS_OPTIONS } from '@/constants/enums';
 import { ROUTES, route } from '@/constants/routes';
 import type { RuleListItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
