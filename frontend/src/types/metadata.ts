@@ -19,8 +19,8 @@ export interface SceneMetadata {
   payloadFieldNames: string[];
   /** 字段名 → 声明类型（integer/number/string/boolean 等） */
   payloadFieldTypes: Record<string, string>;
-  /** 字段名 → 声明类型（LONG/DOUBLE/DECIMAL/STRING/BOOLEAN 等） */
-  payloadFieldTypes: Record<string, string>;
+  /** 后端支持的表达式引擎 lang 列表 */
+  expressionLangs: string[];
 }
 
 export interface InputFieldItem {

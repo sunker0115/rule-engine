@@ -42,8 +42,24 @@ export default function RuleList() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [form] = Form.useForm();
   const formKind = Form.useWatch('kind', form) || 'AST_BOOLEAN';
+  const [langOptions, setLangOptions] = useState<{ value: string; label: string }[]>(
+    () => [{ value: 'CEL', label: 'CEL' }],
+  );
 
   const tenantId = tenantFilter ?? currentId ?? 0;
+
+  /** 打开创建弹窗时拉取引擎语言列表 */
+  const openCreateModal = async () => {
+    form.resetFields();
+    setModalOpen(true);
+    if (currentId && sceneCode) {
+      try {
+        const meta = await getSceneMetadata(currentId, sceneCode);
+        const langs = meta.data?.expressionLangs ?? ['CEL'];
+        setLangOptions(langs.map((l: string) => ({ value: l, label: l })));
+      } catch { /* keep default */ }
+    }
+  };
 
   const load = async () => {
     if (!tenantId || !sceneCode) return;
@@ -97,7 +113,7 @@ export default function RuleList() {
   return (<>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
       <h2>{t('title.list')} — {sceneCode}</h2>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setModalOpen(true); }}>
+      <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
         {t('action.create')}
       </Button>
     </div>
@@ -162,15 +178,8 @@ export default function RuleList() {
         </Form.Item>
         {formKind === 'EXPRESSION_SCRIPT' && (
           <>
-            <Form.Item name="scriptLang" label="脚本语言" initialValue="CEL" rules={[{ required: true }]}>
-              <Select options={[
-                { value: 'CEL', label: 'CEL' },
-                { value: 'Aviator', label: 'Aviator' },
-                { value: 'QLExpress', label: 'QLExpress' },
-                { value: 'JsonLogic', label: 'JsonLogic' },
-                { value: 'JEXL', label: 'JEXL' },
-                { value: 'Groovy', label: 'Groovy' },
-              ]} />
+            <Form.Item name="scriptLang" label="脚本语言" initialValue={langOptions[0]?.value} rules={[{ required: true }]}>
+              <Select options={langOptions} />
             </Form.Item>
             <Form.Item name="scriptSource" label="脚本源码" initialValue="{true}" rules={[{ required: true, message: tc('validation.required') }]}>
               <Input.TextArea rows={6} placeholder='例如: metrics.amount > 1000' />

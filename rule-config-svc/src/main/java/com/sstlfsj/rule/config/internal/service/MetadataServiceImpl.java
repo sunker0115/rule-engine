@@ -17,6 +17,7 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -40,24 +41,20 @@ class MetadataServiceImpl implements MetadataService {
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final List<OperatorSpec> customSpecs;
+    private final List<ExpressionEngine> expressionEngines;
 
-    /**
-     * @param sceneMapper            场景查询 Mapper
-     * @param metricDefinitionMapper metric 定义查询 Mapper
-     * @param ruleDefinitionMapper   规则定义查询 Mapper
-     * @param ruleVersionMapper      规则版本查询 Mapper
-     * @param customSpecs            自定义 {@code @Bean OperatorSpec} 列表（无声明时 Spring 注入空列表）
-     */
     MetadataServiceImpl(SceneMapper sceneMapper,
                         MetricDefinitionMapper metricDefinitionMapper,
                         RuleDefinitionMapper ruleDefinitionMapper,
                         RuleVersionMapper ruleVersionMapper,
-                        List<OperatorSpec> customSpecs) {
+                        List<OperatorSpec> customSpecs,
+                        List<ExpressionEngine> expressionEngines) {
         this.sceneMapper = sceneMapper;
         this.metricDefinitionMapper = metricDefinitionMapper;
         this.ruleDefinitionMapper = ruleDefinitionMapper;
         this.ruleVersionMapper = ruleVersionMapper;
         this.customSpecs = customSpecs != null ? customSpecs : List.of();
+        this.expressionEngines = expressionEngines != null ? expressionEngines : List.of();
     }
 
     @Override
@@ -89,8 +86,10 @@ class MetadataServiceImpl implements MetadataService {
         ConditionTypeCatalog.all().forEach(s -> merged.put(s.code(), s));
         customSpecs.forEach(s -> merged.putIfAbsent(s.code(), s));
         List<OperatorSpec> conditionTypes = List.copyOf(merged.values());
+        List<String> langs = expressionEngines.stream()
+                .map(ExpressionEngine::lang).distinct().toList();
         return new MetadataResponse(conditionTypes, metricMetas,
-                scene.getEventTypes() != null ? scene.getEventTypes() : java.util.List.of());
+                scene.getEventTypes() != null ? scene.getEventTypes() : java.util.List.of(), langs);
     }
 
     @Override

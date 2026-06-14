@@ -36,7 +36,7 @@ class MetadataServiceImplTest {
 
     private MetadataServiceImpl newService(List<OperatorSpec> customSpecs) {
         return new MetadataServiceImpl(sceneMapper, metricDefinitionMapper,
-                ruleDefinitionMapper, ruleVersionMapper, customSpecs);
+                ruleDefinitionMapper, ruleVersionMapper, customSpecs, List.of());
     }
 
     @Test
