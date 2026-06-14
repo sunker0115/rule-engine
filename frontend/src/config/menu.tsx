@@ -1,6 +1,7 @@
 import type { ItemType } from 'antd/es/menu/interface';
 import {
   AppstoreOutlined,
+  ApartmentOutlined,
   LineChartOutlined,
   CheckCircleOutlined,
   HistoryOutlined,
@@ -15,6 +16,11 @@ export const MENU_ITEMS: ItemType[] = [
     key: ROUTES.SCENES,
     icon: <AppstoreOutlined />,
     label: 'Scene',
+  },
+  {
+    key: ROUTES.RULES,
+    icon: <ApartmentOutlined />,
+    label: 'Rule',
   },
   {
     key: ROUTES.METRICS,
