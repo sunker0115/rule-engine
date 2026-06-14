@@ -173,18 +173,18 @@ export default function RulesAll() {
               options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
             />
           </Form.Item>
-          <Form.Item name="sceneCode" label="Scene" rules={[{ required: true, message: tc('validation.required') }]}>
+          <Form.Item name="sceneCode" label={t('editor.createModal.scene')} rules={[{ required: true, message: tc('validation.required') }]}>
             <Select
               options={sceneOpts}
               showSearch
-              placeholder="选择场景"
+              placeholder={t('editor.createModal.scenePlaceholder')}
               onChange={(sceneCode) => createForm.setFieldValue('sceneCode', sceneCode)}
             />
           </Form.Item>
-          <Form.Item name="code" label="Code" rules={[{ required: true, message: tc('validation.required') }]}>
+          <Form.Item name="code" label={t('editor.createModal.code')} rules={[{ required: true, message: tc('validation.required') }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="name" label={tc('label.name')} rules={[{ required: true, message: tc('validation.required') }]}>
+          <Form.Item name="name" label={t('editor.createModal.name')} rules={[{ required: true, message: tc('validation.required') }]}>
             <Input />
           </Form.Item>
           <Form.Item name="kind" label={t('column.kind')} initialValue="AST_BOOLEAN">
@@ -192,16 +192,16 @@ export default function RulesAll() {
           </Form.Item>
           {formKind === 'EXPRESSION_SCRIPT' && (
             <>
-              <Form.Item name="scriptLang" label="脚本语言" initialValue={langOptions[0]?.value} rules={[{ required: true }]}>
+              <Form.Item name="scriptLang" label={t('editor.createModal.scriptLang')} initialValue={langOptions[0]?.value} rules={[{ required: true }]}>
                 <Select options={langOptions} />
               </Form.Item>
-              <Form.Item name="scriptSource" label="脚本源码" initialValue="{true}" rules={[{ required: true, message: tc('validation.required') }]}>
-                <Input.TextArea rows={6} placeholder='例如: metrics.amount > 1000' />
+              <Form.Item name="scriptSource" label={t('editor.createModal.scriptSource')} initialValue={t('editor.createModal.scriptSourceDefault')} rules={[{ required: true, message: tc('validation.required') }]}>
+                <Input.TextArea rows={6} placeholder={t('editor.createModal.scriptSourcePlaceholder')} />
               </Form.Item>
             </>
           )}
-          <Form.Item name="triggerEventTypes" label="Trigger Events">
-            <Select mode="tags" placeholder={t('triggerEventsPlaceholder')} />
+          <Form.Item name="triggerEventTypes" label={t('editor.createModal.triggerEvents')}>
+            <Select mode="tags" placeholder={t('editor.createModal.triggerEventsPlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>

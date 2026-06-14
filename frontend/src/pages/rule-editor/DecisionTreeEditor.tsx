@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Select, Typography, Tag } from 'antd';
 import { PlusOutlined, DeleteOutlined, SwapOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listDecisions } from '@/api/decision';
 import type { AstNode, IfNode, DecisionLeafNode, ConditionTypeMeta, MetricDescriptor } from '@/types';
@@ -25,6 +26,7 @@ function emptyIf(): IfNode {
 export default function DecisionTreeEditor({
   ast, conditionTypes, availableMetrics, payloadFieldNames, onChange,
 }: Props) {
+  const { t } = useTranslation('rule');
   const { currentId } = useTenantStore();
   const [decisions, setDecisions] = useState<{ value: string; label: string }[]>([]);
 
@@ -53,7 +55,7 @@ export default function DecisionTreeEditor({
       <div key={depth} style={{ marginBottom: 12 }}>
         {/* 条件区域 */}
         <div style={{ marginLeft: depth * 24, marginBottom: 8 }}>
-          <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>条件：</div>
+          <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>{t('editor.decisionTree.condition')}</div>
           <GroupEditor
             node={conditionGroup as never}
             conditionTypes={conditionTypes}
@@ -66,7 +68,7 @@ export default function DecisionTreeEditor({
         {/* THEN 分支 */}
         <div style={{ marginLeft: depth * 24, marginBottom: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Tag color="blue" style={{ margin: 0 }}>THEN</Tag>
+            <Tag color="blue" style={{ margin: 0 }}>{t('editor.decisionTree.then')}</Tag>
             {node.thenBranch?.type === 'DecisionLeafNode' ? (
               <Select
                 size="small"
@@ -78,7 +80,7 @@ export default function DecisionTreeEditor({
                   thenBranch: { type: 'DecisionLeafNode', decisionCode: code, category: null },
                 })}
                 options={decisions}
-                placeholder="选择 Decision"
+                placeholder={t('editor.decisionTree.selectDecision')}
               />
             ) : null}
             <Button size="small" icon={<SwapOutlined />}
@@ -86,7 +88,7 @@ export default function DecisionTreeEditor({
                 ...node,
                 thenBranch: thenIsIf ? emptyLeaf() : emptyIf(),
               })}>
-              {thenIsIf ? '改为决策' : '改为分支'}
+              {thenIsIf ? t('editor.decisionTree.toLeaf') : t('editor.decisionTree.toBranch')}
             </Button>
           </div>
         </div>
@@ -95,11 +97,11 @@ export default function DecisionTreeEditor({
         {/* ELSE 分支 */}
         <div style={{ marginLeft: depth * 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Tag color="orange" style={{ margin: 0 }}>ELSE</Tag>
+            <Tag color="orange" style={{ margin: 0 }}>{t('editor.decisionTree.else')}</Tag>
             {elseIsNull ? (
               <Button size="small" type="dashed" icon={<PlusOutlined />}
                 onClick={() => setNode({ ...node, elseBranch: emptyLeaf() })}>
-                添加 ELSE
+                {t('editor.decisionTree.addElse')}
               </Button>
             ) : (
               <>
@@ -114,17 +116,17 @@ export default function DecisionTreeEditor({
                       elseBranch: { type: 'DecisionLeafNode', decisionCode: code, category: null },
                     })}
                     options={decisions}
-                    placeholder="选择 Decision"
+                    placeholder={t('editor.decisionTree.selectDecision')}
                   />
                 )}
                 <Button size="small" icon={<DeleteOutlined />} danger
-                  onClick={() => setNode({ ...node, elseBranch: null })} />
+                  onClick={() => setNode({ ...node, elseBranch: null })}>{t('editor.decisionTree.removeElse')}</Button>
                 <Button size="small" icon={<SwapOutlined />}
                   onClick={() => setNode({
                     ...node,
                     elseBranch: elseIsIf ? emptyLeaf() : emptyIf(),
                   })}>
-                  {elseIsIf ? '改为决策' : '改为分支'}
+                  {elseIsIf ? t('editor.decisionTree.toLeaf') : t('editor.decisionTree.toBranch')}
                 </Button>
               </>
             )}
@@ -138,7 +140,7 @@ export default function DecisionTreeEditor({
   return (
     <div style={{ padding: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <Typography.Text strong>决策树</Typography.Text>
+        <Typography.Text strong>{t('editor.decisionTree.title')}</Typography.Text>
       </div>
       {renderIfNode(root, onChange, 0)}
     </div>

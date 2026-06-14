@@ -1,5 +1,6 @@
 import { Button, Empty } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { AstNode, AndNode, OrNode, NotNode, ConditionTypeMeta, MetricDescriptor } from '@/types';
 import GroupEditor from './GroupEditor';
 
@@ -23,6 +24,7 @@ function normalizeToGroup(node: AstNode): AndNode | OrNode | NotNode {
 export default function ConditionTreeEditor({
   ast, conditionTypes, availableMetrics, payloadFieldNames, onChange,
 }: Props) {
+  const { t } = useTranslation('rule');
   const group = ast ? normalizeToGroup(ast) : null;
   const isEmpty = group === null ||
     ((group.type === 'AndNode' || group.type === 'OrNode') && group.children.length === 0);
@@ -30,13 +32,13 @@ export default function ConditionTreeEditor({
   if (isEmpty) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
-        <Empty description="暂无条件">
+        <Empty description={t('editor.conditionTree.emptyHint')}>
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => onChange({ type: 'AndNode', children: [] })}
           >
-            添加第一个条件
+            {t('editor.conditionTree.addFirst')}
           </Button>
         </Empty>
       </div>

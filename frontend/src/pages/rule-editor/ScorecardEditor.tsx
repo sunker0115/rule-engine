@@ -1,5 +1,6 @@
 import { Button, InputNumber, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { ScorecardRootNode, ConditionNode, ConditionTypeMeta, MetricDescriptor } from '@/types';
 import ConditionCard from './ConditionCard';
 
@@ -16,6 +17,7 @@ function emptyCondition(): ConditionNode {
 }
 
 export default function ScorecardEditor({ node, conditionTypes, availableMetrics, payloadFieldNames, onChange }: Props) {
+  const { t } = useTranslation('rule');
   const updateCondition = (index: number, c: ConditionNode) => {
     const conditions = [...node.conditions];
     conditions[index] = c;
@@ -35,7 +37,7 @@ export default function ScorecardEditor({ node, conditionTypes, availableMetrics
     <div>
       {/* 阈值 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <Typography.Text strong>命中阈值：</Typography.Text>
+        <Typography.Text strong>{t('editor.scorecard.threshold')}</Typography.Text>
         <InputNumber
           min={0}
           value={node.threshold}
@@ -43,16 +45,16 @@ export default function ScorecardEditor({ node, conditionTypes, availableMetrics
           style={{ width: 100 }}
         />
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          累计分 ≥ 阈值则命中
+          {t('editor.scorecard.thresholdHint')}
         </Typography.Text>
         <div style={{ flex: 1 }} />
-        <Button type="primary" icon={<PlusOutlined />} onClick={addCondition}>添加评分项</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={addCondition}>{t('editor.scorecard.addItem')}</Button>
       </div>
 
       {/* 评分项列表 */}
       {node.conditions.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center', color: '#ccc' }}>
-          暂无评分项，点击「添加评分项」开始
+          {t('editor.scorecard.emptyHint')}
         </div>
       )}
       {node.conditions.map((c, index) => (
@@ -60,7 +62,7 @@ export default function ScorecardEditor({ node, conditionTypes, availableMetrics
           {/* 权重 */}
           <div style={{ paddingTop: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fafafa', borderRadius: 4, padding: '4px 8px', border: '1px solid #d9d9d9' }}>
-              <span style={{ fontSize: 12, color: '#999' }}>权重</span>
+              <span style={{ fontSize: 12, color: '#999' }}>{t('editor.scorecard.weight')}</span>
               <InputNumber
                 size="small"
                 min={0}

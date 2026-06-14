@@ -73,7 +73,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         <Descriptions.Item label={tc('label.name')}>{ruleDetail.name}</Descriptions.Item>
         <Descriptions.Item label={t('column.kind')}><Tag>{ruleDetail.kind}</Tag></Descriptions.Item>
         {ruleDetail.kind === 'EXPRESSION_SCRIPT' && ruleDetail.script && (
-          <Descriptions.Item label="Executor"><Tag color="blue">{ruleDetail.script.lang}</Tag></Descriptions.Item>
+          <Descriptions.Item label={t('editor.leftPanel.executorLabel')}><Tag color="blue">{ruleDetail.script.lang}</Tag></Descriptions.Item>
         )}
         <Descriptions.Item label={t('column.status')}>
           <Tag color={colorOf(RULE_STATUS_OPTIONS, ruleDetail.status as never)}>{ruleDetail.status}</Tag>
@@ -92,7 +92,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         )}
         <Button block onClick={onOpenDryRun} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
 
-        <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>发布</Divider>
+        <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerPublish')}</Divider>
         {hasDraft && (
           <Popconfirm title={t('version.publishConfirm').replace('{version}', '?')} onConfirm={handlePublish}>
             <Button type="primary" block style={{ background: '#52c41a', borderColor: '#52c41a', marginBottom: 8 }}>
@@ -102,7 +102,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         )}
 
         {(isPublished || isDisabled) && (
-          <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>管理</Divider>
+          <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerManage')}</Divider>
         )}
         {isPublished && (
           <Popconfirm title={t('version.disableConfirm')} onConfirm={handleDisable}>

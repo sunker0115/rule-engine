@@ -73,7 +73,7 @@ export default function DecisionBindingEditor({ kind, value = [], onChange }: Pr
         </Button>
       )}
       {kind === 'AST_BOOLEAN' && value.length >= 1 && (
-        <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>AST_BOOLEAN 仅支持绑定一个 Decision</div>
+        <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>{t('decisionBinding.singleOnlyHint')}</div>
       )}
     </div>
   );

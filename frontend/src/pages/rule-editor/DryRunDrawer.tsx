@@ -89,7 +89,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
     try {
       const body = await buildRequestBody();
       await navigator.clipboard.writeText(JSON.stringify(body, null, 2));
-      message.success('已复制请求 JSON');
+      message.success(te('dryRun.copiedJson'));
     } catch { /* 表单校验不过时不复制 */ }
   };
 
@@ -172,14 +172,14 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
                     showSearch
                     value={p.key || undefined}
                     onChange={(val) => updatePair(p.id, 'key', val ?? '')}
-                    placeholder="字段"
+                    placeholder={te('dryRun.field')}
                     options={payloadFieldNames.map((f) => ({ value: f, label: f }))}
                     allowClear
                     style={{ width: '100%' }}
                   />
                 ) : (
                   <Input
-                    placeholder="key"
+                    placeholder={te('dryRun.key')}
                     value={p.key}
                     onChange={e => updatePair(p.id, 'key', e.target.value)}
                   />
@@ -187,7 +187,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
               </Col>
               <Col flex="auto">
                 <Input
-                  placeholder="value"
+                  placeholder={te('dryRun.value')}
                   value={p.value}
                   onChange={e => updatePair(p.id, 'value', e.target.value)}
                 />
@@ -205,7 +205,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
           <Button type="primary" onClick={handleExecute} loading={isLoading} style={{ flex: 1 }}>
             {te('dryRun.execute')}
           </Button>
-          <Button icon={<CopyOutlined />} onClick={handleCopyJson}>复制 JSON</Button>
+          <Button icon={<CopyOutlined />} onClick={handleCopyJson}>{te('dryRun.copyJson')}</Button>
         </div>
       </Form>
 

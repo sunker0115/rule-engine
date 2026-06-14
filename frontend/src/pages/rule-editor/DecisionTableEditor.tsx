@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Select, Input, Table, Popconfirm, Typography } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listDecisions } from '@/api/decision';
 import type { DecisionTableNode, DecisionTableColumn, DecisionTableRow, ConditionTypeMeta, MetricDescriptor } from '@/types';
@@ -16,6 +17,7 @@ interface Props {
 export default function DecisionTableEditor({
   node, conditionTypes, availableMetrics, payloadFieldNames, onChange,
 }: Props) {
+  const { t } = useTranslation('rule');
   const { currentId } = useTenantStore();
   const [decisions, setDecisions] = useState<{ value: string; label: string }[]>([]);
 
@@ -51,7 +53,7 @@ export default function DecisionTableEditor({
     }
   }, []);
 
-  // 决策表列仅支持基础比较算子
+  // {t('editor.decisionTable.title')}列仅支持基础比较算子
   const TABLE_OPERATORS = ['EQ', 'NEQ', 'GT', 'GTE', 'LT', 'LTE', 'IN', 'NOT_IN', 'BETWEEN', 'NOT_BETWEEN'];
   const opOptions = conditionTypes
     .filter((ct) => TABLE_OPERATORS.includes(ct.code))
@@ -108,10 +110,10 @@ export default function DecisionTableEditor({
   return (
     <div style={{ padding: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Text strong>决策表</Typography.Text>
+        <Typography.Text strong>{t('editor.decisionTable.title')}</Typography.Text>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button size="small" icon={<PlusOutlined />} onClick={addColumn}>加列</Button>
-          <Button size="small" icon={<PlusOutlined />} onClick={addRow}>加行</Button>
+          <Button size="small" icon={<PlusOutlined />} onClick={addColumn}>{t('editor.decisionTable.addColumn')}</Button>
+          <Button size="small" icon={<PlusOutlined />} onClick={addRow}>{t('editor.decisionTable.addRow')}</Button>
         </div>
       </div>
 
@@ -121,9 +123,9 @@ export default function DecisionTableEditor({
           size="small"
           pagination={false}
           scroll={{ x: 'max-content' }}
-          locale={{ emptyText: '暂无数据行，点击「加行」添加' }}
+          locale={{ emptyText: t('editor.decisionTable.emptyRowHint') }}
           footer={() => (
-            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addRow} block>加行</Button>
+            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addRow} block>{t('editor.decisionTable.addRow')}</Button>
           )}
         >
           {/* 列头：每列 metricCode + operator */}
@@ -138,7 +140,7 @@ export default function DecisionTableEditor({
                     style={{ width: '100%' }}
                     value={col.metricCode || undefined}
                     onChange={(v) => updateColumn(ci, 'metricCode', v)}
-                    placeholder="指标"
+                    placeholder={t('editor.decisionTable.metric')}
                     options={availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }))}
                   />
                   <Select
@@ -149,7 +151,7 @@ export default function DecisionTableEditor({
                     options={opOptions}
                   />
                   <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                    onClick={() => removeColumn(ci)} style={{ fontSize: 11 }}>删列</Button>
+                    onClick={() => removeColumn(ci)} style={{ fontSize: 11 }}>{t('editor.decisionTable.deleteColumn')}</Button>
                 </div>
               )}
               dataIndex={`_c${ci}`}
@@ -159,14 +161,14 @@ export default function DecisionTableEditor({
                   style={{ minWidth: 100 }}
                   value={val != null ? String(val) : ''}
                   onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
-                  placeholder="值或留空(通配)"
+                  placeholder={t('editor.decisionTable.cellPlaceholder')}
                 />
               )}
             />
           ))}
           {/* 决策码列 */}
           <Table.Column
-            title="决策码"
+            title={t('editor.decisionTable.decisionCode')}
             dataIndex="_decisionCode"
             render={(val: string, _: unknown, ri: number) => (
               <Select
@@ -176,7 +178,7 @@ export default function DecisionTableEditor({
                 value={val || undefined}
                 onChange={(v) => updateRow(ri, 'decisionCode', 0, v)}
                 options={decisions}
-                placeholder="Decision"
+                placeholder={t('editor.decisionTable.decisionPlaceholder')}
               />
             )}
           />
@@ -185,7 +187,7 @@ export default function DecisionTableEditor({
             title=""
             width={40}
             render={(_: unknown, __: unknown, ri: number) => (
-              <Popconfirm title="删除此行?" onConfirm={() => removeRow(ri)}>
+              <Popconfirm title={t('editor.decisionTable.deleteRowConfirm')} onConfirm={() => removeRow(ri)}>
                 <Button type="text" size="small" danger icon={<DeleteOutlined />} />
               </Popconfirm>
             )}

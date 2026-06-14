@@ -167,7 +167,7 @@ export default function RuleList() {
       confirmLoading={confirmLoading}
     >
       <Form form={form} layout="vertical">
-        <Form.Item name="code" label="Code" rules={[{ required: true, message: tc('validation.required') }]}>
+        <Form.Item name="code" label={t('editor.createModal.code')} rules={[{ required: true, message: tc('validation.required') }]}>
           <Input />
         </Form.Item>
         <Form.Item name="name" label={tc('label.name')} rules={[{ required: true, message: tc('validation.required') }]}>
@@ -178,16 +178,16 @@ export default function RuleList() {
         </Form.Item>
         {formKind === 'EXPRESSION_SCRIPT' && (
           <>
-            <Form.Item name="scriptLang" label="脚本语言" initialValue={langOptions[0]?.value} rules={[{ required: true }]}>
+            <Form.Item name="scriptLang" label={t('editor.createModal.scriptLang')} initialValue={langOptions[0]?.value} rules={[{ required: true }]}>
               <Select options={langOptions} />
             </Form.Item>
-            <Form.Item name="scriptSource" label="脚本源码" initialValue="{true}" rules={[{ required: true, message: tc('validation.required') }]}>
-              <Input.TextArea rows={6} placeholder='例如: metrics.amount > 1000' />
+            <Form.Item name="scriptSource" label={t('editor.createModal.scriptSource')} initialValue={t('editor.createModal.scriptSourceDefault')} rules={[{ required: true, message: tc('validation.required') }]}>
+              <Input.TextArea rows={6} placeholder={t('editor.createModal.scriptSourcePlaceholder')} />
             </Form.Item>
           </>
         )}
-        <Form.Item name="triggerEventTypes" label="Trigger Events">
-          <Select mode="tags" placeholder={t('triggerEventsPlaceholder')} />
+        <Form.Item name="triggerEventTypes" label={t('editor.createModal.triggerEvents')}>
+          <Select mode="tags" placeholder={t('editor.createModal.triggerEventsPlaceholder')} />
         </Form.Item>
       </Form>
     </Modal>

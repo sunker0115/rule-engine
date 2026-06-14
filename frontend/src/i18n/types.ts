@@ -217,13 +217,64 @@ export interface RuleTranslation {
     };
   };
   editor: {
-    leftPanel: { ruleInfo: string; versionTimeline: string };
+    leftPanel: { ruleInfo: string; versionTimeline: string; executorLabel: string; dividerPublish: string; dividerManage: string };
     centerPanel: { placeholder: string };
     rightPanel: {
       property: string; preGate: string; decisionBinding: string;
-      noSelection: string;
+      noSelection: string; executor: string;
     };
     notFound: string;
+    conditionCard: {
+      selectType: string; metric: string; payload: string;
+      selectMetric: string; payloadField: string;
+      valueRefOptions: { metric: string; payload: string };
+    };
+    groupEditor: {
+      and: string; or: string; not: string; unNot: string;
+      deleteGroup: string; addCondition: string; addGroup: string;
+      wrapNot: string;
+      descriptionAnd: string; descriptionOr: string;
+      emptyHint: string;
+    };
+    conditionTree: {
+      emptyHint: string; addFirst: string;
+    };
+    scorecard: {
+      threshold: string; thresholdHint: string;
+      addItem: string; emptyHint: string;
+      weight: string;
+    };
+    decisionTree: {
+      title: string; condition: string;
+      then: string; else: string;
+      selectDecision: string; toLeaf: string; toBranch: string;
+      addElse: string; removeElse: string;
+    };
+    decisionTable: {
+      title: string; addColumn: string; addRow: string;
+      emptyRowHint: string; metric: string; deleteColumn: string;
+      cellPlaceholder: string; decisionCode: string;
+      decisionPlaceholder: string; deleteRowConfirm: string;
+    };
+    script: {
+      placeholder: string;
+    };
+    createModal: {
+      code: string; name: string; kind: string;
+      scene: string; scenePlaceholder: string;
+      triggerEvents: string; triggerEventsPlaceholder: string;
+      scriptLang: string; scriptSource: string;
+      scriptSourcePlaceholder: string; scriptSourceDefault: string;
+    };
+  };
+  param: {
+    widget: {
+      threshold: string; min: string; max: string;
+      values: string; element: string; prefix: string; suffix: string;
+      regex: string; operator: string; start: string; end: string;
+      value: string; timezone: string; datesExclude: string; daysOfWeek: string;
+    };
+    operatorBefore: string; operatorAfter: string; operatorBetween: string;
   };
   detail: {
     title: string; basicInfo: string; versionHistory: string;
@@ -241,7 +292,7 @@ export interface RuleTranslation {
   };
   decisionBinding: {
     selectPlaceholder: string; scoreRangeMin: string; scoreRangeMax: string;
-    addButton: string;
+    addButton: string; singleOnlyHint: string;
   };
   version: {
     rollbackConfirm: string;
@@ -265,6 +316,11 @@ export interface EvalTranslation {
     payload: string;
     payloadHint: string;
     addField: string;
+    copyJson: string;
+    copiedJson: string;
+    field: string;
+    key: string;
+    value: string;
     result: {
       hit: string; miss: string; blocked: string;
       hitDecisions: string; finalDecision: string; nodeTrace: string;

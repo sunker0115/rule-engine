@@ -1,5 +1,6 @@
 import { Button, Select, Typography } from 'antd';
 import { PlusOutlined, ExceptionOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { AstNode, AndNode, OrNode, NotNode, ConditionNode, ConditionTypeMeta, MetricDescriptor } from '@/types';
 import ConditionCard from './ConditionCard';
 
@@ -29,16 +30,18 @@ function emptyGroup(): AndNode {
 export default function GroupEditor({
   node, conditionTypes, availableMetrics, payloadFieldNames, onChange, onDelete,
 }: Props) {
+  const { t } = useTranslation('rule');
+
   // NotNode 包裹层
   if (node.type === 'NotNode') {
     const child = node.child;
     return (
       <div style={{ border: '1px dashed #ff4d4f', borderRadius: 6, padding: '8px 12px', marginBottom: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <Typography.Text type="danger" strong style={{ fontSize: 12 }}>NOT</Typography.Text>
+          <Typography.Text type="danger" strong style={{ fontSize: 12 }}>{t('editor.groupEditor.not')}</Typography.Text>
           <div style={{ flex: 1 }} />
-          <Button type="text" size="small" onClick={() => onChange(child)}>解除 NOT</Button>
-          {onDelete && <Button type="text" size="small" danger onClick={onDelete}>删除组</Button>}
+          <Button type="text" size="small" onClick={() => onChange(child)}>{t('editor.groupEditor.unNot')}</Button>
+          {onDelete && <Button type="text" size="small" danger onClick={onDelete}>{t('editor.groupEditor.deleteGroup')}</Button>}
         </div>
         {child.type === 'ConditionNode' ? (
           <ConditionCard
@@ -140,17 +143,17 @@ export default function GroupEditor({
             }
           }}
           options={[
-            { value: 'and', label: 'AND' },
-            { value: 'or', label: 'OR' },
+            { value: 'and', label: t('editor.groupEditor.and') },
+            { value: 'or', label: t('editor.groupEditor.or') },
           ]}
         />
         <span style={{ fontSize: 12, color: '#999' }}>
-          {combinator === 'and' ? '满足以下全部条件：' : '满足以下任一条件：'}
+          {combinator === 'and' ? t('editor.groupEditor.descriptionAnd') : t('editor.groupEditor.descriptionOr')}
         </span>
         <div style={{ flex: 1 }} />
-        <Button size="small" icon={<PlusOutlined />} onClick={addCondition}>条件</Button>
-        <Button size="small" onClick={addGroup}>子组</Button>
-        {onDelete && <Button size="small" danger onClick={onDelete}>删除组</Button>}
+        <Button size="small" icon={<PlusOutlined />} onClick={addCondition}>{t('editor.groupEditor.addCondition')}</Button>
+        <Button size="small" onClick={addGroup}>{t('editor.groupEditor.addGroup')}</Button>
+        {onDelete && <Button size="small" danger onClick={onDelete}>{t('editor.groupEditor.deleteGroup')}</Button>}
       </div>
 
       {/* 子节点列表 */}
@@ -163,7 +166,7 @@ export default function GroupEditor({
                 type="text"
                 size="small"
                 icon={<ExceptionOutlined />}
-                title="包装为 NOT"
+                title={t('editor.groupEditor.wrapNot')}
                 onClick={() => wrapWithNot(index)}
               />
             )}
@@ -171,7 +174,7 @@ export default function GroupEditor({
         ))}
         {node.children.length === 0 && (
           <div style={{ padding: 16, textAlign: 'center', color: '#ccc', fontSize: 13 }}>
-            暂无条件，点击「条件」或「子组」添加
+            {t('editor.groupEditor.emptyHint')}
           </div>
         )}
       </div>

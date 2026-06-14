@@ -34,7 +34,7 @@ export default function RightPanel({ metadata, ruleDetail }: Props) {
   const tabItems = [
     ...(ruleDetail.kind === 'EXPRESSION_SCRIPT' ? [{
       key: 'executor',
-      label: 'Executor',
+      label: t('editor.rightPanel.executor'),
       children: (
         <div style={{ padding: 16 }}>
           <Select

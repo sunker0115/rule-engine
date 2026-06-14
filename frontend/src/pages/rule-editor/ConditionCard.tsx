@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { Card, Select, Input, InputNumber, Button } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { ConditionNode, ConditionTypeMeta, MetricDescriptor } from '@/types';
 import { paramLabel, paramWidget } from '@/utils/param-registry';
 
@@ -21,6 +22,7 @@ function findMeta(types: ConditionTypeMeta[], code: string): ConditionTypeMeta |
 export default function ConditionCard({
   node, conditionTypes, availableMetrics, payloadFieldNames, onChange, onDelete,
 }: Props) {
+  const { t } = useTranslation('rule');
   const meta = useMemo(() => findMeta(conditionTypes, node.conditionType), [conditionTypes, node.conditionType]);
   const requiresMetric = meta?.requiresMetric ?? true;
 
@@ -71,9 +73,9 @@ export default function ConditionCard({
               value={val as string}
               onChange={(v) => setParam(key, v)}
               options={[
-                { value: 'BEFORE', label: '早于' },
-                { value: 'AFTER', label: '晚于' },
-                { value: 'BETWEEN', label: '在…之间' },
+                { value: 'BEFORE', label: t('param.operatorBefore') },
+                { value: 'AFTER', label: t('param.operatorAfter') },
+                { value: 'BETWEEN', label: t('param.operatorBetween') },
               ]}
             />
           </div>
@@ -121,7 +123,7 @@ export default function ConditionCard({
             onChange({ ...node, conditionType: code, params: defaultParams });
           }}
           options={conditionTypes.map((ct) => ({ value: ct.code, label: ct.displayName }))}
-          placeholder="选择条件类型"
+          placeholder={t('editor.conditionCard.selectType')}
         />
         {requiresMetric && (
           <Select
@@ -130,8 +132,8 @@ export default function ConditionCard({
             value={node.valueRef ?? 'METRIC'}
             onChange={(ref) => onChange({ ...node, valueRef: ref as 'METRIC' | 'PAYLOAD' })}
             options={[
-              { value: 'METRIC', label: '指标值' },
-              { value: 'PAYLOAD', label: 'Payload' },
+              { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
+              { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
             ]}
           />
         )}
@@ -148,7 +150,7 @@ export default function ConditionCard({
             style={{ minWidth: 200 }}
             value={node.metricCode || undefined}
             onChange={(code) => onChange({ ...node, metricCode: code })}
-            placeholder="选择指标"
+            placeholder={t('editor.conditionCard.selectMetric')}
             popupMatchSelectWidth={false}
             options={availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }))}
           />
@@ -160,7 +162,7 @@ export default function ConditionCard({
             style={{ minWidth: 160 }}
             value={node.metricCode || undefined}
             onChange={(val) => onChange({ ...node, metricCode: val })}
-            placeholder="payload 字段"
+            placeholder={t('editor.conditionCard.payloadField')}
             popupMatchSelectWidth={false}
             options={payloadFieldNames.map((f) => ({ value: f, label: f }))}
             allowClear

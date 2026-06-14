@@ -11,6 +11,11 @@ const evalLoc: EvalTranslation = {
     payload: '事件数据',
     payloadHint: '可不填；添加键值对作为事件 payload',
     addField: '添加字段',
+    copyJson: '复制 JSON',
+    copiedJson: '已复制请求 JSON',
+    field: '字段',
+    key: 'key',
+    value: 'value',
     result: {
       hit: '命中',
       miss: '未命中',
