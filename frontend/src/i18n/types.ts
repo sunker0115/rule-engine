@@ -86,6 +86,7 @@ export interface SceneTranslation {
     basicInfo: string;
     inputManifest: string;
     ruleList: string;
+    notFound: string;
   };
   inputManifest: {
     info: string;
@@ -143,6 +144,7 @@ export interface MetricTranslation {
     breakingChangeTitle: string;
     breakingChangeContent: string;
   };
+  detail: { notFound: string };
   impact: {
     column: { ruleCode: string; ruleName: string; sceneCode: string; status: string };
   };

@@ -34,6 +34,7 @@ const scene: SceneTranslation = {
     basicInfo: '基本信息',
     inputManifest: '输入清单',
     ruleList: '规则列表',
+    notFound: 'Scene 不存在',
   },
   inputManifest: {
     info: '调用方对该场景发评估请求时，payload 需包含以下字段',
