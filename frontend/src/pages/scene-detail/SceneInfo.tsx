@@ -126,7 +126,7 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
 }
 
 // ---- payloadSchema 可视化编辑器 ----
-interface FieldDef { name: string; type: string; required: boolean; }
+interface FieldDef { name: string; type: string; required: boolean; sensitive: boolean; }
 const TYPE_OPTIONS = ['string', 'number', 'integer', 'boolean'].map(v => ({ value: v, label: v }));
 
 function toSchema(fields: FieldDef[]): Record<string, unknown> | null {
@@ -134,7 +134,9 @@ function toSchema(fields: FieldDef[]): Record<string, unknown> | null {
   const props: Record<string, unknown> = {};
   const required: string[] = [];
   for (const f of fields) {
-    props[f.name] = { type: f.type };
+    const prop: Record<string, unknown> = { type: f.type };
+    if (f.sensitive) prop.sensitive = true;
+    props[f.name] = prop;
     if (f.required) required.push(f.name);
   }
   return { type: 'object', properties: props, ...(required.length > 0 ? { required } : {}) };
@@ -143,12 +145,13 @@ function toSchema(fields: FieldDef[]): Record<string, unknown> | null {
 function fromSchema(schema: unknown): FieldDef[] {
   if (!schema || typeof schema !== 'object') return [];
   const s = schema as Record<string, unknown>;
-  const props = (s.properties ?? {}) as Record<string, { type?: string }>;
+  const props = (s.properties ?? {}) as Record<string, { type?: string; sensitive?: boolean }>;
   const req: string[] = (s.required as string[]) ?? [];
   return Object.entries(props).map(([name, def]) => ({
     name,
     type: def.type ?? 'string',
     required: req.includes(name),
+    sensitive: def.sensitive === true,
   }));
 }
 
@@ -172,23 +175,28 @@ function PayloadSchemaEditor({ value, onChange }: { value: unknown; onChange: (v
         <Table.Column title="字段名" dataIndex="name" render={(v: string, _: FieldDef, i: number) => (
           <Input size="small" value={v} onChange={e => {
             const next = [...fields]; next[i] = { ...next[i], name: e.target.value }; update(next);
-          }} style={{ width: 120 }} />
+          }} style={{ width: 100 }} />
         )} />
-        <Table.Column title="类型" dataIndex="type" width={110} render={(v: string, _: FieldDef, i: number) => (
+        <Table.Column title="类型" dataIndex="type" width={100} render={(v: string, _: FieldDef, i: number) => (
           <Select size="small" value={v} onChange={val => {
             const next = [...fields]; next[i] = { ...next[i], type: val }; update(next);
-          }} options={TYPE_OPTIONS} style={{ width: 100 }} />
+          }} options={TYPE_OPTIONS} style={{ width: 90 }} />
         )} />
-        <Table.Column title="必填" dataIndex="required" width={60} render={(v: boolean, _: FieldDef, i: number) => (
+        <Table.Column title="必填" dataIndex="required" width={55} render={(v: boolean, _: FieldDef, i: number) => (
           <Switch size="small" checked={v} onChange={checked => {
             const next = [...fields]; next[i] = { ...next[i], required: checked }; update(next);
+          }} />
+        )} />
+        <Table.Column title="敏感" dataIndex="sensitive" width={55} render={(v: boolean, _: FieldDef, i: number) => (
+          <Switch size="small" checked={v} onChange={checked => {
+            const next = [...fields]; next[i] = { ...next[i], sensitive: checked }; update(next);
           }} />
         )} />
         <Table.Column title="" width={40} render={(_: unknown, __: FieldDef, i: number) => (
           <Button type="text" size="small" icon={<DeleteOutlined />} onClick={() => update(fields.filter((_, j) => j !== i))} />
         )} />
       </Table>
-      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => update([...fields, { name: '', type: 'string', required: false }])} style={{ marginTop: 8 }}>
+      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => update([...fields, { name: '', type: 'string', required: true, sensitive: false }])} style={{ marginTop: 8 }}>
         添加字段
       </Button>
     </div>
