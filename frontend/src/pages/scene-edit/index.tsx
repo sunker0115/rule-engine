@@ -37,6 +37,7 @@ function fromSchema(schema: unknown): FieldDef[] {
 
 function PayloadSchemaEditor({ value, onChange }: { value?: unknown; onChange?: (v: Record<string, unknown> | null) => void }) {
   const [fields, setFields] = useState<FieldDef[]>(() => fromSchema(value));
+  useEffect(() => { setFields(fromSchema(value)); }, [value]);
   const update = (newFields: FieldDef[]) => { setFields(newFields); onChange?.(toSchema(newFields)); };
   return (
     <div>
@@ -68,6 +69,10 @@ function DefaultParamsEditor({ value, onChange }: { value?: unknown; onChange?: 
     const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
     return Object.entries(obj);
   });
+  useEffect(() => {
+    const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
+    setEntries(Object.entries(obj));
+  }, [value]);
   const sync = (newEntries: [string, string][]) => {
     setEntries(newEntries);
     const obj: Record<string, string> = {};
