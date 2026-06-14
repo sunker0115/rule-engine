@@ -1,8 +1,25 @@
 import type { AstNode, AndNode, OrNode, NotNode, ConditionNode } from '@/types';
 import type { RuleGroupType, RuleType } from 'react-querybuilder';
 
-/** 保存 ConditionNode 的 params，供 QB↔AST 往返时恢复 */
+/** 扩展 RuleType，携带 AST 中 ConditionNode 的额外字段 */
+interface RuleTypeExt extends RuleType {
+  _params?: Record<string, unknown>;
+  _valueRef?: string;
+}
+
+/** params 缓存：QB handleOnChange 会重建 RuleType 丢 _params，靠此 cache 跨渲染保留 */
 const paramsCache = new Map<string, Record<string, unknown>>();
+
+/** 从缓存读取 params */
+export function getParams(ruleId: string): Record<string, unknown> {
+  return paramsCache.get(ruleId) ?? {};
+}
+
+/** 更新缓存中单个 param */
+export function setParam(ruleId: string, key: string, value: unknown) {
+  const existing = paramsCache.get(ruleId) ?? {};
+  paramsCache.set(ruleId, { ...existing, [key]: value });
+}
 
 /** AST → react-querybuilder RuleGroupType */
 export function astToQueryBuilder(ast: AstNode | null): RuleGroupType {
@@ -48,16 +65,14 @@ function astToQueryBuilderRule(node: AstNode): RuleType | RuleGroupType {
       return astToQueryBuilder(node);
     case 'ConditionNode': {
       const c = node as ConditionNode;
-      const nodeId = crypto.randomUUID();
-      if (c.params && Object.keys(c.params).length > 0) {
-        paramsCache.set(nodeId, c.params);
-      }
+      const id = crypto.randomUUID();
+      if (c.params) paramsCache.set(id, { ...c.params });
       return {
-        id: nodeId,
+        id,
         field: c.conditionType,
         operator: c.valueRef ?? 'METRIC',
         value: c.metricCode ?? '',
-      } as unknown as RuleType;
+      } as RuleType;
     }
     default:
       return { field: 'unknown', operator: '=', value: '' } as unknown as RuleType;
@@ -82,13 +97,9 @@ export function queryBuilderToAst(group: RuleGroupType): AstNode {
     if ('combinator' in rule) {
       return queryBuilderToAst(rule as RuleGroupType);
     }
-    const r = rule as unknown as {
-      id?: string;
-      field: string;
-      operator: string;
-      value: string;
-    };
-    const params = (r.id && paramsCache.get(r.id)) || {};
+    const r = rule as unknown as RuleTypeExt;
+    const cached = r.id ? paramsCache.get(r.id) : undefined;
+    const params = cached ?? r._params ?? {};
     return {
       type: 'ConditionNode',
       conditionType: r.field,
