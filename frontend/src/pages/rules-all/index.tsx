@@ -76,7 +76,7 @@ export default function RulesAll() {
         body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: defaultMetric, operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
       }
       if (values.kind === 'EXPRESSION_SCRIPT') {
-        body.script = { lang: values.scriptLang || 'CEL', source: values.scriptSource || '' };
+        body.script = { lang: values.scriptLang || 'CEL', source: values.scriptSource || '{true}' };
       }
       await createRule(values.tenantId ?? currentId!, body);
       message.success(tc('message.createSuccess'));
@@ -189,7 +189,7 @@ export default function RulesAll() {
                   { value: 'Groovy', label: 'Groovy' },
                 ]} />
               </Form.Item>
-              <Form.Item name="scriptSource" label="脚本源码" rules={[{ required: true, message: tc('validation.required') }]}>
+              <Form.Item name="scriptSource" label="脚本源码" initialValue="{true}" rules={[{ required: true, message: tc('validation.required') }]}>
                 <Input.TextArea rows={6} placeholder='例如: metrics.amount > 1000' />
               </Form.Item>
             </>
