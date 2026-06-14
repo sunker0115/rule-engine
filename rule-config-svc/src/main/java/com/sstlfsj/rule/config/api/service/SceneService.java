@@ -81,7 +81,7 @@ public interface SceneService {
      * @param sceneCode 场景编码
      * @param enable    true 启用，false 禁用
      */
-    void toggleSceneStatus(String tenantId, String sceneCode, boolean enable);
+    void toggleSceneStatus(String tenantId, String sceneCode, boolean enable, String actorId);
 
     /**
      * 读时脱敏所需的 live 敏感集（D71）。

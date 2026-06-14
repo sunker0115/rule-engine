@@ -46,7 +46,7 @@ class SceneServiceTest {
         }
 
         @Override
-        public void toggleSceneStatus(String tenantId, String sceneCode, boolean enable) {
+        public void toggleSceneStatus(String tenantId, String sceneCode, boolean enable, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 

@@ -126,17 +126,17 @@ class SceneServiceImpl implements SceneService {
 
     @Override
     @Transactional
-    public void toggleSceneStatus(String tenantId, String sceneCode, boolean enable) {
+    public void toggleSceneStatus(String tenantId, String sceneCode, boolean enable, String actorId) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
         SceneStatus newStatus = enable ? SceneStatus.ACTIVE : SceneStatus.DISABLED;
-        if (scene.getStatus() == newStatus) return; // 已是目标状态，无需操作
+        if (scene.getStatus() == newStatus) return;
 
         SceneSnapshot before = snapshotOf(scene);
         scene.setStatus(newStatus);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
         String action = enable ? "ENABLE" : "DISABLE";
-        publishAudit(Long.valueOf(tenantId), null, action, "scene",
+        publishAudit(Long.valueOf(tenantId), actorId, action, "scene",
                 scene.getId().toString(), before, snapshotOf(scene));
         eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, enable));
     }

@@ -93,8 +93,9 @@ public class SceneController {
     public ApiResponse<Map<String, Object>> toggleStatus(
             @PathVariable String sceneCode,
             @RequestParam String tenantId,
-            @RequestParam boolean enable) {
-        sceneService.toggleSceneStatus(tenantId, sceneCode, enable);
+            @RequestParam boolean enable,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        sceneService.toggleSceneStatus(tenantId, sceneCode, enable, actorId);
         return ApiResponse.ok(Map.of("status", enable ? "ACTIVE" : "DISABLED"));
     }
 }
