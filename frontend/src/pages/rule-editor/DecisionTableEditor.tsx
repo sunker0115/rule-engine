@@ -9,11 +9,12 @@ interface Props {
   node: DecisionTableNode;
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
+  payloadFieldNames: string[];
   onChange: (node: DecisionTableNode) => void;
 }
 
 export default function DecisionTableEditor({
-  node, conditionTypes, availableMetrics, onChange,
+  node, conditionTypes, availableMetrics, payloadFieldNames, onChange,
 }: Props) {
   const { currentId } = useTenantStore();
   const [decisions, setDecisions] = useState<{ value: string; label: string }[]>([]);
@@ -27,14 +28,26 @@ export default function DecisionTableEditor({
   const columns: DecisionTableColumn[] = node.columns ?? [];
   const rows: DecisionTableRow[] = node.rows ?? [];
 
-  // 空表自动预填一列一行，避免后端校验 "columns 不得为空"
+  // 空表或空 metricCode 自动预填：取第一个可用 metric 或 payload 字段
   useEffect(() => {
+    const firstMetric = availableMetrics[0]?.metricCode || payloadFieldNames[0] || '';
+    if (!firstMetric) return; // 没有任何可用来源，无法预填
+
     if (columns.length === 0) {
       onChange({
         ...node,
-        columns: [{ metricCode: '', operator: 'EQ', dataType: null }],
+        columns: [{ metricCode: firstMetric, operator: 'EQ', dataType: null }],
         rows: [{ conditions: [null], decisionCode: '' }],
       });
+      return;
+    }
+
+    // 补填空 metricCode 的列
+    const fixed = columns.map((c) =>
+      c.metricCode ? c : { ...c, metricCode: firstMetric },
+    );
+    if (JSON.stringify(fixed) !== JSON.stringify(columns)) {
+      onChange({ ...node, columns: fixed });
     }
   }, []);
 

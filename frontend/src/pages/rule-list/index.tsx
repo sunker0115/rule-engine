@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listRules, createRule } from '@/api/rule';
+import { getSceneMetadata } from '@/api/metadata';
 import { getRuleColumns } from '@/config/columns/rule';
 import { ROUTES, route } from '@/constants/routes';
 import { RULE_KIND_OPTIONS, RULE_STATUS_OPTIONS } from '@/constants/enums';
@@ -13,6 +14,16 @@ import dayjs from 'dayjs';
 import type { RuleListItem } from '@/types';
 
 const { RangePicker } = DatePicker;
+
+/** 查场景第一个可用 metric 做决策表默认列 */
+async function fetchDefaultMetric(tenantId: number, sceneCode: string): Promise<string> {
+  try {
+    const res = await getSceneMetadata(tenantId, sceneCode);
+    return res.data?.availableMetrics?.[0]?.metricCode ?? '';
+  } catch {
+    return '';
+  }
+}
 
 export default function RuleList() {
   const { sceneCode } = useParams<{ sceneCode: string }>();
@@ -67,7 +78,8 @@ export default function RuleList() {
       } else if (values.kind === 'DECISION_TREE') {
         body.conditionAst = { type: 'IfNode', condition: { type: 'AndNode', children: [] }, thenBranch: { type: 'DecisionLeafNode', decisionCode: '', category: null }, elseBranch: null };
       } else if (values.kind === 'DECISION_TABLE') {
-        body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: '', operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
+        const defaultMetric = await fetchDefaultMetric(currentId!, sceneCode!);
+        body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: defaultMetric, operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
       }
       await createRule(currentId!, body);
       message.success(tc('message.createSuccess'));

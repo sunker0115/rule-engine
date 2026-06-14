@@ -4,6 +4,7 @@ import { SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listRules, createRule } from '@/api/rule';
+import { getSceneMetadata } from '@/api/metadata';
 import { listScenes } from '@/api/scene';
 import { getRuleColumns } from '@/config/columns/rule';
 import { RULE_STATUS_OPTIONS, RULE_KIND_OPTIONS } from '@/constants/enums';
@@ -12,6 +13,15 @@ import dayjs from 'dayjs';
 import type { RuleListItem } from '@/types';
 
 const { RangePicker } = DatePicker;
+
+async function fetchDefaultMetric(tenantId: number, sceneCode: string): Promise<string> {
+  try {
+    const res = await getSceneMetadata(tenantId, sceneCode);
+    return res.data?.availableMetrics?.[0]?.metricCode ?? '';
+  } catch {
+    return '';
+  }
+}
 
 export default function RulesAll() {
   const { currentId, activeList } = useTenantStore();
@@ -61,7 +71,8 @@ export default function RulesAll() {
       } else if (values.kind === 'DECISION_TREE') {
         body.conditionAst = { type: 'IfNode', condition: { type: 'AndNode', children: [] }, thenBranch: { type: 'DecisionLeafNode', decisionCode: '', category: null }, elseBranch: null };
       } else if (values.kind === 'DECISION_TABLE') {
-        body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: '', operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
+        const defaultMetric = await fetchDefaultMetric(values.tenantId ?? currentId!, values.sceneCode);
+        body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: defaultMetric, operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
       }
       await createRule(values.tenantId ?? currentId!, body);
       message.success(tc('message.createSuccess'));

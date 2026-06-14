@@ -67,6 +67,7 @@ export default function CenterPanel({ metadata }: Props) {
         node={tableNode}
         conditionTypes={shared.conditionTypes}
         availableMetrics={shared.availableMetrics}
+        payloadFieldNames={shared.payloadFieldNames}
         onChange={(node) => setAst(node as AstNode)}
       />
     );

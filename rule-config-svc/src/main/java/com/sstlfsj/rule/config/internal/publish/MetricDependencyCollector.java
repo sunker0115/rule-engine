@@ -43,7 +43,9 @@ class MetricDependencyCollector {
             case DecisionLeafNode ignored -> {}
             // DecisionTableNode：遍历列头中的 metricCode
             case DecisionTableNode dt ->
-                    dt.columns().forEach(col -> { if (col.metricCode() != null) acc.add(col.metricCode()); });
+                    dt.columns().forEach(col -> {
+                        if (col.metricCode() != null && !col.metricCode().isBlank()) acc.add(col.metricCode());
+                    });
         }
     }
 }
