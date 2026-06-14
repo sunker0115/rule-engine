@@ -66,6 +66,10 @@ const rule: RuleTranslation = {
     },
   },
   preGate: {
+    descPercent:
+      '百分比灰度：按 subjectId 哈希取模，控制单条规则命中比例。如设 10 = 10% 流量进入该规则。适合新规则逐步放量上线。',
+    descBucket:
+      '桶区间互斥：精确控制 [start, end) 区间，配合 experimentId 可让多条规则共享同一哈希种子，实现 A/B 互斥。适合多条规则对照实验。',
     modePercent: '百分比模式',
     modeBucket: '桶区间模式',
     labelPercentage: '放量',

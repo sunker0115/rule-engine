@@ -1,4 +1,4 @@
-import { Slider, InputNumber, Switch, Space, Typography } from 'antd';
+import { Slider, InputNumber, Switch, Space, Typography, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { RolloutParams } from '@/types';
 
@@ -44,6 +44,13 @@ export default function RolloutSlider({ value = {}, onChange }: Props) {
         />
         <Typography.Text>{t('preGate.modeBucket')}</Typography.Text>
       </Space>
+
+      <Alert
+        type="info"
+        showIcon
+        message={!useBucketRange ? t('preGate.descPercent') : t('preGate.descBucket')}
+        style={{ marginBottom: 16, fontSize: 13 }}
+      />
 
       {!useBucketRange ? (
         <div>

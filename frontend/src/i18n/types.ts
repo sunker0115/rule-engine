@@ -233,6 +233,7 @@ export interface RuleTranslation {
     };
   };
   preGate: {
+    descPercent: string; descBucket: string;
     modePercent: string; modeBucket: string;
     labelPercentage: string; labelBucketStart: string; labelBucketEnd: string;
     labelRange: string; labelRollout: string;
