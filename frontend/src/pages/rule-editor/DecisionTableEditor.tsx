@@ -151,10 +151,11 @@ export default function DecisionTableEditor({
                     <Select
                       size="small"
                       showSearch
-                      style={{ width: 140 }}
+                      style={{ width: 160 }}
                       value={col.metricCode || undefined}
                       onChange={(v) => updateColumn(ci, 'metricCode', v)}
                       placeholder={t('editor.decisionTable.metric')}
+                      popupMatchSelectWidth={false}
                       options={fieldOptions}
                     />
                   </div>
@@ -193,7 +194,7 @@ export default function DecisionTableEditor({
             <Select
               size="small"
               showSearch
-              style={{ width: 150 }}
+              style={{ width: 120 }}
               value={val || undefined}
               onChange={(v) => updateRow(ri, 'decisionCode', 0, v)}
               options={decisions}
