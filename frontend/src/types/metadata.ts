@@ -17,6 +17,10 @@ export interface SceneMetadata {
   eventTypes: string[];
   /** 场景 payloadSchema 中声明的字段名 */
   payloadFieldNames: string[];
+  /** 字段名 → 声明类型（integer/number/string/boolean 等） */
+  payloadFieldTypes: Record<string, string>;
+  /** 字段名 → 声明类型（LONG/DOUBLE/DECIMAL/STRING/BOOLEAN 等） */
+  payloadFieldTypes: Record<string, string>;
 }
 
 export interface InputFieldItem {

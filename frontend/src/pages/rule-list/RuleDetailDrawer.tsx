@@ -4,7 +4,32 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getRule } from '@/api/rule';
 import { colorOf, RULE_STATUS_OPTIONS, VERSION_STATUS_OPTIONS } from '@/constants/enums';
-import type { RuleDetail as RuleDetailType } from '@/types';
+import type { RuleDetail as RuleDetailType, AstNode, IfNode, DecisionLeafNode } from '@/types';
+
+/** 从 AST 递归提取所有 DecisionLeafNode 的 decisionCode */
+function extractDecisionCodes(node: unknown): string[] {
+  if (!node || typeof node !== 'object') return [];
+  const n = node as Record<string, unknown>;
+  if (n.type === 'DecisionLeafNode') return [n.decisionCode as string].filter(Boolean);
+  if (n.type === 'IfNode') {
+    const ifNode = node as IfNode;
+    return [
+      ...extractDecisionCodes(ifNode.condition),
+      ...extractDecisionCodes(ifNode.thenBranch),
+      ...extractDecisionCodes(ifNode.elseBranch),
+    ];
+  }
+  // 容器节点：AndNode / OrNode / NotNode / XorNode
+  if (Array.isArray(n.children)) {
+    return (n.children as unknown[]).flatMap(extractDecisionCodes);
+  }
+  if (n.child) return extractDecisionCodes(n.child);
+  if (Array.isArray(n.conditions)) return (n.conditions as unknown[]).flatMap(extractDecisionCodes);
+  if (Array.isArray(n.rows)) {
+    return (n.rows as Array<{ decisionCode?: string }>).map(r => r.decisionCode).filter(Boolean) as string[];
+  }
+  return [];
+}
 
 interface Props {
   open: boolean;
@@ -32,6 +57,11 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
   if (loading) return <Drawer title={t('detail.title')} open={open} onClose={onClose} width={520}><Spin /></Drawer>;
   if (!detail) return <Drawer title={t('detail.title')} open={open} onClose={onClose} width={520}><Empty /></Drawer>;
 
+  // 决策码：优先 decisionBindings，AST_BOOLEAN/SCORECARD 绑在右面板；DECISION_TREE/TABLE 从 AST 提取
+  const boundCodes = (detail.decisionBindings ?? []).map((b) => b.decisionCode);
+  const astCodes = extractDecisionCodes(detail.conditionAst);
+  const decisionCodes = boundCodes.length > 0 ? boundCodes : [...new Set(astCodes)];
+
   // 找当前生效版本
   const activeVersion = detail.versions?.find((v) => v.status === 'ACTIVE');
   const draftVersion = detail.versions?.find((v) => v.status === 'DRAFT');
@@ -55,7 +85,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
                   {(detail.triggerEventTypes ?? []).join(', ') || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('detail.label.decision')}>
-                  {(detail.decisionBindings ?? []).map((b) => b.decisionCode).join(', ') || '-'}
+                  {decisionCodes.length > 0 ? decisionCodes.join(', ') : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('detail.label.preGate')}>
                   {detail.preGates?.[0]?.gateType === 'ROLLOUT'

@@ -15,6 +15,7 @@ interface Props {
   sceneCode: string;
   eventTypes: string[];
   payloadFieldNames: string[];
+  payloadFieldTypes?: Record<string, string>;
 }
 
 interface PayloadPair {
@@ -25,7 +26,7 @@ interface PayloadPair {
 
 let nextPairId = 0;
 
-export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes, payloadFieldNames }: Props) {
+export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes, payloadFieldNames, payloadFieldTypes }: Props) {
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
@@ -56,12 +57,21 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
   };
 
 
+  /** 按场景声明的类型转换 payload 值 */
+  const toPayloadValue = (key: string, raw: string): unknown => {
+    const t = (payloadFieldTypes?.[key] ?? 'string').toLowerCase();
+    if (t === 'integer' || t === 'long') return parseInt(raw, 10);
+    if (t === 'number' || t === 'double' || t === 'decimal') return parseFloat(raw);
+    if (t === 'boolean') return raw === 'true';
+    return raw; // string / 未知类型保持原样
+  };
+
   const buildRequestBody = async () => {
     const values = await form.validateFields();
     const payload: Record<string, unknown> = {};
     pairs.forEach(p => {
       if (p.key.trim()) {
-        payload[p.key.trim()] = p.value;
+        payload[p.key.trim()] = toPayloadValue(p.key.trim(), p.value);
       }
     });
     return {
@@ -91,7 +101,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
       const payload: Record<string, unknown> = {};
       pairs.forEach(p => {
         if (p.key.trim()) {
-          payload[p.key.trim()] = p.value;
+          payload[p.key.trim()] = toPayloadValue(p.key.trim(), p.value);
         }
       });
       const data = await dryRun(

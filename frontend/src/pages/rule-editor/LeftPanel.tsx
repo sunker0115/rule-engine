@@ -77,7 +77,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
       </Descriptions>
 
       <div style={{ marginBottom: 16 }}>
-        {/* 编辑区 */}
+        {/* 编辑与测试 */}
         {isDraft && (
           <Button type="primary" block onClick={handleSaveDraft} loading={saving} disabled={!dirty} style={{ marginBottom: 8 }}>
             {t('action.saveDraft')}
@@ -86,10 +86,9 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         {(isPublished || isDisabled) && !hasDraft && (
           <Button block onClick={handleNewVersion} style={{ marginBottom: 8 }}>{t('action.newVersion')}</Button>
         )}
-
-        <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>测试与发布</Divider>
-
         <Button block onClick={onOpenDryRun} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
+
+        <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>发布</Divider>
         {hasDraft && (
           <Popconfirm title={t('version.publishConfirm').replace('{version}', '?')} onConfirm={handlePublish}>
             <Button type="primary" block style={{ background: '#52c41a', borderColor: '#52c41a', marginBottom: 8 }}>
