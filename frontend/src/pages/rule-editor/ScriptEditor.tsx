@@ -1,4 +1,4 @@
-import { Input } from 'antd';
+import { Input, Tag } from 'antd';
 import { useRuleStore } from '@/store/ruleStore';
 
 export default function ScriptEditor() {
@@ -9,6 +9,9 @@ export default function ScriptEditor() {
 
   return (
     <div style={{ padding: 8 }}>
+      <div style={{ marginBottom: 8 }}>
+        <Tag color="blue">{lang}</Tag>
+      </div>
       <Input.TextArea
         rows={18}
         value={source}

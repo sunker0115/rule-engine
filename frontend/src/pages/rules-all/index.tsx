@@ -38,7 +38,7 @@ export default function RulesAll() {
   const [createLoading, setCreateLoading] = useState(false);
   const [sceneOpts, setSceneOpts] = useState<{ value: string; label: string }[]>([]);
   const [createForm] = Form.useForm();
-  const formKind = Form.useWatch('kind', createForm) || 'AST_BOOLEAN';
+  const [formKind, setFormKind] = useState('AST_BOOLEAN');
   const tenantId = tenantFilter ?? currentId ?? 0;
 
   const load = async () => {
@@ -93,6 +93,7 @@ export default function RulesAll() {
         <h2>{t('title.list')}</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={async () => {
           createForm.resetFields();
+          setFormKind('AST_BOOLEAN');
           setCreateOpen(true);
           try {
             const apiRes = await listScenes(tenantId);
@@ -174,7 +175,7 @@ export default function RulesAll() {
             <Input />
           </Form.Item>
           <Form.Item name="kind" label={t('column.kind')} initialValue="AST_BOOLEAN">
-            <Select options={[...RULE_KIND_OPTIONS]} />
+            <Select options={[...RULE_KIND_OPTIONS]} onChange={(v) => setFormKind(v)} />
           </Form.Item>
           {formKind === 'EXPRESSION_SCRIPT' && (
             <>
