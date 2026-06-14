@@ -167,7 +167,7 @@ export default function DecisionTableEditor({
 
         <Table.Column
           title={t('editor.decisionTable.decisionCode')}
-          width={140}
+          width={200}
           dataIndex="_decisionCode"
           render={(val: string, _: unknown, ri: number) => (
             <Select
