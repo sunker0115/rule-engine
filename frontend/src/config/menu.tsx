@@ -16,27 +16,27 @@ export const MENU_ITEMS: ItemType[] = [
   {
     key: ROUTES.TENANTS,
     icon: <TeamOutlined />,
-    label: 'Tenant',
+    label: '租户管理',
   },
   {
     key: ROUTES.SCENES,
     icon: <AppstoreOutlined />,
-    label: 'Scene',
+    label: '场景管理',
   },
   {
     key: ROUTES.RULES,
     icon: <ApartmentOutlined />,
-    label: 'Rule',
+    label: '规则管理',
   },
   {
     key: ROUTES.METRICS,
     icon: <LineChartOutlined />,
-    label: 'Metric',
+    label: '指标管理',
   },
   {
     key: ROUTES.DECISIONS,
     icon: <CheckCircleOutlined />,
-    label: 'Decision',
+    label: '决策管理',
   },
   { type: 'divider' },
   {
