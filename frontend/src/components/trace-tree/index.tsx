@@ -41,7 +41,7 @@ function TraceNode({ node, depth }: { node: NodeTraceItem; depth: number }) {
         )}
         {!hasChildren && <span style={{ width: 10 }} />}
         <span title={resultLabel(node.result, t)}>{resultIcon(node.result)}</span>
-        <Tag>{node.type}</Tag>
+        <Tag>{node.nodeType}</Tag>
         {node.metricCode && <Tag color="blue">{node.metricCode}</Tag>}
         {node.actualValue !== undefined && (
           <span style={{ color: '#666', marginLeft: 8 }}>= {JSON.stringify(node.actualValue)}</span>

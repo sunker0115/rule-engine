@@ -17,26 +17,30 @@ export async function createRule(tenantId: number, body: Record<string, unknown>
   return res.data;
 }
 
-export async function editDraft(ruleDefinitionId: number, body: Record<string, unknown>) {
-  return apiClient.put(ENDPOINTS.RULE_DRAFT(ruleDefinitionId), body);
+/** 编辑草稿——tenantId 在 body 中 */
+export async function editDraft(tenantId: number, ruleDefinitionId: number, body: Record<string, unknown>) {
+  return apiClient.put(ENDPOINTS.RULE_DRAFT(ruleDefinitionId), { ...body, tenantId });
 }
 
-export async function publishRule(ruleDefinitionId: number) {
-  return apiClient.post(ENDPOINTS.RULE_PUBLISH(ruleDefinitionId));
+/** 发布——tenantId 是 query param */
+export async function publishRule(tenantId: number, ruleDefinitionId: number) {
+  return apiClient.post(ENDPOINTS.RULE_PUBLISH(ruleDefinitionId), null, { params: { tenantId } });
 }
 
-export async function disableRule(ruleDefinitionId: number) {
-  return apiClient.post(ENDPOINTS.RULE_DISABLE(ruleDefinitionId));
+/** 禁用 */
+export async function disableRule(tenantId: number, ruleDefinitionId: number) {
+  return apiClient.post(ENDPOINTS.RULE_DISABLE(ruleDefinitionId), null, { params: { tenantId } });
 }
 
-export async function newVersion(ruleDefinitionId: number, fromVersionId?: number) {
-  return apiClient.post(ENDPOINTS.RULE_VERSIONS(ruleDefinitionId), { fromVersionId });
+/** 新版本/回退 */
+export async function newVersion(tenantId: number, ruleDefinitionId: number, fromVersionId?: number) {
+  return apiClient.post(ENDPOINTS.RULE_VERSIONS(ruleDefinitionId), { fromVersionId }, { params: { tenantId } });
 }
 
-export async function deleteRule(ruleDefinitionId: number) {
-  return apiClient.delete(ENDPOINTS.RULE_DELETE(ruleDefinitionId));
+export async function deleteRule(tenantId: number, ruleDefinitionId: number) {
+  return apiClient.delete(ENDPOINTS.RULE_DELETE(ruleDefinitionId), { params: { tenantId } });
 }
 
-export async function deleteDraftVersion(ruleDefinitionId: number, versionId: number) {
-  return apiClient.delete(ENDPOINTS.RULE_DELETE_VERSION(ruleDefinitionId, versionId));
+export async function deleteDraftVersion(tenantId: number, ruleDefinitionId: number, versionId: number) {
+  return apiClient.delete(ENDPOINTS.RULE_DELETE_VERSION(ruleDefinitionId, versionId), { params: { tenantId } });
 }

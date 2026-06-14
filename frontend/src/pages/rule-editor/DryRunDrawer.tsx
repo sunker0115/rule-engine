@@ -11,13 +11,14 @@ interface Props {
   onClose: () => void;
   ruleVersionId?: number;
   ruleId?: number;
+  sceneCode: string;
   eventTypes: string[];
 }
 
-export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, eventTypes }: Props) {
+export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes }: Props) {
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
-  const { current } = useTenantStore();
+  const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
   const { result, loading, setResult, setLoading } = useDryRunStore();
   const [form] = Form.useForm();
   const [internalLoading, setInternalLoading] = useState(false);
@@ -30,17 +31,18 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, eve
     setLoading(true);
     try {
       const payload = values.payload ? JSON.parse(values.payload) : {};
-      const data = await dryRun({
-        tenantId: current ?? '',
-        sceneCode: values.sceneCode ?? '',
-        eventType: values.eventType,
-        subjectId: values.subjectId,
-        eventId: `dry-${Date.now()}`,
-        occurredAt: new Date().toISOString(),
-        payload,
-        ruleVersionId,
-        ruleId,
-      });
+      const data = await dryRun(
+        {
+          tenantCode: current ?? '',   // eval API 用 tenantCode（字符串 code）
+          sceneCode,
+          eventType: values.eventType,
+          subjectId: values.subjectId,
+          eventId: `dry-${Date.now()}`,
+          occurredAt: new Date().toISOString(),
+          payload,
+        },
+        { ruleVersionId, ruleId },    // query param，不在 body
+      );
       setResult(data);
     } catch {
       message.error(tc('message.loadError'));
@@ -49,21 +51,23 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, eve
     }
   };
 
-  const renderTraceNode = (node: NodeTraceItem): React.ReactNode => {
-    const color = node.result === true ? 'green' : node.result === false ? 'red' : '#999';
+  const renderTraceNode = (node: NodeTraceItem, depth: number = 0): React.ReactNode => {
+    const icon = node.result === true ? '✅' : node.result === false ? '❌' : '⏭';
     return (
-      <div style={{ marginBottom: 4 }}>
-        <span style={{ color }}>{node.type}</span>
-        {node.metricCode && <Tag style={{ marginLeft: 8 }}>{node.metricCode}</Tag>}
-        {node.actualValue !== undefined && (
+      <div key={`${depth}-${node.nodeType}`} style={{ marginLeft: depth * 24, marginBottom: 4 }}>
+        <span>{icon} </span>
+        <Typography.Text>{node.nodeType}</Typography.Text>
+        {node.conditionType && <Tag style={{ marginLeft: 8 }}>{node.conditionType}</Tag>}
+        {node.metricCode && <Tag color="blue" style={{ marginLeft: 4 }}>{node.metricCode}</Tag>}
+        {node.actualValue !== null && node.actualValue !== undefined && (
           <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
             = {JSON.stringify(node.actualValue)}
           </Typography.Text>
         )}
-        {node.children?.map((child, i) => (
-          <div key={i} style={{ marginLeft: 24 }}>
-            {renderTraceNode(child)}
-          </div>
+        {node.valueSource && <Tag style={{ marginLeft: 4 }}>{node.valueSource}</Tag>}
+        {node.errorCode && <Tag color="red" style={{ marginLeft: 4 }}>{node.errorCode}</Tag>}
+        {node.children.map((child, i) => (
+          <div key={i}>{renderTraceNode(child, depth + 1)}</div>
         ))}
       </div>
     );

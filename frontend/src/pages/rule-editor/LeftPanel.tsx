@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Descriptions, Button, Space, Tag, Timeline, message, Popconfirm } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, newVersion } from '@/api/rule';
 import { colorOf, RULE_STATUS_OPTIONS, VERSION_STATUS_OPTIONS } from '@/constants/enums';
@@ -11,13 +12,15 @@ interface Props { ruleDetail: RuleDetailType; }
 export default function LeftPanel({ ruleDetail }: Props) {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
+  const { currentId } = useTenantStore();
+  const tenantId = currentId ?? 0;
   const { ast, decisionBindings, preGates, triggerEventTypes, dirty } = useRuleStore();
   const [saving, setSaving] = useState(false);
 
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      await editDraft(ruleDetail.ruleDefinitionId, {
+      await editDraft(tenantId, ruleDetail.ruleDefinitionId, {
         conditionAst: ast,
         decisionBindings,
         preGates,
@@ -30,17 +33,17 @@ export default function LeftPanel({ ruleDetail }: Props) {
   };
 
   const handlePublish = async () => {
-    await publishRule(ruleDetail.ruleDefinitionId);
+    await publishRule(tenantId, ruleDetail.ruleDefinitionId);
     message.success(tc('message.updateSuccess'));
   };
 
   const handleDisable = async () => {
-    await disableRule(ruleDetail.ruleDefinitionId);
+    await disableRule(tenantId, ruleDetail.ruleDefinitionId);
     message.success(tc('message.updateSuccess'));
   };
 
   const handleNewVersion = async () => {
-    await newVersion(ruleDetail.ruleDefinitionId);
+    await newVersion(tenantId, ruleDetail.ruleDefinitionId);
     message.success(tc('message.createSuccess'));
   };
 
