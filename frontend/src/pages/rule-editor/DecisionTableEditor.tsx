@@ -118,13 +118,13 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
-              width={230}
+              width={280}
               dataIndex={`_c${ci}`}
               title={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Select
                     size="small"
-                    style={{ width: 68 }}
+                    style={{ width: 76 }}
                     value={col.valueRef ?? 'METRIC'}
                     onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
                     options={[
@@ -135,7 +135,7 @@ export default function DecisionTableEditor({
                   <Select
                     size="small"
                     showSearch
-                    style={{ width: 80 }}
+                    style={{ width: 100 }}
                     value={col.metricCode || undefined}
                     onChange={(v) => updateColumn(ci, 'metricCode', v)}
                     placeholder={t('editor.decisionTable.metric')}
@@ -144,7 +144,7 @@ export default function DecisionTableEditor({
                   />
                   <Select
                     size="small"
-                    style={{ width: 58 }}
+                    style={{ width: 64 }}
                     value={col.operator || undefined}
                     onChange={(v) => updateColumn(ci, 'operator', v)}
                     options={opOptions}
@@ -156,7 +156,7 @@ export default function DecisionTableEditor({
               render={(val: unknown, _: unknown, ri: number) => (
                 <Input
                   size="small"
-                  style={{ width: 120 }}
+                  style={{ width: 130 }}
                   value={val != null ? String(val) : ''}
                   onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
                   placeholder="-"
@@ -168,7 +168,7 @@ export default function DecisionTableEditor({
 
         <Table.Column
           title={t('editor.decisionTable.decisionCode')}
-          width={110}
+          width={90}
           dataIndex="_decisionCode"
           render={(val: string, _: unknown, ri: number) => (
             <Select
