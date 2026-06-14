@@ -6,6 +6,7 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.common.PageResponse;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -18,6 +19,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** 规则版本生命周期管理入口：发布、禁用、查询。 */
 @RestController
@@ -191,8 +195,20 @@ public class RuleController {
             @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<RuleListItemVO> result = configService.listRules(tenantId, sceneCode, status, from, to, page, size);
-        return ApiResponse.ok(PageResponse.of(result.getRecords(), result.getTotal(), page, size));
+        Page<RuleDefinition> rdPage = configService.listRules(tenantId, sceneCode, status, from, to, page, size);
+
+        Map<Long, String> sceneCodeMap = configService.getSceneCodeMap(
+                rdPage.getRecords().stream().map(RuleDefinition::getSceneId).collect(Collectors.toSet()));
+
+        List<RuleListItemVO> vos = rdPage.getRecords().stream()
+                .map(rd -> new RuleListItemVO(
+                        rd.getId(), rd.getCode(), rd.getName(),
+                        rd.getKind() != null ? rd.getKind().name() : null,
+                        sceneCodeMap.getOrDefault(rd.getSceneId(), null),
+                        rd.getStatus().name(), rd.getCurrentVersion(), rd.getPublishedAt()))
+                .toList();
+
+        return ApiResponse.ok(PageResponse.of(vos, rdPage.getTotal(), page, size));
     }
 
     /**

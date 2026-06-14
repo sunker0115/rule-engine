@@ -10,6 +10,11 @@ export function getRuleColumns(onDetail?: (id: number) => void): ColumnsType<Rul
     { title: 'Code', dataIndex: 'code', key: 'code' },
     { title: 'Name', dataIndex: 'name', key: 'name' },
     {
+      title: 'Kind', dataIndex: 'kind', key: 'kind',
+      render: (v: string) => <Tag>{v}</Tag>,
+    },
+    { title: 'Scene', dataIndex: 'sceneCode', key: 'sceneCode' },
+    {
       title: 'Status', dataIndex: 'status', key: 'status',
       render: (v: string) => <Tag color={colorOf(RULE_STATUS_OPTIONS, v as never)}>{v}</Tag>,
     },

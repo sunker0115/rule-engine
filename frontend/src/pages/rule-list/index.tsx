@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space } from 'antd';
+import { useEffect, useState, useMemo } from 'react';
+import { Table, Button, Modal, Form, Input, Select, DatePicker, message, Space } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +10,10 @@ import { getRuleColumns } from '@/config/columns/rule';
 import { ROUTES, route } from '@/constants/routes';
 import { RULE_KIND_OPTIONS, RULE_STATUS_OPTIONS } from '@/constants/enums';
 import RuleDetailDrawer from './RuleDetailDrawer';
+import dayjs from 'dayjs';
 import type { RuleListItem } from '@/types';
+
+const { RangePicker } = DatePicker;
 
 export default function RuleList() {
   const { sceneCode } = useParams<{ sceneCode: string }>();

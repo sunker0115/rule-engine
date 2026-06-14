@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
@@ -12,6 +13,8 @@ import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** 规则定义生命周期管理：发布、禁用、查询。 */
 public interface ConfigService {
@@ -47,7 +50,7 @@ public interface ConfigService {
      * @param size      每页条数
      * @return 分页规则列表
      */
-    Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status,
+    Page<RuleDefinition> listRules(String tenantId, String sceneCode, String status,
             String from, String to, int page, int size);
 
     /**
@@ -148,4 +151,9 @@ public interface ConfigService {
      * @return 租户列表
      */
     List<TenantItemVO> listTenants();
+
+    /**
+     * 批量查 sceneId → sceneCode 映射，供 controller 层回填 RuleListItemVO。
+     */
+    Map<Long, String> getSceneCodeMap(Set<Long> sceneIds);
 }

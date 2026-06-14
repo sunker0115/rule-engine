@@ -77,9 +77,8 @@ class ConfigServiceImpl implements ConfigService {
     }
 
     @Override
-    public Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status,
+    public Page<RuleDefinition> listRules(String tenantId, String sceneCode, String status,
             String from, String to, int page, int size) {
-        // 按 sceneCode 解析 sceneId（未传时不过滤）
         Long sceneId = null;
         if (sceneCode != null && !sceneCode.isBlank()) {
             SceneDef scene = sceneMapper.findByCode(Long.valueOf(tenantId), sceneCode);
@@ -94,30 +93,15 @@ class ConfigServiceImpl implements ConfigService {
         LocalDate toDate = to != null && !to.isBlank()
                 ? LocalDate.parse(to) : null;
 
-        Page<RuleDefinition> rdPage = ruleDefinitionMapper.selectRulePage(
+        return ruleDefinitionMapper.selectRulePage(
                 new Page<>(page, size), Long.valueOf(tenantId), sceneId, status, fromDate, toDate);
+    }
 
-        // 按 sceneId 批量查 scene，用于回填 sceneCode
-        Map<Long, String> sceneIdToCode = Collections.emptyMap();
-        if (!rdPage.getRecords().isEmpty()) {
-            Set<Long> sceneIds = rdPage.getRecords().stream()
-                    .map(RuleDefinition::getSceneId)
-                    .collect(Collectors.toSet());
-            sceneIdToCode = sceneMapper.selectBatchIds(sceneIds).stream()
-                    .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
-        }
-
-        final Map<Long, String> finalSceneMap = sceneIdToCode;
-        Page<RuleListItemVO> voPage = new Page<>(rdPage.getCurrent(), rdPage.getSize(), rdPage.getTotal());
-        voPage.setRecords(rdPage.getRecords().stream()
-                .map(rd -> new RuleListItemVO(
-                        rd.getId(), rd.getCode(), rd.getName(),
-                        rd.getKind() != null ? rd.getKind().name() : null,
-                        finalSceneMap.getOrDefault(rd.getSceneId(), null),
-                        rd.getStatus().name(), rd.getCurrentVersion(), rd.getPublishedAt()
-                ))
-                .toList());
-        return voPage;
+    @Override
+    public Map<Long, String> getSceneCodeMap(Set<Long> sceneIds) {
+        if (sceneIds == null || sceneIds.isEmpty()) return Collections.emptyMap();
+        return sceneMapper.selectBatchIds(sceneIds).stream()
+                .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
     }
 
     @Override

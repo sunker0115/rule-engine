@@ -9,6 +9,8 @@ export interface RuleListItem {
   ruleDefinitionId: number;
   code: string;
   name: string;
+  kind: RuleKind;
+  sceneCode: string;
   status: RuleStatus;
   currentVersion?: number | null;
   publishedAt?: string | null;

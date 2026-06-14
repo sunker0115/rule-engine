@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import apiClient from '@/api/client';
+import { ENDPOINTS } from '@/constants/api-endpoints';
 
 interface TenantInfo {
   id: number;
@@ -14,24 +16,18 @@ interface TenantState {
   setCurrent: (code: string) => void;
 }
 
-// 默认租户列表（与 DB tenant 表对齐，后端暂无列表接口）
-const DEFAULT_TENANTS: TenantInfo[] = [
-  { id: 9001, code: 'loadtest', name: 'Load Test' },
-  { id: 9100, code: 'samples', name: '示例租户' },
-];
-
 export const useTenantStore = create<TenantState>((set, get) => ({
-  current: localStorage.getItem('tenantCode') || 'loadtest',
-  currentId: Number(localStorage.getItem('tenantId')) || 9001,
-  list: DEFAULT_TENANTS,
+  current: localStorage.getItem('tenantCode') || null,
+  currentId: Number(localStorage.getItem('tenantId')) || null,
+  list: [],
 
   loadList: async () => {
-    // 后端暂无 tenant 列表接口，使用默认列表
-    // 后续有接口时替换为: apiClient.get(ENDPOINTS.TENANT_LIST)
-    set({ list: DEFAULT_TENANTS });
-    const { current } = get();
-    if (!current) {
-      get().setCurrent(DEFAULT_TENANTS[0].code);
+    const res = await apiClient.get(ENDPOINTS.TENANT_LIST);
+    const list: TenantInfo[] = res.data?.data ?? [];
+    set({ list });
+    const { current, currentId } = get();
+    if ((!current || !currentId) && list.length > 0) {
+      get().setCurrent(list[0].code);
     }
   },
 
