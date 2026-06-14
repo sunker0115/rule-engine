@@ -3,6 +3,7 @@ export const ROUTES = {
   TENANTS:        '/tenants',
   SCENES:         '/scenes',
   SCENE_DETAIL:   '/scenes/:sceneCode',
+  SCENE_EDIT:     '/scenes/:sceneCode/edit',
   SCENE_RULES:    '/scenes/:sceneCode/rules',
   RULES:          '/rules',
   RULE_EDITOR:    '/rule-editor/:ruleId',

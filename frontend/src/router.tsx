@@ -8,6 +8,7 @@ import App from './App';
 const TenantList        = lazy(() => import('@/pages/tenant-list'));
 const SceneList          = lazy(() => import('@/pages/scene-list'));
 const SceneDetail        = lazy(() => import('@/pages/scene-detail'));
+const SceneEdit          = lazy(() => import('@/pages/scene-edit'));
 const RuleList           = lazy(() => import('@/pages/rule-list'));
 const RulesAll           = lazy(() => import('@/pages/rules-all'));
 const RuleEditor         = lazy(() => import('@/pages/rule-editor'));
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
       { path: ROUTES.TENANTS,        element: <LazyPage><TenantList /></LazyPage> },
       { path: ROUTES.SCENES,         element: <LazyPage><SceneList /></LazyPage> },
       { path: ROUTES.SCENE_DETAIL,   element: <LazyPage><SceneDetail /></LazyPage> },
+      { path: ROUTES.SCENE_EDIT,     element: <LazyPage><SceneEdit /></LazyPage> },
       { path: ROUTES.SCENE_RULES,    element: <LazyPage><RuleList /></LazyPage> },
       { path: ROUTES.RULES,          element: <LazyPage><RulesAll /></LazyPage> },
       { path: ROUTES.RULE_EDITOR,    element: <LazyPage><RuleEditor /></LazyPage> },

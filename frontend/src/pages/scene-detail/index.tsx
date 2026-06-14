@@ -40,7 +40,7 @@ export default function SceneDetail() {
     {
       key: 'info',
       label: t('detail.basicInfo'),
-      children: <SceneInfo scene={scene} tenantId={currentId!} onUpdated={load} autoEdit={searchParams.get('edit') === '1'} />,
+      children: <SceneInfo scene={scene} />,
     },
     {
       key: 'manifest',
