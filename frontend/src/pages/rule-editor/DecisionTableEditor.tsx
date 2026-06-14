@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Select, Input, Table, Popconfirm, Typography, Tag } from 'antd';
+import { Button, Select, Input, Table, Popconfirm, Typography } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -31,22 +31,18 @@ export default function DecisionTableEditor({
   const rows: DecisionTableRow[] = node.rows ?? [];
 
   useEffect(() => {
-    const firstMetric = availableMetrics[0]?.metricCode || payloadFieldNames[0] || '';
-    if (!firstMetric) return;
+    const first = availableMetrics[0]?.metricCode || payloadFieldNames[0] || '';
+    if (!first) return;
     if (cols.length === 0) {
       onChange({
         ...node,
-        columns: [{ metricCode: firstMetric, operator: 'EQ', dataType: null }],
+        columns: [{ metricCode: first, operator: 'EQ', dataType: null }],
         rows: [{ conditions: [null], decisionCode: '' }],
       });
       return;
     }
-    const fixed = cols.map((c) =>
-      c.metricCode ? c : { ...c, metricCode: firstMetric },
-    );
-    if (JSON.stringify(fixed) !== JSON.stringify(cols)) {
-      onChange({ ...node, columns: fixed });
-    }
+    const fixed = cols.map((c) => (c.metricCode ? c : { ...c, metricCode: first }));
+    if (JSON.stringify(fixed) !== JSON.stringify(cols)) onChange({ ...node, columns: fixed });
   }, []);
 
   const TABLE_OPERATORS = ['EQ', 'NEQ', 'GT', 'GTE', 'LT', 'LTE', 'IN', 'NOT_IN', 'BETWEEN', 'NOT_BETWEEN'];
@@ -87,9 +83,7 @@ export default function DecisionTableEditor({
     onChange({ ...node, rows: newRows });
   };
 
-  const removeRow = (ri: number) => {
-    onChange({ ...node, rows: rows.filter((_, i) => i !== ri) });
-  };
+  const removeRow = (ri: number) => onChange({ ...node, rows: rows.filter((_, i) => i !== ri) });
 
   return (
     <div style={{ padding: 8 }}>
@@ -101,63 +95,6 @@ export default function DecisionTableEditor({
         </div>
       </div>
 
-      {/* 列定义区：每列一张卡片 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        {cols.map((col, ci) => {
-          const isPayload = col.valueRef === 'PAYLOAD';
-          const fieldOptions = isPayload
-            ? payloadFieldNames.map((f) => ({ value: f, label: f }))
-            : availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }));
-          return (
-            <div
-              key={ci}
-              style={{
-                border: '1px solid #d9d9d9',
-                borderRadius: 6,
-                padding: '8px 10px',
-                background: isPayload ? '#fafafa' : '#f0f5ff',
-              }}
-            >
-              <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>C{ci + 1}</Tag>
-                <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                  onClick={() => removeColumn(ci)} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <Select
-                  size="small"
-                  style={{ width: 90 }}
-                  value={col.valueRef ?? 'METRIC'}
-                  onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
-                  options={[
-                    { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
-                    { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
-                  ]}
-                />
-                <Select
-                  size="small"
-                  showSearch
-                  style={{ width: 160 }}
-                  value={col.metricCode || undefined}
-                  onChange={(v) => updateColumn(ci, 'metricCode', v)}
-                  placeholder={t('editor.decisionTable.metric')}
-                  popupMatchSelectWidth={false}
-                  options={fieldOptions}
-                />
-                <Select
-                  size="small"
-                  style={{ width: 140 }}
-                  value={col.operator || undefined}
-                  onChange={(v) => updateColumn(ci, 'operator', v)}
-                  options={opOptions}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 数据表格 */}
       <Table
         dataSource={rows.map((r, ri) => {
           const base: Record<string, unknown> = { _key: ri, _decisionCode: r.decisionCode };
@@ -167,32 +104,69 @@ export default function DecisionTableEditor({
         rowKey="_key"
         size="small"
         pagination={false}
-        scroll={{ x: 'max-content' }}
+        scroll={{ x: cols.length > 2 ? 'max-content' : undefined }}
         locale={{ emptyText: t('editor.decisionTable.emptyRowHint') }}
         footer={() => (
           <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addRow} block>{t('editor.decisionTable.addRow')}</Button>
         )}
       >
-        {cols.map((col, ci) => (
-          <Table.Column
-            key={ci}
-            title={`C${ci + 1}`}
-            width={120}
-            dataIndex={`_c${ci}`}
-            render={(val: unknown, _: unknown, ri: number) => (
-              <Input
-                size="small"
-                value={val != null ? String(val) : ''}
-                onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
-                placeholder="-"
-              />
-            )}
-          />
-        ))}
+        {cols.map((col, ci) => {
+          const isPayload = col.valueRef === 'PAYLOAD';
+          const fieldOptions = isPayload
+            ? payloadFieldNames.map((f) => ({ value: f, label: f }))
+            : availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }));
+          return (
+            <Table.Column
+              key={ci}
+              dataIndex={`_c${ci}`}
+              title={(
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 270 }}>
+                  <Select
+                    size="small"
+                    style={{ width: 76 }}
+                    value={col.valueRef ?? 'METRIC'}
+                    onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
+                    options={[
+                      { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
+                      { value: 'PAYLOAD', label: 'Payload' },
+                    ]}
+                  />
+                  <Select
+                    size="small"
+                    showSearch
+                    style={{ width: 130 }}
+                    value={col.metricCode || undefined}
+                    onChange={(v) => updateColumn(ci, 'metricCode', v)}
+                    placeholder={t('editor.decisionTable.metric')}
+                    popupMatchSelectWidth={false}
+                    options={fieldOptions}
+                  />
+                  <Select
+                    size="small"
+                    style={{ width: 72 }}
+                    value={col.operator || undefined}
+                    onChange={(v) => updateColumn(ci, 'operator', v)}
+                    options={opOptions}
+                  />
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                    onClick={() => removeColumn(ci)} />
+                </div>
+              )}
+              render={(val: unknown, _: unknown, ri: number) => (
+                <Input
+                  size="small"
+                  value={val != null ? String(val) : ''}
+                  onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
+                  placeholder="-"
+                />
+              )}
+            />
+          );
+        })}
 
         <Table.Column
           title={t('editor.decisionTable.decisionCode')}
-          width={130}
+          width={140}
           dataIndex="_decisionCode"
           render={(val: string, _: unknown, ri: number) => (
             <Select
