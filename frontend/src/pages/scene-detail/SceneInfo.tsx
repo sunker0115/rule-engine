@@ -17,19 +17,17 @@ interface Props {
 export default function SceneInfo({ scene, tenantId, onUpdated, autoEdit }: Props) {
   const { t } = useTranslation('scene');
   const tc = useTranslation('common').t;
-  const [editing, setEditing] = useState(!!autoEdit);
+  const autoEditing = !!autoEdit;
+  const [editing, setEditing] = useState(autoEditing);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
-  // 初始化编辑态的表单值
-  if (autoEdit && editing) {
-    form.setFieldsValue({
-      ...scene,
-      payloadSchema: scene.payloadSchema ?? null,
-      defaultParams: scene.defaultParams ?? null,
-      eventTypes: scene.eventTypes ?? [],
-    });
-  }
+  const initialValues = autoEditing ? {
+    ...scene,
+    payloadSchema: scene.payloadSchema ?? null,
+    defaultParams: scene.defaultParams ?? null,
+    eventTypes: scene.eventTypes ?? [],
+  } : undefined;
 
   const handleSave = async () => {
     const values = await form.validateFields();
@@ -80,7 +78,7 @@ export default function SceneInfo({ scene, tenantId, onUpdated, autoEdit }: Prop
   }
 
   return (
-    <Form form={form} layout="vertical">
+    <Form form={form} layout="vertical" initialValues={initialValues}>
       <Form.Item name="code" label={t('form.code')}>
         <Input disabled />
       </Form.Item>
