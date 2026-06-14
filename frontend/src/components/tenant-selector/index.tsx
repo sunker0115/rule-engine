@@ -13,7 +13,10 @@ export default function TenantSelector() {
     <Select
       value={current}
       onChange={setCurrent}
-      options={list.map((t) => ({ value: t.code, label: `${t.name} (${t.code})` }))}
+      options={list
+        .filter((t) => t.status === 'ACTIVE')
+        .map((t) => ({ value: t.code, label: `${t.name} (${t.code})` }))
+      }
       placeholder={t('tenant.placeholder')}
       style={{ width: 240 }}
       size="small"

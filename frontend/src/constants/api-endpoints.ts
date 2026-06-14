@@ -58,4 +58,5 @@ export const ENDPOINTS = {
 
   // Tenant
   TENANT_LIST: `${ADMIN}/tenants`,
+  TENANT_TOGGLE_STATUS: (id: number) => `${ADMIN}/tenants/${id}/status`,
 } as const;

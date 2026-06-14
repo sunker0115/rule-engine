@@ -6,13 +6,14 @@ interface TenantInfo {
   id: number;
   code: string;
   name: string;
+  status: string;
 }
 
 interface TenantState {
   current: string | null;
   currentId: number | null;
   list: TenantInfo[];
-  loadList: () => Promise<void>;
+  loadList: (keyword?: string, status?: string) => Promise<void>;
   setCurrent: (code: string) => void;
 }
 
@@ -21,8 +22,11 @@ export const useTenantStore = create<TenantState>((set, get) => ({
   currentId: Number(localStorage.getItem('tenantId')) || null,
   list: [],
 
-  loadList: async () => {
-    const res = await apiClient.get(ENDPOINTS.TENANT_LIST);
+  loadList: async (keyword?: string, status?: string) => {
+    const params: Record<string, string> = {};
+    if (keyword) params.keyword = keyword;
+    if (status) params.status = status;
+    const res = await apiClient.get(ENDPOINTS.TENANT_LIST, { params });
     const list: TenantInfo[] = res.data?.data ?? [];
     set({ list });
     const { current, currentId } = get();

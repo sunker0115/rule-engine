@@ -163,12 +163,27 @@ class ConfigServiceImpl implements ConfigService {
     }
 
     @Override
-    public List<TenantItemVO> listTenants() {
-        List<Tenant> tenants = tenantMapper.selectList(
-                new LambdaQueryWrapper<Tenant>().eq(Tenant::getStatus, TenantStatus.ACTIVE));
-        return tenants.stream()
-                .map(t -> new TenantItemVO(t.getId(), t.getCode(), t.getName()))
+    public List<TenantItemVO> listTenants(String keyword, String status) {
+        LambdaQueryWrapper<Tenant> qw = new LambdaQueryWrapper<>();
+        if (status != null && !status.isBlank()) {
+            qw.eq(Tenant::getStatus, TenantStatus.valueOf(status));
+        } else {
+            qw.eq(Tenant::getStatus, TenantStatus.ACTIVE);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            qw.and(w -> w.like(Tenant::getCode, keyword).or().like(Tenant::getName, keyword));
+        }
+        return tenantMapper.selectList(qw).stream()
+                .map(t -> new TenantItemVO(t.getId(), t.getCode(), t.getName(), t.getStatus().name()))
                 .toList();
+    }
+
+    @Override
+    public void toggleTenantStatus(Long tenantId, boolean enable) {
+        Tenant t = tenantMapper.selectById(tenantId);
+        if (t == null) throw new IllegalArgumentException("租户不存在: " + tenantId);
+        t.setStatus(enable ? TenantStatus.ACTIVE : TenantStatus.DISABLED);
+        tenantMapper.updateById(t);
     }
 
     /** 解析 kind 字符串为 RuleKind，null/空返回 null（由下游兜底 AST_BOOLEAN），非法抛 IllegalArgumentException。 */

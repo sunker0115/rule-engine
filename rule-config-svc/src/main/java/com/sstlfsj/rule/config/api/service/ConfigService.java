@@ -150,7 +150,10 @@ public interface ConfigService {
      *
      * @return 租户列表
      */
-    List<TenantItemVO> listTenants();
+    List<TenantItemVO> listTenants(String keyword, String status);
+
+    /** 启/禁租户。 */
+    void toggleTenantStatus(Long tenantId, boolean enable);
 
     /**
      * 批量查 sceneId → sceneCode 映射，供 controller 层回填 RuleListItemVO。
