@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Table, Input, Select, Switch, message, Space } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTenantStore } from '@/store/tenantStore';
-import { colorOf, STATUS_OPTIONS } from '@/constants/enums';
+import { STATUS_OPTIONS } from '@/constants/enums';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import type { ColumnsType } from 'antd/es/table';
