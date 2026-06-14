@@ -95,7 +95,6 @@ class ConfigServiceImplTest {
         scene.setTenantId(1L);
         scene.setCode("risk.transfer");
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
-        when(sceneMapper.selectBatchIds(any())).thenReturn(List.of(scene));
 
         RuleDefinition rd = new RuleDefinition();
         rd.setId(10L);

@@ -167,8 +167,6 @@ class ConfigServiceImpl implements ConfigService {
         LambdaQueryWrapper<Tenant> qw = new LambdaQueryWrapper<>();
         if (status != null && !status.isBlank()) {
             qw.eq(Tenant::getStatus, TenantStatus.valueOf(status));
-        } else {
-            qw.eq(Tenant::getStatus, TenantStatus.ACTIVE);
         }
         if (keyword != null && !keyword.isBlank()) {
             qw.and(w -> w.like(Tenant::getCode, keyword).or().like(Tenant::getName, keyword));

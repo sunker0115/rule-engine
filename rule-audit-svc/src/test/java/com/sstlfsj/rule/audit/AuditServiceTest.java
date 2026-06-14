@@ -41,7 +41,7 @@ class AuditServiceTest {
     void evalSessionEntry_字段赋值与读取正确() {
         Instant now = Instant.now();
         EvalSessionEntry entry = new EvalSessionEntry(
-                "sess-001", "t1", "scene-A", "evt-001", "COMPLETED", now
+                "sess-001", "t1", "scene-A", "evt-001", "COMPLETED", "HIT", 42, now, now
         );
 
         assertThat(entry.sessionId()).isEqualTo("sess-001");
@@ -49,7 +49,10 @@ class AuditServiceTest {
         assertThat(entry.sceneCode()).isEqualTo("scene-A");
         assertThat(entry.eventId()).isEqualTo("evt-001");
         assertThat(entry.status()).isEqualTo("COMPLETED");
+        assertThat(entry.finalDecision()).isEqualTo("HIT");
+        assertThat(entry.evalDurationMs()).isEqualTo(42);
         assertThat(entry.startedAt()).isEqualTo(now);
+        assertThat(entry.finishedAt()).isEqualTo(now);
     }
 
     @Test

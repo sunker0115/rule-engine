@@ -212,9 +212,9 @@ class SceneServiceImplTest {
         s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
         s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
         s.setStatus(SceneStatus.ACTIVE);
-        when(sceneMapper.findByTenantId(1L)).thenReturn(List.of(s));
+        when(sceneMapper.findByTenantId(eq(1L), isNull())).thenReturn(List.of(s));
 
-        var list = sceneService.listScenes("1");
+        var list = sceneService.listScenes("1", null);
 
         assertThat(list).hasSize(1);
         assertThat(list.get(0).id()).isEqualTo(5L);

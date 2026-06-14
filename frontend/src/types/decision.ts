@@ -4,5 +4,6 @@ export interface DecisionItem {
   name: string;
   priority: number;
   description?: string;
+  status?: string;
   createdAt?: string;
 }

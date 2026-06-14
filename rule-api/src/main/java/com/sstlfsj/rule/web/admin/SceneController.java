@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /** 场景管理入口：创建、更新、查询场景（D13）。 */
 @RestController
@@ -22,14 +23,17 @@ public class SceneController {
     private final SceneService sceneService;
 
     /**
-     * GET /admin/v1/scenes — 查询租户全部场景（精简列表，供前端场景选择器 / 列表页）。
+     * GET /admin/v1/scenes — 查询租户场景（精简列表，供前端场景选择器 / 列表页）。
      *
      * @param tenantId 租户 ID
+     * @param status   可选状态过滤（null 返回全部）
      * @return 场景精简列表
      */
     @GetMapping
-    public ApiResponse<List<SceneListItem>> listScenes(@RequestParam String tenantId) {
-        return ApiResponse.ok(sceneService.listScenes(tenantId));
+    public ApiResponse<List<SceneListItem>> listScenes(
+            @RequestParam String tenantId,
+            @RequestParam(required = false) String status) {
+        return ApiResponse.ok(sceneService.listScenes(tenantId, status));
     }
 
     /**
@@ -76,5 +80,21 @@ public class SceneController {
                 req.payloadSchema(), req.defaultParams(),
                 actorId);
         return ApiResponse.ok(null);
+    }
+
+    /**
+     * PUT /admin/v1/scenes/{sceneCode}/status — 启/禁用场景。
+     *
+     * @param sceneCode 场景编码
+     * @param tenantId  租户 ID
+     * @param enable    true 启用，false 禁用
+     */
+    @PutMapping("/{sceneCode}/status")
+    public ApiResponse<Map<String, Object>> toggleStatus(
+            @PathVariable String sceneCode,
+            @RequestParam String tenantId,
+            @RequestParam boolean enable) {
+        sceneService.toggleSceneStatus(tenantId, sceneCode, enable);
+        return ApiResponse.ok(Map.of("status", enable ? "ACTIVE" : "DISABLED"));
     }
 }

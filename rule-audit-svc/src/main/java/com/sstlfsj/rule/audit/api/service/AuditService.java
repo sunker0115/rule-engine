@@ -41,7 +41,10 @@ public interface AuditService {
             String sceneCode,
             String eventId,
             String status,
-            java.time.Instant startedAt
+            String finalDecision,
+            Integer evalDurationMs,
+            java.time.Instant startedAt,
+            java.time.Instant finishedAt
     ) {}
 
     /**

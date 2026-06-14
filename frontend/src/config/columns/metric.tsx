@@ -15,11 +15,6 @@ export const METRIC_COLUMNS: ColumnsType<MetricDescriptor> = [
   { title: '名称', dataIndex: 'name', key: 'name' },
   { title: '取数方式', dataIndex: 'sourceType', key: 'sourceType', render: (v: string) => <Tag>{v}</Tag> },
   { title: '数据类型', dataIndex: 'dataType', key: 'dataType', render: (v: string) => <Tag>{v}</Tag> },
-  { title: '版本', dataIndex: 'metricVersion', key: 'metricVersion' },
-  {
-    title: 'allowProvided', dataIndex: 'allowProvided', key: 'allowProvided',
-    render: (v: boolean) => v ? '是' : '否',
-  },
   { title: '缓存 TTL(s)', dataIndex: 'cacheTtlSeconds', key: 'cacheTtlSeconds' },
   {
     title: '状态', dataIndex: 'status', key: 'status',

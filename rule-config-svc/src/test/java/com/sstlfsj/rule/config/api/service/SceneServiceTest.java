@@ -41,7 +41,12 @@ class SceneServiceTest {
         }
 
         @Override
-        public List<SceneListItem> listScenes(String tenantId) {
+        public List<SceneListItem> listScenes(String tenantId, String status) {
+            throw new UnsupportedOperationException("stub");
+        }
+
+        @Override
+        public void toggleSceneStatus(String tenantId, String sceneCode, boolean enable) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -79,6 +84,6 @@ class SceneServiceTest {
     @Test
     void listScenes_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.listScenes("t1"));
+                () -> stub.listScenes("t1", null));
     }
 }

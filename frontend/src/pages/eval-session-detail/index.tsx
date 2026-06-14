@@ -63,7 +63,10 @@ export default function EvalSessionDetail() {
                 {labelOf(SESSION_STATUS_OPTIONS, session.status)}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label={t('session.column.occurredAt')}>{session.startedAt}</Descriptions.Item>
+            <Descriptions.Item label="决策结果">{session.finalDecision || '-'}</Descriptions.Item>
+            <Descriptions.Item label="耗时(ms)">{session.evalDurationMs != null ? session.evalDurationMs : '-'}</Descriptions.Item>
+            <Descriptions.Item label={t('session.column.occurredAt')}>{session.startedAt || '-'}</Descriptions.Item>
+            <Descriptions.Item label="结束时间">{session.finishedAt || '-'}</Descriptions.Item>
           </Descriptions>
         </Card>
       )}

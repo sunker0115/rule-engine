@@ -12,12 +12,13 @@ import java.util.Set;
 public interface SceneService {
 
     /**
-     * 查询租户全部场景（精简列表，供前端场景选择器 / 列表页）。
+     * 查询租户场景（精简列表，供前端场景选择器 / 列表页）。
      *
      * @param tenantId 租户 ID
+     * @param status   可选状态过滤（null 或空表示不过滤，返回全部）
      * @return 场景精简列表
      */
-    List<SceneListItem> listScenes(String tenantId);
+    List<SceneListItem> listScenes(String tenantId, String status);
 
     /**
      * 为指定租户创建新场景（含 D13 元数据）。
@@ -72,6 +73,15 @@ public interface SceneService {
      * @param actorId   禁用操作人 ID
      */
     void disableScene(String tenantId, String sceneCode, String actorId);
+
+    /**
+     * 启/禁用场景。
+     *
+     * @param tenantId  租户 ID
+     * @param sceneCode 场景编码
+     * @param enable    true 启用，false 禁用
+     */
+    void toggleSceneStatus(String tenantId, String sceneCode, boolean enable);
 
     /**
      * 读时脱敏所需的 live 敏感集（D71）。

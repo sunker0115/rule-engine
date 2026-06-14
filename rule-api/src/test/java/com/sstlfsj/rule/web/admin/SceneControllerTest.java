@@ -37,7 +37,7 @@ class SceneControllerTest {
 
     @Test
     void listScenes_returns200_withList() throws Exception {
-        when(sceneService.listScenes("1")).thenReturn(List.of(
+        when(sceneService.listScenes("1", null)).thenReturn(List.of(
                 new SceneListItem(5L, "PAYMENT", "支付场景", "PUSH", "USER", "ACTIVE")));
 
         mockMvc.perform(get("/admin/v1/scenes").param("tenantId", "1"))
@@ -46,7 +46,7 @@ class SceneControllerTest {
                 .andExpect(jsonPath("$.data[0].sceneCode").value("PAYMENT"))
                 .andExpect(jsonPath("$.data[0].status").value("ACTIVE"));
 
-        verify(sceneService).listScenes("1");
+        verify(sceneService).listScenes("1", null);
     }
 
     @Test

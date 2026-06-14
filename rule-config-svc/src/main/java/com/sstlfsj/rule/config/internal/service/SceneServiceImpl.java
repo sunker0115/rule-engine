@@ -102,8 +102,9 @@ class SceneServiceImpl implements SceneService {
     }
 
     @Override
-    public List<SceneListItem> listScenes(String tenantId) {
-        return sceneMapper.findByTenantId(Long.valueOf(tenantId)).stream()
+    public List<SceneListItem> listScenes(String tenantId, String status) {
+        SceneStatus statusFilter = (status != null && !status.isBlank()) ? SceneStatus.valueOf(status) : null;
+        return sceneMapper.findByTenantId(Long.valueOf(tenantId), statusFilter).stream()
                 .map(s -> new SceneListItem(s.getId(), s.getCode(), s.getName(),
                         s.getDominantMode().name(), s.getSubjectType().name(), s.getStatus().name()))
                 .toList();
@@ -121,6 +122,23 @@ class SceneServiceImpl implements SceneService {
         publishAudit(Long.valueOf(tenantId), actorId, "DISABLE", "scene",
                 scene.getId().toString(), before, snapshotOf(scene));
         eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, false));
+    }
+
+    @Override
+    @Transactional
+    public void toggleSceneStatus(String tenantId, String sceneCode, boolean enable) {
+        SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
+        SceneStatus newStatus = enable ? SceneStatus.ACTIVE : SceneStatus.DISABLED;
+        if (scene.getStatus() == newStatus) return; // 已是目标状态，无需操作
+
+        SceneSnapshot before = snapshotOf(scene);
+        scene.setStatus(newStatus);
+        scene.setUpdatedAt(LocalDateTime.now());
+        sceneMapper.updateById(scene);
+        String action = enable ? "ENABLE" : "DISABLE";
+        publishAudit(Long.valueOf(tenantId), null, action, "scene",
+                scene.getId().toString(), before, snapshotOf(scene));
+        eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, enable));
     }
 
     @Override

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Descriptions, Button, Form, Input, Select, Switch, message, Space } from 'antd';
+import { Descriptions, Button, Form, Input, Select, Switch, message, Space, Popconfirm } from 'antd';
 import { useTranslation } from 'react-i18next';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
@@ -17,6 +17,7 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
   const tc = useTranslation('common').t;
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [form] = Form.useForm();
 
   const handleSave = async () => {
@@ -41,6 +42,20 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
       onUpdated();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleStatus = async () => {
+    const enable = scene.status !== 'ACTIVE';
+    setToggling(true);
+    try {
+      await apiClient.put(ENDPOINTS.SCENE_TOGGLE_STATUS(scene.sceneCode), null, {
+        params: { tenantId, enable },
+      });
+      message.success(enable ? '已启用' : '已禁用');
+      onUpdated();
+    } finally {
+      setToggling(false);
     }
   };
 
@@ -70,7 +85,17 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
           </Descriptions.Item>
         </Descriptions>
         <div style={{ marginTop: 16 }}>
-          <Button type="primary" onClick={startEdit}>{tc('button.edit')}</Button>
+          <Space>
+            <Button type="primary" onClick={startEdit}>{tc('button.edit')}</Button>
+            <Popconfirm
+              title={scene.status === 'ACTIVE' ? '确认禁用该场景？' : '确认启用该场景？'}
+              onConfirm={handleToggleStatus}
+            >
+              <Button loading={toggling} danger={scene.status === 'ACTIVE'}>
+                {scene.status === 'ACTIVE' ? '禁用' : '启用'}
+              </Button>
+            </Popconfirm>
+          </Space>
         </div>
       </div>
     );

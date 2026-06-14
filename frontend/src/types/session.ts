@@ -7,5 +7,8 @@ export interface EvalSessionItem {
   sceneCode: string;
   eventId: string;
   status: SessionStatus;
-  startedAt: string;
+  finalDecision?: string;
+  evalDurationMs?: number;
+  startedAt?: string;
+  finishedAt?: string;
 }

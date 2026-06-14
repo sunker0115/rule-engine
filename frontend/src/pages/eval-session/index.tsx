@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Select, Tag } from 'antd';
+import { Table, Select, Tag, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -11,20 +11,23 @@ import type { ColumnsType } from 'antd/es/table';
 
 export default function EvalSessionList() {
   const navigate = useNavigate();
-  const { currentId } = useTenantStore();
+  const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('eval');
   const [sessions, setSessions] = useState<EvalSessionItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [filters, setFilters] = useState<Record<string, unknown>>({});
 
+  const tenantId = tenantFilter ?? currentId ?? 0;
+
   const load = async () => {
-    if (!currentId) return;
+    if (!tenantId) return;
     setLoading(true);
     try {
-      const data = await listSessions({ tenantId: currentId, page, size: pageSize, ...filters });
+      const data = await listSessions({ tenantId, page, size: pageSize, ...filters });
       setSessions(data.items ?? []);
       setTotal(data.total ?? 0);
     } finally {
@@ -32,7 +35,7 @@ export default function EvalSessionList() {
     }
   };
 
-  useEffect(() => { load(); }, [currentId, page, pageSize, filters]);
+  useEffect(() => { load(); }, [tenantId, page, pageSize, filters]);
 
   const columns: ColumnsType<EvalSessionItem> = [
     {
@@ -47,13 +50,29 @@ export default function EvalSessionList() {
       title: t('session.column.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (v: string) => <Tag color={colorOf(SESSION_STATUS_OPTIONS, v as never)}>{labelOf(SESSION_STATUS_OPTIONS, v as never)}</Tag>,
     },
+    {
+      title: '决策结果', dataIndex: 'finalDecision', key: 'finalDecision', width: 100,
+      render: (v: string) => v || '-',
+    },
+    {
+      title: '耗时(ms)', dataIndex: 'evalDurationMs', key: 'evalDurationMs', width: 100,
+      render: (v: number) => v != null ? v : '-',
+    },
     { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 180 },
   ];
 
   return (
     <div>
       <h2 style={{ marginBottom: 16 }}>{t('title.sessionList')}</h2>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <Space style={{ marginBottom: 16 }}>
+        <Select
+          placeholder="租户"
+          value={tenantFilter}
+          onChange={setTenantFilter}
+          allowClear
+          options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+          style={{ width: 200 }}
+        />
         <Select
           placeholder={t('session.filter.status')}
           style={{ width: 120 }}
@@ -61,7 +80,7 @@ export default function EvalSessionList() {
           options={[...SESSION_STATUS_OPTIONS]}
           onChange={(v) => setFilters((f) => ({ ...f, status: v || undefined }))}
         />
-      </div>
+      </Space>
       <Table
         columns={columns}
         dataSource={sessions}

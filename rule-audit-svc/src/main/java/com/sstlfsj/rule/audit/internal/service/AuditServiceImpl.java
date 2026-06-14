@@ -59,8 +59,12 @@ class AuditServiceImpl implements AuditService {
                         r.getSceneCode(),
                         r.getEventId(),
                         r.getStatus(),
+                        r.getFinalDecision(),
+                        r.getEvalDurationMs(),
                         r.getStartedAt() != null
-                                ? r.getStartedAt().toInstant(ZoneOffset.UTC) : null
+                                ? r.getStartedAt().toInstant(ZoneOffset.UTC) : null,
+                        r.getFinishedAt() != null
+                                ? r.getFinishedAt().toInstant(ZoneOffset.UTC) : null
                 ))
                 .toList();
         return new PageResult<>(items, mp.getTotal(), q.page(), q.size());
@@ -154,8 +158,12 @@ class AuditServiceImpl implements AuditService {
                 row.getSceneCode(),
                 row.getEventId(),
                 row.getStatus(),
+                row.getFinalDecision(),
+                row.getEvalDurationMs(),
                 row.getStartedAt() != null
-                        ? row.getStartedAt().toInstant(ZoneOffset.UTC) : null
+                        ? row.getStartedAt().toInstant(ZoneOffset.UTC) : null,
+                row.getFinishedAt() != null
+                        ? row.getFinishedAt().toInstant(ZoneOffset.UTC) : null
         );
     }
 
