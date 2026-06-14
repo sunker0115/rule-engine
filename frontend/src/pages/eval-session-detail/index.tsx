@@ -24,8 +24,8 @@ export default function EvalSessionDetail() {
       setLoading(true);
       try {
         const [s, tr] = await Promise.all([
-          getSession(currentId, Number(sessionId)),
-          getSessionTrace(currentId, Number(sessionId)),
+          getSession(currentId, sessionId),
+          getSessionTrace(currentId, sessionId),
         ]);
         setSession(s);
         setTrace(tr ?? []);

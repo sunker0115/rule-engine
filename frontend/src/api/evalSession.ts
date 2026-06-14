@@ -11,13 +11,14 @@ export async function listSessions(params: Record<string, unknown>) {
   return res.data.data; // unwrap: ApiResponse → PageResponse
 }
 
-export async function getSession(tenantId: number, sessionId: number) {
-  const res = await apiClient.get<ApiResponse<EvalSessionItem>>(ENDPOINTS.SESSION_DETAIL(sessionId), { params: { tenantId } });
+export async function getSession(tenantId: number, sessionId: string) {
+  // sessionId 是 19 位大数，JS Number 会丢失精度，直接用字符串拼 URL
+  const res = await apiClient.get<ApiResponse<EvalSessionItem>>(`${ENDPOINTS.SESSION_LIST}/${sessionId}`, { params: { tenantId } });
   return res.data.data;
 }
 
-export async function getSessionTrace(tenantId: number, sessionId: number) {
-  const res = await apiClient.get<ApiResponse<NodeTraceItem[]>>(ENDPOINTS.SESSION_TRACE_TREE(sessionId), { params: { tenantId } });
+export async function getSessionTrace(tenantId: number, sessionId: string) {
+  const res = await apiClient.get<ApiResponse<NodeTraceItem[]>>(`${ENDPOINTS.SESSION_LIST}/${sessionId}/trace/tree`, { params: { tenantId } });
   return res.data.data;
 }
 
