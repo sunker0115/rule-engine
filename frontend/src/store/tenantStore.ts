@@ -14,14 +14,15 @@ interface TenantState {
   setCurrent: (code: string) => void;
 }
 
-// 默认租户列表（后端暂无 /admin/v1/tenants 接口，v1 硬编码）
+// 默认租户列表（与 DB tenant 表对齐，后端暂无列表接口）
 const DEFAULT_TENANTS: TenantInfo[] = [
-  { id: 1, code: 'default', name: '默认租户' },
+  { id: 9001, code: 'loadtest', name: 'Load Test' },
+  { id: 9100, code: 'samples', name: '示例租户' },
 ];
 
 export const useTenantStore = create<TenantState>((set, get) => ({
-  current: localStorage.getItem('tenantCode') || 'default',
-  currentId: Number(localStorage.getItem('tenantId')) || 1,
+  current: localStorage.getItem('tenantCode') || 'loadtest',
+  currentId: Number(localStorage.getItem('tenantId')) || 9001,
   list: DEFAULT_TENANTS,
 
   loadList: async () => {
