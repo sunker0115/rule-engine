@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listMetrics, createMetric } from '@/api/metric';
 import { getMetricColumns } from '@/config/columns/metric';
+import apiClient from '@/api/client';
+import { ENDPOINTS } from '@/constants/api-endpoints';
 import { ROUTES, route } from '@/constants/routes';
 import { SOURCE_TYPE_OPTIONS, DATA_TYPE_OPTIONS } from '@/constants/enums';
 import type { MetricDescriptor, SourceType } from '@/types';
@@ -32,6 +34,15 @@ export default function MetricList() {
   };
 
   useEffect(() => { load(); }, [tenantId]);
+
+  const handleToggleStatus = async (code: string, enabled: boolean) => {
+    await apiClient.put(ENDPOINTS.METRIC_TOGGLE_STATUS(code), null, {
+      params: { tenantId, enable: enabled },
+      headers: { 'X-Actor-Id': localStorage.getItem('actorId') || 'anonymous' },
+    });
+    message.success(enabled ? '已启用' : '已禁用');
+    load();
+  };
 
   const handleCreate = async () => {
     const values = await form.validateFields();
@@ -89,7 +100,7 @@ export default function MetricList() {
         style={{ width: 200 }}
       />
     </Space>
-    <Table columns={getMetricColumns(t, tc)} dataSource={metrics} rowKey="metricCode" loading={loading}
+    <Table columns={getMetricColumns(t, tc, handleToggleStatus)} dataSource={metrics} rowKey="metricCode" loading={loading}
       onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
     <Modal title={t('action.create')} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>
       <Form form={form} layout="vertical">

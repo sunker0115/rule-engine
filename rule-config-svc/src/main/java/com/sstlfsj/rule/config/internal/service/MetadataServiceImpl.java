@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -55,6 +56,14 @@ class MetadataServiceImpl implements MetadataService {
         this.ruleDefinitionMapper = ruleDefinitionMapper;
         this.ruleVersionMapper = ruleVersionMapper;
         this.customSpecs = customSpecs != null ? customSpecs : List.of();
+    }
+
+    @Override
+    public void toggleMetricStatus(String tenantId, String metricCode, boolean enable) {
+        MetricDefinition m = metricDefinitionMapper.findAnyByCode(Long.valueOf(tenantId), metricCode);
+        if (m == null) throw new IllegalArgumentException("Metric 不存在: " + metricCode);
+        m.setStatus(enable ? MetricStatus.ACTIVE : MetricStatus.DISABLED);
+        metricDefinitionMapper.updateById(m);
     }
 
     @Override

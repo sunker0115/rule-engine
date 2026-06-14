@@ -13,6 +13,7 @@ export default function EvalSessionList() {
   const navigate = useNavigate();
   const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('eval');
+  const tc = useTranslation('common').t;
   const [sessions, setSessions] = useState<EvalSessionItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -44,6 +45,7 @@ export default function EvalSessionList() {
         <a onClick={(e) => { e.stopPropagation(); navigate(route(ROUTES.SESSION_DETAIL, { sessionId: v })); }}>{v}</a>
       ),
     },
+    { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 60 },
     { title: t('session.column.eventId'), dataIndex: 'eventId', key: 'eventId', width: 180, ellipsis: true },
     { title: t('session.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode', width: 120 },
     {

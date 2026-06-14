@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /** Metric 注册 / 更新 / 影响面查询入口（10-api-contract §3 /admin/v1/metrics）。 */
 @RestController
@@ -88,4 +89,21 @@ public class MetricController {
     /** 影响面查询响应：被某 metric 版本影响的规则清单（10-api-contract §4.7）。 */
     public record ImpactResponse(String metricCode, int metricVersion,
                                  List<RuleRef> affectedRules, int affectedRuleCount) {}
+
+    /**
+     * PUT /admin/v1/metrics/{metricCode}/status — 启/禁 metric。
+     *
+     * @param metricCode metric 编码
+     * @param tenantId   租户 ID
+     * @param enable     true 启用 / false 禁用
+     * @return 操作后的状态
+     */
+    @PutMapping("/{metricCode}/status")
+    public ApiResponse<Map<String, String>> toggleStatus(
+            @PathVariable String metricCode,
+            @RequestParam String tenantId,
+            @RequestParam boolean enable) {
+        metadataService.toggleMetricStatus(tenantId, metricCode, enable);
+        return ApiResponse.ok(Map.of("status", enable ? "ACTIVE" : "DISABLED"));
+    }
 }
