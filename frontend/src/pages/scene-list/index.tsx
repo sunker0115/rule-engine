@@ -62,7 +62,7 @@ export default function SceneList() {
     try {
       const values = await form.validateFields();
       setConfirmLoading(true);
-      await createScene({ ...values, tenantId });
+      await createScene({ ...values, tenantId, defaultParams: values.defaultParams || { timezone: 'UTC' } });
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
@@ -78,7 +78,7 @@ export default function SceneList() {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <h2>{t('title.list')}</h2>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.setFieldValue('defaultParams', { timezone: 'UTC' }); setModalOpen(true); }}>
           {t('action.create')}
         </Button>
       </div>
