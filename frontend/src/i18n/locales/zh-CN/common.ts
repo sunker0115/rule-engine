@@ -29,6 +29,7 @@ const common: CommonTranslation = {
     no: '否',
     all: '全部',
     tenant: '租户',
+    searchPlaceholder: '搜索 Code 或名称',
   },
   enum: {
     status: { ACTIVE: '启用', DISABLED: '禁用' },
@@ -41,10 +42,15 @@ const common: CommonTranslation = {
     saveSuccess: '保存成功',
     loadError: '加载失败',
     confirmDelete: '确认删除？此操作不可撤销',
+    enabled: '已启用',
+    disabled: '已禁用',
   },
   validation: {
     required: '请输入',
     jsonFormat: 'JSON 格式错误',
+  },
+  title: {
+    tenantList: '租户列表',
   },
 };
 

@@ -33,7 +33,7 @@ export default function SceneDetail() {
   useEffect(() => { load(); }, [currentId, sceneCode]);
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!scene) return <div>Scene 不存在</div>;
+  if (!scene) return <div>{t('detail.notFound')}</div>;
 
   const tabItems = [
     {

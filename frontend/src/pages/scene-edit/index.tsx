@@ -46,34 +46,36 @@ function fromSchema(schema: unknown): FieldDef[] {
 }
 
 function PayloadSchemaEditor({ value, onChange }: { value?: unknown; onChange?: (v: unknown) => void }) {
+  const { t } = useTranslation('scene');
   const fields: FieldDef[] = fromSchema(value);
   const update = (newFields: FieldDef[]) => { onChange?.(toSchema(newFields)); };
   return (
     <div>
-      <Table dataSource={fields.map((f, i) => ({ ...f, _key: i }))} rowKey="_key" size="small" pagination={false} locale={{ emptyText: '暂无字段' }}>
-        <Table.Column title="字段名" dataIndex="name" width={130} render={(v: string, _: FieldDef, i: number) => (
+      <Table dataSource={fields.map((f, i) => ({ ...f, _key: i }))} rowKey="_key" size="small" pagination={false} locale={{ emptyText: t('edit.noFields') }}>
+        <Table.Column title={t('edit.fieldName')} dataIndex="name" width={130} render={(v: string, _: FieldDef, i: number) => (
           <Input size="small" value={v} onChange={e => { const next = [...fields]; next[i] = { ...next[i], name: e.target.value }; update(next); }} style={{ width: 120 }} />
         )} />
-        <Table.Column title="类型" dataIndex="type" width={100} render={(v: string, _: FieldDef, i: number) => (
+        <Table.Column title={t('edit.fieldType')} dataIndex="type" width={100} render={(v: string, _: FieldDef, i: number) => (
           <Select size="small" value={v} onChange={val => { const next = [...fields]; next[i] = { ...next[i], type: val }; update(next); }} options={TYPE_OPTIONS} style={{ width: 90 }} />
         )} />
-        <Table.Column title="必填" dataIndex="required" width={55} render={(v: boolean, _: FieldDef, i: number) => (
+        <Table.Column title={t('edit.fieldRequired')} dataIndex="required" width={55} render={(v: boolean, _: FieldDef, i: number) => (
           <Switch size="small" checked={v} onChange={checked => { const next = [...fields]; next[i] = { ...next[i], required: checked }; update(next); }} />
         )} />
-        <Table.Column title="敏感" dataIndex="sensitive" width={55} render={(v: boolean, _: FieldDef, i: number) => (
+        <Table.Column title={t('edit.fieldSensitive')} dataIndex="sensitive" width={55} render={(v: boolean, _: FieldDef, i: number) => (
           <Switch size="small" checked={v} onChange={checked => { const next = [...fields]; next[i] = { ...next[i], sensitive: checked }; update(next); }} />
         )} />
         <Table.Column title="" width={40} render={(_: unknown, __: FieldDef, i: number) => (
           <Button type="text" size="small" icon={<DeleteOutlined />} onClick={() => update(fields.filter((_, j) => j !== i))} />
         )} />
       </Table>
-      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => update([...fields, { name: '', type: 'string', required: true, sensitive: false }])} style={{ marginTop: 8 }}>添加字段</Button>
+      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => update([...fields, { name: '', type: 'string', required: true, sensitive: false }])} style={{ marginTop: 8 }}>{t('edit.addField')}</Button>
     </div>
   );
 }
 
 // ---- defaultParams 编辑器 ----
 function DefaultParamsEditor({ value, onChange }: { value?: unknown; onChange?: (v: Record<string, string> | null) => void }) {
+  const { t } = useTranslation('scene');
   const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
   const entries: [string, string][] = Object.entries(obj);
 
@@ -86,14 +88,14 @@ function DefaultParamsEditor({ value, onChange }: { value?: unknown; onChange?: 
     <div>
       {entries.map(([key, val], i) => (
         <Space key={i} style={{ marginBottom: 6 }}>
-          <Input size="small" placeholder="参数名" value={key}
+          <Input size="small" placeholder={t('edit.paramName')} value={key}
             onChange={e => { const next = [...entries]; next[i] = [e.target.value, val]; sync(next); }} style={{ width: 140 }} />
-          <Input size="small" placeholder="参数值" value={val}
+          <Input size="small" placeholder={t('edit.paramValue')} value={val}
             onChange={e => { const next = [...entries]; next[i] = [key, e.target.value]; sync(next); }} style={{ width: 180 }} />
           <Button type="text" size="small" icon={<DeleteOutlined />} onClick={() => sync(entries.filter((_, j) => j !== i))} />
         </Space>
       ))}
-      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => sync([...entries, [`param${entries.length + 1}`, '']])}>添加参数</Button>
+      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => sync([...entries, [`param${entries.length + 1}`, '']])}>{t('edit.addParam')}</Button>
     </div>
   );
 }
@@ -143,13 +145,13 @@ export default function SceneEdit() {
   };
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!scene) return <div>场景不存在</div>;
+  if (!scene) return <div>{t('detail.notFound')}</div>;
 
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
-        <h2 style={{ margin: 0 }}>编辑场景 — {scene.sceneCode}</h2>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>{tc('button.back')}</Button>
+        <h2 style={{ margin: 0 }}>{t('edit.title', { code: scene.sceneCode })}</h2>
       </div>
       <Form form={form} layout="vertical" style={{ maxWidth: 800 }}>
         <Form.Item name="sceneCode" label={t('form.code')}><Input disabled /></Form.Item>

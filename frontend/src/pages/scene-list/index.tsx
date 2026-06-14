@@ -85,7 +85,7 @@ export default function SceneList() {
       </div>
       <Space style={{ marginBottom: 16 }}>
         <Select
-          placeholder="租户"
+          placeholder={tc('label.tenant')}
           value={tenantFilter}
           onChange={setTenantFilter}
           allowClear
@@ -102,7 +102,7 @@ export default function SceneList() {
         />
         <Input
           prefix={<SearchOutlined />}
-          placeholder="搜索名称或 Code"
+          placeholder={t('searchPlaceholder')}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           allowClear

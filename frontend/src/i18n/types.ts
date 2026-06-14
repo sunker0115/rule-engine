@@ -34,6 +34,7 @@ export interface CommonTranslation {
     no: string;
     all: string;
     tenant: string;
+    searchPlaceholder: string;
   };
   enum: {
     status: { ACTIVE: string; DISABLED: string };
@@ -46,17 +47,22 @@ export interface CommonTranslation {
     saveSuccess: string;
     loadError: string;
     confirmDelete: string;
+    enabled: string;
+    disabled: string;
   };
   validation: {
     required: string;
     jsonFormat: string;
+  };
+  title: {
+    tenantList: string;
   };
 }
 
 // ===== scene 命名空间 =====
 export interface SceneTranslation {
   title: { list: string; detail: string };
-  action: { create: string };
+  action: { create: string; detail: string };
   column: {
     sceneCode: string;
     name: string;
@@ -99,6 +105,21 @@ export interface SceneTranslation {
     optional: string;
     sensitive: string;
     exampleTitle: string;
+    sourceNote: string;
+    selectEventTypeFirst: string;
+  };
+  searchPlaceholder: string;
+  edit: {
+    title: string;
+    noFields: string;
+    fieldName: string;
+    fieldType: string;
+    fieldRequired: string;
+    fieldSensitive: string;
+    addField: string;
+    addParam: string;
+    paramName: string;
+    paramValue: string;
   };
 }
 

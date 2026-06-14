@@ -2,7 +2,7 @@ import type { SceneTranslation } from '../../types';
 
 const scene: SceneTranslation = {
   title: { list: 'Scene 列表', detail: 'Scene 详情' },
-  action: { create: '新建 Scene' },
+  action: { create: '新建 Scene', detail: '详情' },
   column: {
     sceneCode: 'Scene Code',
     name: '名称',
@@ -45,6 +45,21 @@ const scene: SceneTranslation = {
     optional: '可选',
     sensitive: '敏感',
     exampleTitle: '请求体 payload 示例',
+    sourceNote: '清单数据来源：已发布规则中实际引用 payload 的字段（非 payloadSchema 声明）。无规则或规则全部走 metric 时，清单为空。',
+    selectEventTypeFirst: '请先选择事件类型',
+  },
+  searchPlaceholder: '搜索名称或 Code',
+  edit: {
+    title: '编辑场景 — {{code}}',
+    noFields: '暂无字段',
+    fieldName: '字段名',
+    fieldType: '类型',
+    fieldRequired: '必填',
+    fieldSensitive: '敏感',
+    addField: '添加字段',
+    addParam: '添加参数',
+    paramName: '参数名',
+    paramValue: '参数值',
   },
 };
 

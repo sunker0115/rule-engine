@@ -43,8 +43,8 @@ export function getSceneColumns(t: (key: string) => string, tc: (key: string) =>
       key: 'actions',
       render: (_: unknown, record: SceneListItem) => (
         <Space>
-          <Link to={route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })} onClick={e => e.stopPropagation()}>详情</Link>
-          <Link to={route(ROUTES.SCENE_EDIT, { sceneCode: record.sceneCode })} onClick={e => e.stopPropagation()}>编辑</Link>
+          <Link to={route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })} onClick={e => e.stopPropagation()}>{t('action.detail')}</Link>
+          <Link to={route(ROUTES.SCENE_EDIT, { sceneCode: record.sceneCode })} onClick={e => e.stopPropagation()}>{tc('button.edit')}</Link>
         </Space>
       ),
     },

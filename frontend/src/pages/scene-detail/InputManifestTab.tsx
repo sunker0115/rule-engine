@@ -54,7 +54,7 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
         style={{ marginBottom: 8 }}
       />
       <div style={{ color: '#999', fontSize: 12, marginBottom: 16, lineHeight: 1.5 }}>
-        清单数据来源：已发布规则中实际引用 payload 的字段（非 payloadSchema 声明）。无规则或规则全部走 metric 时，清单为空。
+        {t('inputManifest.sourceNote')}
       </div>
       <div style={{ marginBottom: 16 }}>
         <span style={{ marginRight: 8 }}>{t('inputManifest.filterEventType')}：</span>
@@ -68,7 +68,7 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
         />
       </div>
       {!eventType ? (
-        <Alert type="warning" message="请先选择事件类型" style={{ marginTop: 8 }} />
+        <Alert type="warning" message={t('inputManifest.selectEventTypeFirst')} style={{ marginTop: 8 }} />
       ) : (
         <Spin spinning={loading}>
           <Table columns={columns} dataSource={fields} rowKey="name" pagination={false} size="small" />

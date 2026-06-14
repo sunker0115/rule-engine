@@ -45,7 +45,7 @@ export default function TenantList() {
 
   const toggleStatus = async (id: number, enabled: boolean) => {
     await apiClient.put(ENDPOINTS.TENANT_TOGGLE_STATUS(id), null, { params: { enable: enabled } });
-    message.success(enabled ? '已启用' : '已禁用');
+    message.success(enabled ? tc('message.enabled') : tc('message.disabled'));
     refreshHeader();
     doLoad();
   };
@@ -71,19 +71,19 @@ export default function TenantList() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>租户列表</h2>
+        <h2 style={{ margin: 0 }}>{tc('title.tenantList')}</h2>
       </div>
       <Space style={{ marginBottom: 16 }}>
         <Input
           prefix={<SearchOutlined />}
-          placeholder="搜索 Code 或名称"
+          placeholder={tc('label.searchPlaceholder')}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           allowClear
           style={{ width: 240 }}
         />
         <Select
-          placeholder="状态"
+          placeholder={tc('label.status')}
           value={statusFilter}
           onChange={setStatusFilter}
           allowClear
