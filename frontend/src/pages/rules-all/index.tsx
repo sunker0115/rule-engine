@@ -53,7 +53,7 @@ export default function RulesAll() {
       </div>
       <Space style={{ marginBottom: 16 }}>
         <Select
-          placeholder="租户"
+          placeholder={tc('tenant.placeholder')}
           value={tenantFilter}
           onChange={setTenantFilter}
           allowClear
@@ -62,14 +62,14 @@ export default function RulesAll() {
         />
         <Input
           prefix={<SearchOutlined />}
-          placeholder="搜索名称或 Code"
+          placeholder={t('searchPlaceholder')}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           allowClear
           style={{ width: 240 }}
         />
         <Select
-          placeholder="状态"
+          placeholder={tc('label.status')}
           value={statusFilter}
           onChange={setStatusFilter}
           allowClear
@@ -79,7 +79,7 @@ export default function RulesAll() {
         <RangePicker
           value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
           onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
-          placeholder={['发布时间起', '发布时间止']}
+          placeholder={[t('filter.dateFrom'), t('filter.dateTo')]}
           style={{ width: 260 }}
         />
       </Space>

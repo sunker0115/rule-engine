@@ -59,7 +59,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun }: Props) {
     <div style={{ padding: 16 }}>
       <h3>{t('editor.leftPanel.ruleInfo')}</h3>
       <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="Code">{ruleDetail.code}</Descriptions.Item>
+        <Descriptions.Item label={t('column.code')}>{ruleDetail.code}</Descriptions.Item>
         <Descriptions.Item label={tc('label.name')}>{ruleDetail.name}</Descriptions.Item>
         <Descriptions.Item label={t('column.kind')}><Tag>{ruleDetail.kind}</Tag></Descriptions.Item>
         <Descriptions.Item label={t('column.status')}>

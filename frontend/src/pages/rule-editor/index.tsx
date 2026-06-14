@@ -50,7 +50,7 @@ export default function RuleEditor() {
   }, [currentId, ruleId]);
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!ruleDetail) return <div>{t('editor.leftPanel.ruleInfo')} not found</div>;
+  if (!ruleDetail) return <div>{t('editor.notFound')}</div>;
 
   // 取最新 DRAFT 或 ACTIVE 版本 id 作为 dry-run 目标
   const latestVersion = ruleDetail.versions

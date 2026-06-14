@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Drawer, Descriptions, Tag, Spin, Timeline, Tabs, Empty } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getRule } from '@/api/rule';
 import { colorOf, RULE_STATUS_OPTIONS, VERSION_STATUS_OPTIONS } from '@/constants/enums';
@@ -12,6 +13,8 @@ interface Props {
 }
 
 export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Props) {
+  const { t } = useTranslation('rule');
+  const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
   const [detail, setDetail] = useState<RuleDetailType | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,8 +29,8 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
     return () => setDetail(null);
   }, [open, ruleDefinitionId, currentId]);
 
-  if (loading) return <Drawer title="规则详情" open={open} onClose={onClose} width={520}><Spin /></Drawer>;
-  if (!detail) return <Drawer title="规则详情" open={open} onClose={onClose} width={520}><Empty /></Drawer>;
+  if (loading) return <Drawer title={t('detail.title')} open={open} onClose={onClose} width={520}><Spin /></Drawer>;
+  if (!detail) return <Drawer title={t('detail.title')} open={open} onClose={onClose} width={520}><Empty /></Drawer>;
 
   // 找当前生效版本
   const activeVersion = detail.versions?.find((v) => v.status === 'ACTIVE');
@@ -39,31 +42,31 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
         items={[
           {
             key: 'info',
-            label: '基本信息',
+            label: t('detail.basicInfo'),
             children: (
               <Descriptions column={1} size="small" bordered>
-                <Descriptions.Item label="名称">{detail.name}</Descriptions.Item>
-                <Descriptions.Item label="类型"><Tag>{detail.kind}</Tag></Descriptions.Item>
-                <Descriptions.Item label="场景">{detail.sceneCode}</Descriptions.Item>
-                <Descriptions.Item label="状态">
+                <Descriptions.Item label={tc('label.name')}>{detail.name}</Descriptions.Item>
+                <Descriptions.Item label={t('column.kind')}><Tag>{detail.kind}</Tag></Descriptions.Item>
+                <Descriptions.Item label={t('detail.label.scene')}>{detail.sceneCode}</Descriptions.Item>
+                <Descriptions.Item label={tc('label.status')}>
                   <Tag color={colorOf(RULE_STATUS_OPTIONS, detail.status)}>{detail.status}</Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="触发事件">
+                <Descriptions.Item label={t('detail.label.triggerEvents')}>
                   {(detail.triggerEventTypes ?? []).join(', ') || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Decision">
+                <Descriptions.Item label={t('detail.label.decision')}>
                   {(detail.decisionBindings ?? []).map((b) => b.decisionCode).join(', ') || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Pre-Gate">
+                <Descriptions.Item label={t('detail.label.preGate')}>
                   {detail.preGates?.[0]?.gateType === 'ROLLOUT'
-                    ? `ROLLOUT ${detail.preGates[0].params?.percentage ?? '?'}%`
+                    ? `${t('preGate.labelRollout')} ${detail.preGates[0].params?.percentage ?? '?'}%`
                     : '-'}
                 </Descriptions.Item>
                 {activeVersion && (
-                  <Descriptions.Item label="生效版本">v{activeVersion.version}</Descriptions.Item>
+                  <Descriptions.Item label={t('detail.label.activeVersion')}>v{activeVersion.version}</Descriptions.Item>
                 )}
                 {draftVersion && (
-                  <Descriptions.Item label="在途草稿">
+                  <Descriptions.Item label={t('detail.label.draftVersion')}>
                     <Tag color="blue">v{draftVersion.version}</Tag>
                   </Descriptions.Item>
                 )}
@@ -72,7 +75,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
           },
           {
             key: 'versions',
-            label: `版本历史 (${detail.versions?.length ?? 0})`,
+            label: `${t('detail.versionHistory')} (${detail.versions?.length ?? 0})`,
             children: detail.versions && detail.versions.length > 0 ? (
               <Timeline
                 items={detail.versions.map((v) => ({
@@ -88,7 +91,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
                   ),
                 }))}
               />
-            ) : <Empty description="暂无版本" />,
+            ) : <Empty description={t('detail.label.noVersion')} />,
           },
         ]}
       />

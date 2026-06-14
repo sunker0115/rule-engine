@@ -14,7 +14,6 @@ interface Props {
 
 export default function DecisionBindingEditor({ kind, value = [], onChange }: Props) {
   const { t } = useTranslation('rule');
-  const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
 
@@ -69,7 +68,7 @@ export default function DecisionBindingEditor({ kind, value = [], onChange }: Pr
         </Space>
       ))}
       <Button type="dashed" icon={<PlusOutlined />} onClick={handleAdd} block>
-        {tc('button.confirm')}
+        {t('decisionBinding.addButton')}
       </Button>
     </div>
   );

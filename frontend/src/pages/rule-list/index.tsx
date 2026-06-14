@@ -79,7 +79,7 @@ export default function RuleList() {
     </div>
     <Space style={{ marginBottom: 16 }}>
       <Select
-        placeholder="租户"
+        placeholder={tc('tenant.placeholder')}
         value={tenantFilter}
         onChange={setTenantFilter}
         allowClear
@@ -88,7 +88,7 @@ export default function RuleList() {
       />
       <Input
         prefix={<SearchOutlined />}
-        placeholder="搜索名称或 Code"
+        placeholder={t('searchPlaceholder')}
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
         allowClear
@@ -105,7 +105,7 @@ export default function RuleList() {
       <RangePicker
         value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
         onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
-        placeholder={['发布时间起', '发布时间止']}
+        placeholder={[t('filter.dateFrom'), t('filter.dateTo')]}
         style={{ width: 260 }}
       />
     </Space>
@@ -137,7 +137,7 @@ export default function RuleList() {
           <Select options={[...RULE_KIND_OPTIONS]} />
         </Form.Item>
         <Form.Item name="triggerEventTypes" label="Trigger Events">
-          <Select mode="tags" placeholder="输入后回车添加" />
+          <Select mode="tags" placeholder={t('triggerEventsPlaceholder')} />
         </Form.Item>
       </Form>
     </Modal>

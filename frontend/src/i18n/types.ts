@@ -200,9 +200,13 @@ export interface RuleTranslation {
     newVersion: string; rollback: string; disable: string; enable: string;
     deleteDraft: string; deleteRule: string;
   };
+  searchPlaceholder: string;
+  filter: { dateFrom: string; dateTo: string };
+  triggerEventsPlaceholder: string;
   column: {
     code: string; name: string; kind: string; sceneCode: string;
     status: string; currentVersion: string; publishedAt: string; actions: string;
+    actionsDetail: string; actionsEdit: string;
   };
   enum: {
     status: { DRAFT: string; PUBLISHED: string; DISABLED: string };
@@ -219,11 +223,20 @@ export interface RuleTranslation {
       property: string; preGate: string; decisionBinding: string;
       noSelection: string;
     };
+    notFound: string;
+  };
+  detail: {
+    title: string; basicInfo: string; versionHistory: string;
+    label: {
+      scene: string; triggerEvents: string; decision: string; preGate: string;
+      activeVersion: string; draftVersion: string; noVersion: string;
+    };
   };
   preGate: {
     modePercent: string; modeBucket: string;
     labelPercentage: string; labelBucketStart: string; labelBucketEnd: string;
     labelRange: string; labelRollout: string;
+    na: string;
   };
   decisionBinding: {
     selectPlaceholder: string; scoreRangeMin: string; scoreRangeMax: string;

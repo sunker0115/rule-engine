@@ -14,6 +14,9 @@ const rule: RuleTranslation = {
     deleteDraft: '删除草稿',
     deleteRule: '删除规则',
   },
+  searchPlaceholder: '搜索名称或 Code',
+  filter: { dateFrom: '发布时间起', dateTo: '发布时间止' },
+  triggerEventsPlaceholder: '输入后回车添加',
   column: {
     code: 'Code',
     name: '名称',
@@ -23,6 +26,8 @@ const rule: RuleTranslation = {
     currentVersion: '当前版本',
     publishedAt: '发布时间',
     actions: '操作',
+    actionsDetail: '详情',
+    actionsEdit: '编辑',
   },
   enum: {
     status: { DRAFT: '草稿', PUBLISHED: '已发布', DISABLED: '已禁用' },
@@ -44,6 +49,21 @@ const rule: RuleTranslation = {
       decisionBinding: 'Decision 绑定',
       noSelection: '选择 AST 节点查看属性',
     },
+    notFound: '未找到',
+  },
+  detail: {
+    title: '规则详情',
+    basicInfo: '基本信息',
+    versionHistory: '版本历史',
+    label: {
+      scene: '场景',
+      triggerEvents: '触发事件',
+      decision: 'Decision',
+      preGate: 'Pre-Gate',
+      activeVersion: '生效版本',
+      draftVersion: '在途草稿',
+      noVersion: '暂无版本',
+    },
   },
   preGate: {
     modePercent: '百分比模式',
@@ -53,6 +73,7 @@ const rule: RuleTranslation = {
     labelBucketEnd: '结束桶',
     labelRange: '区间',
     labelRollout: '放量',
+    na: 'N/A',
   },
   decisionBinding: {
     selectPlaceholder: '选择 Decision',

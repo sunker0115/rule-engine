@@ -19,11 +19,11 @@ export function getRuleColumns(t: (key: string) => string, tc: (key: string) => 
     { title: tc('label.actions'), key: 'actions',
       render: (_: unknown, record: RuleListItem) => (
         <Space>
-          {onDetail && <a onClick={(e) => { e.stopPropagation(); onDetail(record.ruleDefinitionId); }}>详情</a>}
+          {onDetail && <a onClick={(e) => { e.stopPropagation(); onDetail(record.ruleDefinitionId); }}>{t('column.actionsDetail')}</a>}
           <Link
             to={route(ROUTES.RULE_EDITOR, { ruleId: record.ruleDefinitionId })}
             onClick={(e) => e.stopPropagation()}
-          >编辑</Link>
+          >{t('column.actionsEdit')}</Link>
         </Space>
       ),
     },

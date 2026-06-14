@@ -25,7 +25,7 @@ export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
       label: t('editor.rightPanel.preGate'),
       children: (
         <div style={{ padding: 16 }}>
-          <p>ROLLOUT: {ruleDetail.preGates?.[0]?.params?.percentage ?? 'N/A'}%</p>
+          <p>{t('preGate.labelRollout')}: {ruleDetail.preGates?.[0]?.params?.percentage ?? t('preGate.na')}%</p>
         </div>
       ),
     },
