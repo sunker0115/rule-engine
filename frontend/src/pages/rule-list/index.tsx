@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { useEffect, useState, useMemo } from 'react';
+import { Table, Button, Modal, Form, Input, Select, message, Space } from 'antd';
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listRules, createRule } from '@/api/rule';
 import { RULE_COLUMNS } from '@/config/columns/rule';
 import { ROUTES, route } from '@/constants/routes';
-import { RULE_KIND_OPTIONS } from '@/constants/enums';
+import { RULE_KIND_OPTIONS, RULE_STATUS_OPTIONS } from '@/constants/enums';
 import type { RuleListItem } from '@/types';
 
 export default function RuleList() {
@@ -20,16 +20,31 @@ export default function RuleList() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [keyword, setKeyword] = useState('');
   const [form] = Form.useForm();
 
   const load = async () => {
     if (!currentId || !sceneCode) return;
     setLoading(true);
-    try { const data = await listRules(currentId, sceneCode); setRules(data.items ?? []); }
-    finally { setLoading(false); }
+    try {
+      const params: Record<string, unknown> = {};
+      if (statusFilter) params.status = statusFilter;
+      const data = await listRules(currentId, sceneCode, params);
+      setRules(data.items ?? []);
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [currentId, sceneCode]);
+  useEffect(() => { load(); }, [currentId, sceneCode, statusFilter]);
+
+  // 客户端关键词过滤（名称或 code 模糊匹配）
+  const filtered = useMemo(() => {
+    if (!keyword.trim()) return rules;
+    const kw = keyword.toLowerCase();
+    return rules.filter((r) =>
+      r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw),
+    );
+  }, [rules, keyword]);
 
   const handleCreate = async () => {
     const values = await form.validateFields();
@@ -51,9 +66,27 @@ export default function RuleList() {
         {t('action.create')}
       </Button>
     </div>
+    <Space style={{ marginBottom: 16 }}>
+      <Input
+        prefix={<SearchOutlined />}
+        placeholder="搜索名称或 Code"
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+        allowClear
+        style={{ width: 240 }}
+      />
+      <Select
+        placeholder={t('column.status')}
+        value={statusFilter}
+        onChange={setStatusFilter}
+        allowClear
+        options={[...RULE_STATUS_OPTIONS]}
+        style={{ width: 130 }}
+      />
+    </Space>
     <Table
       columns={RULE_COLUMNS}
-      dataSource={rules}
+      dataSource={filtered}
       rowKey="ruleDefinitionId"
       loading={loading}
       onRow={(r) => ({
@@ -69,8 +102,8 @@ export default function RuleList() {
       confirmLoading={confirmLoading}
     >
       <Form form={form} layout="vertical">
-        <Form.Item name="code" label={t('column.code')} rules={[{ required: true, message: tc('validation.required') }]}>
-          <Input placeholder={t('column.code')} />
+        <Form.Item name="code" label="Code" rules={[{ required: true, message: tc('validation.required') }]}>
+          <Input />
         </Form.Item>
         <Form.Item name="name" label={tc('label.name')} rules={[{ required: true, message: tc('validation.required') }]}>
           <Input />
