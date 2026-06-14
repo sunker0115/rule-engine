@@ -163,8 +163,8 @@ function PayloadSchemaEditor({ value, onChange }: { value: unknown; onChange: (v
   return (
     <div>
       <Table
-        dataSource={fields}
-        rowKey="name"
+        dataSource={fields.map((f, i) => ({ ...f, _key: i }))}
+        rowKey="_key"
         size="small"
         pagination={false}
         locale={{ emptyText: '暂无字段，点击下方添加' }}
