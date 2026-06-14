@@ -16,26 +16,17 @@ import DryRunDrawer from './DryRunDrawer';
 
 const { Sider, Content } = Layout;
 
-/** 从 payloadSchema 提取字段名 + 类型映射 */
-function extractPayloadSchema(schema: unknown): { names: string[]; types: Record<string, string> } {
-  if (!schema) return { names: [], types: {} };
-  const names: string[] = [];
-  const types: Record<string, string> = {};
+/** 从 payloadSchema 提取字段名列表 */
+function extractPayloadFieldNames(schema: unknown): string[] {
+  if (!schema) return [];
   if (Array.isArray(schema)) {
-    for (const f of schema as Record<string, unknown>[]) {
-      const n = f.name as string;
-      if (n) { names.push(n); types[n] = (f.type as string) ?? 'string'; }
-    }
-  } else if (typeof schema === 'object') {
-    const props = (schema as Record<string, unknown>).properties;
-    if (props && typeof props === 'object') {
-      for (const [n, def] of Object.entries(props)) {
-        names.push(n);
-        types[n] = (def as Record<string, unknown>).type as string ?? 'string';
-      }
-    }
+    return (schema as Record<string, unknown>[]).map(f => f.name as string).filter(Boolean);
   }
-  return { names, types };
+  if (typeof schema === 'object') {
+    const props = (schema as Record<string, unknown>).properties;
+    if (props && typeof props === 'object') return Object.keys(props);
+  }
+  return [];
 }
 
 export default function RuleEditor() {
@@ -70,9 +61,7 @@ export default function RuleEditor() {
         ]);
         const meta = metaRes.data ?? null;
         if (meta) {
-          const schema = extractPayloadSchema(sceneRes.data?.payloadSchema);
-          meta.payloadFieldNames = schema.names;
-          meta.payloadFieldTypes = schema.types;
+          meta.payloadFieldNames = extractPayloadFieldNames(sceneRes.data?.payloadSchema);
         }
         setMetadata(meta);
       }
@@ -132,7 +121,6 @@ export default function RuleEditor() {
         ruleId={ruleDetail.ruleDefinitionId}
         sceneCode={ruleDetail.sceneCode}
         eventTypes={metadata?.eventTypes ?? ruleDetail.triggerEventTypes ?? []}
-        payloadFieldTypes={metadata?.payloadFieldTypes}
       />
     </Layout>
   );

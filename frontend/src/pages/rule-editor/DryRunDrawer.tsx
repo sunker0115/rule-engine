@@ -14,7 +14,6 @@ interface Props {
   ruleId?: number;
   sceneCode: string;
   eventTypes: string[];
-  payloadFieldTypes?: Record<string, string>;
 }
 
 interface PayloadPair {
@@ -25,7 +24,7 @@ interface PayloadPair {
 
 let nextPairId = 0;
 
-export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes, payloadFieldTypes }: Props) {
+export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes }: Props) {
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
@@ -36,15 +35,12 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
 
   const isLoading = loading || internalLoading;
 
-  // 每次打开重置
+  // 打开时不清空，保留上次输入；仅关闭时清理结果
   useEffect(() => {
-    if (open) {
-      setPairs([]);
-      nextPairId = 0;
-      form.resetFields();
+    if (!open) {
       reset();
     }
-  }, [open, form, setResult]);
+  }, [open, reset]);
 
   const addPair = () => {
     setPairs(p => [...p, { id: nextPairId++, key: '', value: '' }]);
@@ -58,20 +54,13 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
     setPairs(p => p.map(item => item.id === id ? { ...item, [field]: val } : item));
   };
 
-  /** 按字段声明类型转换值：number/integer → 数字，boolean → 布尔，其余保持字符串 */
-  const toPayloadValue = (key: string, raw: string): unknown => {
+  /** 值类型推断：简单数字→number，true/false→boolean，null→null，其余→string */
+  const toPayloadValue = (raw: string): unknown => {
     const v = raw.trim();
-    const declared = payloadFieldTypes?.[key]?.toLowerCase();
-    if (declared === 'number' || declared === 'integer') {
-      const n = parseFloat(v);
-      return isNaN(n) ? v : n;
-    }
-    if (declared === 'boolean') {
-      if (v === 'true') return true;
-      if (v === 'false') return false;
-      return v;
-    }
-    // 未声明类型或 string → 保持原样
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    if (v === 'null') return null;
+    if (/^-?\d+(\.\d+)?$/.test(v)) return parseFloat(v);
     return v;
   };
 
@@ -80,7 +69,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
     const payload: Record<string, unknown> = {};
     pairs.forEach(p => {
       if (p.key.trim()) {
-        payload[p.key.trim()] = toPayloadValue(p.key.trim(), p.value);
+        payload[p.key.trim()] = toPayloadValue(p.value);
       }
     });
     return {
@@ -111,7 +100,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
       const payload: Record<string, unknown> = {};
       pairs.forEach(p => {
         if (p.key.trim()) {
-          payload[p.key.trim()] = toPayloadValue(p.key.trim(), p.value);
+          payload[p.key.trim()] = toPayloadValue(p.value);
         }
       });
       const data = await dryRun(

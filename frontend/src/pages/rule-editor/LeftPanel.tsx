@@ -83,6 +83,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
             {t('action.saveDraft')}
           </Button>
         )}
+        <Button block onClick={onOpenDryRun}>{t('action.dryRun')}</Button>
         {hasDraft && (
           <Popconfirm title={t('version.publishConfirm').replace('{version}', '?')} onConfirm={handlePublish}>
             <Button type="primary" block style={{ background: '#52c41a', borderColor: '#52c41a' }}>
@@ -101,7 +102,6 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         {isDisabled && (
           <Button block onClick={handleEnable}>{t('action.enable')}</Button>
         )}
-        <Button block onClick={onOpenDryRun}>{t('action.dryRun')}</Button>
       </Space>
 
       <h4>{t('editor.leftPanel.versionTimeline')}</h4>
