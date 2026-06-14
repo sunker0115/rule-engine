@@ -12,6 +12,6 @@ export async function triggerJob(tenantId: number, jobId: number) {
 }
 
 export async function getJobExecutions(tenantId: number, jobId: number, params?: Record<string, unknown>) {
-  const res = await apiClient.get<PageResponse<JobExecutionItem>>(ENDPOINTS.JOB_EXECUTIONS(jobId), { params: { tenantId, ...params } });
-  return res.data;
+  const res = await apiClient.get<ApiResponse<PageResponse<JobExecutionItem>>>(ENDPOINTS.JOB_EXECUTIONS(jobId), { params: { tenantId, ...params } });
+  return res.data.data; // unwrap ApiResponse → PageResponse
 }

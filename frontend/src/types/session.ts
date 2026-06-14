@@ -1,27 +1,11 @@
 export type SessionStatus = 'HIT' | 'MISS' | 'BLOCKED' | 'ERROR' | 'PENDING' | 'FAILED';
-export type EventSource = 'HTTP' | 'MQ' | 'JOB' | 'SDK' | 'REPLAY';
-export type EvalMode = 'PUSH' | 'PULL';
 
+/** 评估会话列表项——字段对齐 GET /admin/v1/evaluation-sessions 实际响应 */
 export interface EvalSessionItem {
   sessionId: number;
-  eventId: string;
+  tenantId: string;
   sceneCode: string;
-  eventType: string;
-  subjectId: string;
+  eventId: string;
   status: SessionStatus;
-  blockedBy?: string;
-  errorCode?: string;
-  finalDecision?: string;
-  candidateRuleCount: number;
-  hitRuleCount: number;
-  source: EventSource;
-  mode: EvalMode;
-  evalDurationMs: number;
-  occurredAt: string;
   startedAt: string;
-}
-
-export interface EvalSessionDetail extends EvalSessionItem {
-  finishedAt?: string;
-  contextSnapshot?: Record<string, unknown>;
 }
