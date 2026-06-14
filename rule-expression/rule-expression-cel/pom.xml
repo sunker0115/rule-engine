@@ -6,10 +6,10 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.sstlfsj.rule</groupId>
-        <artifactId>rule-engine</artifactId>
+        <artifactId>rule-expression</artifactId>
         <version>${revision}</version>
     </parent>
-    <artifactId>rule-expression-jexl</artifactId>
+    <artifactId>rule-expression-cel</artifactId>
 
     <dependencies>
         <dependency>
@@ -17,10 +17,10 @@
             <artifactId>rule-kernel</artifactId>
         </dependency>
 
-        <!-- Apache Commons JEXL：弱类型表达式引擎；版本由根 pom 统一管理 -->
+        <!-- Google CEL-Java：聚合 jar（compiler/runtime/common）；版本由根 pom 统一管理 -->
         <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-jexl3</artifactId>
+            <groupId>dev.cel</groupId>
+            <artifactId>cel</artifactId>
         </dependency>
 
         <!-- Caffeine 预编译缓存；版本由 Spring Boot BOM 管理 -->
