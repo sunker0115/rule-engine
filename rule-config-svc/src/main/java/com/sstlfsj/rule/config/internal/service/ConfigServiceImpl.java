@@ -64,16 +64,20 @@ class ConfigServiceImpl implements ConfigService {
         if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        // 捕获禁用前状态作为 before 快照（D14 审计完整性，能还原"禁用前规则是什么状态"）
         RuleStatusSnapshot before = new RuleStatusSnapshot(
                 ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
-        rule.setStatus(RuleDefinitionStatus.DISABLED);
+
+        // 双向切换：DISABLED → PUBLISHED，PUBLISHED/PUBLISHING → DISABLED
+        boolean enabling = rule.getStatus() == RuleDefinitionStatus.DISABLED;
+        rule.setStatus(enabling ? RuleDefinitionStatus.PUBLISHED : RuleDefinitionStatus.DISABLED);
         ruleDefinitionMapper.updateById(rule);
+
         RuleStatusSnapshot after = new RuleStatusSnapshot(
-                ruleDefinitionId, RuleDefinitionStatus.DISABLED.name(), rule.getCurrentVersion());
+                ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
+        String action = enabling ? "ENABLE" : "DISABLE";
 
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                Long.valueOf(tenantId), actorId, "USER", "DISABLE", "rule_definition",
+                Long.valueOf(tenantId), actorId, "USER", action, "rule_definition",
                 ruleDefinitionId.toString(), before, after, LocalDateTime.now()));
     }
 
