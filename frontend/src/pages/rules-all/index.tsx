@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Space, Input, Select, DatePicker } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { Table, Space, Input, Select, DatePicker, Button, Modal, Form, message } from 'antd';
+import { SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listRules } from '@/api/rule';
+import { listRules, createRule } from '@/api/rule';
+import { listScenes } from '@/api/scene';
 import { getRuleColumns } from '@/config/columns/rule';
-import { RULE_STATUS_OPTIONS } from '@/constants/enums';
+import { RULE_STATUS_OPTIONS, RULE_KIND_OPTIONS } from '@/constants/enums';
 import RuleDetailDrawer from '@/pages/rule-list/RuleDetailDrawer';
 import dayjs from 'dayjs';
 import type { RuleListItem } from '@/types';
@@ -23,6 +24,10 @@ export default function RulesAll() {
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [sceneOpts, setSceneOpts] = useState<{ value: string; label: string }[]>([]);
+  const [createForm] = Form.useForm();
   const tenantId = tenantFilter ?? currentId ?? 0;
 
   const load = async () => {
@@ -46,10 +51,34 @@ export default function RulesAll() {
     return rules.filter((r) => r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw));
   }, [rules, keyword]);
 
+  const handleCreate = async () => {
+    const values = await createForm.validateFields();
+    setCreateLoading(true);
+    try {
+      await createRule(values.tenantId ?? currentId!, values);
+      message.success(tc('message.createSuccess'));
+      setCreateOpen(false);
+      createForm.resetFields();
+      load();
+    } catch { /* handled by interceptor */ }
+    finally { setCreateLoading(false); }
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <h2>{t('title.list')}</h2>
+        <Button type="primary" icon={<PlusOutlined />} onClick={async () => {
+          createForm.resetFields();
+          setCreateOpen(true);
+          try {
+            const apiRes = await listScenes(tenantId);
+            const list = apiRes.data ?? [];
+            setSceneOpts(list.map((s) => ({ value: s.sceneCode, label: `${s.name} (${s.sceneCode})` })));
+          } catch { setSceneOpts([]); }
+        }}>
+          {t('action.create')}
+        </Button>
       </div>
       <Space style={{ marginBottom: 16 }}>
         <Select
@@ -94,6 +123,41 @@ export default function RulesAll() {
         ruleDefinitionId={detailId}
         onClose={() => setDetailId(null)}
       />
+      <Modal
+        title={t('action.create')}
+        open={createOpen}
+        onOk={handleCreate}
+        onCancel={() => { setCreateOpen(false); createForm.resetFields(); }}
+        confirmLoading={createLoading}
+      >
+        <Form form={createForm} layout="vertical">
+          <Form.Item name="tenantId" label={tc('tenant.label')} initialValue={currentId}>
+            <Select
+              options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+            />
+          </Form.Item>
+          <Form.Item name="sceneCode" label="Scene" rules={[{ required: true, message: tc('validation.required') }]}>
+            <Select
+              options={sceneOpts}
+              showSearch
+              placeholder="选择场景"
+              onChange={(sceneCode) => createForm.setFieldValue('sceneCode', sceneCode)}
+            />
+          </Form.Item>
+          <Form.Item name="code" label="Code" rules={[{ required: true, message: tc('validation.required') }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="name" label={tc('label.name')} rules={[{ required: true, message: tc('validation.required') }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="kind" label={t('column.kind')} initialValue="AST_BOOLEAN">
+            <Select options={[...RULE_KIND_OPTIONS]} />
+          </Form.Item>
+          <Form.Item name="triggerEventTypes" label="Trigger Events">
+            <Select mode="tags" placeholder={t('triggerEventsPlaceholder')} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
