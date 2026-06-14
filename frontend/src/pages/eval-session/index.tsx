@@ -49,10 +49,6 @@ export default function EvalSessionList() {
     { title: t('session.column.eventId'), dataIndex: 'eventId', key: 'eventId', width: 180, ellipsis: true },
     { title: t('session.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode', width: 120 },
     {
-      title: t('session.column.status'), dataIndex: 'status', key: 'status', width: 80,
-      render: (v: string) => <Tag color={colorOf(SESSION_STATUS_OPTIONS, v as never)}>{labelOf(SESSION_STATUS_OPTIONS, v as never)}</Tag>,
-    },
-    {
       title: t('session.column.finalDecision'), dataIndex: 'finalDecision', key: 'finalDecision', width: 100,
       render: (v: string) => v || '-',
     },
@@ -61,6 +57,10 @@ export default function EvalSessionList() {
       render: (v: number) => v != null ? v : '-',
     },
     { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 180 },
+    {
+      title: t('session.column.status'), dataIndex: 'status', key: 'status', width: 80,
+      render: (v: string) => <Tag color={colorOf(SESSION_STATUS_OPTIONS, v as never)}>{labelOf(SESSION_STATUS_OPTIONS, v as never)}</Tag>,
+    },
   ];
 
   return (
