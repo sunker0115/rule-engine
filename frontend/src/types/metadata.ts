@@ -10,6 +10,7 @@ export interface ConditionTypeMeta {
 export interface SceneMetadata {
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
+  eventTypes: string[];
 }
 
 export interface InputFieldItem {

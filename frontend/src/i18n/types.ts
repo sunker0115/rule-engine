@@ -259,8 +259,11 @@ export interface EvalTranslation {
     execute: string;
     targetVersion: string;
     eventType: string;
+    eventTypeAny: string;
     subjectId: string;
     payload: string;
+    payloadHint: string;
+    addField: string;
     result: {
       hit: string; miss: string; blocked: string;
       hitDecisions: string; finalDecision: string; nodeTrace: string;

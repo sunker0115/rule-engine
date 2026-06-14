@@ -51,7 +51,8 @@ public interface MetadataService {
 
     record MetadataResponse(
             java.util.List<OperatorSpec> conditionTypes,
-            java.util.List<MetricMeta> availableMetrics
+            java.util.List<MetricMeta> availableMetrics,
+            java.util.List<String> eventTypes
     ) {}
 
     /** 输入清单响应（对外契约；字段值与发布期冻结的 PayloadDependency 同形）。 */

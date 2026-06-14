@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Drawer, Form, Input, Select, Button, Typography, message, Tag } from 'antd';
+import { useState, useEffect } from 'react';
+import { Drawer, Form, Input, Select, Button, Typography, message, Tag, Row, Col } from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useDryRunStore } from '@/store/dryRunStore';
@@ -15,22 +16,68 @@ interface Props {
   eventTypes: string[];
 }
 
+interface PayloadPair {
+  id: number;
+  key: string;
+  value: string;
+}
+
+let nextPairId = 0;
+
 export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes }: Props) {
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
-  const { result, loading, setResult, setLoading } = useDryRunStore();
+  const { result, loading, setResult, setLoading, reset } = useDryRunStore();
   const [form] = Form.useForm();
   const [internalLoading, setInternalLoading] = useState(false);
+  const [pairs, setPairs] = useState<PayloadPair[]>([]);
 
   const isLoading = loading || internalLoading;
+
+  // 每次打开重置
+  useEffect(() => {
+    if (open) {
+      setPairs([]);
+      nextPairId = 0;
+      form.resetFields();
+      reset();
+    }
+  }, [open, form, setResult]);
+
+  const addPair = () => {
+    setPairs(p => [...p, { id: nextPairId++, key: '', value: '' }]);
+  };
+
+  const removePair = (id: number) => {
+    setPairs(p => p.filter(item => item.id !== id));
+  };
+
+  const updatePair = (id: number, field: 'key' | 'value', val: string) => {
+    setPairs(p => p.map(item => item.id === id ? { ...item, [field]: val } : item));
+  };
+
+  /** 值类型推断：简单数字→number，true/false→boolean，null→null，其余→string */
+  const toPayloadValue = (raw: string): unknown => {
+    const v = raw.trim();
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    if (v === 'null') return null;
+    if (/^-?\d+(\.\d+)?$/.test(v)) return parseFloat(v);
+    return v;
+  };
 
   const handleExecute = async () => {
     const values = await form.validateFields();
     setInternalLoading(true);
     setLoading(true);
     try {
-      const payload = values.payload ? JSON.parse(values.payload) : {};
+      const payload: Record<string, unknown> = {};
+      pairs.forEach(p => {
+        if (p.key.trim()) {
+          payload[p.key.trim()] = toPayloadValue(p.value);
+        }
+      });
       const data = await dryRun(
         {
           tenantCode: current ?? '',   // eval API 用 tenantCode（字符串 code）
@@ -76,14 +123,44 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
   return (
     <Drawer title={te('title.dryRun')} open={open} onClose={onClose} width={500}>
       <Form form={form} layout="vertical">
-        <Form.Item name="eventType" label={te('dryRun.eventType')} rules={[{ required: true }]}>
-          <Select options={eventTypes.map((e) => ({ value: e, label: e }))} />
+        <Form.Item name="eventType" label={te('dryRun.eventType')} rules={[{ required: eventTypes.length > 0 }]}>
+          {eventTypes.length > 0
+            ? <Select options={eventTypes.map((e) => ({ value: e, label: e }))} />
+            : <Input placeholder={te('dryRun.eventTypeAny')} />}
         </Form.Item>
         <Form.Item name="subjectId" label={te('dryRun.subjectId')} rules={[{ required: true }]}>
           <Input />
         </Form.Item>
-        <Form.Item name="payload" label={te('dryRun.payload')}>
-          <Input.TextArea rows={6} style={{ fontFamily: 'monospace' }} placeholder='{"amount": 100}' />
+        <Form.Item label={te('dryRun.payload')}>
+          {pairs.length === 0 && (
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              {te('dryRun.payloadHint')}
+            </Typography.Text>
+          )}
+          {pairs.map(p => (
+            <Row gutter={8} key={p.id} style={{ marginBottom: 8 }}>
+              <Col flex="auto">
+                <Input
+                  placeholder="key"
+                  value={p.key}
+                  onChange={e => updatePair(p.id, 'key', e.target.value)}
+                />
+              </Col>
+              <Col flex="auto">
+                <Input
+                  placeholder="value"
+                  value={p.value}
+                  onChange={e => updatePair(p.id, 'value', e.target.value)}
+                />
+              </Col>
+              <Col>
+                <Button icon={<DeleteOutlined />} size="small" onClick={() => removePair(p.id)} />
+              </Col>
+            </Row>
+          ))}
+          <Button type="dashed" block icon={<PlusOutlined />} onClick={addPair}>
+            {te('dryRun.addField')}
+          </Button>
         </Form.Item>
         <Button type="primary" onClick={handleExecute} loading={isLoading} block>
           {te('dryRun.execute')}

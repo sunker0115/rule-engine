@@ -6,8 +6,11 @@ const evalLoc: EvalTranslation = {
     execute: '执行试算',
     targetVersion: '目标版本',
     eventType: '事件类型',
+    eventTypeAny: '事件类型（不限制）',
     subjectId: '主体 ID',
-    payload: '事件数据 (payload)',
+    payload: '事件数据',
+    payloadHint: '可不填；添加键值对作为事件 payload',
+    addField: '添加字段',
     result: {
       hit: '命中',
       miss: '未命中',

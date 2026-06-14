@@ -89,7 +89,8 @@ class MetadataServiceImpl implements MetadataService {
         ConditionTypeCatalog.all().forEach(s -> merged.put(s.code(), s));
         customSpecs.forEach(s -> merged.putIfAbsent(s.code(), s));
         List<OperatorSpec> conditionTypes = List.copyOf(merged.values());
-        return new MetadataResponse(conditionTypes, metricMetas);
+        return new MetadataResponse(conditionTypes, metricMetas,
+                scene.getEventTypes() != null ? scene.getEventTypes() : java.util.List.of());
     }
 
     @Override

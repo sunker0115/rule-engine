@@ -20,7 +20,7 @@ class MetadataServiceTest {
                 .requiresMetric(true).build();
         var metric = new MetadataService.MetricMeta("age", "年龄", "INTEGER", "DB", true);
         var response = new MetadataService.MetadataResponse(
-                List.of(condType), List.of(metric));
+                List.of(condType), List.of(metric), List.of("payment.create"));
 
         assertEquals(1, response.conditionTypes().size());
         assertEquals("GT", response.conditionTypes().get(0).code());

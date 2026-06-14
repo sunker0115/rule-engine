@@ -75,7 +75,7 @@ export default function RuleEditor() {
         ruleVersionId={latestVersion?.ruleVersionId}
         ruleId={ruleDetail.ruleDefinitionId}
         sceneCode={ruleDetail.sceneCode}
-        eventTypes={ruleDetail.triggerEventTypes ?? []}
+        eventTypes={metadata?.eventTypes ?? ruleDetail.triggerEventTypes ?? []}
       />
     </Layout>
   );
