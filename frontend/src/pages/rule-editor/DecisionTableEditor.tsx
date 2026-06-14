@@ -126,18 +126,25 @@ export default function DecisionTableEditor({
                   borderLeft: `3px solid ${isPayload ? '#fa8c16' : '#1890ff'}`,
                 }}>
                   <div style={{
-                    fontSize: 11, color: '#999', padding: '2px 8px',
+                    fontSize: 11, padding: '2px 4px',
                     borderBottom: '1px solid #f0f0f0', background: '#fafafa',
-                    borderRadius: '0 6px 0 0', display: 'flex', justifyContent: 'space-between',
+                    borderRadius: '0 6px 0 0', display: 'flex', alignItems: 'center', gap: 4,
                   }}>
-                    <span>C{ci + 1}</span>
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                      onClick={() => removeColumn(ci)} style={{ fontSize: 11, padding: 0, height: 18 }} />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 8px 6px' }}>
+                    <span style={{ color: '#999', whiteSpace: 'nowrap' }}>C{ci + 1}</span>
                     <Select
                       size="small"
-                      style={{ width: '100%' }}
+                      style={{ flex: 1, fontSize: 11 }}
+                      value={col.operator || undefined}
+                      onChange={(v) => updateColumn(ci, 'operator', v)}
+                      options={opOptions}
+                    />
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                      onClick={() => removeColumn(ci)} style={{ fontSize: 10, padding: 0, height: 16 }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 6px 6px' }}>
+                    <Select
+                      size="small"
+                      style={{ width: '100%', fontSize: 12 }}
                       value={col.valueRef ?? 'METRIC'}
                       onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
                       options={[
@@ -148,19 +155,12 @@ export default function DecisionTableEditor({
                     <Select
                       size="small"
                       showSearch
-                      style={{ width: '100%' }}
+                      style={{ width: '100%', fontSize: 12 }}
                       value={col.metricCode || undefined}
                       onChange={(v) => updateColumn(ci, 'metricCode', v)}
                       placeholder={t('editor.decisionTable.metric')}
                       popupMatchSelectWidth={false}
                       options={fieldOptions}
-                    />
-                    <Select
-                      size="small"
-                      style={{ width: '100%' }}
-                      value={col.operator || undefined}
-                      onChange={(v) => updateColumn(ci, 'operator', v)}
-                      options={opOptions}
                     />
                   </div>
                 </div>
