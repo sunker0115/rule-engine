@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Tabs, Spin, Button } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,7 @@ import InputManifestTab from './InputManifestTab';
 export default function SceneDetail() {
   const { sceneCode } = useParams<{ sceneCode: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation('scene');
   const tc = useTranslation('common').t;
   const { currentId, current } = useTenantStore();
@@ -40,7 +40,7 @@ export default function SceneDetail() {
     {
       key: 'info',
       label: t('detail.basicInfo'),
-      children: <SceneInfo scene={scene} tenantId={currentId!} onUpdated={load} autoEdit={!!(location.state as Record<string, unknown>)?.autoEdit} />,
+      children: <SceneInfo scene={scene} tenantId={currentId!} onUpdated={load} autoEdit={searchParams.get('edit') === '1'} />,
     },
     {
       key: 'manifest',
