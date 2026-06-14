@@ -172,10 +172,10 @@ function PayloadSchemaEditor({ value, onChange }: { value: unknown; onChange: (v
         pagination={false}
         locale={{ emptyText: '暂无字段，点击下方添加' }}
       >
-        <Table.Column title="字段名" dataIndex="name" render={(v: string, _: FieldDef, i: number) => (
+        <Table.Column title="字段名" dataIndex="name" width={130} render={(v: string, _: FieldDef, i: number) => (
           <Input size="small" value={v} onChange={e => {
             const next = [...fields]; next[i] = { ...next[i], name: e.target.value }; update(next);
-          }} style={{ width: 100 }} />
+          }} style={{ width: 120 }} />
         )} />
         <Table.Column title="类型" dataIndex="type" width={100} render={(v: string, _: FieldDef, i: number) => (
           <Select size="small" value={v} onChange={val => {
