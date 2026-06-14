@@ -68,13 +68,14 @@ class SceneServiceImpl implements SceneService {
     @Override
     @Transactional
     public void updateScene(String tenantId, String sceneCode,
-                            String name, List<String> eventTypes,
+                            String name, String description, List<String> eventTypes,
                             List<PayloadFieldSpec> payloadSchema, Map<String, Object> defaultParams,
                             String actorId) {
         SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
         SceneSnapshot before = snapshotOf(scene);
 
         if (name != null) scene.setName(name);
+        if (description != null) scene.setDescription(description);
         if (eventTypes != null) scene.setEventTypes(eventTypes);
         if (defaultParams != null) {
             validateDefaultParams(defaultParams);

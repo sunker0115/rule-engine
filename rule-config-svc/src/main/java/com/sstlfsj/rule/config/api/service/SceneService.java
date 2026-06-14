@@ -52,7 +52,7 @@ public interface SceneService {
      * @param actorId           更新操作人 ID
      */
     void updateScene(String tenantId, String sceneCode,
-                     String name, List<String> eventTypes,
+                     String name, String description, List<String> eventTypes,
                      List<PayloadFieldSpec> payloadSchema, Map<String, Object> defaultParams,
                      String actorId);
 

@@ -10,6 +10,7 @@ import java.util.Map;
 public record UpdateSceneRequest(
         @NotBlank String tenantId,
         String name,
+        String description,
         List<String> eventTypes,
         List<PayloadFieldSpec> payloadSchema,
         Map<String, Object> defaultParams

@@ -76,7 +76,8 @@ public class SceneController {
             @RequestHeader("X-Actor-Id") String actorId) {
         sceneService.updateScene(
                 req.tenantId(), sceneCode,
-                req.name(), req.eventTypes(),
+                req.name(), req.description(),
+                req.eventTypes(),
                 req.payloadSchema(), req.defaultParams(),
                 actorId);
         return ApiResponse.ok(null);
