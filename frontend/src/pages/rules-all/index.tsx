@@ -1,23 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Table, Space, Input } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listScenes } from '@/api/scene';
 import { listRules } from '@/api/rule';
 import { getRuleColumns } from '@/config/columns/rule';
-import { colorOf, RULE_STATUS_OPTIONS } from '@/constants/enums';
-import { ROUTES, route } from '@/constants/routes';
 import RuleDetailDrawer from '@/pages/rule-list/RuleDetailDrawer';
 import type { RuleListItem } from '@/types';
 
 interface RuleWithScene extends RuleListItem {
-  _sceneCode: string;
+  sceneCode: string;
 }
 
 export default function RulesAll() {
-  const navigate = useNavigate();
   const { currentId } = useTenantStore();
   const { t } = useTranslation('rule');
   const [rules, setRules] = useState<RuleWithScene[]>([]);
@@ -35,7 +31,7 @@ export default function RulesAll() {
       const results = await Promise.all(
         sceneList.map(async (s) => {
           const page = await listRules(currentId, s.sceneCode);
-          return (page.items ?? []).map((r) => ({ ...r, _sceneCode: s.sceneCode }));
+          return (page.items ?? []).map((r) => ({ ...r, sceneCode: s.sceneCode }));
         }),
       );
       setRules(results.flat());
@@ -44,7 +40,7 @@ export default function RulesAll() {
 
   useEffect(() => { load(); }, [currentId]);
 
-  const filtered = keyword.trim()
+  const dataSource = keyword.trim()
     ? rules.filter((r) => r.name.includes(keyword) || r.code.includes(keyword))
     : rules;
 
@@ -65,12 +61,9 @@ export default function RulesAll() {
       </Space>
       <Table
         columns={getRuleColumns(setDetailId)}
-        dataSource={filtered}
+        dataSource={dataSource}
         rowKey="ruleDefinitionId"
         loading={loading}
-        onRow={(r) => ({
-          style: { cursor: 'pointer' },
-        })}
       />
       <RuleDetailDrawer
         open={detailId !== null}
