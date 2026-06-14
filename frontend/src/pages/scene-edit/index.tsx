@@ -17,7 +17,7 @@ const TYPE_OPTIONS = ['string', 'number', 'integer', 'boolean'].map(v => ({ valu
 // 输出格式对齐后端 PayloadFieldSpec 数组
 function toSchema(fields: FieldDef[]): Record<string, unknown>[] | null {
   if (fields.length === 0) return null;
-  return fields.filter(f => f.name).map(f => ({
+  return fields.map(f => ({
     name: f.name,
     type: f.type,
     required: f.required,
@@ -136,6 +136,10 @@ export default function SceneEdit() {
 
   const handleSave = async () => {
     const values = await form.validateFields();
+    // payloadSchema 过滤空名字段
+    if (Array.isArray(values.payloadSchema)) {
+      values.payloadSchema = values.payloadSchema.filter((f: Record<string, unknown>) => f.name);
+    }
     setSaving(true);
     try {
       await apiClient.patch(ENDPOINTS.SCENE_DETAIL(sceneCode!), { ...values, tenantId: currentId });
