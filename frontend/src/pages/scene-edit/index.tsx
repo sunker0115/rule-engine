@@ -112,8 +112,8 @@ export default function SceneEdit() {
   const loaded = useRef(false);
 
   useEffect(() => {
-    if (loaded.current) return; loaded.current = true;
     if (!currentId || !sceneCode) return;
+    if (loaded.current) return; loaded.current = true;
     (async () => {
       setLoading(true);
       try { const data = await getScene(currentId, sceneCode); setScene(data.data ?? null); }
