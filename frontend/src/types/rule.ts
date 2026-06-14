@@ -6,6 +6,7 @@ export type VersionStatus = 'DRAFT' | 'ACTIVE' | 'SUPERSEDED';
 
 /** 规则列表项——字段对齐 GET /admin/v1/rules 实际响应 */
 export interface RuleListItem {
+  tenantId: string;
   ruleDefinitionId: number;
   code: string;
   name: string;

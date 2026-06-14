@@ -6,6 +6,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 export function getSceneColumns(t: (key: string) => string, tc: (key: string) => string, onToggleStatus?: (code: string, enabled: boolean) => void): ColumnsType<SceneListItem> {
   return [
+    { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 70 },
     {
       title: t('column.sceneCode'),
       dataIndex: 'sceneCode',

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 /**
  * 规则列表查询响应项，对应 10-api-contract.md §4.4。
  *
+ * @param tenantId         租户 ID
  * @param ruleDefinitionId 规则定义 ID
  * @param code             规则编码
  * @param name             规则名称
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
  * @param createdAt        创建时间
  */
 public record RuleListItemVO(
+        String tenantId,
         Long ruleDefinitionId,
         String code,
         String name,

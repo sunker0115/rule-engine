@@ -105,7 +105,7 @@ class SceneServiceImpl implements SceneService {
     public List<SceneListItem> listScenes(String tenantId, String status) {
         SceneStatus statusFilter = (status != null && !status.isBlank()) ? SceneStatus.valueOf(status) : null;
         return sceneMapper.findByTenantId(Long.valueOf(tenantId), statusFilter).stream()
-                .map(s -> new SceneListItem(s.getId(), s.getCode(), s.getName(),
+                .map(s -> new SceneListItem(s.getId(), String.valueOf(s.getTenantId()), s.getCode(), s.getName(),
                         s.getDominantMode().name(), s.getSubjectType().name(), s.getStatus().name(),
                         s.getCreatedAt(), s.getUpdatedAt()))
                 .toList();

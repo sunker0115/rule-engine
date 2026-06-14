@@ -4,8 +4,8 @@ import type { ColumnsType } from 'antd/es/table';
 
 export function getDecisionColumns(t: (key: string) => string, tc: (key: string) => string, onToggleStatus?: (code: string, enabled: boolean) => void): ColumnsType<DecisionItem> {
   return [
+    { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 70 },
     { title: t('column.code'), dataIndex: 'code', key: 'code' },
-    { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 60 },
     { title: t('column.name'), dataIndex: 'name', key: 'name' },
     { title: t('column.priority'), dataIndex: 'priority', key: 'priority', sorter: (a, b) => a.priority - b.priority },
     {

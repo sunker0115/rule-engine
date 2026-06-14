@@ -204,6 +204,7 @@ public class RuleController {
 
         List<RuleListItemVO> vos = rdPage.getRecords().stream()
                 .map(rd -> new RuleListItemVO(
+                        String.valueOf(rd.getTenantId()),
                         rd.getId(), rd.getCode(), rd.getName(),
                         rd.getKind() != null ? rd.getKind().name() : null,
                         sceneCodeMap.getOrDefault(rd.getSceneId(), null),

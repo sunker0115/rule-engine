@@ -38,7 +38,7 @@ class SceneControllerTest {
     @Test
     void listScenes_returns200_withList() throws Exception {
         when(sceneService.listScenes("1", null)).thenReturn(List.of(
-                new SceneListItem(5L, "PAYMENT", "支付场景", "PUSH", "USER", "ACTIVE", null, null)));
+                new SceneListItem(5L, "1", "PAYMENT", "支付场景", "PUSH", "USER", "ACTIVE", null, null)));
 
         mockMvc.perform(get("/admin/v1/scenes").param("tenantId", "1"))
                 .andExpect(status().isOk())

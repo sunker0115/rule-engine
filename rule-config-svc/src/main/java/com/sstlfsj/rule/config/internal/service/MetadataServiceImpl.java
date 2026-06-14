@@ -191,7 +191,8 @@ class MetadataServiceImpl implements MetadataService {
                 m.getName(),
                 m.getStatus() != null ? m.getStatus().name() : null,
                 m.getCreatedAt() != null ? m.getCreatedAt().toString() : null,
-                m.getUpdatedAt() != null ? m.getUpdatedAt().toString() : null);
+                m.getUpdatedAt() != null ? m.getUpdatedAt().toString() : null,
+                String.valueOf(m.getTenantId()));
     }
 
 }

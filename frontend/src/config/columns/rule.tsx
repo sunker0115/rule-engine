@@ -7,6 +7,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 export function getRuleColumns(t: (key: string) => string, tc: (key: string) => string, onDetail?: (id: number) => void): ColumnsType<RuleListItem> {
   return [
+    { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 70 },
     { title: t('column.code'), dataIndex: 'code', key: 'code' },
     { title: tc('label.name'), dataIndex: 'name', key: 'name' },
     { title: t('column.kind'), dataIndex: 'kind', key: 'kind', render: (v: string) => <Tag>{v}</Tag> },

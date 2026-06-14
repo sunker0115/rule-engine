@@ -1,4 +1,5 @@
 export interface SceneListItem {
+  tenantId: string;
   id: number;
   sceneCode: string;
   name: string;
@@ -10,7 +11,6 @@ export interface SceneListItem {
 }
 
 export interface SceneDetail extends SceneListItem {
-  tenantId: number;
   description?: string;
   payloadSchema?: Record<string, unknown>;
   eventTypes: string[];
