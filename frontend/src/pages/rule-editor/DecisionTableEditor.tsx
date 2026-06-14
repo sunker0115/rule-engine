@@ -123,11 +123,11 @@ export default function DecisionTableEditor({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 270 }}>
                   <Select
                     size="small"
-                    style={{ width: 76 }}
+                    style={{ width: 80 }}
                     value={col.valueRef ?? 'METRIC'}
                     onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
                     options={[
-                      { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
+                      { value: 'METRIC', label: '指标' },
                       { value: 'PAYLOAD', label: 'Payload' },
                     ]}
                   />
