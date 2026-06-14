@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
-import type { SceneMetadata as SceneMetadataType, ScorecardRootNode } from '@/types';
+import type { SceneMetadata as SceneMetadataType, ScorecardRootNode, IfNode, AstNode } from '@/types';
 import ConditionTreeEditor from './ConditionTreeEditor';
 import ScorecardEditor from './ScorecardEditor';
+import DecisionTreeEditor from './DecisionTreeEditor';
 
 interface Props { metadata: SceneMetadataType | null; }
 
@@ -16,14 +17,18 @@ export default function CenterPanel({ metadata }: Props) {
     payloadFieldNames: metadata?.payloadFieldNames ?? [],
   };
 
-  if (kind !== 'AST_BOOLEAN' && kind !== 'SCORECARD' && kind !== 'DECISION_TREE' && kind !== 'DECISION_TABLE' && kind !== 'EXPRESSION_SCRIPT') {
+  // AST_BOOLEAN: 条件组合树
+  if (kind === 'AST_BOOLEAN') {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
-        {t('editor.centerPanel.placeholder')} ({kind})
-      </div>
+      <ConditionTreeEditor
+        ast={ast}
+        {...shared}
+        onChange={setAst}
+      />
     );
   }
 
+  // SCORECARD: 评分卡
   if (kind === 'SCORECARD') {
     const scorecardNode: ScorecardRootNode = (ast?.type === 'ScorecardRootNode')
       ? ast
@@ -37,19 +42,24 @@ export default function CenterPanel({ metadata }: Props) {
     );
   }
 
-  if (kind === 'DECISION_TREE' || kind === 'DECISION_TABLE') {
+  // DECISION_TREE: 决策树
+  if (kind === 'DECISION_TREE') {
+    const ifNode: IfNode = (ast?.type === 'IfNode')
+      ? ast
+      : { type: 'IfNode', condition: { type: 'AndNode', children: [] }, thenBranch: { type: 'DecisionLeafNode', decisionCode: '', category: null }, elseBranch: null };
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
-        {t('editor.centerPanel.placeholder')} ({kind})
-      </div>
+      <DecisionTreeEditor
+        ast={ifNode}
+        {...shared}
+        onChange={(node) => setAst(node as AstNode)}
+      />
     );
   }
 
+  // DECISION_TABLE / EXPRESSION_SCRIPT / 未知: 占位
   return (
-    <ConditionTreeEditor
-      ast={ast}
-      {...shared}
-      onChange={setAst}
-    />
+    <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
+      {t('editor.centerPanel.placeholder')} ({kind})
+    </div>
   );
 }
