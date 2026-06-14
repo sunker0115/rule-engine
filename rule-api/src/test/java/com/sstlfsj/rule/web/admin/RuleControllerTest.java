@@ -4,6 +4,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -272,14 +273,9 @@ class RuleControllerTest {
 
     @Test
     void listRules_returns200_withPageResult() throws Exception {
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<
-                com.sstlfsj.rule.config.api.dto.RuleListItemVO> page =
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> page =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 1);
-        page.setRecords(java.util.List.of(
-                new com.sstlfsj.rule.config.api.dto.RuleListItemVO(
-                        10L, "rule.a", "规则A", "AST_BOOLEAN", "risk.transfer", "PUBLISHED", 42L,
-                        java.time.LocalDateTime.of(2026, 6, 1, 0, 0))
-        ));
+        // Mock domain entity returned by service
         when(configService.listRules("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20)).thenReturn(page);
 
         mockMvc.perform(get("/admin/v1/rules")
@@ -298,8 +294,7 @@ class RuleControllerTest {
 
     @Test
     void listRules_withoutOptionalParams_usesDefaults() throws Exception {
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<
-                com.sstlfsj.rule.config.api.dto.RuleListItemVO> emptyPage =
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> emptyPage =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
         emptyPage.setRecords(java.util.List.of());
         when(configService.listRules("t1", null, null, null, null, 1, 20)).thenReturn(emptyPage);

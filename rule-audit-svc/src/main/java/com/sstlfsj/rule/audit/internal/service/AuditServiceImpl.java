@@ -25,10 +25,11 @@ class AuditServiceImpl implements AuditService {
 
     @Override
     public PageResult<AuditLogEntry> queryAuditLogs(String tenantId, String resourceType,
-                                                     Long resourceId, int page, int size) {
-        // MyBatis-Plus 分页从 1 开始，对外 API 从 0 开始
+                                                     Long resourceId, String action, String actorId,
+                                                     String from, String to, int page, int size) {
         Page<AuditLogRow> mp = auditLogMapper.selectAuditLogPage(
-                new Page<>(page + 1, size), Long.valueOf(tenantId), resourceType, resourceId);
+                new Page<>(page + 1, size), Long.valueOf(tenantId), resourceType, resourceId,
+                action, actorId, from, to);
         List<AuditLogEntry> items = mp.getRecords().stream()
                 .map(r -> new AuditLogEntry(
                         r.getId(),

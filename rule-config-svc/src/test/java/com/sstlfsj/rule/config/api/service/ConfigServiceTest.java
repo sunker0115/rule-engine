@@ -3,7 +3,7 @@ package com.sstlfsj.rule.config.api.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
-import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
+import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
@@ -13,6 +13,8 @@ import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -31,7 +33,7 @@ class ConfigServiceTest {
         }
 
         @Override
-        public Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status,
+        public Page<RuleDefinition> listRules(String tenantId, String sceneCode, String status,
                 String from, String to, int page, int size) {
             throw new UnsupportedOperationException("stub");
         }
@@ -77,9 +79,11 @@ class ConfigServiceTest {
         }
 
         @Override
-        public List<TenantItemVO> listTenants() {
+        public List<TenantItemVO> listTenants(String keyword, String status) {
             throw new UnsupportedOperationException("stub");
         }
+        @Override public Map<Long, String> getSceneCodeMap(Set<Long> sceneIds) { throw new UnsupportedOperationException("stub"); }
+        @Override public void toggleTenantStatus(Long tenantId, boolean enable) { throw new UnsupportedOperationException("stub"); }
     };
 
     @Test
@@ -103,7 +107,7 @@ class ConfigServiceTest {
     @Test
     void listTenants_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.listTenants());
+                () -> stub.listTenants(null, null));
     }
 
     @Test

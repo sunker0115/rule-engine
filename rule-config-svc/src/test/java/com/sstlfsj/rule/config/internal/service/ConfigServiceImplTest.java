@@ -116,12 +116,11 @@ class ConfigServiceImplTest {
         assertThat(result.getTotal()).isEqualTo(1);
         assertThat(result.getRecords()).hasSize(1);
         var item = result.getRecords().get(0);
-        assertThat(item.ruleDefinitionId()).isEqualTo(10L);
-        assertThat(item.code()).isEqualTo("rule.a");
-        assertThat(item.kind()).isEqualTo("AST_BOOLEAN");
-        assertThat(item.sceneCode()).isEqualTo("risk.transfer");
-        assertThat(item.status()).isEqualTo("PUBLISHED");
-        assertThat(item.currentVersion()).isEqualTo(42L);
+        assertThat(item.getId()).isEqualTo(10L);
+        assertThat(item.getCode()).isEqualTo("rule.a");
+        assertThat(item.getKind()).isEqualTo(RuleKind.AST_BOOLEAN);
+        assertThat(item.getStatus()).isEqualTo(RuleDefinitionStatus.PUBLISHED);
+        assertThat(item.getCurrentVersion()).isEqualTo(42L);
         verify(sceneMapper).findByCode(any(), any());
         verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any(), any(), any());
     }

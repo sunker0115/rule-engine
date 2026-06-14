@@ -75,19 +75,19 @@ export default function AuditLogList() {
           style={{ width: 110 }}
           allowClear
           options={[...AUDIT_TARGET_TYPE_OPTIONS]}
-          onChange={(v) => setFilters((f) => ({ ...f, targetType: v || undefined }))}
+          onChange={(v) => setFilters((f) => ({ ...f, resourceType: v || undefined }))}
         />
         <Input
           placeholder={t('filter.targetId')}
           style={{ width: 100 }}
           allowClear
-          onChange={(e) => setFilters((f) => ({ ...f, targetId: e.target.value || undefined }))}
+          onChange={(e) => setFilters((f) => ({ ...f, resourceId: e.target.value || undefined }))}
         />
         <Input
           placeholder={t('filter.actor')}
           style={{ width: 120 }}
           allowClear
-          onChange={(e) => setFilters((f) => ({ ...f, actor: e.target.value || undefined }))}
+          onChange={(e) => setFilters((f) => ({ ...f, actorId: e.target.value || undefined }))}
         />
         <Select
           placeholder={t('filter.action')}

@@ -93,8 +93,9 @@ public class AuditController {
         }
     }
 
-    /** GET /admin/v1/audit-logs — 分页查询操作审计日志
+    /** GET /admin/v1/audit-logs — 分页查询操作审计日志，支持多条件筛选
      * @param tenantId 租户 @param resourceType 可选资源类型 @param resourceId 可选资源 ID
+     * @param action 可选操作类型 @param actorId 可选操作人 @param from 起始时间 @param to 结束时间
      * @param page 页码 @param size 每页大小
      * @return 分页审计日志列表 */
     @GetMapping("/audit-logs")
@@ -102,10 +103,14 @@ public class AuditController {
             @RequestParam String tenantId,
             @RequestParam(required = false) String resourceType,
             @RequestParam(required = false) Long resourceId,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String actorId,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         AuditService.PageResult<AuditService.AuditLogEntry> result =
-                auditService.queryAuditLogs(tenantId, resourceType, resourceId, page - 1, size);
+                auditService.queryAuditLogs(tenantId, resourceType, resourceId, action, actorId, from, to, page - 1, size);
         return ApiResponse.ok(PageResponse.of(result.items(), result.total(), page, size));
     }
 

@@ -33,7 +33,8 @@ public interface AuditService {
      * @return 分页结果
      */
     PageResult<AuditLogEntry> queryAuditLogs(String tenantId, String resourceType,
-                                              Long resourceId, int page, int size);
+                                              Long resourceId, String action, String actorId,
+                                              String from, String to, int page, int size);
 
     /** 评估会话条目，记录一次规则评估的基本信息。 */
     record EvalSessionEntry(
