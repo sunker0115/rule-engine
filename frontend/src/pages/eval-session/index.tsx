@@ -127,7 +127,7 @@ export default function EvalSessionList() {
           onChange: (p, ps) => { setPage(p); setPageSize(ps); },
         }}
         onRow={(record) => ({
-          onClick: () => navigate(route(ROUTES.SESSION_DETAIL, { sessionId: record.sessionId })),
+          onClick: () => navigate(route(ROUTES.SESSION_DETAIL, { sessionId: record.sessionId }), { state: { session: record } }),
           style: { cursor: 'pointer' },
         })}
       />
