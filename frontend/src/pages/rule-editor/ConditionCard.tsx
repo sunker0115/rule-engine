@@ -125,11 +125,11 @@ export default function ConditionCard({
         {requiresMetric && (
           <Select
             size="small"
-            style={{ width: 80 }}
+            style={{ minWidth: 90 }}
             value={node.valueRef ?? 'METRIC'}
             onChange={(ref) => onChange({ ...node, valueRef: ref as 'METRIC' | 'PAYLOAD' })}
             options={[
-              { value: 'METRIC', label: '指标' },
+              { value: 'METRIC', label: '指标值' },
               { value: 'PAYLOAD', label: 'Payload' },
             ]}
           />
