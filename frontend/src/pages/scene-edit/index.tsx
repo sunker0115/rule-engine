@@ -14,29 +14,39 @@ import type { SceneDetail as SceneDetailType } from '@/types';
 interface FieldDef { name: string; type: string; required: boolean; sensitive: boolean; }
 const TYPE_OPTIONS = ['string', 'number', 'integer', 'boolean'].map(v => ({ value: v, label: v }));
 
-function toSchema(fields: FieldDef[]): Record<string, unknown> | null {
+// 输出格式对齐后端 PayloadFieldSpec 数组
+function toSchema(fields: FieldDef[]): Record<string, unknown>[] | null {
   if (fields.length === 0) return null;
-  const props: Record<string, unknown> = {};
-  const required: string[] = [];
-  for (const f of fields) {
-    const prop: Record<string, unknown> = { type: f.type };
-    if (f.sensitive) prop.sensitive = true;
-    props[f.name] = prop;
-    if (f.required) required.push(f.name);
-  }
-  return { type: 'object', properties: props, ...(required.length > 0 ? { required } : {}) };
+  return fields.filter(f => f.name).map(f => ({
+    name: f.name,
+    type: f.type,
+    required: f.required,
+    sensitive: f.sensitive,
+  }));
 }
 function fromSchema(schema: unknown): FieldDef[] {
-  if (!schema || typeof schema !== 'object') return [];
-  const s = schema as Record<string, unknown>;
-  const props = (s.properties ?? {}) as Record<string, { type?: string; sensitive?: boolean }>;
-  const req: string[] = (s.required as string[]) ?? [];
-  return Object.entries(props).map(([name, def]) => ({ name, type: def.type ?? 'string', required: req.includes(name), sensitive: def.sensitive === true }));
+  if (Array.isArray(schema)) {
+    return (schema as Record<string, unknown>[]).map((f: Record<string, unknown>) => ({
+      name: f.name as string ?? '',
+      type: (f.type || f.dataType) as string ?? 'string',
+      required: f.required as boolean ?? true,
+      sensitive: f.sensitive as boolean ?? false,
+    }));
+  }
+  // 兼容旧 JSON Schema 格式
+  if (schema && typeof schema === 'object') {
+    const s = schema as Record<string, unknown>;
+    const props = (s.properties ?? {}) as Record<string, { type?: string; sensitive?: boolean }>;
+    const req: string[] = (s.required as string[]) ?? [];
+    return Object.entries(props).map(([name, def]) => ({
+      name, type: def.type ?? 'string', required: req.includes(name), sensitive: def.sensitive === true,
+    }));
+  }
+  return [];
 }
 
 function PayloadSchemaEditor({ value, onChange }: { value?: unknown; onChange?: (v: Record<string, unknown> | null) => void }) {
   const [fields, setFields] = useState<FieldDef[]>(() => fromSchema(value));
-  useEffect(() => { setFields(fromSchema(value)); }, [value]);
   const update = (newFields: FieldDef[]) => { setFields(newFields); onChange?.(toSchema(newFields)); };
   return (
     <div>
@@ -68,10 +78,6 @@ function DefaultParamsEditor({ value, onChange }: { value?: unknown; onChange?: 
     const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
     return Object.entries(obj);
   });
-  useEffect(() => {
-    const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
-    setEntries(Object.entries(obj));
-  }, [value]);
   const sync = (newEntries: [string, string][]) => {
     setEntries(newEntries);
     const obj: Record<string, string> = {};
