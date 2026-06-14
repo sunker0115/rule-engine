@@ -54,22 +54,13 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
     setPairs(p => p.map(item => item.id === id ? { ...item, [field]: val } : item));
   };
 
-  /** 值类型推断：简单数字→number，true/false→boolean，null→null，其余→string */
-  const toPayloadValue = (raw: string): unknown => {
-    const v = raw.trim();
-    if (v === 'true') return true;
-    if (v === 'false') return false;
-    if (v === 'null') return null;
-    if (/^-?\d+(\.\d+)?$/.test(v)) return parseFloat(v);
-    return v;
-  };
 
   const buildRequestBody = async () => {
     const values = await form.validateFields();
     const payload: Record<string, unknown> = {};
     pairs.forEach(p => {
       if (p.key.trim()) {
-        payload[p.key.trim()] = toPayloadValue(p.value);
+        payload[p.key.trim()] = p.value;
       }
     });
     return {
@@ -99,7 +90,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
       const payload: Record<string, unknown> = {};
       pairs.forEach(p => {
         if (p.key.trim()) {
-          payload[p.key.trim()] = toPayloadValue(p.value);
+          payload[p.key.trim()] = p.value;
         }
       });
       const data = await dryRun(
