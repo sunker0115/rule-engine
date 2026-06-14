@@ -112,19 +112,13 @@ export default function SceneInfo({ scene, tenantId, onUpdated, autoEdit }: Prop
       </Form.Item>
 
       {/* payloadSchema 可视化编辑 */}
-      <Form.Item label={t('form.payloadSchema')} extra={t('form.payloadSchemaExtra')}>
-        <PayloadSchemaEditor
-          value={form.getFieldValue('payloadSchema')}
-          onChange={(v) => form.setFieldValue('payloadSchema', v)}
-        />
+      <Form.Item label={t('form.payloadSchema')} extra={t('form.payloadSchemaExtra')} name="payloadSchema">
+        <PayloadSchemaEditor />
       </Form.Item>
 
       {/* defaultParams 可视化编辑 */}
-      <Form.Item label={t('form.defaultParams')} extra={t('form.defaultParamsExtra')}>
-        <DefaultParamsEditor
-          value={form.getFieldValue('defaultParams')}
-          onChange={(v) => form.setFieldValue('defaultParams', v)}
-        />
+      <Form.Item label={t('form.defaultParams')} extra={t('form.defaultParamsExtra')} name="defaultParams">
+        <DefaultParamsEditor />
       </Form.Item>
 
       <Space>
