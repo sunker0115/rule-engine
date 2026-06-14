@@ -61,11 +61,11 @@ export default function EvalSessionList() {
       title: t('session.column.evalDuration'), dataIndex: 'evalDurationMs', key: 'evalDurationMs', width: 100,
       render: (v: number) => v != null ? v : '-',
     },
-    { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 180 },
     {
       title: t('session.column.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (v: string) => <Tag color={colorOf(SESSION_STATUS_OPTIONS, v as never)}>{labelOf(SESSION_STATUS_OPTIONS, v as never)}</Tag>,
     },
+    { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 180 },
   ];
 
   return (
