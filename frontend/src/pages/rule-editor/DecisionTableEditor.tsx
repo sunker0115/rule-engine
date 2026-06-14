@@ -118,39 +118,41 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
-              width={305}
+              width={220}
               dataIndex={`_c${ci}`}
               title={(
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <Select
                     size="small"
-                    style={{ width: 90 }}
+                    style={{ width: '100%' }}
                     value={col.valueRef ?? 'METRIC'}
                     onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
                     options={[
-                      { value: 'METRIC', label: '指标' },
-                      { value: 'PAYLOAD', label: 'Payload' },
+                      { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
+                      { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
                     ]}
                   />
                   <Select
                     size="small"
                     showSearch
-                    style={{ width: 82 }}
+                    style={{ width: '100%' }}
                     value={col.metricCode || undefined}
                     onChange={(v) => updateColumn(ci, 'metricCode', v)}
                     placeholder={t('editor.decisionTable.metric')}
                     popupMatchSelectWidth={false}
                     options={fieldOptions}
                   />
-                  <Select
-                    size="small"
-                    style={{ width: 100 }}
-                    value={col.operator || undefined}
-                    onChange={(v) => updateColumn(ci, 'operator', v)}
-                    options={opOptions}
-                  />
-                  <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                    onClick={() => removeColumn(ci)} />
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <Select
+                      size="small"
+                      style={{ flex: 1 }}
+                      value={col.operator || undefined}
+                      onChange={(v) => updateColumn(ci, 'operator', v)}
+                      options={opOptions}
+                    />
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                      onClick={() => removeColumn(ci)} />
+                  </div>
                 </div>
               )}
               render={(val: unknown, _: unknown, ri: number) => (
