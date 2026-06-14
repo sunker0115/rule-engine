@@ -45,7 +45,6 @@ export function getSceneColumns(t: (key: string) => string, tc: (key: string) =>
         <Space>
           <Link to={route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })} onClick={e => e.stopPropagation()}>详情</Link>
           <Link to={route(ROUTES.SCENE_EDIT, { sceneCode: record.sceneCode })} onClick={e => e.stopPropagation()}>编辑</Link>
-          <Link to={route(ROUTES.SCENE_RULES, { sceneCode: record.sceneCode })} onClick={e => e.stopPropagation()}>规则</Link>
         </Space>
       ),
     },
