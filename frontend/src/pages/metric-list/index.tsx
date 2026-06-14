@@ -37,7 +37,7 @@ export default function MetricList() {
     const values = await form.validateFields();
     setConfirmLoading(true);
     try {
-      await createMetric(currentId!, values.metricCode, { ...values, tenantId: currentId });
+      await createMetric(tenantId, values.metricCode, { ...values, tenantId });
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
