@@ -80,7 +80,6 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
       eventId: `dry-${Date.now()}`,
       occurredAt: new Date().toISOString(),
       payload,
-      queryParams: { ruleVersionId, ruleId },
     };
   };
 
