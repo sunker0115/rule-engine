@@ -75,6 +75,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
             label: t('detail.basicInfo'),
             children: (
               <Descriptions column={1} size="small" bordered>
+                <Descriptions.Item label={t('column.code')}>{detail.code}</Descriptions.Item>
                 <Descriptions.Item label={tc('label.name')}>{detail.name}</Descriptions.Item>
                 <Descriptions.Item label={t('column.kind')}><Tag>{detail.kind}</Tag></Descriptions.Item>
                 <Descriptions.Item label={t('detail.label.scene')}>{detail.sceneCode}</Descriptions.Item>
