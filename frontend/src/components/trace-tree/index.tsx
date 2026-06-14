@@ -72,7 +72,7 @@ export default function TraceTree({ nodes }: TraceTreeProps) {
   };
 
   if (!nodes || nodes.length === 0) {
-    return <div style={{ color: '#999' }}>无 Trace 数据</div>;
+    return <div style={{ color: '#999' }}>{t('trace.noData')}</div>;
   }
 
   return (

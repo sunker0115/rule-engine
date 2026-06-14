@@ -47,6 +47,13 @@ const evalLoc: EvalTranslation = {
       traceTree: 'Trace 树',
       hitRules: '命中规则',
       contextSnapshot: '上下文快照',
+      notFound: '会话不存在',
+      blockedBy: '拦截原因',
+      errorCode: '错误码',
+      score: '评分',
+      category: '分类',
+      startedAt: '开始时间',
+      finishedAt: '结束时间',
     },
   },
   trace: {
@@ -58,6 +65,7 @@ const evalLoc: EvalTranslation = {
     nodeSkipped: '短路跳过',
     nodeError: '错误',
     preGateBlocked: 'Pre-Gate 拦截',
+    noData: '无 Trace 数据',
   },
 };
 

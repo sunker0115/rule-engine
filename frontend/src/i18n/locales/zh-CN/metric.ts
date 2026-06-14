@@ -55,7 +55,8 @@ const metric: MetricTranslation = {
     breakingChangeTitle: '破坏性变更',
     breakingChangeContent: 'sourceType 或 dataType 变更将产生新版本，已有规则仍绑定旧版本。确认继续？',
   },
-  detail: { notFound: 'Metric 不存在' },
+  searchPlaceholder: '搜索名称或编码',
+  detail: { basicInfo: '基本信息', version: '版本', notFound: 'Metric 不存在' },
   impact: {
     column: { ruleCode: '规则 Code', ruleName: '规则名称', sceneCode: 'Scene', status: '状态' },
   },

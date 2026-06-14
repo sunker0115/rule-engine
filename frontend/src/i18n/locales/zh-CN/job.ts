@@ -4,6 +4,7 @@ const job: JobTranslation = {
   title: { list: 'Job 管理', detail: 'Job 详情' },
   notice: 'Job 由后端 @RuleJob 注解定义，此处仅管理（启用/禁用/手动触发/查看执行记录），不支持创建或编辑 Job 定义。',
   action: { trigger: '手动触发', viewDetail: '查看详情', enable: '启用', disable: '禁用' },
+  triggerSuccess: 'Job 已触发',
   column: {
     name: '名称',
     code: 'Code',

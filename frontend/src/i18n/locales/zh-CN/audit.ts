@@ -31,7 +31,7 @@ const audit: AuditTranslation = {
     },
     targetType: { RULE: '规则', SCENE: '场景', METRIC: '指标', DECISION: '决策', JOB: 'Job' },
   },
-  diff: { before: '变更前', after: '变更后', expand: '展开详情' },
+  diff: { before: '变更前', after: '变更后', expand: '展开详情', noDiff: '无差异', renderError: '差异渲染失败', calcError: '差异计算失败', noSnapshot: '无快照数据' },
 };
 
 export default audit;

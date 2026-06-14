@@ -48,9 +48,9 @@ export default function EvalSessionList() {
     { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 60 },
     { title: t('session.column.eventId'), dataIndex: 'eventId', key: 'eventId', width: 180, ellipsis: true },
     { title: t('session.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode', width: 100 },
-    { title: '主体', dataIndex: 'subjectId', key: 'subjectId', width: 100 },
-    { title: '来源', dataIndex: 'source', key: 'source', width: 60 },
-    { title: '模式', dataIndex: 'mode', key: 'mode', width: 60 },
+    { title: t('session.column.subjectId'), dataIndex: 'subjectId', key: 'subjectId', width: 100 },
+    { title: t('session.column.source'), dataIndex: 'source', key: 'source', width: 60 },
+    { title: t('session.column.mode'), dataIndex: 'mode', key: 'mode', width: 60 },
     {
       title: t('session.column.finalDecision'), dataIndex: 'finalDecision', key: 'finalDecision', width: 100,
       render: (v: string) => v || '-',
@@ -71,7 +71,7 @@ export default function EvalSessionList() {
       <h2 style={{ marginBottom: 16 }}>{t('title.sessionList')}</h2>
       <Space style={{ marginBottom: 16 }}>
         <Select
-          placeholder="租户"
+          placeholder={tc('label.tenant')}
           value={tenantFilter}
           onChange={setTenantFilter}
           allowClear
@@ -97,7 +97,7 @@ export default function EvalSessionList() {
           pageSize,
           total,
           showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 条`,
+          showTotal: (total) => tc('label.paginationTotal', { total }),
           onChange: (p, ps) => { setPage(p); setPageSize(ps); },
         }}
         onRow={(record) => ({

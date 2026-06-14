@@ -80,7 +80,7 @@ export default function JobDetail() {
             pageSize,
             total,
             showSizeChanger: true,
-            showTotal: (t) => `共 ${t} 条`,
+            showTotal: (total) => tc('label.paginationTotal', { total }),
             onChange: (p, ps) => { setPage(p); setPageSize(ps); },
           }}
         />

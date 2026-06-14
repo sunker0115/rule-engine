@@ -54,7 +54,7 @@ export default function MetricList() {
       params: { tenantId, enable: enabled },
       headers: { 'X-Actor-Id': localStorage.getItem('actorId') || 'anonymous' },
     });
-    message.success(enabled ? '已启用' : '已禁用');
+    message.success(enabled ? tc('message.enabled') : tc('message.disabled'));
     load();
   };
 
@@ -106,7 +106,7 @@ export default function MetricList() {
     </div>
     <Space style={{ marginBottom: 16 }}>
       <Select
-        placeholder="租户"
+        placeholder={tc('label.tenant')}
         value={tenantFilter}
         onChange={setTenantFilter}
         allowClear
@@ -115,7 +115,7 @@ export default function MetricList() {
       />
       <Input
         prefix={<SearchOutlined />}
-        placeholder="搜索名称或编码"
+        placeholder={t('searchPlaceholder')}
         value={keyword}
         onChange={(e) => setKeyword(e.target.value)}
         allowClear

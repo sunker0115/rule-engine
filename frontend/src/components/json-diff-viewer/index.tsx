@@ -21,30 +21,30 @@ export default function JsonDiffViewer({ before, after }: JsonDiffViewerProps) {
     try {
       const delta = diff(before, after);
       if (!delta) {
-        containerRef.current.innerHTML = '<div style="color:#999;padding:8px">无差异</div>';
+        containerRef.current.innerHTML = `<div style="color:#999;padding:8px">${t('diff.noDiff')}</div>`;
         return;
       }
       // jsondiffpatch 的 formatters.html 渲染
       // 动态引入 html formatter
       import('jsondiffpatch/formatters/html').then(({ format: htmlFormat }) => {
         if (containerRef.current) {
-          containerRef.current.innerHTML = htmlFormat(delta, before) ?? '<div style="color:#999;padding:8px">无差异</div>';
+          containerRef.current.innerHTML = htmlFormat(delta, before) ?? `<div style="color:#999;padding:8px">${t('diff.noDiff')}</div>`;
         }
       }).catch(() => {
         if (containerRef.current) {
-          containerRef.current.innerHTML = '<div style="color:red;padding:8px">差异渲染失败</div>';
+          containerRef.current.innerHTML = `<div style="color:red;padding:8px">${t('diff.renderError')}</div>`;
         }
       });
     } catch {
       if (containerRef.current) {
-        containerRef.current.innerHTML = '<div style="color:red;padding:8px">差异计算失败</div>';
+        containerRef.current.innerHTML = `<div style="color:red;padding:8px">${t('diff.calcError')}</div>`;
       }
     }
   }, [before, after]);
 
   // 降级：side-by-side JSON 展示
   if (!before && !after) {
-    return <div style={{ color: '#999' }}>无快照数据</div>;
+    return <div style={{ color: '#999' }}>{t('diff.noSnapshot')}</div>;
   }
 
   return (

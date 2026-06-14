@@ -64,7 +64,7 @@ export default function AuditLogList() {
       <h2 style={{ marginBottom: 16 }}>{t('title.list')}</h2>
       <Space style={{ marginBottom: 16 }} wrap>
         <Select
-          placeholder="租户"
+          placeholder={tc('label.tenant')}
           value={tenantFilter}
           onChange={setTenantFilter}
           allowClear
@@ -121,7 +121,7 @@ export default function AuditLogList() {
           pageSize,
           total,
           showSizeChanger: true,
-          showTotal: (total) => `共 ${total} 条`,
+          showTotal: (total) => tc('label.paginationTotal', { total }),
           onChange: (p, ps) => { setPage(p); setPageSize(ps); },
         }}
         expandable={{

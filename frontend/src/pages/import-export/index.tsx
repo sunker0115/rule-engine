@@ -41,7 +41,7 @@ export default function ImportExport() {
       a.download = `rule-export-${currentId}-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      message.success('下载完成');
+      message.success(t('export.downloadComplete'));
     } finally {
       setExporting(false);
     }
@@ -72,7 +72,7 @@ export default function ImportExport() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setImportResult(res.data);
-      message.success('导入完成');
+      message.success(t('import.importComplete'));
     } finally {
       setImporting(false);
     }
@@ -109,7 +109,7 @@ export default function ImportExport() {
                 {exportScope === 'byScene' && (
                   <div style={{ marginBottom: 16 }}>
                     <Input
-                      placeholder="Scene Code"
+                      placeholder={t('export.sceneCodePlaceholder')}
                       value={exportScene}
                       onChange={(e) => setExportScene(e.target.value)}
                       style={{ width: 200 }}
@@ -119,7 +119,7 @@ export default function ImportExport() {
                 {exportScope === 'byRuleIds' && (
                   <div style={{ marginBottom: 16 }}>
                     <Input
-                      placeholder="1,2,3"
+                      placeholder={t('export.ruleIdsPlaceholder')}
                       value={exportRuleIds}
                       onChange={(e) => setExportRuleIds(e.target.value)}
                       style={{ width: 300 }}

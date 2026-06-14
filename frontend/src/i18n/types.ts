@@ -35,6 +35,7 @@ export interface CommonTranslation {
     all: string;
     tenant: string;
     searchPlaceholder: string;
+    paginationTotal: string;
   };
   enum: {
     status: { ACTIVE: string; DISABLED: string };
@@ -168,7 +169,8 @@ export interface MetricTranslation {
     breakingChangeTitle: string;
     breakingChangeContent: string;
   };
-  detail: { notFound: string };
+  searchPlaceholder: string;
+  detail: { basicInfo: string; version: string; notFound: string };
   impact: {
     column: { ruleCode: string; ruleName: string; sceneCode: string; status: string };
   };
@@ -265,12 +267,16 @@ export interface EvalTranslation {
     detail: {
       basicInfo: string; traceTree: string; hitRules: string;
       contextSnapshot: string;
+      notFound: string;
+      blockedBy: string; errorCode: string; score: string; category: string;
+      startedAt: string; finishedAt: string;
     };
   };
   trace: {
     expandAll: string; collapseAll: string; copyJson: string;
     nodeSatisfied: string; nodeUnsatisfied: string; nodeSkipped: string; nodeError: string;
     preGateBlocked: string;
+    noData: string;
   };
 }
 
@@ -292,7 +298,7 @@ export interface AuditTranslation {
     };
     targetType: { RULE: string; SCENE: string; METRIC: string; DECISION: string; JOB: string };
   };
-  diff: { before: string; after: string; expand: string };
+  diff: { before: string; after: string; expand: string; noDiff: string; renderError: string; calcError: string; noSnapshot: string };
 }
 
 // ===== job 命名空间 =====
@@ -300,6 +306,7 @@ export interface JobTranslation {
   title: { list: string; detail: string };
   notice: string;
   action: { trigger: string; viewDetail: string; enable: string; disable: string };
+  triggerSuccess: string;
   column: {
     name: string; code: string; sceneCode: string; eventType: string;
     cronExpr: string; status: string; subjectQueryType: string; actions: string;
@@ -325,11 +332,13 @@ export interface ImportExportTranslation {
   export: {
     scope: string; byRuleIds: string; byScene: string; all: string;
     download: string; summary: string;
+    downloadComplete: string; sceneCodePlaceholder: string; ruleIdsPlaceholder: string;
   };
   import: {
     upload: string; uploadHint: string;
     preview: string; previewTitle: string;
     existing: string; newDraft: string; skip: string; review: string;
+    importComplete: string;
     execute: string;
     result: {
       title: string; rulesImported: string; scenesCreated: string;

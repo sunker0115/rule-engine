@@ -30,6 +30,7 @@ const common: CommonTranslation = {
     all: '全部',
     tenant: '租户',
     searchPlaceholder: '搜索 Code 或名称',
+    paginationTotal: '共 {{total}} 条',
   },
   enum: {
     status: { ACTIVE: '启用', DISABLED: '禁用' },

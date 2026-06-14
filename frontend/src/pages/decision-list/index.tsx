@@ -67,7 +67,7 @@ export default function DecisionList() {
     </div>
     <Space style={{ marginBottom: 16 }}>
       <Select
-        placeholder="租户"
+        placeholder={tc('label.tenant')}
         value={tenantFilter}
         onChange={setTenantFilter}
         allowClear
@@ -78,7 +78,7 @@ export default function DecisionList() {
     <Table
       columns={getDecisionColumns(t, tc, async (code, enabled) => {
         await updateDecision(tenantId, code, { status: enabled ? 'ACTIVE' : 'DISABLED' });
-        message.success(enabled ? '已启用' : '已禁用');
+        message.success(enabled ? tc('message.enabled') : tc('message.disabled'));
         load();
       })}
       dataSource={decisions}

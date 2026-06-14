@@ -36,7 +36,7 @@ export default function EvalSessionDetail() {
   }, [currentId, sessionId]);
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!session) return <div>会话不存在</div>;
+  if (!session) return <div>{t('session.detail.notFound')}</div>;
 
   const tabItems = [
     {
@@ -57,24 +57,24 @@ export default function EvalSessionDetail() {
           <Descriptions.Item label={t('session.column.sessionId')}>{session.sessionId}</Descriptions.Item>
           <Descriptions.Item label={t('session.column.eventId')}>{session.eventId}</Descriptions.Item>
           <Descriptions.Item label={t('session.column.sceneCode')}>{session.sceneCode}</Descriptions.Item>
-          <Descriptions.Item label="事件类型">{session.eventType || '-'}</Descriptions.Item>
-          <Descriptions.Item label="主体ID">{session.subjectId || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('session.column.eventType')}>{session.eventType || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('session.column.subjectId')}>{session.subjectId || '-'}</Descriptions.Item>
           <Descriptions.Item label={t('session.column.status')}>
             <Tag color={colorOf(SESSION_STATUS_OPTIONS, session.status)}>
               {labelOf(SESSION_STATUS_OPTIONS, session.status)}
             </Tag>
           </Descriptions.Item>
-          <Descriptions.Item label="来源">{session.source || '-'}</Descriptions.Item>
-          <Descriptions.Item label="模式">{session.mode || '-'}</Descriptions.Item>
-          <Descriptions.Item label="决策结果">{session.finalDecision || '-'}</Descriptions.Item>
-          {session.blockedBy && <Descriptions.Item label="拦截原因">{session.blockedBy}</Descriptions.Item>}
-          {session.errorCode && <Descriptions.Item label="错误码"><Tag color="red">{session.errorCode}</Tag></Descriptions.Item>}
-          {session.score != null && <Descriptions.Item label="评分">{session.score}</Descriptions.Item>}
-          {session.category && <Descriptions.Item label="分类">{session.category}</Descriptions.Item>}
-          <Descriptions.Item label="耗时(ms)">{session.evalDurationMs}</Descriptions.Item>
-          <Descriptions.Item label="业务时间">{session.occurredAt || '-'}</Descriptions.Item>
-          <Descriptions.Item label="开始时间">{session.startedAt || '-'}</Descriptions.Item>
-          <Descriptions.Item label="结束时间">{session.finishedAt || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('session.column.source')}>{session.source || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('session.column.mode')}>{session.mode || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('session.column.finalDecision')}>{session.finalDecision || '-'}</Descriptions.Item>
+          {session.blockedBy && <Descriptions.Item label={t('session.detail.blockedBy')}>{session.blockedBy}</Descriptions.Item>}
+          {session.errorCode && <Descriptions.Item label={t('session.detail.errorCode')}><Tag color="red">{session.errorCode}</Tag></Descriptions.Item>}
+          {session.score != null && <Descriptions.Item label={t('session.detail.score')}>{session.score}</Descriptions.Item>}
+          {session.category && <Descriptions.Item label={t('session.detail.category')}>{session.category}</Descriptions.Item>}
+          <Descriptions.Item label={t('session.column.evalDuration')}>{session.evalDurationMs}</Descriptions.Item>
+          <Descriptions.Item label={t('session.column.occurredAt')}>{session.occurredAt || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('session.detail.startedAt')}>{session.startedAt || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('session.detail.finishedAt')}>{session.finishedAt || '-'}</Descriptions.Item>
         </Descriptions>
       </Card>
       <Tabs items={tabItems} />

@@ -12,6 +12,7 @@ export default function JobList() {
   const navigate = useNavigate();
   const { currentId } = useTenantStore();
   const { t } = useTranslation('job');
+  const tc = useTranslation('common').t;
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState<number | null>(null);
@@ -38,7 +39,7 @@ export default function JobList() {
         setTriggering(job.id);
         try {
           await triggerJob(currentId, job.id);
-          message.success('Job 已触发');
+          message.success(t('triggerSuccess'));
         } finally {
           setTriggering(null);
         }
@@ -62,8 +63,8 @@ export default function JobList() {
       render: (v: string, record: JobItem) => (
         <Switch
           checked={v === 'ACTIVE'}
-          checkedChildren="启用"
-          unCheckedChildren="禁用"
+          checkedChildren={tc('message.enabled')}
+          unCheckedChildren={tc('message.disabled')}
           onChange={(checked) => handleStatusToggle(record, checked)}
         />
       ),

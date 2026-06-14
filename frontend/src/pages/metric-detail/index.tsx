@@ -69,7 +69,7 @@ export default function MetricDetail() {
   };
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
-  if (!metric) return <div>Metric 不存在</div>;
+  if (!metric) return <div>{t('detail.notFound')}</div>;
 
   const impactColumns: ColumnsType<AffectedRule> = [
     { title: t('impact.column.ruleCode'), dataIndex: 'ruleCode', key: 'ruleCode' },
@@ -84,7 +84,7 @@ export default function MetricDetail() {
   const tabItems = [
     {
       key: 'info',
-      label: '基本信息',
+      label: t('detail.basicInfo'),
       children: editing ? (
         <Form form={form} layout="vertical">
           <Form.Item name="metricCode" label={t('form.code')}><Input disabled /></Form.Item>
@@ -102,7 +102,7 @@ export default function MetricDetail() {
             <Descriptions.Item label={t('form.name')}>{metric.name}</Descriptions.Item>
             <Descriptions.Item label={t('form.sourceType')}>{metric.sourceType}</Descriptions.Item>
             <Descriptions.Item label={t('form.dataType')}>{metric.dataType}</Descriptions.Item>
-            <Descriptions.Item label="版本">{metric.metricVersion}</Descriptions.Item>
+            <Descriptions.Item label={t('detail.version')}>{metric.metricVersion}</Descriptions.Item>
             <Descriptions.Item label={t('form.cacheTtl')}>{metric.cacheTtlSeconds}</Descriptions.Item>
             <Descriptions.Item label={t('form.allowProvided')}>{metric.allowProvided ? tc('label.yes') : tc('label.no')}</Descriptions.Item>
           </Descriptions>
