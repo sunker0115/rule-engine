@@ -74,15 +74,13 @@ function PayloadSchemaEditor({ value, onChange }: { value?: unknown; onChange?: 
 
 // ---- defaultParams 编辑器 ----
 function DefaultParamsEditor({ value, onChange }: { value?: unknown; onChange?: (v: Record<string, string> | null) => void }) {
-  const [entries, setEntries] = useState<[string, string][]>(() => {
-    const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
-    return Object.entries(obj);
-  });
+  const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
+  const entries: [string, string][] = Object.entries(obj);
+
   const sync = (newEntries: [string, string][]) => {
-    setEntries(newEntries);
-    const obj: Record<string, string> = {};
-    for (const [k, v] of newEntries) if (k) obj[k] = v;
-    onChange?.(Object.keys(obj).length > 0 ? obj : null);
+    const next: Record<string, string> = {};
+    for (const [k, v] of newEntries) if (k) next[k] = v;
+    onChange?.(Object.keys(next).length > 0 ? next : null);
   };
   return (
     <div>
