@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, message, Space } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -9,7 +9,7 @@ import { getMetricColumns } from '@/config/columns/metric';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import { ROUTES, route } from '@/constants/routes';
-import { SOURCE_TYPE_OPTIONS, DATA_TYPE_OPTIONS } from '@/constants/enums';
+import { SOURCE_TYPE_OPTIONS, DATA_TYPE_OPTIONS, STATUS_OPTIONS } from '@/constants/enums';
 import type { MetricDescriptor, SourceType } from '@/types';
 
 export default function MetricList() {
@@ -21,6 +21,8 @@ export default function MetricList() {
   const [metrics, setMetrics] = useState<MetricDescriptor[]>([]);
   const tenantId = tenantFilter ?? currentId ?? 0;
   const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [form] = Form.useForm();
@@ -34,6 +36,18 @@ export default function MetricList() {
   };
 
   useEffect(() => { load(); }, [tenantId]);
+
+  const dataSource = useMemo(() => {
+    let result = metrics;
+    if (keyword.trim()) {
+      const kw = keyword.toLowerCase();
+      result = result.filter((m) => m.metricCode.toLowerCase().includes(kw) || (m.name ?? '').toLowerCase().includes(kw));
+    }
+    if (statusFilter) {
+      result = result.filter((m) => m.status === statusFilter);
+    }
+    return result;
+  }, [metrics, keyword, statusFilter]);
 
   const handleToggleStatus = async (code: string, enabled: boolean) => {
     await apiClient.put(ENDPOINTS.METRIC_TOGGLE_STATUS(code), null, {
@@ -97,10 +111,26 @@ export default function MetricList() {
         onChange={setTenantFilter}
         allowClear
         options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
-        style={{ width: 200 }}
+        style={{ width: 180 }}
+      />
+      <Input
+        prefix={<SearchOutlined />}
+        placeholder="搜索名称或编码"
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+        allowClear
+        style={{ width: 220 }}
+      />
+      <Select
+        placeholder={tc('label.status')}
+        value={statusFilter}
+        onChange={setStatusFilter}
+        allowClear
+        options={[...STATUS_OPTIONS]}
+        style={{ width: 120 }}
       />
     </Space>
-    <Table columns={getMetricColumns(t, tc, handleToggleStatus)} dataSource={metrics} rowKey="metricCode" loading={loading}
+    <Table columns={getMetricColumns(t, tc, handleToggleStatus)} dataSource={dataSource} rowKey="metricCode" loading={loading}
       onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
     <Modal title={t('action.create')} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>
       <Form form={form} layout="vertical">

@@ -34,6 +34,8 @@ export function getSceneColumns(t: (key: string) => string, tc: (key: string) =>
         />
       ),
     },
+    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
     {
       title: t('column.actions'),
       key: 'actions',
@@ -44,7 +46,5 @@ export function getSceneColumns(t: (key: string) => string, tc: (key: string) =>
         </Space>
       ),
     },
-    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
-    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
   ];
 }
