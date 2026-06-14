@@ -27,7 +27,7 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
     }
   };
 
-  useEffect(() => { load(); }, [eventType, sceneCode, tenantCode]);
+  useEffect(() => { if (eventType) load(); else setFields([]); }, [eventType, sceneCode, tenantCode]);
 
   const columns: ColumnsType<InputFieldItem> = [
     { title: t('inputManifest.column.name'), dataIndex: 'name', key: 'name' },
@@ -64,9 +64,13 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
           style={{ width: 240 }}
         />
       </div>
-      <Spin spinning={loading}>
-        <Table columns={columns} dataSource={fields} rowKey="name" pagination={false} size="small" />
-      </Spin>
+      {!eventType ? (
+        <Alert type="warning" message="请先选择事件类型" style={{ marginTop: 8 }} />
+      ) : (
+        <Spin spinning={loading}>
+          <Table columns={columns} dataSource={fields} rowKey="name" pagination={false} size="small" />
+        </Spin>
+      )}
       {fields.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <Typography.Title level={5}>{t('inputManifest.exampleTitle')}</Typography.Title>
