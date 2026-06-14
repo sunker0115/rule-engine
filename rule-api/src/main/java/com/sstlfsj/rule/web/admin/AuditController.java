@@ -12,7 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -47,15 +47,16 @@ public class AuditController {
      * @param sessionId 评估会话 ID @param tenantId 租户
      * @return 会话详情；不存在返回 404 */
     @GetMapping("/evaluation-sessions/{sessionId}")
-    public ApiResponse<AuditService.EvalSessionEntry> getSession(
+    public ResponseEntity<ApiResponse<AuditService.EvalSessionEntry>> getSession(
             @PathVariable Long sessionId,
             @RequestParam String tenantId) {
         AuditService.EvalSessionEntry session = auditService.getSession(tenantId, sessionId);
         if (session == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "会话不存在: sessionId=" + sessionId + ", tenantId=" + tenantId);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("NOT_FOUND",
+                            "会话不存在: sessionId=" + sessionId + ", tenantId=" + tenantId));
         }
-        return ApiResponse.ok(session);
+        return ResponseEntity.ok(ApiResponse.ok(session));
     }
 
     /** GET /admin/v1/evaluation-sessions/{sessionId}/trace — 查询评估节点 trace
