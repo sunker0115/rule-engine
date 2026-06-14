@@ -37,7 +37,7 @@ export default function SceneInfo({ scene }: Props) {
             size="small"
             pagination={false}
             columns={[
-              { title: '字段名', dataIndex: 'name', key: 'name' },
+              { title: '字段名', dataIndex: 'name', key: 'name', width: 150 },
               { title: '类型', dataIndex: 'type', key: 'type', width: 100 },
               { title: '必填', dataIndex: 'required', key: 'required', width: 60, render: (v: boolean) => v ? '是' : '否' },
               { title: '敏感', dataIndex: 'sensitive', key: 'sensitive', width: 60, render: (v: boolean) => v ? '是' : '否' },
