@@ -131,14 +131,36 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
       <Form.Item name="description" label={t('form.description')}>
         <Input.TextArea rows={2} />
       </Form.Item>
-      <Form.Item name="payloadSchema" label={t('form.payloadSchema')} extra={t('form.payloadSchemaExtra')}>
-        <Input.TextArea rows={8} style={{ fontFamily: 'monospace' }} />
-      </Form.Item>
       <Form.Item name="eventTypes" label={t('form.eventTypes')}>
         <Select mode="tags" placeholder={t('form.eventTypesPlaceholder')} />
       </Form.Item>
-      <Form.Item name="defaultParams" label={t('form.defaultParams')} extra={t('form.defaultParamsExtra')}>
-        <Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} />
+      <Form.Item
+        label={t('form.payloadSchema')}
+        extra={t('form.payloadSchemaExtra')}
+        validateTrigger="onBlur"
+        rules={[{
+          validator: (_, value) => {
+            if (!value) return Promise.resolve();
+            try { JSON.parse(value); return Promise.resolve(); }
+            catch { return Promise.reject('JSON 格式错误'); }
+          },
+        }]}
+      >
+        <Input.TextArea rows={8} style={{ fontFamily: 'monospace' }} placeholder='{"type":"object","properties":{"amount":{"type":"number"}}}' />
+      </Form.Item>
+      <Form.Item
+        label={t('form.defaultParams')}
+        extra={t('form.defaultParamsExtra')}
+        validateTrigger="onBlur"
+        rules={[{
+          validator: (_, value) => {
+            if (!value) return Promise.resolve();
+            try { JSON.parse(value); return Promise.resolve(); }
+            catch { return Promise.reject('JSON 格式错误'); }
+          },
+        }]}
+      >
+        <Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} placeholder='{"timezone":"Asia/Shanghai"}' />
       </Form.Item>
       <Space>
         <Button type="primary" onClick={handleSave} loading={saving}>{tc('button.save')}</Button>
