@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Descriptions, Button, Space, Tag, Timeline, message, Popconfirm } from 'antd';
-import { useTranslation } from 'react-i18next';
+import { Descriptions, Button, Space, Tag, Timeline, message, Popconfirm, Divider } from 'antd';import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, enableRule, newVersion } from '@/api/rule';
@@ -77,32 +76,40 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         </Descriptions.Item>
       </Descriptions>
 
-      <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        {/* 编辑区 */}
         {isDraft && (
-          <Button type="primary" block onClick={handleSaveDraft} loading={saving} disabled={!dirty}>
+          <Button type="primary" block onClick={handleSaveDraft} loading={saving} disabled={!dirty} style={{ marginBottom: 8 }}>
             {t('action.saveDraft')}
           </Button>
         )}
-        <Button block onClick={onOpenDryRun}>{t('action.dryRun')}</Button>
+        {(isPublished || isDisabled) && !hasDraft && (
+          <Button block onClick={handleNewVersion} style={{ marginBottom: 8 }}>{t('action.newVersion')}</Button>
+        )}
+
+        <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>测试与发布</Divider>
+
+        <Button block onClick={onOpenDryRun} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
         {hasDraft && (
           <Popconfirm title={t('version.publishConfirm').replace('{version}', '?')} onConfirm={handlePublish}>
-            <Button type="primary" block style={{ background: '#52c41a', borderColor: '#52c41a' }}>
+            <Button type="primary" block style={{ background: '#52c41a', borderColor: '#52c41a', marginBottom: 8 }}>
               {t('action.publish')}
             </Button>
           </Popconfirm>
         )}
-        {(isPublished || isDisabled) && !hasDraft && (
-          <Button block onClick={handleNewVersion}>{t('action.newVersion')}</Button>
+
+        {(isPublished || isDisabled) && (
+          <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>管理</Divider>
         )}
         {isPublished && (
           <Popconfirm title={t('version.disableConfirm')} onConfirm={handleDisable}>
-            <Button danger block>{t('action.disable')}</Button>
+            <Button danger block style={{ marginBottom: 8 }}>{t('action.disable')}</Button>
           </Popconfirm>
         )}
         {isDisabled && (
           <Button block onClick={handleEnable}>{t('action.enable')}</Button>
         )}
-      </Space>
+      </div>
 
       <h4>{t('editor.leftPanel.versionTimeline')}</h4>
       <Timeline
