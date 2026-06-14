@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
-import type { SceneMetadata as SceneMetadataType, ScorecardRootNode, IfNode, AstNode } from '@/types';
+import type { SceneMetadata as SceneMetadataType, ScorecardRootNode, IfNode, DecisionTableNode, AstNode } from '@/types';
 import ConditionTreeEditor from './ConditionTreeEditor';
 import ScorecardEditor from './ScorecardEditor';
 import DecisionTreeEditor from './DecisionTreeEditor';
+import DecisionTableEditor from './DecisionTableEditor';
 
 interface Props { metadata: SceneMetadataType | null; }
 
@@ -56,7 +57,22 @@ export default function CenterPanel({ metadata }: Props) {
     );
   }
 
-  // DECISION_TABLE / EXPRESSION_SCRIPT / 未知: 占位
+  // DECISION_TABLE: 决策表
+  if (kind === 'DECISION_TABLE') {
+    const tableNode: DecisionTableNode = (ast?.type === 'DecisionTableNode')
+      ? ast
+      : { type: 'DecisionTableNode', columns: [], rows: [] };
+    return (
+      <DecisionTableEditor
+        node={tableNode}
+        conditionTypes={shared.conditionTypes}
+        availableMetrics={shared.availableMetrics}
+        onChange={(node) => setAst(node as AstNode)}
+      />
+    );
+  }
+
+  // EXPRESSION_SCRIPT / 未知: 占位
   return (
     <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
       {t('editor.centerPanel.placeholder')} ({kind})
