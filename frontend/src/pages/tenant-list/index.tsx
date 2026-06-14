@@ -53,17 +53,16 @@ export default function TenantList() {
     { title: 'Code', dataIndex: 'code', key: 'code' },
     { title: '名称', dataIndex: 'name', key: 'name' },
     {
-      title: '状态', dataIndex: 'status', key: 'status', width: 100,
-      render: (v: string) => <Tag color={colorOf(STATUS_OPTIONS, v as never)}>{v}</Tag>,
-    },
-    {
-      title: '操作', key: 'actions', width: 80,
-      render: (_: unknown, r: TenantRow) => (
-        <Switch
-          checked={r.status === 'ACTIVE'}
-          onChange={(enabled) => toggleStatus(r.id, enabled)}
-          size="small"
-        />
+      title: '状态', dataIndex: 'status', key: 'status', width: 120,
+      render: (v: string, r: TenantRow) => (
+        <Space size={4}>
+          <Switch
+            checked={v === 'ACTIVE'}
+            onChange={(enabled) => toggleStatus(r.id, enabled)}
+            size="small"
+          />
+          <Tag color={colorOf(STATUS_OPTIONS, v as never)}>{v}</Tag>
+        </Space>
       ),
     },
   ];
