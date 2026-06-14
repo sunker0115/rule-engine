@@ -67,9 +67,14 @@ export default function DecisionBindingEditor({ kind, value = [], onChange }: Pr
           <Button icon={<DeleteOutlined />} size="small" onClick={() => handleRemove(i)} />
         </Space>
       ))}
-      <Button type="dashed" icon={<PlusOutlined />} onClick={handleAdd} block>
-        {t('decisionBinding.addButton')}
-      </Button>
+      {(kind !== 'AST_BOOLEAN' || value.length === 0) && (
+        <Button type="dashed" icon={<PlusOutlined />} onClick={handleAdd} block>
+          {t('decisionBinding.addButton')}
+        </Button>
+      )}
+      {kind === 'AST_BOOLEAN' && value.length >= 1 && (
+        <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>AST_BOOLEAN 仅支持绑定一个 Decision</div>
+      )}
     </div>
   );
 }
