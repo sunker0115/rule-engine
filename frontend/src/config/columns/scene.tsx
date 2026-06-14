@@ -27,18 +27,22 @@ export function getSceneColumns(onToggleStatus?: (code: string, enabled: boolean
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (v: string) => <Tag color={colorOf(STATUS_OPTIONS, v as never)}>{v}</Tag>,
+      render: (v: string, record: SceneListItem) => (
+        <Space size={4}>
+          <Switch
+            checked={v === 'ACTIVE'}
+            onChange={(enabled) => onToggleStatus?.(record.sceneCode, enabled)}
+            size="small"
+          />
+          <Tag color={colorOf(STATUS_OPTIONS, v as never)}>{v}</Tag>
+        </Space>
+      ),
     },
     {
       title: '操作',
       key: 'actions',
       render: (_: unknown, record: SceneListItem) => (
         <Space>
-          <Switch
-            checked={record.status === 'ACTIVE'}
-            onChange={(enabled) => onToggleStatus?.(record.sceneCode, enabled)}
-            size="small"
-          />
           <Link to={route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })}>详情</Link>
           <Link to={route(ROUTES.SCENE_RULES, { sceneCode: record.sceneCode })}>规则</Link>
         </Space>
