@@ -4,16 +4,14 @@ export type RuleKind = 'AST_BOOLEAN' | 'SCORECARD' | 'DECISION_TREE' | 'DECISION
 export type RuleStatus = 'DRAFT' | 'PUBLISHED' | 'DISABLED';
 export type VersionStatus = 'DRAFT' | 'ACTIVE' | 'SUPERSEDED';
 
+/** 规则列表项——字段对齐 GET /admin/v1/rules 实际响应 */
 export interface RuleListItem {
   ruleDefinitionId: number;
   code: string;
   name: string;
-  kind: RuleKind;
-  sceneCode: string;
   status: RuleStatus;
-  currentVersion?: number;
-  publishedAt?: string;
-  createdAt: string;
+  currentVersion?: number | null;
+  publishedAt?: string | null;
 }
 
 export interface RuleDetail extends RuleListItem {

@@ -10,18 +10,21 @@ import { ROUTES, route } from '@/constants/routes';
 import type { RuleListItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
+interface RuleWithScene extends RuleListItem {
+  _sceneCode: string;
+}
+
 export default function RulesAll() {
   const navigate = useNavigate();
   const { currentId } = useTenantStore();
   const { t } = useTranslation('rule');
-  const [rules, setRules] = useState<RuleListItem[]>([]);
+  const [rules, setRules] = useState<RuleWithScene[]>([]);
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
     if (!currentId) return;
     setLoading(true);
     try {
-      // 先取所有 Scene，再逐 Scene 查规则并合并
       const scenes = await listScenes(currentId);
       const sceneList = scenes.data ?? [];
       if (sceneList.length === 0) {
@@ -29,10 +32,12 @@ export default function RulesAll() {
         return;
       }
       const results = await Promise.all(
-        sceneList.map((s) => listRules(currentId, s.sceneCode)),
+        sceneList.map(async (s) => {
+          const page = await listRules(currentId, s.sceneCode);
+          return (page.items ?? []).map((r) => ({ ...r, _sceneCode: s.sceneCode }));
+        }),
       );
-      const all: RuleListItem[] = results.flatMap((r) => r.items ?? []);
-      setRules(all);
+      setRules(results.flat());
     } finally {
       setLoading(false);
     }
@@ -40,14 +45,10 @@ export default function RulesAll() {
 
   useEffect(() => { load(); }, [currentId]);
 
-  const columns: ColumnsType<RuleListItem> = [
+  const columns: ColumnsType<RuleWithScene> = [
     { title: 'Code', dataIndex: 'code', key: 'code' },
     { title: t('column.name'), dataIndex: 'name', key: 'name' },
-    { title: 'Scene', dataIndex: 'sceneCode', key: 'sceneCode' },
-    {
-      title: t('column.kind'), dataIndex: 'kind', key: 'kind',
-      render: (v: string) => <Tag>{v}</Tag>,
-    },
+    { title: 'Scene', dataIndex: '_sceneCode', key: '_sceneCode' },
     {
       title: t('column.status'), dataIndex: 'status', key: 'status',
       render: (v: string) => <Tag color={colorOf(RULE_STATUS_OPTIONS, v as never)}>{v}</Tag>,
@@ -65,7 +66,7 @@ export default function RulesAll() {
         rowKey="ruleDefinitionId"
         loading={loading}
         onRow={(r) => ({
-          onClick: () => navigate(route(ROUTES.RULE_EDITOR, { sceneCode: r.sceneCode, ruleId: r.ruleDefinitionId })),
+          onClick: () => navigate(route(ROUTES.RULE_EDITOR, { sceneCode: r._sceneCode, ruleId: r.ruleDefinitionId })),
           style: { cursor: 'pointer' },
         })}
       />
