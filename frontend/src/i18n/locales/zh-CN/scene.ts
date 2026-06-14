@@ -1,10 +1,10 @@
 import type { SceneTranslation } from '../../types';
 
 const scene: SceneTranslation = {
-  title: { list: 'Scene 列表', detail: 'Scene 详情' },
-  action: { create: '新建 Scene', detail: '详情' },
+  title: { list: '场景列表', detail: '场景详情' },
+  action: { create: '新建场景', detail: '详情' },
   column: {
-    sceneCode: 'Scene Code',
+    sceneCode: '场景编码',
     name: '名称',
     dominantMode: '模式',
     subjectType: '主体类型',
@@ -12,21 +12,21 @@ const scene: SceneTranslation = {
     actions: '操作',
   },
   enum: {
-    dominantMode: { PUSH: 'PUSH (异步评估)', PULL: 'PULL (同步评估)', HYBRID: 'HYBRID (混合)' },
+    dominantMode: { PUSH: 'PUSH (异步)', PULL: 'PULL (同步)', HYBRID: 'HYBRID (混合)' },
   },
   form: {
-    code: 'Scene Code',
+    code: '场景编码',
     codePlaceholder: '如 risk.transfer',
     name: '名称',
     dominantMode: '使用模式',
     subjectType: '主体类型',
     description: '说明',
-    payloadSchema: 'payloadSchema (JSON)',
+    payloadSchema: '载荷字段定义 (JSON)',
     payloadSchemaExtra: '定义 payload 允许的字段与类型',
     eventTypes: '事件类型白名单',
     eventTypesPlaceholder: '输入后回车添加',
-    defaultParams: 'defaultParams (JSON)',
-    defaultParamsExtra: 'Scene 级缺省参数',
+    defaultParams: '默认参数 (JSON)',
+    defaultParamsExtra: '场景级缺省参数',
     decisionStrategy: '决策策略',
     status: '状态',
   },
@@ -34,7 +34,7 @@ const scene: SceneTranslation = {
     basicInfo: '基本信息',
     inputManifest: '输入清单',
     ruleList: '规则列表',
-    notFound: 'Scene 不存在',
+    notFound: '场景不存在',
   },
   inputManifest: {
     info: '调用方对该场景发评估请求时，payload 需包含以下字段',
@@ -48,7 +48,7 @@ const scene: SceneTranslation = {
     sourceNote: '清单数据来源：已发布规则中实际引用 payload 的字段（非 payloadSchema 声明）。无规则或规则全部走 metric 时，清单为空。',
     selectEventTypeFirst: '请先选择事件类型',
   },
-  searchPlaceholder: '搜索名称或 Code',
+  searchPlaceholder: '搜索名称或编码',
   edit: {
     title: '编辑场景 — {{code}}',
     noFields: '暂无字段',

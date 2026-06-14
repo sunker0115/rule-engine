@@ -1,10 +1,10 @@
 import type { DecisionTranslation } from '../../types';
 
 const decision: DecisionTranslation = {
-  title: { list: 'Decision 列表' },
-  action: { create: '新建 Decision', edit: '编辑 Decision' },
+  title: { list: '决策列表' },
+  action: { create: '新建决策', edit: '编辑决策' },
   column: {
-    code: 'Code',
+    code: '编码',
     name: '名称',
     priority: '优先级',
     status: '状态',
@@ -13,7 +13,7 @@ const decision: DecisionTranslation = {
     updatedAt: '更新时间',
   },
   form: {
-    code: 'Code',
+    code: '编码',
     codePlaceholder: '如 REJECT / REVIEW / PASS',
     codeDisabled: '创建后不可修改',
     name: '名称',

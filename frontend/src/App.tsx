@@ -9,6 +9,7 @@ const { Header, Sider, Content } = Layout;
 
 const LANG_OPTIONS = [
   { value: 'zh-CN', label: '中文' },
+  { value: 'en', label: 'English' },
 ];
 
 export default function App() {

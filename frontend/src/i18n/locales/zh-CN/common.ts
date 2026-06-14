@@ -16,8 +16,8 @@ const common: CommonTranslation = {
     copy: '复制 JSON',
   },
   label: {
-    id: 'ID',
-    code: 'Code',
+    id: '编号',
+    code: '编码',
     name: '名称',
     status: '状态',
     description: '说明',
@@ -29,12 +29,12 @@ const common: CommonTranslation = {
     no: '否',
     all: '全部',
     tenant: '租户',
-    searchPlaceholder: '搜索 Code 或名称',
+    searchPlaceholder: '搜索编码或名称',
     paginationTotal: '共 {{total}} 条',
   },
   enum: {
     status: { ACTIVE: '启用', DISABLED: '禁用' },
-    actorType: { USER: '用户', SYSTEM: '系统', JOB: 'Job' },
+    actorType: { USER: '用户', SYSTEM: '系统', JOB: '任务' },
   },
   message: {
     createSuccess: '创建成功',
@@ -61,7 +61,7 @@ const common: CommonTranslation = {
     decisions: '决策管理',
     sessions: '评估会话',
     auditLogs: '审计日志',
-    jobs: 'Job 管理',
+    jobs: '任务管理',
     importExport: '导入导出',
   },
 };

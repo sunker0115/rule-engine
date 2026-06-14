@@ -1,16 +1,16 @@
 import type { JobTranslation } from '../../types';
 
 const job: JobTranslation = {
-  title: { list: 'Job 管理', detail: 'Job 详情' },
-  notice: 'Job 由后端 @RuleJob 注解定义，此处仅管理（启用/禁用/手动触发/查看执行记录），不支持创建或编辑 Job 定义。',
+  title: { list: '任务管理', detail: '任务详情' },
+  notice: '任务由后端 @RuleJob 注解定义，此处仅管理（启用/禁用/手动触发/查看执行记录），不支持创建或编辑任务定义。',
   action: { trigger: '手动触发', viewDetail: '查看详情', enable: '启用', disable: '禁用' },
-  triggerSuccess: 'Job 已触发',
+  triggerSuccess: '任务已触发',
   column: {
     name: '名称',
-    code: 'Code',
-    sceneCode: 'Scene',
+    code: '编码',
+    sceneCode: '场景',
     eventType: '事件类型',
-    cronExpr: 'Cron 表达式',
+    cronExpr: '定时表达式',
     status: '状态',
     subjectQueryType: '查询方式',
     actions: '操作',
@@ -25,9 +25,9 @@ const job: JobTranslation = {
   },
   execution: {
     title: '执行历史',
-    triggerConfirm: '将立即执行一次 Job：{name}。确认？',
+    triggerConfirm: '将立即执行一次任务：{name}。确认？',
     column: {
-      id: '执行 ID',
+      id: '执行编号',
       triggerAt: '触发时间',
       finishedAt: '完成时间',
       subjectCount: '主体数',
