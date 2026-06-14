@@ -40,8 +40,13 @@ class PayloadFieldCollector {
             }
             // DecisionLeafNode：终止节点，无 payload 引用
             case DecisionLeafNode ignored -> {}
-            // DecisionTableNode：决策表列本轮不支持 payload，无 payload 引用
-            case DecisionTableNode ignored -> {}
+            // DecisionTableNode：valueRef=PAYLOAD 的列纳入 payload 字段收集
+            case DecisionTableNode dt ->
+                    dt.columns().forEach(col -> {
+                        if (col.valueRef() == ValueRef.PAYLOAD && col.metricCode() != null) {
+                            acc.add(col.metricCode());
+                        }
+                    });
         }
     }
 }

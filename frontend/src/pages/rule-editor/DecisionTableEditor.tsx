@@ -67,7 +67,7 @@ export default function DecisionTableEditor({
     onChange({ ...node, columns: newCols, rows: newRows });
   };
 
-  const updateColumn = (colIndex: number, field: keyof DecisionTableColumn, value: string) => {
+  const updateColumn = (colIndex: number, field: keyof DecisionTableColumn, value: unknown) => {
     const newCols = columns.map((c, i) => (i === colIndex ? { ...c, [field]: value } : c));
     onChange({ ...node, columns: newCols });
   };
@@ -128,21 +128,38 @@ export default function DecisionTableEditor({
             <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addRow} block>{t('editor.decisionTable.addRow')}</Button>
           )}
         >
-          {/* 列头：每列 metricCode + operator */}
-          {columns.map((col, ci) => (
+          {/* 列头：每列 valueRef + metricCode/payloadField + operator */}
+          {columns.map((col, ci) => {
+            const isPayload = col.valueRef === 'PAYLOAD';
+            const fieldOptions = isPayload
+              ? payloadFieldNames.map((f) => ({ value: f, label: f }))
+              : availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }));
+            return (
             <Table.Column
               key={ci}
               title={(
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
-                  <Select
-                    size="small"
-                    showSearch
-                    style={{ width: '100%' }}
-                    value={col.metricCode || undefined}
-                    onChange={(v) => updateColumn(ci, 'metricCode', v)}
-                    placeholder={t('editor.decisionTable.metric')}
-                    options={availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }))}
-                  />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 180 }}>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <Select
+                      size="small"
+                      style={{ width: 70, flexShrink: 0 }}
+                      value={col.valueRef ?? 'METRIC'}
+                      onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
+                      options={[
+                        { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
+                        { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
+                      ]}
+                    />
+                    <Select
+                      size="small"
+                      showSearch
+                      style={{ flex: 1 }}
+                      value={col.metricCode || undefined}
+                      onChange={(v) => updateColumn(ci, 'metricCode', v)}
+                      placeholder={t('editor.decisionTable.metric')}
+                      options={fieldOptions}
+                    />
+                  </div>
                   <Select
                     size="small"
                     style={{ width: '100%' }}
@@ -165,7 +182,8 @@ export default function DecisionTableEditor({
                 />
               )}
             />
-          ))}
+          );
+        })}
           {/* 决策码列 */}
           <Table.Column
             title={t('editor.decisionTable.decisionCode')}

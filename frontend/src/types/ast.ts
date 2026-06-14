@@ -70,6 +70,7 @@ export interface DecisionTableColumn {
   metricCode: string;
   operator: string;
   dataType: string | null;
+  valueRef?: 'METRIC' | 'PAYLOAD';
 }
 
 export interface DecisionTableRow {

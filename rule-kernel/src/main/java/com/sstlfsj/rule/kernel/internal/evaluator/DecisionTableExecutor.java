@@ -93,7 +93,9 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
             Map<String, Object> params = buildParams(col.operator(), condValue);
             // 传入冻结的列 dataType（B22）：令 ComparisonStrategyFactory 按声明类型路由而非运行时猜测；
             // 草稿/未冻结时 dataType=null，退化为 Default 策略（与历史行为一致）
-            ConditionNode node = new ConditionNode(col.operator(), col.metricCode(), null, params, 0.0, col.dataType());
+            // valueRef 从列定义继承：PAYLOAD 列走事件字段，null 默认 METRIC
+            ConditionNode node = new ConditionNode(
+                    col.operator(), col.metricCode(), null, params, 0.0, col.dataType(), col.valueRef());
             ConditionOutcome o = ConditionEvaluation.evaluate(node, ctx, evaluators);
             if (columnTraces != null) {
                 columnTraces.add(new NodeTrace(NodeType.CONDITION.tag(), col.operator(), col.metricCode(),

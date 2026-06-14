@@ -48,22 +48,29 @@ class AstDataTypeResolver {
                     ifn.elseBranch() != null ? resolve(ifn.elseBranch(), dataTypeMap, payloadTypeMap) : null);
             // 决策树终端叶子：无比较、无 metric，永久原样返回（非待办）
             case DecisionLeafNode leaf -> leaf;
-            // 决策表：逐列从 metricCode 冻结 dataType + 校验算子兼容性（B22）；决策表列本轮不支持 payload
-            case DecisionTableNode dt  -> resolveDecisionTable(dt, dataTypeMap);
+            // 决策表：逐列冻结 dataType + 校验算子兼容性（B22）；PAYLOAD 列走 payloadTypeMap
+            case DecisionTableNode dt  -> resolveDecisionTable(dt, dataTypeMap, payloadTypeMap);
         };
     }
 
     private static DecisionTableNode resolveDecisionTable(DecisionTableNode dt,
-                                                          Map<String, String> dataTypeMap) {
+                                                          Map<String, String> dataTypeMap,
+                                                          Map<String, String> payloadTypeMap) {
         List<DecisionTableNode.Column> columns = dt.columns().stream()
-                .map(c -> resolveColumn(c, dataTypeMap)).toList();
+                .map(c -> resolveColumn(c, dataTypeMap, payloadTypeMap)).toList();
         // rows 仅为条件值 + decisionCode，无 metric/dataType，原样保留
         return new DecisionTableNode(columns, dt.rows());
     }
 
     private static DecisionTableNode.Column resolveColumn(DecisionTableNode.Column col,
-                                                          Map<String, String> dataTypeMap) {
-        String dataType = dataTypeMap.get(col.metricCode());
+                                                          Map<String, String> dataTypeMap,
+                                                          Map<String, String> payloadTypeMap) {
+        String dataType;
+        if (col.valueRef() == ValueRef.PAYLOAD) {
+            dataType = payloadTypeMap != null ? payloadTypeMap.get(col.metricCode()) : null;
+        } else {
+            dataType = dataTypeMap.get(col.metricCode());
+        }
         // 校验同 resolveCondition：dataType 已知且算子在 ALLOWED 内才校验；缺席算子放行
         if (dataType != null) {
             OperatorSpec spec = ConditionTypeCatalog.spec(col.operator());
@@ -74,7 +81,7 @@ class AstDataTypeResolver {
                         + "（决策表列 metric=" + col.metricCode() + "）");
             }
         }
-        return new DecisionTableNode.Column(col.metricCode(), col.operator(), dataType);
+        return new DecisionTableNode.Column(col.metricCode(), col.operator(), dataType, col.valueRef());
     }
 
     private static ConditionNode resolveCondition(ConditionNode cond,
