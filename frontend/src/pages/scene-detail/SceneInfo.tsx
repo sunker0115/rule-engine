@@ -26,7 +26,7 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
 
     setSaving(true);
     try {
-      await apiClient.put(ENDPOINTS.SCENE_DETAIL(scene.sceneCode), body);
+      await apiClient.patch(ENDPOINTS.SCENE_DETAIL(scene.sceneCode), body);
       message.success(tc('message.saveSuccess'));
       setEditing(false);
       onUpdated();
