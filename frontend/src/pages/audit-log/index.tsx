@@ -125,7 +125,10 @@ export default function AuditLogList() {
         }}
         expandable={{
           expandedRowRender: (record) => (
-            <JsonDiffViewer before={record.beforeSnapshot} after={record.afterSnapshot} />
+            <JsonDiffViewer
+              before={typeof record.beforeSnapshot === 'string' ? JSON.parse(record.beforeSnapshot) : record.beforeSnapshot}
+              after={typeof record.afterSnapshot === 'string' ? JSON.parse(record.afterSnapshot) : record.afterSnapshot}
+            />
           ),
           rowExpandable: (record) => !!(record.beforeSnapshot || record.afterSnapshot),
         }}
