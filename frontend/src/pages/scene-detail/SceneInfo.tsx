@@ -49,7 +49,7 @@ export default function SceneInfo({ scene }: Props) {
       {paramEntries.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <h4>{t('form.defaultParams')}</h4>
-          <Descriptions bordered column={2} size="small">
+          <Descriptions bordered column={4} size="small">
             {paramEntries.map(([k, v]) => (
               <Descriptions.Item key={k} label={k}>{String(v)}</Descriptions.Item>
             ))}
