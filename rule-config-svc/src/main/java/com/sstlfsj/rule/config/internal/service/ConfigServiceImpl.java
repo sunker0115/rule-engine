@@ -140,14 +140,34 @@ class ConfigServiceImpl implements ConfigService {
             throw new IllegalArgumentException("规则不存在: id=" + ruleId);
         }
         SceneDef scene = sceneMapper.selectById(rule.getSceneId());
-        RuleVersion active = ruleVersionMapper.findActiveVersion(ruleId);
+
+        // 按规则状态取对应版本：DRAFT → DRAFT 版本，PUBLISHED/DISABLED → ACTIVE 版本
+        RuleVersion current;
+        if (rule.getStatus() == RuleDefinitionStatus.DRAFT) {
+            current = ruleVersionMapper.findLatestDraft(ruleId);
+        } else {
+            current = ruleVersionMapper.findActiveVersion(ruleId);
+        }
+
+        List<RuleDetailVO.VersionItem> versions = ruleVersionMapper.findByRuleDefId(ruleId)
+                .stream()
+                .map(v -> new RuleDetailVO.VersionItem(
+                        v.getId(), v.getVersion(), v.getStatus().name(),
+                        v.getCreatedAt() != null ? v.getCreatedAt().toString() : null,
+                        v.getPublishedBy(), v.getPublishedAt() != null ? v.getPublishedAt().toString() : null))
+                .collect(java.util.stream.Collectors.toList());
+
         return new RuleDetailVO(
                 rule.getId(), rule.getCode(), rule.getName(), rule.getStatus().name(),
                 rule.getKind() != null ? rule.getKind().name() : null,
                 scene != null ? scene.getCode() : null,
-                active != null ? active.getConditionAst() : null,
-                active != null ? active.getDecisionBindings() : null,
-                active != null ? active.getId() : null);
+                current != null ? current.getConditionAst() : null,
+                current != null ? current.getDecisionBindings() : null,
+                current != null ? current.getPreGates() : null,
+                current != null ? current.getTriggerEventTypes() : null,
+                current != null ? current.getScriptSource() : null,
+                current != null ? current.getId() : null,
+                versions);
     }
 
     @Override
