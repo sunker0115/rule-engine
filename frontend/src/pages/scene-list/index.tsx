@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { useEffect, useState, useMemo } from 'react';
+import { Table, Button, Modal, Form, Input, Select, message, Space } from 'antd';
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listScenes, createScene } from '@/api/scene';
 import { SCENE_COLUMNS } from '@/config/columns/scene';
 import { ROUTES, route } from '@/constants/routes';
-import { DOMINANT_MODE_OPTIONS } from '@/constants/enums';
+import { STATUS_OPTIONS } from '@/constants/enums';
 import type { SceneListItem } from '@/types';
 
 export default function SceneList() {
@@ -17,6 +17,8 @@ export default function SceneList() {
   const { currentId } = useTenantStore();
   const [scenes, setScenes] = useState<SceneListItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [form] = Form.useForm();
@@ -25,14 +27,22 @@ export default function SceneList() {
     if (!currentId) return;
     setLoading(true);
     try {
-      const data = await listScenes(currentId);
+      const params: Record<string, unknown> = {};
+      if (statusFilter) params.status = statusFilter;
+      const data = await listScenes(currentId, params);
       setScenes(data.data ?? []);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, [currentId]);
+  useEffect(() => { load(); }, [currentId, statusFilter]);
+
+  const dataSource = useMemo(() => {
+    if (!keyword.trim()) return scenes;
+    const kw = keyword.toLowerCase();
+    return scenes.filter((s) => s.sceneCode.toLowerCase().includes(kw) || s.name.toLowerCase().includes(kw));
+  }, [scenes, keyword]);
 
   const handleCreate = async () => {
     try {
@@ -58,9 +68,27 @@ export default function SceneList() {
           {t('action.create')}
         </Button>
       </div>
+      <Space style={{ marginBottom: 16 }}>
+        <Input
+          prefix={<SearchOutlined />}
+          placeholder="搜索名称或 Code"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          allowClear
+          style={{ width: 240 }}
+        />
+        <Select
+          placeholder={tc('label.status')}
+          value={statusFilter}
+          onChange={setStatusFilter}
+          allowClear
+          options={[...STATUS_OPTIONS]}
+          style={{ width: 130 }}
+        />
+      </Space>
       <Table
         columns={SCENE_COLUMNS}
-        dataSource={scenes}
+        dataSource={dataSource}
         rowKey="id"
         loading={loading}
         onRow={(record) => ({
