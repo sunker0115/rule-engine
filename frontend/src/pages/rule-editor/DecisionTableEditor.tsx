@@ -118,13 +118,13 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
-              width={280}
+              width={310}
               dataIndex={`_c${ci}`}
               title={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Select
                     size="small"
-                    style={{ width: 76 }}
+                    style={{ width: 90 }}
                     value={col.valueRef ?? 'METRIC'}
                     onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
                     options={[
@@ -135,7 +135,7 @@ export default function DecisionTableEditor({
                   <Select
                     size="small"
                     showSearch
-                    style={{ width: 100 }}
+                    style={{ width: 110 }}
                     value={col.metricCode || undefined}
                     onChange={(v) => updateColumn(ci, 'metricCode', v)}
                     placeholder={t('editor.decisionTable.metric')}
@@ -144,7 +144,7 @@ export default function DecisionTableEditor({
                   />
                   <Select
                     size="small"
-                    style={{ width: 64 }}
+                    style={{ width: 68 }}
                     value={col.operator || undefined}
                     onChange={(v) => updateColumn(ci, 'operator', v)}
                     options={opOptions}
@@ -156,7 +156,7 @@ export default function DecisionTableEditor({
               render={(val: unknown, _: unknown, ri: number) => (
                 <Input
                   size="small"
-                  style={{ width: 140 }}
+                  style={{ width: 120 }}
                   value={val != null ? String(val) : ''}
                   onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
                   placeholder="-"
