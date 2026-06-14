@@ -1,6 +1,9 @@
 import type { AstNode, AndNode, OrNode, NotNode, ConditionNode } from '@/types';
 import type { RuleGroupType, RuleType } from 'react-querybuilder';
 
+/** 保存 ConditionNode 的 params，供 QB↔AST 往返时恢复 */
+const paramsCache = new Map<string, Record<string, unknown>>();
+
 /** AST → react-querybuilder RuleGroupType */
 export function astToQueryBuilder(ast: AstNode | null): RuleGroupType {
   if (!ast) {
@@ -45,12 +48,15 @@ function astToQueryBuilderRule(node: AstNode): RuleType | RuleGroupType {
       return astToQueryBuilder(node);
     case 'ConditionNode': {
       const c = node as ConditionNode;
+      const nodeId = crypto.randomUUID();
+      if (c.params && Object.keys(c.params).length > 0) {
+        paramsCache.set(nodeId, c.params);
+      }
       return {
-        id: crypto.randomUUID(),
+        id: nodeId,
         field: c.conditionType,
         operator: c.valueRef ?? 'METRIC',
         value: c.metricCode ?? '',
-        valueSource: c.params,
       } as unknown as RuleType;
     }
     default:
@@ -77,15 +83,16 @@ export function queryBuilderToAst(group: RuleGroupType): AstNode {
       return queryBuilderToAst(rule as RuleGroupType);
     }
     const r = rule as unknown as {
+      id?: string;
       field: string;
       operator: string;
       value: string;
-      valueSource: Record<string, unknown>;
     };
+    const params = (r.id && paramsCache.get(r.id)) || {};
     return {
       type: 'ConditionNode',
       conditionType: r.field,
-      params: r.valueSource ?? {},
+      params,
       metricCode: r.value || undefined,
       valueRef: (r.operator === 'PAYLOAD' ? 'PAYLOAD' : 'METRIC') as 'METRIC' | 'PAYLOAD',
     } satisfies ConditionNode;
