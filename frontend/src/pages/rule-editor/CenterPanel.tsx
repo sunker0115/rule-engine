@@ -76,7 +76,7 @@ export default function CenterPanel({ metadata }: Props) {
 
   // EXPRESSION_SCRIPT: 脚本编辑器
   if (kind === 'EXPRESSION_SCRIPT') {
-    return <ScriptEditor />;
+    return <ScriptEditor availableMetrics={shared.availableMetrics} payloadFieldNames={shared.payloadFieldNames} />;
   }
 
   // 未知: 占位
