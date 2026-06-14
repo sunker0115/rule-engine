@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, Spin, Button } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,6 @@ import InputManifestTab from './InputManifestTab';
 export default function SceneDetail() {
   const { sceneCode } = useParams<{ sceneCode: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { t } = useTranslation('scene');
   const tc = useTranslation('common').t;
   const { currentId, current } = useTenantStore();
