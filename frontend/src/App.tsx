@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Typography, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { MENU_ITEMS } from '@/config/menu';
-import TenantSelector from '@/components/tenant-selector';
+import { useTenantStore } from '@/store/tenantStore';
 
 const { Header, Sider, Content } = Layout;
 
@@ -16,6 +16,9 @@ export default function App() {
   const location = useLocation();
   const { t, i18n } = useTranslation('common');
   const [actorId] = useState(() => localStorage.getItem('actorId') || 'anonymous');
+  const tenantInit = useTenantStore((s) => s.init);
+
+  useEffect(() => { tenantInit(); }, [tenantInit]);
 
   const segments = location.pathname.split('/').filter(Boolean);
   const selectedKey = segments.length > 0 ? `/${segments[0]}` : '/scenes';
@@ -37,7 +40,6 @@ export default function App() {
           <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
             {t('app.title')}
           </Typography.Title>
-          <TenantSelector />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Select

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, message } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, message, Space } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -10,32 +10,34 @@ import type { DecisionItem } from '@/types';
 export default function DecisionList() {
   const { t } = useTranslation('decision');
   const tc = useTranslation('common').t;
-  const { currentId } = useTenantStore();
+  const { currentId, activeList } = useTenantStore();
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [form] = Form.useForm();
+  const tenantId = tenantFilter ?? currentId ?? 0;
 
   const load = async () => {
-    if (!currentId) return;
+    if (!tenantId) return;
     setLoading(true);
-    try { const data = await listDecisions(currentId); setDecisions(data.data ?? []); }
+    try { const data = await listDecisions(tenantId); setDecisions(data.data ?? []); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [currentId]);
+  useEffect(() => { load(); }, [tenantId]);
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
     setConfirmLoading(true);
     try {
       if (editingCode) {
-        await updateDecision(currentId!, editingCode, values);
+        await updateDecision(tenantId, editingCode, values);
         message.success(tc('message.updateSuccess'));
       } else {
-        await createDecision(currentId!, { ...values, tenantId: currentId });
+        await createDecision(tenantId, { ...values, tenantId });
         message.success(tc('message.createSuccess'));
       }
       setModalOpen(false);
@@ -63,6 +65,16 @@ export default function DecisionList() {
       <h2>{t('title.list')}</h2>
       <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('action.create')}</Button>
     </div>
+    <Space style={{ marginBottom: 16 }}>
+      <Select
+        placeholder="租户"
+        value={tenantFilter}
+        onChange={setTenantFilter}
+        allowClear
+        options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+        style={{ width: 200 }}
+      />
+    </Space>
     <Table
       columns={DECISION_COLUMNS}
       dataSource={decisions}

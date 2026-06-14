@@ -14,7 +14,9 @@ interface TenantState {
   currentId: number | null;
   /** Header 专用：全部 ACTIVE 租户列表（始终全量，不受页面筛选影响） */
   activeList: TenantInfo[];
-  /** 页面专用：按关键词+状态查询，不污染 Header 的 activeList */
+  /** 应用启动时自动初始化 */
+  init: () => Promise<void>;
+  /** 页面专用：按关键词+状态查询，不污染 activeList */
   searchTenants: (keyword?: string, status?: string) => Promise<TenantInfo[]>;
   setCurrent: (code: string) => void;
 }
@@ -23,6 +25,19 @@ export const useTenantStore = create<TenantState>((set, get) => ({
   current: localStorage.getItem('tenantCode') || null,
   currentId: Number(localStorage.getItem('tenantId')) || null,
   activeList: [],
+
+  /** 应用启动时自动加载 ACTIVE 租户列表并选中第一个 */
+  init: async () => {
+    const tenants = await get().searchTenants(undefined, 'ACTIVE');
+    set({ activeList: tenants });
+    const { current, currentId } = get();
+    if ((!current || !currentId) && tenants.length > 0) {
+      const t = tenants[0];
+      localStorage.setItem('tenantCode', t.code);
+      localStorage.setItem('tenantId', String(t.id));
+      set({ current: t.code, currentId: t.id });
+    }
+  },
 
   searchTenants: async (keyword?: string, status?: string) => {
     const params: Record<string, string> = {};

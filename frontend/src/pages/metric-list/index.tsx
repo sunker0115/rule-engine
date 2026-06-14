@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, message } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, message, Space } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -14,8 +14,10 @@ export default function MetricList() {
   const navigate = useNavigate();
   const { t } = useTranslation('metric');
   const tc = useTranslation('common').t;
-  const { currentId } = useTenantStore();
+  const { currentId, activeList } = useTenantStore();
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [metrics, setMetrics] = useState<MetricDescriptor[]>([]);
+  const tenantId = tenantFilter ?? currentId ?? 0;
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -23,13 +25,13 @@ export default function MetricList() {
   const sourceType: SourceType = Form.useWatch('sourceType', form);
 
   const load = async () => {
-    if (!currentId) return;
+    if (!tenantId) return;
     setLoading(true);
-    try { const data = await listMetrics(currentId); setMetrics(data.data ?? []); }
+    try { const data = await listMetrics(tenantId); setMetrics(data.data ?? []); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [currentId]);
+  useEffect(() => { load(); }, [tenantId]);
 
   const handleCreate = async () => {
     const values = await form.validateFields();
@@ -77,6 +79,16 @@ export default function MetricList() {
       <h2>{t('title.list')}</h2>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>{t('action.create')}</Button>
     </div>
+    <Space style={{ marginBottom: 16 }}>
+      <Select
+        placeholder="租户"
+        value={tenantFilter}
+        onChange={setTenantFilter}
+        allowClear
+        options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+        style={{ width: 200 }}
+      />
+    </Space>
     <Table columns={METRIC_COLUMNS} dataSource={metrics} rowKey="metricCode" loading={loading}
       onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
     <Modal title={t('action.create')} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>

@@ -14,29 +14,32 @@ export default function SceneList() {
   const navigate = useNavigate();
   const { t } = useTranslation('scene');
   const tc = useTranslation('common').t;
-  const { currentId } = useTenantStore();
+  const { currentId, activeList } = useTenantStore();
   const [scenes, setScenes] = useState<SceneListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
+
+  const tenantId = tenantFilter ?? currentId ?? 0;
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [form] = Form.useForm();
 
   const load = async () => {
-    if (!currentId) return;
+    if (!tenantId) return;
     setLoading(true);
     try {
       const params: Record<string, unknown> = {};
       if (statusFilter) params.status = statusFilter;
-      const data = await listScenes(currentId, params);
+      const data = await listScenes(tenantId, params);
       setScenes(data.data ?? []);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, [currentId, statusFilter]);
+  useEffect(() => { load(); }, [tenantId, statusFilter]);
 
   const dataSource = useMemo(() => {
     if (!keyword.trim()) return scenes;
@@ -69,13 +72,13 @@ export default function SceneList() {
         </Button>
       </div>
       <Space style={{ marginBottom: 16 }}>
-        <Input
-          prefix={<SearchOutlined />}
-          placeholder="搜索名称或 Code"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
+        <Select
+          placeholder="租户"
+          value={tenantFilter}
+          onChange={setTenantFilter}
           allowClear
-          style={{ width: 240 }}
+          options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+          style={{ width: 200 }}
         />
         <Select
           placeholder={tc('label.status')}
@@ -84,6 +87,14 @@ export default function SceneList() {
           allowClear
           options={[...STATUS_OPTIONS]}
           style={{ width: 130 }}
+        />
+        <Input
+          prefix={<SearchOutlined />}
+          placeholder="搜索名称或 Code"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          allowClear
+          style={{ width: 240 }}
         />
       </Space>
       <Table

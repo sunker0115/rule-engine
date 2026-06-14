@@ -17,7 +17,7 @@ const { RangePicker } = DatePicker;
 export default function RuleList() {
   const { sceneCode } = useParams<{ sceneCode: string }>();
   const navigate = useNavigate();
-  const { currentId } = useTenantStore();
+  const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
   const [rules, setRules] = useState<RuleListItem[]>([]);
@@ -27,23 +27,26 @@ export default function RuleList() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [keyword, setKeyword] = useState('');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
+  const tenantId = tenantFilter ?? currentId ?? 0;
+
   const load = async () => {
-    if (!currentId || !sceneCode) return;
+    if (!tenantId || !sceneCode) return;
     setLoading(true);
     try {
       const params: Record<string, unknown> = {};
       if (statusFilter) params.status = statusFilter;
       if (dateRange?.[0]) params.from = dateRange[0].format('YYYY-MM-DD');
       if (dateRange?.[1]) params.to = dateRange[1].format('YYYY-MM-DD');
-      const data = await listRules(currentId, sceneCode, params);
+      const data = await listRules(tenantId, sceneCode, params);
       setRules(data.items ?? []);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [currentId, sceneCode, statusFilter, dateRange]);
+  useEffect(() => { load(); }, [tenantId, sceneCode, statusFilter, dateRange]);
 
   // 客户端关键词过滤（名称或 code 模糊匹配）
   const filtered = useMemo(() => {
@@ -75,6 +78,14 @@ export default function RuleList() {
       </Button>
     </div>
     <Space style={{ marginBottom: 16 }}>
+      <Select
+        placeholder="租户"
+        value={tenantFilter}
+        onChange={setTenantFilter}
+        allowClear
+        options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+        style={{ width: 200 }}
+      />
       <Input
         prefix={<SearchOutlined />}
         placeholder="搜索名称或 Code"
