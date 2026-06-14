@@ -9,9 +9,9 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
-import jakarta.servlet.http.HttpServletRequest;
 
 /** 全局异常处理器：将常见异常映射为 ApiResponse 错误格式。 */
 @RestControllerAdvice
@@ -36,11 +36,12 @@ public class GlobalExceptionHandler {
         return ApiResponse.error("INVALID_ARGUMENT", ex.getParameterName() + " 参数必填");
     }
 
-    /** ResponseStatusException → 按其 status code 返回。 */
+    /** ResponseStatusException → 透传 HTTP 状态码，不进入兜底 500。 */
     @ExceptionHandler(ResponseStatusException.class)
-    public ApiResponse<Void> handleResponseStatus(ResponseStatusException ex, HttpServletRequest req) {
-        log.warn("{} {} [{}]", req.getMethod(), req.getRequestURI(), ex.getStatusCode().value());
-        return ApiResponse.error(ex.getStatusCode().value() >= 500 ? "INTERNAL_ERROR" : "INVALID_ARGUMENT", ex.getReason());
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatus(ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(ApiResponse.error(ex.getStatusCode().value() == 404 ? "NOT_FOUND" : "INVALID_ARGUMENT",
+                        ex.getReason()));
     }
 
     /** 业务层主动抛出的非法参数 → 400。 */
