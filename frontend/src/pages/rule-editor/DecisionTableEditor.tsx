@@ -38,9 +38,10 @@ export default function DecisionTableEditor({
     }
   }, []);
 
-  // 适合决策表的算子（排除 time.* 类）
+  // 决策表列仅支持基础比较算子
+  const TABLE_OPERATORS = ['EQ', 'NEQ', 'GT', 'GTE', 'LT', 'LTE', 'IN', 'NOT_IN', 'BETWEEN', 'NOT_BETWEEN'];
   const opOptions = conditionTypes
-    .filter((ct) => !ct.code.startsWith('time.'))
+    .filter((ct) => TABLE_OPERATORS.includes(ct.code))
     .map((ct) => ({ value: ct.code, label: ct.displayName }));
 
   // ===== 列操作 =====
