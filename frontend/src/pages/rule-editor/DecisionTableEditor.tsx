@@ -104,7 +104,7 @@ export default function DecisionTableEditor({
         rowKey="_key"
         size="small"
         pagination={false}
-        scroll={{ x: 'max-content' }}
+        scroll={{ x: cols.length > 2 ? 'max-content' : undefined }}
         locale={{ emptyText: t('editor.decisionTable.emptyRowHint') }}
         footer={() => (
           <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addRow} block>{t('editor.decisionTable.addRow')}</Button>
@@ -118,10 +118,9 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
-              width={290}
               dataIndex={`_c${ci}`}
               title={(
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 290 }}>
                   <Select
                     size="small"
                     style={{ width: 90 }}
@@ -156,7 +155,6 @@ export default function DecisionTableEditor({
               render={(val: unknown, _: unknown, ri: number) => (
                 <Input
                   size="small"
-                  style={{ width: 100 }}
                   value={val != null ? String(val) : ''}
                   onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
                   placeholder="-"
@@ -168,7 +166,7 @@ export default function DecisionTableEditor({
 
         <Table.Column
           title={t('editor.decisionTable.decisionCode')}
-          width={100}
+          width={140}
           dataIndex="_decisionCode"
           render={(val: string, _: unknown, ri: number) => (
             <Select
