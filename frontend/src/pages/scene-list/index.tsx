@@ -5,9 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listScenes, createScene } from '@/api/scene';
-import { SCENE_COLUMNS } from '@/config/columns/scene';
+import { getSceneColumns } from '@/config/columns/scene';
 import { ROUTES, route } from '@/constants/routes';
 import { STATUS_OPTIONS, DOMINANT_MODE_OPTIONS } from '@/constants/enums';
+import apiClient from '@/api/client';
+import { ENDPOINTS } from '@/constants/api-endpoints';
 import type { SceneListItem } from '@/types';
 
 export default function SceneList() {
@@ -46,6 +48,15 @@ export default function SceneList() {
     const kw = keyword.toLowerCase();
     return scenes.filter((s) => s.sceneCode.toLowerCase().includes(kw) || s.name.toLowerCase().includes(kw));
   }, [scenes, keyword]);
+
+  const handleToggleStatus = async (sceneCode: string, enabled: boolean) => {
+    await apiClient.put(ENDPOINTS.SCENE_TOGGLE_STATUS(sceneCode), null, {
+      params: { tenantId, enable: enabled },
+      headers: { 'X-Actor-Id': localStorage.getItem('actorId') || 'anonymous' },
+    });
+    message.success(enabled ? '已启用' : '已禁用');
+    load();
+  };
 
   const handleCreate = async () => {
     try {
@@ -98,7 +109,7 @@ export default function SceneList() {
         />
       </Space>
       <Table
-        columns={SCENE_COLUMNS}
+        columns={getSceneColumns(handleToggleStatus)}
         dataSource={dataSource}
         rowKey="id"
         loading={loading}
