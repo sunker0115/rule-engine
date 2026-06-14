@@ -60,22 +60,47 @@ class ConfigServiceImpl implements ConfigService {
     @Override
     @Transactional
     public void disable(String tenantId, Long ruleDefinitionId, String actorId) {
+        // 关停：PUBLISHED → DISABLED，单向。
+        transitionStatus(tenantId, ruleDefinitionId, actorId,
+                RuleDefinitionStatus.PUBLISHED, RuleDefinitionStatus.DISABLED, "DISABLE", "禁用");
+    }
+
+    @Override
+    @Transactional
+    public void enable(String tenantId, Long ruleDefinitionId, String actorId) {
+        // 重新启用：DISABLED → PUBLISHED，单向。
+        transitionStatus(tenantId, ruleDefinitionId, actorId,
+                RuleDefinitionStatus.DISABLED, RuleDefinitionStatus.PUBLISHED, "ENABLE", "启用");
+    }
+
+    /**
+     * 规则启停状态单向迁移（D19 DISABLED↔PUBLISHED 解耦切换）：仅当规则处于 {@code from} 态才迁到 {@code to}，
+     * 其它态（DRAFT/PUBLISHING/PUBLISH_FAILED 或已是目标态）一律拒绝，并落一条对应 action 的审计事件。
+     * 严格校验源态杜绝"未发布规则被 disable 再 enable 成无 current_version 的脏 PUBLISHED"。
+     *
+     * @param from   要求的源状态
+     * @param to     迁移后的目标状态
+     * @param action 审计动作（ENABLE / DISABLE）
+     * @param verb   面向用户错误信息中的动词（启用 / 禁用）
+     */
+    private void transitionStatus(String tenantId, Long ruleDefinitionId, String actorId,
+            RuleDefinitionStatus from, RuleDefinitionStatus to, String action, String verb) {
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
+        if (rule.getStatus() != from) {
+            throw new IllegalArgumentException(
+                    "仅 " + from + " 规则可" + verb + "，当前状态: " + rule.getStatus());
+        }
         RuleStatusSnapshot before = new RuleStatusSnapshot(
                 ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
 
-        // 双向切换：DISABLED → PUBLISHED，PUBLISHED/PUBLISHING → DISABLED
-        boolean enabling = rule.getStatus() == RuleDefinitionStatus.DISABLED;
-        rule.setStatus(enabling ? RuleDefinitionStatus.PUBLISHED : RuleDefinitionStatus.DISABLED);
+        rule.setStatus(to);
         ruleDefinitionMapper.updateById(rule);
 
         RuleStatusSnapshot after = new RuleStatusSnapshot(
                 ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
-        String action = enabling ? "ENABLE" : "DISABLE";
-
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 Long.valueOf(tenantId), actorId, "USER", action, "rule_definition",
                 ruleDefinitionId.toString(), before, after, LocalDateTime.now()));

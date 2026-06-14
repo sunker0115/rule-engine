@@ -34,6 +34,11 @@ class ConfigServiceTest {
         }
 
         @Override
+        public void enable(String tenantId, Long ruleDefinitionId, String actorId) {
+            throw new UnsupportedOperationException("stub");
+        }
+
+        @Override
         public Page<RuleDefinition> listRules(RuleListQuery q) {
             throw new UnsupportedOperationException("stub");
         }
@@ -96,6 +101,12 @@ class ConfigServiceTest {
     void disable_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.disable("t1", 1L, "actor"));
+    }
+
+    @Test
+    void enable_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.enable("t1", 1L, "actor"));
     }
 
     @Test

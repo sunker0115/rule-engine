@@ -89,6 +89,64 @@ class ConfigServiceImplTest {
     }
 
     @Test
+    void enable_disabledRule_togglesToPublishedWithEnableAudit() {
+        RuleDefinition rule = new RuleDefinition();
+        rule.setId(10L);
+        rule.setTenantId(1L);
+        rule.setStatus(RuleDefinitionStatus.DISABLED);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
+        when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+
+        configService.enable("1", 10L, "actor1");
+
+        ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
+        verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
+        assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.PUBLISHED);
+
+        ArgumentCaptor<OperationAuditedEvent> evCaptor =
+                ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher).publishEvent(evCaptor.capture());
+        OperationAuditedEvent ev = evCaptor.getValue();
+        assertThat(ev.action()).isEqualTo("ENABLE");
+        var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.beforeSnapshot();
+        var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.afterSnapshot();
+        assertThat(before.status()).isEqualTo("DISABLED");
+        assertThat(after.status()).isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    void disable_draftRule_rejectedAndNoStatusChange() {
+        // 守卫：disable 仅接受 PUBLISHED 源态，DRAFT 被拒（杜绝无 current_version 的脏 PUBLISHED）
+        RuleDefinition rule = new RuleDefinition();
+        rule.setId(10L);
+        rule.setTenantId(1L);
+        rule.setStatus(RuleDefinitionStatus.DRAFT);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
+
+        assertThatThrownBy(() -> configService.disable("1", 10L, "actor1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("仅 PUBLISHED 规则可禁用");
+        verify(ruleDefinitionMapper, never()).updateById((RuleDefinition) any());
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void enable_publishedRule_rejected() {
+        // enable 仅接受 DISABLED 源态，对已 PUBLISHED 规则启用被拒
+        RuleDefinition rule = new RuleDefinition();
+        rule.setId(10L);
+        rule.setTenantId(1L);
+        rule.setStatus(RuleDefinitionStatus.PUBLISHED);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
+
+        assertThatThrownBy(() -> configService.enable("1", 10L, "actor1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("仅 DISABLED 规则可启用");
+        verify(ruleDefinitionMapper, never()).updateById((RuleDefinition) any());
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
     void listRules_withSceneCodeAndStatus_filtersAndReturnsPage() {
         SceneDef scene = new SceneDef();
         scene.setId(5L);

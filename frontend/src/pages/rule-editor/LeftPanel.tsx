@@ -3,7 +3,7 @@ import { Descriptions, Button, Space, Tag, Timeline, message, Popconfirm } from 
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
-import { editDraft, publishRule, disableRule, newVersion } from '@/api/rule';
+import { editDraft, publishRule, disableRule, enableRule, newVersion } from '@/api/rule';
 import { colorOf, RULE_STATUS_OPTIONS, VERSION_STATUS_OPTIONS } from '@/constants/enums';
 import type { RuleDetail as RuleDetailType } from '@/types';
 
@@ -44,6 +44,12 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
 
   const handleDisable = async () => {
     await disableRule(tenantId, ruleDetail.ruleDefinitionId);
+    message.success(tc('message.updateSuccess'));
+    onUpdated();
+  };
+
+  const handleEnable = async () => {
+    await enableRule(tenantId, ruleDetail.ruleDefinitionId);
     message.success(tc('message.updateSuccess'));
     onUpdated();
   };
@@ -93,7 +99,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
           </Popconfirm>
         )}
         {isDisabled && (
-          <Button block onClick={handleDisable}>{t('action.enable')}</Button>
+          <Button block onClick={handleEnable}>{t('action.enable')}</Button>
         )}
         <Button block onClick={onOpenDryRun}>{t('action.dryRun')}</Button>
       </Space>

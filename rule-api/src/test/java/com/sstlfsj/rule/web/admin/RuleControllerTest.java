@@ -209,6 +209,19 @@ class RuleControllerTest {
     }
 
     @Test
+    void enable_returns200_andCallsService() throws Exception {
+        doNothing().when(configService).enable(any(), any(), any());
+
+        mockMvc.perform(post("/admin/v1/rules/2/enable")
+                        .param("tenantId", "t1")
+                        .header("X-Actor-Id", "user1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(configService).enable("t1", 2L, "user1");
+    }
+
+    @Test
     void createDraft_returns201_withValidBody() throws Exception {
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
         when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
@@ -276,8 +289,18 @@ class RuleControllerTest {
     void listRules_returns200_withPageResult() throws Exception {
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> page =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 1);
-        // Mock domain entity returned by service
+        RuleDefinition rd = new RuleDefinition();
+        rd.setId(10L);
+        rd.setTenantId(1L);
+        rd.setSceneId(5L);
+        rd.setCode("rule.a");
+        rd.setName("规则A");
+        rd.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
+        rd.setStatus(com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus.PUBLISHED);
+        rd.setCurrentVersion(42L);
+        page.setRecords(java.util.List.of(rd));
         when(configService.listRules(new RuleListQuery("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20))).thenReturn(page);
+        when(configService.getSceneCodeMap(java.util.Set.of(5L))).thenReturn(java.util.Map.of(5L, "risk.transfer"));
 
         mockMvc.perform(get("/admin/v1/rules")
                         .param("tenantId", "t1")

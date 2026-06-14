@@ -315,13 +315,17 @@ POST /admin/v1/rules/{ruleDefinitionId}/publish
 
 **响应**：发布成功 200，返回新激活的 `RuleVersionSnapshot`；当前无 DRAFT 可发布返回 400；草稿写入期校验已前移，publish 不再做解析校验（premise A 下校验失败的草稿无法落库）。
 
-### 4.3 禁用规则
+### 4.3 禁用 / 启用规则
 
 ```
 POST /admin/v1/rules/{ruleDefinitionId}/disable
+POST /admin/v1/rules/{ruleDefinitionId}/enable
 ```
 
-效果：`rule_definition.status = DISABLED`，Matcher 倒排索引热摘除（≤15s 全实例收敛，D17）。
+disable 与 enable 是 `PUBLISHED ↔ DISABLED` 两个**单向**操作（D19 解耦切换，不走 PUBLISHING 中转、不增 `rule_version`、`current_version` 指针不变）：
+
+- **disable**：仅 `PUBLISHED → DISABLED`，其它源态（DRAFT 等）返回 400；效果 `rule_definition.status = DISABLED`，Matcher 倒排索引热摘除（≤15s 全实例收敛，D17），审计 `action=DISABLE`。
+- **enable**：仅 `DISABLED → PUBLISHED`，其它源态返回 400；指回原 `current_version`，索引热加回，审计 `action=ENABLE`。
 
 ### 4.3.1 删除规则（deleteRule，D56）
 

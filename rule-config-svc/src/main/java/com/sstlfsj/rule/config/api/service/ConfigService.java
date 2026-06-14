@@ -31,13 +31,22 @@ public interface ConfigService {
     RuleVersionSnapshot publish(String tenantId, Long ruleDefinitionId, String actorId);
 
     /**
-     * 禁用规则定义及其当前激活版本。
+     * 禁用规则定义：仅 PUBLISHED → DISABLED，其它态拒绝。倒排索引热摘除。
      *
      * @param tenantId         规则所属租户 ID
      * @param ruleDefinitionId 待禁用的规则定义 ID
      * @param actorId          触发禁用的操作人 ID
      */
     void disable(String tenantId, Long ruleDefinitionId, String actorId);
+
+    /**
+     * 重新启用规则定义：仅 DISABLED → PUBLISHED，其它态拒绝。指向原 current_version，不增版本。
+     *
+     * @param tenantId         规则所属租户 ID
+     * @param ruleDefinitionId 待启用的规则定义 ID
+     * @param actorId          触发启用的操作人 ID
+     */
+    void enable(String tenantId, Long ruleDefinitionId, String actorId);
 
     /**
      * 查询规则列表，支持按 sceneCode / status / 时间范围 过滤，结果分页返回。

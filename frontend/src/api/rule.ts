@@ -29,9 +29,14 @@ export async function publishRule(tenantId: number, ruleDefinitionId: number) {
   return apiClient.post(ENDPOINTS.RULE_PUBLISH(ruleDefinitionId), null, { params: { tenantId } });
 }
 
-/** 禁用 */
+/** 禁用（PUBLISHED → DISABLED） */
 export async function disableRule(tenantId: number, ruleDefinitionId: number) {
   return apiClient.post(ENDPOINTS.RULE_DISABLE(ruleDefinitionId), null, { params: { tenantId } });
+}
+
+/** 重新启用（DISABLED → PUBLISHED） */
+export async function enableRule(tenantId: number, ruleDefinitionId: number) {
+  return apiClient.post(ENDPOINTS.RULE_ENABLE(ruleDefinitionId), null, { params: { tenantId } });
 }
 
 /** 新版本/回退 */

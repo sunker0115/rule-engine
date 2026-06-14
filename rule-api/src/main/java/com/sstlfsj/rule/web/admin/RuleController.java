@@ -123,7 +123,7 @@ public class RuleController {
     }
 
     /**
-     * POST /admin/v1/rules/{ruleId}/disable — 禁用规则版本。
+     * POST /admin/v1/rules/{ruleId}/disable — 禁用规则（PUBLISHED → DISABLED，其它态拒绝）。
      *
      * @param ruleId   规则 ID
      * @param tenantId 租户
@@ -136,6 +136,23 @@ public class RuleController {
             @RequestParam String tenantId,
             @RequestHeader("X-Actor-Id") String actorId) {
         configService.disable(tenantId, ruleId, actorId);
+        return ApiResponse.ok(null);
+    }
+
+    /**
+     * POST /admin/v1/rules/{ruleId}/enable — 重新启用规则（DISABLED → PUBLISHED，其它态拒绝）。
+     *
+     * @param ruleId   规则 ID
+     * @param tenantId 租户
+     * @param actorId  操作人
+     * @return 空数据
+     */
+    @PostMapping("/{ruleId}/enable")
+    public ApiResponse<Void> enable(
+            @PathVariable Long ruleId,
+            @RequestParam String tenantId,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        configService.enable(tenantId, ruleId, actorId);
         return ApiResponse.ok(null);
     }
 

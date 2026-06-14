@@ -15,6 +15,7 @@ export const ENDPOINTS = {
   RULE_DRAFT:    (id: number) => `${ADMIN}/rules/${id}/draft`,
   RULE_PUBLISH:  (id: number) => `${ADMIN}/rules/${id}/publish`,
   RULE_DISABLE:  (id: number) => `${ADMIN}/rules/${id}/disable`,
+  RULE_ENABLE:   (id: number) => `${ADMIN}/rules/${id}/enable`,
   RULE_VERSIONS: (id: number) => `${ADMIN}/rules/${id}/versions`,
   RULE_DELETE:   (id: number) => `${ADMIN}/rules/${id}`,
   RULE_DELETE_VERSION: (ruleId: number, versionId: number) => `${ADMIN}/rules/${ruleId}/versions/${versionId}`,
