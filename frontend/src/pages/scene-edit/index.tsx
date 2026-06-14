@@ -147,7 +147,7 @@ export default function SceneEdit() {
         <h2 style={{ margin: 0 }}>编辑场景 — {scene.sceneCode}</h2>
       </div>
       <Form form={form} layout="vertical" style={{ maxWidth: 800 }}>
-        <Form.Item name="code" label={t('form.code')}><Input disabled /></Form.Item>
+        <Form.Item name="sceneCode" label={t('form.code')}><Input disabled /></Form.Item>
         <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="dominantMode" label={t('form.dominantMode')}>
           <Select options={[...DOMINANT_MODE_OPTIONS]} />
