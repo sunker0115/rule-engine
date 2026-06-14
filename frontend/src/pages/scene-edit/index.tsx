@@ -8,7 +8,6 @@ import { getScene } from '@/api/scene';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import { ROUTES, route } from '@/constants/routes';
-import { DOMINANT_MODE_OPTIONS } from '@/constants/enums';
 import type { SceneDetail as SceneDetailType } from '@/types';
 
 // ---- payloadSchema 编辑器 ----
