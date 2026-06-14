@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.api.service;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
+import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -23,10 +24,7 @@ class SceneServiceTest {
         }
 
         @Override
-        public void updateScene(String tenantId, String sceneCode,
-                                String name, List<String> eventTypes,
-                                List<PayloadFieldSpec> payloadSchema, Map<String, Object> defaultParams,
-                                String actorId) {
+        public void updateScene(UpdateSceneCommand cmd) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -66,7 +64,7 @@ class SceneServiceTest {
     @Test
     void updateScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.updateScene("t1", "SCENE_A", null, null, null, null, "actor"));
+                () -> stub.updateScene(new UpdateSceneCommand("t1", "SCENE_A", null, null, null, null, null, "actor")));
     }
 
     @Test

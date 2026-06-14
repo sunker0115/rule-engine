@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
+import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -112,7 +113,7 @@ class SceneControllerTest {
 
     @Test
     void patchScene_returns200() throws Exception {
-        doNothing().when(sceneService).updateScene(any(), any(), any(), any(), any(), any(), any());
+        doNothing().when(sceneService).updateScene(any(UpdateSceneCommand.class));
 
         mockMvc.perform(patch("/admin/v1/scenes/payment")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -126,10 +127,12 @@ class SceneControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(sceneService).updateScene(
-                eq("t1"), eq("payment"), isNull(), isNull(),
-                argThat(ps -> ps != null && !ps.isEmpty() && "amount".equals(ps.getFirst().name())),
-                isNull(), eq("user1"));
+        verify(sceneService).updateScene(argThat(cmd ->
+                "t1".equals(cmd.tenantId()) && "payment".equals(cmd.sceneCode())
+                && cmd.name() == null && cmd.description() == null
+                && cmd.payloadSchema() != null && !cmd.payloadSchema().isEmpty()
+                && "amount".equals(cmd.payloadSchema().getFirst().name())
+                && cmd.defaultParams() == null && "user1".equals(cmd.actorId())));
     }
 
     @Test

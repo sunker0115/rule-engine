@@ -26,7 +26,7 @@ class UpdateSceneRequestTest {
     @Test
     void valid_minimal_request_passesValidation() {
         // 只填必填 tenantId，其余字段为 null
-        var req = new UpdateSceneRequest("t1", null, null, null, null);
+        var req = new UpdateSceneRequest("t1", null, null, null, null, null);
         Set<ConstraintViolation<UpdateSceneRequest>> violations = validator.validate(req);
         assertThat(violations).isEmpty();
     }
@@ -37,6 +37,7 @@ class UpdateSceneRequestTest {
         var req = new UpdateSceneRequest(
                 "t1",
                 "新场景名称",
+                null,
                 List.of("payment.initiated", "payment.settled"),
                 List.of(new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null)),
                 Map.of("timezone", "Asia/Shanghai")
@@ -47,14 +48,14 @@ class UpdateSceneRequestTest {
 
     @Test
     void null_tenantId_failsValidation() {
-        var req = new UpdateSceneRequest(null, "新名称", null, null, null);
+        var req = new UpdateSceneRequest(null, "新名称", null, null, null, null);
         Set<ConstraintViolation<UpdateSceneRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("tenantId"));
     }
 
     @Test
     void blank_tenantId_failsValidation() {
-        var req = new UpdateSceneRequest("  ", "新名称", null, null, null);
+        var req = new UpdateSceneRequest("  ", "新名称", null, null, null, null);
         Set<ConstraintViolation<UpdateSceneRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("tenantId"));
     }

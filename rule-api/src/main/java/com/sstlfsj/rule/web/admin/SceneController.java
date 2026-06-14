@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import lombok.RequiredArgsConstructor;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
+import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.admin.dto.CreateSceneRequest;
@@ -75,11 +76,8 @@ public class SceneController {
             @Valid @RequestBody UpdateSceneRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
         sceneService.updateScene(
-                req.tenantId(), sceneCode,
-                req.name(), req.description(),
-                req.eventTypes(),
-                req.payloadSchema(), req.defaultParams(),
-                actorId);
+                new UpdateSceneCommand(req.tenantId(), sceneCode, req.name(), req.description(),
+                        req.eventTypes(), req.payloadSchema(), req.defaultParams(), actorId));
         return ApiResponse.ok(null);
     }
 

@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.api.service;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
+import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 
 import java.util.List;
 import java.util.Map;
@@ -43,18 +44,9 @@ public interface SceneService {
     /**
      * 更新已有场景元数据。payloadSchema 发生变化时自动快照历史版本并自增版本号。
      *
-     * @param tenantId          租户 ID
-     * @param sceneCode         待更新的场景编码
-     * @param name              新名称（null 表示不更新）
-     * @param eventTypes        新 eventType 白名单（null 表示不更新）
-     * @param payloadSchema     新 payloadSchema（null 表示不更新）
-     * @param defaultParams     新 defaultParams（null 表示不更新）
-     * @param actorId           更新操作人 ID
+     * @param cmd 更新命令，字段为 null 表示不更新该项
      */
-    void updateScene(String tenantId, String sceneCode,
-                     String name, String description, List<String> eventTypes,
-                     List<PayloadFieldSpec> payloadSchema, Map<String, Object> defaultParams,
-                     String actorId);
+    void updateScene(UpdateSceneCommand cmd);
 
     /**
      * 查询场景详情（含 payloadSchema / eventTypes 等 D13 字段）。

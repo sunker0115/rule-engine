@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
+import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -141,7 +142,7 @@ class SceneServiceImplTest {
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
 
         List<PayloadFieldSpec> newSchema = List.of(field("amount"), field("currency"));
-        sceneService.updateScene("1", "PAYMENT", null, null, newSchema, null, "actor1");
+        sceneService.updateScene(new UpdateSceneCommand("1", "PAYMENT", null, null, null, newSchema, null, "actor1"));
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).updateById(sceneCaptor.capture());

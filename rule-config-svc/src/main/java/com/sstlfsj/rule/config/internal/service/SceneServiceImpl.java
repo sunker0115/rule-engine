@@ -4,6 +4,7 @@ import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldType;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
+import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -67,33 +68,30 @@ class SceneServiceImpl implements SceneService {
 
     @Override
     @Transactional
-    public void updateScene(String tenantId, String sceneCode,
-                            String name, String description, List<String> eventTypes,
-                            List<PayloadFieldSpec> payloadSchema, Map<String, Object> defaultParams,
-                            String actorId) {
-        SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
+    public void updateScene(UpdateSceneCommand cmd) {
+        SceneDef scene = findScene(Long.valueOf(cmd.tenantId()), cmd.sceneCode());
         SceneSnapshot before = snapshotOf(scene);
 
-        if (name != null) scene.setName(name);
-        if (description != null) scene.setDescription(description);
-        if (eventTypes != null) scene.setEventTypes(eventTypes);
-        if (defaultParams != null) {
-            validateDefaultParams(defaultParams);
-            scene.setDefaultParams(defaultParams);
+        if (cmd.name() != null) scene.setName(cmd.name());
+        if (cmd.description() != null) scene.setDescription(cmd.description());
+        if (cmd.eventTypes() != null) scene.setEventTypes(cmd.eventTypes());
+        if (cmd.defaultParams() != null) {
+            validateDefaultParams(cmd.defaultParams());
+            scene.setDefaultParams(cmd.defaultParams());
         }
-        if (payloadSchema != null) {
-            validatePayloadSchemaTypes(payloadSchema);
-            scene.setPayloadSchema(payloadSchema);
+        if (cmd.payloadSchema() != null) {
+            validatePayloadSchemaTypes(cmd.payloadSchema());
+            scene.setPayloadSchema(cmd.payloadSchema());
         }
 
-        scene.setUpdatedBy(actorId);
+        scene.setUpdatedBy(cmd.actorId());
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        publishAudit(Long.valueOf(tenantId), actorId, "UPDATE", "scene",
+        publishAudit(Long.valueOf(cmd.tenantId()), cmd.actorId(), "UPDATE", "scene",
                 scene.getId().toString(), before, snapshotOf(scene));
         // 场景仍 ACTIVE：发 SceneChangedEvent(active=true) 触发 eval 索引重载，
         // 使 payloadSchema / eventTypes / defaultParams(含 timezone)变更 live 生效(不必等规则 republish)。
-        eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, true));
+        eventPublisher.publishEvent(new SceneChangedEvent(cmd.tenantId(), cmd.sceneCode(), true));
     }
 
     @Override
