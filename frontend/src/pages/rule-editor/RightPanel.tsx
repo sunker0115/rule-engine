@@ -1,7 +1,6 @@
 import { Tabs } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
-import ParamsSchemaForm from '@/components/params-schema-form';
 import RolloutSlider from '@/components/rollout-slider';
 import DecisionBindingEditor from './DecisionBindingEditor';
 import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType } from '@/types';
