@@ -2,10 +2,8 @@ import { useState, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Typography, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useMenuItems } from '@/config/menu';
-import { useSceneStore } from '@/store/sceneStore';
+import { MENU_ITEMS } from '@/config/menu';
 import TenantSelector from '@/components/tenant-selector';
-import SceneSelector from '@/components/scene-selector';
 
 const { Header, Sider, Content } = Layout;
 
@@ -19,17 +17,8 @@ export default function App() {
   const { t, i18n } = useTranslation('common');
   const [actorId] = useState(() => localStorage.getItem('actorId') || 'anonymous');
 
-  const selectedSceneCode = useSceneStore((s) => s.selectedSceneCode);
-  const menuItems = useMenuItems(selectedSceneCode);
-
   const segments = location.pathname.split('/').filter(Boolean);
-  const pathname = location.pathname;
-  const candidateKeys: string[] = [];
-  for (const item of menuItems) {
-    if (item && 'key' in item) candidateKeys.push(String(item.key));
-  }
-  const selectedKey = candidateKeys.find((key) => pathname.startsWith(key.split('?')[0]))
-    || (segments.length > 0 ? `/${segments[0]}` : '/scenes');
+  const selectedKey = segments.length > 0 ? `/${segments[0]}` : '/scenes';
 
   const handleLangChange = useCallback((lang: string) => {
     i18n.changeLanguage(lang);
@@ -49,7 +38,6 @@ export default function App() {
             {t('app.title')}
           </Typography.Title>
           <TenantSelector />
-          <SceneSelector />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Select
@@ -69,7 +57,7 @@ export default function App() {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            items={menuItems}
+            items={MENU_ITEMS}
             onClick={({ key }) => navigate(key)}
             style={{ height: '100%', borderRight: 0 }}
           />
