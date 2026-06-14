@@ -6,7 +6,7 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorState, Compartment } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
-import { autocompletion, CompletionContext } from '@codemirror/autocomplete';
+import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
 import type { MetricDescriptor } from '@/types';
 
 interface Props {
