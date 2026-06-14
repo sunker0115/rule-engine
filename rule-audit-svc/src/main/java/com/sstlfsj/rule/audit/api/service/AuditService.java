@@ -55,7 +55,8 @@ public interface AuditService {
      * @param size     每页条数
      * @return 分页结果
      */
-    PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String eventId,
+    PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String sceneCode,
+                                                    String status, String eventId,
                                                     int page, int size);
 
     /** 节点 trace 条目，对应 node_trace 表一行。 */

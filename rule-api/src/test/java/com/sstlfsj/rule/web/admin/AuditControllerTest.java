@@ -31,7 +31,7 @@ class AuditControllerTest {
     void querySessions_returns200() throws Exception {
         AuditService.PageResult<AuditService.EvalSessionEntry> empty =
                 new AuditService.PageResult<>(List.of(), 0, 0, 20);
-        when(auditService.queryEvalSessions("t1", null, 0, 20)).thenReturn(empty);
+        when(auditService.queryEvalSessions("t1", null, null, null, 0, 20)).thenReturn(empty);
 
         mockMvc.perform(get("/admin/v1/evaluation-sessions").param("tenantId", "t1"))
                 .andExpect(status().isOk())
@@ -40,7 +40,7 @@ class AuditControllerTest {
                 .andExpect(jsonPath("$.data.page").value(1));
 
         // 默认 page=1 → service 收到 0-based 的 0
-        verify(auditService).queryEvalSessions("t1", null, 0, 20);
+        verify(auditService).queryEvalSessions("t1", null, null, null, 0, 20);
     }
 
     @Test

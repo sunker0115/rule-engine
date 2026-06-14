@@ -49,10 +49,10 @@ class AuditServiceImplTest {
         Page<EvalSessionRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of(row));
         mp.setTotal(1L);
-        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any())).thenReturn(mp);
+        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                service.queryEvalSessions("100", null, 0, 20);
+                service.queryEvalSessions("100", null, null, null, 0, 20);
 
         assertThat(result.total()).isEqualTo(1L);
         assertThat(result.items()).hasSize(1);
@@ -67,10 +67,10 @@ class AuditServiceImplTest {
         Page<EvalSessionRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of());
         mp.setTotal(0L);
-        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any())).thenReturn(mp);
+        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                service.queryEvalSessions("100", "evt-xyz", 0, 20);
+                service.queryEvalSessions("100", null, null, "evt-xyz", 0, 20);
 
         assertThat(result.total()).isEqualTo(0L);
         assertThat(result.items()).isEmpty();

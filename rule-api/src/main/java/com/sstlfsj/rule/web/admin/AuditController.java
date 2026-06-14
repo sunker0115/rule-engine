@@ -31,11 +31,13 @@ public class AuditController {
     @GetMapping("/evaluation-sessions")
     public ApiResponse<PageResponse<AuditService.EvalSessionEntry>> querySessions(
             @RequestParam String tenantId,
+            @RequestParam(required = false) String sceneCode,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false) String eventId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                auditService.queryEvalSessions(tenantId, eventId, page - 1, size);
+                auditService.queryEvalSessions(tenantId, sceneCode, status, eventId, page - 1, size);
         return ApiResponse.ok(PageResponse.of(result.items(), result.total(), page, size));
     }
 

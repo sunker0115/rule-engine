@@ -49,11 +49,11 @@ class AuditServiceImpl implements AuditService {
     }
 
     @Override
-    public PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String eventId,
+    public PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String sceneCode,
+                                                           String status, String eventId,
                                                            int page, int size) {
-        // MyBatis-Plus 分页从 1 开始，对外 API 从 0 开始
         Page<EvalSessionRow> mp = evalSessionMapper.selectEvalSessionPage(
-                new Page<>(page + 1, size), Long.valueOf(tenantId), eventId);
+                new Page<>(page + 1, size), Long.valueOf(tenantId), sceneCode, status, eventId);
         List<EvalSessionEntry> items = mp.getRecords().stream()
                 .map(r -> new EvalSessionEntry(
                         String.valueOf(r.getId()),
