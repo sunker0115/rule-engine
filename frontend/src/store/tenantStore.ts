@@ -1,26 +1,42 @@
 import { create } from 'zustand';
+import apiClient from '@/api/client';
+import { ENDPOINTS } from '@/constants/api-endpoints';
 
-interface Tenant {
+interface TenantInfo {
+  id: number;
   code: string;
   name: string;
 }
 
-interface TenantStore {
+interface TenantState {
   current: string | null;
-  list: Tenant[];
-  setCurrent: (code: string) => void;
+  currentId: number | null;
+  list: TenantInfo[];
   loadList: () => Promise<void>;
+  setCurrent: (code: string) => void;
 }
 
-/** 租户状态 —— 完整实现见 Task 7 */
-export const useTenantStore = create<TenantStore>((set) => ({
-  current: localStorage.getItem('tenantCode'),
+export const useTenantStore = create<TenantState>((set, get) => ({
+  current: localStorage.getItem('tenantCode') || null,
+  currentId: Number(localStorage.getItem('tenantId')) || null,
   list: [],
-  setCurrent: (code: string) => {
-    localStorage.setItem('tenantCode', code);
-    set({ current: code });
-  },
+
   loadList: async () => {
-    set({ list: [{ code: 'default', name: '默认租户' }] });
+    const res = await apiClient.get(ENDPOINTS.TENANT_LIST);
+    const list: TenantInfo[] = res.data?.data ?? [];
+    set({ list });
+    const { current } = get();
+    if (!current && list.length > 0) {
+      get().setCurrent(list[0].code);
+    }
+  },
+
+  setCurrent: (code: string) => {
+    const tenant = get().list.find((t) => t.code === code);
+    if (tenant) {
+      localStorage.setItem('tenantCode', tenant.code);
+      localStorage.setItem('tenantId', String(tenant.id));
+      set({ current: tenant.code, currentId: tenant.id });
+    }
   },
 }));
