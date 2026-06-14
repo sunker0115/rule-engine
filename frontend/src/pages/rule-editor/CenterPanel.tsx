@@ -10,6 +10,12 @@ export default function CenterPanel({ metadata }: Props) {
   const { t } = useTranslation('rule');
   const { ast, setAst, kind } = useRuleStore();
 
+  const shared = {
+    conditionTypes: metadata?.conditionTypes ?? [],
+    availableMetrics: metadata?.availableMetrics ?? [],
+    payloadFieldNames: metadata?.payloadFieldNames ?? [],
+  };
+
   if (kind !== 'AST_BOOLEAN' && kind !== 'SCORECARD') {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
@@ -25,8 +31,7 @@ export default function CenterPanel({ metadata }: Props) {
     return (
       <ScorecardEditor
         node={scorecardNode}
-        conditionTypes={metadata?.conditionTypes ?? []}
-        availableMetrics={metadata?.availableMetrics ?? []}
+        {...shared}
         onChange={setAst}
       />
     );
@@ -35,8 +40,7 @@ export default function CenterPanel({ metadata }: Props) {
   return (
     <ConditionTreeEditor
       ast={ast}
-      conditionTypes={metadata?.conditionTypes ?? []}
-      availableMetrics={metadata?.availableMetrics ?? []}
+      {...shared}
       onChange={setAst}
     />
   );

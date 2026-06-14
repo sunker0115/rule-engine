@@ -7,6 +7,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { getRule } from '@/api/rule';
 import { getSceneMetadata } from '@/api/metadata';
+import { getScene } from '@/api/scene';
 import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType } from '@/types';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
@@ -14,6 +15,19 @@ import RightPanel from './RightPanel';
 import DryRunDrawer from './DryRunDrawer';
 
 const { Sider, Content } = Layout;
+
+/** 从 payloadSchema（数组或 JSON Schema）中提取字段名列表 */
+function extractPayloadFieldNames(schema: unknown): string[] {
+  if (!schema) return [];
+  if (Array.isArray(schema)) {
+    return schema.map((f: Record<string, unknown>) => f.name as string).filter(Boolean);
+  }
+  if (typeof schema === 'object') {
+    const props = (schema as Record<string, unknown>).properties;
+    if (props && typeof props === 'object') return Object.keys(props);
+  }
+  return [];
+}
 
 export default function RuleEditor() {
   const { ruleId } = useParams<{ ruleId: string }>();
@@ -41,8 +55,15 @@ export default function RuleEditor() {
           detail.triggerEventTypes ?? [],
           detail.kind,
         );
-        const metaRes = await getSceneMetadata(currentId, detail.sceneCode);
-        setMetadata(metaRes.data ?? null);
+        const [metaRes, sceneRes] = await Promise.all([
+          getSceneMetadata(currentId, detail.sceneCode),
+          getScene(currentId, detail.sceneCode),
+        ]);
+        const meta = metaRes.data ?? null;
+        if (meta) {
+          meta.payloadFieldNames = extractPayloadFieldNames(sceneRes.data?.payloadSchema);
+        }
+        setMetadata(meta);
       }
     } finally {
       setLoading(false);

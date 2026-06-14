@@ -7,6 +7,7 @@ interface Props {
   node: AndNode | OrNode | NotNode;
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
+  payloadFieldNames: string[];
   onChange: (node: AstNode) => void;
   onDelete?: () => void;
 }
@@ -26,7 +27,7 @@ function emptyGroup(): AndNode {
 }
 
 export default function GroupEditor({
-  node, conditionTypes, availableMetrics, onChange, onDelete,
+  node, conditionTypes, availableMetrics, payloadFieldNames, onChange, onDelete,
 }: Props) {
   // NotNode 包裹层
   if (node.type === 'NotNode') {
@@ -44,6 +45,7 @@ export default function GroupEditor({
             node={child}
             conditionTypes={conditionTypes}
             availableMetrics={availableMetrics}
+            payloadFieldNames={payloadFieldNames}
             onChange={(n) => onChange({ ...node, child: n })}
             onDelete={() => onChange({ type: 'AndNode', children: [] })}
           />
@@ -52,6 +54,7 @@ export default function GroupEditor({
             node={child as AndNode | OrNode}
             conditionTypes={conditionTypes}
             availableMetrics={availableMetrics}
+            payloadFieldNames={payloadFieldNames}
             onChange={(n) => onChange({ ...node, child: n })}
           />
         )}
@@ -95,6 +98,7 @@ export default function GroupEditor({
           node={child}
           conditionTypes={conditionTypes}
           availableMetrics={availableMetrics}
+          payloadFieldNames={payloadFieldNames}
           onChange={(n) => updateChild(index, n)}
           onDelete={() => removeChild(index)}
         />
@@ -105,6 +109,7 @@ export default function GroupEditor({
         node={child as AndNode | OrNode | NotNode}
         conditionTypes={conditionTypes}
         availableMetrics={availableMetrics}
+        payloadFieldNames={payloadFieldNames}
         onChange={(n) => updateChild(index, n)}
         onDelete={() => removeChild(index)}
       />

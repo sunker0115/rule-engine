@@ -7,6 +7,7 @@ interface Props {
   node: ScorecardRootNode;
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
+  payloadFieldNames: string[];
   onChange: (node: ScorecardRootNode) => void;
 }
 
@@ -14,7 +15,7 @@ function emptyCondition(): ConditionNode {
   return { type: 'ConditionNode', conditionType: '', params: {}, weight: 0 };
 }
 
-export default function ScorecardEditor({ node, conditionTypes, availableMetrics, onChange }: Props) {
+export default function ScorecardEditor({ node, conditionTypes, availableMetrics, payloadFieldNames, onChange }: Props) {
   const updateCondition = (index: number, c: ConditionNode) => {
     const conditions = [...node.conditions];
     conditions[index] = c;
@@ -74,6 +75,7 @@ export default function ScorecardEditor({ node, conditionTypes, availableMetrics
               node={c}
               conditionTypes={conditionTypes}
               availableMetrics={availableMetrics}
+              payloadFieldNames={payloadFieldNames}
               onChange={(n) => updateCondition(index, n)}
               onDelete={() => removeCondition(index)}
             />

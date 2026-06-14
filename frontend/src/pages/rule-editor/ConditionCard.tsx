@@ -8,6 +8,7 @@ interface Props {
   node: ConditionNode;
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
+  payloadFieldNames: string[];
   onChange: (node: ConditionNode) => void;
   onDelete: () => void;
 }
@@ -18,7 +19,7 @@ function findMeta(types: ConditionTypeMeta[], code: string): ConditionTypeMeta |
 }
 
 export default function ConditionCard({
-  node, conditionTypes, availableMetrics, onChange, onDelete,
+  node, conditionTypes, availableMetrics, payloadFieldNames, onChange, onDelete,
 }: Props) {
   const meta = useMemo(() => findMeta(conditionTypes, node.conditionType), [conditionTypes, node.conditionType]);
   const requiresMetric = meta?.requiresMetric ?? true;
@@ -153,12 +154,16 @@ export default function ConditionCard({
           />
         )}
         {node.valueRef === 'PAYLOAD' && (
-          <Input
+          <Select
             size="small"
-            style={{ width: 160 }}
-            value={node.metricCode ?? ''}
-            onChange={(e) => onChange({ ...node, metricCode: e.target.value })}
-            placeholder="payload 字段名"
+            showSearch
+            style={{ minWidth: 160 }}
+            value={node.metricCode || undefined}
+            onChange={(val) => onChange({ ...node, metricCode: val })}
+            placeholder="payload 字段"
+            popupMatchSelectWidth={false}
+            options={payloadFieldNames.map((f) => ({ value: f, label: f }))}
+            allowClear
           />
         )}
         {requiredKeys.map(renderParamField)}

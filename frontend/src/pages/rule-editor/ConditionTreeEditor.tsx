@@ -7,6 +7,7 @@ interface Props {
   ast: AstNode | null;
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
+  payloadFieldNames: string[];
   onChange: (ast: AstNode) => void;
 }
 
@@ -20,7 +21,7 @@ function normalizeToGroup(node: AstNode): AndNode | OrNode | NotNode {
 }
 
 export default function ConditionTreeEditor({
-  ast, conditionTypes, availableMetrics, onChange,
+  ast, conditionTypes, availableMetrics, payloadFieldNames, onChange,
 }: Props) {
   const group = ast ? normalizeToGroup(ast) : null;
   const isEmpty = group === null ||
@@ -47,6 +48,7 @@ export default function ConditionTreeEditor({
       node={group}
       conditionTypes={conditionTypes}
       availableMetrics={availableMetrics}
+      payloadFieldNames={payloadFieldNames}
       onChange={onChange}
     />
   );

@@ -47,7 +47,12 @@ class RuleControllerTest {
                 new RuleDetailVO(10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
                         "risk.transfer",
                         new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
-                        java.util.List.of(), 42L));
+                        java.util.List.of(),
+                        java.util.List.of(),
+                        java.util.List.of(),
+                        null,
+                        42L,
+                        java.util.List.of()));
 
         mockMvc.perform(get("/admin/v1/rules/10").param("tenantId", "t1"))
                 .andExpect(status().isOk())
