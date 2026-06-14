@@ -197,14 +197,16 @@ function PayloadSchemaEditor({ value, onChange }: { value: unknown; onChange: (v
 
 // ---- defaultParams 可视化编辑器 ----
 function DefaultParamsEditor({ value, onChange }: { value: unknown; onChange: (v: Record<string, string> | null) => void }) {
-  const params = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
-  const entries = Object.entries(params);
+  const [entries, setEntries] = useState<[string, string][]>(() => {
+    const obj = (value && typeof value === 'object' ? value : {}) as Record<string, string>;
+    return Object.entries(obj);
+  });
 
-  const update = (key: string, val: string, oldKey?: string) => {
-    const next = { ...params };
-    if (oldKey !== undefined) delete next[oldKey];
-    if (key) next[key] = val;
-    onChange(Object.keys(next).length > 0 ? next : null);
+  const sync = (newEntries: [string, string][]) => {
+    setEntries(newEntries);
+    const obj: Record<string, string> = {};
+    for (const [k, v] of newEntries) if (k) obj[k] = v;
+    onChange(Object.keys(obj).length > 0 ? obj : null);
   };
 
   return (
@@ -215,20 +217,28 @@ function DefaultParamsEditor({ value, onChange }: { value: unknown; onChange: (v
             size="small"
             placeholder="参数名"
             value={key}
-            onChange={e => update(e.target.value, val, key)}
+            onChange={e => {
+              const next = [...entries];
+              next[i] = [e.target.value, val];
+              sync(next);
+            }}
             style={{ width: 140 }}
           />
           <Input
             size="small"
             placeholder="参数值"
             value={val}
-            onChange={e => update(key, e.target.value)}
+            onChange={e => {
+              const next = [...entries];
+              next[i] = [key, e.target.value];
+              sync(next);
+            }}
             style={{ width: 180 }}
           />
-          <Button type="text" size="small" icon={<DeleteOutlined />} onClick={() => update('', '', key)} />
+          <Button type="text" size="small" icon={<DeleteOutlined />} onClick={() => sync(entries.filter((_, j) => j !== i))} />
         </Space>
       ))}
-      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => update(`param${entries.length + 1}`, '')}>
+      <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => sync([...entries, [`param${entries.length + 1}`, '']])}>
         添加参数
       </Button>
     </div>
