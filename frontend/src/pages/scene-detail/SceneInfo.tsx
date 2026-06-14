@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Descriptions, Button, Form, Input, Select, Switch, message, Space, Table } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -11,9 +11,10 @@ interface Props {
   scene: SceneDetailType;
   tenantId: number;
   onUpdated: () => void;
+  autoEdit?: boolean;
 }
 
-export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
+export default function SceneInfo({ scene, tenantId, onUpdated, autoEdit }: Props) {
   const { t } = useTranslation('scene');
   const tc = useTranslation('common').t;
   const [editing, setEditing] = useState(false);
@@ -44,6 +45,8 @@ export default function SceneInfo({ scene, tenantId, onUpdated }: Props) {
     });
     setEditing(true);
   };
+
+  useEffect(() => { if (autoEdit) startEdit(); }, [autoEdit]);
 
   if (!editing) {
     return (
