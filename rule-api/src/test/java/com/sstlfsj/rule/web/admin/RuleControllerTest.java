@@ -277,10 +277,10 @@ class RuleControllerTest {
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 1);
         page.setRecords(java.util.List.of(
                 new com.sstlfsj.rule.config.api.dto.RuleListItemVO(
-                        10L, "rule.a", "规则A", "PUBLISHED", 42L,
+                        10L, "rule.a", "规则A", "AST_BOOLEAN", "risk.transfer", "PUBLISHED", 42L,
                         java.time.LocalDateTime.of(2026, 6, 1, 0, 0))
         ));
-        when(configService.listRules("t1", "risk.transfer", "PUBLISHED", 1, 20)).thenReturn(page);
+        when(configService.listRules("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20)).thenReturn(page);
 
         mockMvc.perform(get("/admin/v1/rules")
                         .param("tenantId", "t1")
@@ -293,7 +293,7 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.items[0].code").value("rule.a"))
                 .andExpect(jsonPath("$.data.items[0].status").value("PUBLISHED"));
 
-        verify(configService).listRules("t1", "risk.transfer", "PUBLISHED", 1, 20);
+        verify(configService).listRules("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20);
     }
 
     @Test
@@ -302,7 +302,7 @@ class RuleControllerTest {
                 com.sstlfsj.rule.config.api.dto.RuleListItemVO> emptyPage =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
         emptyPage.setRecords(java.util.List.of());
-        when(configService.listRules("t1", null, null, 1, 20)).thenReturn(emptyPage);
+        when(configService.listRules("t1", null, null, null, null, 1, 20)).thenReturn(emptyPage);
 
         mockMvc.perform(get("/admin/v1/rules")
                         .param("tenantId", "t1"))
@@ -310,6 +310,6 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.total").value(0));
 
-        verify(configService).listRules("t1", null, null, 1, 20);
+        verify(configService).listRules("t1", null, null, null, null, 1, 20);
     }
 }

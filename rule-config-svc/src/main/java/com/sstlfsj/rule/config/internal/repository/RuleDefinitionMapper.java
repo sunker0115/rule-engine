@@ -44,13 +44,16 @@ public interface RuleDefinitionMapper extends BaseMapper<RuleDefinition> {
                 .in(RuleDefinition::getSceneId, sceneIds));
     }
 
-    /** 规则列表分页：按租户过滤，sceneId / status 非空时附加条件，按 id 倒序。 */
+    /** 规则列表分页：按租户过滤，sceneId / status / from/to 非空时附加条件，按 id 倒序。 */
     default Page<RuleDefinition> selectRulePage(Page<RuleDefinition> page, Long tenantId,
-                                                Long sceneId, String status) {
+                                                Long sceneId, String status,
+                                                java.time.LocalDate from, java.time.LocalDate to) {
         return selectPage(page, new LambdaQueryWrapper<RuleDefinition>()
                 .eq(RuleDefinition::getTenantId, tenantId)
                 .eq(sceneId != null, RuleDefinition::getSceneId, sceneId)
                 .eq(status != null && !status.isBlank(), RuleDefinition::getStatus, status)
+                .ge(from != null, RuleDefinition::getPublishedAt, from != null ? from.atStartOfDay() : null)
+                .le(to != null, RuleDefinition::getPublishedAt, to != null ? to.plusDays(1).atStartOfDay() : null)
                 .orderByDesc(RuleDefinition::getId));
     }
 }

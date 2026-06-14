@@ -12,6 +12,7 @@ import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.config.internal.repository.TenantMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
@@ -37,6 +38,7 @@ class ConfigServiceImplTest {
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
     @Mock SceneMapper sceneMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
+    @Mock TenantMapper tenantMapper;
     @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks ConfigServiceImpl configService;
 
@@ -92,38 +94,43 @@ class ConfigServiceImplTest {
         scene.setTenantId(1L);
         scene.setCode("risk.transfer");
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
+        when(sceneMapper.selectBatchIds(any())).thenReturn(List.of(scene));
 
         RuleDefinition rd = new RuleDefinition();
         rd.setId(10L);
+        rd.setSceneId(5L);
         rd.setCode("rule.a");
         rd.setName("规则A");
         rd.setStatus(RuleDefinitionStatus.PUBLISHED);
+        rd.setKind(RuleKind.AST_BOOLEAN);
         rd.setCurrentVersion(42L);
         rd.setPublishedAt(java.time.LocalDateTime.of(2026, 6, 1, 0, 0));
 
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> mockPage =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 1);
         mockPage.setRecords(java.util.List.of(rd));
-        when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any())).thenReturn(mockPage);
+        when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any(), any(), any())).thenReturn(mockPage);
 
-        var result = configService.listRules("1", "risk.transfer", "PUBLISHED", 1, 20);
+        var result = configService.listRules("1", "risk.transfer", "PUBLISHED", null, null, 1, 20);
 
         assertThat(result.getTotal()).isEqualTo(1);
         assertThat(result.getRecords()).hasSize(1);
         var item = result.getRecords().get(0);
         assertThat(item.ruleDefinitionId()).isEqualTo(10L);
         assertThat(item.code()).isEqualTo("rule.a");
+        assertThat(item.kind()).isEqualTo("AST_BOOLEAN");
+        assertThat(item.sceneCode()).isEqualTo("risk.transfer");
         assertThat(item.status()).isEqualTo("PUBLISHED");
         assertThat(item.currentVersion()).isEqualTo(42L);
         verify(sceneMapper).findByCode(any(), any());
-        verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any());
+        verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void listRules_sceneNotFound_returnsEmptyPage() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(null);
 
-        var result = configService.listRules("1", "nonexistent.scene", null, 1, 20);
+        var result = configService.listRules("1", "nonexistent.scene", null, null, null, 1, 20);
 
         assertThat(result.getRecords()).isEmpty();
         assertThat(result.getTotal()).isEqualTo(0);
@@ -135,12 +142,12 @@ class ConfigServiceImplTest {
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> emptyPage =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
         emptyPage.setRecords(java.util.List.of());
-        when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any())).thenReturn(emptyPage);
+        when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any(), any(), any())).thenReturn(emptyPage);
 
-        var result = configService.listRules("1", null, null, 1, 20);
+        var result = configService.listRules("1", null, null, null, null, 1, 20);
 
         assertThat(result.getRecords()).isEmpty();
-        verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any());
+        verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(sceneMapper);
     }
 

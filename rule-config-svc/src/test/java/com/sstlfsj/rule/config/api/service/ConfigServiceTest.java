@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
+import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
@@ -30,7 +31,8 @@ class ConfigServiceTest {
         }
 
         @Override
-        public Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status, int page, int size) {
+        public Page<RuleListItemVO> listRules(String tenantId, String sceneCode, String status,
+                String from, String to, int page, int size) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -73,6 +75,11 @@ class ConfigServiceTest {
         public void deleteDraftVersion(String tenantId, Long ruleId, Long versionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
+
+        @Override
+        public List<TenantItemVO> listTenants() {
+            throw new UnsupportedOperationException("stub");
+        }
     };
 
     @Test
@@ -90,7 +97,13 @@ class ConfigServiceTest {
     @Test
     void listRules_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.listRules("t1", null, null, 1, 20));
+                () -> stub.listRules("t1", null, null, null, null, 1, 20));
+    }
+
+    @Test
+    void listTenants_stubThrowsUnsupported() {
+        assertThrows(UnsupportedOperationException.class,
+                () -> stub.listTenants());
     }
 
     @Test

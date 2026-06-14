@@ -171,11 +171,13 @@ public class RuleController {
     }
 
     /**
-     * GET /admin/v1/rules — 查询规则列表，支持 sceneCode / status 过滤与分页。
+     * GET /admin/v1/rules — 查询规则列表，支持 sceneCode / status / 时间范围 过滤与分页。
      *
      * @param tenantId  租户 ID
      * @param sceneCode Scene 编码（可选）
      * @param status    规则状态（可选；DRAFT / PUBLISHED / DISABLED）
+     * @param from      发布时间起始（含，ISO 日期字符串如 2026-06-01；可选）
+     * @param to        发布时间截止（含，ISO 日期字符串；可选）
      * @param page      页码，默认 1
      * @param size      每页条数，默认 20
      * @return 分页规则列表
@@ -185,9 +187,11 @@ public class RuleController {
             @RequestParam String tenantId,
             @RequestParam(required = false) String sceneCode,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<RuleListItemVO> result = configService.listRules(tenantId, sceneCode, status, page, size);
+        Page<RuleListItemVO> result = configService.listRules(tenantId, sceneCode, status, from, to, page, size);
         return ApiResponse.ok(PageResponse.of(result.getRecords(), result.getTotal(), page, size));
     }
 

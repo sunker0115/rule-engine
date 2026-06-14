@@ -142,6 +142,24 @@ class AuditServiceImpl implements AuditService {
         return evalSessionMapper.findSceneCode(sessionId, Long.valueOf(tenantId));
     }
 
+    @Override
+    public EvalSessionEntry getSession(String tenantId, Long sessionId) {
+        EvalSessionRow row = evalSessionMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EvalSessionRow>()
+                        .eq(EvalSessionRow::getId, sessionId)
+                        .eq(EvalSessionRow::getTenantId, Long.valueOf(tenantId)));
+        if (row == null) return null;
+        return new EvalSessionEntry(
+                String.valueOf(row.getId()),
+                tenantId,
+                row.getSceneCode(),
+                row.getEventId(),
+                row.getStatus(),
+                row.getStartedAt() != null
+                        ? row.getStartedAt().toInstant(ZoneOffset.UTC) : null
+        );
+    }
+
     /** 返回点分路径的父路径；根节点（不含 "."）返回 null。 */
     private static String parentPath(String path) {
         int dot = path.lastIndexOf('.');

@@ -8,7 +8,9 @@ import com.sstlfsj.rule.web.mask.TraceMasker;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -35,6 +37,21 @@ public class AuditController {
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
                 auditService.queryEvalSessions(tenantId, eventId, page - 1, size);
         return ApiResponse.ok(PageResponse.of(result.items(), result.total(), page, size));
+    }
+
+    /** GET /admin/v1/evaluation-sessions/{sessionId} — 查询单次评估会话详情
+     * @param sessionId 评估会话 ID @param tenantId 租户
+     * @return 会话详情；不存在返回 404 */
+    @GetMapping("/evaluation-sessions/{sessionId}")
+    public ApiResponse<AuditService.EvalSessionEntry> getSession(
+            @PathVariable Long sessionId,
+            @RequestParam String tenantId) {
+        AuditService.EvalSessionEntry session = auditService.getSession(tenantId, sessionId);
+        if (session == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "会话不存在: sessionId=" + sessionId + ", tenantId=" + tenantId);
+        }
+        return ApiResponse.ok(session);
     }
 
     /** GET /admin/v1/evaluation-sessions/{sessionId}/trace — 查询评估节点 trace

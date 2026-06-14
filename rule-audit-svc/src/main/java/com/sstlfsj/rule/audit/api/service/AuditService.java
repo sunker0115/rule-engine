@@ -141,4 +141,13 @@ public interface AuditService {
      * @return 场景编码；会话不存在返回 null
      */
     String getSessionSceneCode(String tenantId, Long sessionId);
+
+    /**
+     * 查询单次评估会话详情。
+     *
+     * @param tenantId  租户标识
+     * @param sessionId 评估会话 ID
+     * @return 会话详情；不存在返回 null
+     */
+    EvalSessionEntry getSession(String tenantId, Long sessionId);
 }
