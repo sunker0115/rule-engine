@@ -21,6 +21,7 @@ export interface CommonTranslation {
     copy: string;
   };
   label: {
+    id: string;
     code: string;
     name: string;
     status: string;
@@ -32,6 +33,7 @@ export interface CommonTranslation {
     yes: string;
     no: string;
     all: string;
+    tenant: string;
   };
   enum: {
     status: { ACTIVE: string; DISABLED: string };
@@ -154,7 +156,7 @@ export interface MetricTranslation {
 export interface DecisionTranslation {
   title: { list: string };
   action: { create: string; edit: string };
-  column: { code: string; name: string; priority: string; description: string; createdAt: string };
+  column: { code: string; name: string; priority: string; status: string; description: string; createdAt: string; updatedAt: string };
   form: {
     code: string;
     codePlaceholder: string;

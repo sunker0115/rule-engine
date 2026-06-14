@@ -76,7 +76,7 @@ export default function DecisionList() {
       />
     </Space>
     <Table
-      columns={getDecisionColumns(async (code, enabled) => {
+      columns={getDecisionColumns(t, tc, async (code, enabled) => {
         await updateDecision(tenantId, code, { status: enabled ? 'ACTIVE' : 'DISABLED' });
         message.success(enabled ? '已启用' : '已禁用');
         load();

@@ -7,8 +7,10 @@ const decision: DecisionTranslation = {
     code: 'Code',
     name: '名称',
     priority: '优先级',
+    status: '状态',
     description: '说明',
     createdAt: '创建时间',
+    updatedAt: '更新时间',
   },
   form: {
     code: 'Code',

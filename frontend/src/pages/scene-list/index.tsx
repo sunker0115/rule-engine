@@ -109,7 +109,7 @@ export default function SceneList() {
         />
       </Space>
       <Table
-        columns={getSceneColumns(handleToggleStatus)}
+        columns={getSceneColumns(t, tc, handleToggleStatus)}
         dataSource={dataSource}
         rowKey="id"
         loading={loading}

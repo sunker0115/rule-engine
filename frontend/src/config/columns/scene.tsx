@@ -4,26 +4,26 @@ import { ROUTES, route } from '@/constants/routes';
 import type { SceneListItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
-export function getSceneColumns(onToggleStatus?: (code: string, enabled: boolean) => void): ColumnsType<SceneListItem> {
+export function getSceneColumns(t: (key: string) => string, tc: (key: string) => string, onToggleStatus?: (code: string, enabled: boolean) => void): ColumnsType<SceneListItem> {
   return [
     {
-      title: 'Scene Code',
+      title: t('column.sceneCode'),
       dataIndex: 'sceneCode',
       key: 'sceneCode',
       render: (v: string, record: SceneListItem) => (
         <Link to={route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })}>{v}</Link>
       ),
     },
-    { title: '名称', dataIndex: 'name', key: 'name' },
+    { title: t('column.name'), dataIndex: 'name', key: 'name' },
     {
-      title: '模式',
+      title: t('column.dominantMode'),
       dataIndex: 'dominantMode',
       key: 'dominantMode',
       render: (v: string) => <Tag>{v}</Tag>,
     },
-    { title: '主体类型', dataIndex: 'subjectType', key: 'subjectType' },
+    { title: t('column.subjectType'), dataIndex: 'subjectType', key: 'subjectType' },
     {
-      title: '状态',
+      title: t('column.status'),
       dataIndex: 'status',
       key: 'status',
       render: (_v: string, record: SceneListItem) => (
@@ -35,7 +35,7 @@ export function getSceneColumns(onToggleStatus?: (code: string, enabled: boolean
       ),
     },
     {
-      title: '操作',
+      title: t('column.actions'),
       key: 'actions',
       render: (_: unknown, record: SceneListItem) => (
         <Space>
@@ -44,7 +44,7 @@ export function getSceneColumns(onToggleStatus?: (code: string, enabled: boolean
         </Space>
       ),
     },
-    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
-    { title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
   ];
 }

@@ -110,7 +110,7 @@ export default function RuleList() {
       />
     </Space>
     <Table
-      columns={getRuleColumns(setDetailId)}
+      columns={getRuleColumns(t, tc, setDetailId)}
       dataSource={filtered}
       rowKey="ruleDefinitionId"
       loading={loading}

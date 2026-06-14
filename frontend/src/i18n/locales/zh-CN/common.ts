@@ -16,6 +16,7 @@ const common: CommonTranslation = {
     copy: '复制 JSON',
   },
   label: {
+    id: 'ID',
     code: 'Code',
     name: '名称',
     status: '状态',
@@ -27,6 +28,7 @@ const common: CommonTranslation = {
     yes: '是',
     no: '否',
     all: '全部',
+    tenant: '租户',
   },
   enum: {
     status: { ACTIVE: '启用', DISABLED: '禁用' },

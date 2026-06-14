@@ -51,11 +51,11 @@ export default function EvalSessionList() {
       render: (v: string) => <Tag color={colorOf(SESSION_STATUS_OPTIONS, v as never)}>{labelOf(SESSION_STATUS_OPTIONS, v as never)}</Tag>,
     },
     {
-      title: '决策结果', dataIndex: 'finalDecision', key: 'finalDecision', width: 100,
+      title: t('session.column.finalDecision'), dataIndex: 'finalDecision', key: 'finalDecision', width: 100,
       render: (v: string) => v || '-',
     },
     {
-      title: '耗时(ms)', dataIndex: 'evalDurationMs', key: 'evalDurationMs', width: 100,
+      title: t('session.column.evalDuration'), dataIndex: 'evalDurationMs', key: 'evalDurationMs', width: 100,
       render: (v: number) => v != null ? v : '-',
     },
     { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 180 },

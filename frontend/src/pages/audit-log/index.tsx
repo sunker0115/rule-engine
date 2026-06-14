@@ -13,6 +13,7 @@ const { RangePicker } = DatePicker;
 export default function AuditLogList() {
   const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('audit');
+  const tc = useTranslation('common').t;
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -37,8 +38,8 @@ export default function AuditLogList() {
   useEffect(() => { load(); }, [tenantId, page, pageSize, filters]);
 
   const columns: ColumnsType<AuditLogItem> = [
-    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: '租户', dataIndex: 'tenantId', key: 'tenantId', width: 60 },
+    { title: tc('label.id'), dataIndex: 'id', key: 'id', width: 60 },
+    { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 60 },
     {
       title: t('column.actor'), dataIndex: 'actorId', key: 'actorId', width: 100,
     },

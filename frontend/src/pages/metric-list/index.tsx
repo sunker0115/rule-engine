@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listMetrics, createMetric } from '@/api/metric';
-import { METRIC_COLUMNS } from '@/config/columns/metric';
+import { getMetricColumns } from '@/config/columns/metric';
 import { ROUTES, route } from '@/constants/routes';
 import { SOURCE_TYPE_OPTIONS, DATA_TYPE_OPTIONS } from '@/constants/enums';
 import type { MetricDescriptor, SourceType } from '@/types';
@@ -89,7 +89,7 @@ export default function MetricList() {
         style={{ width: 200 }}
       />
     </Space>
-    <Table columns={METRIC_COLUMNS} dataSource={metrics} rowKey="metricCode" loading={loading}
+    <Table columns={getMetricColumns(t, tc)} dataSource={metrics} rowKey="metricCode" loading={loading}
       onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
     <Modal title={t('action.create')} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>
       <Form form={form} layout="vertical">

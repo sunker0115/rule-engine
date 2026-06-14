@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Table, Input, Select, Switch, message, Space } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { STATUS_OPTIONS } from '@/constants/enums';
 import apiClient from '@/api/client';
@@ -15,6 +16,7 @@ interface TenantRow {
 }
 
 export default function TenantList() {
+  const tc = useTranslation('common').t;
   const { current, searchTenants, setCurrent } = useTenantStore();
   const [list, setList] = useState<TenantRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,13 +51,13 @@ export default function TenantList() {
   };
 
   const columns: ColumnsType<TenantRow> = [
-    { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
-    { title: 'Code', dataIndex: 'code', key: 'code' },
-    { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
-    { title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.id'), dataIndex: 'id', key: 'id', width: 80 },
+    { title: tc('label.code'), dataIndex: 'code', key: 'code' },
+    { title: tc('label.name'), dataIndex: 'name', key: 'name' },
+    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
     {
-      title: '状态', dataIndex: 'status', key: 'status', width: 80,
+      title: tc('label.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (_v: string, r: TenantRow) => (
         <Switch
           checked={r.status === 'ACTIVE'}

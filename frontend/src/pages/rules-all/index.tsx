@@ -15,6 +15,7 @@ const { RangePicker } = DatePicker;
 export default function RulesAll() {
   const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('rule');
+  const tc = useTranslation('common').t;
   const [rules, setRules] = useState<RuleListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -83,7 +84,7 @@ export default function RulesAll() {
         />
       </Space>
       <Table
-        columns={getRuleColumns(setDetailId)}
+        columns={getRuleColumns(t, tc, setDetailId)}
         dataSource={dataSource}
         rowKey="ruleDefinitionId"
         loading={loading}

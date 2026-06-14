@@ -5,24 +5,17 @@ import { colorOf, RULE_STATUS_OPTIONS } from '@/constants/enums';
 import type { RuleListItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
-export function getRuleColumns(onDetail?: (id: number) => void): ColumnsType<RuleListItem> {
+export function getRuleColumns(t: (key: string) => string, tc: (key: string) => string, onDetail?: (id: number) => void): ColumnsType<RuleListItem> {
   return [
-    { title: 'Code', dataIndex: 'code', key: 'code' },
-    { title: 'Name', dataIndex: 'name', key: 'name' },
-    {
-      title: 'Kind', dataIndex: 'kind', key: 'kind',
-      render: (v: string) => <Tag>{v}</Tag>,
-    },
-    { title: 'Scene', dataIndex: 'sceneCode', key: 'sceneCode' },
-    {
-      title: 'Status', dataIndex: 'status', key: 'status',
-      render: (v: string) => <Tag color={colorOf(RULE_STATUS_OPTIONS, v as never)}>{v}</Tag>,
-    },
-    { title: 'Version', dataIndex: 'currentVersion', key: 'currentVersion', render: (v: number | null) => v ?? '-' },
-    { title: 'Published', dataIndex: 'publishedAt', key: 'publishedAt', render: (v: string | null) => v?.slice(0, 19) ?? '-' },
-    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
-    {
-      title: 'Actions', key: 'actions',
+    { title: t('column.code'), dataIndex: 'code', key: 'code' },
+    { title: tc('label.name'), dataIndex: 'name', key: 'name' },
+    { title: t('column.kind'), dataIndex: 'kind', key: 'kind', render: (v: string) => <Tag>{v}</Tag> },
+    { title: t('column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode' },
+    { title: t('column.status'), dataIndex: 'status', key: 'status', render: (v: string) => <Tag color={colorOf(RULE_STATUS_OPTIONS, v as never)}>{v}</Tag> },
+    { title: t('column.currentVersion'), dataIndex: 'currentVersion', key: 'currentVersion', render: (v: number | null) => v ?? '-' },
+    { title: t('column.publishedAt'), dataIndex: 'publishedAt', key: 'publishedAt', render: (v: string | null) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.actions'), key: 'actions',
       render: (_: unknown, record: RuleListItem) => (
         <Space>
           {onDetail && <a onClick={(e) => { e.stopPropagation(); onDetail(record.ruleDefinitionId); }}>详情</a>}
