@@ -194,6 +194,15 @@ export interface RuleTranslation {
       noSelection: string;
     };
   };
+  preGate: {
+    modePercent: string; modeBucket: string;
+    labelPercentage: string; labelBucketStart: string; labelBucketEnd: string;
+    labelRange: string; labelRollout: string;
+  };
+  decisionBinding: {
+    selectPlaceholder: string; scoreRangeMin: string; scoreRangeMax: string;
+    addButton: string;
+  };
   version: {
     rollbackConfirm: string;
     deleteDraftConfirm: string;

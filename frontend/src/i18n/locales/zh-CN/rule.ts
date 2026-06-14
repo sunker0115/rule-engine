@@ -45,6 +45,21 @@ const rule: RuleTranslation = {
       noSelection: '选择 AST 节点查看属性',
     },
   },
+  preGate: {
+    modePercent: '百分比模式',
+    modeBucket: '桶区间模式',
+    labelPercentage: '放量',
+    labelBucketStart: '起始桶',
+    labelBucketEnd: '结束桶',
+    labelRange: '区间',
+    labelRollout: '放量',
+  },
+  decisionBinding: {
+    selectPlaceholder: '选择 Decision',
+    scoreRangeMin: '最低分',
+    scoreRangeMax: '最高分',
+    addButton: '添加绑定',
+  },
   version: {
     rollbackConfirm: '将回退到 v{version}（克隆其配置、按当前世界重解析），需显式发布后生效。确认？',
     deleteDraftConfirm: '确认删除此草稿版本？',
