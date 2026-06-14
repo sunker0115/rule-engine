@@ -118,7 +118,7 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
-              width={100}
+              width={140}
               dataIndex={`_c${ci}`}
               title={(
                 <div style={{
@@ -126,14 +126,15 @@ export default function DecisionTableEditor({
                   borderLeft: `3px solid ${isPayload ? '#fa8c16' : '#1890ff'}`,
                 }}>
                   <div style={{
-                    fontSize: 11, padding: '2px 4px',
+                    fontSize: 11, padding: '2px 6px',
                     borderBottom: '1px solid #f0f0f0', background: '#fafafa',
                     borderRadius: '0 6px 0 0', display: 'flex', alignItems: 'center', gap: 4,
                   }}>
-                    <span style={{ color: '#999', whiteSpace: 'nowrap' }}>C{ci + 1}</span>
+                    <span style={{ color: '#999' }}>C{ci + 1}</span>
+                    <div style={{ flex: 1 }} />
                     <Select
                       size="small"
-                      style={{ flex: 1, fontSize: 11 }}
+                      style={{ width: 68, fontSize: 11 }}
                       value={col.operator || undefined}
                       onChange={(v) => updateColumn(ci, 'operator', v)}
                       options={opOptions}
@@ -144,7 +145,7 @@ export default function DecisionTableEditor({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 6px 6px' }}>
                     <Select
                       size="small"
-                      style={{ width: '100%', fontSize: 12 }}
+                      style={{ width: '100%' }}
                       value={col.valueRef ?? 'METRIC'}
                       onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
                       options={[
@@ -155,7 +156,7 @@ export default function DecisionTableEditor({
                     <Select
                       size="small"
                       showSearch
-                      style={{ width: '100%', fontSize: 12 }}
+                      style={{ width: '100%' }}
                       value={col.metricCode || undefined}
                       onChange={(v) => updateColumn(ci, 'metricCode', v)}
                       placeholder={t('editor.decisionTable.metric')}
@@ -166,13 +167,22 @@ export default function DecisionTableEditor({
                 </div>
               )}
               render={(val: unknown, _: unknown, ri: number) => (
-                <Input
-                  size="small"
-                  style={{ width: '100%' }}
-                  value={val != null ? String(val) : ''}
-                  onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
-                  placeholder="-"
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Select
+                    size="small"
+                    style={{ width: 74 }}
+                    value={col.operator || undefined}
+                    onChange={(v) => updateColumn(ci, 'operator', v)}
+                    options={opOptions}
+                  />
+                  <Input
+                    size="small"
+                    style={{ flex: 1 }}
+                    value={val != null ? String(val) : ''}
+                    onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
+                    placeholder="-"
+                  />
+                </div>
               )}
             />
           );
