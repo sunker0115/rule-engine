@@ -17,7 +17,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
   const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
   const tenantId = currentId ?? 0;
-  const { ast, decisionBindings, preGates, triggerEventTypes, dirty } = useRuleStore();
+  const { ast, decisionBindings, preGates, triggerEventTypes, script, dirty } = useRuleStore();
   const [saving, setSaving] = useState(false);
 
   const handleSaveDraft = async () => {
@@ -30,6 +30,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         triggerEventTypes,
         kind: ruleDetail.kind,
         name: ruleDetail.name,
+        script,
       });
       message.success(tc('message.saveSuccess'));
     } finally { setSaving(false); }
@@ -71,6 +72,9 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         <Descriptions.Item label={t('column.code')}>{ruleDetail.code}</Descriptions.Item>
         <Descriptions.Item label={tc('label.name')}>{ruleDetail.name}</Descriptions.Item>
         <Descriptions.Item label={t('column.kind')}><Tag>{ruleDetail.kind}</Tag></Descriptions.Item>
+        {ruleDetail.kind === 'EXPRESSION_SCRIPT' && ruleDetail.script && (
+          <Descriptions.Item label="Executor"><Tag color="blue">{ruleDetail.script.lang}</Tag></Descriptions.Item>
+        )}
         <Descriptions.Item label={t('column.status')}>
           <Tag color={colorOf(RULE_STATUS_OPTIONS, ruleDetail.status as never)}>{ruleDetail.status}</Tag>
         </Descriptions.Item>

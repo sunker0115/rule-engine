@@ -5,6 +5,7 @@ import ConditionTreeEditor from './ConditionTreeEditor';
 import ScorecardEditor from './ScorecardEditor';
 import DecisionTreeEditor from './DecisionTreeEditor';
 import DecisionTableEditor from './DecisionTableEditor';
+import ScriptEditor from './ScriptEditor';
 
 interface Props { metadata: SceneMetadataType | null; }
 
@@ -73,7 +74,12 @@ export default function CenterPanel({ metadata }: Props) {
     );
   }
 
-  // EXPRESSION_SCRIPT / 未知: 占位
+  // EXPRESSION_SCRIPT: 脚本编辑器
+  if (kind === 'EXPRESSION_SCRIPT') {
+    return <ScriptEditor />;
+  }
+
+  // 未知: 占位
   return (
     <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
       {t('editor.centerPanel.placeholder')} ({kind})

@@ -9,6 +9,7 @@ interface RuleState {
   kind: RuleKind;
   displayLabel: string;
   dirty: boolean;
+  script: { source: string; lang: string } | null;
 
   setAst: (ast: AstNode) => void;
   setDecisionBindings: (bindings: DecisionBinding[]) => void;
@@ -16,12 +17,14 @@ interface RuleState {
   setTriggerEventTypes: (types: string[]) => void;
   setKind: (kind: RuleKind) => void;
   setDisplayLabel: (label: string) => void;
+  setScript: (script: { source: string; lang: string } | null) => void;
   loadFromDetail: (
     ast: AstNode | null,
     bindings: DecisionBinding[],
     gates: PreGate[],
     types: string[],
     kind: RuleKind,
+    script: { source: string; lang: string } | null,
   ) => void;
   reset: () => void;
 }
@@ -34,6 +37,7 @@ const initialState = {
   kind: 'AST_BOOLEAN' as RuleKind,
   displayLabel: '',
   dirty: false,
+  script: null as { source: string; lang: string } | null,
 };
 
 export const useRuleStore = create<RuleState>((set) => ({
@@ -45,9 +49,10 @@ export const useRuleStore = create<RuleState>((set) => ({
   setTriggerEventTypes: (types) => set({ triggerEventTypes: types, dirty: true }),
   setKind: (kind) => set({ kind, dirty: true }),
   setDisplayLabel: (label) => set({ displayLabel: label, dirty: true }),
+  setScript: (script) => set({ script, dirty: true }),
 
-  loadFromDetail: (ast, bindings, gates, types, kind) =>
-    set({ ast, decisionBindings: bindings, preGates: gates, triggerEventTypes: types, kind, dirty: false }),
+  loadFromDetail: (ast, bindings, gates, types, kind, script) =>
+    set({ ast, decisionBindings: bindings, preGates: gates, triggerEventTypes: types, kind, script, dirty: false }),
 
   reset: () => set({ ...initialState }),
 }));

@@ -63,6 +63,7 @@ export default function RuleEditor() {
           detail.preGates ?? [],
           detail.triggerEventTypes ?? [],
           detail.kind,
+          detail.script ?? null,
         );
         const [metaRes, sceneRes] = await Promise.all([
           getSceneMetadata(currentId, detail.sceneCode),
