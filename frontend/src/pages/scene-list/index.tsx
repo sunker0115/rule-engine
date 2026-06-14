@@ -62,7 +62,7 @@ export default function SceneList() {
     try {
       const values = await form.validateFields();
       setConfirmLoading(true);
-      await createScene({ ...values, tenantId: currentId });
+      await createScene({ ...values, tenantId });
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
@@ -126,7 +126,7 @@ export default function SceneList() {
         confirmLoading={confirmLoading}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="code" label={t('form.code')} rules={[{ required: true, message: tc('validation.required') }]}>
+          <Form.Item name="sceneCode" label={t('form.code')} rules={[{ required: true, message: tc('validation.required') }]}>
             <Input placeholder={t('form.codePlaceholder')} />
           </Form.Item>
           <Form.Item name="name" label={t('form.name')} rules={[{ required: true, message: tc('validation.required') }]}>
