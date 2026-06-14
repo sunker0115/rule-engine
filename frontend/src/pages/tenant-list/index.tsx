@@ -55,7 +55,6 @@ export default function TenantList() {
     { title: tc('label.code'), dataIndex: 'code', key: 'code' },
     { title: tc('label.name'), dataIndex: 'name', key: 'name' },
     { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
-    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
     {
       title: tc('label.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (_v: string, r: TenantRow) => (
@@ -66,6 +65,7 @@ export default function TenantList() {
         />
       ),
     },
+    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
   ];
 
   return (
