@@ -45,7 +45,7 @@ function fromSchema(schema: unknown): FieldDef[] {
   return [];
 }
 
-function PayloadSchemaEditor({ value, onChange }: { value?: unknown; onChange?: (v: Record<string, unknown> | null) => void }) {
+function PayloadSchemaEditor({ value, onChange }: { value?: unknown; onChange?: (v: unknown) => void }) {
   const [fields, setFields] = useState<FieldDef[]>(() => fromSchema(value));
   const update = (newFields: FieldDef[]) => { setFields(newFields); onChange?.(toSchema(newFields)); };
   return (
