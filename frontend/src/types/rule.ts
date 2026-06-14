@@ -15,6 +15,8 @@ export interface RuleListItem {
 }
 
 export interface RuleDetail extends RuleListItem {
+  kind: RuleKind;           // 详情接口返回，列表不返回
+  sceneCode: string;        // 详情接口返回，列表不返回
   conditionAst?: AstNode | null;
   script?: { source: string; lang: string } | null;
   decisionBindings: DecisionBinding[];

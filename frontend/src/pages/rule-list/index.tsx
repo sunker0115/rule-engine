@@ -5,9 +5,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listRules, createRule } from '@/api/rule';
-import { RULE_COLUMNS } from '@/config/columns/rule';
+import { getRuleColumns } from '@/config/columns/rule';
 import { ROUTES, route } from '@/constants/routes';
 import { RULE_KIND_OPTIONS, RULE_STATUS_OPTIONS } from '@/constants/enums';
+import RuleDetailDrawer from './RuleDetailDrawer';
 import type { RuleListItem } from '@/types';
 
 export default function RuleList() {
@@ -22,6 +23,7 @@ export default function RuleList() {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [keyword, setKeyword] = useState('');
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
   const load = async () => {
@@ -85,7 +87,7 @@ export default function RuleList() {
       />
     </Space>
     <Table
-      columns={RULE_COLUMNS}
+      columns={getRuleColumns(setDetailId)}
       dataSource={filtered}
       rowKey="ruleDefinitionId"
       loading={loading}
@@ -116,5 +118,10 @@ export default function RuleList() {
         </Form.Item>
       </Form>
     </Modal>
+    <RuleDetailDrawer
+      open={detailId !== null}
+      ruleDefinitionId={detailId}
+      onClose={() => setDetailId(null)}
+    />
   </>);
 }
