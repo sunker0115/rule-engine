@@ -155,7 +155,7 @@ export default function ConditionCard({
         {node.valueRef === 'PAYLOAD' && (
           <Input
             size="small"
-            style={{ width: 120 }}
+            style={{ minWidth: 180 }}
             value={node.metricCode ?? ''}
             onChange={(e) => onChange({ ...node, metricCode: e.target.value })}
             placeholder="payload 字段名"
