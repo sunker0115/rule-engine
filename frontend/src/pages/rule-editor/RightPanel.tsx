@@ -1,5 +1,9 @@
 import { Tabs } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useRuleStore } from '@/store/ruleStore';
+import ParamsSchemaForm from '@/components/params-schema-form';
+import RolloutSlider from '@/components/rollout-slider';
+import DecisionBindingEditor from './DecisionBindingEditor';
 import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType } from '@/types';
 
 interface Props {
@@ -7,8 +11,9 @@ interface Props {
   ruleDetail: RuleDetailType;
 }
 
-export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
+export default function RightPanel({ metadata, ruleDetail }: Props) {
   const { t } = useTranslation('rule');
+  const { preGates, decisionBindings, setPreGates, setDecisionBindings } = useRuleStore();
 
   const tabItems = [
     {
@@ -25,7 +30,10 @@ export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
       label: t('editor.rightPanel.preGate'),
       children: (
         <div style={{ padding: 16 }}>
-          <p>{t('preGate.labelRollout')}: {ruleDetail.preGates?.[0]?.params?.percentage ?? t('preGate.na')}%</p>
+          <RolloutSlider
+            value={preGates?.[0]?.params ?? {}}
+            onChange={(params) => setPreGates([{ gateType: 'ROLLOUT', params }])}
+          />
         </div>
       ),
     },
@@ -34,9 +42,11 @@ export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
       label: t('editor.rightPanel.decisionBinding'),
       children: (
         <div style={{ padding: 16 }}>
-          {(ruleDetail.decisionBindings ?? []).map((b, i) => (
-            <p key={i}>{b.decisionCode}</p>
-          ))}
+          <DecisionBindingEditor
+            kind={ruleDetail.kind}
+            value={decisionBindings}
+            onChange={setDecisionBindings}
+          />
         </div>
       ),
     },
