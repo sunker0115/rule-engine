@@ -41,7 +41,7 @@ export default function RuleList() {
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [form] = Form.useForm();
-  const [formKind, setFormKind] = useState('AST_BOOLEAN');
+  const formKind = Form.useWatch('kind', form) || 'AST_BOOLEAN';
 
   const tenantId = tenantFilter ?? currentId ?? 0;
 
@@ -97,7 +97,7 @@ export default function RuleList() {
   return (<>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
       <h2>{t('title.list')} — {sceneCode}</h2>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setFormKind('AST_BOOLEAN'); setModalOpen(true); }}>
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setModalOpen(true); }}>
         {t('action.create')}
       </Button>
     </div>
@@ -158,7 +158,7 @@ export default function RuleList() {
           <Input />
         </Form.Item>
         <Form.Item name="kind" label={t('column.kind')} initialValue="AST_BOOLEAN">
-          <Select options={[...RULE_KIND_OPTIONS]} onChange={(v) => setFormKind(v)} />
+          <Select options={[...RULE_KIND_OPTIONS]} />
         </Form.Item>
         {formKind === 'EXPRESSION_SCRIPT' && (
           <>
