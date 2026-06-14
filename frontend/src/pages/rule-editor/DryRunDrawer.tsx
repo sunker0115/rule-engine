@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Drawer, Form, Input, Select, Button, Typography, message, Tag, Row, Col } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useDryRunStore } from '@/store/dryRunStore';
@@ -65,6 +65,34 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
     if (v === 'null') return null;
     if (/^-?\d+(\.\d+)?$/.test(v)) return parseFloat(v);
     return v;
+  };
+
+  const buildRequestBody = async () => {
+    const values = await form.validateFields();
+    const payload: Record<string, unknown> = {};
+    pairs.forEach(p => {
+      if (p.key.trim()) {
+        payload[p.key.trim()] = toPayloadValue(p.value);
+      }
+    });
+    return {
+      tenantCode: current ?? '',
+      sceneCode,
+      eventType: values.eventType,
+      subjectId: values.subjectId,
+      eventId: `dry-${Date.now()}`,
+      occurredAt: new Date().toISOString(),
+      payload,
+      queryParams: { ruleVersionId, ruleId },
+    };
+  };
+
+  const handleCopyJson = async () => {
+    try {
+      const body = await buildRequestBody();
+      await navigator.clipboard.writeText(JSON.stringify(body, null, 2));
+      message.success('已复制请求 JSON');
+    } catch { /* 表单校验不过时不复制 */ }
   };
 
   const handleExecute = async () => {
@@ -163,9 +191,12 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
             {te('dryRun.addField')}
           </Button>
         </Form.Item>
-        <Button type="primary" onClick={handleExecute} loading={isLoading} block>
-          {te('dryRun.execute')}
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button type="primary" onClick={handleExecute} loading={isLoading} style={{ flex: 1 }}>
+            {te('dryRun.execute')}
+          </Button>
+          <Button icon={<CopyOutlined />} onClick={handleCopyJson}>复制 JSON</Button>
+        </div>
       </Form>
 
       {result && (
