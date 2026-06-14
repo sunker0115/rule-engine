@@ -51,6 +51,7 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
       <Alert
         type="info"
         message={t('inputManifest.info')}
+        description="清单来自已发布规则中实际引用的 payload 字段（非 payloadSchema 声明），无规则或全部走 metric 时为空。"
         style={{ marginBottom: 16 }}
       />
       <div style={{ marginBottom: 16 }}>
