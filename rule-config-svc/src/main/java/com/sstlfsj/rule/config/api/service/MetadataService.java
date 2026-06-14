@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.sstlfsj.rule.config.api.dto.MetricListQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 
@@ -16,8 +17,13 @@ public interface MetadataService {
      * @param scenes   场景编码列表；v1 暂不按场景白名单过滤，传空列表即可
      * @return MetricDescriptor 列表（含 params/cacheTtl/allowProvided）
      */
-    java.util.List<MetricDescriptor> listMetricDefinitions(
-            String tenantId, java.util.List<String> scenes);
+    /** 查询租户全部 metric 运行时定义（对外接口，保留简单参数）。 */
+    default java.util.List<MetricDescriptor> listMetricDefinitions(String tenantId, java.util.List<String> scenes) {
+        return listMetricDefinitions(new MetricListQuery(tenantId, scenes));
+    }
+
+    /** 查询租户 metric 运行时定义（内部使用，Query 收口）。 */
+    java.util.List<MetricDescriptor> listMetricDefinitions(MetricListQuery q);
 
     /**
      * 返回指定场景的元数据，包括可用条件类型和指标列表。

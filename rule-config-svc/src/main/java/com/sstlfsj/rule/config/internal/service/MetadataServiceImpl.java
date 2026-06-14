@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.sstlfsj.rule.config.api.dto.MetricListQuery;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricStatus;
@@ -91,18 +92,18 @@ class MetadataServiceImpl implements MetadataService {
     }
 
     @Override
-    public List<MetricDescriptor> listMetricDefinitions(String tenantId, List<String> scenes) {
-        Long tid = Long.valueOf(tenantId);
+    public List<MetricDescriptor> listMetricDefinitions(MetricListQuery q) {
+        Long tid = Long.valueOf(q.tenantId());
 
         // scenes 为空（FetchMode.ALL）：返回该租户全部 ACTIVE 定义（新规则只能绑 ACTIVE）
-        if (scenes == null || scenes.isEmpty()) {
+        if (q.scenes() == null || q.scenes().isEmpty()) {
             return metricDefinitionMapper.findActiveByTenant(tid)
                     .stream().map(this::toDescriptor).toList();
         }
 
         // scenes 非空（FetchMode.DECLARED）：按被规则引用的精确 (code,version) 并集下发，含 SUPERSEDED。
         // 存量快照可能绑旧版（SUPERSEDED），若只下发 ACTIVE 版，评估期 resolve(code,oldVersion) 返回 null → 评估失败。
-        Set<MetricDependency> deps = collectRequiredDeps(tid, scenes);
+        Set<MetricDependency> deps = collectRequiredDeps(tid, q.scenes());
         if (deps.isEmpty()) return List.of();
 
         List<MetricDescriptor> result = new ArrayList<>();

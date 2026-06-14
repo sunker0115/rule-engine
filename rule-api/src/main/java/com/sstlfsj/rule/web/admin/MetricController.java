@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.config.api.dto.MetricListQuery;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
@@ -30,7 +31,7 @@ public class MetricController {
      */
     @GetMapping
     public ApiResponse<List<MetricDescriptor>> listMetrics(@RequestParam String tenantId) {
-        return ApiResponse.ok(metadataService.listMetricDefinitions(tenantId, List.of()));
+        return ApiResponse.ok(metadataService.listMetricDefinitions(new MetricListQuery(tenantId, List.of())));
     }
 
     /**
