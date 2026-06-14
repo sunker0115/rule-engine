@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.web.sdk;
 
+import com.sstlfsj.rule.config.api.dto.MetricListQuery;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
@@ -34,7 +35,8 @@ class SdkMetricDefinitionControllerTest {
 
     @Test
     void getMetricDefinitions_returns200WithData() throws Exception {
-        when(metadataService.listMetricDefinitions(eq("t1"), any()))
+        // SDK 端点调的是 listMetricDefinitions(MetricListQuery) 单参重载，桩该重载
+        when(metadataService.listMetricDefinitions(any(MetricListQuery.class)))
                 .thenReturn(List.of(new MetricDescriptor(
                         "risk.score", "SQL_AGGREGATE", "LONG", false, 60, Map.of("dataType", "LONG"))));
 

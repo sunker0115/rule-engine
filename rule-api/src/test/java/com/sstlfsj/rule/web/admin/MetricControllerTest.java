@@ -5,7 +5,7 @@ import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
-import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
+import com.sstlfsj.rule.config.api.dto.MetricListItemVO;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,8 +42,10 @@ class MetricControllerTest {
 
     @Test
     void listMetrics_returns200_withDefinitions() throws Exception {
-        when(metadataService.listMetricDefinitions("1", List.of())).thenReturn(List.of(
-                new MetricDescriptor("account.age", 1, "ATTRIBUTE", "LONG", false, 60, java.util.Map.of())));
+        // listMetrics 端点委托 listMetricItems(tenantId) → List<MetricListItemVO>
+        when(metadataService.listMetricItems("1")).thenReturn(List.of(
+                new MetricListItemVO("account.age", 1, "ATTRIBUTE", "LONG", false, 60, java.util.Map.of(),
+                        "账龄", "ACTIVE", "1", null, null)));
 
         mockMvc.perform(get("/admin/v1/metrics").param("tenantId", "1"))
                 .andExpect(status().isOk())
@@ -51,7 +53,7 @@ class MetricControllerTest {
                 .andExpect(jsonPath("$.data[0].metricCode").value("account.age"))
                 .andExpect(jsonPath("$.data[0].dataType").value("LONG"));
 
-        verify(metadataService).listMetricDefinitions("1", List.of());
+        verify(metadataService).listMetricItems("1");
     }
 
     // ── POST /admin/v1/metrics ──────────────────────────────────────────────────
