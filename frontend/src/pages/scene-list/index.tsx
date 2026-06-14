@@ -62,7 +62,7 @@ export default function SceneList() {
     try {
       const values = await form.validateFields();
       setConfirmLoading(true);
-      await createScene({ ...values, tenantId, defaultParams: values.defaultParams || { timezone: 'UTC' } });
+      await createScene({ ...values, tenantId, status: 'DISABLED', defaultParams: values.defaultParams || { timezone: 'UTC' } });
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();

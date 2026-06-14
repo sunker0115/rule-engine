@@ -29,6 +29,7 @@ export function getSceneColumns(t: (key: string) => string, tc: (key: string) =>
       key: 'status',
       render: (_v: string, record: SceneListItem) => (
         <Switch
+          onClick={(_, e) => e?.stopPropagation?.()}
           checked={record.status === 'ACTIVE'}
           onChange={(enabled) => onToggleStatus?.(record.sceneCode, enabled)}
           size="small"
