@@ -8,10 +8,13 @@ interface SceneState {
   current: SceneDetail | null;
   metadata: SceneMetadata | null;
   loading: boolean;
+  selectedSceneCode: string | null;
+  selectedSceneName: string;
   loadList: (tenantId: number) => Promise<void>;
   loadDetail: (tenantId: number, sceneCode: string) => Promise<void>;
   loadMetadata: (tenantId: number, sceneCode: string) => Promise<void>;
   clearCurrent: () => void;
+  setSelectedScene: (code: string | null, name?: string) => void;
 }
 
 export const useSceneStore = create<SceneState>((set) => ({
@@ -19,6 +22,8 @@ export const useSceneStore = create<SceneState>((set) => ({
   current: null,
   metadata: null,
   loading: false,
+  selectedSceneCode: localStorage.getItem('selectedSceneCode'),
+  selectedSceneName: localStorage.getItem('selectedSceneName') ?? '',
 
   loadList: async (tenantId: number) => {
     set({ loading: true });
@@ -37,4 +42,17 @@ export const useSceneStore = create<SceneState>((set) => ({
   },
 
   clearCurrent: () => set({ current: null, metadata: null }),
+
+  setSelectedScene: (code: string | null, name?: string) => {
+    if (code == null) {
+      localStorage.removeItem('selectedSceneCode');
+      localStorage.removeItem('selectedSceneName');
+      set({ selectedSceneCode: null, selectedSceneName: '' });
+    } else {
+      localStorage.setItem('selectedSceneCode', code);
+      const sceneName = name ?? '';
+      localStorage.setItem('selectedSceneName', sceneName);
+      set({ selectedSceneCode: code, selectedSceneName: sceneName });
+    }
+  },
 }));
