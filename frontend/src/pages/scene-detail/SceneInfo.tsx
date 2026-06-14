@@ -6,6 +6,7 @@ interface Props { scene: SceneDetailType; }
 
 export default function SceneInfo({ scene }: Props) {
   const { t } = useTranslation('scene');
+  const tc = useTranslation('common').t;
 
   const schemaFields = Array.isArray(scene.payloadSchema) ? scene.payloadSchema as Record<string, unknown>[] : [];
   const params = (scene.defaultParams && typeof scene.defaultParams === 'object'
@@ -37,10 +38,10 @@ export default function SceneInfo({ scene }: Props) {
             size="small"
             pagination={false}
             columns={[
-              { title: '字段名', dataIndex: 'name', key: 'name', width: 150 },
-              { title: '类型', dataIndex: 'type', key: 'type', width: 100 },
-              { title: '必填', dataIndex: 'required', key: 'required', width: 60, render: (v: boolean) => v ? '是' : '否' },
-              { title: '敏感', dataIndex: 'sensitive', key: 'sensitive', width: 60, render: (v: boolean) => v ? '是' : '否' },
+              { title: t('inputManifest.column.name'), dataIndex: 'name', key: 'name', width: 150 },
+              { title: t('inputManifest.column.dataType'), dataIndex: 'type', key: 'type', width: 100 },
+              { title: t('inputManifest.column.required'), dataIndex: 'required', key: 'required', width: 60, render: (v: boolean) => v ? tc('label.yes') : tc('label.no') },
+              { title: t('inputManifest.sensitive'), dataIndex: 'sensitive', key: 'sensitive', width: 60, render: (v: boolean) => v ? tc('label.yes') : tc('label.no') },
             ]}
           />
         </div>

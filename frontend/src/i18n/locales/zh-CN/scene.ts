@@ -43,6 +43,7 @@ const scene: SceneTranslation = {
     column: { name: '字段名', dataType: '类型', required: '必填' },
     required: '必填',
     optional: '可选',
+    sensitive: '敏感',
     exampleTitle: '请求体 payload 示例',
   },
 };

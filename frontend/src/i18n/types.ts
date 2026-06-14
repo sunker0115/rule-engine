@@ -97,6 +97,7 @@ export interface SceneTranslation {
     column: { name: string; dataType: string; required: string };
     required: string;
     optional: string;
+    sensitive: string;
     exampleTitle: string;
   };
 }
