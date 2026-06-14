@@ -11,11 +11,6 @@ export async function listSessions(params: Record<string, unknown>) {
   return res.data.data; // unwrap: ApiResponse → PageResponse
 }
 
-export async function getSession(tenantId: number, sessionId: number) {
-  const res = await apiClient.get<ApiResponse<EvalSessionDetail>>(ENDPOINTS.SESSION_DETAIL(sessionId), { params: { tenantId } });
-  return res.data.data;
-}
-
 export async function getSessionTrace(tenantId: number, sessionId: number) {
   const res = await apiClient.get<ApiResponse<NodeTraceItem[]>>(ENDPOINTS.SESSION_TRACE_TREE(sessionId), { params: { tenantId } });
   return res.data.data;
