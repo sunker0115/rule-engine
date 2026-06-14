@@ -138,13 +138,6 @@ export default function DecisionTableEditor({
                     <Select
                       size="small"
                       style={{ width: '100%' }}
-                      value={col.operator || undefined}
-                      onChange={(v) => updateColumn(ci, 'operator', v)}
-                      options={opOptions}
-                    />
-                    <Select
-                      size="small"
-                      style={{ width: '100%' }}
                       value={col.valueRef ?? 'METRIC'}
                       onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
                       options={[
@@ -161,6 +154,13 @@ export default function DecisionTableEditor({
                       placeholder={t('editor.decisionTable.metric')}
                       popupMatchSelectWidth={false}
                       options={fieldOptions}
+                    />
+                    <Select
+                      size="small"
+                      style={{ width: '100%' }}
+                      value={col.operator || undefined}
+                      onChange={(v) => updateColumn(ci, 'operator', v)}
+                      options={opOptions}
                     />
                   </div>
                 </div>
