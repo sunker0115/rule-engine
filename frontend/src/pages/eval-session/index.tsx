@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Table, Select, Tag } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listSessions } from '@/api/evalSession';
@@ -18,7 +18,17 @@ export default function EvalSessionList() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [filters, setFilters] = useState<Record<string, unknown>>({});
+  const [searchParams] = useSearchParams();
+
+  const [filters, setFilters] = useState<Record<string, unknown>>(() => {
+    const init: Record<string, unknown> = {};
+    const sceneCode = searchParams.get('sceneCode');
+    if (sceneCode) init.sceneCode = sceneCode;
+    const statuses = searchParams.getAll('status');
+    if (statuses.length > 0) init.status = statuses.join(',');
+    else init.status = 'HIT,BLOCKED'; // 默认只看命中和被拦截
+    return init;
+  });
 
   const load = async () => {
     if (!currentId) return;

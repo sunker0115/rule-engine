@@ -3,7 +3,6 @@ export const ROUTES = {
   SCENES:         '/scenes',
   SCENE_DETAIL:   '/scenes/:sceneCode',
   SCENE_RULES:    '/scenes/:sceneCode/rules',
-  RULES:          '/rules',
   RULE_EDITOR:    '/scenes/:sceneCode/rules/:ruleId',
   METRICS:        '/metrics',
   METRIC_DETAIL:  '/metrics/:metricCode',

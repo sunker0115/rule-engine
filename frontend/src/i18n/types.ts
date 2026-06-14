@@ -9,6 +9,9 @@ export interface CommonTranslation {
   app: { title: string };
   header: { actorLabel: string };
   tenant: { placeholder: string };
+  scene: {
+    selector: { placeholder: string; notSelected: string };
+  };
   button: {
     back: string;
     save: string;
