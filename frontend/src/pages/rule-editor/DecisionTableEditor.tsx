@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Select, Input, Table, Popconfirm, Typography } from 'antd';
+import { Button, Select, Input, Table, Popconfirm, Typography, Tag, Space } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -27,14 +27,13 @@ export default function DecisionTableEditor({
     });
   }, [currentId]);
 
-  const columns: DecisionTableColumn[] = node.columns ?? [];
+  const cols: DecisionTableColumn[] = node.columns ?? [];
   const rows: DecisionTableRow[] = node.rows ?? [];
 
-  // 空表自动预填
   useEffect(() => {
     const firstMetric = availableMetrics[0]?.metricCode || payloadFieldNames[0] || '';
     if (!firstMetric) return;
-    if (columns.length === 0) {
+    if (cols.length === 0) {
       onChange({
         ...node,
         columns: [{ metricCode: firstMetric, operator: 'EQ', dataType: null }],
@@ -42,10 +41,10 @@ export default function DecisionTableEditor({
       });
       return;
     }
-    const fixed = columns.map((c) =>
+    const fixed = cols.map((c) =>
       c.metricCode ? c : { ...c, metricCode: firstMetric },
     );
-    if (JSON.stringify(fixed) !== JSON.stringify(columns)) {
+    if (JSON.stringify(fixed) !== JSON.stringify(cols)) {
       onChange({ ...node, columns: fixed });
     }
   }, []);
@@ -55,65 +54,108 @@ export default function DecisionTableEditor({
     .filter((ct) => TABLE_OPERATORS.includes(ct.code))
     .map((ct) => ({ value: ct.code, label: ct.displayName }));
 
-  // ===== 列操作 =====
   const addColumn = () => {
-    const newCols = [...columns, { metricCode: '', operator: 'EQ', dataType: null }];
+    const newCols = [...cols, { metricCode: '', operator: 'EQ', dataType: null }];
     const newRows = rows.map((r) => ({ ...r, conditions: [...r.conditions, null] }));
     onChange({ ...node, columns: newCols, rows: newRows });
   };
 
-  const updateColumn = (colIndex: number, field: keyof DecisionTableColumn, value: unknown) => {
-    const newCols = columns.map((c, i) => (i === colIndex ? { ...c, [field]: value } : c));
+  const updateColumn = (ci: number, field: keyof DecisionTableColumn, value: unknown) => {
+    const newCols = cols.map((c, i) => (i === ci ? { ...c, [field]: value } : c));
     onChange({ ...node, columns: newCols });
   };
 
-  const removeColumn = (colIndex: number) => {
-    if (columns.length <= 1) return;
-    const newCols = columns.filter((_, i) => i !== colIndex);
-    const newRows = rows.map((r) => ({ ...r, conditions: r.conditions.filter((_, i) => i !== colIndex) }));
+  const removeColumn = (ci: number) => {
+    if (cols.length <= 1) return;
+    const newCols = cols.filter((_, i) => i !== ci);
+    const newRows = rows.map((r) => ({ ...r, conditions: r.conditions.filter((_, i) => i !== ci) }));
     onChange({ ...node, columns: newCols, rows: newRows });
   };
 
-  // ===== 行操作 =====
   const addRow = () => {
-    const newRow: DecisionTableRow = { conditions: columns.map(() => null), decisionCode: '' };
-    onChange({ ...node, rows: [...rows, newRow] });
+    onChange({ ...node, rows: [...rows, { conditions: cols.map(() => null), decisionCode: '' }] });
   };
 
-  const updateRow = (rowIndex: number, field: 'decisionCode' | 'condition', colIndex: number, value: unknown) => {
+  const updateRow = (ri: number, field: 'decisionCode' | 'condition', ci: number, value: unknown) => {
     const newRows = rows.map((r, i) => {
-      if (i !== rowIndex) return r;
+      if (i !== ri) return r;
       if (field === 'decisionCode') return { ...r, decisionCode: value as string };
       const newConds = [...r.conditions];
-      newConds[colIndex] = value;
+      newConds[ci] = value;
       return { ...r, conditions: newConds };
     });
     onChange({ ...node, rows: newRows });
   };
 
-  const removeRow = (rowIndex: number) => {
-    onChange({ ...node, rows: rows.filter((_, i) => i !== rowIndex) });
+  const removeRow = (ri: number) => {
+    onChange({ ...node, rows: rows.filter((_, i) => i !== ri) });
   };
-
-  // ===== 数据源 =====
-  const dataSource = rows.map((r, ri) => {
-    const base: Record<string, unknown> = { _key: ri, _decisionCode: r.decisionCode };
-    columns.forEach((_, ci) => { base[`_c${ci}`] = r.conditions[ci]; });
-    return base;
-  });
 
   return (
     <div style={{ padding: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <Typography.Text strong>{t('editor.decisionTable.title')}</Typography.Text>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <Space size={8}>
           <Button size="small" icon={<PlusOutlined />} onClick={addColumn}>{t('editor.decisionTable.addColumn')}</Button>
           <Button size="small" icon={<PlusOutlined />} onClick={addRow}>{t('editor.decisionTable.addRow')}</Button>
-        </div>
+        </Space>
       </div>
 
+      {/* 列定义区 */}
+      <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {cols.map((col, ci) => {
+          const isPayload = col.valueRef === 'PAYLOAD';
+          const fieldOptions = isPayload
+            ? payloadFieldNames.map((f) => ({ value: f, label: f }))
+            : availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }));
+          return (
+            <div key={ci} style={{
+              border: '1px solid #d9d9d9', borderRadius: 6, padding: '6px 10px',
+              background: isPayload ? '#fff7e6' : '#f0f5ff',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Tag style={{ margin: 0, fontSize: 11 }}>C{ci + 1}</Tag>
+              <Select
+                size="small"
+                style={{ width: 70 }}
+                value={col.valueRef ?? 'METRIC'}
+                onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
+                options={[
+                  { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
+                  { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
+                ]}
+              />
+              <Select
+                size="small"
+                showSearch
+                style={{ width: 150 }}
+                value={col.metricCode || undefined}
+                onChange={(v) => updateColumn(ci, 'metricCode', v)}
+                placeholder={t('editor.decisionTable.metric')}
+                popupMatchSelectWidth={false}
+                options={fieldOptions}
+              />
+              <Select
+                size="small"
+                style={{ width: 110 }}
+                value={col.operator || undefined}
+                onChange={(v) => updateColumn(ci, 'operator', v)}
+                options={opOptions}
+              />
+              <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                onClick={() => removeColumn(ci)} />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 数据表格 */}
       <Table
-        dataSource={dataSource}
+        dataSource={rows.map((r, ri) => {
+          const base: Record<string, unknown> = { _key: ri, _decisionCode: r.decisionCode };
+          cols.forEach((_, ci) => { base[`_c${ci}`] = r.conditions[ci]; });
+          return base;
+        })}
         rowKey="_key"
         size="small"
         pagination={false}
@@ -123,65 +165,23 @@ export default function DecisionTableEditor({
           <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={addRow} block>{t('editor.decisionTable.addRow')}</Button>
         )}
       >
-
-        {/* 条件列 */}
-        {columns.map((col, ci) => {
-          const isPayload = col.valueRef === 'PAYLOAD';
-          const fieldOptions = isPayload
-            ? payloadFieldNames.map((f) => ({ value: f, label: f }))
-            : availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }));
-          return (
-            <Table.Column
-              key={ci}
-              width={200}
-              dataIndex={`_c${ci}`}
-              title={(
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <Select
-                    size="small"
-                    style={{ width: '100%' }}
-                    value={col.valueRef ?? 'METRIC'}
-                    onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
-                    options={[
-                      { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
-                      { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
-                    ]}
-                  />
-                  <Select
-                    size="small"
-                    showSearch
-                    style={{ width: '100%' }}
-                    value={col.metricCode || undefined}
-                    onChange={(v) => updateColumn(ci, 'metricCode', v)}
-                    placeholder={t('editor.decisionTable.metric')}
-                    popupMatchSelectWidth={false}
-                    options={fieldOptions}
-                  />
-                  <div style={{ display: 'flex', gap: 3 }}>
-                    <Select
-                      size="small"
-                      style={{ flex: 1 }}
-                      value={col.operator || undefined}
-                      onChange={(v) => updateColumn(ci, 'operator', v)}
-                      options={opOptions}
-                    />
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                      onClick={() => removeColumn(ci)}
-                      title={t('editor.decisionTable.deleteColumn')} />
-                  </div>
-                </div>
-              )}
-              render={(val: unknown, _: unknown, ri: number) => (
-                <Input
-                  size="small"
-                  value={val != null ? String(val) : ''}
-                  onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
-                  placeholder="-"
-                />
-              )}
-            />
-          );
-        })}
+        {/* 条件列：表头只显示 C1/C2... */}
+        {cols.map((col, ci) => (
+          <Table.Column
+            key={ci}
+            title={`C${ci + 1}`}
+            width={120}
+            dataIndex={`_c${ci}`}
+            render={(val: unknown, _: unknown, ri: number) => (
+              <Input
+                size="small"
+                value={val != null ? String(val) : ''}
+                onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
+                placeholder="-"
+              />
+            )}
+          />
+        ))}
 
         {/* 决策码列 */}
         <Table.Column
@@ -192,7 +192,7 @@ export default function DecisionTableEditor({
             <Select
               size="small"
               showSearch
-              style={{ width: 120 }}
+              style={{ width: '100%' }}
               value={val || undefined}
               onChange={(v) => updateRow(ri, 'decisionCode', 0, v)}
               options={decisions}
@@ -201,7 +201,7 @@ export default function DecisionTableEditor({
           )}
         />
 
-        {/* 删除行 */}
+        {/* 操作列 */}
         <Table.Column
           title=""
           width={36}
