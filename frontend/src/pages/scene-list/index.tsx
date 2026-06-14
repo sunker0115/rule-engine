@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, Select, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listScenes, createScene } from '@/api/scene';
 import { SCENE_COLUMNS } from '@/config/columns/scene';
@@ -11,6 +12,8 @@ import type { SceneListItem } from '@/types';
 
 export default function SceneList() {
   const navigate = useNavigate();
+  const { t } = useTranslation('scene');
+  const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
   const [scenes, setScenes] = useState<SceneListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,7 +39,7 @@ export default function SceneList() {
       const values = await form.validateFields();
       setConfirmLoading(true);
       await createScene({ ...values, tenantId: currentId });
-      message.success('Scene 创建成功');
+      message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
       load();
@@ -50,9 +53,9 @@ export default function SceneList() {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2>Scene 列表</h2>
+        <h2>{t('title.list')}</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-          新建 Scene
+          {t('action.create')}
         </Button>
       </div>
       <Table
@@ -66,26 +69,26 @@ export default function SceneList() {
         })}
       />
       <Modal
-        title="新建 Scene"
+        title={t('action.create')}
         open={modalOpen}
         onOk={handleCreate}
         onCancel={() => { setModalOpen(false); form.resetFields(); }}
         confirmLoading={confirmLoading}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="code" label="Scene Code" rules={[{ required: true, message: '请输入 Scene Code' }]}>
-            <Input placeholder="如 risk.transfer" />
+          <Form.Item name="code" label={t('form.code')} rules={[{ required: true, message: tc('validation.required') }]}>
+            <Input placeholder={t('form.codePlaceholder')} />
           </Form.Item>
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
+          <Form.Item name="name" label={t('form.name')} rules={[{ required: true, message: tc('validation.required') }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="dominantMode" label="使用模式" initialValue="PUSH">
+          <Form.Item name="dominantMode" label={t('form.dominantMode')} initialValue="PUSH">
             <Select options={[...DOMINANT_MODE_OPTIONS]} />
           </Form.Item>
-          <Form.Item name="subjectType" label="主体类型" initialValue="USER">
+          <Form.Item name="subjectType" label={t('form.subjectType')} initialValue="USER">
             <Select options={[{ value: 'USER', label: 'USER' }]} />
           </Form.Item>
-          <Form.Item name="description" label="说明">
+          <Form.Item name="description" label={t('form.description')}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>

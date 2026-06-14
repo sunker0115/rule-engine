@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Table, Select, Typography, Alert, Spin } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { getInputManifest } from '@/api/inputManifest';
 import type { InputFieldItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: Props) {
+  const { t } = useTranslation('scene');
   const [fields, setFields] = useState<InputFieldItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [eventType, setEventType] = useState<string | undefined>(undefined);
@@ -28,13 +30,13 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
   useEffect(() => { load(); }, [eventType, sceneCode, tenantCode]);
 
   const columns: ColumnsType<InputFieldItem> = [
-    { title: '字段名', dataIndex: 'name', key: 'name' },
-    { title: '类型', dataIndex: 'dataType', key: 'dataType' },
+    { title: t('inputManifest.column.name'), dataIndex: 'name', key: 'name' },
+    { title: t('inputManifest.column.dataType'), dataIndex: 'dataType', key: 'dataType' },
     {
-      title: '必填',
+      title: t('inputManifest.column.required'),
       dataIndex: 'required',
       key: 'required',
-      render: (v: boolean) => v ? <span style={{ color: 'red' }}>必填</span> : '可选',
+      render: (v: boolean) => v ? <span style={{ color: 'red' }}>{t('inputManifest.required')}</span> : t('inputManifest.optional'),
     },
   ];
 
@@ -48,14 +50,14 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
     <div>
       <Alert
         type="info"
-        message="调用方对该场景发评估请求时，payload 需包含以下字段"
+        message={t('inputManifest.info')}
         style={{ marginBottom: 16 }}
       />
       <div style={{ marginBottom: 16 }}>
-        <span style={{ marginRight: 8 }}>按事件类型筛选：</span>
+        <span style={{ marginRight: 8 }}>{t('inputManifest.filterEventType')}：</span>
         <Select
           allowClear
-          placeholder="全部事件类型"
+          placeholder={t('inputManifest.filterAll')}
           value={eventType}
           onChange={setEventType}
           options={(eventTypes ?? []).map((et) => ({ value: et, label: et }))}
@@ -67,7 +69,7 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
       </Spin>
       {fields.length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <Typography.Title level={5}>请求体 payload 示例</Typography.Title>
+          <Typography.Title level={5}>{t('inputManifest.exampleTitle')}</Typography.Title>
           <pre style={{ background: '#f5f5f5', padding: 16, borderRadius: 4, overflow: 'auto' }}>
             {exampleJson}
           </pre>

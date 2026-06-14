@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Descriptions, Button, Tabs, Table, Spin, message, Form, Input, InputNumber, Select, Switch, Modal, Space } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listMetrics, updateMetric, getMetricImpact } from '@/api/metric';
 import { ROUTES } from '@/constants/routes';
@@ -12,6 +13,8 @@ import type { ColumnsType } from 'antd/es/table';
 export default function MetricDetail() {
   const { metricCode } = useParams<{ metricCode: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation('metric');
+  const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
   const [metric, setMetric] = useState<MetricDescriptor | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,8 +40,8 @@ export default function MetricDetail() {
     const breakingChange = values.sourceType !== metric?.sourceType || values.dataType !== metric?.dataType;
     if (breakingChange) {
       Modal.confirm({
-        title: '破坏性变更',
-        content: 'sourceType 或 dataType 变更将产生新版本，已有规则仍绑定旧版本。确认继续？',
+        title: t('form.breakingChangeTitle'),
+        content: t('form.breakingChangeContent'),
         onOk: () => doSave(values, true),
       });
     } else {
@@ -50,7 +53,7 @@ export default function MetricDetail() {
     setSaving(true);
     try {
       await updateMetric(currentId!, metricCode!, breaking, values);
-      message.success('保存成功');
+      message.success(tc('message.saveSuccess'));
       setEditing(false);
       load();
     } finally { setSaving(false); }
@@ -69,11 +72,11 @@ export default function MetricDetail() {
   if (!metric) return <div>Metric 不存在</div>;
 
   const impactColumns: ColumnsType<AffectedRule> = [
-    { title: '规则 Code', dataIndex: 'ruleCode', key: 'ruleCode' },
-    { title: '规则名称', dataIndex: 'ruleName', key: 'ruleName' },
-    { title: 'Scene', dataIndex: 'sceneCode', key: 'sceneCode' },
+    { title: t('impact.column.ruleCode'), dataIndex: 'ruleCode', key: 'ruleCode' },
+    { title: t('impact.column.ruleName'), dataIndex: 'ruleName', key: 'ruleName' },
+    { title: t('impact.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode' },
     {
-      title: '状态', dataIndex: 'status', key: 'status',
+      title: t('impact.column.status'), dataIndex: 'status', key: 'status',
       render: (v: string) => <span style={{ color: colorOf(STATUS_OPTIONS, v as never) }}>{v}</span>,
     },
   ];
@@ -84,37 +87,37 @@ export default function MetricDetail() {
       label: '基本信息',
       children: editing ? (
         <Form form={form} layout="vertical">
-          <Form.Item name="metricCode" label="Metric Code"><Input disabled /></Form.Item>
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="sourceType" label="取数方式"><Select options={[...SOURCE_TYPE_OPTIONS]} /></Form.Item>
-          <Form.Item name="dataType" label="数据类型"><Select options={[...DATA_TYPE_OPTIONS]} /></Form.Item>
-          <Form.Item name="cacheTtlSeconds" label="缓存 TTL (秒)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
-          <Form.Item name="allowProvided" label="allowProvided" valuePropName="checked"><Switch /></Form.Item>
-          <Space><Button type="primary" onClick={handleSave} loading={saving}>保存</Button><Button onClick={() => setEditing(false)}>取消</Button></Space>
+          <Form.Item name="metricCode" label={t('form.code')}><Input disabled /></Form.Item>
+          <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="sourceType" label={t('form.sourceType')}><Select options={[...SOURCE_TYPE_OPTIONS]} /></Form.Item>
+          <Form.Item name="dataType" label={t('form.dataType')}><Select options={[...DATA_TYPE_OPTIONS]} /></Form.Item>
+          <Form.Item name="cacheTtlSeconds" label={t('form.cacheTtl')}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="allowProvided" label={t('form.allowProvided')} valuePropName="checked"><Switch /></Form.Item>
+          <Space><Button type="primary" onClick={handleSave} loading={saving}>{tc('button.save')}</Button><Button onClick={() => setEditing(false)}>{tc('button.cancel')}</Button></Space>
         </Form>
       ) : (
         <div>
           <Descriptions bordered column={2} size="small">
-            <Descriptions.Item label="Metric Code">{metric.metricCode}</Descriptions.Item>
-            <Descriptions.Item label="名称">{metric.name}</Descriptions.Item>
-            <Descriptions.Item label="取数方式">{metric.sourceType}</Descriptions.Item>
-            <Descriptions.Item label="数据类型">{metric.dataType}</Descriptions.Item>
+            <Descriptions.Item label={t('form.code')}>{metric.metricCode}</Descriptions.Item>
+            <Descriptions.Item label={t('form.name')}>{metric.name}</Descriptions.Item>
+            <Descriptions.Item label={t('form.sourceType')}>{metric.sourceType}</Descriptions.Item>
+            <Descriptions.Item label={t('form.dataType')}>{metric.dataType}</Descriptions.Item>
             <Descriptions.Item label="版本">{metric.metricVersion}</Descriptions.Item>
-            <Descriptions.Item label="缓存 TTL(s)">{metric.cacheTtlSeconds}</Descriptions.Item>
-            <Descriptions.Item label="allowProvided">{metric.allowProvided ? '是' : '否'}</Descriptions.Item>
+            <Descriptions.Item label={t('form.cacheTtl')}>{metric.cacheTtlSeconds}</Descriptions.Item>
+            <Descriptions.Item label={t('form.allowProvided')}>{metric.allowProvided ? tc('label.yes') : tc('label.no')}</Descriptions.Item>
           </Descriptions>
           <div style={{ marginTop: 16 }}>
-            <Button type="primary" onClick={() => { form.setFieldsValue(metric); setEditing(true); }}>编辑</Button>
+            <Button type="primary" onClick={() => { form.setFieldsValue(metric); setEditing(true); }}>{tc('button.edit')}</Button>
           </div>
         </div>
       ),
     },
     {
       key: 'impact',
-      label: '影响面查询',
+      label: t('action.queryImpact'),
       children: (
         <div>
-          <Button type="primary" onClick={loadImpact} loading={impactLoading} style={{ marginBottom: 16 }}>查询引用的规则</Button>
+          <Button type="primary" onClick={loadImpact} loading={impactLoading} style={{ marginBottom: 16 }}>{t('action.queryImpact')}</Button>
           <Table columns={impactColumns} dataSource={affectedRules} rowKey="ruleDefinitionId" loading={impactLoading} size="small" />
         </div>
       ),
@@ -124,7 +127,7 @@ export default function MetricDetail() {
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(ROUTES.METRICS)}>返回</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(ROUTES.METRICS)}>{tc('button.back')}</Button>
         <h2 style={{ margin: 0 }}>{metric.name} ({metric.metricCode})</h2>
       </div>
       <Tabs items={tabItems} />

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listMetrics, createMetric } from '@/api/metric';
 import { METRIC_COLUMNS } from '@/config/columns/metric';
@@ -11,6 +12,8 @@ import type { MetricDescriptor, SourceType } from '@/types';
 
 export default function MetricList() {
   const navigate = useNavigate();
+  const { t } = useTranslation('metric');
+  const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
   const [metrics, setMetrics] = useState<MetricDescriptor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,7 +36,7 @@ export default function MetricList() {
     setConfirmLoading(true);
     try {
       await createMetric(currentId!, values.metricCode, { ...values, tenantId: currentId });
-      message.success('Metric 注册成功');
+      message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
       load();
@@ -45,25 +48,25 @@ export default function MetricList() {
     switch (sourceType) {
       case 'ATTRIBUTE':
         return (<>
-          <Form.Item name={['params', 'table']} label="表名" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name={['params', 'column']} label="列名" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name={['params', 'table']} label={t('form.params.table')} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name={['params', 'column']} label={t('form.params.column')} rules={[{ required: true }]}><Input /></Form.Item>
         </>);
       case 'SQL_AGGREGATE':
         return (<>
-          <Form.Item name={['params', 'datasource']} label="数据源" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name={['params', 'sql']} label="SQL" rules={[{ required: true }]}><Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} /></Form.Item>
+          <Form.Item name={['params', 'datasource']} label={t('form.params.datasource')} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name={['params', 'sql']} label={t('form.params.sql')} rules={[{ required: true }]}><Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} /></Form.Item>
         </>);
       case 'EXTERNAL_HTTP':
         return (<>
-          <Form.Item name={['params', 'endpoint']} label="Endpoint" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name={['params', 'path']} label="路径" rules={[{ required: true }]}><Input placeholder="/api/v1/risk/{payload.userId}" /></Form.Item>
-          <Form.Item name={['params', 'jsonPath']} label="JSON Path" rules={[{ required: true }]}><Input placeholder="$.data.riskScore" /></Form.Item>
+          <Form.Item name={['params', 'endpoint']} label={t('form.params.endpoint')} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name={['params', 'path']} label={t('form.params.path')} rules={[{ required: true }]}><Input placeholder={t('form.params.pathPlaceholder')} /></Form.Item>
+          <Form.Item name={['params', 'jsonPath']} label={t('form.params.jsonPath')} rules={[{ required: true }]}><Input placeholder={t('form.params.jsonPathPlaceholder')} /></Form.Item>
         </>);
       case 'STREAM':
         return (<>
-          <Form.Item name={['params', 'topic']} label="Topic"><Input disabled /></Form.Item>
-          <Form.Item name={['params', 'keyExpr']} label="Key 表达式"><Input disabled /></Form.Item>
-          <div style={{ color: '#999', fontSize: 12 }}>STREAM 类型 v2 接入，当前不可用</div>
+          <Form.Item name={['params', 'topic']} label={t('form.params.topic')}><Input disabled /></Form.Item>
+          <Form.Item name={['params', 'keyExpr']} label={t('form.params.keyExpr')}><Input disabled /></Form.Item>
+          <div style={{ color: '#999', fontSize: 12 }}>{t('form.streamDisabled')}</div>
         </>);
       default: return null;
     }
@@ -71,27 +74,27 @@ export default function MetricList() {
 
   return (<>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-      <h2>Metric 列表</h2>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>注册 Metric</Button>
+      <h2>{t('title.list')}</h2>
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>{t('action.create')}</Button>
     </div>
     <Table columns={METRIC_COLUMNS} dataSource={metrics} rowKey="metricCode" loading={loading}
       onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
-    <Modal title="注册 Metric" open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>
+    <Modal title={t('action.create')} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>
       <Form form={form} layout="vertical">
-        <Form.Item name="metricCode" label="Metric Code" rules={[{ required: true, pattern: /^[a-z][a-z0-9_.]*$/ }]}>
-          <Input placeholder="如 user.trade.sum.7d" />
+        <Form.Item name="metricCode" label={t('form.code')} rules={[{ required: true, pattern: /^[a-z][a-z0-9_.]*$/ }]}>
+          <Input placeholder={t('form.codePlaceholder')} />
         </Form.Item>
-        <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="sourceType" label="取数方式" initialValue="ATTRIBUTE">
+        <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}><Input /></Form.Item>
+        <Form.Item name="sourceType" label={t('form.sourceType')} initialValue="ATTRIBUTE">
           <Select options={[...SOURCE_TYPE_OPTIONS]} />
         </Form.Item>
-        <Form.Item name="dataType" label="数据类型" initialValue="LONG">
+        <Form.Item name="dataType" label={t('form.dataType')} initialValue="LONG">
           <Select options={[...DATA_TYPE_OPTIONS]} />
         </Form.Item>
-        <Form.Item name="cacheTtlSeconds" label="缓存 TTL (秒)" initialValue={60}>
+        <Form.Item name="cacheTtlSeconds" label={t('form.cacheTtl')} initialValue={60}>
           <InputNumber min={0} style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="allowProvided" label="允许外部注入" valuePropName="checked" initialValue={false}>
+        <Form.Item name="allowProvided" label={t('form.allowProvided')} valuePropName="checked" initialValue={false}>
           <Switch />
         </Form.Item>
         {renderParamsFields()}

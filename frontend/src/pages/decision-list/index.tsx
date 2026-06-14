@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listDecisions, createDecision, updateDecision } from '@/api/decision';
 import { DECISION_COLUMNS } from '@/config/columns/decision';
 import type { DecisionItem } from '@/types';
 
 export default function DecisionList() {
+  const { t } = useTranslation('decision');
+  const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,10 +33,10 @@ export default function DecisionList() {
     try {
       if (editingCode) {
         await updateDecision(currentId!, editingCode, values);
-        message.success('更新成功');
+        message.success(tc('message.updateSuccess'));
       } else {
         await createDecision(currentId!, { ...values, tenantId: currentId });
-        message.success('创建成功');
+        message.success(tc('message.createSuccess'));
       }
       setModalOpen(false);
       setEditingCode(null);
@@ -57,8 +60,8 @@ export default function DecisionList() {
 
   return (<>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-      <h2>Decision 列表</h2>
-      <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建 Decision</Button>
+      <h2>{t('title.list')}</h2>
+      <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('action.create')}</Button>
     </div>
     <Table
       columns={DECISION_COLUMNS}
@@ -68,23 +71,23 @@ export default function DecisionList() {
       onRow={(record) => ({ onClick: () => openEdit(record), style: { cursor: 'pointer' } })}
     />
     <Modal
-      title={editingCode ? `编辑 Decision: ${editingCode}` : '新建 Decision'}
+      title={editingCode ? `${t('action.edit')}: ${editingCode}` : t('action.create')}
       open={modalOpen}
       onOk={handleSubmit}
       onCancel={() => { setModalOpen(false); setEditingCode(null); form.resetFields(); }}
       confirmLoading={confirmLoading}
     >
       <Form form={form} layout="vertical">
-        <Form.Item name="code" label="Code" rules={[{ required: true }]}>
-          <Input disabled={!!editingCode} placeholder="如 REJECT / REVIEW / PASS" />
+        <Form.Item name="code" label={t('form.code')} rules={[{ required: true }]}>
+          <Input disabled={!!editingCode} placeholder={t('form.codePlaceholder')} />
         </Form.Item>
-        <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+        <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}>
           <Input />
         </Form.Item>
-        <Form.Item name="priority" label="优先级" extra="数值越小优先级越高" rules={[{ required: true }]}>
+        <Form.Item name="priority" label={t('form.priority')} extra={t('form.priorityExtra')} rules={[{ required: true }]}>
           <InputNumber min={1} style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="description" label="说明">
+        <Form.Item name="description" label={t('form.description')}>
           <Input.TextArea rows={2} />
         </Form.Item>
       </Form>
