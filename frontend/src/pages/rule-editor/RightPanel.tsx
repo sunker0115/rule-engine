@@ -1,4 +1,4 @@
-import { Tabs } from 'antd';
+import { Tabs, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
 import RolloutSlider from '@/components/rollout-slider';
@@ -12,12 +12,32 @@ interface Props {
 
 export default function RightPanel({ metadata: _metadata, ruleDetail }: Props) {
   const { t } = useTranslation('rule');
-  const { preGates, decisionBindings, setPreGates, setDecisionBindings } = useRuleStore();
+  const { preGates, decisionBindings, script, setPreGates, setDecisionBindings, setScript } = useRuleStore();
 
-  // DECISION_TREE / DECISION_TABLE 的决策码在 AST 中管理，右边不显示绑定 tab
   const showBinding = ruleDetail.kind !== 'DECISION_TREE' && ruleDetail.kind !== 'DECISION_TABLE';
 
   const tabItems = [
+    ...(ruleDetail.kind === 'EXPRESSION_SCRIPT' ? [{
+      key: 'executor',
+      label: 'Executor',
+      children: (
+        <div style={{ padding: 16 }}>
+          <Select
+            style={{ width: '100%' }}
+            value={script?.lang ?? 'CEL'}
+            onChange={(lang) => setScript({ lang, source: script?.source ?? '' })}
+            options={[
+              { value: 'CEL', label: 'CEL' },
+              { value: 'Aviator', label: 'Aviator' },
+              { value: 'QLExpress', label: 'QLExpress' },
+              { value: 'JsonLogic', label: 'JsonLogic' },
+              { value: 'JEXL', label: 'JEXL' },
+              { value: 'Groovy', label: 'Groovy' },
+            ]}
+          />
+        </div>
+      ),
+    }] : []),
     {
       key: 'pregate',
       label: t('editor.rightPanel.preGate'),
