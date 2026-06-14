@@ -16,17 +16,26 @@ import DryRunDrawer from './DryRunDrawer';
 
 const { Sider, Content } = Layout;
 
-/** 从 payloadSchema（数组或 JSON Schema）中提取字段名列表 */
-function extractPayloadFieldNames(schema: unknown): string[] {
-  if (!schema) return [];
+/** 从 payloadSchema 提取字段名 + 类型映射 */
+function extractPayloadSchema(schema: unknown): { names: string[]; types: Record<string, string> } {
+  if (!schema) return { names: [], types: {} };
+  const names: string[] = [];
+  const types: Record<string, string> = {};
   if (Array.isArray(schema)) {
-    return schema.map((f: Record<string, unknown>) => f.name as string).filter(Boolean);
-  }
-  if (typeof schema === 'object') {
+    for (const f of schema as Record<string, unknown>[]) {
+      const n = f.name as string;
+      if (n) { names.push(n); types[n] = (f.type as string) ?? 'string'; }
+    }
+  } else if (typeof schema === 'object') {
     const props = (schema as Record<string, unknown>).properties;
-    if (props && typeof props === 'object') return Object.keys(props);
+    if (props && typeof props === 'object') {
+      for (const [n, def] of Object.entries(props)) {
+        names.push(n);
+        types[n] = (def as Record<string, unknown>).type as string ?? 'string';
+      }
+    }
   }
-  return [];
+  return { names, types };
 }
 
 export default function RuleEditor() {
@@ -61,7 +70,9 @@ export default function RuleEditor() {
         ]);
         const meta = metaRes.data ?? null;
         if (meta) {
-          meta.payloadFieldNames = extractPayloadFieldNames(sceneRes.data?.payloadSchema);
+          const schema = extractPayloadSchema(sceneRes.data?.payloadSchema);
+          meta.payloadFieldNames = schema.names;
+          meta.payloadFieldTypes = schema.types;
         }
         setMetadata(meta);
       }
@@ -121,6 +132,7 @@ export default function RuleEditor() {
         ruleId={ruleDetail.ruleDefinitionId}
         sceneCode={ruleDetail.sceneCode}
         eventTypes={metadata?.eventTypes ?? ruleDetail.triggerEventTypes ?? []}
+        payloadFieldTypes={metadata?.payloadFieldTypes}
       />
     </Layout>
   );
