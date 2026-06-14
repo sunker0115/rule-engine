@@ -14,6 +14,7 @@ interface Props {
   ruleId?: number;
   sceneCode: string;
   eventTypes: string[];
+  payloadFieldNames: string[];
 }
 
 interface PayloadPair {
@@ -24,7 +25,7 @@ interface PayloadPair {
 
 let nextPairId = 0;
 
-export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes }: Props) {
+export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes, payloadFieldNames }: Props) {
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
@@ -156,11 +157,23 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
           {pairs.map(p => (
             <Row gutter={8} key={p.id} style={{ marginBottom: 8 }}>
               <Col flex="auto">
-                <Input
-                  placeholder="key"
-                  value={p.key}
-                  onChange={e => updatePair(p.id, 'key', e.target.value)}
-                />
+                {payloadFieldNames.length > 0 ? (
+                  <Select
+                    showSearch
+                    value={p.key || undefined}
+                    onChange={(val) => updatePair(p.id, 'key', val ?? '')}
+                    placeholder="字段"
+                    options={payloadFieldNames.map((f) => ({ value: f, label: f }))}
+                    allowClear
+                    style={{ width: '100%' }}
+                  />
+                ) : (
+                  <Input
+                    placeholder="key"
+                    value={p.key}
+                    onChange={e => updatePair(p.id, 'key', e.target.value)}
+                  />
+                )}
               </Col>
               <Col flex="auto">
                 <Input

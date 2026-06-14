@@ -121,6 +121,7 @@ export default function RuleEditor() {
         ruleId={ruleDetail.ruleDefinitionId}
         sceneCode={ruleDetail.sceneCode}
         eventTypes={metadata?.eventTypes ?? ruleDetail.triggerEventTypes ?? []}
+        payloadFieldNames={metadata?.payloadFieldNames ?? []}
       />
     </Layout>
   );
