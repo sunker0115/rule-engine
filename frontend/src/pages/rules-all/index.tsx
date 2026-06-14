@@ -38,6 +38,7 @@ export default function RulesAll() {
   const [createLoading, setCreateLoading] = useState(false);
   const [sceneOpts, setSceneOpts] = useState<{ value: string; label: string }[]>([]);
   const [createForm] = Form.useForm();
+  const [formKind, setFormKind] = useState('AST_BOOLEAN');
   const tenantId = tenantFilter ?? currentId ?? 0;
 
   const load = async () => {
@@ -74,6 +75,9 @@ export default function RulesAll() {
         const defaultMetric = await fetchDefaultMetric(values.tenantId ?? currentId!, values.sceneCode);
         body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: defaultMetric, operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
       }
+      if (values.kind === 'EXPRESSION_SCRIPT') {
+        body.script = { lang: values.scriptLang || 'CEL', source: values.scriptSource || '' };
+      }
       await createRule(values.tenantId ?? currentId!, body);
       message.success(tc('message.createSuccess'));
       setCreateOpen(false);
@@ -89,6 +93,7 @@ export default function RulesAll() {
         <h2>{t('title.list')}</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={async () => {
           createForm.resetFields();
+          setFormKind('AST_BOOLEAN');
           setCreateOpen(true);
           try {
             const apiRes = await listScenes(tenantId);
@@ -170,8 +175,25 @@ export default function RulesAll() {
             <Input />
           </Form.Item>
           <Form.Item name="kind" label={t('column.kind')} initialValue="AST_BOOLEAN">
-            <Select options={[...RULE_KIND_OPTIONS]} />
+            <Select options={[...RULE_KIND_OPTIONS]} onChange={(v) => setFormKind(v)} />
           </Form.Item>
+          {formKind === 'EXPRESSION_SCRIPT' && (
+            <>
+              <Form.Item name="scriptLang" label="脚本语言" initialValue="CEL" rules={[{ required: true }]}>
+                <Select options={[
+                  { value: 'CEL', label: 'CEL' },
+                  { value: 'Aviator', label: 'Aviator' },
+                  { value: 'QLExpress', label: 'QLExpress' },
+                  { value: 'JsonLogic', label: 'JsonLogic' },
+                  { value: 'JEXL', label: 'JEXL' },
+                  { value: 'Groovy', label: 'Groovy' },
+                ]} />
+              </Form.Item>
+              <Form.Item name="scriptSource" label="脚本源码" rules={[{ required: true, message: tc('validation.required') }]}>
+                <Input.TextArea rows={6} placeholder='例如: metrics.amount > 1000' />
+              </Form.Item>
+            </>
+          )}
           <Form.Item name="triggerEventTypes" label="Trigger Events">
             <Select mode="tags" placeholder={t('triggerEventsPlaceholder')} />
           </Form.Item>
