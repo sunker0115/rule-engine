@@ -47,13 +47,13 @@ class AuditControllerTest {
     void queryAuditLogs_returns200() throws Exception {
         AuditService.PageResult<AuditService.AuditLogEntry> empty =
                 new AuditService.PageResult<>(List.of(), 0, 0, 20);
-        when(auditService.queryAuditLogs("t1", null, null, 0, 20)).thenReturn(empty);
+        when(auditService.queryAuditLogs("t1", null, null, null, null, null, null, 0, 20)).thenReturn(empty);
 
         mockMvc.perform(get("/admin/v1/audit-logs").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(auditService).queryAuditLogs("t1", null, null, 0, 20);
+        verify(auditService).queryAuditLogs("t1", null, null, null, null, null, null, 0, 20);
     }
 
     @Test

@@ -92,10 +92,10 @@ class AuditServiceImplTest {
         Page<AuditLogRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of(row));
         mp.setTotal(1L);
-        when(auditLogMapper.selectAuditLogPage(any(), any(), any(), any())).thenReturn(mp);
+        when(auditLogMapper.selectAuditLogPage(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.AuditLogEntry> result =
-                service.queryAuditLogs("100", "rule_definition", null, 0, 20);
+                service.queryAuditLogs("100", "rule_definition", null, null, null, null, null, 0, 20);
 
         assertThat(result.total()).isEqualTo(1L);
         AuditService.AuditLogEntry entry = result.items().get(0);
