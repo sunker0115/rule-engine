@@ -207,7 +207,8 @@ public class RuleController {
                         rd.getId(), rd.getCode(), rd.getName(),
                         rd.getKind() != null ? rd.getKind().name() : null,
                         sceneCodeMap.getOrDefault(rd.getSceneId(), null),
-                        rd.getStatus().name(), rd.getCurrentVersion(), rd.getPublishedAt()))
+                        rd.getStatus().name(), rd.getCurrentVersion(), rd.getPublishedAt(),
+                        rd.getCreatedAt()))
                 .toList();
 
         return ApiResponse.ok(PageResponse.of(vos, rdPage.getTotal(), page, size));

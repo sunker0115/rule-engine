@@ -15,7 +15,11 @@ public record MetricDescriptor(
         String dataType,
         boolean allowProvided,
         int cacheTtlSeconds,
-        Map<String, Object> params
+        Map<String, Object> params,
+        String name,
+        String status,
+        String createdAt,
+        String updatedAt
 ) {
     public MetricDescriptor {
         params = params == null ? Map.of() : Map.copyOf(params);
@@ -24,6 +28,13 @@ public record MetricDescriptor(
     /** 兼容旧调用点的便利构造：metricVersion 默认 1（B6 引入版本字段前的调用方无需感知版本）。 */
     public MetricDescriptor(String metricCode, String sourceType, String dataType,
                             boolean allowProvided, int cacheTtlSeconds, Map<String, Object> params) {
-        this(metricCode, 1, sourceType, dataType, allowProvided, cacheTtlSeconds, params);
+        this(metricCode, 1, sourceType, dataType, allowProvided, cacheTtlSeconds, params, null, null, null, null);
+    }
+
+    /** 兼容旧调用点的便利构造：使用旧 7 字段签名（新增 name/status/createdAt/updatedAt 填 null）。 */
+    public MetricDescriptor(String metricCode, int metricVersion, String sourceType, String dataType,
+                            boolean allowProvided, int cacheTtlSeconds, Map<String, Object> params) {
+        this(metricCode, metricVersion, sourceType, dataType, allowProvided, cacheTtlSeconds, params,
+                null, null, null, null);
     }
 }

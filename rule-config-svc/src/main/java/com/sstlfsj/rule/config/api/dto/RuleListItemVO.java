@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
  * @param status           规则状态（DRAFT / PUBLISHED / DISABLED）
  * @param currentVersion   当前版本 ID（未发布时为 null）
  * @param publishedAt      最后发布时间（未发布时为 null）
+ * @param createdAt        创建时间
  */
 public record RuleListItemVO(
         Long ruleDefinitionId,
@@ -22,5 +23,6 @@ public record RuleListItemVO(
         String sceneCode,
         String status,
         Long currentVersion,
-        LocalDateTime publishedAt
+        LocalDateTime publishedAt,
+        LocalDateTime createdAt
 ) {}

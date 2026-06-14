@@ -5,6 +5,8 @@ export interface SceneListItem {
   dominantMode: 'PUSH' | 'PULL' | 'HYBRID';
   subjectType: string;
   status: 'ACTIVE' | 'DISABLED';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SceneDetail extends SceneListItem {

@@ -20,6 +20,7 @@ export function getRuleColumns(onDetail?: (id: number) => void): ColumnsType<Rul
     },
     { title: 'Version', dataIndex: 'currentVersion', key: 'currentVersion', render: (v: number | null) => v ?? '-' },
     { title: 'Published', dataIndex: 'publishedAt', key: 'publishedAt', render: (v: string | null) => v?.slice(0, 19) ?? '-' },
+    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
     {
       title: 'Actions', key: 'actions',
       render: (_: unknown, record: RuleListItem) => (

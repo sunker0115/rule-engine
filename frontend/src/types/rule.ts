@@ -14,6 +14,7 @@ export interface RuleListItem {
   status: RuleStatus;
   currentVersion?: number | null;
   publishedAt?: string | null;
+  createdAt?: string;
 }
 
 export interface RuleDetail extends RuleListItem {

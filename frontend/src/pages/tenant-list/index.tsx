@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Input, Select, Tag, Switch, message, Space } from 'antd';
+import { Table, Input, Select, Switch, message, Space } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTenantStore } from '@/store/tenantStore';
 import { colorOf, STATUS_OPTIONS } from '@/constants/enums';
@@ -52,17 +52,16 @@ export default function TenantList() {
     { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
     { title: 'Code', dataIndex: 'code', key: 'code' },
     { title: '名称', dataIndex: 'name', key: 'name' },
+    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
     {
-      title: '状态', dataIndex: 'status', key: 'status', width: 120,
-      render: (v: string, r: TenantRow) => (
-        <Space size={4}>
-          <Switch
-            checked={v === 'ACTIVE'}
-            onChange={(enabled) => toggleStatus(r.id, enabled)}
-            size="small"
-          />
-          <Tag color={colorOf(STATUS_OPTIONS, v as never)}>{v}</Tag>
-        </Space>
+      title: '状态', dataIndex: 'status', key: 'status', width: 80,
+      render: (_v: string, r: TenantRow) => (
+        <Switch
+          checked={r.status === 'ACTIVE'}
+          onChange={(enabled) => toggleStatus(r.id, enabled)}
+          size="small"
+        />
       ),
     },
   ];

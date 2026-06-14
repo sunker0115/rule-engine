@@ -6,4 +6,5 @@ export interface DecisionItem {
   description?: string;
   status?: string;
   createdAt?: string;
+  updatedAt?: string;
 }

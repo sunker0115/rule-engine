@@ -172,7 +172,8 @@ class ConfigServiceImpl implements ConfigService {
             qw.and(w -> w.like(Tenant::getCode, keyword).or().like(Tenant::getName, keyword));
         }
         return tenantMapper.selectList(qw).stream()
-                .map(t -> new TenantItemVO(t.getId(), t.getCode(), t.getName(), t.getStatus().name()))
+                .map(t -> new TenantItemVO(t.getId(), t.getCode(), t.getName(), t.getStatus().name(),
+                        t.getCreatedAt(), t.getUpdatedAt()))
                 .toList();
     }
 

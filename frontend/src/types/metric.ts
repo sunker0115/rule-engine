@@ -11,6 +11,8 @@ export interface MetricDescriptor {
   cacheTtlSeconds: number;
   params?: Record<string, unknown>;
   status?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MetricImpactResult {

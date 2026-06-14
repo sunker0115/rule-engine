@@ -7,6 +7,8 @@ interface TenantInfo {
   code: string;
   name: string;
   status: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface TenantState {

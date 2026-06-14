@@ -4,7 +4,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listDecisions, createDecision, updateDecision } from '@/api/decision';
-import { DECISION_COLUMNS } from '@/config/columns/decision';
+import { getDecisionColumns } from '@/config/columns/decision';
 import type { DecisionItem } from '@/types';
 
 export default function DecisionList() {
@@ -76,7 +76,11 @@ export default function DecisionList() {
       />
     </Space>
     <Table
-      columns={DECISION_COLUMNS}
+      columns={getDecisionColumns(async (code, enabled) => {
+        await updateDecision(tenantId, code, { status: enabled ? 'ACTIVE' : 'DISABLED' });
+        message.success(enabled ? '已启用' : '已禁用');
+        load();
+      })}
       dataSource={decisions}
       rowKey="code"
       loading={loading}

@@ -1,7 +1,6 @@
 import { Tag, Space, Switch } from 'antd';
 import { Link } from 'react-router-dom';
 import { ROUTES, route } from '@/constants/routes';
-import { colorOf, STATUS_OPTIONS } from '@/constants/enums';
 import type { SceneListItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -27,15 +26,12 @@ export function getSceneColumns(onToggleStatus?: (code: string, enabled: boolean
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (v: string, record: SceneListItem) => (
-        <Space size={4}>
-          <Switch
-            checked={v === 'ACTIVE'}
-            onChange={(enabled) => onToggleStatus?.(record.sceneCode, enabled)}
-            size="small"
-          />
-          <Tag color={colorOf(STATUS_OPTIONS, v as never)}>{v}</Tag>
-        </Space>
+      render: (_v: string, record: SceneListItem) => (
+        <Switch
+          checked={record.status === 'ACTIVE'}
+          onChange={(enabled) => onToggleStatus?.(record.sceneCode, enabled)}
+          size="small"
+        />
       ),
     },
     {
@@ -48,5 +44,7 @@ export function getSceneColumns(onToggleStatus?: (code: string, enabled: boolean
         </Space>
       ),
     },
+    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
   ];
 }

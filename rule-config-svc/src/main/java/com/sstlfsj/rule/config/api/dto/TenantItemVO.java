@@ -8,4 +8,6 @@ package com.sstlfsj.rule.config.api.dto;
  * @param name   租户显示名称
  * @param status 租户状态（ACTIVE / DISABLED）
  */
-public record TenantItemVO(Long id, String code, String name, String status) {}
+public record TenantItemVO(Long id, String code, String name, String status,
+                           java.time.LocalDateTime createdAt,
+                           java.time.LocalDateTime updatedAt) {}

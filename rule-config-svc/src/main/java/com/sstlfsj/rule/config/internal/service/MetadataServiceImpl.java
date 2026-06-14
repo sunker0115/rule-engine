@@ -177,7 +177,11 @@ class MetadataServiceImpl implements MetadataService {
                 m.getSourceType(), m.getDataType(),
                 Boolean.TRUE.equals(m.getAllowProvided()),
                 m.getCacheTtlSeconds() == null ? 0 : m.getCacheTtlSeconds(),
-                params);
+                params,
+                m.getName(),
+                m.getStatus() != null ? m.getStatus().name() : null,
+                m.getCreatedAt() != null ? m.getCreatedAt().toString() : null,
+                m.getUpdatedAt() != null ? m.getUpdatedAt().toString() : null);
     }
 
 }
