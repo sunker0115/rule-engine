@@ -135,7 +135,7 @@ export default function DecisionTableEditor({
                   <Select
                     size="small"
                     showSearch
-                    style={{ width: 92 }}
+                    style={{ width: 82 }}
                     value={col.metricCode || undefined}
                     onChange={(v) => updateColumn(ci, 'metricCode', v)}
                     placeholder={t('editor.decisionTable.metric')}
@@ -144,7 +144,7 @@ export default function DecisionTableEditor({
                   />
                   <Select
                     size="small"
-                    style={{ width: 80 }}
+                    style={{ width: 100 }}
                     value={col.operator || undefined}
                     onChange={(v) => updateColumn(ci, 'operator', v)}
                     options={opOptions}
