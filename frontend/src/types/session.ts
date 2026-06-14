@@ -2,7 +2,7 @@ export type SessionStatus = 'HIT' | 'MISS' | 'BLOCKED' | 'ERROR' | 'PENDING' | '
 
 /** 评估会话——字段对齐 GET /admin/v1/evaluation-sessions 实际响应 */
 export interface EvalSessionItem {
-  sessionId: number;
+  sessionId: string;
   tenantId: string;
   sceneCode: string;
   eventId: string;

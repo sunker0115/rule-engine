@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -33,6 +34,13 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleMissingParam(MissingServletRequestParameterException ex) {
         return ApiResponse.error("INVALID_ARGUMENT", ex.getParameterName() + " 参数必填");
+    }
+
+    /** ResponseStatusException → 按其 status code 返回。 */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ApiResponse<Void> handleResponseStatus(ResponseStatusException ex, HttpServletRequest req) {
+        log.warn("{} {} [{}]", req.getMethod(), req.getRequestURI(), ex.getStatusCode().value());
+        return ApiResponse.error(ex.getStatusCode().value() >= 500 ? "INTERNAL_ERROR" : "INVALID_ARGUMENT", ex.getReason());
     }
 
     /** 业务层主动抛出的非法参数 → 400。 */
