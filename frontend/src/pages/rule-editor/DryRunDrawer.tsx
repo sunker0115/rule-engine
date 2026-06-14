@@ -95,6 +95,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
       message.error(tc('message.loadError'));
     } finally {
       setInternalLoading(false);
+      setLoading(false);
     }
   };
 
