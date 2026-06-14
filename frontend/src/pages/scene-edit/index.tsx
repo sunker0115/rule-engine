@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, Switch, Button, Space, message, Spin, Table } from 'antd';
 import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined } from '@ant-design/icons';
@@ -109,8 +109,10 @@ export default function SceneEdit() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
+  const loaded = useRef(false);
 
   useEffect(() => {
+    if (loaded.current) return; loaded.current = true;
     if (!currentId || !sceneCode) return;
     (async () => {
       setLoading(true);
