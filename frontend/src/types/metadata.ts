@@ -3,7 +3,11 @@ import type { MetricDescriptor } from './metric';
 export interface ConditionTypeMeta {
   code: string;
   displayName: string;
-  paramsSchema: Record<string, unknown>;
+  /** 必填参数键名列表（来自 OperatorSpec.requiredParamKeys） */
+  requiredParamKeys: string[];
+  /** 允许的 metric/payload dataType 标签（来自 OperatorSpec.allowedDataTypes） */
+  allowedDataTypes: string[];
+  /** 是否需绑定 metric/payload */
   requiresMetric: boolean;
 }
 
