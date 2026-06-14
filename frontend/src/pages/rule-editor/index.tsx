@@ -10,6 +10,7 @@ import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType }
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
+import DryRunDrawer from './DryRunDrawer';
 
 const { Sider, Content } = Layout;
 
@@ -21,6 +22,7 @@ export default function RuleEditor() {
   const [loading, setLoading] = useState(true);
   const [ruleDetail, setRuleDetail] = useState<RuleDetailType | null>(null);
   const [metadata, setMetadata] = useState<SceneMetadataType | null>(null);
+  const [dryRunOpen, setDryRunOpen] = useState(false);
 
   useEffect(() => {
     if (!currentId || !ruleId) return;
@@ -50,10 +52,15 @@ export default function RuleEditor() {
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!ruleDetail) return <div>{t('editor.leftPanel.ruleInfo')} not found</div>;
 
+  // 取最新 DRAFT 或 ACTIVE 版本 id 作为 dry-run 目标
+  const latestVersion = ruleDetail.versions
+    ?.filter(v => v.status === 'DRAFT' || v.status === 'ACTIVE')
+    .sort((a, b) => b.version - a.version)[0];
+
   return (
     <Layout style={{ background: '#fff', height: 'calc(100vh - 64px - 48px)' }}>
       <Sider width={260} style={{ background: '#fafafa', borderRight: '1px solid #f0f0f0', overflow: 'auto' }}>
-        <LeftPanel ruleDetail={ruleDetail} />
+        <LeftPanel ruleDetail={ruleDetail} onOpenDryRun={() => setDryRunOpen(true)} />
       </Sider>
       <Content style={{ overflow: 'auto', padding: 16 }}>
         <CenterPanel metadata={metadata} />
@@ -61,6 +68,15 @@ export default function RuleEditor() {
       <Sider width={360} style={{ background: '#fafafa', borderLeft: '1px solid #f0f0f0', overflow: 'auto' }}>
         <RightPanel metadata={metadata} ruleDetail={ruleDetail} />
       </Sider>
+
+      <DryRunDrawer
+        open={dryRunOpen}
+        onClose={() => setDryRunOpen(false)}
+        ruleVersionId={latestVersion?.ruleVersionId}
+        ruleId={ruleDetail.ruleDefinitionId}
+        sceneCode={ruleDetail.sceneCode}
+        eventTypes={ruleDetail.triggerEventTypes ?? []}
+      />
     </Layout>
   );
 }

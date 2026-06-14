@@ -26,8 +26,8 @@ export default function EvalSessionDetail() {
         getSession(currentId, Number(sessionId)),
         getSessionTrace(currentId, Number(sessionId)),
       ]);
-      setSession(s.data);
-      setTrace(tr.data ?? []);
+      setSession(s);
+      setTrace(tr ?? []);
     } finally {
       setLoading(false);
     }

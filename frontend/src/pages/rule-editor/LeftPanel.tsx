@@ -7,9 +7,12 @@ import { editDraft, publishRule, disableRule, newVersion } from '@/api/rule';
 import { colorOf, RULE_STATUS_OPTIONS, VERSION_STATUS_OPTIONS } from '@/constants/enums';
 import type { RuleDetail as RuleDetailType } from '@/types';
 
-interface Props { ruleDetail: RuleDetailType; }
+interface Props {
+  ruleDetail: RuleDetailType;
+  onOpenDryRun: () => void;
+}
 
-export default function LeftPanel({ ruleDetail }: Props) {
+export default function LeftPanel({ ruleDetail, onOpenDryRun }: Props) {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
   const { currentId } = useTenantStore();
@@ -88,6 +91,7 @@ export default function LeftPanel({ ruleDetail }: Props) {
         {isDisabled && (
           <Button block onClick={handleDisable}>{t('action.enable')}</Button>
         )}
+        <Button block onClick={onOpenDryRun}>{t('action.dryRun')}</Button>
       </Space>
 
       <h4>{t('editor.leftPanel.versionTimeline')}</h4>
