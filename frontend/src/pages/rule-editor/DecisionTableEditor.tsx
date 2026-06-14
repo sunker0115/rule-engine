@@ -133,33 +133,30 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
+              width={200}
               dataIndex={`_c${ci}`}
               title={(
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {/* 第一行：取值源 + 列名 */}
-                  <div style={{ display: 'flex', gap: 3 }}>
-                    <Select
-                      size="small"
-                      style={{ width: 60 }}
-                      value={col.valueRef ?? 'METRIC'}
-                      onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
-                      options={[
-                        { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
-                        { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
-                      ]}
-                    />
-                    <Select
-                      size="small"
-                      showSearch
-                      style={{ width: 160 }}
-                      value={col.metricCode || undefined}
-                      onChange={(v) => updateColumn(ci, 'metricCode', v)}
-                      placeholder={t('editor.decisionTable.metric')}
-                      popupMatchSelectWidth={false}
-                      options={fieldOptions}
-                    />
-                  </div>
-                  {/* 第二行：算子 + 删除 */}
+                  <Select
+                    size="small"
+                    style={{ width: '100%' }}
+                    value={col.valueRef ?? 'METRIC'}
+                    onChange={(ref) => updateColumn(ci, 'valueRef', ref)}
+                    options={[
+                      { value: 'METRIC', label: t('editor.conditionCard.valueRefOptions.metric') },
+                      { value: 'PAYLOAD', label: t('editor.conditionCard.valueRefOptions.payload') },
+                    ]}
+                  />
+                  <Select
+                    size="small"
+                    showSearch
+                    style={{ width: '100%' }}
+                    value={col.metricCode || undefined}
+                    onChange={(v) => updateColumn(ci, 'metricCode', v)}
+                    placeholder={t('editor.decisionTable.metric')}
+                    popupMatchSelectWidth={false}
+                    options={fieldOptions}
+                  />
                   <div style={{ display: 'flex', gap: 3 }}>
                     <Select
                       size="small"
@@ -189,6 +186,7 @@ export default function DecisionTableEditor({
         {/* 决策码列 */}
         <Table.Column
           title={t('editor.decisionTable.decisionCode')}
+          width={160}
           dataIndex="_decisionCode"
           render={(val: string, _: unknown, ri: number) => (
             <Select
