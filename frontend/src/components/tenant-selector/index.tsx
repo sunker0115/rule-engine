@@ -5,18 +5,19 @@ import { useTenantStore } from '@/store/tenantStore';
 
 export default function TenantSelector() {
   const { t } = useTranslation('common');
-  const { current, list, setCurrent, loadList } = useTenantStore();
+  const { current, activeList, setCurrent, searchTenants } = useTenantStore();
 
-  useEffect(() => { loadList(); }, [loadList]);
+  useEffect(() => {
+    searchTenants(undefined, 'ACTIVE').then((tenants) => {
+      useTenantStore.setState({ activeList: tenants });
+    });
+  }, [searchTenants]);
 
   return (
     <Select
       value={current}
       onChange={setCurrent}
-      options={list
-        .filter((t) => t.status === 'ACTIVE')
-        .map((t) => ({ value: t.code, label: `${t.name} (${t.code})` }))
-      }
+      options={activeList.map((t) => ({ value: t.code, label: `${t.name} (${t.code})` }))}
       placeholder={t('tenant.placeholder')}
       style={{ width: 240 }}
       size="small"

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Table, Input, Select, Tag, Switch, message, Space } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTenantStore } from '@/store/tenantStore';
@@ -15,21 +15,36 @@ interface TenantRow {
 }
 
 export default function TenantList() {
-  const { list, loadList, setCurrent, current } = useTenantStore();
+  const { current, searchTenants, setCurrent } = useTenantStore();
+  const [list, setList] = useState<TenantRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 
   const doLoad = () => {
     setLoading(true);
-    loadList(keyword || undefined, statusFilter).finally(() => setLoading(false));
+    searchTenants(keyword || undefined, statusFilter)
+      .then(setList)
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { doLoad(); }, [keyword, statusFilter]);
 
+  /** 停用当前选中的租户后，Header 需同步刷新 */
+  const refreshHeader = () => {
+    searchTenants(undefined, 'ACTIVE').then((tenants) => {
+      useTenantStore.setState({ activeList: tenants });
+      // 如果当前选中的租户被停用了，清空选中
+      if (!tenants.find((t) => t.code === current)) {
+        setCurrent(tenants[0]?.code ?? null);
+      }
+    });
+  };
+
   const toggleStatus = async (id: number, enabled: boolean) => {
     await apiClient.put(ENDPOINTS.TENANT_TOGGLE_STATUS(id), null, { params: { enable: enabled } });
     message.success(enabled ? '已启用' : '已禁用');
+    refreshHeader();
     doLoad();
   };
 

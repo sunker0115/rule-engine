@@ -12,35 +12,43 @@ interface TenantInfo {
 interface TenantState {
   current: string | null;
   currentId: number | null;
-  list: TenantInfo[];
-  loadList: (keyword?: string, status?: string) => Promise<void>;
+  /** Header 专用：全部 ACTIVE 租户列表（始终全量，不受页面筛选影响） */
+  activeList: TenantInfo[];
+  /** 页面专用：按关键词+状态查询，不污染 Header 的 activeList */
+  searchTenants: (keyword?: string, status?: string) => Promise<TenantInfo[]>;
   setCurrent: (code: string) => void;
 }
 
 export const useTenantStore = create<TenantState>((set, get) => ({
   current: localStorage.getItem('tenantCode') || null,
   currentId: Number(localStorage.getItem('tenantId')) || null,
-  list: [],
+  activeList: [],
 
-  loadList: async (keyword?: string, status?: string) => {
+  searchTenants: async (keyword?: string, status?: string) => {
     const params: Record<string, string> = {};
     if (keyword) params.keyword = keyword;
     if (status) params.status = status;
     const res = await apiClient.get(ENDPOINTS.TENANT_LIST, { params });
-    const list: TenantInfo[] = res.data?.data ?? [];
-    set({ list });
-    const { current, currentId } = get();
-    if ((!current || !currentId) && list.length > 0) {
-      get().setCurrent(list[0].code);
-    }
+    return res.data?.data ?? [];
   },
 
-  setCurrent: (code: string) => {
-    const tenant = get().list.find((t) => t.code === code);
-    if (tenant) {
-      localStorage.setItem('tenantCode', tenant.code);
-      localStorage.setItem('tenantId', String(tenant.id));
-      set({ current: tenant.code, currentId: tenant.id });
+  setCurrent: (code: string | null) => {
+    if (!code) {
+      localStorage.removeItem('tenantCode');
+      localStorage.removeItem('tenantId');
+      set({ current: null, currentId: null });
+      return;
     }
+    // 先从 activeList 查（Header 加载的 ACTIVE 列表）
+    let tenant = get().activeList.find((t) => t.code === code);
+    if (!tenant) {
+      // activeList 里没有 → 临时 set（如从页面点击了 DISABLED 租户）
+      localStorage.setItem('tenantCode', code);
+      set({ current: code, currentId: null });
+      return;
+    }
+    localStorage.setItem('tenantCode', tenant.code);
+    localStorage.setItem('tenantId', String(tenant.id));
+    set({ current: tenant.code, currentId: tenant.id });
   },
 }));
