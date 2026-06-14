@@ -1,6 +1,6 @@
 import apiClient from './client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
-import type { ApiResponse, PageResponse, EvalSessionItem, EvalSessionDetail, NodeTraceItem } from '@/types';
+import type { ApiResponse, PageResponse, EvalSessionItem, NodeTraceItem } from '@/types';
 
 /**
  * 评估会话列表——返回已解包的 PageResponse。
