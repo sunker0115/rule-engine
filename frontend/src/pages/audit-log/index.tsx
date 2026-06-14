@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Select, Input, DatePicker, Tag } from 'antd';
+import { Table, Select, Input, DatePicker, Tag, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listAuditLogs } from '@/api/audit';
@@ -11,20 +11,22 @@ import type { ColumnsType } from 'antd/es/table';
 const { RangePicker } = DatePicker;
 
 export default function AuditLogList() {
-  const { currentId } = useTenantStore();
+  const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('audit');
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [filters, setFilters] = useState<Record<string, unknown>>({});
+  const tenantId = tenantFilter ?? currentId ?? 0;
 
   const load = async () => {
-    if (!currentId) return;
+    if (!tenantId) return;
     setLoading(true);
     try {
-      const data = await listAuditLogs({ tenantId: currentId, page, size: pageSize, ...filters });
+      const data = await listAuditLogs({ tenantId, page, size: pageSize, ...filters });
       setLogs(data.items ?? []);
       setTotal(data.total ?? 0);
     } finally {
@@ -32,11 +34,13 @@ export default function AuditLogList() {
     }
   };
 
-  useEffect(() => { load(); }, [currentId, page, pageSize, filters]);
+  useEffect(() => { load(); }, [tenantId, page, pageSize, filters]);
 
   const columns: ColumnsType<AuditLogItem> = [
+    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+    { title: '租户', dataIndex: 'tenantId', key: 'tenantId', width: 60 },
     {
-      title: t('column.actor'), dataIndex: 'actor', key: 'actor', width: 120,
+      title: t('column.actor'), dataIndex: 'actorId', key: 'actorId', width: 100,
     },
     {
       title: t('column.actorType'), dataIndex: 'actorType', key: 'actorType', width: 60,
@@ -47,17 +51,25 @@ export default function AuditLogList() {
       render: (v: string) => <Tag color={colorOf(AUDIT_ACTION_OPTIONS, v as never)}>{labelOf(AUDIT_ACTION_OPTIONS, v as never)}</Tag>,
     },
     {
-      title: t('column.targetType'), dataIndex: 'targetType', key: 'targetType', width: 80,
+      title: t('column.targetType'), dataIndex: 'resourceType', key: 'resourceType', width: 90,
       render: (v: string) => <Tag>{labelOf(AUDIT_TARGET_TYPE_OPTIONS, v as never)}</Tag>,
     },
-    { title: t('column.targetId'), dataIndex: 'targetId', key: 'targetId', width: 80 },
-    { title: t('column.operatedAt'), dataIndex: 'operatedAt', key: 'operatedAt', width: 160 },
+    { title: t('column.targetId'), dataIndex: 'resourceId', key: 'resourceId', width: 70 },
+    { title: t('column.operatedAt'), dataIndex: 'occurredAt', key: 'occurredAt', width: 170, render: (v: string) => v?.slice(0, 19) },
   ];
 
   return (
     <div>
       <h2 style={{ marginBottom: 16 }}>{t('title.list')}</h2>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Select
+          placeholder="租户"
+          value={tenantFilter}
+          onChange={setTenantFilter}
+          allowClear
+          options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+          style={{ width: 180 }}
+        />
         <Select
           placeholder={t('filter.targetType')}
           style={{ width: 110 }}
@@ -96,18 +108,19 @@ export default function AuditLogList() {
             }));
           }}
         />
-      </div>
+      </Space>
       <Table
         columns={columns}
         dataSource={logs}
-        rowKey={(r) => `${r.targetType}-${r.targetId}-${r.operatedAt}`}
+        rowKey="id"
         loading={loading}
+        scroll={{ x: 900 }}
         pagination={{
           current: page,
           pageSize,
           total,
           showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 条`,
+          showTotal: (total) => `共 ${total} 条`,
           onChange: (p, ps) => { setPage(p); setPageSize(ps); },
         }}
         expandable={{

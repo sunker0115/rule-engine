@@ -1,14 +1,16 @@
 export type ActorType = 'USER' | 'SYSTEM' | 'JOB';
 export type AuditAction = 'CREATE' | 'UPDATE' | 'PUBLISH' | 'PUBLISH_FAILED' | 'ENABLE' | 'DISABLE' | 'DELETE' | 'IMPORT';
 
+/** 审计日志项——字段对齐 GET /admin/v1/audit-logs 实际响应 */
 export interface AuditLogItem {
-  actor: string;
-  actorType: ActorType;
+  id: number;
+  tenantId: string;
+  resourceType: string;   // API 字段名
+  resourceId: number;      // API 字段名
   action: AuditAction;
-  targetType: string;
-  targetId: number;
-  beforeSnapshot?: Record<string, unknown>;
-  afterSnapshot?: Record<string, unknown>;
-  operatedAt: string;
-  traceId?: string;
+  actorId: string;         // API 字段名
+  actorType: ActorType;
+  beforeSnapshot?: string; // JSON 字符串
+  afterSnapshot?: string;  // JSON 字符串
+  occurredAt: string;      // API 字段名
 }

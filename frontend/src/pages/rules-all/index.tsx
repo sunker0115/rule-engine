@@ -13,29 +13,31 @@ import type { RuleListItem } from '@/types';
 const { RangePicker } = DatePicker;
 
 export default function RulesAll() {
-  const { currentId } = useTenantStore();
+  const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('rule');
   const [rules, setRules] = useState<RuleListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [detailId, setDetailId] = useState<number | null>(null);
+  const tenantId = tenantFilter ?? currentId ?? 0;
 
   const load = async () => {
-    if (!currentId) return;
+    if (!tenantId) return;
     setLoading(true);
     try {
       const params: Record<string, unknown> = {};
       if (statusFilter) params.status = statusFilter;
       if (dateRange?.[0]) params.from = dateRange[0].format('YYYY-MM-DD');
       if (dateRange?.[1]) params.to = dateRange[1].format('YYYY-MM-DD');
-      const data = await listRules(currentId, undefined, params);
+      const data = await listRules(tenantId, undefined, params);
       setRules(data.items ?? []);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [currentId, statusFilter, dateRange]);
+  useEffect(() => { load(); }, [tenantId, statusFilter, dateRange]);
 
   const dataSource = useMemo(() => {
     if (!keyword.trim()) return rules;
@@ -49,6 +51,14 @@ export default function RulesAll() {
         <h2>{t('title.list')}</h2>
       </div>
       <Space style={{ marginBottom: 16 }}>
+        <Select
+          placeholder="租户"
+          value={tenantFilter}
+          onChange={setTenantFilter}
+          allowClear
+          options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+          style={{ width: 180 }}
+        />
         <Input
           prefix={<SearchOutlined />}
           placeholder="搜索名称或 Code"
