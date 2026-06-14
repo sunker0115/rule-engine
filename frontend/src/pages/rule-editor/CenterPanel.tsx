@@ -16,7 +16,7 @@ export default function CenterPanel({ metadata }: Props) {
     payloadFieldNames: metadata?.payloadFieldNames ?? [],
   };
 
-  if (kind !== 'AST_BOOLEAN' && kind !== 'SCORECARD' && kind !== 'DECISION_TREE' && kind !== 'DECISION_TABLE') {
+  if (kind !== 'AST_BOOLEAN' && kind !== 'SCORECARD' && kind !== 'DECISION_TREE' && kind !== 'DECISION_TABLE' && kind !== 'EXPRESSION_SCRIPT') {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
         {t('editor.centerPanel.placeholder')} ({kind})
@@ -34,6 +34,14 @@ export default function CenterPanel({ metadata }: Props) {
         {...shared}
         onChange={setAst}
       />
+    );
+  }
+
+  if (kind === 'DECISION_TREE' || kind === 'DECISION_TABLE') {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
+        {t('editor.centerPanel.placeholder')} ({kind})
+      </div>
     );
   }
 
