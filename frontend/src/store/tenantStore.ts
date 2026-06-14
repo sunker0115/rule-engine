@@ -16,18 +16,23 @@ interface TenantState {
   setCurrent: (code: string) => void;
 }
 
+// 默认租户列表（后端暂无 /admin/v1/tenants 接口，v1 硬编码）
+const DEFAULT_TENANTS: TenantInfo[] = [
+  { id: 1, code: 'default', name: '默认租户' },
+];
+
 export const useTenantStore = create<TenantState>((set, get) => ({
-  current: localStorage.getItem('tenantCode') || null,
-  currentId: Number(localStorage.getItem('tenantId')) || null,
-  list: [],
+  current: localStorage.getItem('tenantCode') || 'default',
+  currentId: Number(localStorage.getItem('tenantId')) || 1,
+  list: DEFAULT_TENANTS,
 
   loadList: async () => {
-    const res = await apiClient.get(ENDPOINTS.TENANT_LIST);
-    const list: TenantInfo[] = res.data?.data ?? [];
-    set({ list });
+    // 后端暂无 tenant 列表接口，使用默认列表
+    // 后续有接口时替换为: apiClient.get(ENDPOINTS.TENANT_LIST)
+    set({ list: DEFAULT_TENANTS });
     const { current } = get();
-    if (!current && list.length > 0) {
-      get().setCurrent(list[0].code);
+    if (!current) {
+      get().setCurrent(DEFAULT_TENANTS[0].code);
     }
   },
 
