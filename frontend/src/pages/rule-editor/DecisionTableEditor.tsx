@@ -118,9 +118,10 @@ export default function DecisionTableEditor({
           return (
             <Table.Column
               key={ci}
+              width={280}
               dataIndex={`_c${ci}`}
               title={(
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 290 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Select
                     size="small"
                     style={{ width: 90 }}
@@ -134,7 +135,7 @@ export default function DecisionTableEditor({
                   <Select
                     size="small"
                     showSearch
-                    style={{ width: 130 }}
+                    style={{ width: 110 }}
                     value={col.metricCode || undefined}
                     onChange={(v) => updateColumn(ci, 'metricCode', v)}
                     placeholder={t('editor.decisionTable.metric')}
