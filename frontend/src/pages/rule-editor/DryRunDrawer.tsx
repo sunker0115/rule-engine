@@ -11,6 +11,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   ruleVersionId?: number;
+  /** 目标版本号，仅用于展示"正在试算 v{N}" */
+  versionLabel?: number;
   ruleId?: number;
   sceneCode: string;
   eventTypes: string[];
@@ -26,7 +28,7 @@ interface PayloadPair {
 
 let nextPairId = 0;
 
-export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sceneCode, eventTypes, payloadFieldNames, payloadFieldTypes }: Props) {
+export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabel, ruleId, sceneCode, eventTypes, payloadFieldNames, payloadFieldTypes }: Props) {
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
@@ -149,6 +151,12 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, ruleId, sce
 
   return (
     <Drawer title={te('title.dryRun')} open={open} onClose={onClose} width={500}>
+      {versionLabel !== undefined && (
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text type="secondary">{te('dryRun.targetVersion')}: </Typography.Text>
+          <Tag color="blue">v{versionLabel}</Tag>
+        </div>
+      )}
       <Form form={form} layout="vertical">
         <Form.Item name="eventType" label={te('dryRun.eventType')} rules={[{ required: eventTypes.length > 0 }]}>
           {eventTypes.length > 0

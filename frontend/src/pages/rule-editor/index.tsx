@@ -8,7 +8,7 @@ import { useRuleStore } from '@/store/ruleStore';
 import { getRule } from '@/api/rule';
 import { getSceneMetadata } from '@/api/metadata';
 import { getScene } from '@/api/scene';
-import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType } from '@/types';
+import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType, RuleVersionItem } from '@/types';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
@@ -47,7 +47,15 @@ export default function RuleEditor() {
   const [ruleDetail, setRuleDetail] = useState<RuleDetailType | null>(null);
   const [metadata, setMetadata] = useState<SceneMetadataType | null>(null);
   const [dryRunOpen, setDryRunOpen] = useState(false);
+  // 当前要试算的目标版本；null 表示走默认（最新 DRAFT/ACTIVE 版本）
+  const [dryRunTarget, setDryRunTarget] = useState<RuleVersionItem | null>(null);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+
+  // 打开试算抽屉：传入 version 则针对该历史版本，否则默认最新版本
+  const openDryRun = (version?: RuleVersionItem) => {
+    setDryRunTarget(version ?? null);
+    setDryRunOpen(true);
+  };
 
   const load = async () => {
     if (!currentId || !ruleId) return;
@@ -87,15 +95,17 @@ export default function RuleEditor() {
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!ruleDetail) return <div>{t('editor.notFound')}</div>;
 
-  // 取最新 DRAFT 或 ACTIVE 版本 id 作为 dry-run 目标
+  // 取最新 DRAFT 或 ACTIVE 版本作为默认 dry-run 目标
   const latestVersion = ruleDetail.versions
     ?.filter(v => v.status === 'DRAFT' || v.status === 'ACTIVE')
     .sort((a, b) => b.version - a.version)[0];
+  // 实际试算的版本：选中的历史版本优先，否则回退默认最新版本
+  const dryRunVersion = dryRunTarget ?? latestVersion;
 
   return (
     <Layout style={{ background: '#fff', height: 'calc(100vh - 64px - 48px)' }}>
       <Sider width={260} style={{ background: '#fafafa', borderRight: '1px solid #f0f0f0', overflow: 'auto' }}>
-        <LeftPanel ruleDetail={ruleDetail} onOpenDryRun={() => setDryRunOpen(true)} onUpdated={load} />
+        <LeftPanel ruleDetail={ruleDetail} onOpenDryRun={openDryRun} onUpdated={load} />
       </Sider>
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <Content style={{ flex: 1, overflow: 'auto', padding: 16 }}>
@@ -129,7 +139,8 @@ export default function RuleEditor() {
       <DryRunDrawer
         open={dryRunOpen}
         onClose={() => setDryRunOpen(false)}
-        ruleVersionId={latestVersion?.ruleVersionId}
+        ruleVersionId={dryRunVersion?.ruleVersionId}
+        versionLabel={dryRunVersion?.version}
         ruleId={ruleDetail.ruleDefinitionId}
         sceneCode={ruleDetail.sceneCode}
         eventTypes={metadata?.eventTypes ?? ruleDetail.triggerEventTypes ?? []}

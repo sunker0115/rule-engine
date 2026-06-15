@@ -224,7 +224,7 @@ export interface RuleTranslation {
     };
   };
   editor: {
-    leftPanel: { ruleInfo: string; versionTimeline: string; executorLabel: string; dividerPublish: string; dividerManage: string };
+    leftPanel: { ruleInfo: string; versionTimeline: string; executorLabel: string; dividerPublish: string; dividerManage: string; dryRunVersion: string };
     centerPanel: { placeholder: string };
     rightPanel: {
       property: string; preGate: string; decisionBinding: string;

@@ -44,6 +44,7 @@ const rule: RuleTranslation = {
     leftPanel: {
       ruleInfo: 'Rule Info', versionTimeline: 'Versions', executorLabel: 'Executor',
       dividerPublish: 'Publish', dividerManage: 'Manage',
+      dryRunVersion: 'Dry run this version',
     },
     centerPanel: { placeholder: 'Editor (v1.5)' },
     rightPanel: {

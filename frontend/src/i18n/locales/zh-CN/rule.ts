@@ -44,6 +44,7 @@ const rule: RuleTranslation = {
     leftPanel: {
       ruleInfo: '规则信息', versionTimeline: '版本历史', executorLabel: '执行器',
       dividerPublish: '发布', dividerManage: '管理',
+      dryRunVersion: '试算此版本',
     },
     centerPanel: { placeholder: '编辑器 (v1.5 实装)' },
     rightPanel: {
