@@ -1,0 +1,4 @@
+[
+  { "code": "REJECT", "name": "拒绝", "priority": 1, "description": "外部风险分超阈值，拒绝" },
+  { "code": "PASS", "name": "通过", "priority": 100, "description": "放行" }
+]

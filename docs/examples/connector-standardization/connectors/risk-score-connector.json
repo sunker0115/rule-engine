@@ -1,0 +1,32 @@
+{
+  "name": "风控评分服务连接器",
+  "descriptor": {
+    "endpointRef": "risk-svc",
+    "request": {
+      "method": "POST",
+      "pathTemplate": "/v1/score",
+      "headers": [
+        { "name": "Content-Type", "valueTemplate": "application/json" }
+      ],
+      "bodyTemplate": "{\"userId\":\"{subjectId}\",\"channel\":\"{vars.channel}\",\"ip\":\"{payload.ip}\"}"
+    },
+    "response": {
+      "successWhen": { "path": "code", "op": "EQ", "value": 0 },
+      "valuePath": "data.score"
+    },
+    "auth": {
+      "kind": "BEARER",
+      "tokenRef": "risk-svc-token"
+    },
+    "resilience": {
+      "connectTimeoutMs": 200,
+      "readTimeoutMs": 300,
+      "retries": 1,
+      "retryOn": ["TIMEOUT", "UPSTREAM_5XX"]
+    },
+    "errorMapping": [
+      { "when": { "envelopeCode": "40401" }, "to": "NOT_FOUND" },
+      { "when": { "statusFrom": 429, "statusTo": 429 }, "to": "UPSTREAM_ERROR" }
+    ]
+  }
+}

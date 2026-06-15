@@ -32,6 +32,7 @@
 | `tenant` | 租户注册 | 同步事务 | 永久 |
 | `scene` | 业务域元数据（dominantMode / payloadSchema / decisionStrategy） | 同步事务 | 永久 |
 | `metric_definition` | 指标元数据（sourceType / params / cacheTtl / allowProvided） | 同步事务 | 永久 |
+| `connector_definition` | 声明式 HTTP 连接器（descriptor：request/response/auth/resilience/errorMapping），`EXTERNAL_HTTP` metric 经 `params.connector` 引用（D72） | 同步事务 | 永久 |
 | `rule_definition` | 规则主记录（code / name / status） | 同步事务 | 永久 |
 | `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
 | `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级（D26） | 同步事务 | 永久 |
@@ -109,7 +110,7 @@ CREATE TABLE metric_definition (
   name                VARCHAR(128) NOT NULL,
   source_type         VARCHAR(16) NOT NULL COMMENT '取值: ATTRIBUTE/SQL_AGGREGATE/EXTERNAL_HTTP/STREAM',
   data_type           VARCHAR(16) NOT NULL COMMENT '取值: LONG/DOUBLE/STRING/BOOLEAN/LIST/DATE/DATETIME；B20 新增 DATE（LocalDate，日历日期）/ DATETIME（Instant/带时区偏移，时区相关）；由 Flyway V1_5__add_date_datetime_to_metric_datatype.sql 扩展',
-  params              JSON         NOT NULL COMMENT 'sourceType 专属参数（B21）：SQL_AGGREGATE={datasource(命名只读源),sql(:now命名参数)}；EXTERNAL_HTTP={endpoint(命名端点),path,jsonPath}；ATTRIBUTE={table,column}',
+  params              JSON         NOT NULL COMMENT 'sourceType 专属参数（B21）：SQL_AGGREGATE={datasource(命名只读源),sql(:now命名参数)}；EXTERNAL_HTTP={connector(connector_definition.connector_code),vars(连接器入参,渲染 {vars.x})}(D72：descriptor 持有 request/response/auth/resilience/errorMapping)；ATTRIBUTE={table,column}',
   cache_ttl_seconds   INT          NOT NULL DEFAULT 60 COMMENT '取数结果缓存 TTL，0=不缓存',
   allow_provided      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'D30：是否允许调用方通过 providedMetrics 覆盖；DEFAULT 0 为 SQL_AGGREGATE/STREAM 兜底，ATTRIBUTE/EXTERNAL_HTTP 应用层写入时需显式设为 1（见 04-extension §4.3）',
   status              VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED/SUPERSEDED；B6：SUPERSEDED=被新版本取代（旧行保留，规则仍可按版本解析）',
@@ -120,6 +121,26 @@ CREATE TABLE metric_definition (
   UNIQUE KEY uk_tenant_code_version (tenant_id, metric_code, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标元数据（sourceType / params / cacheTtl / allowProvided / version B6）';
 ```
+
+**connector_definition**（D72：声明式 HTTP 连接器，迁移 V1_34）
+
+```sql
+CREATE TABLE connector_definition (
+  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id       BIGINT       NOT NULL,
+  connector_code  VARCHAR(128) NOT NULL COMMENT 'connectorCode，租户内唯一；EXTERNAL_HTTP metric 经 params.connector 引用',
+  name            VARCHAR(128) NOT NULL,
+  descriptor      JSON         NOT NULL COMMENT '声明式连接器描述符（ConnectorDescriptor：endpointRef / request[method,pathTemplate,query,headers,bodyTemplate] / response[successWhen,valuePath] / auth[STATIC_HEADER|BEARER|OAUTH2_CLIENT_CREDENTIALS] / resilience / errorMapping），整体单 JSON 列由 Jackson3TypeHandler 转换（模板 = rule_version）',
+  status          VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED；v1 可变热加载，不做 per-version 冻结（D72）',
+  created_by      VARCHAR(64),
+  created_at      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_by      VARCHAR(64),
+  updated_at      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_tenant_connector (tenant_id, connector_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='连接器定义（D72，声明式 HTTP 连接器）';
+```
+
+> **descriptor 内字段不单列 DDL**：descriptor 是 typed `ConnectorDescriptor` record 整体序列化进单 JSON 列（与 `rule_version.condition_ast` 同款），字段语义见 [`04-extension.md`](./04-extension.md) §4.5 连接器契约（C1–C5）。endpoint baseUrl / 凭证不落本表——`descriptor.endpointRef` 指向 infra 注册的命名端点（`engine.rule.fetch.endpoints`），密钥经 `*Ref` 引用 `engine.rule.fetch.credentials`（来自 env/secrets）。
 
 **rule_definition**
 
@@ -403,6 +424,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `evaluation_session` | （无专用索引）按规则查历史 session 走 `node_trace.rule_version_id` IN 该规则所有版本 id → 取 `evaluation_session_id` → JOIN evaluation_session；不在 evaluation_session 加规则外键索引以避免写热点，JOIN 量小可接受（见 10-api-contract §6.4） | |
 | `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
 | `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |
+| `connector_definition` | UK `uk_tenant_connector (tenant_id, connector_code)` | 租户内连接器码唯一性约束 + 按 code 解析 descriptor（eval 侧 `ConnectorDefinitionResolver` 命中后 Caffeine 缓存） |
 | `rule_version` | UK `uk_def_version (rule_definition_id, version)` | 版本唯一性约束 + 按规则查所有版本 |
 | `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)`<br>`idx_operated_at (operated_at)` | 查某个规则/Scene 的所有变更记录<br>按时间范围查审计日志 |
 | `decision_definition` | UK `uk_tenant_code (tenant_id, code)` | Tenant 内 Decision 码唯一性约束 + 发布时查 Decision |

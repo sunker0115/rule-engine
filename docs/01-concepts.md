@@ -401,10 +401,10 @@ EvalContext {
 |------------|---------|---------|------------------|----------------|---------------------|
 | `ATTRIBUTE` | 从主体属性表（`subject_attribute` 或业务库指定表/列）读单值 | KYC 等级、会员等级、账户状态等慢变属性 | `table`, `column` | 60–300s | `true` |
 | `SQL_AGGREGATE` | 执行 SQL 聚合查询（命名参数 `:subjectId` / `:tenantId` / `:now` / `:payload.x` / `:params.x`；禁 DB 时间函数与 `${}` 拼接） | 近 N 天交易次数、累计金额、历史行为统计 | `datasource`（命名只读源）, `sql` | 3600s（聚合结果更新慢；见 04-extension §4.3） | `false` |
-| `EXTERNAL_HTTP` | 调命名 HTTP 端点（infra 注册 baseURL+鉴权，灭 SSRF），取 JSON 响应字段 | 设备指纹分、IP 信誉、第三方评分 | `endpoint`（命名端点）, `path`（含 `{payload.x}` / `{params.x}` 占位符）, `jsonPath` | 60s 左右 | `true` |
+| `EXTERNAL_HTTP` | 引用**命名连接器**（D72：`ConnectorDescriptor` 声明 request 模板 / response 映射 / 鉴权 / 弹性 / 错误映射；descriptor 内 `endpointRef` 指向 infra 注册的命名端点，baseURL+凭证只在端点层，灭 SSRF），声明式从外部 HTTP 服务取一个值 | 设备指纹分、IP 信誉、第三方评分 | `connector`（`connector_definition.connector_code`）, `vars`（连接器入参，渲染模板里 `{vars.x}`） | 60s 左右 | `true` |
 | `STREAM` | 从流处理平台（Flink / Kafka）读预聚合结果（v1 占位，v2 接入） | 实时 CEP 序列特征、滑动窗口计数 | `topic`, `keyExpr` | `0`（流结果已是最新） | `false` |
 
-> `params` 完整字段 schema 及 `EXTERNAL_HTTP` 的 `jsonPath` 语法、`STREAM` 适配协议见 [`04-extension.md`](./04-extension.md) §MetricSource 实现指南。
+> `params` 完整字段 schema、`EXTERNAL_HTTP` 声明式连接器契约（descriptor 字段 + 响应映射 / 鉴权 / 错误归一带编号 Requirement C1–C5）、`STREAM` 适配协议见 [`04-extension.md`](./04-extension.md) §4.5 与 §MetricSource 实现指南。
 
 **可见性**（D54）：metric 在 **tenant 级**对所有 scene 可用，无 scene 级绑定白名单（原 `scene_metric_binding` 表已移除）。
 
