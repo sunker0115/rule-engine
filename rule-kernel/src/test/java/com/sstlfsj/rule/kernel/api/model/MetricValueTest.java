@@ -48,4 +48,19 @@ class MetricValueTest {
         assertEquals("METRIC_FETCH_FAIL", mv.errorCode());
         assertEquals("FETCHED", mv.valueSource());
     }
+
+    @Test
+    void convenienceConstructors_leaveReasonNull() {
+        assertNull(new MetricValue(42, "LONG", "PROVIDED").reason());
+        assertNull(new MetricValue(null, "UNKNOWN", "FETCHED", "TIMEOUT").reason());
+        assertNull(MetricValue.error("TIMEOUT").reason());
+    }
+
+    @Test
+    void fiveArgConstructor_retainsReason() {
+        MetricValue mv = new MetricValue(null, "UNKNOWN", "FETCHED", "TIMEOUT", "upstream took >300ms");
+        assertEquals("upstream took >300ms", mv.reason());
+        assertEquals("TIMEOUT", mv.errorCode());
+        assertTrue(mv.isError());
+    }
 }
