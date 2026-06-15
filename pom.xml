@@ -38,6 +38,8 @@
         <!-- 辅助/工具：基准 + 样例 -->
         <module>rule-benchmark</module>
         <module>rule-samples</module>
+        <!-- 测试支持：连接器一致性套件（mock 上游 + 黄金用例） -->
+        <module>rule-connector-conformance</module>
     </modules>
 
     <properties>

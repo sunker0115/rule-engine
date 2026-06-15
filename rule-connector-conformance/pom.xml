@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.sstlfsj.rule</groupId>
+        <artifactId>rule-engine</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <artifactId>rule-connector-conformance</artifactId>
+
+    <!--
+      连接器一致性套件（test-support 模块）：嵌入式 mock 上游 + 黄金用例 + 可执行的连接器行为契约。
+      只依赖 rule-kernel（MetricFetchError 细码名做期望）+ WireMock（mock 上游），不依赖 eval-svc——
+      对照的是 HTTP 行为契约，经实测 HTTP 验证而非直调 handler 类。
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-kernel</artifactId>
+        </dependency>
+
+        <!-- 嵌入式 mock 上游（standalone 含 jetty/jackson，自包含，版本由根 pom 管理） -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+        </dependency>
+
+        <!-- JSON 解析：参照实现按 valuePath 取标量（与 handler 同口径用 Jackson 3），版本由 Spring Boot BOM 管理。
+             不复用 WireMock standalone 内 shaded 的 jackson（内部坐标不稳定，不应跨模块依赖）。 -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- 套件的可执行规约依赖 JUnit/AssertJ 做断言（compile scope：接入方引依赖后可直接 run） -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+        </dependency>
+    </dependencies>
+</project>
