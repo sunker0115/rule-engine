@@ -5,7 +5,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { getRule } from '@/api/rule';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
-import type { RuleDetail as RuleDetailType, AstNode, IfNode, DecisionLeafNode } from '@/types';
+import type { RuleDetail as RuleDetailType, IfNode } from '@/types';
 
 /** 从 AST 递归提取所有 DecisionLeafNode 的 decisionCode */
 function extractDecisionCodes(node: unknown): string[] {

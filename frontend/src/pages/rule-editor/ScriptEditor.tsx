@@ -1,6 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { Tag } from 'antd';
-import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
 import { EditorView, basicSetup } from 'codemirror';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -53,7 +52,6 @@ function scriptCompletions(ctx: CompletionContext, metrics: MetricDescriptor[], 
 }
 
 export default function ScriptEditor({ availableMetrics, payloadFieldNames }: Props) {
-  const { t } = useTranslation('rule');
   const { script, setScript } = useRuleStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);

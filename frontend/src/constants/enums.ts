@@ -16,7 +16,7 @@ export function getDominantModeOptions(t: TFunction) {
     { value: 'PUSH',   label: t('enum.dominantMode.PUSH')   },
     { value: 'PULL',   label: t('enum.dominantMode.PULL')   },
     { value: 'HYBRID', label: t('enum.dominantMode.HYBRID') },
-  ] as const;
+  ];
 }
 
 /** 规则状态 */
@@ -25,7 +25,7 @@ export function getRuleStatusOptions(t: TFunction) {
     { value: 'DRAFT',     label: t('enum.status.DRAFT'),     color: 'blue'   },
     { value: 'PUBLISHED', label: t('enum.status.PUBLISHED'), color: 'green'  },
     { value: 'DISABLED',  label: t('enum.status.DISABLED'),  color: 'red'    },
-  ] as const;
+  ];
 }
 
 /** 版本状态 */
@@ -44,7 +44,7 @@ export function getSourceTypeOptions(t: TFunction) {
     { value: 'SQL_AGGREGATE', label: t('enum.sourceType.SQL_AGGREGATE') },
     { value: 'EXTERNAL_HTTP', label: t('enum.sourceType.EXTERNAL_HTTP') },
     { value: 'STREAM',        label: t('enum.sourceType.STREAM')        },
-  ] as const;
+  ];
 }
 
 /** Metric 数据类型 */
@@ -57,7 +57,7 @@ export function getDataTypeOptions(t: TFunction) {
     { value: 'LIST',     label: t('enum.dataType.LIST')     },
     { value: 'DATE',     label: t('enum.dataType.DATE')     },
     { value: 'DATETIME', label: t('enum.dataType.DATETIME') },
-  ] as const;
+  ];
 }
 
 /** 规则 kind */
@@ -68,7 +68,7 @@ export function getRuleKindOptions(t: TFunction) {
     { value: 'DECISION_TREE',      label: t('enum.kind.DECISION_TREE')      },
     { value: 'DECISION_TABLE',     label: t('enum.kind.DECISION_TABLE')     },
     { value: 'EXPRESSION_SCRIPT',  label: t('enum.kind.EXPRESSION_SCRIPT')  },
-  ] as const;
+  ];
 }
 
 /** 评估会话状态 */
@@ -80,7 +80,7 @@ export function getSessionStatusOptions(t: TFunction) {
     { value: 'ERROR',   label: t('enum.sessionStatus.ERROR'),   color: 'red'     },
     { value: 'PENDING', label: t('enum.sessionStatus.PENDING'), color: 'blue'    },
     { value: 'FAILED',  label: t('enum.sessionStatus.FAILED'),  color: '#8b0000' },
-  ] as const;
+  ];
 }
 
 /** 事件来源渠道 */

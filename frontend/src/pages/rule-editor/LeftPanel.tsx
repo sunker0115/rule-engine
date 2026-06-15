@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Descriptions, Button, Space, Tag, Timeline, message, Popconfirm, Divider } from 'antd';import { useTranslation } from 'react-i18next';
+import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider } from 'antd';import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, enableRule, newVersion } from '@/api/rule';
