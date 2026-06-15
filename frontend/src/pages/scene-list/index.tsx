@@ -114,6 +114,7 @@ export default function SceneList() {
         dataSource={dataSource}
         rowKey="id"
         loading={loading}
+        scroll={{ y: 'calc(100vh - 312px)' }}
         onRow={(record) => ({
           onClick: () => navigate(route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })),
           style: { cursor: 'pointer' },

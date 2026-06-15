@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listAuditLogs } from '@/api/audit';
 import { colorOf, labelOf, getAuditActionOptions, getAuditTargetTypeOptions, getActorTypeOptions } from '@/constants/enums';
+import { formatDateTime } from '@/utils/format';
 import JsonDiffViewer from '@/components/json-diff-viewer';
 import type { AuditLogItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -44,7 +45,7 @@ export default function AuditLogList() {
     { title: tc('label.id'), dataIndex: 'id', key: 'id', width: 60 },
     { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 60 },
     {
-      title: t('column.actor'), dataIndex: 'actorId', key: 'actorId', width: 100,
+      title: t('column.actor'), dataIndex: 'actorId', key: 'actorId', width: 120, ellipsis: true,
     },
     {
       title: t('column.actorType'), dataIndex: 'actorType', key: 'actorType', width: 60,
@@ -59,7 +60,7 @@ export default function AuditLogList() {
       render: (v: string) => <Tag>{labelOf(auditTargetTypeOpts, v as never)}</Tag>,
     },
     { title: t('column.targetId'), dataIndex: 'resourceId', key: 'resourceId', width: 70 },
-    { title: t('column.operatedAt'), dataIndex: 'occurredAt', key: 'occurredAt', width: 170, render: (v: string) => v?.slice(0, 19) },
+    { title: t('column.operatedAt'), dataIndex: 'occurredAt', key: 'occurredAt', width: 170, render: (v: string) => formatDateTime(v) },
   ];
 
   return (
@@ -118,7 +119,7 @@ export default function AuditLogList() {
         dataSource={logs}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 900 }}
+        scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
         pagination={{
           current: page,
           pageSize,

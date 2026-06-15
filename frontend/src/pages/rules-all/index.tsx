@@ -154,6 +154,7 @@ export default function RulesAll() {
         dataSource={dataSource}
         rowKey="ruleDefinitionId"
         loading={loading}
+        scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
       />
       <RuleDetailDrawer
         open={detailId !== null}

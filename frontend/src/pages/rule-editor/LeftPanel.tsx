@@ -4,6 +4,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, enableRule, newVersion } from '@/api/rule';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
+import { formatDateTime } from '@/utils/format';
 import type { RuleDetail as RuleDetailType } from '@/types';
 
 interface Props {
@@ -122,7 +123,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
           children: (
             <div>
               <Tag color={colorOf(versionStatusOpts, v.status as never)}>v{v.version}</Tag>
-              <span style={{ fontSize: 12, color: '#999' }}>{v.createdAt?.slice(0, 10)}</span>
+              <span style={{ fontSize: 12, color: '#999' }}>{formatDateTime(v.createdAt, 'YYYY-MM-DD')}</span>
             </div>
           ),
         }))}

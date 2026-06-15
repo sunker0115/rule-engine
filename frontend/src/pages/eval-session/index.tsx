@@ -6,6 +6,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { listSessions } from '@/api/evalSession';
 import { ROUTES, route } from '@/constants/routes';
 import { colorOf, labelOf, getSessionStatusOptions } from '@/constants/enums';
+import { formatDateTime } from '@/utils/format';
 import type { EvalSessionItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -46,13 +47,13 @@ export default function EvalSessionList() {
       ),
     },
     { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 60 },
-    { title: t('session.column.eventId'), dataIndex: 'eventId', key: 'eventId', width: 180, ellipsis: true },
-    { title: t('session.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode', width: 100 },
-    { title: t('session.column.subjectId'), dataIndex: 'subjectId', key: 'subjectId', width: 100 },
+    { title: t('session.column.eventId'), dataIndex: 'eventId', key: 'eventId', width: 200, ellipsis: true },
+    { title: t('session.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode', width: 100, ellipsis: true },
+    { title: t('session.column.subjectId'), dataIndex: 'subjectId', key: 'subjectId', width: 120, ellipsis: true },
     { title: t('session.column.source'), dataIndex: 'source', key: 'source', width: 60 },
     { title: t('session.column.mode'), dataIndex: 'mode', key: 'mode', width: 60 },
     {
-      title: t('session.column.finalDecision'), dataIndex: 'finalDecision', key: 'finalDecision', width: 100,
+      title: t('session.column.finalDecision'), dataIndex: 'finalDecision', key: 'finalDecision', width: 100, ellipsis: true,
       render: (v: string) => v || '-',
     },
     {
@@ -63,7 +64,7 @@ export default function EvalSessionList() {
       title: t('session.column.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (v: string) => <Tag color={colorOf(getSessionStatusOptions(t), v as never)}>{labelOf(getSessionStatusOptions(t), v as never)}</Tag>,
     },
-    { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 180 },
+    { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 170, render: (v: string) => formatDateTime(v) },
   ];
 
   return (
@@ -91,7 +92,7 @@ export default function EvalSessionList() {
         dataSource={sessions}
         rowKey="sessionId"
         loading={loading}
-        scroll={{ x: 1400 }}
+        scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
         pagination={{
           current: page,
           pageSize,

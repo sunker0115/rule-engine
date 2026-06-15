@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getJobExecutions } from '@/api/job';
 import { colorOf, labelOf, getJobExecStatusOptions } from '@/constants/enums';
+import { formatDateTime } from '@/utils/format';
 import type { JobExecutionItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -52,8 +53,8 @@ export default function JobDetail() {
 
   const columns: ColumnsType<JobExecutionItem> = [
     { title: t('execution.column.id'), dataIndex: 'id', key: 'id', width: 80 },
-    { title: t('execution.column.triggerAt'), dataIndex: 'triggerAt', key: 'triggerAt', width: 160 },
-    { title: t('execution.column.finishedAt'), dataIndex: 'finishedAt', key: 'finishedAt', width: 160, render: (v: string) => v || '-' },
+    { title: t('execution.column.triggerAt'), dataIndex: 'triggerAt', key: 'triggerAt', render: (v: string) => formatDateTime(v) },
+    { title: t('execution.column.finishedAt'), dataIndex: 'finishedAt', key: 'finishedAt', render: (v: string) => formatDateTime(v) },
     { title: t('execution.column.subjectCount'), dataIndex: 'subjectCount', key: 'subjectCount', width: 70 },
     { title: t('execution.column.successCount'), dataIndex: 'successCount', key: 'successCount', width: 70 },
     { title: t('execution.column.errorCount'), dataIndex: 'errorCount', key: 'errorCount', width: 70 },

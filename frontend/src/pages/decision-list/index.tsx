@@ -84,6 +84,7 @@ export default function DecisionList() {
       dataSource={decisions}
       rowKey="code"
       loading={loading}
+      scroll={{ y: 'calc(100vh - 312px)' }}
       onRow={(record) => ({ onClick: () => openEdit(record), style: { cursor: 'pointer' } })}
     />
     <Modal

@@ -53,11 +53,11 @@ export default function JobList() {
   };
 
   const columns: ColumnsType<JobItem> = [
-    { title: t('column.name'), dataIndex: 'name', key: 'name', width: 140 },
-    { title: t('column.code'), dataIndex: 'code', key: 'code', width: 120 },
-    { title: t('column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode', width: 100 },
-    { title: t('column.eventType'), dataIndex: 'eventType', key: 'eventType', width: 100 },
-    { title: t('column.cronExpr'), dataIndex: 'cronExpression', key: 'cronExpression', width: 120, render: (v: string) => v || '-' },
+    { title: t('column.name'), dataIndex: 'name', key: 'name', ellipsis: true },
+    { title: t('column.code'), dataIndex: 'code', key: 'code', ellipsis: true },
+    { title: t('column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode', ellipsis: true },
+    { title: t('column.eventType'), dataIndex: 'eventType', key: 'eventType', ellipsis: true },
+    { title: t('column.cronExpr'), dataIndex: 'cronExpression', key: 'cronExpression', ellipsis: true, render: (v: string) => v || '-' },
     {
       title: t('column.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (v: string, record: JobItem) => (
@@ -70,7 +70,7 @@ export default function JobList() {
       ),
     },
     {
-      title: t('column.subjectQueryType'), dataIndex: 'subjectQuery', key: 'subjectQueryType', width: 100,
+      title: t('column.subjectQueryType'), dataIndex: 'subjectQuery', key: 'subjectQueryType', ellipsis: true,
       render: (v: JobItem['subjectQuery']) => v?.type || '-',
     },
     {
@@ -98,6 +98,7 @@ export default function JobList() {
         rowKey="id"
         loading={loading}
         pagination={false}
+        scroll={{ y: 'calc(100vh - 260px)' }}
       />
     </div>
   );

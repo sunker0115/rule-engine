@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getSession, getSessionTrace } from '@/api/evalSession';
 import { colorOf, labelOf, getSessionStatusOptions } from '@/constants/enums';
+import { formatDateTime } from '@/utils/format';
 import TraceTree from '@/components/trace-tree';
 import type { EvalSessionItem, NodeTraceItem } from '@/types';
 
@@ -73,9 +74,9 @@ export default function EvalSessionDetail() {
           {session.score != null && <Descriptions.Item label={t('session.detail.score')}>{session.score}</Descriptions.Item>}
           {session.category && <Descriptions.Item label={t('session.detail.category')}>{session.category}</Descriptions.Item>}
           <Descriptions.Item label={t('session.column.evalDuration')}>{session.evalDurationMs}</Descriptions.Item>
-          <Descriptions.Item label={t('session.column.occurredAt')}>{session.occurredAt || '-'}</Descriptions.Item>
-          <Descriptions.Item label={t('session.detail.startedAt')}>{session.startedAt || '-'}</Descriptions.Item>
-          <Descriptions.Item label={t('session.detail.finishedAt')}>{session.finishedAt || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('session.column.occurredAt')}>{formatDateTime(session.occurredAt)}</Descriptions.Item>
+          <Descriptions.Item label={t('session.detail.startedAt')}>{formatDateTime(session.startedAt)}</Descriptions.Item>
+          <Descriptions.Item label={t('session.detail.finishedAt')}>{formatDateTime(session.finishedAt)}</Descriptions.Item>
         </Descriptions>
       </Card>
       <Tabs items={tabItems} />

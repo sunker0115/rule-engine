@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getRule } from '@/api/rule';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
+import { formatDateTime } from '@/utils/format';
 import type { RuleDetail as RuleDetailType, AstNode, IfNode, DecisionLeafNode } from '@/types';
 
 /** 从 AST 递归提取所有 DecisionLeafNode 的 decisionCode */
@@ -117,7 +118,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
                     <div>
                       <Tag color={colorOf(versionStatusOpts, v.status)}>v{v.version}</Tag>
                       <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                        {v.createdAt?.slice(0, 16)}
+                                                {formatDateTime(v.createdAt, 'YYYY-MM-DD HH:mm')}
                         {v.publishedBy && <span> · {v.publishedBy}</span>}
                       </div>
                     </div>

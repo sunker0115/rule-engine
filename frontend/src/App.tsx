@@ -29,7 +29,7 @@ export default function App() {
   }, [i18n]);
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ height: '100vh' }}>
       <Header style={{
         display: 'flex',
         alignItems: 'center',
@@ -65,7 +65,7 @@ export default function App() {
             style={{ height: '100%', borderRight: 0 }}
           />
         </Sider>
-        <Content style={{ padding: 24, background: '#f5f5f5' }}>
+        <Content style={{ padding: 24, background: '#f5f5f5', overflow: 'auto' }}>
           <Outlet />
         </Content>
       </Layout>

@@ -4,6 +4,7 @@ import { SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getStatusOptions } from '@/constants/enums';
+import { formatDateTime } from '@/utils/format';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import type { ColumnsType } from 'antd/es/table';
@@ -52,9 +53,8 @@ export default function TenantList() {
 
   const columns: ColumnsType<TenantRow> = [
     { title: tc('label.id'), dataIndex: 'id', key: 'id', width: 80 },
-    { title: tc('label.code'), dataIndex: 'code', key: 'code' },
-    { title: tc('label.name'), dataIndex: 'name', key: 'name' },
-    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.code'), dataIndex: 'code', key: 'code', ellipsis: true },
+    { title: tc('label.name'), dataIndex: 'name', key: 'name', ellipsis: true },
     {
       title: tc('label.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (_v: string, r: TenantRow) => (
@@ -65,7 +65,8 @@ export default function TenantList() {
         />
       ),
     },
-    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => formatDateTime(v) },
+    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => formatDateTime(v) },
   ];
 
   return (
@@ -96,6 +97,7 @@ export default function TenantList() {
         dataSource={list}
         rowKey="id"
         loading={loading}
+        scroll={{ y: 'calc(100vh - 312px)' }}
         onRow={(r) => ({
           onClick: () => setCurrent(r.code),
           style: { cursor: 'pointer', background: r.code === current ? '#e6f7ff' : undefined },

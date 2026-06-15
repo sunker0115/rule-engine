@@ -131,6 +131,7 @@ export default function MetricList() {
       />
     </Space>
     <Table columns={getMetricColumns(t, tc, handleToggleStatus)} dataSource={dataSource} rowKey="metricCode" loading={loading}
+      scroll={{ y: 'calc(100vh - 312px)' }}
       onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
     <Modal title={t('action.create')} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>
       <Form form={form} layout="vertical">

@@ -154,6 +154,7 @@ export default function RuleList() {
       dataSource={filtered}
       rowKey="ruleDefinitionId"
       loading={loading}
+      scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
       onRow={(r) => ({
         onClick: () => navigate(route(ROUTES.RULE_EDITOR, { sceneCode: sceneCode!, ruleId: r.ruleDefinitionId })),
         style: { cursor: 'pointer' },

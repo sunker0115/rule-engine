@@ -1,6 +1,7 @@
 import { Tag, Space, Switch } from 'antd';
 import { Link } from 'react-router-dom';
 import { ROUTES, route } from '@/constants/routes';
+import { formatDateTime } from '@/utils/format';
 import type { SceneListItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -27,6 +28,7 @@ export function getSceneColumns(t: (key: string) => string, tc: (key: string) =>
       title: t('column.status'),
       dataIndex: 'status',
       key: 'status',
+      width: 70,
       render: (_v: string, record: SceneListItem) => (
         <Switch
           onClick={(_, e) => e?.stopPropagation?.()}
@@ -36,8 +38,8 @@ export function getSceneColumns(t: (key: string) => string, tc: (key: string) =>
         />
       ),
     },
-    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
-    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => v?.slice(0, 19) ?? '-' },
+    { title: tc('label.createdAt'), dataIndex: 'createdAt', key: 'createdAt', render: (v: string) => formatDateTime(v) },
+    { title: tc('label.updatedAt'), dataIndex: 'updatedAt', key: 'updatedAt', render: (v: string) => formatDateTime(v) },
     {
       title: t('column.actions'),
       key: 'actions',
