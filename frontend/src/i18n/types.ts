@@ -449,8 +449,8 @@ export interface ImportExportTranslation {
 // ===== 所有命名空间聚合（供 i18next CustomTypeOptions 使用）=====
 // ===== connector 命名空间 =====
 export interface ConnectorTranslation {
-  title: { list: string; detail: string };
-  action: { create: string };
+  title: { list: string; detail: string; create: string; edit: string };
+  action: { create: string; addQuery: string; addHeader: string; addError: string; addScope: string };
   column: {
     connectorCode: string;
     name: string;
@@ -458,6 +458,68 @@ export interface ConnectorTranslation {
   };
   searchPlaceholder: string;
   detail: { notFound: string };
+  section: {
+    basic: string;
+    request: string;
+    response: string;
+    auth: string;
+    resilience: string;
+    errorMapping: string;
+  };
+  form: {
+    connectorCode: string;
+    connectorCodePlaceholder: string;
+    name: string;
+    endpointRef: string;
+    endpointRefExtra: string;
+    method: string;
+    pathTemplate: string;
+    pathTemplatePlaceholder: string;
+    query: string;
+    headers: string;
+    paramName: string;
+    paramValue: string;
+    bodyTemplate: string;
+    bodyTemplatePlaceholder: string;
+    successWhen: string;
+    successPath: string;
+    successOp: string;
+    successValue: string;
+    valuePath: string;
+    valuePathPlaceholder: string;
+    authKind: string;
+    headerName: string;
+    credentialRef: string;
+    tokenRef: string;
+    tokenUrl: string;
+    clientIdRef: string;
+    clientSecretRef: string;
+    scopes: string;
+    connectTimeoutMs: string;
+    readTimeoutMs: string;
+    retries: string;
+    retryOn: string;
+    enableCircuitBreaker: string;
+    failureRateThreshold: string;
+    windowSeconds: string;
+    openSeconds: string;
+    errorWhenStatusFrom: string;
+    errorWhenStatusTo: string;
+    errorWhenEnvelopeCode: string;
+    errorTo: string;
+  };
+  enum: {
+    authKind: { NONE: string; STATIC_HEADER: string; BEARER: string; OAUTH2_CLIENT_CREDENTIALS: string };
+    retryTrigger: { TIMEOUT: string; UPSTREAM_5XX: string };
+  };
+  preset: {
+    title: string;
+    hint: string;
+    codeMsgData: string;
+    bareJson: string;
+    successData: string;
+    applied: string;
+  };
 }
 
 export interface TranslationResources {
