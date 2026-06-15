@@ -225,7 +225,7 @@ export default function ConnectorDetail() {
               <Select
                 value={descriptor.request.method}
                 style={{ width: 120, display: 'block' }}
-                options={HTTP_METHODS.map((m) => ({ value: m, label: m }))}
+                options={HTTP_METHODS.map((m) => ({ value: m, label: t(`enum.httpMethod.${m}`) }))}
                 onChange={(v) => patchRequest({ method: v })}
               />
             </div>
@@ -279,7 +279,7 @@ export default function ConnectorDetail() {
             <Select
               style={{ width: 90, display: 'block' }}
               value={descriptor.response.successWhen.op}
-              options={COMPARE_OPS.map((o) => ({ value: o, label: o }))}
+              options={COMPARE_OPS.map((o) => ({ value: o, label: t(`enum.compareOp.${o}`) }))}
               onChange={(v) => patchResponse({ ...descriptor.response, successWhen: { ...descriptor.response.successWhen, op: v } })}
             />
           </div>

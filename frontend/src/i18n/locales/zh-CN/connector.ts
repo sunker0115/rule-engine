@@ -61,6 +61,8 @@ const connector: ConnectorTranslation = {
     errorTo: '映射为',
   },
   enum: {
+    httpMethod: { GET: 'GET', POST: 'POST', PUT: 'PUT' },
+    compareOp: { EQ: '等于', NE: '不等于', GT: '大于', GE: '大于等于', LT: '小于', LE: '小于等于' },
     authKind: {
       NONE: '无',
       STATIC_HEADER: '静态请求头',

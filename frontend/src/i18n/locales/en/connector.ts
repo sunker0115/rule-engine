@@ -61,6 +61,8 @@ const connector: ConnectorTranslation = {
     errorTo: 'Map To',
   },
   enum: {
+    httpMethod: { GET: 'GET', POST: 'POST', PUT: 'PUT' },
+    compareOp: { EQ: 'Equals', NE: 'Not Equals', GT: 'Greater Than', GE: 'Greater or Equal', LT: 'Less Than', LE: 'Less or Equal' },
     authKind: {
       NONE: 'None',
       STATIC_HEADER: 'Static Header',

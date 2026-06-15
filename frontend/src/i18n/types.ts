@@ -509,6 +509,8 @@ export interface ConnectorTranslation {
     errorTo: string;
   };
   enum: {
+    httpMethod: { GET: string; POST: string; PUT: string };
+    compareOp: { EQ: string; NE: string; GT: string; GE: string; LT: string; LE: string };
     authKind: { NONE: string; STATIC_HEADER: string; BEARER: string; OAUTH2_CLIENT_CREDENTIALS: string };
     retryTrigger: { TIMEOUT: string; UPSTREAM_5XX: string };
   };
