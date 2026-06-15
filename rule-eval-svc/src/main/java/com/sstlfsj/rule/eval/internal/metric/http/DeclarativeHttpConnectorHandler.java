@@ -11,11 +11,13 @@ import com.sstlfsj.rule.config.api.connector.HttpRequestTemplate;
 import com.sstlfsj.rule.config.api.connector.OAuth2ClientCredentialsAuth;
 import com.sstlfsj.rule.config.api.connector.Predicate;
 import com.sstlfsj.rule.config.api.connector.ResiliencePolicy;
+import com.sstlfsj.rule.config.api.connector.RetryTrigger;
 import com.sstlfsj.rule.config.api.connector.StaticHeaderAuth;
 import com.sstlfsj.rule.config.api.connector.TemplateParam;
 import com.sstlfsj.rule.eval.internal.metric.DataTypeCoercion;
 import com.sstlfsj.rule.eval.internal.metric.fetch.MetricFetchErrorMapper;
 import com.sstlfsj.rule.eval.internal.metric.fetch.ResiliencePolicyExecutor;
+import com.sstlfsj.rule.eval.internal.metric.fetch.RetryableUpstreamStatusException;
 import com.sstlfsj.rule.eval.internal.metric.fetch.VariableRenderer;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.MetricFetchError;
@@ -97,18 +99,28 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
         }
         collector.renderedRequest(request.method() + " " + request.uri());
 
+        ResiliencePolicy policy = descriptor.resilience();
         HttpResponse<String> response;
         try {
-            HttpClient client = client(descriptor.resilience());
-            response = resilienceExecutor.execute(descriptor.resilience(),
-                    () -> client.send(request, HttpResponse.BodyHandlers.ofString()));
+            HttpClient client = client(policy);
+            response = resilienceExecutor.execute(policy, () -> {
+                HttpResponse<String> r = client.send(request, HttpResponse.BodyHandlers.ofString());
+                // 5xx 是正常响应不抛异常；retryOn 含 UPSTREAM_5XX 时主动抛 RetryableUpstreamStatusException 触发重试
+                if (isServerError(r.statusCode()) && retryOnUpstream5xx(policy)) {
+                    throw new RetryableUpstreamStatusException(r.statusCode());
+                }
+                return r;
+            });
+        } catch (RetryableUpstreamStatusException e) {
+            // 重试耗尽：按非 2xx 路径归一（先查 errorMapping 状态区间，再回落 fromHttpStatus）
+            return error(collector, mapStatusError(descriptor.errorMapping(), e.status()));
         } catch (Exception e) {
             return error(collector, errorMapper.fromException(e));
         }
 
         collector.rawResponse(response.body());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            return error(collector, errorMapper.fromHttpStatus(response.statusCode()));
+            return error(collector, mapStatusError(descriptor.errorMapping(), response.statusCode()));
         }
 
         return mapResponse(descriptor, query, response.body(), collector);
@@ -194,11 +206,14 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
         }
 
         Object raw = extractJsonPath(root, descriptor.response().valuePath());
+        // valuePath 未命中（raw==null）归 PARSE_ERROR，区别于命中后强转失败的 TYPE_MISMATCH
         if (raw == null) return error(collector, MetricFetchError.PARSE_ERROR);
 
         Object dataType = query.params().get("dataType");
         String dt = dataType == null ? null : dataType.toString();
         Object value = DataTypeCoercion.coerce(raw, dt);
+        // 取到非空原始值但强转后为 null = 类型不匹配（与 SQL handler 同款判定，跨源一致）
+        if (value == null) return error(collector, MetricFetchError.TYPE_MISMATCH);
         collector.mappedValue(value);
         return new MetricValue(value, dt, ValueSource.FETCHED.tag());
     }
@@ -217,6 +232,31 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
             }
         }
         return MetricFetchError.UPSTREAM_ERROR;
+    }
+
+    /**
+     * 非 2xx 状态归一：先查 errorMapping 的状态区间（statusFrom<=status<=statusTo 命中）用其 to，
+     * 无命中再回落 {@link MetricFetchErrorMapper#fromHttpStatus}（401/403→UNAUTHORIZED，其余→UPSTREAM_ERROR）。
+     */
+    private MetricFetchError mapStatusError(List<ErrorRule> errorMapping, int status) {
+        if (errorMapping != null) {
+            for (ErrorRule rule : errorMapping) {
+                ErrorMatch when = rule.when();
+                if (when != null && when.statusFrom() != null && when.statusTo() != null
+                        && status >= when.statusFrom() && status <= when.statusTo()) {
+                    return toFetchError(rule.to());
+                }
+            }
+        }
+        return errorMapper.fromHttpStatus(status);
+    }
+
+    private static boolean isServerError(int status) {
+        return status >= 500 && status <= 599;
+    }
+
+    private static boolean retryOnUpstream5xx(ResiliencePolicy policy) {
+        return policy.retryOn() != null && policy.retryOn().contains(RetryTrigger.UPSTREAM_5XX);
     }
 
     /** to（String 细码名）转 MetricFetchError，无法识别归 UPSTREAM_ERROR。 */

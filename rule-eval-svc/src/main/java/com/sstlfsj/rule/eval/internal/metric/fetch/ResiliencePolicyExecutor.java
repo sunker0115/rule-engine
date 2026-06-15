@@ -38,6 +38,9 @@ public class ResiliencePolicyExecutor {
     private boolean retryable(Exception e, ResiliencePolicy policy) {
         if (policy.retryOn() == null) return false;
         boolean timeout = e instanceof HttpTimeoutException || e instanceof TimeoutException;
-        return timeout && policy.retryOn().contains(RetryTrigger.TIMEOUT);
+        if (timeout && policy.retryOn().contains(RetryTrigger.TIMEOUT)) return true;
+        // 5xx 由 handler 主动抛 RetryableUpstreamStatusException（正常响应不抛异常），retryOn 含 UPSTREAM_5XX 才重试
+        return e instanceof RetryableUpstreamStatusException
+                && policy.retryOn().contains(RetryTrigger.UPSTREAM_5XX);
     }
 }

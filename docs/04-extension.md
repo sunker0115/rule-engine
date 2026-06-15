@@ -170,7 +170,7 @@ public @interface MetricSourceType {
 | **C2.1** | 仅 HTTP 2xx 进入响应映射（非 2xx 走 C3 错误归一）。响应体 MUST 为合法 JSON，否则归 `PARSE_ERROR`。 | `parse-bad-json` |
 | **C2.2** | `successWhen` 是 `Predicate(path, op, value)`：`path` 为点号 jsonPath，`op` ∈ `CompareOp{EQ,NE,GT,GE,LT,LE}`，`value` 为标量字面量。判定语义：**当 actual 与 expected 均可解析为数值时**走 double 全序比较（六算子全支持）；**否则仅 `EQ`/`NE` 按标量相等判定，`GT/GE/LT/LE` 对非数值一律判不命中**。`successWhen` 为 `null` 时 MUST 视为恒成功。 | —（未覆盖；见 `DeclarativeHttpConnectorHandlerTest`） |
 | **C2.3** | `valuePath` 按点号 jsonPath 从 JSON 树取**标量**（整数→`long` / 浮点→`double` / 布尔→`boolean` / 其余→`string`）。路径未命中、命中 `null` 或非标量 MUST 归 `PARSE_ERROR`。 | `parse-missing-path` |
-| **C2.4** | 成功时取出的标量 MUST 按 metric `dataType` 经 `DataTypeCoercion` 强转（`LONG`/`DOUBLE`/`BOOLEAN` 真转换，`STRING`/`DATE`/`DATETIME`/`DECIMAL` 字符串化交 evaluator 再解析）。**v1 行为**：强转失败返回 `null`（透传，不归专门错误码）；`MetricFetchError.TYPE_MISMATCH` 枚举已定义但 HTTP 取数路径当前不产出（见本节末「实现与契约差异」）。 | `success-scalar`（成功路径） |
+| **C2.4** | 成功时取出的标量 MUST 按 metric `dataType` 经 `DataTypeCoercion` 强转（`LONG`/`DOUBLE`/`BOOLEAN` 真转换，`STRING`/`DATE`/`DATETIME`/`DECIMAL` 字符串化交 evaluator 再解析）。`valuePath` 命中**非 null** 原始标量但强转返回 `null`（强转失败）MUST 归 `TYPE_MISMATCH`（与 SQL 源 `raw != null && coerced == null → TYPE_MISMATCH` 同款判定，跨源一致）；`valuePath` 未命中（原始为 `null`）仍归 `PARSE_ERROR`（C2.3），二者 MUST 区分。 | `success-scalar`（成功路径） |
 
 #### C3 错误归一（`MetricFetchErrorMapper` + `mapEnvelopeError`）
 
@@ -178,11 +178,12 @@ public @interface MetricSourceType {
 
 | # | Requirement | conformance 用例 |
 |---|---|---|
-| **C3.1** | HTTP 状态 → 细码映射：`401` / `403` → `UNAUTHORIZED`；其余非 2xx → `UPSTREAM_ERROR`。 | `unauthorized-401` / `forbidden-403` / `upstream-500` |
+| **C3.1** | 非 2xx 状态归一 MUST 先查 `errorMapping` 状态区间（C3.6），无命中再回落默认映射：`401` / `403` → `UNAUTHORIZED`；其余非 2xx → `UPSTREAM_ERROR`。 | `unauthorized-401` / `forbidden-403` / `upstream-500` |
 | **C3.2** | 异常 → 细码映射：连接/读超时类异常（`HttpTimeoutException` / `java.util.concurrent.TimeoutException` / JDBC `SQLTimeoutException`，含被包裹的 cause）→ `TIMEOUT`；其余异常 → `UPSTREAM_ERROR`（默认兜底）。 | —（未覆盖；见 `MetricFetchErrorMapperTest`） |
 | **C3.3** | 连接器名 / endpoint / descriptor 未解析到 MUST 归 `NOT_FOUND`。 | —（未覆盖） |
 | **C3.4** | 鉴权取凭证或 token 交换失败（凭证缺失等）MUST 归 `UNAUTHORIZED`。 | —（未覆盖；见 `OAuth2TokenManagerTest`） |
 | **C3.5** | `successWhen` 不命中（信封错误）时，按 `errorMapping`（`List<ErrorRule>`）**顺序**匹配：`ErrorMatch.envelopeCode` 与「**`successWhen.path` 同位**」取出的信封码标量相等则命中，用该规则的 `to`（`MetricFetchError` 名，`valueOf` 不识别则回落 `UPSTREAM_ERROR`）。无任何规则命中 MUST 回落默认 `UPSTREAM_ERROR`。 | —（未覆盖） |
+| **C3.6** | 非 2xx 状态归一时，MUST 先按 `errorMapping`（`List<ErrorRule>`）**顺序**查状态区间：`ErrorMatch.statusFrom` / `statusTo` 均非 `null` 且 `statusFrom <= status <= statusTo` 命中，用该规则的 `to`（`MetricFetchError` 名，`valueOf` 不识别则回落 `UPSTREAM_ERROR`）；无命中再回落 C3.1 默认映射。5xx 走重试（C5.1）耗尽后的归一同样 MUST 先查状态区间。状态区间匹配与信封码匹配（C3.5）正交：前者用于非 2xx 状态码，后者用于 2xx 但 `successWhen` 不命中的信封错误。 | —（未覆盖） |
 
 #### C4 鉴权（`AuthScheme` + `applyAuth` + `OAuth2TokenManager`）
 
@@ -198,18 +199,10 @@ public @interface MetricSourceType {
 
 | # | Requirement | conformance 用例 |
 |---|---|---|
-| **C5.1** | retry 只对幂等场景生效：`retries` 次重试由 `retryOn`（`Set<RetryTrigger>`）触发。**v1 行为**：仅 `RetryTrigger.TIMEOUT` 有效（超时异常 + `retryOn` 含 `TIMEOUT` 才重试）；`RetryTrigger.UPSTREAM_5XX` 枚举已定义但 v1 执行器不触发重试（5xx 为正常响应不抛异常，见本节末「实现与契约差异」）。 | —（未覆盖） |
+| **C5.1** | retry 只对幂等场景生效：`retries` 次重试由 `retryOn`（`Set<RetryTrigger>`）触发，两类触发条件：`TIMEOUT`——超时异常（`HttpTimeoutException` / `TimeoutException`）且 `retryOn` 含 `TIMEOUT` MUST 重试；`UPSTREAM_5XX`——响应状态 `500..599` 且 `retryOn` 含 `UPSTREAM_5XX` 时，handler MUST 将该 5xx 响应转为内部 `RetryableUpstreamStatusException` 交执行器重试（5xx 本身为正常响应不抛异常，故需主动转换）。`retryOn` 不含 `UPSTREAM_5XX` 时 5xx MUST NOT 重试，直接走 C3.6/C3.1 归一。重试耗尽后该内部异常 MUST 被 handler catch、按 C3.6 归一为细码，MUST NOT 外泄到引擎。 | —（未覆盖） |
 | **C5.2** | 超时分两段：`connectTimeoutMs` 设在 `HttpClient`，`readTimeoutMs` 设在请求。两者均 MUST ≥ 1ms（`Math.max(1, …)` 兜底）。超时触发 C3.2 的 `TIMEOUT` 归一。 | —（未覆盖） |
 | **C5.3** | 取数在评估热路径内，超时预算 MUST 短（建议见 §6.2：EXTERNAL_HTTP connect 200ms / read 300ms / retry 1 仅幂等）。OAuth2 token 交换**不在**评估热路径预算内（独立 connect 2s / read 5s，见 `OAuth2TokenManager`）。 | —（未覆盖） |
 | **C5.4** | 熔断（`CircuitBreakerPolicy`）v1 **未实装**，作后续增强位；配置可声明但执行器当前不应用。 | —（未覆盖） |
-
-#### 实现与契约差异（v1 已知缺口）
-
-以下为 P2 实装中**枚举/配置已定义但运行时行为尚未完全落地**的点，契约据实标注（不夸大能力，待后续补齐）：
-
-- **C2.4 `TYPE_MISMATCH`**：`MetricFetchError.TYPE_MISMATCH` 枚举存在，但 `DataTypeCoercion` 强转失败返回 `null`、HTTP handler 不将其归为 `TYPE_MISMATCH`。当前强转失败表现为映射值 `null`。
-- **C3.5 状态区间错误映射**：`ErrorMatch` 含 `statusFrom`/`statusTo` 字段，但 `mapEnvelopeError` 仅按 `envelopeCode` 匹配信封码，未读状态区间（非 2xx 状态已由 C3.1 统一归一，状态区间映射为冗余配置）。
-- **C5.1 `UPSTREAM_5XX` 重试**：`RetryTrigger.UPSTREAM_5XX` 枚举存在，但执行器只对超时异常重试；5xx 是正常 `HttpResponse`（不抛异常）不进重试分支。
 
 ---
 
