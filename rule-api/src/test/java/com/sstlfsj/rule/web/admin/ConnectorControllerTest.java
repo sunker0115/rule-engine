@@ -4,6 +4,8 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
+import com.sstlfsj.rule.eval.api.FetchTrace;
+import com.sstlfsj.rule.eval.api.service.MetricFetchTestService;
 import com.sstlfsj.rule.web.admin.convert.ConnectorConvert;
 import com.sstlfsj.rule.web.admin.convert.ConnectorConvertImpl;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
@@ -26,6 +28,7 @@ class ConnectorControllerTest {
 
     private MockMvc mockMvc;
     private ConnectorWriteService service;
+    private MetricFetchTestService testService;
 
     private static final String DESCRIPTOR_JSON = """
             {"name":"风控打分","descriptor":{
@@ -39,10 +42,11 @@ class ConnectorControllerTest {
     @BeforeEach
     void setUp() {
         service = mock(ConnectorWriteService.class);
+        testService = mock(MetricFetchTestService.class);
         ConnectorConvert convert = new ConnectorConvertImpl();
         JsonMapper mapper = JsonMapper.builder().build();
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new ConnectorController(service, convert))
+                .standaloneSetup(new ConnectorController(service, convert, testService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .build();
@@ -124,5 +128,30 @@ class ConnectorControllerTest {
                         .content(DESCRIPTOR_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    // ── POST /admin/v1/connectors/{connectorCode}:test ──────────────────────────
+
+    @Test
+    void testEndpointColonRouteHitsMethodAndReturnsTrace() throws Exception {
+        // 验收门：冒号风格路由 :test 真命中方法（不 404），返回分阶段 FetchTrace
+        when(testService.testConnector(eq(1L), eq("risk-svc"), any(), any(), eq("s1")))
+                .thenReturn(new FetchTrace("EXTERNAL_HTTP", "GET https://risk/s/9",
+                        null, "{\"ok\":true,\"v\":42}", true, 42, null));
+
+        mockMvc.perform(post("/admin/v1/connectors/risk-svc:test")
+                        .param("tenantId", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"sampleVars":{"x":1},"samplePayload":{"id":9},"sampleSubjectId":"s1"}
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.sourceType").value("EXTERNAL_HTTP"))
+                .andExpect(jsonPath("$.data.renderedRequest").value("GET https://risk/s/9"))
+                .andExpect(jsonPath("$.data.successMatched").value(true))
+                .andExpect(jsonPath("$.data.mappedValue").value(42));
+
+        verify(testService).testConnector(eq(1L), eq("risk-svc"), any(), any(), eq("s1"));
     }
 }

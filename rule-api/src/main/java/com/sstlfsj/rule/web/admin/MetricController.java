@@ -5,6 +5,8 @@ import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
+import com.sstlfsj.rule.eval.api.FetchTrace;
+import com.sstlfsj.rule.eval.api.service.MetricFetchTestService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +23,7 @@ public class MetricController {
 
     private final MetricWriteService service;
     private final MetadataService metadataService;
+    private final MetricFetchTestService testService;
 
     /**
      * GET /admin/v1/metrics — 查询租户全部 metric 运行时定义。
@@ -106,4 +109,24 @@ public class MetricController {
         metadataService.toggleMetricStatus(tenantId, metricCode, enable);
         return ApiResponse.ok(Map.of("status", enable ? "ACTIVE" : "DISABLED"));
     }
+
+    /**
+     * POST /admin/v1/metrics/{metricCode}:test — 用样例输入实打实取数一次，返回分阶段 trace。
+     *
+     * @param metricCode metric 编码
+     * @param tenantId   租户 ID
+     * @param req        样例入参（vars / payload / subjectId）
+     * @return 分阶段取数 trace
+     */
+    @PostMapping("/{metricCode}:test")
+    public ApiResponse<FetchTrace> test(@PathVariable String metricCode,
+                                        @RequestParam String tenantId,
+                                        @RequestBody TestRequest req) {
+        return ApiResponse.ok(testService.test(Long.valueOf(tenantId), metricCode,
+                req.sampleVars(), req.samplePayload(), req.sampleSubjectId()));
+    }
+
+    /** 自助测试样例入参（异构样本，Map 合规例外）。 */
+    public record TestRequest(Map<String, Object> sampleVars, Map<String, Object> samplePayload,
+                              String sampleSubjectId) {}
 }

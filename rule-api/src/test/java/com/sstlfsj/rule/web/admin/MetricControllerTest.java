@@ -6,6 +6,8 @@ import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
 import com.sstlfsj.rule.config.api.dto.MetricListItemVO;
+import com.sstlfsj.rule.eval.api.FetchTrace;
+import com.sstlfsj.rule.eval.api.service.MetricFetchTestService;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,14 +29,16 @@ class MetricControllerTest {
     private MockMvc mockMvc;
     private MetricWriteService service;
     private MetadataService metadataService;
+    private MetricFetchTestService testService;
 
     @BeforeEach
     void setUp() {
         service = mock(MetricWriteService.class);
         metadataService = mock(MetadataService.class);
+        testService = mock(MetricFetchTestService.class);
         JsonMapper mapper = JsonMapper.builder().build();
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new MetricController(service, metadataService))
+                .standaloneSetup(new MetricController(service, metadataService, testService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .build();
@@ -196,5 +200,30 @@ class MetricControllerTest {
     void impact_missingTenantId_returns400() throws Exception {
         mockMvc.perform(get("/admin/v1/metrics/account.age/versions/1/impact"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ── POST /admin/v1/metrics/{metricCode}:test ────────────────────────────────
+
+    @Test
+    void test_colonRoute_hitsMethod_andReturnsTrace() throws Exception {
+        // 验收门：冒号风格路由 :test 真命中方法（不 404），返回分阶段 FetchTrace
+        when(testService.test(eq(1L), eq("account.age"), any(), any(), eq("s1")))
+                .thenReturn(new FetchTrace("EXTERNAL_HTTP", "GET https://risk/s/9",
+                        null, "{\"ok\":true,\"v\":42}", true, 42, null));
+
+        mockMvc.perform(post("/admin/v1/metrics/account.age:test")
+                        .param("tenantId", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"sampleVars":{"x":1},"samplePayload":{"id":9},"sampleSubjectId":"s1"}
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.sourceType").value("EXTERNAL_HTTP"))
+                .andExpect(jsonPath("$.data.renderedRequest").value("GET https://risk/s/9"))
+                .andExpect(jsonPath("$.data.successMatched").value(true))
+                .andExpect(jsonPath("$.data.mappedValue").value(42));
+
+        verify(testService).test(eq(1L), eq("account.age"), any(), any(), eq("s1"));
     }
 }

@@ -2,6 +2,9 @@ package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
+import com.sstlfsj.rule.eval.api.FetchTrace;
+import com.sstlfsj.rule.eval.api.service.MetricFetchTestService;
+import com.sstlfsj.rule.web.admin.MetricController.TestRequest;
 import com.sstlfsj.rule.web.admin.convert.ConnectorConvert;
 import com.sstlfsj.rule.web.admin.dto.ConnectorRequest;
 import com.sstlfsj.rule.web.admin.dto.ConnectorResponse;
@@ -20,6 +23,7 @@ public class ConnectorController {
 
     private final ConnectorWriteService service;
     private final ConnectorConvert convert;
+    private final MetricFetchTestService testService;
 
     /**
      * GET /admin/v1/connectors — 列出租户内全部 ACTIVE 连接器。
@@ -71,5 +75,21 @@ public class ConnectorController {
         int n = service.update(Long.valueOf(tenantId), connectorCode,
                 new ConnectorWriteCommand(req.name(), req.descriptor()), actorId);
         return ApiResponse.ok(n);
+    }
+
+    /**
+     * POST /admin/v1/connectors/{connectorCode}:test — 直测连接器（不经 metric，传临时样例 vars），返回分阶段 trace。
+     *
+     * @param connectorCode 连接器编码
+     * @param tenantId      租户 ID
+     * @param req           样例入参（vars / payload / subjectId）
+     * @return 分阶段取数 trace
+     */
+    @PostMapping("/{connectorCode}:test")
+    public ApiResponse<FetchTrace> test(@PathVariable String connectorCode,
+                                        @RequestParam String tenantId,
+                                        @RequestBody TestRequest req) {
+        return ApiResponse.ok(testService.testConnector(Long.valueOf(tenantId), connectorCode,
+                req.sampleVars(), req.samplePayload(), req.sampleSubjectId()));
     }
 }
