@@ -63,6 +63,7 @@ export interface CommonTranslation {
     metrics: string; decisions: string;
     sessions: string; auditLogs: string;
     jobs: string; importExport: string;
+    connectors: string;
   };
 }
 
@@ -446,6 +447,19 @@ export interface ImportExportTranslation {
 }
 
 // ===== 所有命名空间聚合（供 i18next CustomTypeOptions 使用）=====
+// ===== connector 命名空间 =====
+export interface ConnectorTranslation {
+  title: { list: string; detail: string };
+  action: { create: string };
+  column: {
+    connectorCode: string;
+    name: string;
+    status: string;
+  };
+  searchPlaceholder: string;
+  detail: { notFound: string };
+}
+
 export interface TranslationResources {
   common: CommonTranslation;
   scene: SceneTranslation;
@@ -456,4 +470,5 @@ export interface TranslationResources {
   audit: AuditTranslation;
   job: JobTranslation;
   importExport: ImportExportTranslation;
+  connector: ConnectorTranslation;
 }

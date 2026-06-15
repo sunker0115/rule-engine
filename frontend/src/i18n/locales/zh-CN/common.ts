@@ -58,6 +58,7 @@ const common: CommonTranslation = {
     scenes: '场景管理',
     rules: '规则管理',
     metrics: '指标管理',
+    connectors: '连接器',
     decisions: '决策管理',
     sessions: '评估会话',
     auditLogs: '审计日志',

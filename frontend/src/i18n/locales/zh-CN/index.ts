@@ -7,6 +7,7 @@ import evalLoc from './eval';
 import audit from './audit';
 import job from './job';
 import importExport from './import-export';
+import connector from './connector';
 
 const zhCN = {
   common,
@@ -18,6 +19,7 @@ const zhCN = {
   audit,
   job,
   importExport,
+  connector,
 };
 
 export default zhCN;

@@ -5,6 +5,7 @@ import {
   AppstoreOutlined,
   ApartmentOutlined,
   LineChartOutlined,
+  ApiOutlined,
   CheckCircleOutlined,
   HistoryOutlined,
   AuditOutlined,
@@ -34,6 +35,11 @@ export function getMenuItems(t: TFunction): ItemType[] {
       key: ROUTES.METRICS,
       icon: <LineChartOutlined />,
       label: t('menu.metrics'),
+    },
+    {
+      key: ROUTES.CONNECTORS,
+      icon: <ApiOutlined />,
+      label: t('menu.connectors'),
     },
     {
       key: ROUTES.DECISIONS,
