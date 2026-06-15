@@ -4,6 +4,7 @@ import { DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { ConditionNode, ConditionTypeMeta, MetricDescriptor } from '@/types';
 import { paramLabel, paramWidget } from '@/utils/param-registry';
+import { conditionTypeLabel } from '@/utils/condition-type-label';
 
 interface Props {
   node: ConditionNode;
@@ -122,7 +123,7 @@ export default function ConditionCard({
             }
             onChange({ ...node, conditionType: code, params: defaultParams });
           }}
-          options={conditionTypes.map((ct) => ({ value: ct.code, label: ct.displayName }))}
+          options={conditionTypes.map((ct) => ({ value: ct.code, label: conditionTypeLabel(t, ct.code) }))}
           placeholder={t('editor.conditionCard.selectType')}
         />
         {requiresMetric && (

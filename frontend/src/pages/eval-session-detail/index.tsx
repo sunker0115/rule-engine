@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tabs, Button, Tag, Space, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getSession, getSessionTrace } from '@/api/evalSession';
-import { colorOf, labelOf, SESSION_STATUS_OPTIONS } from '@/constants/enums';
+import { colorOf, labelOf, getSessionStatusOptions } from '@/constants/enums';
 import TraceTree from '@/components/trace-tree';
 import type { EvalSessionItem, NodeTraceItem } from '@/types';
 
@@ -14,6 +14,7 @@ export default function EvalSessionDetail() {
   const { currentId } = useTenantStore();
   const { t } = useTranslation('eval');
   const tc = useTranslation('common').t;
+  const sessionStatusOpts = useMemo(() => getSessionStatusOptions(t), [t]);
   const [session, setSession] = useState<EvalSessionItem | null>(null);
   const [trace, setTrace] = useState<NodeTraceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,8 +61,8 @@ export default function EvalSessionDetail() {
           <Descriptions.Item label={t('session.column.eventType')}>{session.eventType || '-'}</Descriptions.Item>
           <Descriptions.Item label={t('session.column.subjectId')}>{session.subjectId || '-'}</Descriptions.Item>
           <Descriptions.Item label={t('session.column.status')}>
-            <Tag color={colorOf(SESSION_STATUS_OPTIONS, session.status)}>
-              {labelOf(SESSION_STATUS_OPTIONS, session.status)}
+            <Tag color={colorOf(sessionStatusOpts, session.status)}>
+              {labelOf(sessionStatusOpts, session.status)}
             </Tag>
           </Descriptions.Item>
           <Descriptions.Item label={t('session.column.source')}>{session.source || '-'}</Descriptions.Item>

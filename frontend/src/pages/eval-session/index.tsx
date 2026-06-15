@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listSessions } from '@/api/evalSession';
 import { ROUTES, route } from '@/constants/routes';
-import { colorOf, labelOf, SESSION_STATUS_OPTIONS } from '@/constants/enums';
+import { colorOf, labelOf, getSessionStatusOptions } from '@/constants/enums';
 import type { EvalSessionItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -61,7 +61,7 @@ export default function EvalSessionList() {
     },
     {
       title: t('session.column.status'), dataIndex: 'status', key: 'status', width: 80,
-      render: (v: string) => <Tag color={colorOf(SESSION_STATUS_OPTIONS, v as never)}>{labelOf(SESSION_STATUS_OPTIONS, v as never)}</Tag>,
+      render: (v: string) => <Tag color={colorOf(getSessionStatusOptions(t), v as never)}>{labelOf(getSessionStatusOptions(t), v as never)}</Tag>,
     },
     { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 180 },
   ];
@@ -82,7 +82,7 @@ export default function EvalSessionList() {
           placeholder={t('session.filter.status')}
           style={{ width: 120 }}
           allowClear
-          options={[...SESSION_STATUS_OPTIONS]}
+          options={getSessionStatusOptions(t)}
           onChange={(v) => setFilters((f) => ({ ...f, status: v || undefined }))}
         />
       </Space>

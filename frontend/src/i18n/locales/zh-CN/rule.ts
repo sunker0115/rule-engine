@@ -134,6 +134,14 @@ const rule: RuleTranslation = {
       scriptSourceDefault: '{true}',
     },
   },
+  conditionType: {
+    EQ: '等于', NEQ: '不等于', GT: '大于', GTE: '大于等于', LT: '小于', LTE: '小于等于',
+    IN: '在集合内', NOT_IN: '不在集合内', BETWEEN: '在区间内', NOT_BETWEEN: '不在区间内',
+    CONTAINS: '列表包含', NOT_CONTAINS: '列表不包含',
+    STARTS_WITH: '前缀匹配', ENDS_WITH: '后缀匹配', MATCHES: '正则匹配',
+    DATE_BEFORE: '日期早于', DATE_AFTER: '日期晚于',
+    time_window: '时间窗口内', time_occurred_at: '事件发生时间',
+  },
   param: {
     widget: {
       threshold: '阈值', min: '下限', max: '上限',

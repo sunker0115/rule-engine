@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listMetrics, updateMetric, getMetricImpact } from '@/api/metric';
 import { ROUTES } from '@/constants/routes';
-import { SOURCE_TYPE_OPTIONS, DATA_TYPE_OPTIONS, colorOf, STATUS_OPTIONS } from '@/constants/enums';
+import { getSourceTypeOptions, getDataTypeOptions, colorOf, getStatusOptions } from '@/constants/enums';
 import type { MetricDescriptor, AffectedRule } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -77,7 +77,7 @@ export default function MetricDetail() {
     { title: t('impact.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode' },
     {
       title: t('impact.column.status'), dataIndex: 'status', key: 'status',
-      render: (v: string) => <span style={{ color: colorOf(STATUS_OPTIONS, v as never) }}>{v}</span>,
+      render: (v: string) => <span style={{ color: colorOf(getStatusOptions(tc), v as never) }}>{v}</span>,
     },
   ];
 
@@ -89,8 +89,8 @@ export default function MetricDetail() {
         <Form form={form} layout="vertical">
           <Form.Item name="metricCode" label={t('form.code')}><Input disabled /></Form.Item>
           <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="sourceType" label={t('form.sourceType')}><Select options={[...SOURCE_TYPE_OPTIONS]} /></Form.Item>
-          <Form.Item name="dataType" label={t('form.dataType')}><Select options={[...DATA_TYPE_OPTIONS]} /></Form.Item>
+          <Form.Item name="sourceType" label={t('form.sourceType')}><Select options={getSourceTypeOptions(t)} /></Form.Item>
+          <Form.Item name="dataType" label={t('form.dataType')}><Select options={getDataTypeOptions(t)} /></Form.Item>
           <Form.Item name="cacheTtlSeconds" label={t('form.cacheTtl')}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="allowProvided" label={t('form.allowProvided')} valuePropName="checked"><Switch /></Form.Item>
           <Space><Button type="primary" onClick={handleSave} loading={saving}>{tc('button.save')}</Button><Button onClick={() => setEditing(false)}>{tc('button.cancel')}</Button></Space>

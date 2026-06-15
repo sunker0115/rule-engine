@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Table, Select, Input, DatePicker, Tag, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listAuditLogs } from '@/api/audit';
-import { colorOf, labelOf, AUDIT_ACTION_OPTIONS, AUDIT_TARGET_TYPE_OPTIONS, ACTOR_TYPE_OPTIONS } from '@/constants/enums';
+import { colorOf, labelOf, getAuditActionOptions, getAuditTargetTypeOptions, getActorTypeOptions } from '@/constants/enums';
 import JsonDiffViewer from '@/components/json-diff-viewer';
 import type { AuditLogItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -14,6 +14,9 @@ export default function AuditLogList() {
   const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('audit');
   const tc = useTranslation('common').t;
+  const actorTypeOpts = useMemo(() => getActorTypeOptions(tc), [tc]);
+  const auditActionOpts = useMemo(() => getAuditActionOptions(t), [t]);
+  const auditTargetTypeOpts = useMemo(() => getAuditTargetTypeOptions(t), [t]);
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -45,15 +48,15 @@ export default function AuditLogList() {
     },
     {
       title: t('column.actorType'), dataIndex: 'actorType', key: 'actorType', width: 60,
-      render: (v: string) => labelOf(ACTOR_TYPE_OPTIONS, v as never),
+      render: (v: string) => labelOf(actorTypeOpts, v as never),
     },
     {
       title: t('column.action'), dataIndex: 'action', key: 'action', width: 80,
-      render: (v: string) => <Tag color={colorOf(AUDIT_ACTION_OPTIONS, v as never)}>{labelOf(AUDIT_ACTION_OPTIONS, v as never)}</Tag>,
+      render: (v: string) => <Tag color={colorOf(auditActionOpts, v as never)}>{labelOf(auditActionOpts, v as never)}</Tag>,
     },
     {
       title: t('column.targetType'), dataIndex: 'resourceType', key: 'resourceType', width: 90,
-      render: (v: string) => <Tag>{labelOf(AUDIT_TARGET_TYPE_OPTIONS, v as never)}</Tag>,
+      render: (v: string) => <Tag>{labelOf(auditTargetTypeOpts, v as never)}</Tag>,
     },
     { title: t('column.targetId'), dataIndex: 'resourceId', key: 'resourceId', width: 70 },
     { title: t('column.operatedAt'), dataIndex: 'occurredAt', key: 'occurredAt', width: 170, render: (v: string) => v?.slice(0, 19) },
@@ -75,7 +78,7 @@ export default function AuditLogList() {
           placeholder={t('filter.targetType')}
           style={{ width: 110 }}
           allowClear
-          options={[...AUDIT_TARGET_TYPE_OPTIONS]}
+          options={[...auditTargetTypeOpts]}
           onChange={(v) => setFilters((f) => ({ ...f, resourceType: v || undefined }))}
         />
         <Input
@@ -94,7 +97,7 @@ export default function AuditLogList() {
           placeholder={t('filter.action')}
           style={{ width: 110 }}
           allowClear
-          options={[...AUDIT_ACTION_OPTIONS]}
+          options={[...auditActionOpts]}
           onChange={(v) => setFilters((f) => ({ ...f, action: v || undefined }))}
         />
         <RangePicker

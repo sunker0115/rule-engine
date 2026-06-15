@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Descriptions, Button, Space, Tag, Timeline, message, Popconfirm, Divider } from 'antd';import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, enableRule, newVersion } from '@/api/rule';
-import { colorOf, RULE_STATUS_OPTIONS, VERSION_STATUS_OPTIONS } from '@/constants/enums';
+import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import type { RuleDetail as RuleDetailType } from '@/types';
 
 interface Props {
@@ -15,6 +15,8 @@ interface Props {
 export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props) {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
+  const ruleStatusOpts = useMemo(() => getRuleStatusOptions(t), [t]);
+  const versionStatusOpts = useMemo(() => getVersionStatusOptions(t), [t]);
   const { currentId } = useTenantStore();
   const tenantId = currentId ?? 0;
   const { ast, decisionBindings, preGates, triggerEventTypes, script, dirty } = useRuleStore();
@@ -76,7 +78,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
           <Descriptions.Item label={t('editor.leftPanel.executorLabel')}><Tag color="blue">{ruleDetail.script.lang}</Tag></Descriptions.Item>
         )}
         <Descriptions.Item label={t('column.status')}>
-          <Tag color={colorOf(RULE_STATUS_OPTIONS, ruleDetail.status as never)}>{ruleDetail.status}</Tag>
+          <Tag color={colorOf(ruleStatusOpts, ruleDetail.status as never)}>{ruleDetail.status}</Tag>
         </Descriptions.Item>
       </Descriptions>
 
@@ -119,7 +121,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         items={(ruleDetail.versions ?? []).map(v => ({
           children: (
             <div>
-              <Tag color={colorOf(VERSION_STATUS_OPTIONS, v.status as never)}>v{v.version}</Tag>
+              <Tag color={colorOf(versionStatusOpts, v.status as never)}>v{v.version}</Tag>
               <span style={{ fontSize: 12, color: '#999' }}>{v.createdAt?.slice(0, 10)}</span>
             </div>
           ),

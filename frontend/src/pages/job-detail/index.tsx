@@ -1,10 +1,10 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Button, Tag, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getJobExecutions } from '@/api/job';
-import { colorOf, labelOf, JOB_EXEC_STATUS_OPTIONS } from '@/constants/enums';
+import { colorOf, labelOf, getJobExecStatusOptions } from '@/constants/enums';
 import type { JobExecutionItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -14,6 +14,7 @@ export default function JobDetail() {
   const { currentId } = useTenantStore();
   const { t } = useTranslation('job');
   const tc = useTranslation('common').t;
+  const jobExecStatusOpts = useMemo(() => getJobExecStatusOptions(t), [t]);
   const [executions, setExecutions] = useState<JobExecutionItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -58,7 +59,7 @@ export default function JobDetail() {
     { title: t('execution.column.errorCount'), dataIndex: 'errorCount', key: 'errorCount', width: 70 },
     {
       title: t('execution.column.status'), dataIndex: 'status', key: 'status', width: 90,
-      render: (v: string) => <Tag color={colorOf(JOB_EXEC_STATUS_OPTIONS, v as never)}>{labelOf(JOB_EXEC_STATUS_OPTIONS, v as never)}</Tag>,
+      render: (v: string) => <Tag color={colorOf(jobExecStatusOpts, v as never)}>{labelOf(jobExecStatusOpts, v as never)}</Tag>,
     },
     { title: t('execution.column.errorSummary'), dataIndex: 'errorSummary', key: 'errorSummary', ellipsis: true, render: (v: string) => v || '-' },
   ];

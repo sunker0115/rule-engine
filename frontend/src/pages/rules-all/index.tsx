@@ -7,7 +7,7 @@ import { listRules, createRule } from '@/api/rule';
 import { getSceneMetadata } from '@/api/metadata';
 import { listScenes } from '@/api/scene';
 import { getRuleColumns } from '@/config/columns/rule';
-import { RULE_STATUS_OPTIONS, RULE_KIND_OPTIONS } from '@/constants/enums';
+import { getRuleStatusOptions, getRuleKindOptions } from '@/constants/enums';
 import RuleDetailDrawer from '@/pages/rule-list/RuleDetailDrawer';
 import dayjs from 'dayjs';
 import type { RuleListItem } from '@/types';
@@ -139,7 +139,7 @@ export default function RulesAll() {
           value={statusFilter}
           onChange={setStatusFilter}
           allowClear
-          options={[...RULE_STATUS_OPTIONS]}
+          options={getRuleStatusOptions(t)}
           style={{ width: 130 }}
         />
         <RangePicker
@@ -188,7 +188,7 @@ export default function RulesAll() {
             <Input />
           </Form.Item>
           <Form.Item name="kind" label={t('column.kind')} initialValue="AST_BOOLEAN">
-            <Select options={[...RULE_KIND_OPTIONS]} onChange={(v) => setFormKind(v)} />
+            <Select options={getRuleKindOptions(t)} onChange={(v) => setFormKind(v)} />
           </Form.Item>
           {formKind === 'EXPRESSION_SCRIPT' && (
             <>

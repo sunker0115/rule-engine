@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listDecisions } from '@/api/decision';
 import type { DecisionTableNode, DecisionTableColumn, DecisionTableRow, ConditionTypeMeta, MetricDescriptor } from '@/types';
+import { conditionTypeLabel } from '@/utils/condition-type-label';
 
 interface Props {
   node: DecisionTableNode;
@@ -48,7 +49,7 @@ export default function DecisionTableEditor({
   const TABLE_OPERATORS = ['EQ', 'NEQ', 'GT', 'GTE', 'LT', 'LTE', 'IN', 'NOT_IN', 'BETWEEN', 'NOT_BETWEEN'];
   const opOptions = conditionTypes
     .filter((ct) => TABLE_OPERATORS.includes(ct.code))
-    .map((ct) => ({ value: ct.code, label: ct.displayName }));
+    .map((ct) => ({ value: ct.code, label: conditionTypeLabel(t, ct.code) }));
 
   const addColumn = () => {
     const newCols = [...cols, { metricCode: '', operator: 'EQ', dataType: null }];

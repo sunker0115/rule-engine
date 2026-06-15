@@ -274,6 +274,14 @@ export interface RuleTranslation {
       scriptSourcePlaceholder: string; scriptSourceDefault: string;
     };
   };
+  conditionType: {
+    EQ: string; NEQ: string; GT: string; GTE: string; LT: string; LTE: string;
+    IN: string; NOT_IN: string; BETWEEN: string; NOT_BETWEEN: string;
+    CONTAINS: string; NOT_CONTAINS: string;
+    STARTS_WITH: string; ENDS_WITH: string; MATCHES: string;
+    DATE_BEFORE: string; DATE_AFTER: string;
+    time_window: string; time_occurred_at: string;
+  };
   param: {
     widget: {
       threshold: string; min: string; max: string;
@@ -338,6 +346,8 @@ export interface EvalTranslation {
       HIT: string; MISS: string; BLOCKED: string;
       ERROR: string; PENDING: string; FAILED: string;
     };
+    source: { HTTP: string; MQ: string; JOB: string; SDK: string; REPLAY: string };
+    mode: { PUSH: string; PULL: string };
   };
   session: {
     column: {

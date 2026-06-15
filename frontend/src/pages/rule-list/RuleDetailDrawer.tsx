@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Drawer, Descriptions, Tag, Spin, Timeline, Tabs, Empty } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getRule } from '@/api/rule';
-import { colorOf, RULE_STATUS_OPTIONS, VERSION_STATUS_OPTIONS } from '@/constants/enums';
+import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import type { RuleDetail as RuleDetailType, AstNode, IfNode, DecisionLeafNode } from '@/types';
 
 /** 从 AST 递归提取所有 DecisionLeafNode 的 decisionCode */
@@ -40,6 +40,8 @@ interface Props {
 export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Props) {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
+  const ruleStatusOpts = useMemo(() => getRuleStatusOptions(t), [t]);
+  const versionStatusOpts = useMemo(() => getVersionStatusOptions(t), [t]);
   const { currentId } = useTenantStore();
   const [detail, setDetail] = useState<RuleDetailType | null>(null);
   const [loading, setLoading] = useState(false);
@@ -80,7 +82,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
                 <Descriptions.Item label={t('column.kind')}><Tag>{detail.kind}</Tag></Descriptions.Item>
                 <Descriptions.Item label={t('detail.label.scene')}>{detail.sceneCode}</Descriptions.Item>
                 <Descriptions.Item label={tc('label.status')}>
-                  <Tag color={colorOf(RULE_STATUS_OPTIONS, detail.status)}>{detail.status}</Tag>
+                  <Tag color={colorOf(ruleStatusOpts, detail.status)}>{detail.status}</Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label={t('detail.label.triggerEvents')}>
                   {(detail.triggerEventTypes ?? []).join(', ') || '-'}
@@ -113,7 +115,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
                   color: v.status === 'ACTIVE' ? 'green' : v.status === 'DRAFT' ? 'blue' : 'gray',
                   children: (
                     <div>
-                      <Tag color={colorOf(VERSION_STATUS_OPTIONS, v.status)}>v{v.version}</Tag>
+                      <Tag color={colorOf(versionStatusOpts, v.status)}>v{v.version}</Tag>
                       <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
                         {v.createdAt?.slice(0, 16)}
                         {v.publishedBy && <span> · {v.publishedBy}</span>}

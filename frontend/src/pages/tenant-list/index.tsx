@@ -3,7 +3,7 @@ import { Table, Input, Select, Switch, message, Space } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { STATUS_OPTIONS } from '@/constants/enums';
+import { getStatusOptions } from '@/constants/enums';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import type { ColumnsType } from 'antd/es/table';
@@ -87,7 +87,7 @@ export default function TenantList() {
           value={statusFilter}
           onChange={setStatusFilter}
           allowClear
-          options={[...STATUS_OPTIONS]}
+          options={getStatusOptions(tc)}
           style={{ width: 120 }}
         />
       </Space>

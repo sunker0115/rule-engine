@@ -9,7 +9,7 @@ import { getMetricColumns } from '@/config/columns/metric';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import { ROUTES, route } from '@/constants/routes';
-import { SOURCE_TYPE_OPTIONS, DATA_TYPE_OPTIONS, STATUS_OPTIONS } from '@/constants/enums';
+import { getSourceTypeOptions, getDataTypeOptions, getStatusOptions } from '@/constants/enums';
 import type { MetricDescriptor, SourceType } from '@/types';
 
 export default function MetricList() {
@@ -126,7 +126,7 @@ export default function MetricList() {
         value={statusFilter}
         onChange={setStatusFilter}
         allowClear
-        options={[...STATUS_OPTIONS]}
+        options={getStatusOptions(tc)}
         style={{ width: 120 }}
       />
     </Space>
@@ -139,10 +139,10 @@ export default function MetricList() {
         </Form.Item>
         <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="sourceType" label={t('form.sourceType')} initialValue="ATTRIBUTE">
-          <Select options={[...SOURCE_TYPE_OPTIONS]} />
+          <Select options={getSourceTypeOptions(t)} />
         </Form.Item>
         <Form.Item name="dataType" label={t('form.dataType')} initialValue="LONG">
-          <Select options={[...DATA_TYPE_OPTIONS]} />
+          <Select options={getDataTypeOptions(t)} />
         </Form.Item>
         <Form.Item name="cacheTtlSeconds" label={t('form.cacheTtl')} initialValue={60}>
           <InputNumber min={0} style={{ width: '100%' }} />

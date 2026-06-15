@@ -30,6 +30,8 @@ const evalLoc: EvalTranslation = {
       HIT: '命中', MISS: '未命中', BLOCKED: '被拦截',
       ERROR: '错误', PENDING: '进行中', FAILED: '失败',
     },
+    source: { HTTP: 'HTTP', MQ: 'MQ', JOB: 'Job', SDK: 'SDK', REPLAY: 'Replay' },
+    mode: { PUSH: 'PUSH', PULL: 'PULL' },
   },
   session: {
     column: {

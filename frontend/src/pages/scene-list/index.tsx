@@ -7,7 +7,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { listScenes, createScene } from '@/api/scene';
 import { getSceneColumns } from '@/config/columns/scene';
 import { ROUTES, route } from '@/constants/routes';
-import { STATUS_OPTIONS, DOMINANT_MODE_OPTIONS } from '@/constants/enums';
+import { getStatusOptions, getDominantModeOptions } from '@/constants/enums';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import type { SceneListItem } from '@/types';
@@ -97,7 +97,7 @@ export default function SceneList() {
           value={statusFilter}
           onChange={setStatusFilter}
           allowClear
-          options={[...STATUS_OPTIONS]}
+          options={getStatusOptions(tc)}
           style={{ width: 130 }}
         />
         <Input
@@ -134,7 +134,7 @@ export default function SceneList() {
             <Input />
           </Form.Item>
           <Form.Item name="dominantMode" label={t('form.dominantMode')} initialValue="PUSH">
-            <Select options={[...DOMINANT_MODE_OPTIONS]} />
+            <Select options={getDominantModeOptions(t)} />
           </Form.Item>
           <Form.Item name="subjectType" label={t('form.subjectType')} initialValue="USER">
             <Select options={[{ value: 'USER', label: 'USER' }]} />

@@ -134,6 +134,15 @@ const rule: RuleTranslation = {
       scriptSourceDefault: '{true}',
     },
   },
+  conditionType: {
+    EQ: 'Equals', NEQ: 'Not Equals', GT: 'Greater Than', GTE: 'Greater Than or Equal',
+    LT: 'Less Than', LTE: 'Less Than or Equal',
+    IN: 'In Set', NOT_IN: 'Not In Set', BETWEEN: 'Between', NOT_BETWEEN: 'Not Between',
+    CONTAINS: 'Contains', NOT_CONTAINS: 'Not Contains',
+    STARTS_WITH: 'Starts With', ENDS_WITH: 'Ends With', MATCHES: 'Matches',
+    DATE_BEFORE: 'Date Before', DATE_AFTER: 'Date After',
+    time_window: 'Time Window', time_occurred_at: 'Event Occurred At',
+  },
   param: {
     widget: {
       threshold: 'Threshold', min: 'Min', max: 'Max',
