@@ -8,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.SourceType;
 import com.sstlfsj.rule.kernel.api.model.ValueSource;
+import com.sstlfsj.rule.kernel.api.spi.metric.FetchTraceCollector;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -41,31 +42,45 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
 
     @Override
     public MetricValue fetch(MetricQuery query) {
+        return fetch(query, FetchTraceCollector.noop());
+    }
+
+    @Override
+    public MetricValue fetch(MetricQuery query, FetchTraceCollector collector) {
         Object dsName = query.params().get("datasource");
         Object sqlText = query.params().get("sql");
         Object dataType = query.params().get("dataType"); // 由 resolver 注入到 params
         // 配置缺失（datasource/sql 未填或数据源未注册）归为上游错误细码
-        if (dsName == null || sqlText == null) return MetricValue.error(MetricFetchError.UPSTREAM_ERROR.tag());
+        if (dsName == null || sqlText == null) return error(collector, MetricFetchError.UPSTREAM_ERROR);
         // template 已在注册表按全局超时设好 statement 超时（getQueryTimeout 秒级），此处不再重设
         NamedParameterJdbcTemplate tpl = registry.template(dsName.toString());
-        if (tpl == null) return MetricValue.error(MetricFetchError.UPSTREAM_ERROR.tag());
+        if (tpl == null) return error(collector, MetricFetchError.UPSTREAM_ERROR);
+        Bound bound = bind(sqlText.toString(), query.subjectId(), query.tenantId(),
+                query.now(), query.eventPayload(), castParams(query.params().get("params")),
+                query.subjectAttributes());
+        collector.boundSql(bound.sql());
         Object raw;
         try {
-            Bound bound = bind(sqlText.toString(), query.subjectId(), query.tenantId(),
-                    query.now(), query.eventPayload(), castParams(query.params().get("params")),
-                    query.subjectAttributes());
             List<Object> firstCol = tpl.query(bound.sql(), bound.params(),
                     (rs, rowNum) -> rs.getObject(1));
             raw = firstCol.isEmpty() ? null : firstCol.getFirst();
         } catch (Exception e) {
             // DB 异常/超时经 mapper 归一为细码（超时→TIMEOUT，其余→UPSTREAM_ERROR）
-            return MetricValue.error(errorMapper.fromException(e).tag());
+            return error(collector, errorMapper.fromException(e));
         }
+        collector.rawResponse(raw == null ? null : raw.toString());
         String dt = dataType != null ? dataType.toString() : null;
         Object coerced = DataTypeCoercion.coerce(raw, dt);
         // 取到非空原始值但强转后为 null = 类型不匹配（coerce 内吞异常返 null，故据此识别）
-        if (raw != null && coerced == null) return MetricValue.error(MetricFetchError.TYPE_MISMATCH.tag());
+        if (raw != null && coerced == null) return error(collector, MetricFetchError.TYPE_MISMATCH);
+        collector.mappedValue(coerced);
         return new MetricValue(coerced, dt, ValueSource.FETCHED.tag());
+    }
+
+    /** 归一错误：记 errorCode 到 collector 并返回降级 MetricValue（单一出口，避免各分支重复记录）。 */
+    private static MetricValue error(FetchTraceCollector collector, MetricFetchError err) {
+        collector.errorCode(err.tag());
+        return MetricValue.error(err.tag());
     }
 
     @SuppressWarnings("unchecked")

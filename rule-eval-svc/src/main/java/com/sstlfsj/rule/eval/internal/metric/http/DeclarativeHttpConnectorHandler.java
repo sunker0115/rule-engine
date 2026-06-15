@@ -23,6 +23,7 @@ import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.SourceType;
 import com.sstlfsj.rule.kernel.api.model.ValueSource;
+import com.sstlfsj.rule.kernel.api.spi.metric.FetchTraceCollector;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -71,15 +72,20 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
 
     @Override
     public MetricValue fetch(MetricQuery query) {
+        return fetch(query, FetchTraceCollector.noop());
+    }
+
+    @Override
+    public MetricValue fetch(MetricQuery query, FetchTraceCollector collector) {
         Object connectorName = query.params().get("connector");
-        if (connectorName == null) return MetricValue.error(MetricFetchError.NOT_FOUND.tag());
+        if (connectorName == null) return error(collector, MetricFetchError.NOT_FOUND);
 
         ConnectorDescriptor descriptor =
                 connectorResolver.resolve(tenantId(query.tenantId()), connectorName.toString());
-        if (descriptor == null) return MetricValue.error(MetricFetchError.NOT_FOUND.tag());
+        if (descriptor == null) return error(collector, MetricFetchError.NOT_FOUND);
 
         HttpEndpointRegistry.Endpoint endpoint = endpointRegistry.get(descriptor.endpointRef());
-        if (endpoint == null) return MetricValue.error(MetricFetchError.NOT_FOUND.tag());
+        if (endpoint == null) return error(collector, MetricFetchError.NOT_FOUND);
 
         VariableRenderer.Context ctx = context(query);
         HttpRequest request;
@@ -87,8 +93,9 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
             request = buildRequest(descriptor, endpoint, ctx);
         } catch (Exception e) {
             // 鉴权取值 / token 交换失败（CredentialMissingException 等）→ 归一为 UNAUTHORIZED。
-            return MetricValue.error(MetricFetchError.UNAUTHORIZED.tag());
+            return error(collector, MetricFetchError.UNAUTHORIZED);
         }
+        collector.renderedRequest(request.method() + " " + request.uri());
 
         HttpResponse<String> response;
         try {
@@ -96,14 +103,21 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
             response = resilienceExecutor.execute(descriptor.resilience(),
                     () -> client.send(request, HttpResponse.BodyHandlers.ofString()));
         } catch (Exception e) {
-            return MetricValue.error(errorMapper.fromException(e).tag());
+            return error(collector, errorMapper.fromException(e));
         }
 
+        collector.rawResponse(response.body());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            return MetricValue.error(errorMapper.fromHttpStatus(response.statusCode()).tag());
+            return error(collector, errorMapper.fromHttpStatus(response.statusCode()));
         }
 
-        return mapResponse(descriptor, query, response.body());
+        return mapResponse(descriptor, query, response.body(), collector);
+    }
+
+    /** 归一错误：记 errorCode 到 collector 并返回降级 MetricValue（单一出口，避免各分支重复记录）。 */
+    private static MetricValue error(FetchTraceCollector collector, MetricFetchError err) {
+        collector.errorCode(err.tag());
+        return MetricValue.error(err.tag());
     }
 
     /** 构造渲染上下文：payload/params/vars/subjectAttributes 取自 query。 */
@@ -163,25 +177,30 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
     }
 
     /** 解析 200 响应：successWhen 判定 → errorMapping → valuePath 取值 → DataTypeCoercion 强转。 */
-    private MetricValue mapResponse(ConnectorDescriptor descriptor, MetricQuery query, String responseBody) {
+    private MetricValue mapResponse(ConnectorDescriptor descriptor, MetricQuery query,
+                                    String responseBody, FetchTraceCollector collector) {
         JsonNode root;
         try {
             root = objectMapper.readTree(responseBody);
         } catch (Exception e) {
-            return MetricValue.error(MetricFetchError.PARSE_ERROR.tag());
+            return error(collector, MetricFetchError.PARSE_ERROR);
         }
 
         Predicate successWhen = descriptor.response().successWhen();
-        if (successWhen != null && !matches(extractJsonPath(root, successWhen.path()), successWhen)) {
-            return MetricValue.error(mapEnvelopeError(descriptor.errorMapping(), root, successWhen.path()).tag());
+        boolean matched = successWhen == null || matches(extractJsonPath(root, successWhen.path()), successWhen);
+        collector.successMatched(matched);
+        if (!matched) {
+            return error(collector, mapEnvelopeError(descriptor.errorMapping(), root, successWhen.path()));
         }
 
         Object raw = extractJsonPath(root, descriptor.response().valuePath());
-        if (raw == null) return MetricValue.error(MetricFetchError.PARSE_ERROR.tag());
+        if (raw == null) return error(collector, MetricFetchError.PARSE_ERROR);
 
         Object dataType = query.params().get("dataType");
         String dt = dataType == null ? null : dataType.toString();
-        return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, ValueSource.FETCHED.tag());
+        Object value = DataTypeCoercion.coerce(raw, dt);
+        collector.mappedValue(value);
+        return new MetricValue(value, dt, ValueSource.FETCHED.tag());
     }
 
     /**
