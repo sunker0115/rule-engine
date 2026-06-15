@@ -22,6 +22,8 @@ public class FetchResourceProperties {
     private List<DataSourceDef> datasources = new ArrayList<>();
     /** 命名 HTTP 端点列表（Phase 3 使用）。 */
     private List<EndpointDef> endpoints = new ArrayList<>();
+    /** 命名凭证列表：连接器 auth 的 *Ref 按 name 解析为 value，值来自 env/secrets，不落 metric/connector。 */
+    private List<CredentialDef> credentials = new ArrayList<>();
 
     /** 命名只读数据源定义。 */
     @Getter
@@ -43,5 +45,13 @@ public class FetchResourceProperties {
         private String authHeaderValue;
         private int connectTimeoutMs = 1000;
         private int readTimeoutMs = 2000;
+    }
+
+    /** 命名凭证定义：name 为连接器 auth *Ref 引用名，value 为实际密钥（来自 env/secrets）。 */
+    @Getter
+    @Setter
+    public static class CredentialDef {
+        private String name;
+        private String value;
     }
 }

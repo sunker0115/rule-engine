@@ -93,6 +93,12 @@
             <artifactId>flyway-mysql</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- WireMock standalone：OAuth2TokenManagerTest 桩 token 端点；版本集中根 pom -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
