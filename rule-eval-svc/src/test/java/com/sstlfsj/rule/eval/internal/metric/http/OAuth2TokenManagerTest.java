@@ -83,6 +83,19 @@ class OAuth2TokenManagerTest {
     }
 
     @Test
+    void token_responseMissingAccessToken_throwsWithoutBody() {
+        wireMock.stubFor(post(urlEqualTo("/token")).willReturn(aResponse()
+                .withHeader("Content-Type", "application/json")
+                .withBody("{}")));
+        OAuth2TokenManager mgr = new OAuth2TokenManager(new CredentialStore(propsWithClientCreds()), objectMapper);
+
+        assertThatThrownBy(() -> mgr.token(authAt(wireMock.port())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("access_token")
+                .hasMessageNotContaining("{}");
+    }
+
+    @Test
     void token_missingCredential_throws() {
         OAuth2TokenManager mgr = new OAuth2TokenManager(new CredentialStore(new FetchResourceProperties()), objectMapper);
 

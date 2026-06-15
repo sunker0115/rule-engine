@@ -56,7 +56,8 @@ public class OAuth2TokenManager {
     public String token(OAuth2ClientCredentialsAuth auth) {
         List<String> scopes = auth.scopes() == null ? List.of() : auth.scopes();
         String key = auth.tokenUrl() + "|" + auth.clientIdRef() + "|" + String.join(",", scopes);
-        // computeIfAbsent 保证同 key 并发只换取一次；过期则替换。
+        // compute 对同一 key 持 bin 锁，串行化该 key 的换取与过期替换，避免并发惊群式重复换 token。
+        // 取舍：回调内阻塞 token 请求期间同 key 其它线程会等待——token 端点 key 基数小，可接受。
         CachedToken token = cache.compute(key, (k, existing) -> {
             if (existing != null && Instant.now().isBefore(existing.expiresAt())) {
                 return existing;
@@ -93,9 +94,18 @@ public class OAuth2TokenManager {
             JsonNode body = objectMapper.readTree(resp.body());
             String accessToken = body.path("access_token").asString();
             long expiresIn = body.path("expires_in").asLong();
+            // 200 但响应体异常时缺 access_token/expires_in 会缓存空 Bearer 且立即过期，
+            // 错误被推迟到下游带空 token 请求才暴露；此处即时抛错。异常消息只放 tokenUrl，绝不 dump body（body 可能含 token/secret）。
+            if (accessToken == null || accessToken.isBlank()) {
+                throw new IllegalStateException("token response missing access_token: " + auth.tokenUrl());
+            }
+            if (expiresIn <= 0) {
+                throw new IllegalStateException("token response missing expires_in: " + auth.tokenUrl());
+            }
             Instant expiresAt = Instant.now().plusSeconds(expiresIn).minus(EXPIRY_MARGIN);
             return new CachedToken(accessToken, expiresAt);
-        } catch (CredentialMissingException e) {
+        } catch (CredentialMissingException | IllegalStateException e) {
+            // 凭证缺失与响应体校验失败的异常已含精确语义，原样上抛，不再包成泛化消息（也避免覆盖 access_token 等关键字）。
             throw e;
         } catch (Exception e) {
             throw new IllegalStateException("oauth2 token exchange failed: " + auth.tokenUrl(), e);
