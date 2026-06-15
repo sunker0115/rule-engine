@@ -60,6 +60,37 @@ const metric: MetricTranslation = {
   impact: {
     column: { ruleCode: '规则编码', ruleName: '规则名称', sceneCode: '场景', status: '状态' },
   },
+  test: {
+    title: '试算',
+    sampleVars: '样例变量 (vars)',
+    sampleVarsHint: 'JSON 对象，取数时注入（用于渲染 SQL / 请求模板），如 {"region":"cn"}',
+    samplePayload: '样例载荷 (payload)',
+    samplePayloadHint: 'JSON 对象，模拟事件载荷，如 {"amount":100}',
+    sampleSubjectId: '样例主体 ID',
+    run: '试算',
+    invalidJson: 'JSON 格式错误，请检查',
+    result: '试算结果',
+    renderedRequest: '渲染后请求',
+    boundSql: '绑定后 SQL',
+    rawResponse: '原始响应',
+    successMatched: '成功判定',
+    matched: '命中（successWhen=true）',
+    notMatched: '未命中（successWhen=false）',
+    mappedValue: '取数值',
+    errorCode: '错误码',
+    success: '取数成功',
+    failure: '取数失败',
+    empty: '（空）',
+    errorMeaning: {
+      PARSE_ERROR: '响应解析失败：取值路径取不到值或格式不符',
+      UPSTREAM_ERROR: '上游服务返回错误',
+      UNAUTHORIZED: '鉴权失败：凭据无效或缺失',
+      TIMEOUT: '请求超时',
+      NOT_FOUND: '资源不存在',
+      MAPPING_ERROR: '响应映射失败：successWhen 判定不通过',
+      TYPE_MISMATCH: '取值类型与期望不符',
+    },
+  },
 };
 
 export default metric;

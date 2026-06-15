@@ -91,6 +91,7 @@ const connector: ConnectorTranslation = {
     invalidJson: 'JSON 格式错误，请检查',
     result: '测试结果',
     renderedRequest: '渲染后请求',
+    boundSql: '绑定后 SQL',
     rawResponse: '原始响应',
     successMatched: '成功判定',
     matched: '命中（successWhen=true）',

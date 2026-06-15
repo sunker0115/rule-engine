@@ -91,6 +91,7 @@ const connector: ConnectorTranslation = {
     invalidJson: 'Invalid JSON, please check',
     result: 'Test Result',
     renderedRequest: 'Rendered Request',
+    boundSql: 'Bound SQL',
     rawResponse: 'Raw Response',
     successMatched: 'Success Match',
     matched: 'Matched (successWhen=true)',

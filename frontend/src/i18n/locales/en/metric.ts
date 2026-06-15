@@ -60,6 +60,37 @@ const metric: MetricTranslation = {
   impact: {
     column: { ruleCode: 'Rule Code', ruleName: 'Rule Name', sceneCode: 'Scene', status: 'Status' },
   },
+  test: {
+    title: 'Try Out',
+    sampleVars: 'Sample Vars',
+    sampleVarsHint: 'JSON object injected at fetch time (renders SQL / request template), e.g. {"region":"cn"}',
+    samplePayload: 'Sample Payload',
+    samplePayloadHint: 'JSON object simulating the event payload, e.g. {"amount":100}',
+    sampleSubjectId: 'Sample Subject ID',
+    run: 'Try Out',
+    invalidJson: 'Invalid JSON, please check',
+    result: 'Result',
+    renderedRequest: 'Rendered Request',
+    boundSql: 'Bound SQL',
+    rawResponse: 'Raw Response',
+    successMatched: 'Success Match',
+    matched: 'Matched (successWhen=true)',
+    notMatched: 'Not matched (successWhen=false)',
+    mappedValue: 'Fetched Value',
+    errorCode: 'Error Code',
+    success: 'Fetch succeeded',
+    failure: 'Fetch failed',
+    empty: '(empty)',
+    errorMeaning: {
+      PARSE_ERROR: 'Response parse failed: value path resolved nothing or wrong shape',
+      UPSTREAM_ERROR: 'Upstream service returned an error',
+      UNAUTHORIZED: 'Authentication failed: invalid or missing credentials',
+      TIMEOUT: 'Request timed out',
+      NOT_FOUND: 'Resource not found',
+      MAPPING_ERROR: 'Response mapping failed: successWhen predicate not satisfied',
+      TYPE_MISMATCH: 'Resolved value type does not match expectation',
+    },
+  },
 };
 
 export default metric;

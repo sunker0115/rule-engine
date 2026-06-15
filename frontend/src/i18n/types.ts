@@ -181,6 +181,37 @@ export interface MetricTranslation {
   impact: {
     column: { ruleCode: string; ruleName: string; sceneCode: string; status: string };
   };
+  test: {
+    title: string;
+    sampleVars: string;
+    sampleVarsHint: string;
+    samplePayload: string;
+    samplePayloadHint: string;
+    sampleSubjectId: string;
+    run: string;
+    invalidJson: string;
+    result: string;
+    renderedRequest: string;
+    boundSql: string;
+    rawResponse: string;
+    successMatched: string;
+    matched: string;
+    notMatched: string;
+    mappedValue: string;
+    errorCode: string;
+    success: string;
+    failure: string;
+    empty: string;
+    errorMeaning: {
+      PARSE_ERROR: string;
+      UPSTREAM_ERROR: string;
+      UNAUTHORIZED: string;
+      TIMEOUT: string;
+      NOT_FOUND: string;
+      MAPPING_ERROR: string;
+      TYPE_MISMATCH: string;
+    };
+  };
 }
 
 // ===== decision 命名空间 =====
@@ -534,6 +565,7 @@ export interface ConnectorTranslation {
     invalidJson: string;
     result: string;
     renderedRequest: string;
+    boundSql: string;
     rawResponse: string;
     successMatched: string;
     matched: string;

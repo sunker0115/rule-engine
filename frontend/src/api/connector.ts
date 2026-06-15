@@ -35,13 +35,3 @@ export async function testConnector(connectorCode: string, tenantId: number, sam
   );
   return res.data;
 }
-
-/** 自助测试 metric 取数：返回分阶段取数链路 trace */
-export async function testMetric(metricCode: string, tenantId: number, sample: FetchTestSample) {
-  const res = await apiClient.post<ApiResponse<FetchTrace>>(
-    ENDPOINTS.METRIC_TEST(metricCode),
-    sample,
-    { params: { tenantId } },
-  );
-  return res.data;
-}

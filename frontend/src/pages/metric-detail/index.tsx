@@ -7,6 +7,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { listMetrics, updateMetric, getMetricImpact } from '@/api/metric';
 import { ROUTES } from '@/constants/routes';
 import { getSourceTypeOptions, getDataTypeOptions, colorOf, getStatusOptions } from '@/constants/enums';
+import TestPanel from './TestPanel';
 import type { MetricDescriptor, AffectedRule } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -121,6 +122,11 @@ export default function MetricDetail() {
           <Table columns={impactColumns} dataSource={affectedRules} rowKey="ruleDefinitionId" loading={impactLoading} size="small" />
         </div>
       ),
+    },
+    {
+      key: 'test',
+      label: t('test.title'),
+      children: <TestPanel metricCode={metric.metricCode} />,
     },
   ];
 

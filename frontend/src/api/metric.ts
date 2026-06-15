@@ -1,6 +1,6 @@
 import apiClient from './client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
-import type { ApiResponse, MetricDescriptor, MetricImpactResult } from '@/types';
+import type { ApiResponse, FetchTestSample, FetchTrace, MetricDescriptor, MetricImpactResult } from '@/types';
 
 export async function listMetrics(tenantId: number) {
   const res = await apiClient.get<ApiResponse<MetricDescriptor[]>>(ENDPOINTS.METRIC_LIST, { params: { tenantId } });
@@ -18,6 +18,16 @@ export async function updateMetric(tenantId: number, metricCode: string, breakin
 export async function getMetricImpact(tenantId: number, metricCode: string, metricVersion: number) {
   const res = await apiClient.get<ApiResponse<MetricImpactResult>>(
     ENDPOINTS.METRIC_IMPACT(metricCode, metricVersion), { params: { tenantId } }
+  );
+  return res.data;
+}
+
+/** 自助试算 metric 取数：用样例输入实打实取数一次，返回分阶段取数链路 trace */
+export async function testMetric(metricCode: string, tenantId: number, sample: FetchTestSample) {
+  const res = await apiClient.post<ApiResponse<FetchTrace>>(
+    ENDPOINTS.METRIC_TEST(metricCode),
+    sample,
+    { params: { tenantId } },
   );
   return res.data;
 }

@@ -1,21 +1,19 @@
 import { useState } from 'react';
-import { Alert, Button, Input, Space, Typography, message } from 'antd';
+import { Button, Input, Space, Typography, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { testConnector } from '@/api/connector';
+import { testMetric } from '@/api/metric';
 import FetchTraceView, { parseJsonObject } from '@/components/fetch-trace-view';
 import type { FetchTrace } from '@/types';
 
 interface Props {
-  /** 连接器编码；新建未保存态为空 */
-  connectorCode: string;
-  /** 编辑态（已存在 connector）才允许测试 */
-  isEdit: boolean;
+  /** 指标编码 */
+  metricCode: string;
 }
 
-/** 已知 errorCode → 含义说明（connector 命名空间七码） */
+/** 已知 errorCode → 含义说明（metric 命名空间七码） */
 function useErrorMeaning(): Record<string, string> {
-  const { t } = useTranslation('connector');
+  const { t } = useTranslation('metric');
   return {
     PARSE_ERROR: t('test.errorMeaning.PARSE_ERROR'),
     UPSTREAM_ERROR: t('test.errorMeaning.UPSTREAM_ERROR'),
@@ -27,9 +25,9 @@ function useErrorMeaning(): Record<string, string> {
   };
 }
 
-/** 连接器内联自助测试面板：填样例 → 调 :test → 分阶段展示取数链路 trace */
-export default function TestPanel({ connectorCode, isEdit }: Props) {
-  const { t } = useTranslation('connector');
+/** 指标自助试算面板：填样例 → 调 :test 实打实取数一次 → 分阶段展示取数链路 trace */
+export default function TestPanel({ metricCode }: Props) {
+  const { t } = useTranslation('metric');
   const { currentId } = useTenantStore();
   const errorMeaning = useErrorMeaning();
 
@@ -53,7 +51,7 @@ export default function TestPanel({ connectorCode, isEdit }: Props) {
     setRunning(true);
     setTrace(null);
     try {
-      const res = await testConnector(connectorCode, currentId, {
+      const res = await testMetric(metricCode, currentId, {
         sampleVars,
         samplePayload,
         sampleSubjectId: subjectId.trim() || undefined,
@@ -65,10 +63,6 @@ export default function TestPanel({ connectorCode, isEdit }: Props) {
       setRunning(false);
     }
   };
-
-  if (!isEdit) {
-    return <Alert type="info" showIcon message={t('test.saveFirst')} />;
-  }
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
