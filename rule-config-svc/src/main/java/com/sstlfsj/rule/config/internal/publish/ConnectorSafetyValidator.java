@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  * 连接器写时安全校验：endpointRef 已注册、占位符命名空间合法。
  * 资源名集合为 null 时跳过 endpoint 校验（纯 config 部署无 eval catalog，照 MetricSafetyValidator 容错）。
  */
-class ConnectorSafetyValidator {
+public class ConnectorSafetyValidator {
 
     private static final Pattern PH = Pattern.compile("\\{([a-zA-Z_][\\w.]*)}");
     private static final Set<String> NAMESPACES =
@@ -24,7 +24,7 @@ class ConnectorSafetyValidator {
      * @param endpointNames 已注册端点名（null = 跳过 endpoint 校验）
      * @throws IllegalArgumentException 校验失败
      */
-    void validate(ConnectorDescriptor d, Set<String> endpointNames) {
+    public void validate(ConnectorDescriptor d, Set<String> endpointNames) {
         if (endpointNames != null && !endpointNames.contains(d.endpointRef())) {
             throw new IllegalArgumentException("未注册的 endpointRef: " + d.endpointRef());
         }

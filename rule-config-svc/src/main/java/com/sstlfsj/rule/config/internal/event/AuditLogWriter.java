@@ -27,7 +27,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
         RulePublishedSnapshot.class,
         RuleStatusSnapshot.class,
         RuleImportedSnapshot.class,
-        MetricChangedSnapshot.class
+        MetricChangedSnapshot.class,
+        ConnectorChangedSnapshot.class
 })
 public class AuditLogWriter {
 
