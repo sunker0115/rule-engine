@@ -520,6 +520,37 @@ export interface ConnectorTranslation {
     successData: string;
     applied: string;
   };
+  test: {
+    title: string;
+    saveFirst: string;
+    sampleVars: string;
+    sampleVarsHint: string;
+    samplePayload: string;
+    samplePayloadHint: string;
+    sampleSubjectId: string;
+    run: string;
+    invalidJson: string;
+    result: string;
+    renderedRequest: string;
+    rawResponse: string;
+    successMatched: string;
+    matched: string;
+    notMatched: string;
+    mappedValue: string;
+    errorCode: string;
+    success: string;
+    failure: string;
+    empty: string;
+    errorMeaning: {
+      PARSE_ERROR: string;
+      UPSTREAM_ERROR: string;
+      UNAUTHORIZED: string;
+      TIMEOUT: string;
+      NOT_FOUND: string;
+      MAPPING_ERROR: string;
+      TYPE_MISMATCH: string;
+    };
+  };
 }
 
 export interface TranslationResources {

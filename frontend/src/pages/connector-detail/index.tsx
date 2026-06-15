@@ -10,6 +10,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { listConnectors, createConnector, updateConnector } from '@/api/connector';
 import { ROUTES } from '@/constants/routes';
 import EnvelopePresets from './EnvelopePresets';
+import TestPanel from './TestPanel';
 import type {
   ConnectorDescriptor, HttpMethod, AuthKind, AuthScheme, CompareOp,
   RetryTrigger, TemplateParam, ErrorRule, ResponseMapping,
@@ -482,6 +483,11 @@ export default function ConnectorDetail() {
             </Button>
           )}
         />
+      </Card>
+
+      {/* 内联自助测试 */}
+      <Card title={t('test.title')} size="small" style={{ marginBottom: 16 }}>
+        <TestPanel connectorCode={connectorCode} isEdit={isEdit} />
       </Card>
 
       <Space>
