@@ -235,6 +235,7 @@ export interface RuleTranslation {
   title: { list: string; editor: string };
   action: {
     create: string; saveDraft: string; publish: string; dryRun: string;
+    sessions: string;
     newVersion: string; rollback: string; disable: string; enable: string;
     deleteDraft: string; deleteRule: string;
   };
@@ -353,7 +354,10 @@ export interface RuleTranslation {
 
 // ===== eval 命名空间 =====
 export interface EvalTranslation {
-  title: { dryRun: string; sessionList: string; sessionDetail: string };
+  title: { dryRun: string; sessionList: string; sessionDetail: string; ruleSessions: string };
+  replay: {
+    button: string; resultTitle: string; consistencyHint: string; ruleHit: string;
+  };
   dryRun: {
     execute: string;
     targetVersion: string;

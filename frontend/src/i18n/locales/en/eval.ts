@@ -1,7 +1,13 @@
 import type { EvalTranslation } from '../../types';
 
 const evalLoc: EvalTranslation = {
-  title: { dryRun: 'Dry Run', sessionList: 'Sessions', sessionDetail: 'Session Detail' },
+  title: { dryRun: 'Dry Run', sessionList: 'Sessions', sessionDetail: 'Session Detail', ruleSessions: 'Recent Sessions' },
+  replay: {
+    button: 'Replay',
+    resultTitle: 'Replay Result',
+    consistencyHint: 'Should match the original',
+    ruleHit: 'Rule Hit',
+  },
   dryRun: {
     execute: 'Execute',
     targetVersion: 'Target Version',

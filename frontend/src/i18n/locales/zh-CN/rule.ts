@@ -7,6 +7,7 @@ const rule: RuleTranslation = {
     saveDraft: '保存草稿',
     publish: '发布',
     dryRun: '试算',
+    sessions: '评估记录',
     newVersion: '新版本',
     rollback: '回退到此版本',
     disable: '停用',

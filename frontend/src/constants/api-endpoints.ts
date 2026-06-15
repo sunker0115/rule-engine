@@ -54,6 +54,7 @@ export const ENDPOINTS = {
   SESSION_LIST:        `${ADMIN}/evaluation-sessions`,
   SESSION_DETAIL:      (sessionId: number) => `${ADMIN}/evaluation-sessions/${sessionId}`,
   SESSION_TRACE_TREE:  (sessionId: number) => `${ADMIN}/evaluation-sessions/${sessionId}/trace/tree`,
+  SESSION_REPLAY:      (sessionId: number) => `${ADMIN}/evaluation-sessions/${sessionId}/replay`,
   RULE_SESSIONS:       (ruleId: number) => `${ADMIN}/rules/${ruleId}/sessions`,
 
   // Audit

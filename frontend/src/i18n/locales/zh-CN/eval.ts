@@ -1,7 +1,13 @@
 import type { EvalTranslation } from '../../types';
 
 const evalLoc: EvalTranslation = {
-  title: { dryRun: '试算', sessionList: '评估会话', sessionDetail: '会话详情' },
+  title: { dryRun: '试算', sessionList: '评估会话', sessionDetail: '会话详情', ruleSessions: '近期评估记录' },
+  replay: {
+    button: '重放',
+    resultTitle: '重放结果',
+    consistencyHint: '应与当时一致',
+    ruleHit: '是否命中',
+  },
   dryRun: {
     execute: '执行试算',
     targetVersion: '目标版本',

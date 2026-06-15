@@ -7,6 +7,7 @@ const rule: RuleTranslation = {
     saveDraft: 'Save Draft',
     publish: 'Publish',
     dryRun: 'Dry Run',
+    sessions: 'Sessions',
     newVersion: 'New Version',
     rollback: 'Rollback',
     disable: 'Disable',

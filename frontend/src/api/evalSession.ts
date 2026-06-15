@@ -1,6 +1,6 @@
 import apiClient from './client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
-import type { ApiResponse, PageResponse, EvalSessionItem, NodeTraceItem } from '@/types';
+import type { ApiResponse, PageResponse, EvalSessionItem, NodeTraceItem, EvalResult } from '@/types';
 
 /**
  * 评估会话列表——返回已解包的 PageResponse。
@@ -24,5 +24,18 @@ export async function getSessionTrace(tenantId: number, sessionId: string) {
 
 export async function getRuleSessions(tenantId: number, ruleDefinitionId: number, params?: Record<string, unknown>) {
   const res = await apiClient.get<ApiResponse<PageResponse<EvalSessionItem>>>(ENDPOINTS.RULE_SESSIONS(ruleDefinitionId), { params: { tenantId, ...params } });
+  return res.data.data;
+}
+
+/**
+ * 忠实重放历史评估会话——返回与当时一致的 EvalResult（trace 读时脱敏）。
+ * sessionId 是 19 位大数，直接用字符串拼 URL 避免 JS Number 精度丢失。
+ */
+export async function replaySession(tenantId: number, sessionId: string) {
+  const res = await apiClient.post<ApiResponse<EvalResult>>(
+    `${ENDPOINTS.SESSION_LIST}/${sessionId}/replay`,
+    null,
+    { params: { tenantId } },
+  );
   return res.data.data;
 }

@@ -7,6 +7,7 @@ import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, enableRule, newVersion } from '@/api/rule';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
+import RuleSessionsDrawer from './RuleSessionsDrawer';
 import type { RuleDetail as RuleDetailType, RuleVersionItem } from '@/types';
 
 interface Props {
@@ -25,6 +26,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
   const tenantId = currentId ?? 0;
   const { ast, decisionBindings, preGates, triggerEventTypes, script, dirty } = useRuleStore();
   const [saving, setSaving] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   const handleSaveDraft = async () => {
     setSaving(true);
@@ -99,6 +101,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
           <Button block onClick={handleNewVersion} style={{ marginBottom: 8 }}>{t('action.newVersion')}</Button>
         )}
         <Button block onClick={() => onOpenDryRun()} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
+        <Button block onClick={() => setSessionsOpen(true)} style={{ marginBottom: 8 }}>{t('action.sessions')}</Button>
 
         <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerPublish')}</Divider>
         {hasDraft && (
@@ -141,6 +144,13 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
             </div>
           ),
         }))}
+      />
+
+      <RuleSessionsDrawer
+        open={sessionsOpen}
+        onClose={() => setSessionsOpen(false)}
+        tenantId={tenantId}
+        ruleDefinitionId={ruleDetail.ruleDefinitionId}
       />
     </div>
   );
