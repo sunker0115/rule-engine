@@ -28,6 +28,12 @@ export const ENDPOINTS = {
   METRIC_UPDATE: (code: string) => `${ADMIN}/metrics/${code}`,
   METRIC_TOGGLE_STATUS: (code: string) => `${ADMIN}/metrics/${code}/status`,
   METRIC_IMPACT: (code: string, version: number) => `${ADMIN}/metrics/${code}/versions/${version}/impact`,
+  METRIC_TEST:   (code: string) => `${ADMIN}/metrics/${code}:test`,
+
+  // Connector
+  CONNECTORS:       `${ADMIN}/connectors`,
+  CONNECTOR_UPDATE: (code: string) => `${ADMIN}/connectors/${code}`,
+  CONNECTOR_TEST:   (code: string) => `${ADMIN}/connectors/${code}:test`,
 
   // Decision
   DECISION_LIST:   `${ADMIN}/decisions`,

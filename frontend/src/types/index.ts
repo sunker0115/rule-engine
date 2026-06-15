@@ -1,6 +1,7 @@
 export * from './common';
 export * from './scene';
 export * from './metric';
+export * from './connector';
 export * from './decision';
 export * from './rule';
 export * from './ast';
