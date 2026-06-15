@@ -1,8 +1,8 @@
-package com.sstlfsj.rule.eval.internal.metric.fetch;
+package com.sstlfsj.rule.eval.api;
 
 /**
  * 取数分阶段 trace（自助测试用）。HTTP：renderedRequest/rawResponse/successMatched/mappedValue/errorCode；
- * SQL：boundSql/rawFirstRow/coercedValue/errorCode。按源填相应字段，未用字段为 null。
+ * SQL：boundSql/rawResponse/mappedValue/errorCode。按源填相应字段，未用字段为 null。
  *
  * @param sourceType      源类型
  * @param renderedRequest HTTP 渲染后请求（method url headers body 文本）

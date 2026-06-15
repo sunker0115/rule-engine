@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.eval.internal.metric.fetch;
 
 import com.sstlfsj.rule.config.api.connector.ConnectorDescriptor;
+import com.sstlfsj.rule.eval.api.FetchTrace;
 import com.sstlfsj.rule.eval.internal.metric.http.ConnectorDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;

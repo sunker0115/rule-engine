@@ -9,6 +9,7 @@ import com.sstlfsj.rule.config.api.connector.HttpRequestTemplate;
 import com.sstlfsj.rule.config.api.connector.Predicate;
 import com.sstlfsj.rule.config.api.connector.ResiliencePolicy;
 import com.sstlfsj.rule.config.api.connector.ResponseMapping;
+import com.sstlfsj.rule.eval.api.FetchTrace;
 import com.sstlfsj.rule.eval.internal.metric.http.ConnectorDefinitionResolver;
 import com.sstlfsj.rule.eval.internal.metric.http.CredentialStore;
 import com.sstlfsj.rule.eval.internal.metric.http.DeclarativeHttpConnectorHandler;
