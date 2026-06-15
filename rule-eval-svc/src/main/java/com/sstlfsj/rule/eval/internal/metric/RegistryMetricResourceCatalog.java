@@ -3,6 +3,7 @@ package com.sstlfsj.rule.eval.internal.metric;
 import com.sstlfsj.rule.config.api.spi.MetricResourceCatalog;
 import com.sstlfsj.rule.eval.internal.metric.http.HttpEndpointRegistry;
 import com.sstlfsj.rule.eval.internal.metric.sql.MetricDataSourceRegistry;
+import com.sstlfsj.rule.eval.internal.repository.ConnectorDefinitionReadMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
@@ -13,11 +14,14 @@ public class RegistryMetricResourceCatalog implements MetricResourceCatalog {
 
     private final MetricDataSourceRegistry dataSourceRegistry;
     private final HttpEndpointRegistry endpointRegistry;
+    private final ConnectorDefinitionReadMapper connectorReadMapper;
 
     public RegistryMetricResourceCatalog(MetricDataSourceRegistry dataSourceRegistry,
-                                         HttpEndpointRegistry endpointRegistry) {
+                                         HttpEndpointRegistry endpointRegistry,
+                                         ConnectorDefinitionReadMapper connectorReadMapper) {
         this.dataSourceRegistry = dataSourceRegistry;
         this.endpointRegistry = endpointRegistry;
+        this.connectorReadMapper = connectorReadMapper;
     }
 
     @Override
@@ -28,5 +32,11 @@ public class RegistryMetricResourceCatalog implements MetricResourceCatalog {
     @Override
     public Set<String> endpointNames() {
         return endpointRegistry.names();
+    }
+
+    // datasource/endpoint 由全局 properties 配置无租户隔离；connector 存 DB 且按租户隔离，故按 tenantId 查 ACTIVE 编码。
+    @Override
+    public Set<String> connectorNames(Long tenantId) {
+        return Set.copyOf(connectorReadMapper.findActiveCodes(tenantId));
     }
 }

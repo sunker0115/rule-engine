@@ -540,8 +540,8 @@ public class PublishService {
         dataTypeMap.putAll(activeByCode.values().stream()
                 .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
         java.util.Set<String> dsNames = metricResourceCatalog != null ? metricResourceCatalog.datasourceNames() : null;
-        java.util.Set<String> epNames = metricResourceCatalog != null ? metricResourceCatalog.endpointNames() : null;
-        new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
+        java.util.Set<String> connectorNames = metricResourceCatalog != null ? metricResourceCatalog.connectorNames(tenantId) : null;
+        new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, connectorNames);
         return metricDeps;
     }
 

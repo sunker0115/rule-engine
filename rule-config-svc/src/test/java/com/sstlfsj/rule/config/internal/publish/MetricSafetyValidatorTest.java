@@ -22,6 +22,14 @@ class MetricSafetyValidatorTest {
         return m;
     }
 
+    private MetricDefinition httpMetric(String code, Map<String, Object> params) {
+        MetricDefinition m = new MetricDefinition();
+        m.setMetricCode(code);
+        m.setSourceType("EXTERNAL_HTTP");
+        m.setParams(params);
+        return m;
+    }
+
     @Test
     void rejectsDbTimeFunction() {
         MetricDefinition m = sqlMetric("balance",
@@ -71,5 +79,37 @@ class MetricSafetyValidatorTest {
         assertThatThrownBy(() -> validator.validate(List.of(m), Set.of("ro"), Set.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("CURRENT_DATE");
+    }
+
+    @Test
+    void passesRegisteredConnector() {
+        MetricDefinition m = httpMetric("risk_score",
+                Map.of("connector", "risk-svc", "vars", Map.of("uid", "u1")));
+        assertThatCode(() -> validator.validate(List.of(m), Set.of(), Set.of("risk-svc")))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsUnregisteredConnector() {
+        MetricDefinition m = httpMetric("risk_score",
+                Map.of("connector", "ghost-svc", "vars", Map.of()));
+        assertThatThrownBy(() -> validator.validate(List.of(m), Set.of(), Set.of("risk-svc")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ghost-svc");
+    }
+
+    @Test
+    void rejectsMissingConnector() {
+        MetricDefinition m = httpMetric("risk_score", Map.of("vars", Map.of()));
+        assertThatThrownBy(() -> validator.validate(List.of(m), Set.of(), Set.of("risk-svc")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("connector");
+    }
+
+    @Test
+    void nullConnectorNames_skipsHttpResourceCheck() {
+        MetricDefinition m = httpMetric("risk_score", Map.of("connector", "anything"));
+        assertThatCode(() -> validator.validate(List.of(m), null, null))
+                .doesNotThrowAnyException();
     }
 }
