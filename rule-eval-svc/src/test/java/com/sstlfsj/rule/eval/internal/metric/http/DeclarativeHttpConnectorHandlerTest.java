@@ -155,6 +155,23 @@ class DeclarativeHttpConnectorHandlerTest {
                 .build();
     }
 
+    /** 描述符：retryOn 含 UPSTREAM_5XX（retries=2）+ errorMapping 状态区间 500-599 → TIMEOUT（合流：重试耗尽后经状态区间归一）。 */
+    private ConnectorDescriptor descriptorRetry5xxWithStatusRangeMapping(AuthScheme auth) {
+        return ConnectorDescriptor.builder()
+                .endpointRef(ENDPOINT_REF)
+                .request(HttpRequestTemplate.builder()
+                        .method(HttpMethod.POST)
+                        .pathTemplate("/score/{subjectId}")
+                        .build())
+                .response(new ResponseMapping(new Predicate("code", CompareOp.EQ, 0), "data.score"))
+                .auth(auth)
+                .resilience(ResiliencePolicy.builder()
+                        .connectTimeoutMs(1000).readTimeoutMs(2000).retries(2)
+                        .retryOn(java.util.Set.of(RetryTrigger.UPSTREAM_5XX)).build())
+                .errorMapping(List.of(new ErrorRule(new ErrorMatch(500, 599, null), "TIMEOUT")))
+                .build();
+    }
+
     /** 描述符：errorMapping 状态区间 500-599 → TIMEOUT（用细码区分于默认 UPSTREAM_ERROR 以坐实命中）。 */
     private ConnectorDescriptor descriptorStatusRangeMapping(AuthScheme auth) {
         return ConnectorDescriptor.builder()
@@ -337,6 +354,20 @@ class DeclarativeHttpConnectorHandlerTest {
 
         assertThat(v.isError()).isTrue();
         // 状态区间 500-599 命中 → 用规则的 to=TIMEOUT，而非默认 fromHttpStatus 的 UPSTREAM_ERROR。
+        assertThat(v.errorCode()).isEqualTo(MetricFetchError.TIMEOUT.tag());
+    }
+
+    @Test
+    void upstream500_retriesToLimit_thenStatusRangeMapping() {
+        when(resolver.resolve(1L, CONNECTOR))
+                .thenReturn(descriptorRetry5xxWithStatusRangeMapping(new BearerAuth("tok-ref")));
+        wireMock.stubFor(post(urlEqualTo("/score/sub1")).willReturn(aResponse().withStatus(500)));
+
+        MetricValue v = handler(credentialStore()).fetch(query());
+
+        assertThat(v.isError()).isTrue();
+        // 合流：retries=2 重试到上限（首次 + 2 = 3 次），耗尽后经状态区间 500-599 归一为 TIMEOUT（非默认 UPSTREAM_ERROR）。
+        wireMock.verify(exactly(3), postRequestedFor(urlEqualTo("/score/sub1")));
         assertThat(v.errorCode()).isEqualTo(MetricFetchError.TIMEOUT.tag());
     }
 }
