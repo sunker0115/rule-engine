@@ -63,6 +63,8 @@ export const ENDPOINTS = {
   JOB_LIST:       `${ADMIN}/jobs`,
   JOB_DETAIL:     (jobId: number) => `${ADMIN}/jobs/${jobId}`,
   JOB_TRIGGER:    (jobId: number) => `${ADMIN}/jobs/${jobId}/trigger`,
+  JOB_ENABLE:     (jobId: number) => `${ADMIN}/jobs/${jobId}/enable`,
+  JOB_DISABLE:    (jobId: number) => `${ADMIN}/jobs/${jobId}/disable`,
   JOB_EXECUTIONS: (jobId: number) => `${ADMIN}/jobs/${jobId}/executions`,
 
   // Tenant

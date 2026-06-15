@@ -11,6 +11,14 @@ export async function triggerJob(tenantId: number, jobId: number) {
   return apiClient.post(ENDPOINTS.JOB_TRIGGER(jobId), null, { params: { tenantId } });
 }
 
+export async function enableJob(tenantId: number, jobId: number) {
+  return apiClient.post(ENDPOINTS.JOB_ENABLE(jobId), null, { params: { tenantId } });
+}
+
+export async function disableJob(tenantId: number, jobId: number) {
+  return apiClient.post(ENDPOINTS.JOB_DISABLE(jobId), null, { params: { tenantId } });
+}
+
 export async function getJobExecutions(tenantId: number, jobId: number, params?: Record<string, unknown>) {
   const res = await apiClient.get<ApiResponse<PageResponse<JobExecutionItem>>>(ENDPOINTS.JOB_EXECUTIONS(jobId), { params: { tenantId, ...params } });
   return res.data.data; // unwrap ApiResponse → PageResponse

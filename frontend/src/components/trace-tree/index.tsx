@@ -25,19 +25,43 @@ function resultLabel(result: boolean | null, t: (key: string) => string): string
   return t('trace.nodeError');
 }
 
-function TraceNode({ node, depth }: { node: NodeTraceItem; depth: number }) {
+// NodeTraceItem 无自带 id，用渲染路径（父 key + 子序号）作稳定 key
+function collectKeys(nodes: NodeTraceItem[], prefix = '', acc: string[] = []): string[] {
+  nodes.forEach((node, i) => {
+    const key = prefix ? `${prefix}-${i}` : `${i}`;
+    if ((node.children?.length ?? 0) > 0) {
+      acc.push(key);
+      collectKeys(node.children, key, acc);
+    }
+  });
+  return acc;
+}
+
+function TraceNode({
+  node,
+  depth,
+  nodeKey,
+  expandedKeys,
+  toggle,
+}: {
+  node: NodeTraceItem;
+  depth: number;
+  nodeKey: string;
+  expandedKeys: Set<string>;
+  toggle: (key: string) => void;
+}) {
   const { t } = useTranslation('eval');
-  const [collapsed, setCollapsed] = useState(false);
   const hasChildren = (node.children?.length ?? 0) > 0;
+  const expanded = expandedKeys.has(nodeKey);
 
   return (
     <div>
       <div
         style={{ marginLeft: depth * 24, padding: '4px 0', display: 'flex', alignItems: 'center', gap: 6 }}
-        onClick={() => hasChildren && setCollapsed(!collapsed)}
+        onClick={() => hasChildren && toggle(nodeKey)}
       >
         {hasChildren && (
-          collapsed ? <CaretRightOutlined style={{ fontSize: 10 }} /> : <CaretDownOutlined style={{ fontSize: 10 }} />
+          expanded ? <CaretDownOutlined style={{ fontSize: 10 }} /> : <CaretRightOutlined style={{ fontSize: 10 }} />
         )}
         {!hasChildren && <span style={{ width: 10 }} />}
         <span title={resultLabel(node.result, t)}>{resultIcon(node.result)}</span>
@@ -50,8 +74,15 @@ function TraceNode({ node, depth }: { node: NodeTraceItem; depth: number }) {
         {node.errorCode && <Tag color="red">{node.errorCode}</Tag>}
         {node.errorMessage && <span style={{ color: 'red', fontSize: 12 }}>{node.errorMessage}</span>}
       </div>
-      {hasChildren && !collapsed && node.children!.map((child, i) => (
-        <TraceNode key={i} node={child} depth={depth + 1} />
+      {hasChildren && expanded && node.children.map((child, i) => (
+        <TraceNode
+          key={i}
+          node={child}
+          depth={depth + 1}
+          nodeKey={`${nodeKey}-${i}`}
+          expandedKeys={expandedKeys}
+          toggle={toggle}
+        />
       ))}
     </div>
   );
@@ -59,11 +90,20 @@ function TraceNode({ node, depth }: { node: NodeTraceItem; depth: number }) {
 
 export default function TraceTree({ nodes }: TraceTreeProps) {
   const { t } = useTranslation('eval');
+  // 受控展开：默认全部展开
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set(collectKeys(nodes ?? [])));
 
-  const expandAll = () => {
-    // Force re-render by toggling key — simple approach
-    message.info(t('trace.expandAll'));
+  const toggle = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
+
+  const expandAll = () => setExpandedKeys(new Set(collectKeys(nodes ?? [])));
+  const collapseAll = () => setExpandedKeys(new Set());
 
   const handleCopyJson = () => {
     navigator.clipboard.writeText(JSON.stringify(nodes, null, 2)).then(() => {
@@ -79,11 +119,18 @@ export default function TraceTree({ nodes }: TraceTreeProps) {
     <div>
       <Space style={{ marginBottom: 12 }}>
         <Button size="small" onClick={expandAll}>{t('trace.expandAll')}</Button>
-        <Button size="small">{t('trace.collapseAll')}</Button>
+        <Button size="small" onClick={collapseAll}>{t('trace.collapseAll')}</Button>
         <Button size="small" onClick={handleCopyJson}>{t('trace.copyJson')}</Button>
       </Space>
       {nodes.map((node, i) => (
-        <TraceNode key={i} node={node} depth={0} />
+        <TraceNode
+          key={i}
+          node={node}
+          depth={0}
+          nodeKey={`${i}`}
+          expandedKeys={expandedKeys}
+          toggle={toggle}
+        />
       ))}
     </div>
   );

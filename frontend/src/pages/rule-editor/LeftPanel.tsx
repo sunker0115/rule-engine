@@ -66,7 +66,9 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
   const isDraft = ruleDetail.status === 'DRAFT';
   const isPublished = ruleDetail.status === 'PUBLISHED';
   const isDisabled = ruleDetail.status === 'DISABLED';
-  const hasDraft = (ruleDetail.versions ?? []).some(v => v.status === 'DRAFT');
+  // 待发布的即草稿版本，发布确认框展示其真实版本号
+  const draftVersion = (ruleDetail.versions ?? []).find(v => v.status === 'DRAFT');
+  const hasDraft = draftVersion !== undefined;
 
   return (
     <div style={{ padding: 16 }}>
@@ -97,7 +99,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
 
         <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerPublish')}</Divider>
         {hasDraft && (
-          <Popconfirm title={t('version.publishConfirm').replace('{version}', '?')} onConfirm={handlePublish}>
+          <Popconfirm title={t('version.publishConfirm').replace('{version}', String(draftVersion?.version ?? ''))} onConfirm={handlePublish}>
             <Button type="primary" block style={{ background: '#52c41a', borderColor: '#52c41a', marginBottom: 8 }}>
               {t('action.publish')}
             </Button>

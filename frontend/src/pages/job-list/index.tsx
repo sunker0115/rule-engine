@@ -3,7 +3,7 @@ import { Table, Button, Switch, Modal, Alert, message, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listJobs, triggerJob } from '@/api/job';
+import { listJobs, triggerJob, enableJob, disableJob } from '@/api/job';
 import { ROUTES, route } from '@/constants/routes';
 import type { JobItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -48,8 +48,11 @@ export default function JobList() {
   };
 
   const handleStatusToggle = async (job: JobItem, checked: boolean) => {
-    // 简化：实际 API 需要 enable/disable 端点
-    message.info(`${checked ? t('action.enable') : t('action.disable')}: ${job.name}`);
+    if (!currentId) return;
+    if (checked) await enableJob(currentId, job.id);
+    else await disableJob(currentId, job.id);
+    message.success(checked ? tc('message.enabled') : tc('message.disabled'));
+    load();
   };
 
   const columns: ColumnsType<JobItem> = [
