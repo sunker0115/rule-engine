@@ -20,6 +20,8 @@ public class MetricDataSourceRegistry implements AutoCloseable {
     private final Map<String, HikariDataSource> pools = new HashMap<>();
 
     public MetricDataSourceRegistry(FetchResourceProperties props) {
+        // statement 超时：全局取数超时毫秒向上取整为秒，至少 1 秒（JDBC queryTimeout 单位为秒）
+        int queryTimeoutSeconds = (int) Math.max(1, Math.ceil(props.getTimeoutMs() / 1000.0));
         for (FetchResourceProperties.DataSourceDef def : props.getDatasources()) {
             HikariConfig cfg = new HikariConfig();
             cfg.setJdbcUrl(def.getUrl());
@@ -30,7 +32,10 @@ public class MetricDataSourceRegistry implements AutoCloseable {
             cfg.setPoolName("metric-ro-" + def.getName());
             HikariDataSource ds = new HikariDataSource(cfg);
             pools.put(def.getName(), ds);
-            templates.put(def.getName(), new NamedParameterJdbcTemplate(ds));
+            NamedParameterJdbcTemplate tpl = new NamedParameterJdbcTemplate(ds);
+            // statement 级超时常量化设在共享 template 上（取数超时为固定配置，非每查询变量，避免跨线程串扰）
+            tpl.getJdbcTemplate().setQueryTimeout(queryTimeoutSeconds);
+            templates.put(def.getName(), tpl);
         }
     }
 

@@ -1,8 +1,9 @@
 package com.sstlfsj.rule.eval.internal.metric.sql;
 
 import com.sstlfsj.rule.eval.internal.metric.DataTypeCoercion;
+import com.sstlfsj.rule.eval.internal.metric.fetch.MetricFetchErrorMapper;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
-import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
+import com.sstlfsj.rule.kernel.api.model.MetricFetchError;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.SourceType;
@@ -31,6 +32,8 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
     private static final Pattern PLACEHOLDER = Pattern.compile(":([a-zA-Z_][\\w.]*)");
 
     private final MetricDataSourceRegistry registry;
+    // 共用脊·调用无关，无状态，直接实例化（与 DeclarativeHttpConnectorHandler 一致，不入 Spring 容器）
+    private final MetricFetchErrorMapper errorMapper = new MetricFetchErrorMapper();
 
     public SqlAggregateMetricSourceHandler(MetricDataSourceRegistry registry) {
         this.registry = registry;
@@ -41,20 +44,28 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
         Object dsName = query.params().get("datasource");
         Object sqlText = query.params().get("sql");
         Object dataType = query.params().get("dataType"); // 由 resolver 注入到 params
-        if (dsName == null || sqlText == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
+        // 配置缺失（datasource/sql 未填或数据源未注册）归为上游错误细码
+        if (dsName == null || sqlText == null) return MetricValue.error(MetricFetchError.UPSTREAM_ERROR.tag());
+        // template 已在注册表按全局超时设好 statement 超时（getQueryTimeout 秒级），此处不再重设
         NamedParameterJdbcTemplate tpl = registry.template(dsName.toString());
-        if (tpl == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
+        if (tpl == null) return MetricValue.error(MetricFetchError.UPSTREAM_ERROR.tag());
+        Object raw;
         try {
             Bound bound = bind(sqlText.toString(), query.subjectId(), query.tenantId(),
-                    query.now(), query.eventPayload(), castParams(query.params().get("params")));
+                    query.now(), query.eventPayload(), castParams(query.params().get("params")),
+                    query.subjectAttributes());
             List<Object> firstCol = tpl.query(bound.sql(), bound.params(),
                     (rs, rowNum) -> rs.getObject(1));
-            Object raw = firstCol.isEmpty() ? null : firstCol.getFirst();
-            String dt = dataType != null ? dataType.toString() : null;
-            return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, ValueSource.FETCHED.tag());
+            raw = firstCol.isEmpty() ? null : firstCol.getFirst();
         } catch (Exception e) {
-            return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);
+            // DB 异常/超时经 mapper 归一为细码（超时→TIMEOUT，其余→UPSTREAM_ERROR）
+            return MetricValue.error(errorMapper.fromException(e).tag());
         }
+        String dt = dataType != null ? dataType.toString() : null;
+        Object coerced = DataTypeCoercion.coerce(raw, dt);
+        // 取到非空原始值但强转后为 null = 类型不匹配（coerce 内吞异常返 null，故据此识别）
+        if (raw != null && coerced == null) return MetricValue.error(MetricFetchError.TYPE_MISMATCH.tag());
+        return new MetricValue(coerced, dt, ValueSource.FETCHED.tag());
     }
 
     @SuppressWarnings("unchecked")
@@ -67,18 +78,21 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
 
     /**
      * 把 SQL 中的命名占位符规范化为合法参数名并绑定值。
-     * :subjectId/:tenantId/:now 直绑；:payload.X→:payload_X 绑 eventPayload.X；:params.X→:params_X 绑 params.X。
+     * :subjectId/:tenantId/:now 直绑；:payload.X→:payload_X 绑 eventPayload.X；:params.X→:params_X 绑 params.X；
+     * :subject.X→:subject_X 绑 subjectAttributes.X（主体属性，来自 Subject.attributes）。
      *
-     * @param sql       原始 SQL（仅命名参数，禁拼接）
-     * @param subjectId 主体 id
-     * @param tenantId  租户 id
-     * @param now       引擎统一时钟
-     * @param payload   事件 payload
-     * @param params    metric.params.params 子 map
+     * @param sql               原始 SQL（仅命名参数，禁拼接）
+     * @param subjectId         主体 id
+     * @param tenantId          租户 id
+     * @param now               引擎统一时钟
+     * @param payload           事件 payload
+     * @param params            metric.params.params 子 map
+     * @param subjectAttributes 主体属性（来自 Subject.attributes）
      * @return 绑定结果
      */
     public static Bound bind(String sql, String subjectId, String tenantId, Instant now,
-                             Map<String, Object> payload, Map<String, Object> params) {
+                             Map<String, Object> payload, Map<String, Object> params,
+                             Map<String, Object> subjectAttributes) {
         MapSqlParameterSource src = new MapSqlParameterSource();
         src.addValue("subjectId", subjectId);
         src.addValue("tenantId", tenantId);
@@ -94,6 +108,7 @@ public class SqlAggregateMetricSourceHandler implements MetricSourceHandler {
                 Object value = switch (parts[0]) {
                     case "payload" -> payload.get(parts[1]);
                     case "params" -> params.get(parts[1]);
+                    case "subject" -> subjectAttributes.get(parts[1]);
                     default -> null;
                 };
                 src.addValue(safe, value);

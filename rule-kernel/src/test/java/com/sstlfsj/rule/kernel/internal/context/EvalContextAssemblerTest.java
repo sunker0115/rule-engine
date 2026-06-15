@@ -107,6 +107,44 @@ class EvalContextAssemblerTest {
     }
 
     @Test
+    void subjectAttributes_passedToMetricQuery() {
+        // subject 加载后，其属性须随 MetricQuery 传给 handler（供 SQL/HTTP 的 subject.* 绑定）
+        SubjectLoader loader = new SubjectLoader() {
+            @Override
+            public List<SubjectType> supportedTypes() { return List.of(SubjectType.USER); }
+            @Override
+            public Subject load(String id, SubjectType type, RuleEvent event) {
+                return new Subject(id, type, Map.of("level", "VIP"));
+            }
+        };
+        MetricDescriptor def = new MetricDescriptor("risk", 1, "SQL", "LONG", false, 0, Map.of());
+        MetricDefinitionResolver resolver = (tenantId, code, version) ->
+                "risk".equals(code) ? def : null;
+        java.util.concurrent.atomic.AtomicReference<MetricQuery> captured = new java.util.concurrent.atomic.AtomicReference<>();
+        @com.sstlfsj.rule.kernel.api.annotation.MetricSourceType("SQL")
+        class CapturingHandler implements com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler {
+            @Override
+            public MetricValue fetch(MetricQuery query) {
+                captured.set(query);
+                return new MetricValue(1L, "LONG", ValueSource.FETCHED.tag());
+            }
+        }
+
+        ConditionNode ast = new ConditionNode("GT", "risk", null, Map.of(), 0.0);
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(3L).sceneCode("s1").tenantId("t1").conditionAst(ast)
+                .addMetricDependency("risk", 1).build();
+
+        EvalContextAssembler assembler = new EvalContextAssembler(
+                List.of(loader), java.util.Map.of("SQL", new CapturingHandler()),
+                resolver, null, null, 0L);
+        assembler.assemble(event(Map.of()), List.of(snap), new EvalEnv(NOW, java.util.Map.of()));
+
+        assertThat(captured.get()).isNotNull();
+        assertThat(captured.get().subjectAttributes()).containsEntry("level", "VIP");
+    }
+
+    @Test
     void allowProvided_false_ignoresProvidedValue_andFallsToError() {
         // allowProvided=false：provided 传值被忽略（触发 log.warn，原 System.err.println 已改为 slf4j），
         // 走 fetch 管线；无 handler 时结果为 METRIC_FETCH_FAIL。覆盖 EvalContextAssembler 122-126 行。
