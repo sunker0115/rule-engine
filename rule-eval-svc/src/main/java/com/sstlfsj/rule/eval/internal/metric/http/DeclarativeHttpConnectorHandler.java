@@ -173,7 +173,7 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
 
         Predicate successWhen = descriptor.response().successWhen();
         if (successWhen != null && !matches(extractJsonPath(root, successWhen.path()), successWhen)) {
-            return MetricValue.error(mapEnvelopeError(descriptor.errorMapping(), root).tag());
+            return MetricValue.error(mapEnvelopeError(descriptor.errorMapping(), root, successWhen.path()).tag());
         }
 
         Object raw = extractJsonPath(root, descriptor.response().valuePath());
@@ -184,13 +184,16 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
         return new MetricValue(DataTypeCoercion.coerce(raw, dt), dt, ValueSource.FETCHED.tag());
     }
 
-    /** successWhen 不命中时查 errorMapping 的信封码规则，命中用其 to（String 细码名），否则 UPSTREAM_ERROR。 */
-    private MetricFetchError mapEnvelopeError(List<ErrorRule> errorMapping, JsonNode root) {
+    /**
+     * successWhen 不命中时查 errorMapping 的信封码规则，命中用其 to（String 细码名），否则 UPSTREAM_ERROR。
+     * 信封码从 successWhen.path 同位取值（ErrorMatch.envelopeCode 契约「与 successWhen.path 同位」）。
+     */
+    private MetricFetchError mapEnvelopeError(List<ErrorRule> errorMapping, JsonNode root, String envelopePath) {
         if (errorMapping == null) return MetricFetchError.UPSTREAM_ERROR;
         for (ErrorRule rule : errorMapping) {
             ErrorMatch when = rule.when();
             if (when != null && when.envelopeCode() != null
-                    && scalarEquals(extractJsonPath(root, "code"), when.envelopeCode())) {
+                    && scalarEquals(extractJsonPath(root, envelopePath), when.envelopeCode())) {
                 return toFetchError(rule.to());
             }
         }

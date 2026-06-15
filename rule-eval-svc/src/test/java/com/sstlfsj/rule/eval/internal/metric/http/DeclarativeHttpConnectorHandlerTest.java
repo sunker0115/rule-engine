@@ -5,6 +5,8 @@ import com.sstlfsj.rule.config.api.connector.AuthScheme;
 import com.sstlfsj.rule.config.api.connector.BearerAuth;
 import com.sstlfsj.rule.config.api.connector.CompareOp;
 import com.sstlfsj.rule.config.api.connector.ConnectorDescriptor;
+import com.sstlfsj.rule.config.api.connector.ErrorMatch;
+import com.sstlfsj.rule.config.api.connector.ErrorRule;
 import com.sstlfsj.rule.config.api.connector.HttpMethod;
 import com.sstlfsj.rule.config.api.connector.HttpRequestTemplate;
 import com.sstlfsj.rule.config.api.connector.OAuth2ClientCredentialsAuth;
@@ -101,6 +103,24 @@ class DeclarativeHttpConnectorHandlerTest {
                 .build();
     }
 
+    /**
+     * 描述符变体：successWhen 用 status EQ 0（非 "code" 字段，坐实信封码按 successWhen.path 同位取值），
+     * errorMapping 命中 status=1 → MAPPING_ERROR。
+     */
+    private ConnectorDescriptor descriptorWithErrorMapping(AuthScheme auth) {
+        return ConnectorDescriptor.builder()
+                .endpointRef(ENDPOINT_REF)
+                .request(HttpRequestTemplate.builder()
+                        .method(HttpMethod.POST)
+                        .pathTemplate("/score/{subjectId}")
+                        .build())
+                .response(new ResponseMapping(new Predicate("status", CompareOp.EQ, 0), "data.score"))
+                .auth(auth)
+                .resilience(ResiliencePolicy.builder().connectTimeoutMs(1000).readTimeoutMs(2000).build())
+                .errorMapping(List.of(new ErrorRule(new ErrorMatch(null, null, 1), "MAPPING_ERROR")))
+                .build();
+    }
+
     private DeclarativeHttpConnectorHandler handler(CredentialStore credentialStore) {
         return new DeclarativeHttpConnectorHandler(
                 endpointRegistry(), resolver, credentialStore, oauth2TokenManager, objectMapper);
@@ -135,6 +155,20 @@ class DeclarativeHttpConnectorHandlerTest {
 
         assertThat(v.isError()).isTrue();
         assertThat(v.errorCode()).isEqualTo(MetricFetchError.UPSTREAM_ERROR.tag());
+    }
+
+    @Test
+    void successWhenNotMatched_errorMappingHit_returnsMappedCode() {
+        when(resolver.resolve(1L, CONNECTOR)).thenReturn(descriptorWithErrorMapping(new BearerAuth("tok-ref")));
+        // successWhen 是 status EQ 0；上游返 status=1 不命中，errorMapping 按 status 同位取信封码 1 → MAPPING_ERROR。
+        wireMock.stubFor(post(urlEqualTo("/score/sub1")).willReturn(aResponse()
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"status\":1,\"data\":{\"score\":88}}")));
+
+        MetricValue v = handler(credentialStore()).fetch(query());
+
+        assertThat(v.isError()).isTrue();
+        assertThat(v.errorCode()).isEqualTo(MetricFetchError.MAPPING_ERROR.tag());
     }
 
     @Test
