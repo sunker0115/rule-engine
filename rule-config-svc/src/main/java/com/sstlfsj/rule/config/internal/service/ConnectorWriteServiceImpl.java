@@ -6,8 +6,8 @@ import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
 import com.sstlfsj.rule.config.internal.domain.ConnectorStatus;
 import com.sstlfsj.rule.config.internal.event.ConnectorChangedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
-import com.sstlfsj.rule.config.internal.publish.ConnectorSafetyValidator;
 import com.sstlfsj.rule.config.internal.repository.ConnectorDefinitionMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,25 +23,13 @@ import java.util.function.Supplier;
  */
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class ConnectorWriteServiceImpl implements ConnectorWriteService {
 
     private final ConnectorDefinitionMapper mapper;
     private final ApplicationEventPublisher eventPublisher;
     private final Supplier<Set<String>> endpointNames;
     private final ConnectorSafetyValidator validator = new ConnectorSafetyValidator();
-
-    /**
-     * @param mapper         连接器 mapper
-     * @param eventPublisher Spring 事件发布器
-     * @param endpointNames  已注册 endpoint 名供给（纯 config 部署无 eval catalog 时返回 null → 跳过 endpoint 校验）
-     */
-    public ConnectorWriteServiceImpl(ConnectorDefinitionMapper mapper,
-                                     ApplicationEventPublisher eventPublisher,
-                                     Supplier<Set<String>> endpointNames) {
-        this.mapper = mapper;
-        this.eventPublisher = eventPublisher;
-        this.endpointNames = endpointNames;
-    }
 
     @Override
     public Long create(Long tenantId, String connectorCode, ConnectorWriteCommand cmd, String actorId) {

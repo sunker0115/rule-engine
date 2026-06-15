@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.config.internal.publish;
+package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.connector.*;
 import org.junit.jupiter.api.Test;
