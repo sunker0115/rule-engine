@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.config.api.connector;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import lombok.Builder;
 import java.util.Set;
 
@@ -14,8 +16,8 @@ import java.util.Set;
  */
 @Builder
 public record ResiliencePolicy(
-        int connectTimeoutMs,
-        int readTimeoutMs,
-        int retries,
+        @JsonSetter(nulls = Nulls.AS_EMPTY) int connectTimeoutMs,
+        @JsonSetter(nulls = Nulls.AS_EMPTY) int readTimeoutMs,
+        @JsonSetter(nulls = Nulls.AS_EMPTY) int retries,
         Set<RetryTrigger> retryOn,
         CircuitBreakerPolicy circuitBreaker) {}

@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.config.api.connector;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import lombok.Builder;
 
 /**
@@ -10,4 +12,7 @@ import lombok.Builder;
  * @param openSeconds          打开后保持秒
  */
 @Builder
-public record CircuitBreakerPolicy(int failureRateThreshold, int windowSeconds, int openSeconds) {}
+public record CircuitBreakerPolicy(
+        @JsonSetter(nulls = Nulls.AS_EMPTY) int failureRateThreshold,
+        @JsonSetter(nulls = Nulls.AS_EMPTY) int windowSeconds,
+        @JsonSetter(nulls = Nulls.AS_EMPTY) int openSeconds) {}

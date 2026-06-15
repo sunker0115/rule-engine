@@ -65,4 +65,31 @@ class ConnectorDescriptorJsonTest {
         assertThat(back).isEqualTo(d);
         assertThat(back.auth()).isInstanceOf(StaticHeaderAuth.class);
     }
+
+    @Test
+    void missingPrimitiveKeysDefaultToZero() {
+        // resilience 缺 retries、circuitBreaker 缺 windowSeconds —— @JsonSetter(nulls=AS_EMPTY) 兜底落 0，不报 400
+        String json = """
+                {
+                  "endpointRef": "risk-svc",
+                  "request": {"method": "GET", "pathTemplate": "/p", "query": [], "headers": [], "bodyTemplate": null},
+                  "response": {"successWhen": {"path": "code", "op": "EQ", "value": 0}, "valuePath": "data.score"},
+                  "auth": {"kind": "BEARER", "tokenRef": "tok"},
+                  "resilience": {
+                    "connectTimeoutMs": 200,
+                    "readTimeoutMs": 300,
+                    "retryOn": [],
+                    "circuitBreaker": {"failureRateThreshold": 50, "openSeconds": 30}
+                  },
+                  "errorMapping": []
+                }
+                """;
+
+        ConnectorDescriptor back = mapper.readValue(json, ConnectorDescriptor.class);
+
+        assertThat(back.resilience().retries()).isZero();
+        assertThat(back.resilience().circuitBreaker().windowSeconds()).isZero();
+        assertThat(back.resilience().connectTimeoutMs()).isEqualTo(200);
+        assertThat(back.resilience().circuitBreaker().failureRateThreshold()).isEqualTo(50);
+    }
 }
