@@ -308,7 +308,7 @@ export interface RuleTranslation {
       scene: string; scenePlaceholder: string;
       triggerEvents: string; triggerEventsPlaceholder: string;
       scriptLang: string; scriptSource: string;
-      scriptSourcePlaceholder: string; scriptSourceDefault: string;
+      scriptSourcePlaceholder: string; scriptSourceDefault: string; scriptSourceDeferHint: string;
     };
   };
   conditionType: {

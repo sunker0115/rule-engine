@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, DatePicker, message, Space } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, DatePicker, message, Space, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -18,10 +18,6 @@ const { RangePicker } = DatePicker;
 /** 各表达式引擎的"恒真"默认脚本——JsonLogic 须为 JSON 对象，其余引擎用布尔字面量 true */
 function defaultTrueFor(lang?: string): string {
   return lang === 'JSONLOGIC' ? '{"==":[1,1]}' : 'true';
-}
-function isDefaultTrue(src: string): boolean {
-  const s = src.trim();
-  return s === 'true' || s === '{"==":[1,1]}' || s === '{true}';
 }
 
 /** 查场景第一个可用 metric 做决策表默认列 */
@@ -186,17 +182,12 @@ export default function RuleList() {
         {formKind === 'EXPRESSION_SCRIPT' && (
           <>
             <Form.Item name="scriptLang" label={t('editor.createModal.scriptLang')} initialValue={langOptions[0]?.value} rules={[{ required: true }]}>
-              <Select
-                options={langOptions}
-                onChange={(lang) => {
-                  const cur = form.getFieldValue('scriptSource');
-                  if (!cur || isDefaultTrue(cur)) form.setFieldValue('scriptSource', defaultTrueFor(lang));
-                }}
-              />
+              <Select options={langOptions} />
             </Form.Item>
-            <Form.Item name="scriptSource" label={t('editor.createModal.scriptSource')} initialValue={defaultTrueFor(langOptions[0]?.value)} rules={[{ required: true, message: tc('validation.required') }]}>
-              <Input.TextArea rows={6} placeholder={t('editor.createModal.scriptSourcePlaceholder')} />
-            </Form.Item>
+            {/* 脚本源码进编辑器再写，创建态用默认恒真值占位（与其它 kind 一致） */}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('editor.createModal.scriptSourceDeferHint')}
+            </Typography.Text>
           </>
         )}
         <Form.Item name="triggerEventTypes" label={t('editor.createModal.triggerEvents')}>

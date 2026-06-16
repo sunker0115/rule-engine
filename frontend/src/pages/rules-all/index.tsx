@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Space, Input, Select, DatePicker, Button, Modal, Form, message, Empty } from 'antd';
+import { Table, Space, Input, Select, DatePicker, Button, Modal, Form, message, Empty, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -21,10 +21,6 @@ function defaultTrueFor(lang?: string): string {
   return lang === 'JSONLOGIC' ? '{"==":[1,1]}' : 'true';
 }
 /** 判断脚本内容是否仍是某引擎的默认恒真值（用户没改过 → 切换语言时可自动替换） */
-function isDefaultTrue(src: string): boolean {
-  const s = src.trim();
-  return s === 'true' || s === '{"==":[1,1]}' || s === '{true}';
-}
 
 async function fetchDefaultMetric(tenantId: number, sceneCode: string): Promise<string> {
   try {
@@ -213,20 +209,12 @@ export default function RulesAll() {
           {formKind === 'EXPRESSION_SCRIPT' && (
             <>
               <Form.Item name="scriptLang" label={t('editor.createModal.scriptLang')} initialValue={langOptions[0]?.value} rules={[{ required: true }]}>
-                <Select
-                  options={langOptions}
-                  onChange={(lang) => {
-                    // 各引擎"恒真"默认值语法不同：JsonLogic 须为 JSON 对象，其余用布尔字面量 true
-                    const cur = createForm.getFieldValue('scriptSource');
-                    if (!cur || isDefaultTrue(cur)) {
-                      createForm.setFieldValue('scriptSource', defaultTrueFor(lang));
-                    }
-                  }}
-                />
+                <Select options={langOptions} />
               </Form.Item>
-              <Form.Item name="scriptSource" label={t('editor.createModal.scriptSource')} initialValue={defaultTrueFor(langOptions[0]?.value)} rules={[{ required: true, message: tc('validation.required') }]}>
-                <Input.TextArea rows={6} placeholder={t('editor.createModal.scriptSourcePlaceholder')} />
-              </Form.Item>
+              {/* 脚本源码不在创建态填——建草稿用默认恒真值占位，进编辑器再写真正脚本（与其它 kind 一致） */}
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('editor.createModal.scriptSourceDeferHint')}
+              </Typography.Text>
             </>
           )}
           <Form.Item name="triggerEventTypes" label={t('editor.createModal.triggerEvents')}>

@@ -148,6 +148,7 @@ const rule: RuleTranslation = {
       scriptSource: 'Script Source',
       scriptSourcePlaceholder: 'e.g. metrics.amount > 1000',
       scriptSourceDefault: 'true',
+      scriptSourceDeferHint: 'Script content is written in the rule editor',
     },
   },
   conditionType: {

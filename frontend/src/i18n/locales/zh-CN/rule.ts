@@ -148,6 +148,7 @@ const rule: RuleTranslation = {
       scriptSource: '脚本源码',
       scriptSourcePlaceholder: '例如: metrics.amount > 1000',
       scriptSourceDefault: 'true',
+      scriptSourceDeferHint: '脚本内容将在规则编辑器中填写',
     },
   },
   conditionType: {
