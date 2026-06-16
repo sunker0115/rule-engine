@@ -28,7 +28,7 @@ async function fetchDefaultMetric(tenantId: number, sceneCode: string): Promise<
 export default function RuleList() {
   const { sceneCode } = useParams<{ sceneCode: string }>();
   const navigate = useNavigate();
-  const { currentId, activeList } = useTenantStore();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
   const [rules, setRules] = useState<RuleListItem[]>([]);
@@ -117,7 +117,7 @@ export default function RuleList() {
       <Select
         placeholder={tc('tenant.placeholder')}
         value={tenantFilter ?? currentId ?? undefined}
-        onChange={(v) => { setTenantFilter(v); setPage(1); }}
+        onChange={(v) => { setTenantFilter(v); setCurrentById(v); setPage(1); }}
         allowClear
         options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
         style={{ width: 200 }}

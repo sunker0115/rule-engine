@@ -14,7 +14,7 @@ export default function ConnectorList() {
   const navigate = useNavigate();
   const { t } = useTranslation('connector');
   const tc = useTranslation('common').t;
-  const { currentId, activeList } = useTenantStore();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
 
   // 筛选条件（服务端）
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
@@ -70,7 +70,7 @@ export default function ConnectorList() {
       <Select
         placeholder={tc('label.tenant')}
         value={tenantFilter ?? currentId ?? undefined}
-        onChange={handleFilterChange(setTenantFilter as (v: unknown) => void)}
+        onChange={(v) => { setTenantFilter(v as number | undefined); setCurrentById(v as number | undefined); setPage(1); }}
         allowClear
         options={activeList.map((tenant) => ({ value: tenant.id, label: `${tenant.name} (${tenant.code})` }))}
         style={{ width: 180 }}

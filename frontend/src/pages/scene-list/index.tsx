@@ -16,7 +16,7 @@ export default function SceneList() {
   const navigate = useNavigate();
   const { t } = useTranslation('scene');
   const tc = useTranslation('common').t;
-  const { currentId, activeList } = useTenantStore();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
   const [scenes, setScenes] = useState<SceneListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -88,7 +88,7 @@ export default function SceneList() {
         <Select
           placeholder={tc('label.tenant')}
           value={tenantFilter ?? currentId ?? undefined}
-          onChange={setTenantFilter}
+          onChange={(v) => { setTenantFilter(v); setCurrentById(v); }}
           allowClear
           options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
           style={{ width: 200 }}

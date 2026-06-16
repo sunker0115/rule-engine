@@ -12,7 +12,7 @@ import type { ColumnsType } from 'antd/es/table';
 const { RangePicker } = DatePicker;
 
 export default function AuditLogList() {
-  const { currentId, activeList } = useTenantStore();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
   const { t } = useTranslation('audit');
   const tc = useTranslation('common').t;
   const actorTypeOpts = useMemo(() => getActorTypeOptions(tc), [tc]);
@@ -70,7 +70,7 @@ export default function AuditLogList() {
         <Select
           placeholder={tc('label.tenant')}
           value={tenantFilter ?? currentId ?? undefined}
-          onChange={setTenantFilter}
+          onChange={(v) => { setTenantFilter(v); setCurrentById(v); }}
           allowClear
           options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
           style={{ width: 180 }}

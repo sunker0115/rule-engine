@@ -21,6 +21,8 @@ interface TenantState {
   /** 页面专用：按关键词+状态查询，不污染 activeList */
   searchTenants: (keyword?: string, status?: string) => Promise<TenantInfo[]>;
   setCurrent: (code: string) => void;
+  /** 按租户 id 设为全局当前（各列表页租户选择器联动写回全局）；null 清空 */
+  setCurrentById: (id?: number | null) => void;
 }
 
 export const useTenantStore = create<TenantState>((set, get) => ({
@@ -67,5 +69,18 @@ export const useTenantStore = create<TenantState>((set, get) => ({
     localStorage.setItem('tenantCode', tenant.code);
     localStorage.setItem('tenantId', String(tenant.id));
     set({ current: tenant.code, currentId: tenant.id });
+  },
+
+  setCurrentById: (id?: number | null) => {
+    if (id == null) {
+      localStorage.removeItem('tenantCode');
+      localStorage.removeItem('tenantId');
+      set({ current: null, currentId: null });
+      return;
+    }
+    const tenant = get().activeList.find((t) => t.id === id);
+    localStorage.setItem('tenantId', String(id));
+    if (tenant) localStorage.setItem('tenantCode', tenant.code);
+    set({ current: tenant?.code ?? get().current, currentId: id });
   },
 }));

@@ -10,7 +10,7 @@ import type { DecisionItem } from '@/types';
 export default function DecisionList() {
   const { t } = useTranslation('decision');
   const tc = useTranslation('common').t;
-  const { currentId, activeList } = useTenantStore();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -69,7 +69,7 @@ export default function DecisionList() {
       <Select
         placeholder={tc('label.tenant')}
         value={tenantFilter ?? currentId ?? undefined}
-        onChange={setTenantFilter}
+        onChange={(v) => { setTenantFilter(v); setCurrentById(v); }}
         allowClear
         options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
         style={{ width: 200 }}

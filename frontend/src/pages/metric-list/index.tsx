@@ -18,7 +18,7 @@ export default function MetricList() {
   const navigate = useNavigate();
   const { t } = useTranslation('metric');
   const tc = useTranslation('common').t;
-  const { currentId, activeList } = useTenantStore();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [metrics, setMetrics] = useState<MetricDescriptor[]>([]);
   const tenantId = tenantFilter ?? currentId ?? 0;
@@ -176,7 +176,7 @@ export default function MetricList() {
       <Select
         placeholder={tc('label.tenant')}
         value={tenantFilter ?? currentId ?? undefined}
-        onChange={setTenantFilter}
+        onChange={(v) => { setTenantFilter(v); setCurrentById(v); }}
         allowClear
         options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
         style={{ width: 180 }}

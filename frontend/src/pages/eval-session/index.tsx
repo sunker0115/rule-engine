@@ -12,7 +12,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 export default function EvalSessionList() {
   const navigate = useNavigate();
-  const { currentId, activeList } = useTenantStore();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
   const { t } = useTranslation('eval');
   const tc = useTranslation('common').t;
   const [sessions, setSessions] = useState<EvalSessionItem[]>([]);
@@ -74,7 +74,7 @@ export default function EvalSessionList() {
         <Select
           placeholder={tc('label.tenant')}
           value={tenantFilter ?? currentId ?? undefined}
-          onChange={setTenantFilter}
+          onChange={(v) => { setTenantFilter(v); setCurrentById(v); }}
           allowClear
           options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
           style={{ width: 200 }}
