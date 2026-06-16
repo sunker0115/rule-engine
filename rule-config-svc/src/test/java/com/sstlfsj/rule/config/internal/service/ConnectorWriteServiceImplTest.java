@@ -182,6 +182,8 @@ class ConnectorWriteServiceImplTest {
         assertThat(detail.name()).isEqualTo("风控打分");
         assertThat(detail.status()).isEqualTo("DISABLED");
         assertThat(detail.descriptor()).isSameAs(c.getDescriptor());
+        // mock 对象未设置时间，createdAt/updatedAt 为 null
+        assertThat(detail.createdAt()).isNull();
     }
 
     @Test

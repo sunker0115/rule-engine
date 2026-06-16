@@ -64,5 +64,6 @@ public interface ConnectorWriteService {
      * @param status        状态名
      */
     record ConnectorDetailView(String connectorCode, String name,
-                               ConnectorDescriptor descriptor, String status) {}
+                               ConnectorDescriptor descriptor, String status,
+                               String createdAt, String updatedAt) {}
 }

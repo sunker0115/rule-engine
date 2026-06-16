@@ -145,7 +145,8 @@ class ConnectorControllerTest {
     @Test
     void getByCodeReturnsDetailWithTypedDescriptor() throws Exception {
         when(service.getByCode(1L, "risk-svc")).thenReturn(
-                new ConnectorDetailView("risk-svc", "风控打分", descriptor(), "DISABLED"));
+                new ConnectorDetailView("risk-svc", "风控打分", descriptor(), "DISABLED",
+                        "2026-06-16T00:00", "2026-06-16T01:00"));
 
         mockMvc.perform(get("/admin/v1/connectors/risk-svc").param("tenantId", "1"))
                 .andExpect(status().isOk())

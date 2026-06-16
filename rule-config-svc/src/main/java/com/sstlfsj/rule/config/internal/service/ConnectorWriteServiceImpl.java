@@ -119,7 +119,9 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
             throw new IllegalArgumentException("连接器不存在: " + connectorCode);
         }
         return new ConnectorDetailView(c.getConnectorCode(), c.getName(),
-                c.getDescriptor(), c.getStatus().name());
+                c.getDescriptor(), c.getStatus().name(),
+                c.getCreatedAt() != null ? c.getCreatedAt().toString() : null,
+                c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null);
     }
 
     /** 发布操作审计事件，由集中监听器 BEFORE_COMMIT 同事务落 audit_log（D14 约定）。 */

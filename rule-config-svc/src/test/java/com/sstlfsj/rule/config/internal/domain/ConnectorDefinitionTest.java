@@ -8,24 +8,25 @@ import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 守护 ConnectorDefinition 实体的列映射注解，防止 @TableField 被误删导致时间字段查不到。 */
+/**
+ * 守护 ConnectorDefinition 实体时间字段——autoResultMap=true + map-underscore-to-camel-case 自动映射
+ * created_at→createdAt / updated_at→updatedAt（与 MetricDefinition 同款，不需要显式 @TableField）。
+ */
 class ConnectorDefinitionTest {
 
     @Test
-    void createdAt_hasTableFieldAnnotationWithCorrectColumn() throws NoSuchFieldException {
+    void createdAt_fieldExistsAndIsLocalDateTime() throws NoSuchFieldException {
         Field f = ConnectorDefinition.class.getDeclaredField("createdAt");
-        TableField ann = f.getAnnotation(TableField.class);
-        assertThat(ann).as("createdAt 必须有 @TableField(\"created_at\")").isNotNull();
-        assertThat(ann.value()).isEqualTo("created_at");
         assertThat(f.getType()).isEqualTo(LocalDateTime.class);
+        // 不加 @TableField：autoResultMap + underscore-to-camel 自动映射 created_at→createdAt
+        assertThat(f.getAnnotation(TableField.class)).isNull();
     }
 
     @Test
-    void updatedAt_hasTableFieldAnnotationWithCorrectColumn() throws NoSuchFieldException {
+    void updatedAt_fieldExistsAndIsLocalDateTime() throws NoSuchFieldException {
         Field f = ConnectorDefinition.class.getDeclaredField("updatedAt");
-        TableField ann = f.getAnnotation(TableField.class);
-        assertThat(ann).as("updatedAt 必须有 @TableField(\"updated_at\")").isNotNull();
-        assertThat(ann.value()).isEqualTo("updated_at");
+        assertThat(f.getType()).isEqualTo(LocalDateTime.class);
+        assertThat(f.getAnnotation(TableField.class)).isNull();
     }
 
     @Test
