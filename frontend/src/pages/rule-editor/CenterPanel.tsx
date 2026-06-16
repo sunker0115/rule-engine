@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
-import type { SceneMetadata as SceneMetadataType, ScorecardRootNode, IfNode, DecisionTableNode, AstNode } from '@/types';
+import { useTenantStore } from '@/store/tenantStore';
+import { listDecisions } from '@/api/decision';
+import type { SceneMetadata as SceneMetadataType, ScorecardRootNode, IfNode, DecisionTableNode, AstNode, DecisionItem } from '@/types';
 import ConditionTreeEditor from './ConditionTreeEditor';
 import ScorecardEditor from './ScorecardEditor';
 import DecisionTreeEditor from './DecisionTreeEditor';
@@ -12,6 +15,12 @@ interface Props { metadata: SceneMetadataType | null; }
 export default function CenterPanel({ metadata }: Props) {
   const { t } = useTranslation('rule');
   const { ast, setAst, kind } = useRuleStore();
+  const { currentId } = useTenantStore();
+  const [decisions, setDecisions] = useState<DecisionItem[]>([]);
+
+  useEffect(() => {
+    if (currentId) listDecisions(currentId).then((d) => setDecisions(d.data ?? []));
+  }, [currentId]);
 
   const shared = {
     conditionTypes: metadata?.conditionTypes ?? [],
@@ -39,6 +48,7 @@ export default function CenterPanel({ metadata }: Props) {
       <ScorecardEditor
         node={scorecardNode}
         {...shared}
+        decisions={decisions}
         onChange={setAst}
       />
     );

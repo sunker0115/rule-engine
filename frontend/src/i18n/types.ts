@@ -286,6 +286,10 @@ export interface RuleTranslation {
       threshold: string; thresholdHint: string;
       addItem: string; emptyHint: string;
       weight: string;
+      bandsTitle: string; bandsEmptyHint: string;
+      bandMin: string; bandMax: string;
+      bandDecision: string; bandCategory: string;
+      addBand: string; bandOverlap: string;
     };
     decisionTree: {
       title: string; condition: string;
