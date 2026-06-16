@@ -44,7 +44,7 @@ function extractPlaceholders(d: ConnectorDescriptor, prefix: 'vars' | 'payload')
   return [...seen];
 }
 
-/** 是否引用了 {subject.id}（决定是否显示 subjectId 输入项） */
+/** 是否引用了主体 id 占位符 {subjectId}（裸命名空间，对应后端 sampleSubjectId） */
 function usesSubject(d: ConnectorDescriptor): boolean {
   const all = [
     d.request?.pathTemplate ?? '',
@@ -52,7 +52,8 @@ function usesSubject(d: ConnectorDescriptor): boolean {
     ...(d.request?.query ?? []).map((p) => p.valueTemplate),
     ...(d.request?.headers ?? []).map((p) => p.valueTemplate),
   ].join(' ');
-  return /\{subject\./.test(all);
+  // 后端命名空间：{subjectId} 裸 = 主体 id；{subject.x} = 主体属性（:test 暂只支持主体 id）
+  return /\{subjectId\}/.test(all) || /\{subject\./.test(all);
 }
 
 /** 连接器内联自助测试面板：按描述符占位符生成键值输入 → 调 :test → 分阶段展示取数链路 trace */
@@ -106,7 +107,8 @@ export default function TestPanel({ connectorCode, isEdit, descriptor, tenantId 
       {needSubject && (
         <div>
           <Typography.Text strong>{t('test.sampleSubjectId')}</Typography.Text>
-          <Input value={subjectId} placeholder="{subject.id}" onChange={(e) => setSubjectId(e.target.value)} />
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>{'{subjectId}'}</Typography.Text>
+          <Input value={subjectId} onChange={(e) => setSubjectId(e.target.value)} />
         </div>
       )}
 
