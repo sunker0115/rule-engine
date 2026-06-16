@@ -9,10 +9,14 @@ import com.sstlfsj.rule.config.api.connector.Predicate;
 import com.sstlfsj.rule.config.api.connector.ResiliencePolicy;
 import com.sstlfsj.rule.config.api.connector.ResponseMapping;
 import com.sstlfsj.rule.config.api.connector.StaticHeaderAuth;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.ConnectorListQuery;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorDetailView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
+import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
+import com.sstlfsj.rule.config.internal.domain.ConnectorStatus;
 import com.sstlfsj.rule.eval.api.FetchTrace;
 import com.sstlfsj.rule.eval.api.service.MetricFetchTestService;
 import com.sstlfsj.rule.web.admin.convert.ConnectorConvert;
@@ -65,19 +69,22 @@ class ConnectorControllerTest {
     // ── GET /admin/v1/connectors ────────────────────────────────────────────────
 
     @Test
-    void listReturnsActiveConnectors() throws Exception {
-        when(service.listActive(1L)).thenReturn(List.of(
-                new ConnectorView("risk-svc", "风控打分", "ACTIVE", "2026-06-16T00:00", null)));
+    void listReturnsPaginatedConnectors() throws Exception {
+        ConnectorDefinition c = new ConnectorDefinition();
+        c.setTenantId(1L); c.setConnectorCode("risk-svc"); c.setName("风控打分");
+        c.setStatus(ConnectorStatus.ACTIVE);
+        Page<ConnectorDefinition> page = new Page<>(1, 20);
+        page.setRecords(List.of(c)); page.setTotal(1);
+        when(service.listPage(any(ConnectorListQuery.class))).thenReturn(page);
 
         mockMvc.perform(get("/admin/v1/connectors").param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].connectorCode").value("risk-svc"))
-                .andExpect(jsonPath("$.data[0].name").value("风控打分"))
-                .andExpect(jsonPath("$.data[0].status").value("ACTIVE"))
-                .andExpect(jsonPath("$.data[0].createdAt").value("2026-06-16T00:00"));
+                .andExpect(jsonPath("$.data.items[0].connectorCode").value("risk-svc"))
+                .andExpect(jsonPath("$.data.items[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.total").value(1));
 
-        verify(service).listActive(1L);
+        verify(service).listPage(any(ConnectorListQuery.class));
     }
 
     // ── POST /admin/v1/connectors ───────────────────────────────────────────────

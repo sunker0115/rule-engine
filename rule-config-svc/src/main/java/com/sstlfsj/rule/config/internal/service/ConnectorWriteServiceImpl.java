@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.ConnectorListQuery;
 import com.sstlfsj.rule.config.api.event.ConnectorChangedEvent;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
 import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
@@ -103,9 +105,20 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<ConnectorDefinition> listPage(ConnectorListQuery q) {
+        Long tid = (q.tenantId() != null && !q.tenantId().isBlank()) ? Long.valueOf(q.tenantId()) : null;
+        return mapper.searchPage(new Page<>(q.page(), q.size()), tid, q.keyword(), q.status());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ConnectorView> listActive(Long tenantId) {
-        return mapper.findActiveByTenant(tenantId).stream()
-                .map(c -> new ConnectorView(c.getConnectorCode(), c.getName(), c.getStatus().name(),
+        // tenantId 为 null 时返回全部租户的 ACTIVE 连接器
+        List<ConnectorDefinition> rows = tenantId == null
+                ? mapper.findAllActive()
+                : mapper.findActiveByTenant(tenantId);
+        return rows.stream()
+                .map(c -> new ConnectorView(c.getTenantId(), c.getConnectorCode(), c.getName(), c.getStatus().name(),
                         c.getCreatedAt() != null ? c.getCreatedAt().toString() : null,
                         c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null))
                 .toList();

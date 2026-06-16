@@ -51,8 +51,8 @@ export default function MetricList() {
 
   useEffect(() => {
     if (!tenantId || sourceType !== 'EXTERNAL_HTTP') return;
-    listConnectors(tenantId).then((r) => {
-      setConnectors((r.data ?? []).map((c) => ({ value: c.connectorCode, label: `${c.name} (${c.connectorCode})` })));
+    listConnectors({ tenantId, size: 200 }).then((r) => {
+      setConnectors((r.data?.items ?? []).map((c) => ({ value: c.connectorCode, label: `${c.name} (${c.connectorCode})` })));
     }).catch(() => {});
     // 切类型时清空 vars 状态
     setVarsKeys([]);

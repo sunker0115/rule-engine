@@ -6,12 +6,19 @@ import type {
   ConnectorWriteBody,
   FetchTestSample,
   FetchTrace,
+  PageResponse,
 } from '@/types';
 
-/** 列出租户下全部连接器 */
-export async function listConnectors(tenantId: number) {
-  const res = await apiClient.get<ApiResponse<ConnectorListItem[]>>(ENDPOINTS.CONNECTORS, {
-    params: { tenantId },
+/** 分页查询连接器（照规则列表范式，tenantId 可选） */
+export async function listConnectors(params: {
+  tenantId?: number;
+  keyword?: string;
+  status?: string;
+  page?: number;
+  size?: number;
+}) {
+  const res = await apiClient.get<ApiResponse<PageResponse<ConnectorListItem>>>(ENDPOINTS.CONNECTORS, {
+    params,
   });
   return res.data;
 }

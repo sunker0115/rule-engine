@@ -54,9 +54,10 @@ class ConnectorWriteServiceTest {
 
     @Test
     void connectorView_recordAccessors() {
-        var view = new ConnectorWriteService.ConnectorView("risk-svc", "风控打分", "ACTIVE",
+        var view = new ConnectorWriteService.ConnectorView(9100L, "risk-svc", "风控打分", "ACTIVE",
                 "2026-06-16T00:00", "2026-06-16T01:00");
 
+        assertEquals(9100L, view.tenantId());
         assertEquals("risk-svc", view.connectorCode());
         assertEquals("风控打分", view.name());
         assertEquals("ACTIVE", view.status());
@@ -65,8 +66,8 @@ class ConnectorWriteServiceTest {
 
     @Test
     void connectorView_recordEquality() {
-        var a = new ConnectorWriteService.ConnectorView("risk-svc", "风控打分", "ACTIVE", null, null);
-        var b = new ConnectorWriteService.ConnectorView("risk-svc", "风控打分", "ACTIVE", null, null);
+        var a = new ConnectorWriteService.ConnectorView(1L, "risk-svc", "风控打分", "ACTIVE", null, null);
+        var b = new ConnectorWriteService.ConnectorView(1L, "risk-svc", "风控打分", "ACTIVE", null, null);
         assertEquals(a, b);
     }
 }

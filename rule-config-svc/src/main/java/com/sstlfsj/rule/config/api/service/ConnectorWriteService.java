@@ -1,6 +1,9 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.connector.ConnectorDescriptor;
+import com.sstlfsj.rule.config.api.dto.ConnectorListQuery;
+import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
 
 import java.util.List;
 
@@ -27,7 +30,10 @@ public interface ConnectorWriteService {
      */
     void disable(Long tenantId, String connectorCode, String actorId);
 
-    /** 列出租户内全部 ACTIVE 连接器。 */
+    /** 分页查询连接器（照 ConfigService.listRules 范式）。 */
+    Page<ConnectorDefinition> listPage(ConnectorListQuery q);
+
+    /** 列出 ACTIVE 连接器；tenantId 为 null 时返回全部租户（供内部校验用）。 */
     List<ConnectorView> listActive(Long tenantId);
 
     /**
@@ -52,7 +58,7 @@ public interface ConnectorWriteService {
      * @param name          名称
      * @param status        状态名
      */
-    record ConnectorView(String connectorCode, String name, String status,
+    record ConnectorView(Long tenantId, String connectorCode, String name, String status,
                          String createdAt, String updatedAt) {}
 
     /**

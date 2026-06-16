@@ -8,6 +8,8 @@ import com.sstlfsj.rule.config.api.connector.Predicate;
 import com.sstlfsj.rule.config.api.connector.ResiliencePolicy;
 import com.sstlfsj.rule.config.api.connector.ResponseMapping;
 import com.sstlfsj.rule.config.api.connector.StaticHeaderAuth;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.ConnectorListQuery;
 import com.sstlfsj.rule.config.api.event.ConnectorChangedEvent;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
 import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
@@ -113,6 +115,7 @@ class ConnectorWriteServiceImplTest {
     void listActiveMapsStatusToName() {
         ConnectorWriteServiceImpl svc = newServiceWithEndpoint("risk");
         ConnectorDefinition c = new ConnectorDefinition();
+        c.setTenantId(1L);
         c.setConnectorCode("risk-svc");
         c.setName("风控打分");
         c.setStatus(ConnectorStatus.ACTIVE);
@@ -121,10 +124,25 @@ class ConnectorWriteServiceImplTest {
         var views = svc.listActive(1L);
 
         assertThat(views).hasSize(1);
+        assertThat(views.getFirst().tenantId()).isEqualTo(1L);
         assertThat(views.getFirst().status()).isEqualTo("ACTIVE");
         assertThat(views.getFirst().connectorCode()).isEqualTo("risk-svc");
-        // createdAt/updatedAt 为 null（mock 对象未设置时间字段）
         assertThat(views.getFirst().createdAt()).isNull();
+    }
+
+    @Test
+    void listPage_delegatesToMapper() {
+        ConnectorWriteServiceImpl svc = newServiceWithEndpoint("risk");
+        ConnectorDefinition c = new ConnectorDefinition();
+        c.setTenantId(1L); c.setConnectorCode("risk-svc"); c.setStatus(ConnectorStatus.ACTIVE);
+        Page<ConnectorDefinition> mockPage = new Page<>(1, 20);
+        mockPage.setRecords(List.of(c)); mockPage.setTotal(1);
+        when(mapper.searchPage(any(), any(), any(), any())).thenReturn(mockPage);
+
+        var result = svc.listPage(new ConnectorListQuery("1", null, null, 1, 20));
+
+        assertThat(result.getTotal()).isEqualTo(1);
+        assertThat(result.getRecords()).hasSize(1);
     }
 
     @Test

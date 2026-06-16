@@ -1,7 +1,10 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.config.api.dto.ConnectorListQuery;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
+import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
 import com.sstlfsj.rule.eval.api.FetchTrace;
 import com.sstlfsj.rule.eval.api.service.MetricFetchTestService;
 import com.sstlfsj.rule.web.admin.MetricController.TestRequest;
@@ -10,6 +13,7 @@ import com.sstlfsj.rule.web.admin.dto.ConnectorDetailResponse;
 import com.sstlfsj.rule.web.admin.dto.ConnectorRequest;
 import com.sstlfsj.rule.web.admin.dto.ConnectorResponse;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import com.sstlfsj.rule.web.common.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -27,16 +31,26 @@ public class ConnectorController {
     private final MetricFetchTestService testService;
 
     /**
-     * GET /admin/v1/connectors — 列出租户内全部 ACTIVE 连接器。
-     *
-     * @param tenantId 租户 ID
-     * @return 连接器列表
+     * GET /admin/v1/connectors — 分页查询连接器（照规则列表范式）。
+     * tenantId/keyword/status 可选；page 默认 1，size 默认 20。
      */
     @GetMapping
-    public ApiResponse<List<ConnectorResponse>> list(@RequestParam String tenantId) {
-        List<ConnectorResponse> data = service.listActive(Long.valueOf(tenantId)).stream()
-                .map(convert::toResponse).toList();
-        return ApiResponse.ok(data);
+    public ApiResponse<PageResponse<ConnectorResponse>> list(
+            @RequestParam(required = false) String tenantId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Page<ConnectorDefinition> p = service.listPage(
+                new ConnectorListQuery(tenantId, keyword, status, page, size));
+        List<ConnectorResponse> items = p.getRecords().stream()
+                .map(c -> convert.toResponse(new ConnectorWriteService.ConnectorView(
+                        c.getTenantId(), c.getConnectorCode(), c.getName(),
+                        c.getStatus().name(),
+                        c.getCreatedAt() != null ? c.getCreatedAt().toString() : null,
+                        c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null)))
+                .toList();
+        return ApiResponse.ok(PageResponse.of(items, p.getTotal(), page, size));
     }
 
     /**
