@@ -88,6 +88,7 @@ const connector: ConnectorTranslation = {
     samplePayload: 'Sample Payload',
     samplePayloadHint: 'JSON object simulating the event payload, e.g. {"amount":100}',
     sampleSubjectId: 'Sample Subject ID',
+    noInputs: 'This connector template uses no {vars.x} / {payload.x} / {subject.id} placeholders — just click Test',
     run: 'Test',
     invalidJson: 'Invalid JSON, please check',
     result: 'Test Result',

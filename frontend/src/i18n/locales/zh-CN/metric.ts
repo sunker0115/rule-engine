@@ -68,6 +68,7 @@ const metric: MetricTranslation = {
     samplePayload: '样例载荷 (payload)',
     samplePayloadHint: 'JSON 对象，模拟事件载荷，如 {"amount":100}',
     sampleSubjectId: '样例主体 ID',
+    noInputs: '无占位符，直接测试',
     run: '试算',
     invalidJson: 'JSON 格式错误，请检查',
     result: '试算结果',

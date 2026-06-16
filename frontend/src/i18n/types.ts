@@ -188,6 +188,7 @@ export interface MetricTranslation {
     samplePayload: string;
     samplePayloadHint: string;
     sampleSubjectId: string;
+    noInputs: string;
     run: string;
     invalidJson: string;
     result: string;
@@ -566,6 +567,7 @@ export interface ConnectorTranslation {
     samplePayload: string;
     samplePayloadHint: string;
     sampleSubjectId: string;
+    noInputs: string;
     run: string;
     invalidJson: string;
     result: string;

@@ -88,6 +88,7 @@ const connector: ConnectorTranslation = {
     samplePayload: '样例载荷 (payload)',
     samplePayloadHint: 'JSON 对象，模拟事件载荷，如 {"amount":100}',
     sampleSubjectId: '样例主体 ID',
+    noInputs: '该连接器模板未使用任何 {vars.x} / {payload.x} / {subject.id} 占位符，直接点测试即可',
     run: '测试',
     invalidJson: 'JSON 格式错误，请检查',
     result: '测试结果',

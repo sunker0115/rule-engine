@@ -68,6 +68,7 @@ const metric: MetricTranslation = {
     samplePayload: 'Sample Payload',
     samplePayloadHint: 'JSON object simulating the event payload, e.g. {"amount":100}',
     sampleSubjectId: 'Sample Subject ID',
+    noInputs: 'No placeholders — just test',
     run: 'Try Out',
     invalidJson: 'Invalid JSON, please check',
     result: 'Result',

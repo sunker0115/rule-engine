@@ -502,7 +502,7 @@ export default function ConnectorDetail() {
 
       {/* 内联自助测试 */}
       <Card title={t('test.title')} size="small" style={{ marginBottom: 16 }}>
-        <TestPanel connectorCode={connectorCode} isEdit={isEdit} />
+        <TestPanel connectorCode={connectorCode} isEdit={isEdit} descriptor={descriptor} tenantId={tenantId} />
       </Card>
 
       <Space>
