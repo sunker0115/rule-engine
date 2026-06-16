@@ -439,7 +439,13 @@ public class PublishService {
         AstNode resolvedAst = (metricCodes.isEmpty() && payloadFields.isEmpty())
                 ? ast : AstDataTypeResolver.resolve(ast, dataTypeMap, payloadTypeMap);
 
-        List<RuleVersionSnapshot.DecisionBinding> frozenBindings = freezeDecisionBindings(tenantId, scene, bindings);
+        // SCORECARD 的 band decisionCode 并入决策绑定收集/校验/回填流程（单一回填入口）：
+        // 每个 band code 以占位 binding 注入，由 freezeDecisionBindings 统一查存在 + 回填 name/priority，
+        // 这样 executor 段命中能按 decisionCode 索引到快照里的 name/priority。
+        List<RuleVersionSnapshot.DecisionBinding> bindingsWithBands =
+                mergeBandDecisionCodes(bindings, resolvedAst);
+        List<RuleVersionSnapshot.DecisionBinding> frozenBindings =
+                freezeDecisionBindings(tenantId, scene, bindingsWithBands);
 
         return new ResolvedDraft(kind, resolvedAst, frozenBindings, gates, triggers, metricDeps, payloadDeps, null);
     }
@@ -589,6 +595,25 @@ public class PublishService {
                     throw new IllegalArgumentException("SCORECARD 条件节点 weight 必须 > 0，conditionType=" + leaf.conditionType());
                 }
             }
+            // bands 非空时：每段 min<max；按 minScore 排序后相邻段左闭右开端点相接不算重叠
+            List<ScoreBand> bands = scorecardRoot.bands();
+            if (!bands.isEmpty()) {
+                List<ScoreBand> sorted = bands.stream()
+                        .sorted(java.util.Comparator.comparingDouble(ScoreBand::minScore)).toList();
+                for (ScoreBand b : sorted) {
+                    if (b.minScore() >= b.maxScore()) {
+                        throw new IllegalArgumentException(
+                                "SCORECARD band minScore 必须 < maxScore: [" + b.minScore() + "," + b.maxScore() + ")");
+                    }
+                }
+                for (int i = 1; i < sorted.size(); i++) {
+                    if (sorted.get(i).minScore() < sorted.get(i - 1).maxScore()) {
+                        throw new IllegalArgumentException("SCORECARD bands 区间重叠: "
+                                + "[" + sorted.get(i - 1).minScore() + "," + sorted.get(i - 1).maxScore() + ") 与 "
+                                + "[" + sorted.get(i).minScore() + "," + sorted.get(i).maxScore() + ")");
+                    }
+                }
+            }
         }
         if (RuleKind.DECISION_TREE.tag().equals(kindTag)) {
             if (!(ast instanceof IfNode ifRoot)) {
@@ -712,6 +737,32 @@ public class PublishService {
         rv.setStatus(RuleVersionStatus.DRAFT);
         rv.setCreatedAt(LocalDateTime.now());
         return rv;
+    }
+
+    /**
+     * 把 SCORECARD AST 的 band decisionCode 并入决策绑定列表（去重，已存在的 code 不重复注入）。
+     * 注入项 priority 用 0 占位，后续由 freezeDecisionBindings 从 decision_definition 回填。
+     * 非 SCORECARD 或无 bands 时原样返回。
+     *
+     * @param bindings 草稿原有决策绑定
+     * @param ast      已解析的条件 AST
+     * @return 含 band decisionCode 的绑定列表
+     */
+    private static List<RuleVersionSnapshot.DecisionBinding> mergeBandDecisionCodes(
+            List<RuleVersionSnapshot.DecisionBinding> bindings, AstNode ast) {
+        if (!(ast instanceof ScorecardRootNode scorecardRoot) || scorecardRoot.bands().isEmpty()) {
+            return bindings;
+        }
+        java.util.LinkedHashSet<String> existing = bindings.stream()
+                .map(RuleVersionSnapshot.DecisionBinding::decisionCode)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        List<RuleVersionSnapshot.DecisionBinding> merged = new ArrayList<>(bindings);
+        for (ScoreBand band : scorecardRoot.bands()) {
+            if (existing.add(band.decisionCode())) {
+                merged.add(new RuleVersionSnapshot.DecisionBinding(band.decisionCode(), null, 0));
+            }
+        }
+        return merged;
     }
 
     /**

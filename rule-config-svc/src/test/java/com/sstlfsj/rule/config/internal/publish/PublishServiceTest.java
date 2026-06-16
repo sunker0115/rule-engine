@@ -555,4 +555,95 @@ class PublishServiceTest {
         verify(ruleVersionMapper, never()).deleteById((Long) any());
     }
 
+    // ===== SCORECARD bands 发布期校验 + band decisionCode 回填 =====
+
+    @Test
+    void scorecardBands_overlap_rejected() {
+        // [0,60) 与 [50,80) 重叠 → 拒绝
+        ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
+                List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "A", null),
+                        new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(50, 80, "B", null)));
+        decisionsExist("A", "B");
+        assertThatThrownBy(() -> publishScorecard(ast))
+                .hasMessageContaining("重叠");
+    }
+
+    @Test
+    void scorecardBands_minGeMax_rejected() {
+        ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
+                List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(80, 60, "A", null)));
+        decisionsExist("A");
+        assertThatThrownBy(() -> publishScorecard(ast))
+                .hasMessageContaining("minScore");
+    }
+
+    @Test
+    void scorecardBands_decisionNotFound_rejected() {
+        ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
+                List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "MISSING", null)));
+        decisionsExist(/* none */);
+        assertThatThrownBy(() -> publishScorecard(ast))
+                .hasMessageContaining("DECISION_CODE_NOT_FOUND");
+    }
+
+    @Test
+    void scorecardBands_valid_backfillsBandDecisionsIntoSnapshot() {
+        ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
+                List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "REJECT", "HIGH"),
+                        new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(60, 100, "PASS", "LOW")));
+        decisionsExist("REJECT", "PASS");
+
+        publishScorecard(ast);
+
+        // band 的 decisionCode 回填进快照 decisionBindings（含 name/priority），executor 可按 code 索引
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(cap.capture());
+        List<RuleVersionSnapshot.DecisionBinding> bindings = cap.getValue().getDecisionBindings();
+        assertThat(bindings).extracting(RuleVersionSnapshot.DecisionBinding::decisionCode)
+                .containsExactlyInAnyOrder("REJECT", "PASS");
+        RuleVersionSnapshot.DecisionBinding reject = bindings.stream()
+                .filter(b -> b.decisionCode().equals("REJECT")).findFirst().orElseThrow();
+        assertThat(reject.name()).isEqualTo("REJECT-name");
+    }
+
+    /** 带 weight>0 的 SCORECARD 叶子条件（无 metric/payload 引用，走纯条件）。 */
+    private static ConditionNode weightedCond() {
+        return new ConditionNode("GT", "score", null, Map.of("threshold", 1), 5.0);
+    }
+
+    /** mock decisionDefinitionMapper.findByCodes：给定 codes 视为存在（name=<code>-name, priority=7）。 */
+    private void decisionsExist(String... codes) {
+        List<DecisionDefinition> defs = new java.util.ArrayList<>();
+        for (String c : codes) {
+            DecisionDefinition d = new DecisionDefinition();
+            d.setCode(c);
+            d.setName(c + "-name");
+            d.setPriority(7);
+            d.setStatus(DecisionStatus.ACTIVE);
+            defs.add(d);
+        }
+        // lenient：bands 结构非法的用例在 validateKindStructure 即拒，触不到 findByCodes
+        lenient().when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(defs);
+    }
+
+    /** 经 createDraft 发布一条 SCORECARD 规则，触发 resolveAndValidate（含 validateKindStructure + freezeDecisionBindings）。 */
+    private DraftCreatedResult publishScorecard(ScorecardRootNode ast) {
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        sc.setEventTypes(List.of("payment.initiated"));
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("score"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
+        lenient().when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+        lenient().doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
+                .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
+        lenient().doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
+                .when(ruleVersionMapper).insert(any(RuleVersion.class));
+        return publishService.createDraft(1L, "PAYMENT", "rule.scorecard",
+                new RuleContent("评分卡", RuleKind.SCORECARD.name(), ast,
+                        List.of(), List.of(), List.of(), null),
+                "actor");
+    }
+
 }

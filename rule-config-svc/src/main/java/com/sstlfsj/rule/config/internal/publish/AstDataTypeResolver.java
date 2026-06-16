@@ -41,7 +41,7 @@ class AstDataTypeResolver {
                     xor.displayLabel());
             case ScorecardRootNode sc -> new ScorecardRootNode(
                     resolveConditionList(sc.conditions(), dataTypeMap, payloadTypeMap),
-                    sc.threshold());
+                    sc.threshold(), sc.bands());
             case IfNode ifn -> new IfNode(
                     resolve(ifn.condition(), dataTypeMap, payloadTypeMap),
                     resolve(ifn.thenBranch(), dataTypeMap, payloadTypeMap),
