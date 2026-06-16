@@ -78,7 +78,7 @@ class MetricDependencyCollectorTest {
         AstNode ast = new ScorecardRootNode(List.of(
                 new ConditionNode("GT", "score", null, Map.of("threshold", 60), 0.4),
                 new ConditionNode("EQ", "channel", null, Map.of("threshold", "APP"), 0.6)
-        ), 0.6);
+        ), 0.6, java.util.List.of());
         assertThat(MetricDependencyCollector.collect(ast))
                 .containsExactly("score", "channel");
     }
@@ -87,7 +87,7 @@ class MetricDependencyCollectorTest {
     void scorecardRootNode_conditionWithoutMetricCode_notCollected() {
         AstNode ast = new ScorecardRootNode(List.of(
                 new ConditionNode("EVENT", null, null, Map.of(), 1.0)
-        ), 0.5);
+        ), 0.5, java.util.List.of());
         assertThat(MetricDependencyCollector.collect(ast)).isEmpty();
     }
 

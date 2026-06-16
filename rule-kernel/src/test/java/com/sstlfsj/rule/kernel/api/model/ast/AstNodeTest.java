@@ -38,7 +38,7 @@ class AstNodeTest {
 
     @Test
     void scorecardRootNode_isInstanceOfAstNode() {
-        ScorecardRootNode node = new ScorecardRootNode(List.of(), 0.6);
+        ScorecardRootNode node = new ScorecardRootNode(List.of(), 0.6, java.util.List.of());
         assertInstanceOf(AstNode.class, node);
     }
 

@@ -110,7 +110,7 @@ class AstDataTypeResolverTest {
     void resolve_scorecardRootNode_freezesLeafDataTypes() {
         ScorecardRootNode sc = new ScorecardRootNode(List.of(
                 new ConditionNode("GT", "score", null, Map.of("threshold", 60), 0.4)
-        ), 0.6);
+        ), 0.6, java.util.List.of());
         Map<String, String> typeMap = Map.of("score", "DOUBLE");
 
         AstNode result = AstDataTypeResolver.resolve(sc, typeMap, Map.of());

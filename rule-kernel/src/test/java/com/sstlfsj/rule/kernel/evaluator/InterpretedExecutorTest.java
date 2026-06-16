@@ -193,7 +193,7 @@ class InterpretedExecutorTest {
 
     @Test
     void scorecardRootNode_throwsIllegalState() {
-        AstNode ast = new ScorecardRootNode(List.of(), 0.6);
+        AstNode ast = new ScorecardRootNode(List.of(), 0.6, java.util.List.of());
         InterpretedExecutor executor = executorWith(Map.of());
 
         org.assertj.core.api.Assertions.assertThatThrownBy(

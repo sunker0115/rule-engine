@@ -200,7 +200,7 @@ class PublishServiceTest {
         ConditionNode leaf = new ConditionNode("GT", "score", null, Map.of("threshold", 1), 5.0);
         publishService.editDraft(1L, 10L,
                 new RuleContent(null, null,
-                        new ScorecardRootNode(List.of(leaf), 60.0),
+                        new ScorecardRootNode(List.of(leaf), 60.0, java.util.List.of()),
                         List.of(), List.of(), List.of(), null),
                 "actor");
 

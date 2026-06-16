@@ -42,7 +42,7 @@ class ScorecardExecutorTest {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 30.0),
                 new ConditionNode(ALWAYS_TRUE, "m2", null, Map.of(), 70.0)
-        ), 80.0);
+        ), 80.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.ruleHit()).isTrue();
@@ -54,7 +54,7 @@ class ScorecardExecutorTest {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE,  "m1", null, Map.of(), 30.0),
                 new ConditionNode(ALWAYS_FALSE, "m2", null, Map.of(), 70.0)
-        ), 80.0);
+        ), 80.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(
                 Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse))
                 .execute(snapshot(root), ctx());
@@ -66,7 +66,7 @@ class ScorecardExecutorTest {
     void scoreEqualsThreshold_isHit() {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 50.0)
-        ), 50.0);
+        ), 50.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.ruleHit()).isTrue();
@@ -75,7 +75,7 @@ class ScorecardExecutorTest {
 
     @Test
     void noConditions_scoreZero_miss() {
-        ScorecardRootNode root = new ScorecardRootNode(List.of(), 1.0);
+        ScorecardRootNode root = new ScorecardRootNode(List.of(), 1.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of())
                 .execute(snapshot(root), ctx());
         assertThat(result.ruleHit()).isFalse();
@@ -87,7 +87,7 @@ class ScorecardExecutorTest {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE,  "m1", null, Map.of(), 30.0),
                 new ConditionNode(ALWAYS_FALSE, "m2", null, Map.of(), 20.0)
-        ), 100.0);
+        ), 100.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(
                 Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse))
                 .execute(snapshot(root), ctx());
@@ -102,7 +102,7 @@ class ScorecardExecutorTest {
         // weight=null 时即使条件命中也不累加分数，且不抛 NPE（AST_BOOLEAN 场景兼容）
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), null)
-        ), 0.0);
+        ), 0.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.score()).isEqualTo(0.0);
@@ -114,7 +114,7 @@ class ScorecardExecutorTest {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE,  "m1", null, Map.of(), 30.0),
                 new ConditionNode(ALWAYS_FALSE, "m2", null, Map.of(), 70.0)
-        ), 80.0);
+        ), 80.0, java.util.List.of());
         ScorecardExecutor executor = new ScorecardExecutor(
                 Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse));
         RuleVersionSnapshot snap = snapshot(root);
@@ -176,7 +176,7 @@ class ScorecardExecutorTest {
         // bands 空 → 老逻辑：score>=threshold 命中，无 decision
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
-        ), 60.0);   // 2 参，bands 空
+        ), 60.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.ruleHit()).isTrue();
@@ -189,7 +189,7 @@ class ScorecardExecutorTest {
     void category_and_decision_areNull_forScorecard() {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 50.0)
-        ), 50.0);
+        ), 50.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.category()).isNull();
