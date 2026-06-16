@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.kernel.api.model.ast;
 
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +11,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ScorecardRootNodeTest {
+
+    private final ObjectMapper mapper = JsonMapper.builder().build();
 
     @Test
     void nullConditions_treatedAsEmptyList() {
@@ -72,5 +76,33 @@ class ScorecardRootNodeTest {
         ScoreBand band = new ScoreBand(0, 60, "REJECT", "HIGH_RISK");
         ScorecardRootNode node = new ScorecardRootNode(List.of(), 60.0, List.of(band));
         assertEquals(List.of(band), node.bands());
+    }
+
+    /** 回归：record 有 2 参兼容构造，反序列化须由 @JsonCreator 锁定 3 参规范构造，否则漏读 bands（e2e 暴露）。 */
+    @Test
+    void jsonRoundTrip_preservesBands() {
+        String json = """
+            {"type":"ScorecardRootNode","threshold":0.0,"conditions":[],
+             "bands":[{"minScore":0,"maxScore":60,"decisionCode":"REJECT","category":"HIGH"},
+                      {"minScore":60,"maxScore":100,"decisionCode":"PASS","category":"LOW"}]}
+            """;
+        AstNode node = mapper.readValue(json, AstNode.class);
+        assertInstanceOf(ScorecardRootNode.class, node);
+        ScorecardRootNode sc = (ScorecardRootNode) node;
+        assertEquals(2, sc.bands().size());
+        assertEquals("REJECT", sc.bands().get(0).decisionCode());
+        assertEquals("HIGH", sc.bands().get(0).category());
+        assertEquals(60.0, sc.bands().get(1).minScore());
+    }
+
+    /** 序列化往返：写出再读回，bands 不丢。 */
+    @Test
+    void serializeThenDeserialize_bandsSurvive() {
+        ScorecardRootNode src = new ScorecardRootNode(List.of(), 0.0,
+                List.of(new ScoreBand(0, 50, "REVIEW", "MID")));
+        String json = mapper.writeValueAsString(src);
+        ScorecardRootNode back = (ScorecardRootNode) mapper.readValue(json, AstNode.class);
+        assertEquals(1, back.bands().size());
+        assertEquals("REVIEW", back.bands().get(0).decisionCode());
     }
 }
