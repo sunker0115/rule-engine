@@ -122,6 +122,65 @@ class ConnectorWriteServiceImplTest {
         assertThat(views.getFirst().connectorCode()).isEqualTo("risk-svc");
     }
 
+    @Test
+    void disableSetsDisabledAndPublishesBothEvents() {
+        ConnectorWriteServiceImpl svc = newServiceWithEndpoint("risk");
+        ConnectorDefinition existing = new ConnectorDefinition();
+        existing.setId(7L);
+        existing.setConnectorCode("risk-svc");
+        existing.setName("风控打分");
+        existing.setStatus(ConnectorStatus.ACTIVE);
+        when(mapper.findByCode(1L, "risk-svc")).thenReturn(existing);
+
+        svc.disable(1L, "risk-svc", "u3");
+
+        verify(mapper).updateById(existing);
+        assertThat(existing.getStatus()).isEqualTo(ConnectorStatus.DISABLED);
+        assertThat(existing.getUpdatedBy()).isEqualTo("u3");
+        verify(events).publishEvent(new ConnectorChangedEvent("1", "risk-svc"));
+        verify(events).publishEvent(argThat((Object e) ->
+                e instanceof OperationAuditedEvent a
+                        && "connector_definition".equals(a.targetType())
+                        && "DISABLE".equals(a.action())));
+    }
+
+    @Test
+    void disableRejectsMissingCode() {
+        ConnectorWriteServiceImpl svc = newServiceWithEndpoint("risk");
+        when(mapper.findByCode(1L, "risk-svc")).thenReturn(null);
+
+        assertThatThrownBy(() -> svc.disable(1L, "risk-svc", "u3"))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(mapper, never()).updateById(any(ConnectorDefinition.class));
+    }
+
+    @Test
+    void getByCodeReturnsDetailWithTypedDescriptor() {
+        ConnectorWriteServiceImpl svc = newServiceWithEndpoint("risk");
+        ConnectorDefinition c = new ConnectorDefinition();
+        c.setConnectorCode("risk-svc");
+        c.setName("风控打分");
+        c.setDescriptor(cmd().descriptor());
+        c.setStatus(ConnectorStatus.DISABLED);
+        when(mapper.findByCode(1L, "risk-svc")).thenReturn(c);
+
+        var detail = svc.getByCode(1L, "risk-svc");
+
+        assertThat(detail.connectorCode()).isEqualTo("risk-svc");
+        assertThat(detail.name()).isEqualTo("风控打分");
+        assertThat(detail.status()).isEqualTo("DISABLED");
+        assertThat(detail.descriptor()).isSameAs(c.getDescriptor());
+    }
+
+    @Test
+    void getByCodeRejectsMissingCode() {
+        ConnectorWriteServiceImpl svc = newServiceWithEndpoint("risk");
+        when(mapper.findByCode(1L, "risk-svc")).thenReturn(null);
+
+        assertThatThrownBy(() -> svc.getByCode(1L, "risk-svc"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     // 工厂：构造 impl，注入 endpoint 名集合 {endpoint} 使 ConnectorSafetyValidator 通过
     private ConnectorWriteServiceImpl newServiceWithEndpoint(String endpoint) {
         return new ConnectorWriteServiceImpl(mapper, events, () -> Set.of(endpoint));

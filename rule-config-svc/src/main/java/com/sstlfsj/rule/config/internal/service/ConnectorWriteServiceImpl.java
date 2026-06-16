@@ -79,11 +79,40 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
     }
 
     @Override
+    public void disable(Long tenantId, String connectorCode, String actorId) {
+        ConnectorDefinition existing = mapper.findByCode(tenantId, connectorCode);
+        if (existing == null) {
+            throw new IllegalArgumentException("连接器不存在: " + connectorCode);
+        }
+
+        ConnectorChangedSnapshot before = new ConnectorChangedSnapshot(connectorCode, existing.getName());
+        existing.setStatus(ConnectorStatus.DISABLED);
+        existing.setUpdatedBy(actorId);
+        existing.setUpdatedAt(LocalDateTime.now());
+        mapper.updateById(existing);
+
+        publishAudit(tenantId, actorId, "DISABLE", existing.getId(), before,
+                new ConnectorChangedSnapshot(connectorCode, existing.getName()));
+        eventPublisher.publishEvent(new ConnectorChangedEvent(String.valueOf(tenantId), connectorCode));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<ConnectorView> listActive(Long tenantId) {
         return mapper.findActiveByTenant(tenantId).stream()
                 .map(c -> new ConnectorView(c.getConnectorCode(), c.getName(), c.getStatus().name()))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ConnectorDetailView getByCode(Long tenantId, String connectorCode) {
+        ConnectorDefinition c = mapper.findByCode(tenantId, connectorCode);
+        if (c == null) {
+            throw new IllegalArgumentException("连接器不存在: " + connectorCode);
+        }
+        return new ConnectorDetailView(c.getConnectorCode(), c.getName(),
+                c.getDescriptor(), c.getStatus().name());
     }
 
     /** 发布操作审计事件，由集中监听器 BEFORE_COMMIT 同事务落 audit_log（D14 约定）。 */

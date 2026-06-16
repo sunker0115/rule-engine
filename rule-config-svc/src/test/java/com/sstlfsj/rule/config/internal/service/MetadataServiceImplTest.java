@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -278,6 +279,38 @@ class MetadataServiceImplTest {
 
         // 容错：跳过缺失定义，不抛异常，返回空列表
         assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();
+    }
+
+    @Test
+    void getMetricItem_returnsFullDefinition() {
+        MetricDefinition m = new MetricDefinition();
+        m.setMetricCode("account.balance");
+        m.setVersion(2);
+        m.setSourceType("SQL_AGGREGATE");
+        m.setDataType("DECIMAL");
+        m.setAllowProvided(false);
+        m.setCacheTtlSeconds(60);
+        m.setParams(java.util.Map.of("window", "30d"));
+        m.setName("余额");
+        m.setStatus(MetricStatus.ACTIVE);
+        m.setTenantId(1L);
+        when(metricDefinitionMapper.findAnyByCode(1L, "account.balance")).thenReturn(m);
+
+        var vo = newService(List.of()).getMetricItem("1", "account.balance");
+
+        assertThat(vo.metricCode()).isEqualTo("account.balance");
+        assertThat(vo.metricVersion()).isEqualTo(2);
+        assertThat(vo.status()).isEqualTo("ACTIVE");
+        assertThat(vo.params()).containsEntry("window", "30d");
+        assertThat(vo.name()).isEqualTo("余额");
+    }
+
+    @Test
+    void getMetricItem_missing_throws() {
+        when(metricDefinitionMapper.findAnyByCode(1L, "nope")).thenReturn(null);
+
+        assertThatThrownBy(() -> newService(List.of()).getMetricItem("1", "nope"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

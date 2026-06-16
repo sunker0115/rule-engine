@@ -194,19 +194,31 @@ class MetadataServiceImpl implements MetadataService {
     @Override
     public java.util.List<MetricListItemVO> listMetricItems(String tenantId) {
         return metricDefinitionMapper.findActiveByTenant(Long.valueOf(tenantId)).stream()
-                .map(m -> new MetricListItemVO(
-                        m.getMetricCode(),
-                        m.getVersion() == null ? 1 : m.getVersion(),
-                        m.getSourceType(), m.getDataType(),
-                        Boolean.TRUE.equals(m.getAllowProvided()),
-                        m.getCacheTtlSeconds() == null ? 0 : m.getCacheTtlSeconds(),
-                        m.getParams(),
-                        m.getName(),
-                        m.getStatus() != null ? m.getStatus().name() : null,
-                        String.valueOf(m.getTenantId()),
-                        m.getCreatedAt(),
-                        m.getUpdatedAt()))
+                .map(this::toListItem)
                 .toList();
+    }
+
+    @Override
+    public MetricListItemVO getMetricItem(String tenantId, String metricCode) {
+        MetricDefinition m = metricDefinitionMapper.findAnyByCode(Long.valueOf(tenantId), metricCode);
+        if (m == null) throw new IllegalArgumentException("Metric 不存在: " + metricCode);
+        return toListItem(m);
+    }
+
+    /** MetricDefinition → admin 列表项 VO（含 name/status/时间/tenantId）。 */
+    private MetricListItemVO toListItem(MetricDefinition m) {
+        return new MetricListItemVO(
+                m.getMetricCode(),
+                m.getVersion() == null ? 1 : m.getVersion(),
+                m.getSourceType(), m.getDataType(),
+                Boolean.TRUE.equals(m.getAllowProvided()),
+                m.getCacheTtlSeconds() == null ? 0 : m.getCacheTtlSeconds(),
+                m.getParams(),
+                m.getName(),
+                m.getStatus() != null ? m.getStatus().name() : null,
+                String.valueOf(m.getTenantId()),
+                m.getCreatedAt(),
+                m.getUpdatedAt());
     }
 
 }

@@ -37,6 +37,19 @@ public class MetricController {
     }
 
     /**
+     * GET /admin/v1/metrics/{metricCode} — 查单个 metric 完整定义，供前端编辑器加载。
+     *
+     * @param metricCode metric 编码
+     * @param tenantId   租户 ID
+     * @return metric 完整定义
+     */
+    @GetMapping("/{metricCode}")
+    public ApiResponse<MetricListItemVO> getMetric(@PathVariable String metricCode,
+                                                   @RequestParam String tenantId) {
+        return ApiResponse.ok(metadataService.getMetricItem(tenantId, metricCode));
+    }
+
+    /**
      * POST /admin/v1/metrics — 注册新 metric（version=1, status=ACTIVE）。
      *
      * @param tenantId   租户 ID

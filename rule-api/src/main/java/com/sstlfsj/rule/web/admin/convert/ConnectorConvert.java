@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.web.admin.convert;
 
+import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorDetailView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorView;
+import com.sstlfsj.rule.web.admin.dto.ConnectorDetailResponse;
 import com.sstlfsj.rule.web.admin.dto.ConnectorResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
@@ -11,4 +13,7 @@ public interface ConnectorConvert {
 
     /** 将 service 列表视图转换为 API 响应 DTO。 */
     ConnectorResponse toResponse(ConnectorView view);
+
+    /** 将 service 详情视图转换为 API 详情响应 DTO（descriptor 直传 typed）。 */
+    ConnectorDetailResponse toDetailResponse(ConnectorDetailView view);
 }

@@ -60,6 +60,35 @@ class MetricControllerTest {
         verify(metadataService).listMetricItems("1");
     }
 
+    // ── GET /admin/v1/metrics/{metricCode} ──────────────────────────────────────
+
+    @Test
+    void getMetric_returns200_withFullDefinition() throws Exception {
+        when(metadataService.getMetricItem("1", "account.age")).thenReturn(
+                new MetricListItemVO("account.age", 2, "ATTRIBUTE", "LONG", false, 60,
+                        java.util.Map.of("window", "30d"), "账龄", "ACTIVE", "1", null, null));
+
+        mockMvc.perform(get("/admin/v1/metrics/account.age").param("tenantId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.metricCode").value("account.age"))
+                .andExpect(jsonPath("$.data.metricVersion").value(2))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.params.window").value("30d"));
+
+        verify(metadataService).getMetricItem("1", "account.age");
+    }
+
+    @Test
+    void getMetric_missing_returns400() throws Exception {
+        when(metadataService.getMetricItem("1", "nope"))
+                .thenThrow(new IllegalArgumentException("Metric 不存在: nope"));
+
+        mockMvc.perform(get("/admin/v1/metrics/nope").param("tenantId", "1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
     // ── POST /admin/v1/metrics ──────────────────────────────────────────────────
 
     @Test

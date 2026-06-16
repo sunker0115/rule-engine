@@ -1,7 +1,16 @@
 package com.sstlfsj.rule.web.admin;
 
 import tools.jackson.databind.json.JsonMapper;
+import com.sstlfsj.rule.config.api.connector.CompareOp;
+import com.sstlfsj.rule.config.api.connector.ConnectorDescriptor;
+import com.sstlfsj.rule.config.api.connector.HttpMethod;
+import com.sstlfsj.rule.config.api.connector.HttpRequestTemplate;
+import com.sstlfsj.rule.config.api.connector.Predicate;
+import com.sstlfsj.rule.config.api.connector.ResiliencePolicy;
+import com.sstlfsj.rule.config.api.connector.ResponseMapping;
+import com.sstlfsj.rule.config.api.connector.StaticHeaderAuth;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
+import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorDetailView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
 import com.sstlfsj.rule.eval.api.FetchTrace;
@@ -17,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -130,6 +140,61 @@ class ConnectorControllerTest {
                 .andExpect(jsonPath("$.success").value(false));
     }
 
+    // ── GET /admin/v1/connectors/{connectorCode} ────────────────────────────────
+
+    @Test
+    void getByCodeReturnsDetailWithTypedDescriptor() throws Exception {
+        when(service.getByCode(1L, "risk-svc")).thenReturn(
+                new ConnectorDetailView("risk-svc", "风控打分", descriptor(), "DISABLED"));
+
+        mockMvc.perform(get("/admin/v1/connectors/risk-svc").param("tenantId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.connectorCode").value("risk-svc"))
+                .andExpect(jsonPath("$.data.name").value("风控打分"))
+                .andExpect(jsonPath("$.data.status").value("DISABLED"))
+                // descriptor 以 typed 对象序列化，不是 String
+                .andExpect(jsonPath("$.data.descriptor.endpointRef").value("risk"))
+                .andExpect(jsonPath("$.data.descriptor.request.method").value("GET"));
+
+        verify(service).getByCode(1L, "risk-svc");
+    }
+
+    @Test
+    void getByCodeMissingReturns400() throws Exception {
+        when(service.getByCode(1L, "risk-svc"))
+                .thenThrow(new IllegalArgumentException("连接器不存在: risk-svc"));
+
+        mockMvc.perform(get("/admin/v1/connectors/risk-svc").param("tenantId", "1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    // ── POST /admin/v1/connectors/{connectorCode}/disable ───────────────────────
+
+    @Test
+    void disableReturns200AndDelegates() throws Exception {
+        mockMvc.perform(post("/admin/v1/connectors/risk-svc/disable")
+                        .param("tenantId", "1")
+                        .header("X-Actor-Id", "u1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(service).disable(1L, "risk-svc", "u1");
+    }
+
+    @Test
+    void disableMissingReturns400() throws Exception {
+        doThrow(new IllegalArgumentException("连接器不存在: risk-svc"))
+                .when(service).disable(1L, "risk-svc", "u1");
+
+        mockMvc.perform(post("/admin/v1/connectors/risk-svc/disable")
+                        .param("tenantId", "1")
+                        .header("X-Actor-Id", "u1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
     // ── POST /admin/v1/connectors/{connectorCode}:test ──────────────────────────
 
     @Test
@@ -153,5 +218,20 @@ class ConnectorControllerTest {
                 .andExpect(jsonPath("$.data.mappedValue").value(42));
 
         verify(testService).testConnector(eq(1L), eq("risk-svc"), any(), any(), eq("s1"));
+    }
+
+    // typed descriptor 工厂：与 DESCRIPTOR_JSON 同形，供 detail 端点返回体断言
+    private static ConnectorDescriptor descriptor() {
+        return ConnectorDescriptor.builder()
+                .endpointRef("risk")
+                .request(HttpRequestTemplate.builder()
+                        .method(HttpMethod.GET).pathTemplate("/s/{payload.id}")
+                        .query(List.of()).headers(List.of()).bodyTemplate(null).build())
+                .response(new ResponseMapping(new Predicate("ok", CompareOp.EQ, true), "v"))
+                .auth(new StaticHeaderAuth("X-Key", "k"))
+                .resilience(ResiliencePolicy.builder()
+                        .connectTimeoutMs(200).readTimeoutMs(300).retries(0)
+                        .retryOn(Set.of()).circuitBreaker(null).build())
+                .errorMapping(List.of()).build();
     }
 }

@@ -30,6 +30,15 @@ public interface MetadataService {
     java.util.List<MetricListItemVO> listMetricItems(String tenantId);
 
     /**
+     * 管理后台：查询租户内单个 metric 完整定义，供前端编辑器直接加载。
+     *
+     * @param tenantId   租户 ID
+     * @param metricCode metric 编码
+     * @return metric 列表项 VO；不存在抛 {@link IllegalArgumentException}
+     */
+    MetricListItemVO getMetricItem(String tenantId, String metricCode);
+
+    /**
      * 返回指定场景的元数据，包括可用条件类型和指标列表。
      *
      * @param tenantId  场景所属租户 ID
