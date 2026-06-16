@@ -10,8 +10,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 一致性套件自验：跑覆盖成功 + 各失败码的黄金用例，全绿即证明套件参照实现与连接器行为契约一致。
+ * 连接器一致性套件（连接器行为契约的可执行规约，对照 {@code docs/04-extension.md §9.1} 带编号 Requirement）。
+ * 自验逻辑：跑覆盖成功 + 各失败码的黄金用例，全绿即证明套件参照实现与契约一致；
  * 同时反向验证——人为构造与契约不符的期望，套件应抛 AssertionError。
+ *
+ * <p><b>怎么跑</b>：{@code $MVN -pl rule-eval-svc -am test -Dtest=ConformanceSuiteTest}（JDK25 环境，见 mvn-env），
+ * 或随 eval-svc 全量测试一起跑。</p>
+ *
+ * <p><b>怎么加用例</b>：往 {@code runsGoldenCasesCoveringSuccessAndFailureCodes} 的 {@code cases} 列表加一个 {@link GoldenCase}：</p>
+ * <pre>{@code
+ * // 成功：名字, 路径, 上游响应体, valuePath(点号路径), 期望标量值
+ * GoldenCase.success("success-scalar", "/score", "{\"data\":{\"score\":42}}", "data.score", 42L)
+ * // 失败：名字, 路径, HTTP 状态码, 响应体, valuePath, 期望归一错误码
+ * GoldenCase.failure("upstream-500", "/down", 500, "{}", "data.score", "UPSTREAM_ERROR")
+ * }</pre>
+ * 新增 §9.1 编号 Requirement 时在此补一条对应用例交叉验证。
+ *
+ * <p><b>边界</b>：{@link ConformanceSuite} 内是一份"标准连接器 HTTP 语义参照实现"，并非直跑真实
+ * {@code DeclarativeHttpConnectorHandler}——验证的是"契约自洽"，非"真 handler 符合契约"，两者同口径但分立、可能漂移。</p>
  */
 class ConformanceSuiteTest {
 

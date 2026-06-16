@@ -148,7 +148,7 @@ public @interface MetricSourceType {
 
 ### 4.5 声明式 HTTP 连接器契约（Requirement 编号）
 
-> **定位**：`EXTERNAL_HTTP` 的声明式连接器（`ConnectorDescriptor`，P2 实装）把"从任意外部 HTTP 服务取一个 metric 值"归一为一组配置——请求模板 + 响应映射 + 鉴权 + 弹性 + 错误映射。本节是接入方与一致性套件（`rule-connector-conformance` 模块）的**单一真相源**：每条带编号 Requirement 描述引擎的实际行为，仿 OpenFeature spec。引擎实现见 `DeclarativeHttpConnectorHandler` / `OAuth2TokenManager` / `MetricFetchErrorMapper`；可执行规约见 `rule-connector-conformance` 的 `ConformanceSuite` + `ConformanceSuiteTest`。
+> **定位**：`EXTERNAL_HTTP` 的声明式连接器（`ConnectorDescriptor`，P2 实装）把"从任意外部 HTTP 服务取一个 metric 值"归一为一组配置——请求模板 + 响应映射 + 鉴权 + 弹性 + 错误映射。本节是连接器行为与一致性套件的**单一真相源**：每条带编号 Requirement 描述引擎的实际行为，仿 OpenFeature spec。引擎实现见 `DeclarativeHttpConnectorHandler` / `OAuth2TokenManager` / `MetricFetchErrorMapper`；可执行规约见 `rule-eval-svc` 测试下 `com.sstlfsj.rule.conformance` 包的 `ConformanceSuite` + `ConformanceSuiteTest`（嵌入式 mock 上游 + 黄金用例，单人内部用，原 `rule-connector-conformance` 独立模块已并入）。
 >
 > **关键词约定**：MUST / MUST NOT = 强制；SHOULD = 推荐；MAY = 可选（RFC 2119）。
 >

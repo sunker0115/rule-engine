@@ -116,7 +116,7 @@ curl -s "$BASE/admin/v1/audit-logs?tenantId=9001&targetType=rule_definition&targ
 | 9 connector :test | `data` 为 `FetchTrace`:`renderedRequest`="POST https://risk.internal.example.com/v1/score"、`rawResponse`=原始响应体、`successMatched=true`、`mappedValue`=分数、`errorCode=null`(成功) |
 | 10 metric :test | 同上,验证 `params.connector` 解析到 descriptor + `vars.channel` 渲染进 body |
 
-> 上游评分服务需真实可达(或用 stub),否则步骤 7/9/10 的 trace 会落 `UPSTREAM_ERROR`/`TIMEOUT`——这恰好验证错误归一链路。无真实上游时,可用 `rule-connector-conformance` 模块的嵌入式 mock 上游跑黄金用例集对照(见 `ConformanceSuiteTest`)。
+> 上游评分服务需真实可达(或用 stub),否则步骤 7/9/10 的 trace 会落 `UPSTREAM_ERROR`/`TIMEOUT`——这恰好验证错误归一链路。无真实上游时,可用 `rule-eval-svc` 测试下 `com.sstlfsj.rule.conformance` 的嵌入式 mock 上游跑黄金用例集对照(见 `ConformanceSuiteTest`)。
 
 ## 六、清理(恢复干净基线)
 
@@ -135,4 +135,4 @@ curl -s $H -X PUT "$BASE/admin/v1/metrics/demo.user.risk.score/status?tenantId=9
 - 连接器契约(C1–C5 带编号 Requirement):[`../../04-extension.md`](../../04-extension.md) §4.5。
 - 存储:[`../../05-storage.md`](../../05-storage.md) `connector_definition` 表(V1_34)、`metric_definition.params` 形态。
 - 概念:[`../../01-concepts.md`](../../01-concepts.md) §3.9 sourceType 对比表(EXTERNAL_HTTP 行)。
-- 实现:`DeclarativeHttpConnectorHandler` / `ConnectorDefinitionResolver` / `OAuth2TokenManager` / `MetricFetchErrorMapper`;可执行规约 `rule-connector-conformance` 的 `ConformanceSuite`。
+- 实现:`DeclarativeHttpConnectorHandler` / `ConnectorDefinitionResolver` / `OAuth2TokenManager` / `MetricFetchErrorMapper`;可执行规约 `rule-eval-svc` 测试下 `com.sstlfsj.rule.conformance` 的 `ConformanceSuite`。
