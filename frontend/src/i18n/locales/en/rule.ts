@@ -47,6 +47,20 @@ const rule: RuleTranslation = {
       dividerPublish: 'Publish', dividerManage: 'Manage',
       dryRunVersion: 'Dry run this version',
     },
+    versionContent: {
+      title: 'Version Content', version: 'Version', conditionAst: 'Condition AST',
+      decisionBindings: 'Decision Bindings', preGates: 'Pre-gates', triggerEventTypes: 'Trigger Events',
+      script: 'Script', publishedBy: 'Published By',
+    },
+    versionDiff: {
+      title: 'Compare with Current',
+      hint: 'v{{from}} (left/old) → v{{to}} (right/current)',
+    },
+    versionRestore: {
+      title: 'Restore This Version', confirm: 'Create a new draft from v{{version}} (re-resolved against current world). Confirm?',
+      created: 'Draft created from v{{version}}. Review and publish in the editor.',
+      blockedByDraft: 'A draft already exists — publish or delete it before restoring',
+    },
     centerPanel: { placeholder: 'Editor (v1.5)' },
     rightPanel: {
       property: 'Properties',

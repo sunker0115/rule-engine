@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip } from 'antd';
-import { ThunderboltOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
@@ -8,6 +8,8 @@ import { editDraft, publishRule, disableRule, enableRule, newVersion } from '@/a
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
 import RuleSessionsDrawer from './RuleSessionsDrawer';
+import VersionContentDrawer from './VersionContentDrawer';
+import VersionDiffDrawer from './VersionDiffDrawer';
 import type { RuleDetail as RuleDetailType, RuleVersionItem } from '@/types';
 
 interface Props {
@@ -28,6 +30,17 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
   const { ast, decisionBindings, preGates, triggerEventTypes, script, dirty } = useRuleStore();
   const [saving, setSaving] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [viewVersionId, setViewVersionId] = useState<number | null>(null);
+  const [diffVersionId, setDiffVersionId] = useState<number | null>(null);
+
+  // 恢复此版本：克隆为新草稿（按当前世界重解析）→ 跳编辑器 review → 用户再发布
+  const handleRestore = async (v: RuleVersionItem) => {
+    try {
+      await newVersion(tenantId, ruleDetail.ruleDefinitionId, v.ruleVersionId);
+      message.success(t('editor.versionRestore.created', { version: v.version }));
+      onUpdated();
+    } catch { /* 重解析失败等由拦截器透出 */ }
+  };
 
   const handleSaveDraft = async () => {
     setSaving(true);
@@ -133,15 +146,35 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <Tag color={colorOf(versionStatusOpts, v.status as never)}>v{v.version}</Tag>
               <span style={{ fontSize: 12, color: '#999' }}>{formatDateTime(v.createdAt, 'YYYY-MM-DD')}</span>
-              <Tooltip title={t('editor.leftPanel.dryRunVersion')}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<ThunderboltOutlined />}
-                  onClick={() => onOpenDryRun(v)}
-                  style={{ marginLeft: 'auto' }}
-                />
-              </Tooltip>
+              <div style={{ marginLeft: 'auto', display: 'flex' }}>
+                <Tooltip title={t('editor.versionContent.title')}>
+                  <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => setViewVersionId(v.ruleVersionId)} />
+                </Tooltip>
+                {v.ruleVersionId !== ruleDetail.currentVersionId && (
+                  <Tooltip title={t('editor.versionDiff.title')}>
+                    <Button type="text" size="small" icon={<DiffOutlined />} onClick={() => setDiffVersionId(v.ruleVersionId)} />
+                  </Tooltip>
+                )}
+                <Tooltip title={t('editor.leftPanel.dryRunVersion')}>
+                  <Button type="text" size="small" icon={<ThunderboltOutlined />} onClick={() => onOpenDryRun(v)} />
+                </Tooltip>
+                {v.ruleVersionId !== ruleDetail.currentVersionId && (
+                  <Tooltip title={hasDraft ? t('editor.versionRestore.blockedByDraft') : t('editor.versionRestore.title')}>
+                    {hasDraft ? (
+                      <Button type="text" size="small" icon={<RollbackOutlined />} disabled />
+                    ) : (
+                      <Popconfirm
+                        title={t('editor.versionRestore.confirm', { version: v.version })}
+                        onConfirm={() => handleRestore(v)}
+                        okText={tc('button.confirm')}
+                        cancelText={tc('button.cancel')}
+                      >
+                        <Button type="text" size="small" icon={<RollbackOutlined />} />
+                      </Popconfirm>
+                    )}
+                  </Tooltip>
+                )}
+              </div>
             </div>
           ),
         }))}
@@ -152,6 +185,21 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         onClose={() => setSessionsOpen(false)}
         tenantId={tenantId}
         ruleDefinitionId={ruleDetail.ruleDefinitionId}
+      />
+      <VersionContentDrawer
+        open={viewVersionId !== null}
+        onClose={() => setViewVersionId(null)}
+        tenantId={tenantId}
+        ruleId={ruleDetail.ruleDefinitionId}
+        versionId={viewVersionId}
+      />
+      <VersionDiffDrawer
+        open={diffVersionId !== null}
+        onClose={() => setDiffVersionId(null)}
+        tenantId={tenantId}
+        ruleId={ruleDetail.ruleDefinitionId}
+        versionId={diffVersionId}
+        currentVersionId={ruleDetail.currentVersionId ?? null}
       />
     </div>
   );

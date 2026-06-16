@@ -258,6 +258,9 @@ export interface RuleTranslation {
   };
   editor: {
     leftPanel: { ruleInfo: string; versionTimeline: string; executorLabel: string; dividerPublish: string; dividerManage: string; dryRunVersion: string };
+    versionContent: { title: string; version: string; conditionAst: string; decisionBindings: string; preGates: string; triggerEventTypes: string; script: string; publishedBy: string };
+    versionDiff: { title: string; hint: string };
+    versionRestore: { title: string; confirm: string; created: string; blockedByDraft: string };
     centerPanel: { placeholder: string };
     rightPanel: {
       property: string; preGate: string; decisionBinding: string;

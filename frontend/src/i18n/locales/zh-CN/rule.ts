@@ -47,6 +47,20 @@ const rule: RuleTranslation = {
       dividerPublish: '发布', dividerManage: '管理',
       dryRunVersion: '试算此版本',
     },
+    versionContent: {
+      title: '版本内容', version: '版本', conditionAst: '条件 AST',
+      decisionBindings: '决策绑定', preGates: '前置门控', triggerEventTypes: '触发事件',
+      script: '脚本', publishedBy: '发布人',
+    },
+    versionDiff: {
+      title: '与当前版本对比',
+      hint: 'v{{from}}（左/旧）→ v{{to}}（右/当前）',
+    },
+    versionRestore: {
+      title: '恢复此版本', confirm: '基于 v{{version}} 创建新草稿（按当前世界重解析），确认？',
+      created: '已基于 v{{version}} 创建草稿，请在编辑器中确认后发布',
+      blockedByDraft: '已有未发布草稿，请先发布或删除再恢复',
+    },
     centerPanel: { placeholder: '编辑器 (v1.5 实装)' },
     rightPanel: {
       property: '属性',
