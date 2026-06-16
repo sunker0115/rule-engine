@@ -36,7 +36,7 @@ export default function ConditionTreeEditor({
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => onChange({ type: 'AndNode', children: [] })}
+            onClick={() => onChange({ type: 'AndNode', children: [{ type: 'ConditionNode', conditionType: '', params: {} }] })}
           >
             {t('editor.conditionTree.addFirst')}
           </Button>
