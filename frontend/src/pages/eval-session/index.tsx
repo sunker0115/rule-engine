@@ -64,7 +64,7 @@ export default function EvalSessionList() {
       title: t('session.column.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (v: string) => <Tag color={colorOf(getSessionStatusOptions(t), v as never)}>{labelOf(getSessionStatusOptions(t), v as never)}</Tag>,
     },
-    { title: t('session.column.occurredAt'), dataIndex: 'startedAt', key: 'startedAt', width: 170, render: (v: string) => formatDateTime(v) },
+    { title: t('session.column.occurredAt'), dataIndex: 'occurredAt', key: 'occurredAt', width: 170, render: (v: string | undefined, r: EvalSessionItem) => formatDateTime(v ?? r.startedAt) },
   ];
 
   return (
@@ -74,7 +74,7 @@ export default function EvalSessionList() {
         <Select
           placeholder={tc('label.tenant')}
           value={tenantFilter ?? currentId ?? undefined}
-          onChange={(v) => { setTenantFilter(v); setCurrentById(v); }}
+          onChange={(v) => { setTenantFilter(v); setCurrentById(v); setPage(1); }}
           allowClear
           options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
           style={{ width: 200 }}
@@ -84,7 +84,7 @@ export default function EvalSessionList() {
           style={{ width: 120 }}
           allowClear
           options={getSessionStatusOptions(t)}
-          onChange={(v) => setFilters((f) => ({ ...f, status: v || undefined }))}
+          onChange={(v) => { setFilters((f) => ({ ...f, status: v || undefined })); setPage(1); }}
         />
       </Space>
       <Table

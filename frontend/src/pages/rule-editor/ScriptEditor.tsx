@@ -15,7 +15,8 @@ interface Props {
 }
 
 function langExtension(lang: string) {
-  if (lang === 'JsonLogic') return json();
+  // 后端 ExpressionLang tag 为全大写 JSONLOGIC（非 JsonLogic），匹配错会让 JsonLogic 规则用 JS 高亮
+  if (lang === 'JSONLOGIC') return json();
   return javascript();
 }
 

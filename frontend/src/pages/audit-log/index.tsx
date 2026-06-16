@@ -41,6 +41,18 @@ export default function AuditLogList() {
 
   useEffect(() => { load(); }, [tenantId, page, pageSize, filters]);
 
+  // 筛选变更统一回第 1 页（否则在非首页改筛选会用旧 page 请求，返回空页）
+  const updateFilter = (patch: Record<string, unknown>) => {
+    setFilters((f) => ({ ...f, ...patch }));
+    setPage(1);
+  };
+
+  // 快照可能是非 JSON 字符串：解析失败时原样返回，避免展开行时 JSON.parse 抛错崩溃整个渲染
+  const safeParse = (v: unknown) => {
+    if (typeof v !== 'string') return v;
+    try { return JSON.parse(v); } catch { return v; }
+  };
+
   const columns: ColumnsType<AuditLogItem> = [
     { title: tc('label.id'), dataIndex: 'id', key: 'id', width: 60 },
     { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 60 },
@@ -70,7 +82,7 @@ export default function AuditLogList() {
         <Select
           placeholder={tc('label.tenant')}
           value={tenantFilter ?? currentId ?? undefined}
-          onChange={(v) => { setTenantFilter(v); setCurrentById(v); }}
+          onChange={(v) => { setTenantFilter(v); setCurrentById(v); setPage(1); }}
           allowClear
           options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
           style={{ width: 180 }}
@@ -80,37 +92,36 @@ export default function AuditLogList() {
           style={{ width: 110 }}
           allowClear
           options={[...auditTargetTypeOpts]}
-          onChange={(v) => setFilters((f) => ({ ...f, resourceType: v || undefined }))}
+          onChange={(v) => updateFilter({ resourceType: v || undefined })}
         />
         <Input
           placeholder={t('filter.targetId')}
           style={{ width: 100 }}
           allowClear
-          onChange={(e) => setFilters((f) => ({ ...f, resourceId: e.target.value || undefined }))}
+          onChange={(e) => updateFilter({ resourceId: e.target.value || undefined })}
         />
         <Input
           placeholder={t('filter.actor')}
           style={{ width: 120 }}
           allowClear
-          onChange={(e) => setFilters((f) => ({ ...f, actorId: e.target.value || undefined }))}
+          onChange={(e) => updateFilter({ actorId: e.target.value || undefined })}
         />
         <Select
           placeholder={t('filter.action')}
           style={{ width: 110 }}
           allowClear
           options={[...auditActionOpts]}
-          onChange={(v) => setFilters((f) => ({ ...f, action: v || undefined }))}
+          onChange={(v) => updateFilter({ action: v || undefined })}
         />
         <RangePicker
           showTime
           style={{ width: 340 }}
           placeholder={[t('filter.from'), t('filter.to')]}
           onChange={(dates) => {
-            setFilters((f) => ({
-              ...f,
+            updateFilter({
               from: dates?.[0]?.toISOString() || undefined,
               to: dates?.[1]?.toISOString() || undefined,
-            }));
+            });
           }}
         />
       </Space>
@@ -131,8 +142,8 @@ export default function AuditLogList() {
         expandable={{
           expandedRowRender: (record) => (
             <JsonDiffViewer
-              before={typeof record.beforeSnapshot === 'string' ? JSON.parse(record.beforeSnapshot) : record.beforeSnapshot}
-              after={typeof record.afterSnapshot === 'string' ? JSON.parse(record.afterSnapshot) : record.afterSnapshot}
+              before={safeParse(record.beforeSnapshot) as Record<string, unknown> | undefined}
+              after={safeParse(record.afterSnapshot) as Record<string, unknown> | undefined}
             />
           ),
           rowExpandable: (record) => !!(record.beforeSnapshot || record.afterSnapshot),

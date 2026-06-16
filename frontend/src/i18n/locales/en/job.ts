@@ -25,7 +25,7 @@ const job: JobTranslation = {
   },
   execution: {
     title: 'Execution History',
-    triggerConfirm: 'Trigger job immediately: {name}. Confirm?',
+    triggerConfirm: 'Trigger job immediately: {{name}}. Confirm?',
     column: {
       id: 'Execution ID',
       triggerAt: 'Triggered',

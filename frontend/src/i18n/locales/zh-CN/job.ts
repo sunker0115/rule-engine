@@ -25,7 +25,7 @@ const job: JobTranslation = {
   },
   execution: {
     title: '执行历史',
-    triggerConfirm: '将立即执行一次任务：{name}。确认？',
+    triggerConfirm: '将立即执行一次任务：{{name}}。确认？',
     column: {
       id: '执行编号',
       triggerAt: '触发时间',

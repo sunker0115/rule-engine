@@ -31,14 +31,16 @@ export default function RolloutSlider({ value = {}, onChange }: Props) {
         <Switch
           checked={!useBucketRange}
           onChange={(checked) => {
+            // 保留 ...value(尤其 experimentId),只切换 percentage / bucket 字段，避免切模式丢实验种子
             if (checked) {
               onChange?.({
+                ...value,
                 percentage: value.percentage ?? 100,
                 bucketStart: undefined,
                 bucketEnd: undefined,
               });
             } else {
-              onChange?.({ bucketStart: 0, bucketEnd: 100, percentage: undefined });
+              onChange?.({ ...value, bucketStart: 0, bucketEnd: 100, percentage: undefined });
             }
           }}
         />

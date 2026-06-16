@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button, Space, Tag, message } from 'antd';
 import { CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -92,6 +92,11 @@ export default function TraceTree({ nodes }: TraceTreeProps) {
   const { t } = useTranslation('eval');
   // 受控展开：默认全部展开
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set(collectKeys(nodes ?? [])));
+
+  // nodes 变化（切换 session / 重跑 dry-run）时重置为默认全展开；惰性初始化只在 mount 跑一次，不会自更新
+  useEffect(() => {
+    setExpandedKeys(new Set(collectKeys(nodes ?? [])));
+  }, [nodes]);
 
   const toggle = (key: string) => {
     setExpandedKeys((prev) => {

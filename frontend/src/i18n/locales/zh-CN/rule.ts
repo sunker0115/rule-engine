@@ -137,11 +137,11 @@ const rule: RuleTranslation = {
       placeholder: '输入脚本，例如: metrics.amount > 1000',
       syntaxHints: {
         CEL: 'CEL 表达式，直接写条件：\nmetrics.amount > 1000\npayload.country == "CN"\n链接：&&  ||  分组：()',
-        Aviator: '类 JS 语法：\nmetrics.amount > 1000 && payload.country == "CN"\n支持：if/else、三元、正则',
-        QLExpress: '类 Java 语法：\nmetrics.amount > 1000 && payload.country == "CN"\n支持：for/while、自定义函数',
-        JsonLogic: 'JSON 规则格式：\n{ "and": [\n  { ">": [{ "var": "metrics.amount" }, 1000] },\n  { "==": [{ "var": "payload.country" }, "CN"] }\n] }',
+        AVIATOR: '类 JS 语法：\nmetrics.amount > 1000 && payload.country == "CN"\n支持：if/else、三元、正则',
+        QLEXPRESS: '类 Java 语法：\nmetrics.amount > 1000 && payload.country == "CN"\n支持：for/while、自定义函数',
+        JSONLOGIC: 'JSON 规则格式：\n{ "and": [\n  { ">": [{ "var": "metrics.amount" }, 1000] },\n  { "==": [{ "var": "payload.country" }, "CN"] }\n] }',
         JEXL: '类 Java 表达式：\nmetrics.amount > 1000 && payload.country == "CN"\n支持：方法调用、集合操作',
-        Groovy: 'Groovy 脚本：\nif (metrics.amount > 1000) { return true }\nreturn false',
+        GROOVY: 'Groovy 脚本：\nif (metrics.amount > 1000) { return true }\nreturn false',
       },
     },
     createModal: {

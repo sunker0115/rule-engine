@@ -52,7 +52,9 @@ export default function DecisionTableEditor({
     .map((ct) => ({ value: ct.code, label: conditionTypeLabel(t, ct.code) }));
 
   const addColumn = () => {
-    const newCols = [...cols, { metricCode: '', operator: 'EQ', dataType: null }];
+    // 默认取首个可用 metric/payload，避免新增列 metricCode='' 持久化为无效条件列（与初始列一致）
+    const first = availableMetrics[0]?.metricCode || payloadFieldNames[0] || '';
+    const newCols = [...cols, { metricCode: first, operator: 'EQ', dataType: null }];
     const newRows = rows.map((r) => ({ ...r, conditions: [...r.conditions, null] }));
     onChange({ ...node, columns: newCols, rows: newRows });
   };

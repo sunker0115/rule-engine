@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, Switch, Button, Space, message, Spin, Table } from 'antd';
 import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined } from '@ant-design/icons';
@@ -111,16 +111,17 @@ export default function SceneEdit() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
-  const loaded = useRef(false);
 
   useEffect(() => {
     if (!currentId || !sceneCode) return;
-    if (loaded.current) return; loaded.current = true;
+    // cancelled 守卫:sceneCode/tenant 切换时丢弃旧请求结果，避免竞态把旧 scene 写进表单（原 loaded ref 永不重置会导致切换后不重载）
+    let cancelled = false;
     (async () => {
       setLoading(true);
-      try { const data = await getScene(currentId, sceneCode); setScene(data.data ?? null); }
-      finally { setLoading(false); }
+      try { const data = await getScene(currentId, sceneCode); if (!cancelled) setScene(data.data ?? null); }
+      finally { if (!cancelled) setLoading(false); }
     })();
+    return () => { cancelled = true; };
   }, [currentId, sceneCode]);
 
   // scene 加载后填充表单

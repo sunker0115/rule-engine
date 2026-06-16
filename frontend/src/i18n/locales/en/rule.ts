@@ -137,11 +137,11 @@ const rule: RuleTranslation = {
       placeholder: 'Enter script, e.g. metrics.amount > 1000',
       syntaxHints: {
         CEL: 'CEL expression, write conditions directly:\nmetrics.amount > 1000\npayload.country == "CN"\nJoin: &&  ||  Group: ()',
-        Aviator: 'JS-like syntax:\nmetrics.amount > 1000 && payload.country == "CN"\nSupports: if/else, ternary, regex',
-        QLExpress: 'Java-like syntax:\nmetrics.amount > 1000 && payload.country == "CN"\nSupports: for/while, custom functions',
-        JsonLogic: 'JSON rule format:\n{ "and": [\n  { ">": [{ "var": "metrics.amount" }, 1000] },\n  { "==": [{ "var": "payload.country" }, "CN"] }\n] }',
+        AVIATOR: 'JS-like syntax:\nmetrics.amount > 1000 && payload.country == "CN"\nSupports: if/else, ternary, regex',
+        QLEXPRESS: 'Java-like syntax:\nmetrics.amount > 1000 && payload.country == "CN"\nSupports: for/while, custom functions',
+        JSONLOGIC: 'JSON rule format:\n{ "and": [\n  { ">": [{ "var": "metrics.amount" }, 1000] },\n  { "==": [{ "var": "payload.country" }, "CN"] }\n] }',
         JEXL: 'Java-like expressions:\nmetrics.amount > 1000 && payload.country == "CN"\nSupports: method calls, collections',
-        Groovy: 'Groovy script:\nif (metrics.amount > 1000) { return true }\nreturn false',
+        GROOVY: 'Groovy script:\nif (metrics.amount > 1000) { return true }\nreturn false',
       },
     },
     createModal: {

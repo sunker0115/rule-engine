@@ -40,6 +40,7 @@ export default function JobList() {
         try {
           await triggerJob(currentId, job.id);
           message.success(t('triggerSuccess'));
+          load();
         } finally {
           setTriggering(null);
         }
