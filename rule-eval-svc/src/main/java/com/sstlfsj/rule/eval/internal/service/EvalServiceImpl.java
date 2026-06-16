@@ -3,7 +3,6 @@ package com.sstlfsj.rule.eval.internal.service;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
-import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.dispatch.PushEventDispatcher;
 import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
@@ -22,7 +21,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件，自身不做内联持久化、不派发 action。 */
+/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计事件，自身不做内联持久化、不派发 action；dry-run 只即时返回不落库。 */
 @Service
 class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
@@ -113,12 +112,7 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             // dry-run 始终强制收集 NodeTrace（需回传 nodeTrace），不受全局 trace 开关影响
             EvalOutcome outcome = evalEngine.evaluateWithContext(
                     event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow, true);
-            // dry-run 终态事件化：请求线程生成 id（snowflake，INPUT），异步 persister 落 dry_run_session + trace
-            long dryRunId = IdWorker.getId();
-            int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
-            eventPublisher.publish(new DryRunRecordedEvent(
-                    dryRunId, event, specificVersionId, snap.code(), snap.version(),
-                    outcome.result(), outcome.context(), durationMs));
+            // dry-run 只即时返回结果（含 nodeTrace），不落历史（对齐 OPA：试算不写库）
             instrumentation.record(outcome.result().errorCode() != null);
             return outcome.result();
         }

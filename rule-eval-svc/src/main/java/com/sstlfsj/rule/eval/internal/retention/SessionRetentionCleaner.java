@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.eval.internal.retention;
 
-import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,20 +8,17 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.time.LocalDateTime;
 import java.util.function.ToIntFunction;
 
-/** 定时清理超期 session（evaluation_session / dry_run_session），各按自己保留窗，分批短事务、幂等。 */
+/** 定时清理超期 session（evaluation_session），按保留窗分批短事务、幂等。 */
 public class SessionRetentionCleaner {
 
     private static final Logger log = LoggerFactory.getLogger(SessionRetentionCleaner.class);
 
     private final EvaluationSessionMapper evaluationSessionMapper;
-    private final DryRunSessionMapper dryRunSessionMapper;
     private final RetentionProperties props;
 
     public SessionRetentionCleaner(EvaluationSessionMapper evaluationSessionMapper,
-                                   DryRunSessionMapper dryRunSessionMapper,
                                    RetentionProperties props) {
         this.evaluationSessionMapper = evaluationSessionMapper;
-        this.dryRunSessionMapper = dryRunSessionMapper;
         this.props = props;
     }
 
@@ -31,9 +27,7 @@ public class SessionRetentionCleaner {
     public void purge() {
         int es = purgeLoop(c -> evaluationSessionMapper.purgeOlderThan(c, props.getBatchSize()),
                 LocalDateTime.now().minusDays(props.getEvaluationSessionDays()));
-        int dr = purgeLoop(c -> dryRunSessionMapper.purgeOlderThan(c, props.getBatchSize()),
-                LocalDateTime.now().minusDays(props.getDryRunSessionDays()));
-        log.info("retention 清理 session 完成 evaluation_session={} dry_run_session={}", es, dr);
+        log.info("retention 清理 session 完成 evaluation_session={}", es);
     }
 
     /** 分批循环删，直到单批不足 batchSize；返回累计删除数。 */

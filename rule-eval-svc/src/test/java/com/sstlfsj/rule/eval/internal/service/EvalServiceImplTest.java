@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
-import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
@@ -27,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计；dry-run 发 DryRunRecordedEvent 事件。 */
+/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计；dry-run 只即时返回不落库。 */
 @ExtendWith(MockitoExtension.class)
 class EvalServiceImplTest {
 
@@ -160,7 +159,7 @@ class EvalServiceImplTest {
     }
 
     @Test
-    void dryRun_publishesDryRunRecorded() {
+    void dryRun_returnsResult_withoutPersisting() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         EvalContext engineCtx = ctx();
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
@@ -170,11 +169,8 @@ class EvalServiceImplTest {
 
         impl.dryRun(event(), null, 42L);
 
-        // dry-run 改事件驱动：发 DryRunRecordedEvent 事件由异步 persister 落 dry_run_session
-        verify(eventPublisher).publish(argThat(o ->
-                o instanceof DryRunRecordedEvent d
-                        && d.ruleVersionId().equals(42L)
-                        && d.context() == engineCtx));
+        // dry-run 只即时返回（对齐 OPA：试算不写历史），不发任何落库事件
+        verifyNoInteractions(eventPublisher);
         // dry-run 始终强制收集 trace：必须以 collectTrace=true 调用引擎
         verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(),
                 any(SceneExecutionStrategy.class), any(Instant.class), eq(true));
@@ -194,8 +190,6 @@ class EvalServiceImplTest {
 
         verify(ruleVersionReadMapper).latestVersionIdByRule(1L, 5L);
         verify(snapshotLoader).loadById(77L);
-        verify(eventPublisher).publish(argThat(o ->
-                o instanceof DryRunRecordedEvent d && d.ruleVersionId().equals(77L)));
         // dry-run 永不落候选分支：不走 match
         verify(evalEngine, never()).match(any(RuleEvent.class));
     }

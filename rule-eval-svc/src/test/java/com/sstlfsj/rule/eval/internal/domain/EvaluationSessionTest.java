@@ -82,37 +82,4 @@ class EvaluationSessionTest {
         assertNull(s.getPayload());
         assertNull(s.getCandidateRuleVersionIds());
     }
-
-    @Test
-    void dryRunSession_settersAndGetters() {
-        DryRunSession d = new DryRunSession();
-        d.setTenantId(1L);
-        d.setRuleVersionId(99L);
-        d.setStatus(SessionStatus.HIT);
-
-        assertEquals(1L, d.getTenantId());
-        assertEquals(99L, d.getRuleVersionId());
-        assertEquals(SessionStatus.HIT, d.getStatus());
-    }
-
-    @Test
-    void dryRunSession_contextSnapshot_setAndGet() {
-        DryRunSession d = new DryRunSession();
-        d.setContextSnapshot("{\"metrics\":{\"user.age\":30,\"order.amount\":5000},\"evalNow\":\"2024-01-01T00:00:00Z\"}");
-        assertEquals("{\"metrics\":{\"user.age\":30,\"order.amount\":5000},\"evalNow\":\"2024-01-01T00:00:00Z\"}", d.getContextSnapshot());
-    }
-
-    @Test
-    void dryRunSession_contextSnapshot_defaultsToNull() {
-        DryRunSession d = new DryRunSession();
-        assertNull(d.getContextSnapshot());
-    }
-
-    @Test
-    void dryRunSession_contextSnapshot_setNullAllowed() {
-        DryRunSession d = new DryRunSession();
-        d.setContextSnapshot("{\"k\":1}");
-        d.setContextSnapshot(null);
-        assertNull(d.getContextSnapshot());
-    }
 }

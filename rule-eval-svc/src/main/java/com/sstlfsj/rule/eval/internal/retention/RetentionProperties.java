@@ -14,8 +14,6 @@ public class RetentionProperties {
     private boolean enabled = true;
     /** evaluation_session 保留天数。 */
     private int evaluationSessionDays = 90;
-    /** dry_run_session 保留天数。 */
-    private int dryRunSessionDays = 7;
     /** 单批删除上限。 */
     private int batchSize = 1000;
 }

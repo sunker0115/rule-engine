@@ -4,13 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.api.service.EvalService;
-import com.sstlfsj.rule.eval.internal.domain.DryRunSession;
 import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.domain.SessionStatus;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
-import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
@@ -87,9 +85,6 @@ class EvalIntegrationTest {
     private EvaluationSessionMapper sessionMapper;
 
     @Autowired
-    private DryRunSessionMapper dryRunMapper;
-
-    @Autowired
     private SceneSnapshotLoader snapshotLoader;
 
     @Autowired
@@ -106,7 +101,6 @@ class EvalIntegrationTest {
     void setUp() {
         // 清理会话表（不清配置表，避免每次重建数据）
         jdbc.execute("DELETE FROM evaluation_session");
-        jdbc.execute("DELETE FROM dry_run_session");
 
         // 确保配置数据存在（幂等插入：主键固定为 1）
         insertBaseDataIfAbsent();
@@ -257,24 +251,22 @@ class EvalIntegrationTest {
         assertThat(sessions.get(0).getMode()).isEqualTo(EvalMode.PUSH);
     }
 
-    // ===== 测试 4：dry-run 写入 dry_run_session，不污染生产表 =====
+    // ===== 测试 4：dry-run 只即时返回，不落任何库（对齐 OPA） =====
 
     /**
-     * dryRun() 应写入 dry_run_session，不写 evaluation_session。
+     * dryRun() 即时返回结果（含 nodeTrace），不写任何库。
      * 使用 ruleVersionId=1（与 setUp 插入的版本一致）。
      */
     @Test
-    void dryRun_writesToDryRunSession_notProdSession() throws InterruptedException {
+    void dryRun_returnsResult_writesNothing() {
         RuleEvent event = makeEvent("dry-001", "fraud_check");
         // ruleVersionId=1 指定已存在的版本
         EvalResult result = evalService.dryRun(event, null, 1L);
 
-        // dry-run 改事件驱动后异步落库，轮询等待 dry_run_session 出现
-        List<DryRunSession> dryRuns = awaitDryRuns("dry-001");
-        assertThat(dryRuns).hasSize(1);
-        assertThat(dryRuns.get(0).getStatus()).isIn(SessionStatus.HIT, SessionStatus.MISS);
+        // dry-run 即时算出结果，nodeTrace 照常收集
+        assertThat(result.nodeTrace()).isNotNull();
 
-        // evaluation_session 不应有记录（dry-run 不写生产表）
+        // evaluation_session 不应有记录（dry-run 不写历史）
         long prodCount = sessionMapper.selectCount(
                 new LambdaQueryWrapper<EvaluationSession>()
                         .eq(EvaluationSession::getEventId, "dry-001")
@@ -299,21 +291,6 @@ class EvalIntegrationTest {
                         .eq(EvaluationSession::getEventId, "no-rule-001")
                         .eq(EvaluationSession::getTenantId, 1L));
         assertThat(count).isEqualTo(0);
-    }
-
-    /** 轮询最多 3 秒，等指定 eventId 的 dry_run_session 异步落库出现，返回查到的行。 */
-    private List<DryRunSession> awaitDryRuns(String eventId) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 3_000;
-        List<DryRunSession> dryRuns = List.of();
-        while (System.currentTimeMillis() < deadline) {
-            dryRuns = dryRunMapper.selectList(
-                    new LambdaQueryWrapper<DryRunSession>()
-                            .eq(DryRunSession::getEventId, eventId)
-                            .eq(DryRunSession::getTenantId, 1L));
-            if (!dryRuns.isEmpty()) break;
-            Thread.sleep(100);
-        }
-        return dryRuns;
     }
 
     /** 轮询最多 3 秒，等指定 eventId 的 evaluation_session 异步落库出现，返回查到的行。 */
