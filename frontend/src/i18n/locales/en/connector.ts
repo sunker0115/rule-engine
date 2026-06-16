@@ -2,11 +2,12 @@ import type { ConnectorTranslation } from '../../types';
 
 const connector: ConnectorTranslation = {
   title: { list: 'Connectors', detail: 'Connector Detail', create: 'New Connector', edit: 'Edit Connector' },
-  action: { create: 'New Connector', addQuery: 'Add Query', addHeader: 'Add Header', addError: 'Add Error Mapping', addScope: 'Add Scope' },
+  action: { create: 'New Connector', addQuery: 'Add Query', addHeader: 'Add Header', addError: 'Add Error Mapping', addScope: 'Add Scope', disable: 'Disable', disableConfirm: 'Disable this connector? It cannot be re-enabled.' },
   column: {
     connectorCode: 'Connector Code',
     name: 'Name',
     status: 'Status',
+    action: 'Action',
   },
   searchPlaceholder: 'Search by name or code',
   detail: { notFound: 'Connector not found' },

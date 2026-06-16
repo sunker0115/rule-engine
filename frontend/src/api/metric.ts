@@ -7,6 +7,15 @@ export async function listMetrics(tenantId: number) {
   return res.data;
 }
 
+/** 取单个 metric 完整定义（结构同 list item） */
+export async function getMetric(metricCode: string, tenantId: number) {
+  const res = await apiClient.get<ApiResponse<MetricDescriptor>>(
+    ENDPOINTS.METRIC_DETAIL(metricCode),
+    { params: { tenantId } },
+  );
+  return res.data;
+}
+
 export async function createMetric(tenantId: number, metricCode: string, body: Record<string, unknown>) {
   return apiClient.post(ENDPOINTS.METRIC_CREATE, body, { params: { tenantId, metricCode } });
 }

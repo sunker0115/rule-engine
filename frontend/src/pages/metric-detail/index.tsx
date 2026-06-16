@@ -4,7 +4,7 @@ import { Descriptions, Button, Tabs, Table, Spin, message, Form, Input, InputNum
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listMetrics, updateMetric, getMetricImpact } from '@/api/metric';
+import { getMetric, updateMetric, getMetricImpact } from '@/api/metric';
 import { ROUTES } from '@/constants/routes';
 import { getSourceTypeOptions, getDataTypeOptions, colorOf, getStatusOptions } from '@/constants/enums';
 import TestPanel from './TestPanel';
@@ -29,8 +29,8 @@ export default function MetricDetail() {
     if (!currentId || !metricCode) return;
     setLoading(true);
     try {
-      const data = await listMetrics(currentId);
-      setMetric((data.data ?? []).find((m) => m.metricCode === metricCode) ?? null);
+      const data = await getMetric(metricCode, currentId);
+      setMetric(data.data ?? null);
     } finally { setLoading(false); }
   };
 

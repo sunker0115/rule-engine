@@ -7,7 +7,7 @@ import {
 import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listConnectors, createConnector, updateConnector } from '@/api/connector';
+import { getConnector, createConnector, updateConnector } from '@/api/connector';
 import { ROUTES } from '@/constants/routes';
 import EnvelopePresets from './EnvelopePresets';
 import TestPanel from './TestPanel';
@@ -56,13 +56,13 @@ export default function ConnectorDetail() {
   const [name, setName] = useState('');
   const [descriptor, setDescriptor] = useState<ConnectorDescriptor>(emptyDescriptor());
 
-  // 编辑态：T1 仅有 list 接口，从 list 结果按 code 过滤回填（详情 API 待后续）
+  // 编辑态：按 code 直取单条详情，descriptor 为 typed 对象直接消费
   useEffect(() => {
     if (!isEdit || !currentId || !routeCode) return;
     setLoading(true);
-    listConnectors(currentId)
+    getConnector(routeCode, currentId)
       .then((res) => {
-        const found = (res.data ?? []).find((c) => c.connectorCode === routeCode);
+        const found = res.data;
         if (found) {
           setConnectorCode(found.connectorCode);
           setName(found.name ?? '');

@@ -26,6 +26,20 @@ export async function updateConnector(connectorCode: string, tenantId: number, b
   return apiClient.put(ENDPOINTS.CONNECTOR_UPDATE(connectorCode), body, { params: { tenantId } });
 }
 
+/** 取单个连接器完整信息（含 typed descriptor），供编辑态回填 */
+export async function getConnector(connectorCode: string, tenantId: number) {
+  const res = await apiClient.get<ApiResponse<ConnectorListItem>>(
+    ENDPOINTS.CONNECTOR_DETAIL(connectorCode),
+    { params: { tenantId } },
+  );
+  return res.data;
+}
+
+/** 禁用连接器（仅 disable，无 enable；X-Actor-Id 由请求拦截器注入） */
+export async function disableConnector(connectorCode: string, tenantId: number) {
+  return apiClient.post(ENDPOINTS.CONNECTOR_DISABLE(connectorCode), null, { params: { tenantId } });
+}
+
 /** 自助测试连接器：返回分阶段取数链路 trace */
 export async function testConnector(connectorCode: string, tenantId: number, sample: FetchTestSample) {
   const res = await apiClient.post<ApiResponse<FetchTrace>>(

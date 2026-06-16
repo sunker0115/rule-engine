@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Button, Input, Select, Space } from 'antd';
+import { Table, Button, Input, Select, Space, message } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listConnectors } from '@/api/connector';
+import { listConnectors, disableConnector } from '@/api/connector';
 import { getConnectorColumns } from '@/config/columns/connector';
 import { ROUTES, route } from '@/constants/routes';
 import { getStatusOptions } from '@/constants/enums';
@@ -75,7 +75,11 @@ export default function ConnectorList() {
       />
     </Space>
     <Table
-      columns={getConnectorColumns(t, tc)}
+      columns={getConnectorColumns(t, tc, async (code) => {
+        await disableConnector(code, tenantId);
+        message.success(tc('message.disabled'));
+        load();
+      })}
       dataSource={dataSource}
       rowKey="connectorCode"
       loading={loading}

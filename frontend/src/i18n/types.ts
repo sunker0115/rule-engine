@@ -485,11 +485,12 @@ export interface ImportExportTranslation {
 // ===== connector 命名空间 =====
 export interface ConnectorTranslation {
   title: { list: string; detail: string; create: string; edit: string };
-  action: { create: string; addQuery: string; addHeader: string; addError: string; addScope: string };
+  action: { create: string; addQuery: string; addHeader: string; addError: string; addScope: string; disable: string; disableConfirm: string };
   column: {
     connectorCode: string;
     name: string;
     status: string;
+    action: string;
   };
   searchPlaceholder: string;
   detail: { notFound: string };
