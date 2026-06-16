@@ -219,7 +219,7 @@ export default function ConnectorDetail() {
       {/* 请求 */}
       <Card title={t('section.request')} size="small" style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Space>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <div>
               <Typography.Text>{t('form.method')}</Typography.Text>
               <Select
@@ -232,13 +232,13 @@ export default function ConnectorDetail() {
             <div style={{ flex: 1 }}>
               <Typography.Text>{t('form.pathTemplate')}</Typography.Text>
               <Input
-                style={{ width: 360 }}
+                style={{ width: '100%' }}
                 value={descriptor.request.pathTemplate}
                 placeholder={t('form.pathTemplatePlaceholder')}
                 onChange={(e) => patchRequest({ pathTemplate: e.target.value })}
               />
             </div>
-          </Space>
+          </div>
           <div>
             <Typography.Text strong>{t('form.query')}</Typography.Text>
             {paramTable('query')}
