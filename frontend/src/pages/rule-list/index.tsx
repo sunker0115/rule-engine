@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, Select, DatePicker, message, Space } from 'antd';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -32,11 +32,13 @@ export default function RuleList() {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
   const [rules, setRules] = useState<RuleListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
-  const [keyword, setKeyword] = useState('');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -65,25 +67,18 @@ export default function RuleList() {
     if (!tenantId || !sceneCode) return;
     setLoading(true);
     try {
-      const params: Record<string, unknown> = {};
+      // 筛选（status/from/to）与分页全部交后端处理，不再做客户端过滤
+      const params: Record<string, unknown> = { page, size: pageSize };
       if (statusFilter) params.status = statusFilter;
       if (dateRange?.[0]) params.from = dateRange[0].format('YYYY-MM-DD');
       if (dateRange?.[1]) params.to = dateRange[1].format('YYYY-MM-DD');
       const data = await listRules(tenantId, sceneCode, params);
       setRules(data.items ?? []);
+      setTotal(data.total ?? 0);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [tenantId, sceneCode, statusFilter, dateRange]);
-
-  // 客户端关键词过滤（名称或 code 模糊匹配）
-  const filtered = useMemo(() => {
-    if (!keyword.trim()) return rules;
-    const kw = keyword.toLowerCase();
-    return rules.filter((r) =>
-      r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw),
-    );
-  }, [rules, keyword]);
+  useEffect(() => { load(); }, [tenantId, sceneCode, page, pageSize, statusFilter, dateRange]);
 
   const handleCreate = async () => {
     const values = await form.validateFields();
@@ -122,40 +117,40 @@ export default function RuleList() {
       <Select
         placeholder={tc('tenant.placeholder')}
         value={tenantFilter}
-        onChange={setTenantFilter}
+        onChange={(v) => { setTenantFilter(v); setPage(1); }}
         allowClear
         options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
         style={{ width: 200 }}
       />
-      <Input
-        prefix={<SearchOutlined />}
-        placeholder={t('searchPlaceholder')}
-        value={keyword}
-        onChange={(e) => setKeyword(e.target.value)}
-        allowClear
-        style={{ width: 240 }}
-      />
       <Select
         placeholder={t('column.status')}
         value={statusFilter}
-        onChange={setStatusFilter}
+        onChange={(v) => { setStatusFilter(v); setPage(1); }}
         allowClear
         options={getRuleStatusOptions(t)}
         style={{ width: 130 }}
       />
       <RangePicker
         value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
-        onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
+        onChange={(dates) => { setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null); setPage(1); }}
         placeholder={[t('filter.dateFrom'), t('filter.dateTo')]}
         style={{ width: 260 }}
       />
     </Space>
     <Table
       columns={getRuleColumns(t, tc, setDetailId)}
-      dataSource={filtered}
+      dataSource={rules}
       rowKey="ruleDefinitionId"
       loading={loading}
       scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
+      pagination={{
+        current: page,
+        pageSize,
+        total,
+        showSizeChanger: true,
+        showTotal: (t) => tc('label.paginationTotal', { total: t }),
+        onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+      }}
       onRow={(r) => ({
         onClick: () => navigate(route(ROUTES.RULE_EDITOR, { sceneCode: sceneCode!, ruleId: r.ruleDefinitionId })),
         style: { cursor: 'pointer' },

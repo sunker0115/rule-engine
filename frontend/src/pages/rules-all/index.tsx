@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { Table, Space, Input, Select, DatePicker, Button, Modal, Form, message, Empty } from 'antd';
-import { SearchOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -31,8 +31,10 @@ export default function RulesAll() {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
   const [rules, setRules] = useState<RuleListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
-  const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
@@ -51,22 +53,18 @@ export default function RulesAll() {
     if (!tenantId) return;
     setLoading(true);
     try {
-      const params: Record<string, unknown> = {};
+      // 筛选（status/from/to）与分页全部交后端处理，不再做客户端过滤
+      const params: Record<string, unknown> = { page, size: pageSize };
       if (statusFilter) params.status = statusFilter;
       if (dateRange?.[0]) params.from = dateRange[0].format('YYYY-MM-DD');
       if (dateRange?.[1]) params.to = dateRange[1].format('YYYY-MM-DD');
       const data = await listRules(tenantId, undefined, params);
       setRules(data.items ?? []);
+      setTotal(data.total ?? 0);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [tenantId, statusFilter, dateRange]);
-
-  const dataSource = useMemo(() => {
-    if (!keyword.trim()) return rules;
-    const kw = keyword.toLowerCase();
-    return rules.filter((r) => r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw));
-  }, [rules, keyword]);
+  useEffect(() => { load(); }, [tenantId, page, pageSize, statusFilter, dateRange]);
 
   const handleCreate = async () => {
     const values = await createForm.validateFields();
@@ -125,30 +123,22 @@ export default function RulesAll() {
         <Select
           placeholder={tc('tenant.placeholder')}
           value={tenantFilter}
-          onChange={setTenantFilter}
+          onChange={(v) => { setTenantFilter(v); setPage(1); }}
           allowClear
           options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
           style={{ width: 180 }}
         />
-        <Input
-          prefix={<SearchOutlined />}
-          placeholder={t('searchPlaceholder')}
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          allowClear
-          style={{ width: 240 }}
-        />
         <Select
           placeholder={tc('label.status')}
           value={statusFilter}
-          onChange={setStatusFilter}
+          onChange={(v) => { setStatusFilter(v); setPage(1); }}
           allowClear
           options={getRuleStatusOptions(t)}
           style={{ width: 130 }}
         />
         <RangePicker
           value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
-          onChange={(dates) => setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
+          onChange={(dates) => { setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null); setPage(1); }}
           placeholder={[t('filter.dateFrom'), t('filter.dateTo')]}
           style={{ width: 260 }}
         />
@@ -156,10 +146,18 @@ export default function RulesAll() {
       {tenantId ? (
         <Table
           columns={getRuleColumns(t, tc, setDetailId)}
-          dataSource={dataSource}
+          dataSource={rules}
           rowKey="ruleDefinitionId"
           loading={loading}
           scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            showTotal: (t) => tc('label.paginationTotal', { total: t }),
+            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+          }}
         />
       ) : (
         <Empty description={tc('tenant.notSelected')} style={{ marginTop: 80 }}>
