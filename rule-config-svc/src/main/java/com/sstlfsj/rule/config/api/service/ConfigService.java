@@ -6,6 +6,7 @@ import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
+import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -62,6 +63,17 @@ public interface ConfigService {
      * @return 规则详情
      */
     RuleDetailVO getRuleDetail(String tenantId, Long ruleId);
+
+    /**
+     * 取某规则的指定版本完整内容（历史版本查看 / diff）。
+     * 版本须归属该 rule + tenant，否则抛 IllegalArgumentException。
+     *
+     * @param tenantId  租户 ID
+     * @param ruleId    规则定义 ID
+     * @param versionId 规则版本 ID
+     * @return 该版本完整内容
+     */
+    RuleVersionContentVO getRuleVersion(String tenantId, Long ruleId, Long versionId);
 
     /**
      * 创建规则草稿：新建 rule_definition（DRAFT）+ rule_version（DRAFT）。

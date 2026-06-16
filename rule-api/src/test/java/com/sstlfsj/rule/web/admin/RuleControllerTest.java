@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
+import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
@@ -65,6 +66,26 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.currentVersionId").value(42));
 
         verify(configService).getRuleDetail("t1", 10L);
+    }
+
+    @Test
+    void getVersion_returns200_withTypedVersionContent() throws Exception {
+        when(configService.getRuleVersion("t1", 10L, 20L)).thenReturn(
+                new RuleVersionContentVO(20L, 2L, "ACTIVE", "AST_BOOLEAN",
+                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
+                        java.util.List.of(), java.util.List.of(), java.util.List.of("TXN"),
+                        null, "2026-06-16T00:00", "u1", "2026-06-16T01:00"));
+
+        mockMvc.perform(get("/admin/v1/rules/10/versions/20").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ruleVersionId").value(20))
+                .andExpect(jsonPath("$.data.version").value(2))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.kind").value("AST_BOOLEAN"))
+                .andExpect(jsonPath("$.data.conditionAst.type").value("AndNode"))
+                .andExpect(jsonPath("$.data.triggerEventTypes[0]").value("TXN"));
+
+        verify(configService).getRuleVersion("t1", 10L, 20L);
     }
 
     @Test

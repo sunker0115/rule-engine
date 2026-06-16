@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
+import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
@@ -48,6 +49,11 @@ class ConfigServiceTest {
 
         @Override
         public RuleDetailVO getRuleDetail(String tenantId, Long ruleId) {
+            throw new UnsupportedOperationException("stub");
+        }
+
+        @Override
+        public RuleVersionContentVO getRuleVersion(String tenantId, Long ruleId, Long versionId) {
             throw new UnsupportedOperationException("stub");
         }
 

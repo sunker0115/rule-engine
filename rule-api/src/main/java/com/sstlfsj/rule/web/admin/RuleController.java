@@ -7,6 +7,7 @@ import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
+import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.web.common.ApiResponse;
@@ -238,5 +239,20 @@ public class RuleController {
     public ApiResponse<RuleDetailVO> getDetail(@PathVariable Long ruleId,
                                                @RequestParam String tenantId) {
         return ApiResponse.ok(configService.getRuleDetail(tenantId, ruleId));
+    }
+
+    /**
+     * GET /admin/v1/rules/{ruleId}/versions/{versionId} — 取指定版本完整内容（历史版本查看 / diff）。
+     *
+     * @param ruleId    规则定义 ID
+     * @param versionId 规则版本 ID
+     * @param tenantId  租户 ID
+     * @return 该版本完整内容
+     */
+    @GetMapping("/{ruleId}/versions/{versionId}")
+    public ApiResponse<RuleVersionContentVO> getVersion(@PathVariable Long ruleId,
+                                                        @PathVariable Long versionId,
+                                                        @RequestParam String tenantId) {
+        return ApiResponse.ok(configService.getRuleVersion(tenantId, ruleId, versionId));
     }
 }

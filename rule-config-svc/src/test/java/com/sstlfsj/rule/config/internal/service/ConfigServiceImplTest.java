@@ -4,7 +4,9 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
+import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
+import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
@@ -306,5 +308,57 @@ class ConfigServiceImplTest {
 
         // tenantId 字符串 "1" 转 Long 后透传 publishService，versionId 原样透传
         verify(publishService).deleteDraftVersion(1L, 10L, 100L, "actor");
+    }
+
+    @Test
+    void getRuleVersion_returnsTypedContent() {
+        RuleDefinition rule = new RuleDefinition();
+        rule.setId(10L);
+        rule.setTenantId(1L);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
+        RuleVersion v = new RuleVersion();
+        v.setId(20L);
+        v.setRuleDefinitionId(10L);
+        v.setVersion(2L);
+        v.setStatus(RuleVersionStatus.ACTIVE);
+        v.setKind(RuleKind.AST_BOOLEAN);
+        v.setConditionAst(new AndNode(List.of(), null, null));
+        v.setTriggerEventTypes(List.of("TXN"));
+        when(ruleVersionMapper.selectById(20L)).thenReturn(v);
+
+        RuleVersionContentVO vo = configService.getRuleVersion("1", 10L, 20L);
+
+        assertThat(vo.ruleVersionId()).isEqualTo(20L);
+        assertThat(vo.version()).isEqualTo(2L);
+        assertThat(vo.status()).isEqualTo("ACTIVE");
+        assertThat(vo.kind()).isEqualTo("AST_BOOLEAN");
+        assertThat(vo.conditionAst()).isNotNull();
+        assertThat(vo.triggerEventTypes()).containsExactly("TXN");
+    }
+
+    @Test
+    void getRuleVersion_rejectsVersionNotBelongingToRule() {
+        RuleDefinition rule = new RuleDefinition();
+        rule.setId(10L);
+        rule.setTenantId(1L);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
+        RuleVersion v = new RuleVersion();
+        v.setId(20L);
+        v.setRuleDefinitionId(99L); // 不属于 rule 10
+        when(ruleVersionMapper.selectById(20L)).thenReturn(v);
+
+        assertThatThrownBy(() -> configService.getRuleVersion("1", 10L, 20L))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void getRuleVersion_rejectsCrossTenant() {
+        RuleDefinition rule = new RuleDefinition();
+        rule.setId(10L);
+        rule.setTenantId(2L); // 实际属租户 2
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
+
+        assertThatThrownBy(() -> configService.getRuleVersion("1", 10L, 20L))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

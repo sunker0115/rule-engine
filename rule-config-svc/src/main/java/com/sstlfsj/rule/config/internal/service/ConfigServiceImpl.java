@@ -7,6 +7,7 @@ import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
+import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
@@ -164,6 +165,25 @@ class ConfigServiceImpl implements ConfigService {
                 current != null ? current.getScriptSource() : null,
                 current != null ? current.getId() : null,
                 versions);
+    }
+
+    @Override
+    public RuleVersionContentVO getRuleVersion(String tenantId, Long ruleId, Long versionId) {
+        RuleDefinition rule = ruleDefinitionMapper.selectById(ruleId);
+        if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
+            throw new IllegalArgumentException("规则不存在: id=" + ruleId);
+        }
+        RuleVersion v = ruleVersionMapper.selectById(versionId);
+        if (v == null || !ruleId.equals(v.getRuleDefinitionId())) {
+            throw new IllegalArgumentException("版本不存在或不属于该规则: versionId=" + versionId);
+        }
+        return new RuleVersionContentVO(
+                v.getId(), v.getVersion(), v.getStatus().name(),
+                v.getKind() != null ? v.getKind().name() : null,
+                v.getConditionAst(), v.getDecisionBindings(), v.getPreGates(),
+                v.getTriggerEventTypes(), v.getScriptSource(),
+                v.getCreatedAt() != null ? v.getCreatedAt().toString() : null,
+                v.getPublishedBy(), v.getPublishedAt() != null ? v.getPublishedAt().toString() : null);
     }
 
     @Override
