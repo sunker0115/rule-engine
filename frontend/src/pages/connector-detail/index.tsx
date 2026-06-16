@@ -48,7 +48,10 @@ export default function ConnectorDetail() {
   const navigate = useNavigate();
   const { t } = useTranslation('connector');
   const tc = useTranslation('common').t;
-  const { currentId } = useTenantStore();
+  const { currentId, activeList } = useTenantStore();
+  // 租户：编辑态跟随全局，新建态允许选择
+  const [selectedTenant, setSelectedTenant] = useState<number | undefined>(undefined);
+  const tenantId = selectedTenant ?? currentId ?? 0;
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -58,9 +61,9 @@ export default function ConnectorDetail() {
 
   // 编辑态：按 code 直取单条详情，descriptor 为 typed 对象直接消费
   useEffect(() => {
-    if (!isEdit || !currentId || !routeCode) return;
+    if (!isEdit || !tenantId || !routeCode) return;
     setLoading(true);
-    getConnector(routeCode, currentId)
+    getConnector(routeCode, tenantId)
       .then((res) => {
         const found = res.data;
         if (found) {
@@ -123,7 +126,7 @@ export default function ConnectorDetail() {
   );
 
   const handleSave = async () => {
-    if (!currentId) return;
+    if (!tenantId) { message.error(tc('tenant.notSelected')); return; }
     if (!connectorCode.trim() || !name.trim()) {
       message.error(tc('validation.required'));
       return;
@@ -131,8 +134,8 @@ export default function ConnectorDetail() {
     setSaving(true);
     try {
       const body = { name: name.trim(), descriptor };
-      if (isEdit) await updateConnector(connectorCode, currentId, body);
-      else await createConnector(currentId, connectorCode.trim(), body);
+      if (isEdit) await updateConnector(connectorCode, tenantId, body);
+      else await createConnector(tenantId, connectorCode.trim(), body);
       message.success(tc('message.saveSuccess'));
       navigate(ROUTES.CONNECTORS);
     } catch {
@@ -195,6 +198,18 @@ export default function ConnectorDetail() {
       {/* 基本信息 */}
       <Card title={t('section.basic')} size="small" style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {!isEdit && (
+            <div>
+              <Typography.Text>{tc('label.tenant')}</Typography.Text>
+              <Select
+                value={tenantId || undefined}
+                onChange={setSelectedTenant}
+                placeholder={tc('label.tenant')}
+                style={{ width: '100%', display: 'block' }}
+                options={activeList.map((ten) => ({ value: ten.id, label: `${ten.name} (${ten.code})` }))}
+              />
+            </div>
+          )}
           <div>
             <Typography.Text>{t('form.connectorCode')}</Typography.Text>
             <Input
