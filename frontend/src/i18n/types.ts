@@ -169,7 +169,7 @@ export interface MetricTranslation {
       table: string; column: string;
       datasource: string; sql: string;
       connector: string; connectorPlaceholder: string; connectorEmpty: string;
-      vars: string; varsHint: string;
+      vars: string; varsHint: string; varsKeyPlaceholder: string;
       topic: string; keyExpr: string;
     };
     streamDisabled: string;

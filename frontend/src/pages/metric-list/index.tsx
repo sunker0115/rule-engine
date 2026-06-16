@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listMetrics, createMetric } from '@/api/metric';
-import { listConnectors } from '@/api/connector';
+import { listConnectors, getConnector } from '@/api/connector';
+import type { ConnectorDescriptor } from '@/types';
 import { getMetricColumns } from '@/config/columns/metric';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
@@ -29,13 +30,48 @@ export default function MetricList() {
   const [form] = Form.useForm();
   const sourceType: SourceType = Form.useWatch('sourceType', form);
   const [connectors, setConnectors] = useState<{ value: string; label: string }[]>([]);
+  // 选定连接器后从描述符里提取的 vars 占位符名列表（去重有序）
+  const [varsKeys, setVarsKeys] = useState<string[]>([]);
+  const [loadingConnector, setLoadingConnector] = useState(false);
+
+  // 从 descriptor 各模板字段提取 {vars.xxx} 名
+  const extractVarsKeys = (d: ConnectorDescriptor): string[] => {
+    const targets = [
+      d.request?.pathTemplate ?? '',
+      d.request?.bodyTemplate ?? '',
+      ...(d.request?.query ?? []).map((p) => p.valueTemplate),
+      ...(d.request?.headers ?? []).map((p) => p.valueTemplate),
+    ];
+    const seen = new Set<string>();
+    targets.forEach((tmpl) => {
+      [...tmpl.matchAll(/\{vars\.([a-zA-Z_][\w.]*)\}/g)].forEach((m) => seen.add(m[1]));
+    });
+    return [...seen];
+  };
 
   useEffect(() => {
     if (!tenantId || sourceType !== 'EXTERNAL_HTTP') return;
     listConnectors(tenantId).then((r) => {
       setConnectors((r.data ?? []).map((c) => ({ value: c.connectorCode, label: `${c.name} (${c.connectorCode})` })));
     }).catch(() => {});
+    // 切类型时清空 vars 状态
+    setVarsKeys([]);
+    form.setFieldValue(['params', 'connector'], undefined);
   }, [tenantId, sourceType]);
+
+  const handleConnectorChange = async (code: string) => {
+    setVarsKeys([]);
+    if (!code || !tenantId) return;
+    setLoadingConnector(true);
+    try {
+      const res = await getConnector(code, tenantId);
+      const keys = extractVarsKeys(res.data?.descriptor ?? {} as ConnectorDescriptor);
+      setVarsKeys(keys);
+      // 清空旧 vars 值
+      keys.forEach((k) => form.setFieldValue(['params', 'vars', k], undefined));
+    } catch { /* ignore */ }
+    finally { setLoadingConnector(false); }
+  };
 
   const load = async () => {
     if (!tenantId) return;
@@ -71,13 +107,8 @@ export default function MetricList() {
     const values = await form.validateFields();
     setConfirmLoading(true);
     try {
-      // EXTERNAL_HTTP 的 vars 是 JSON 文本框，提交前 parse 成對象；parse 失敗給空對象
-      const parsedParams = { ...(values.params ?? {}) };
-      if (values.sourceType === 'EXTERNAL_HTTP' && typeof parsedParams.vars === 'string') {
-        try { parsedParams.vars = parsedParams.vars.trim() ? JSON.parse(parsedParams.vars) : {}; }
-        catch { parsedParams.vars = {}; }
-      }
-      await createMetric(tenantId, values.metricCode, { ...values, params: parsedParams, tenantId });
+      // params 直接来自表单嵌套字段（vars 已是对象形式，不再需要 JSON.parse）
+      await createMetric(tenantId, values.metricCode, { ...values, tenantId });
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
@@ -104,17 +135,27 @@ export default function MetricList() {
           <Form.Item name={['params', 'connector']} label={t('form.params.connector')} rules={[{ required: true }]}>
             <Select
               showSearch
+              loading={loadingConnector}
               placeholder={t('form.params.connectorPlaceholder')}
               options={connectors}
               notFoundContent={t('form.params.connectorEmpty')}
+              onChange={handleConnectorChange}
             />
           </Form.Item>
           <Form.Item name={['params', 'dataType']} label={t('form.dataType')} rules={[{ required: true }]}>
             <Select options={getDataTypeOptions(t)} />
           </Form.Item>
-          <Form.Item name={['params', 'vars']} label={t('form.params.vars')} extra={t('form.params.varsHint')}>
-            <Input.TextArea rows={3} style={{ fontFamily: 'monospace' }} placeholder={'{"featureA":"val"}'} />
-          </Form.Item>
+          {varsKeys.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ marginBottom: 4, fontWeight: 500 }}>{t('form.params.vars')}</div>
+              <div style={{ color: '#999', fontSize: 12, marginBottom: 8 }}>{t('form.params.varsHint')}</div>
+              {varsKeys.map((k) => (
+                <Form.Item key={k} name={['params', 'vars', k]} label={k} style={{ marginBottom: 8 }}>
+                  <Input placeholder={t('form.params.varsKeyPlaceholder', { key: k })} />
+                </Form.Item>
+              ))}
+            </div>
+          )}
         </>);
       case 'STREAM':
         return (<>
