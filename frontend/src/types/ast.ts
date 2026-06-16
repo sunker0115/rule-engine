@@ -44,6 +44,8 @@ export interface ScoreBand {
   maxScore: number;
   decisionCode: string;
   category?: string | null;
+  name?: string;      // 发布期回填，前端只读展示
+  priority?: number;  // 发布期回填，前端只读展示
 }
 
 /** kind=DECISION_TREE 的规则条件分支节点 */
