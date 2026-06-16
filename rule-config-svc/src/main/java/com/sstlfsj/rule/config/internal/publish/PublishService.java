@@ -441,11 +441,18 @@ public class PublishService {
         AstNode resolvedAst = (metricCodes.isEmpty() && payloadFields.isEmpty())
                 ? ast : AstDataTypeResolver.resolve(ast, dataTypeMap, payloadTypeMap);
 
-        // SCORECARD 的 band decisionCode 并入决策绑定收集/校验/回填流程（单一回填入口）：
-        // 每个 band code 以占位 binding 注入，由 freezeDecisionBindings 统一查存在 + 回填 name/priority，
-        // 这样 executor 段命中能按 decisionCode 索引到快照里的 name/priority。
+        // SCORECARD bands 直接回填 name/priority（不走 decisionBindings 搬运）
+        if (RuleKind.SCORECARD.tag().equals(kindTag) && resolvedAst instanceof ScorecardRootNode scRoot
+                && !scRoot.bands().isEmpty()) {
+            List<ScoreBand> enrichedBands = enrichBands(tenantId, scRoot.bands());
+            resolvedAst = new ScorecardRootNode(scRoot.conditions(), scRoot.threshold(), enrichedBands);
+        }
+
+        // SCORECARD 的 band decisionCode 已在 enrichBands 回填进 ScoreBand，不再注入 decisionBindings
         List<RuleVersionSnapshot.DecisionBinding> bindingsWithBands =
-                mergeBandDecisionCodes(bindings, resolvedAst);
+                (RuleKind.SCORECARD.tag().equals(kindTag))
+                        ? bindings
+                        : mergeBandDecisionCodes(bindings, resolvedAst);
         List<RuleVersionSnapshot.DecisionBinding> frozenBindings =
                 freezeDecisionBindings(tenantId, scene, bindingsWithBands);
 
@@ -739,6 +746,28 @@ public class PublishService {
         rv.setStatus(RuleVersionStatus.DRAFT);
         rv.setCreatedAt(LocalDateTime.now());
         return rv;
+    }
+
+    /**
+     * 从 decision_definition 批量回填 band 的 name/priority，返回重建的 ScoreBand 列表（不可变）。
+     * band decisionCode 不存在时抛含 "DECISION_CODE_NOT_FOUND" 的 IllegalArgumentException。
+     */
+    private List<ScoreBand> enrichBands(Long tenantId, List<ScoreBand> bands) {
+        if (bands.isEmpty()) return List.of();
+        List<String> codes = bands.stream().map(ScoreBand::decisionCode).distinct().toList();
+        Map<String, DecisionDefinition> byCode = decisionDefinitionMapper.findByCodes(tenantId, codes)
+                .stream().collect(Collectors.toMap(DecisionDefinition::getCode, d -> d, (a, b) -> a));
+        List<ScoreBand> result = new ArrayList<>(bands.size());
+        for (ScoreBand band : bands) {
+            DecisionDefinition d = byCode.get(band.decisionCode());
+            if (d == null) {
+                throw new IllegalArgumentException("DECISION_CODE_NOT_FOUND: bands 引用的 decision 不存在: " + band.decisionCode());
+            }
+            int priority = d.getPriority() != null ? d.getPriority() : 0;
+            result.add(new ScoreBand(band.minScore(), band.maxScore(), band.decisionCode(),
+                    band.category(), d.getName() != null ? d.getName() : "", priority));
+        }
+        return java.util.Collections.unmodifiableList(result);
     }
 
     /**

@@ -578,7 +578,8 @@ class PublishServiceTest {
     }
 
     @Test
-    void scorecardBands_decisionNotFound_rejected() {
+    void scorecardBands_decisionNotFound_rejectedByEnrichBands() {
+        // bands 里 decisionCode 不存在 → enrichBands 应拒绝
         ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
                 List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "MISSING", null)));
         decisionsExist(/* none */);
@@ -587,7 +588,7 @@ class PublishServiceTest {
     }
 
     @Test
-    void scorecardBands_valid_backfillsBandDecisionsIntoSnapshot() {
+    void scorecardBands_valid_enrichesBandsInAstNotDecisionBindings() {
         ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
                 List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "REJECT", "HIGH"),
                         new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(60, 100, "PASS", "LOW")));
@@ -595,15 +596,16 @@ class PublishServiceTest {
 
         publishScorecard(ast);
 
-        // band 的 decisionCode 回填进快照 decisionBindings（含 name/priority），executor 可按 code 索引
+        // band 的 name/priority 直接回填进 ScoreBand（不再注入 decisionBindings）
         ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(cap.capture());
-        List<RuleVersionSnapshot.DecisionBinding> bindings = cap.getValue().getDecisionBindings();
-        assertThat(bindings).extracting(RuleVersionSnapshot.DecisionBinding::decisionCode)
-                .containsExactlyInAnyOrder("REJECT", "PASS");
-        RuleVersionSnapshot.DecisionBinding reject = bindings.stream()
+        assertThat(cap.getValue().getDecisionBindings()).isEmpty();
+        ScorecardRootNode resolved = (ScorecardRootNode) cap.getValue().getConditionAst();
+        com.sstlfsj.rule.kernel.api.model.ast.ScoreBand reject = resolved.bands().stream()
                 .filter(b -> b.decisionCode().equals("REJECT")).findFirst().orElseThrow();
         assertThat(reject.name()).isEqualTo("REJECT-name");
+        assertThat(reject.priority()).isEqualTo(7);
+        assertThat(reject.category()).isEqualTo("HIGH");
     }
 
     /** 带 weight>0 的 SCORECARD 叶子条件（无 metric/payload 引用，走纯条件）。 */
