@@ -90,6 +90,9 @@ class ConnectorDefinitionMapperIT {
         assertThat(((BearerAuth) back.getDescriptor().auth()).tokenRef()).isEqualTo("riskToken");
         assertThat(back.getDescriptor().response().valuePath()).isEqualTo("data.score");
         assertThat(back.getDescriptor().response().successWhen().op()).isEqualTo(CompareOp.EQ);
+        // 验 @TableField("created_at") 映射生效：insert 后 DB 由 DEFAULT CURRENT_TIMESTAMP 填充，查回不应为 null
+        assertThat(back.getCreatedAt()).as("autoResultMap @TableField created_at 映射应生效").isNotNull();
+        assertThat(back.getUpdatedAt()).as("autoResultMap @TableField updated_at 映射应生效").isNotNull();
     }
 
     @Test
