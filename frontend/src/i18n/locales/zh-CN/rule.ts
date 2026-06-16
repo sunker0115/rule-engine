@@ -198,8 +198,6 @@ const rule: RuleTranslation = {
   },
   decisionBinding: {
     selectPlaceholder: '选择决策',
-    scoreRangeMin: '最低分',
-    scoreRangeMax: '最高分',
     addButton: '添加绑定',
     singleOnlyHint: 'AST 布尔树仅支持绑定一个决策',
   },

@@ -64,8 +64,6 @@ export interface RuleVersionContent {
 
 export interface DecisionBinding {
   decisionCode: string;
-  scoreRangeMin?: number;
-  scoreRangeMax?: number;
 }
 
 export interface PreGate {

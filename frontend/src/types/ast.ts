@@ -35,6 +35,15 @@ export interface ScorecardRootNode {
   type: 'ScorecardRootNode';
   conditions: ConditionNode[];
   threshold: number;
+  bands?: ScoreBand[];
+}
+
+/** 评分卡分段：得分落入 [minScore, maxScore] 区间命中对应决策码 */
+export interface ScoreBand {
+  minScore: number;
+  maxScore: number;
+  decisionCode: string;
+  category?: string | null;
 }
 
 /** kind=DECISION_TREE 的规则条件分支节点 */

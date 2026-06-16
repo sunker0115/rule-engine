@@ -1,4 +1,4 @@
-import { Button, Select, Space, InputNumber } from 'antd';
+import { Button, Select, Space } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,8 +30,8 @@ export default function DecisionBindingEditor({ kind, value = [], onChange }: Pr
     onChange?.(updated);
   };
 
-  const handleChange = (index: number, field: keyof DecisionBinding, val: unknown) => {
-    const updated = value.map((b, i) => (i === index ? { ...b, [field]: val } : b));
+  const handleChange = (index: number, decisionCode: string) => {
+    const updated = value.map((b, i) => (i === index ? { ...b, decisionCode } : b));
     onChange?.(updated);
   };
 
@@ -43,27 +43,11 @@ export default function DecisionBindingEditor({ kind, value = [], onChange }: Pr
         <Space key={i} style={{ display: 'flex', marginBottom: 8 }} align="start">
           <Select
             value={binding.decisionCode || undefined}
-            onChange={(v) => handleChange(i, 'decisionCode', v)}
+            onChange={(v) => handleChange(i, v)}
             options={decisionOptions}
             placeholder={t('decisionBinding.selectPlaceholder')}
             style={{ width: 160 }}
           />
-          {kind === 'SCORECARD' && (
-            <>
-              <InputNumber
-                placeholder={t('decisionBinding.scoreRangeMin')}
-                value={binding.scoreRangeMin}
-                onChange={(v) => handleChange(i, 'scoreRangeMin', v)}
-                style={{ width: 80 }}
-              />
-              <InputNumber
-                placeholder={t('decisionBinding.scoreRangeMax')}
-                value={binding.scoreRangeMax}
-                onChange={(v) => handleChange(i, 'scoreRangeMax', v)}
-                style={{ width: 80 }}
-              />
-            </>
-          )}
           <Button icon={<DeleteOutlined />} size="small" onClick={() => handleRemove(i)} />
         </Space>
       ))}

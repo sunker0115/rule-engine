@@ -199,8 +199,6 @@ const rule: RuleTranslation = {
   },
   decisionBinding: {
     selectPlaceholder: 'Select Decision',
-    scoreRangeMin: 'Min Score',
-    scoreRangeMax: 'Max Score',
     addButton: 'Add Binding',
     singleOnlyHint: 'AST Boolean supports binding a single Decision only',
   },

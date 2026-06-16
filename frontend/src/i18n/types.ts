@@ -343,7 +343,7 @@ export interface RuleTranslation {
     na: string;
   };
   decisionBinding: {
-    selectPlaceholder: string; scoreRangeMin: string; scoreRangeMax: string;
+    selectPlaceholder: string;
     addButton: string; singleOnlyHint: string;
   };
   version: {
