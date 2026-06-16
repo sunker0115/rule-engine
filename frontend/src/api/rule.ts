@@ -15,8 +15,8 @@ export async function getRule(tenantId: number, ruleDefinitionId: number) {
 }
 
 export async function createRule(tenantId: number, body: Record<string, unknown>) {
-  const res = await apiClient.post<DraftCreatedResult>(ENDPOINTS.RULE_CREATE, { ...body, tenantId });
-  return res.data;
+  const res = await apiClient.post<ApiResponse<DraftCreatedResult>>(ENDPOINTS.RULE_CREATE, { ...body, tenantId });
+  return res.data.data;
 }
 
 /** 编辑草稿——tenantId 在 body 中 */

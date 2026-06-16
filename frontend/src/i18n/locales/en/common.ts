@@ -3,7 +3,7 @@ import type { CommonTranslation } from '../../types';
 const common: CommonTranslation = {
   app: { title: 'Rule Engine Console' },
   header: { actorLabel: 'Operator' },
-  tenant: { placeholder: 'Select Tenant' },
+  tenant: { placeholder: 'Select Tenant', notSelected: 'Please select a current tenant first', goSelect: 'Go to Tenants to select' },
   button: {
     back: 'Back',
     save: 'Save',

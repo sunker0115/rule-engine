@@ -3,7 +3,7 @@ import type { CommonTranslation } from '../../types';
 const common: CommonTranslation = {
   app: { title: '规则引擎运营平台' },
   header: { actorLabel: '操作人' },
-  tenant: { placeholder: '选择租户' },
+  tenant: { placeholder: '选择租户', notSelected: '请先选择当前租户后再查看', goSelect: '前往租户页选择' },
   button: {
     back: '返回',
     save: '保存',

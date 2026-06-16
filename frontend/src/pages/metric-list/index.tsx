@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, message, Space } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, message, Space, Empty } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -66,7 +66,8 @@ export default function MetricList() {
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
-      load();
+      // 新建后直接跳详情页（避免列表→再点进去的断点）
+      navigate(route(ROUTES.METRIC_DETAIL, { metricCode: values.metricCode }));
     } catch { /* handled by interceptor */ }
     finally { setConfirmLoading(false); }
   };
@@ -130,9 +131,15 @@ export default function MetricList() {
         style={{ width: 120 }}
       />
     </Space>
-    <Table columns={getMetricColumns(t, tc, handleToggleStatus)} dataSource={dataSource} rowKey="metricCode" loading={loading}
-      scroll={{ y: 'calc(100vh - 312px)' }}
-      onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
+    {tenantId ? (
+      <Table columns={getMetricColumns(t, tc, handleToggleStatus)} dataSource={dataSource} rowKey="metricCode" loading={loading}
+        scroll={{ y: 'calc(100vh - 312px)' }}
+        onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
+    ) : (
+      <Empty description={tc('tenant.notSelected')} style={{ marginTop: 80 }}>
+        <Button type="primary" onClick={() => navigate(ROUTES.TENANTS)}>{tc('tenant.goSelect')}</Button>
+      </Empty>
+    )}
     <Modal title={t('action.create')} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>
       <Form form={form} layout="vertical">
         <Form.Item name="metricCode" label={t('form.code')} rules={[{ required: true, pattern: /^[a-z][a-z0-9_.]*$/ }]}>

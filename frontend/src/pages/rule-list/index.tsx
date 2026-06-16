@@ -101,11 +101,12 @@ export default function RuleList() {
       if (values.kind === 'EXPRESSION_SCRIPT') {
         body.script = { lang: values.scriptLang || 'CEL', source: values.scriptSource || '{true}' };
       }
-      await createRule(currentId!, body);
+      const created = await createRule(currentId!, body);
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
-      load();
+      // 新建草稿后直接跳编辑器继续配置（避免列表→再点进去的断点）
+      navigate(route(ROUTES.RULE_EDITOR, { ruleId: created.ruleDefinitionId }));
     } catch { /* handled by interceptor */ }
     finally { setConfirmLoading(false); }
   };

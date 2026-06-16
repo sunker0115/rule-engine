@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Space, Input, Select, DatePicker, Button, Modal, Form, message } from 'antd';
+import { Table, Space, Input, Select, DatePicker, Button, Modal, Form, message, Empty } from 'antd';
 import { SearchOutlined, PlusOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listRules, createRule } from '@/api/rule';
 import { getSceneMetadata } from '@/api/metadata';
 import { listScenes } from '@/api/scene';
+import { ROUTES, route } from '@/constants/routes';
 import { getRuleColumns } from '@/config/columns/rule';
 import { getRuleStatusOptions, getRuleKindOptions } from '@/constants/enums';
 import RuleDetailDrawer from '@/pages/rule-list/RuleDetailDrawer';
@@ -24,6 +26,7 @@ async function fetchDefaultMetric(tenantId: number, sceneCode: string): Promise<
 }
 
 export default function RulesAll() {
+  const navigate = useNavigate();
   const { currentId, activeList } = useTenantStore();
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
@@ -81,11 +84,12 @@ export default function RulesAll() {
       if (values.kind === 'EXPRESSION_SCRIPT') {
         body.script = { lang: values.scriptLang || 'CEL', source: values.scriptSource || '{true}' };
       }
-      await createRule(values.tenantId ?? currentId!, body);
+      const created = await createRule(values.tenantId ?? currentId!, body);
       message.success(tc('message.createSuccess'));
       setCreateOpen(false);
       createForm.resetFields();
-      load();
+      // 新建草稿后直接跳编辑器继续配置（避免列表→再点进去的断点）
+      navigate(route(ROUTES.RULE_EDITOR, { ruleId: created.ruleDefinitionId }));
     } catch { /* handled by interceptor */ }
     finally { setCreateLoading(false); }
   };
@@ -149,13 +153,19 @@ export default function RulesAll() {
           style={{ width: 260 }}
         />
       </Space>
-      <Table
-        columns={getRuleColumns(t, tc, setDetailId)}
-        dataSource={dataSource}
-        rowKey="ruleDefinitionId"
-        loading={loading}
-        scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
-      />
+      {tenantId ? (
+        <Table
+          columns={getRuleColumns(t, tc, setDetailId)}
+          dataSource={dataSource}
+          rowKey="ruleDefinitionId"
+          loading={loading}
+          scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
+        />
+      ) : (
+        <Empty description={tc('tenant.notSelected')} style={{ marginTop: 80 }}>
+          <Button type="primary" onClick={() => navigate(ROUTES.TENANTS)}>{tc('tenant.goSelect')}</Button>
+        </Empty>
+      )}
       <RuleDetailDrawer
         open={detailId !== null}
         ruleDefinitionId={detailId}

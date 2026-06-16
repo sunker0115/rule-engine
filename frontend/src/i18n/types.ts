@@ -8,7 +8,7 @@
 export interface CommonTranslation {
   app: { title: string };
   header: { actorLabel: string };
-  tenant: { placeholder: string };
+  tenant: { placeholder: string; notSelected: string; goSelect: string };
   button: {
     back: string;
     save: string;

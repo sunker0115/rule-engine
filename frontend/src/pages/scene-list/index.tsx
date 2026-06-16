@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, message, Space, Empty } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -67,7 +67,8 @@ export default function SceneList() {
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
-      load();
+      // 新建后直接跳编辑页继续配置 payloadSchema 等（避免列表→再点进去的断点）
+      navigate(route(ROUTES.SCENE_EDIT, { sceneCode: values.sceneCode }));
     } catch {
       // validation failed or API error, handled by interceptor
     } finally {
@@ -109,17 +110,23 @@ export default function SceneList() {
           style={{ width: 240 }}
         />
       </Space>
-      <Table
-        columns={getSceneColumns(t, tc, handleToggleStatus)}
-        dataSource={dataSource}
-        rowKey="id"
-        loading={loading}
-        scroll={{ y: 'calc(100vh - 312px)' }}
-        onRow={(record) => ({
-          onClick: () => navigate(route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })),
-          style: { cursor: 'pointer' },
-        })}
-      />
+      {tenantId ? (
+        <Table
+          columns={getSceneColumns(t, tc, handleToggleStatus)}
+          dataSource={dataSource}
+          rowKey="id"
+          loading={loading}
+          scroll={{ y: 'calc(100vh - 312px)' }}
+          onRow={(record) => ({
+            onClick: () => navigate(route(ROUTES.SCENE_DETAIL, { sceneCode: record.sceneCode })),
+            style: { cursor: 'pointer' },
+          })}
+        />
+      ) : (
+        <Empty description={tc('tenant.notSelected')} style={{ marginTop: 80 }}>
+          <Button type="primary" onClick={() => navigate(ROUTES.TENANTS)}>{tc('tenant.goSelect')}</Button>
+        </Empty>
+      )}
       <Modal
         title={t('action.create')}
         open={modalOpen}
