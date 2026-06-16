@@ -6,8 +6,6 @@ import TimeWindowPicker from '@/components/time-window-picker';
 import DecisionBindingEditor from './DecisionBindingEditor';
 import type {
   PreGate,
-  RolloutParams,
-  TimeWindowParams,
   RuleDetail as RuleDetailType,
   SceneMetadata as SceneMetadataType,
 } from '@/types';
@@ -33,14 +31,16 @@ export default function RightPanel({ metadata, ruleDetail }: Props) {
   const currentLang = script?.lang ?? langs[0] ?? 'CEL';
 
   // 一个 gateType 至多一条；params 全空时移除该 gate，保留其它 gate（灰度与时段可并存）
-  const upsertGate = (gateType: PreGate['gateType'], params: RolloutParams | TimeWindowParams) => {
-    const others = (preGates ?? []).filter((g) => g.gateType !== gateType);
-    const isEmpty = Object.values(params).every((v) => v === undefined || v === null);
-    setPreGates(isEmpty ? others : [...others, { gateType, params }]);
+  const upsertGate = (gate: PreGate) => {
+    const others = (preGates ?? []).filter((g) => g.gateType !== gate.gateType);
+    const isEmpty = Object.values(gate.params).every((v) => v === undefined || v === null);
+    setPreGates(isEmpty ? others : [...others, gate]);
   };
 
-  const rolloutParams = (preGates?.find((g) => g.gateType === 'ROLLOUT')?.params as RolloutParams) ?? {};
-  const timeWindowParams = (preGates?.find((g) => g.gateType === 'TIME_WINDOW')?.params as TimeWindowParams) ?? {};
+  const rolloutParams =
+    preGates?.find((g): g is Extract<PreGate, { gateType: 'ROLLOUT' }> => g.gateType === 'ROLLOUT')?.params ?? {};
+  const timeWindowParams =
+    preGates?.find((g): g is Extract<PreGate, { gateType: 'TIME_WINDOW' }> => g.gateType === 'TIME_WINDOW')?.params ?? {};
 
   const tabItems = [
     ...(ruleDetail.kind === 'EXPRESSION_SCRIPT' ? [{
@@ -71,11 +71,11 @@ export default function RightPanel({ metadata, ruleDetail }: Props) {
           <Typography.Title level={5} style={{ marginTop: 0 }}>
             {t('preGate.rolloutTitle')}
           </Typography.Title>
-          <RolloutSlider value={rolloutParams} onChange={(params) => upsertGate('ROLLOUT', params)} />
+          <RolloutSlider value={rolloutParams} onChange={(params) => upsertGate({ gateType: 'ROLLOUT', params })} />
           <Typography.Title level={5} style={{ marginTop: 24 }}>
             {t('preGate.timeWindowTitle')}
           </Typography.Title>
-          <TimeWindowPicker value={timeWindowParams} onChange={(params) => upsertGate('TIME_WINDOW', params)} />
+          <TimeWindowPicker value={timeWindowParams} onChange={(params) => upsertGate({ gateType: 'TIME_WINDOW', params })} />
         </div>
       ),
     },

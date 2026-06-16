@@ -66,10 +66,18 @@ export interface DecisionBinding {
   decisionCode: string;
 }
 
-export interface PreGate {
-  gateType: 'ROLLOUT' | 'TIME_WINDOW';
-  params: RolloutParams | TimeWindowParams;
+export interface RolloutPreGate {
+  gateType: 'ROLLOUT';
+  params: RolloutParams;
 }
+
+export interface TimeWindowPreGate {
+  gateType: 'TIME_WINDOW';
+  params: TimeWindowParams;
+}
+
+/** 前置门控配置：按 gateType 判别的联合，读取 params 时无需强转。 */
+export type PreGate = RolloutPreGate | TimeWindowPreGate;
 
 export interface RolloutParams {
   percentage?: number;

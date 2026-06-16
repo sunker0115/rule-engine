@@ -5,7 +5,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { getRule } from '@/api/rule';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
-import type { RuleDetail as RuleDetailType, IfNode, RolloutParams } from '@/types';
+import type { RuleDetail as RuleDetailType, IfNode } from '@/types';
 
 /** 从 AST 递归提取所有 DecisionLeafNode 的 decisionCode */
 function extractDecisionCodes(node: unknown): string[] {
@@ -96,7 +96,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
                     ? (detail.preGates ?? [])
                         .map((g) =>
                           g.gateType === 'ROLLOUT'
-                            ? `${t('preGate.labelRollout')} ${(g.params as RolloutParams)?.percentage ?? '?'}%`
+                            ? `${t('preGate.labelRollout')} ${g.params.percentage ?? '?'}%`
                             : t('preGate.timeWindowTitle'),
                         )
                         .join('; ')
