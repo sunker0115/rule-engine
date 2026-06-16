@@ -15,18 +15,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConnectorDefinitionTest {
 
     @Test
-    void createdAt_fieldExistsAndIsLocalDateTime() throws NoSuchFieldException {
+    void createdAt_hasTableFieldWithCorrectColumn() throws NoSuchFieldException {
         Field f = ConnectorDefinition.class.getDeclaredField("createdAt");
         assertThat(f.getType()).isEqualTo(LocalDateTime.class);
-        // 不加 @TableField：autoResultMap + underscore-to-camel 自动映射 created_at→createdAt
-        assertThat(f.getAnnotation(TableField.class)).isNull();
+        // autoResultMap=true 时普通字段需显式 @TableField(value="列名") 才能正确映射
+        TableField ann = f.getAnnotation(TableField.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo("created_at");
     }
 
     @Test
-    void updatedAt_fieldExistsAndIsLocalDateTime() throws NoSuchFieldException {
+    void updatedAt_hasTableFieldWithCorrectColumn() throws NoSuchFieldException {
         Field f = ConnectorDefinition.class.getDeclaredField("updatedAt");
         assertThat(f.getType()).isEqualTo(LocalDateTime.class);
-        assertThat(f.getAnnotation(TableField.class)).isNull();
+        TableField ann = f.getAnnotation(TableField.class);
+        assertThat(ann).isNotNull();
+        assertThat(ann.value()).isEqualTo("updated_at");
     }
 
     @Test
