@@ -306,6 +306,33 @@
 - **迁移成本**：低（纯写路径，无 DDL 变更，无索引热更，无事件发布）。
 - **已实装（v2）**：`DraftCreatedResult`（`rule-config-svc` api 包）+ `CreateRuleRequest` 字段更新（`sceneCode` + 4 个 `JsonNode` 字段）+ `ConfigService.createDraft` + `PublishService.createDraft`（事务、code 唯一性校验）+ `ConfigServiceImpl` 委托 + `RuleController POST /admin/v1/rules`（`@Valid` + 201）；无 DDL 变更。
 
+### 2.24 特征预计算 / 物化特征层（来源 风控演进成熟度对照分析 — 第三代「高性能」）
+
+- **v1 现状**：D5 定调"单事件 + MetricSource 内 SQL 聚合"；评估期 Context Builder 扫 AST 收集 `metricCode` → `MetricRegistry` 并发取数（D25），即**实时取数**。D20 把同一次评估内 N 个 metric 压成批量预拉（1 次 mget），但仍是评估期现取。`providedMetrics`（D30，公开侧已退场 D55，仅内部 SDK / Job 注入保留）是**调用方携值**，不是平台侧预计算。**无物化 / 预计算特征层**。
+- **触发条件**：决策依赖特征数多、加工链长、含多个外部数据源时，评估期实时取数的 IO 等待吃掉延迟预算，撑不住风控秒级 / 万级 QPS（D8 下一档目标）。**这比 CEP（§2 预留窗口指标）更早撞上**——是"营销千级 QPS → 风控万级 QPS"路上的第一道性能墙。
+- **演进方向（空间换时间）**：
+  - `MetricSourceHandler` 之上加**物化档** `sourceType`：metric 值预计算后写 KV（持久化 Redis / Tair / 列存），评估期 O(1) 取，不走实时 SQL；
+  - 刷新用 **CDC**（业务表 binlog → 重算受影响 metric）保证物化值准确率；触发时机 / 失效窗口可配；
+  - **分层取数**：内部数据预计算物化 / 三方收费接口仍实时取（避免预计算后未用造成数据成本浪费）；
+  - 可选 **Lambda 形态**：T-1 历史批处理 + 当日增量融合（全局去重统计的精度损失需按 metric 标注）；
+  - 物化未命中 / 未完成时的降级语义（忽略 / 失败 / 回落实时算）按 metric 粒度配置，归 D15 失败语义体系。
+- **接口衔接面**：`metric_definition` 加物化档 `sourceType` + 刷新策略列；`MetricSourceHandler` 增物化实现（读 KV）+ 一套离线 / CDC 预计算 writer（独立于评估热路径）；`EvalContext` 取数侧透明（仍按 `metricCode` 索引，选 handler 由 `sourceType` 路由，**评估代码零改动**）。
+- **迁移成本**：高（引入物化 KV / 列存为新存储组件，需与 D9 "全 MySQL 起步"基调专门决策——注意 metric 值不属 D9 引擎自有持久化范畴、D20 已含 Redis 取数后端；外加 CDC 管道 + 预计算 writer + metric 注册扩 `sourceType` + 降级语义）。
+- **依赖与联动**：与 §2.2 metric 版本化正交（物化的是**值**，版本管的是**定义口径**，可叠加）；与 CEP（§2 预留窗口指标）同属"特征供给增强"，但 CEP 解时间窗序列、本锚点解高频实时取数性能，可独立推进。
+
+### 2.25 what-if 批量回放 / 新规则陪跑（来源 风控演进成熟度对照分析 — 第三代「高可靠」；建立在 D70 之上）
+
+- **现状（D70 已实装"忠实重放"）**：单条历史 `evaluation_session` 可**忠实重放**——锁当时规则版本 + 灌当时 payload / metric / evalNow + 跳过取数，重跑出与当时一致的 `EvalResult` + trace，**只读零副作用**（`POST /admin/v1/evaluation-sessions/{sessionId}/replay`）。捕获三件套（payload + `candidate_rule_version_ids` + `context_snapshot`）默认开。其中 **what-if**（历史输入 × 当前 / 新规则版本，而非当时版本）被 D70 明确列为**非目标、留后续**；**批量回放** D70 未涉及（按 `.../{sessionId}/replay` 单 session API 设计）。本锚点即补这两项。
+- **触发条件**：风控规则上线前要评估"新规则版本在历史真实流量上的命中率 / 拦截率变化"，降低变更风险（对照分析第三代"流量回放与模型回溯 + 模型陪跑 / 平滑决策"刚需）。单 session 忠实重放只能验"当时跑得对不对"，答不了"换规则会怎样"。
+- **演进方向（复用 D70 地基，改两处）**：
+  - **what-if**：把 D70 `evaluateReplay` 的"锁当时版本"改为"取指定 / 当前版本"，输入仍灌历史冻结的 payload / metric（degraded `EvalContextAssembler` 回灌、绕过取数不变）——历史数据 × 新规则，得到反事实 `EvalResult`；
+  - **批量**：按 `sceneCode` + 时间窗 + 采样率选一批历史 session，逐条 what-if 重放，聚合新旧决策 diff（命中率 / 拦截率 / 各 Decision 分布变化 + 逐条差异样本）；
+  - **陪跑**：新版本不发布，仅以 what-if 批量回放产出效果报告，人工对比专家经验后再走标准发布（D19）；离线执行，不占评估热路径，不落新 session、不触发下游（延续 D70 只读零副作用）。
+- **忠实度边界（继承 D70）**：subject 重载当前、metric 仅存 rawValue（丢 dataType / isError）；what-if 额外引入"新规则可能引用历史 session 未捕获的 metric"——此时缺值按 D15 降级标注，报告须**显式标这类不可比样本**，不静默填默认值。
+- **接口衔接面**：新增批量回放任务入口（`POST /admin/v1/replay-batches`，异步任务 + 进度 / 报告查询）+ `BatchReplayService`（编排采样查询 + 逐条调 `evaluateReplay` 的 what-if 变体）；`EvalEngine.evaluateReplay` 抽出"版本来源"参数（当时 / 指定版本）；**不动 D70 捕获落库路径**。
+- **迁移成本**：中（复用 D70 忠实重放核心 + dry-run 取版本逻辑；主要增量是批量任务编排、采样查询、diff 聚合报告，无新存储红线）。
+- **依赖与联动**：**强依赖 D70**（忠实重放 + 三件套捕获默认开；无捕获的存量 session 不可回放，`REPLAY_NOT_REPRODUCIBLE`）；与 §2.24 特征预计算正交；模型节点（若落地，见对照分析第二梯队）落地后，本锚点天然支持"新模型陪跑"（模型分作为 metric 灌入回放）。
+
 ---
 
 ## 三、决策时间线
