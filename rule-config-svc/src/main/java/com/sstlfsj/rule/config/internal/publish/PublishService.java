@@ -25,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -507,7 +509,7 @@ public class PublishService {
 
     /** 从点路径集合按前缀（如 "metrics."）过滤并去前缀，去重保序。 */
     private static List<String> stripPrefix(java.util.Set<String> refVars, String prefix) {
-        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        LinkedHashSet<String> out = new LinkedHashSet<>();
         for (String v : refVars) {
             if (v.startsWith(prefix)) out.add(v.substring(prefix.length()));
         }
@@ -599,7 +601,7 @@ public class PublishService {
             List<ScoreBand> bands = scorecardRoot.bands();
             if (!bands.isEmpty()) {
                 List<ScoreBand> sorted = bands.stream()
-                        .sorted(java.util.Comparator.comparingDouble(ScoreBand::minScore)).toList();
+                        .sorted(Comparator.comparingDouble(ScoreBand::minScore)).toList();
                 for (ScoreBand b : sorted) {
                     if (b.minScore() >= b.maxScore()) {
                         throw new IllegalArgumentException(
@@ -753,9 +755,9 @@ public class PublishService {
         if (!(ast instanceof ScorecardRootNode scorecardRoot) || scorecardRoot.bands().isEmpty()) {
             return bindings;
         }
-        java.util.LinkedHashSet<String> existing = bindings.stream()
+        LinkedHashSet<String> existing = bindings.stream()
                 .map(RuleVersionSnapshot.DecisionBinding::decisionCode)
-                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         List<RuleVersionSnapshot.DecisionBinding> merged = new ArrayList<>(bindings);
         for (ScoreBand band : scorecardRoot.bands()) {
             if (existing.add(band.decisionCode())) {
