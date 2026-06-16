@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Select, Input, Table, Popconfirm, Typography } from 'antd';
+import { Button, Select, Input, InputNumber, Table, Popconfirm, Typography } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -116,10 +116,14 @@ export default function DecisionTableEditor({
           const fieldOptions = isPayload
             ? payloadFieldNames.map((f) => ({ value: f, label: f }))
             : availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }));
+          // 区间/集合算子的格子要塞两个输入或标签，列加宽
+          const isRange = col.operator === 'BETWEEN' || col.operator === 'NOT_BETWEEN';
+          const isIn = col.operator === 'IN' || col.operator === 'NOT_IN';
+          const cellWidth = isRange ? 150 : isIn ? 140 : 85;
           return (
             <Table.Column
               key={ci}
-              width={85}
+              width={cellWidth}
               dataIndex={`_c${ci}`}
               title={(
                 <div style={{
@@ -166,15 +170,58 @@ export default function DecisionTableEditor({
                   </div>
                 </div>
               )}
-              render={(val: unknown, _: unknown, ri: number) => (
-                <Input
-                  size="small"
-                  style={{ width: '100%' }}
-                  value={val != null ? String(val) : ''}
-                  onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
-                  placeholder="-"
-                />
-              )}
+              render={(val: unknown, _: unknown, ri: number) => {
+                // 列条件值的形状随算子而定（与 kernel ConditionEvaluator 约定对齐）：
+                // IN/NOT_IN 收数组（"values"）、BETWEEN/NOT_BETWEEN 收二元 [lo,hi]（"min"/"max"）、其余收单值；
+                // 空值统一回落 null = 该列通配
+                if (isIn) {
+                  return (
+                    <Select
+                      mode="tags"
+                      size="small"
+                      style={{ width: '100%' }}
+                      value={Array.isArray(val) ? (val as string[]) : []}
+                      onChange={(v) => updateRow(ri, 'condition', ci, v.length ? v : null)}
+                      placeholder="-"
+                    />
+                  );
+                }
+                if (isRange) {
+                  const pair = Array.isArray(val) ? (val as (number | null)[]) : [null, null];
+                  const setBound = (idx: 0 | 1, v: number | null) => {
+                    const next: (number | null)[] = [pair[0] ?? null, pair[1] ?? null];
+                    next[idx] = v;
+                    updateRow(ri, 'condition', ci, next[0] == null && next[1] == null ? null : next);
+                  };
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <InputNumber
+                        size="small"
+                        style={{ width: '50%' }}
+                        value={pair[0] as number ?? null}
+                        onChange={(v) => setBound(0, v as number | null)}
+                        placeholder="lo"
+                      />
+                      <InputNumber
+                        size="small"
+                        style={{ width: '50%' }}
+                        value={pair[1] as number ?? null}
+                        onChange={(v) => setBound(1, v as number | null)}
+                        placeholder="hi"
+                      />
+                    </div>
+                  );
+                }
+                return (
+                  <Input
+                    size="small"
+                    style={{ width: '100%' }}
+                    value={val != null ? String(val) : ''}
+                    onChange={(e) => updateRow(ri, 'condition', ci, e.target.value || null)}
+                    placeholder="-"
+                  />
+                );
+              }}
             />
           );
         })}
