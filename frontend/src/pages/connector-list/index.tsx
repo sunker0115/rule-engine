@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Input, Select, Space, message } from 'antd';
+import { Table, Button, Input, Select, Space, message, Empty } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -29,10 +29,11 @@ export default function ConnectorList() {
   const [connectors, setConnectors] = useState<ConnectorListItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // tenantId：筛选器选中 > store 当前租户 > 不传（返回全部）
-  const tenantId = tenantFilter ?? currentId ?? undefined;
+  // 与其他列表页一致：筛选器选中 > store 当前租户，没选则为 0（守卫不加载）
+  const tenantId = tenantFilter ?? currentId ?? 0;
 
   const load = async () => {
+    if (!tenantId) return;
     setLoading(true);
     try {
       const res = await listConnectors({
@@ -91,9 +92,10 @@ export default function ConnectorList() {
         style={{ width: 120 }}
       />
     </Space>
+    {tenantId ? (
     <Table
       columns={getConnectorColumns(t, tc, async (code) => {
-        await disableConnector(code, tenantId ?? currentId ?? 0);
+        await disableConnector(code, tenantId);
         message.success(tc('message.disabled'));
         load();
       })}
@@ -114,5 +116,10 @@ export default function ConnectorList() {
         style: { cursor: 'pointer' },
       })}
     />
+    ) : (
+      <Empty description={tc('tenant.notSelected')} style={{ marginTop: 80 }}>
+        <Button type="primary" onClick={() => navigate('/tenants')}>{tc('tenant.goSelect')}</Button>
+      </Empty>
+    )}
   </>);
 }
