@@ -53,7 +53,9 @@ export default function MetricDetail() {
   const doSave = async (values: Record<string, unknown>, breaking: boolean) => {
     setSaving(true);
     try {
-      await updateMetric(currentId!, metricCode!, breaking, values);
+      // params 不在編輯表單裡，需從原始 metric 帶入，避免傳 undefined 導致後端清空 params
+      const payload = { ...values, params: metric?.params ?? {} };
+      await updateMetric(currentId!, metricCode!, breaking, payload);
       message.success(tc('message.saveSuccess'));
       setEditing(false);
       load();

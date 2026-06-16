@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listMetrics, createMetric } from '@/api/metric';
+import { listConnectors } from '@/api/connector';
 import { getMetricColumns } from '@/config/columns/metric';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
@@ -27,6 +28,14 @@ export default function MetricList() {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [form] = Form.useForm();
   const sourceType: SourceType = Form.useWatch('sourceType', form);
+  const [connectors, setConnectors] = useState<{ value: string; label: string }[]>([]);
+
+  useEffect(() => {
+    if (!tenantId || sourceType !== 'EXTERNAL_HTTP') return;
+    listConnectors(tenantId).then((r) => {
+      setConnectors((r.data ?? []).map((c) => ({ value: c.connectorCode, label: `${c.name} (${c.connectorCode})` })));
+    }).catch(() => {});
+  }, [tenantId, sourceType]);
 
   const load = async () => {
     if (!tenantId) return;
@@ -62,7 +71,13 @@ export default function MetricList() {
     const values = await form.validateFields();
     setConfirmLoading(true);
     try {
-      await createMetric(tenantId, values.metricCode, { ...values, tenantId });
+      // EXTERNAL_HTTP 的 vars 是 JSON 文本框，提交前 parse 成對象；parse 失敗給空對象
+      const parsedParams = { ...(values.params ?? {}) };
+      if (values.sourceType === 'EXTERNAL_HTTP' && typeof parsedParams.vars === 'string') {
+        try { parsedParams.vars = parsedParams.vars.trim() ? JSON.parse(parsedParams.vars) : {}; }
+        catch { parsedParams.vars = {}; }
+      }
+      await createMetric(tenantId, values.metricCode, { ...values, params: parsedParams, tenantId });
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
@@ -86,9 +101,20 @@ export default function MetricList() {
         </>);
       case 'EXTERNAL_HTTP':
         return (<>
-          <Form.Item name={['params', 'endpoint']} label={t('form.params.endpoint')} rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name={['params', 'path']} label={t('form.params.path')} rules={[{ required: true }]}><Input placeholder={t('form.params.pathPlaceholder')} /></Form.Item>
-          <Form.Item name={['params', 'jsonPath']} label={t('form.params.jsonPath')} rules={[{ required: true }]}><Input placeholder={t('form.params.jsonPathPlaceholder')} /></Form.Item>
+          <Form.Item name={['params', 'connector']} label={t('form.params.connector')} rules={[{ required: true }]}>
+            <Select
+              showSearch
+              placeholder={t('form.params.connectorPlaceholder')}
+              options={connectors}
+              notFoundContent={t('form.params.connectorEmpty')}
+            />
+          </Form.Item>
+          <Form.Item name={['params', 'dataType']} label={t('form.dataType')} rules={[{ required: true }]}>
+            <Select options={getDataTypeOptions(t)} />
+          </Form.Item>
+          <Form.Item name={['params', 'vars']} label={t('form.params.vars')} extra={t('form.params.varsHint')}>
+            <Input.TextArea rows={3} style={{ fontFamily: 'monospace' }} placeholder={'{"featureA":"val"}'} />
+          </Form.Item>
         </>);
       case 'STREAM':
         return (<>

@@ -168,8 +168,8 @@ export interface MetricTranslation {
     params: {
       table: string; column: string;
       datasource: string; sql: string;
-      endpoint: string; path: string; pathPlaceholder: string;
-      jsonPath: string; jsonPathPlaceholder: string;
+      connector: string; connectorPlaceholder: string; connectorEmpty: string;
+      vars: string; varsHint: string;
       topic: string; keyExpr: string;
     };
     streamDisabled: string;
