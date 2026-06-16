@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.evaluator;
 
+import com.sstlfsj.rule.kernel.api.model.Decision;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
@@ -7,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.NodeType;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScoreBand;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
@@ -68,10 +70,43 @@ public class ScorecardExecutor implements RuleVersionExecutor {
             }
         }
 
-        boolean hit = score >= root.threshold();
-        return new EvalResult(hit, null, List.of(),
-                scorecardRoot(collect, hit, factorTraces, rvId, code, version),
-                null, score, null, null);
+        if (root.bands().isEmpty()) {
+            // 现状路径：单 threshold，无 decision（行为一字不动）
+            boolean hit = score >= root.threshold();
+            return new EvalResult(hit, null, List.of(),
+                    scorecardRoot(collect, hit, factorTraces, rvId, code, version),
+                    null, score, null, null);
+        }
+        // bands 非空：threshold 作命中门槛，score < threshold 则弃权
+        if (score < root.threshold()) {
+            return new EvalResult(false, null, List.of(),
+                    scorecardRoot(collect, false, factorTraces, rvId, code, version),
+                    null, score, null, null);
+        }
+        // 命中门槛：找 score ∈ [minScore, maxScore) 的段
+        ScoreBand band = null;
+        for (ScoreBand b : root.bands()) {
+            if (score >= b.minScore() && score < b.maxScore()) { band = b; break; }
+        }
+        if (band == null) {
+            // 落空隙：命中但无段决策（回退 EvalEngine binding）
+            return new EvalResult(true, null, List.of(),
+                    scorecardRoot(collect, true, factorTraces, rvId, code, version),
+                    null, score, null, null);
+        }
+        // 段命中：出决策。name/priority 发布期已回填进快照 decisionBindings，按 decisionCode 索引；
+        // 找不到则 name="" priority=0，与 DecisionTreeExecutor.hit 回退一致
+        ScoreBand hitBand = band;
+        Decision decision = snapshot.decisionBindings().stream()
+                .filter(b -> b.decisionCode().equals(hitBand.decisionCode()))
+                .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
+                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(),
+                        snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), hitBand.category()))
+                .orElseGet(() -> new Decision(hitBand.decisionCode(), "", 0,
+                        snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), hitBand.category()));
+        return new EvalResult(true, decision, List.of(decision),
+                scorecardRoot(collect, true, factorTraces, rvId, code, version),
+                null, score, band.category(), null);
     }
 
     /**

@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScoreBand;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
@@ -125,6 +126,63 @@ class ScorecardExecutorTest {
         assertThat(off.nodeTrace()).isEmpty();
         assertThat(off.score()).isEqualTo(on.score());
         assertThat(off.ruleHit()).isEqualTo(on.ruleHit());
+    }
+
+    @Test
+    void bandsHit_emitsDecisionWithCategory() {
+        // score=70 落 [60,80) → REVIEW/MEDIUM
+        ScoreBand low = new ScoreBand(0, 60, "REJECT", "HIGH");
+        ScoreBand mid = new ScoreBand(60, 80, "REVIEW", "MEDIUM");
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
+        ), 0.0, List.of(low, mid));
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.score()).isEqualTo(70.0);
+        assertThat(result.finalDecision().code()).isEqualTo("REVIEW");
+        assertThat(result.category()).isEqualTo("MEDIUM");
+        assertThat(result.hitDecisions()).hasSize(1);
+    }
+
+    @Test
+    void belowThreshold_notHit_withBands() {
+        // score=10 < threshold 50 → 弃权，带 score 无 decision
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 10.0)
+        ), 50.0, List.of(new ScoreBand(0, 100, "X", null)));
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.ruleHit()).isFalse();
+        assertThat(result.score()).isEqualTo(10.0);
+        assertThat(result.finalDecision()).isNull();
+    }
+
+    @Test
+    void scoreInGap_hitsButNoBandDecision() {
+        // bands 只覆盖 [0,60)，score=70 落空隙 → 命中但无段决策（回退 binding）
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
+        ), 0.0, List.of(new ScoreBand(0, 60, "REJECT", null)));
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.finalDecision()).isNull();
+        assertThat(result.hitDecisions()).isEmpty();
+    }
+
+    @Test
+    void noBands_legacyThresholdBehaviorUnchanged() {
+        // bands 空 → 老逻辑：score>=threshold 命中，无 decision
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
+        ), 60.0);   // 2 参，bands 空
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.score()).isEqualTo(70.0);
+        assertThat(result.finalDecision()).isNull();
+        assertThat(result.hitDecisions()).isEmpty();
     }
 
     @Test
