@@ -147,7 +147,7 @@ const rule: RuleTranslation = {
       scriptLang: '脚本语言',
       scriptSource: '脚本源码',
       scriptSourcePlaceholder: '例如: metrics.amount > 1000',
-      scriptSourceDefault: '{true}',
+      scriptSourceDefault: 'true',
     },
   },
   conditionType: {

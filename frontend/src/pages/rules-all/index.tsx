@@ -16,6 +16,16 @@ import type { RuleListItem } from '@/types';
 
 const { RangePicker } = DatePicker;
 
+/** 各表达式引擎的"恒真"默认脚本——JsonLogic 须为 JSON 对象，其余引擎用布尔字面量 true */
+function defaultTrueFor(lang?: string): string {
+  return lang === 'JSONLOGIC' ? '{"==":[1,1]}' : 'true';
+}
+/** 判断脚本内容是否仍是某引擎的默认恒真值（用户没改过 → 切换语言时可自动替换） */
+function isDefaultTrue(src: string): boolean {
+  const s = src.trim();
+  return s === 'true' || s === '{"==":[1,1]}' || s === '{true}';
+}
+
 async function fetchDefaultMetric(tenantId: number, sceneCode: string): Promise<string> {
   try {
     const res = await getSceneMetadata(tenantId, sceneCode);
@@ -80,7 +90,8 @@ export default function RulesAll() {
         body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: defaultMetric, operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
       }
       if (values.kind === 'EXPRESSION_SCRIPT') {
-        body.script = { lang: values.scriptLang || 'CEL', source: values.scriptSource || '{true}' };
+        const lang = values.scriptLang || 'CEL';
+        body.script = { lang, source: values.scriptSource || defaultTrueFor(lang) };
       }
       const created = await createRule(values.tenantId ?? currentId!, body);
       message.success(tc('message.createSuccess'));
@@ -202,9 +213,18 @@ export default function RulesAll() {
           {formKind === 'EXPRESSION_SCRIPT' && (
             <>
               <Form.Item name="scriptLang" label={t('editor.createModal.scriptLang')} initialValue={langOptions[0]?.value} rules={[{ required: true }]}>
-                <Select options={langOptions} />
+                <Select
+                  options={langOptions}
+                  onChange={(lang) => {
+                    // 各引擎"恒真"默认值语法不同：JsonLogic 须为 JSON 对象，其余用布尔字面量 true
+                    const cur = createForm.getFieldValue('scriptSource');
+                    if (!cur || isDefaultTrue(cur)) {
+                      createForm.setFieldValue('scriptSource', defaultTrueFor(lang));
+                    }
+                  }}
+                />
               </Form.Item>
-              <Form.Item name="scriptSource" label={t('editor.createModal.scriptSource')} initialValue={t('editor.createModal.scriptSourceDefault')} rules={[{ required: true, message: tc('validation.required') }]}>
+              <Form.Item name="scriptSource" label={t('editor.createModal.scriptSource')} initialValue={defaultTrueFor(langOptions[0]?.value)} rules={[{ required: true, message: tc('validation.required') }]}>
                 <Input.TextArea rows={6} placeholder={t('editor.createModal.scriptSourcePlaceholder')} />
               </Form.Item>
             </>
