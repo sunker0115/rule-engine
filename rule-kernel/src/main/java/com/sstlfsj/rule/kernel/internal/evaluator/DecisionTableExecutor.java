@@ -7,6 +7,7 @@ import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -111,12 +112,23 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
 
     /**
      * 将行中的条件值转成 ConditionNode.params，遵循各算子约定：
-     * 数值类算子用 "threshold"，IN 类算子用 "values"。
+     * 单值算子用 "threshold"，IN 类用 "values"，BETWEEN 类用 "min"/"max"（行条件值为二元 [lo,hi] List）。
      */
     private static Map<String, Object> buildParams(String operator, Object condValue) {
         return switch (operator.toUpperCase()) {
-            case ConditionTypes.IN, ConditionTypes.NOT_IN -> Map.of("values", condValue);
-            default             -> Map.of("threshold", condValue);
+            case ConditionTypes.IN, ConditionTypes.NOT_IN -> Map.of(ConditionParams.VALUES, condValue);
+            case ConditionTypes.BETWEEN, ConditionTypes.NOT_BETWEEN -> {
+                // 行条件值约定为二元 List [lo, hi]；用 HashMap 而非 Map.of 以容忍残缺配置下
+                // 端点为 null（Map.of 遇 null value 抛 NPE）；null 端点下游 evaluator 判不命中
+                if (condValue instanceof List<?> bounds && bounds.size() == 2) {
+                    Map<String, Object> p = new HashMap<>();
+                    p.put(ConditionParams.MIN, bounds.get(0));
+                    p.put(ConditionParams.MAX, bounds.get(1));
+                    yield p;
+                }
+                yield Map.of();
+            }
+            default -> Map.of(ConditionParams.THRESHOLD, condValue);
         };
     }
 
