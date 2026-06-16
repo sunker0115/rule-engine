@@ -146,6 +146,26 @@ class ScorecardExecutorTest {
     }
 
     @Test
+    void bandsWithNamePriority_decisionContainsNameAndPriority() {
+        // band 含回填的 name/priority → Decision 应直接从 band 读，不索引 decisionBindings
+        ScoreBand rich = new ScoreBand(60, 100, "PASS", "LOW", "通过", 100);
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
+        ), 0.0, List.of(new ScoreBand(0, 60, "REJECT", "HIGH", "拒绝", 1), rich));
+        // decisionBindings 为空（评分卡发布后不再注入）——执行器直接从 band 读
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+                1L, "scene1", "t1", root, null, List.of(), null, null);
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snap, ctx());
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.score()).isEqualTo(70.0);
+        assertThat(result.finalDecision().code()).isEqualTo("PASS");
+        assertThat(result.finalDecision().name()).isEqualTo("通过");
+        assertThat(result.finalDecision().priority()).isEqualTo(100);
+        assertThat(result.category()).isEqualTo("LOW");
+    }
+
+    @Test
     void belowThreshold_notHit_withBands() {
         // score=10 < threshold 50 → 弃权，带 score 无 decision
         ScorecardRootNode root = new ScorecardRootNode(List.of(

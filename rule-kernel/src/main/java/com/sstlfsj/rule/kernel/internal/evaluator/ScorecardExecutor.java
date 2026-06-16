@@ -94,16 +94,14 @@ public class ScorecardExecutor implements RuleVersionExecutor {
                     scorecardRoot(collect, true, factorTraces, rvId, code, version),
                     null, score, null, null);
         }
-        // 段命中：出决策。name/priority 发布期已回填进快照 decisionBindings，按 decisionCode 索引；
-        // 找不到则 name="" priority=0，与 DecisionTreeExecutor.hit 回退一致
+        // 段命中：出决策。ScoreBand 已含发布期回填的 name/priority，直接读，不再索引
+        // decisionBindings（评分卡语义内聚）。旧快照（bands 无 name/priority）兜底：name=""
+        // priority=0，与原 orElseGet 回退行为一致。
         ScoreBand hitBand = band;
-        Decision decision = snapshot.decisionBindings().stream()
-                .filter(b -> b.decisionCode().equals(hitBand.decisionCode()))
-                .max(java.util.Comparator.comparingInt(RuleVersionSnapshot.DecisionBinding::priority))
-                .map(b -> new Decision(b.decisionCode(), b.name(), b.priority(),
-                        snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), hitBand.category()))
-                .orElseGet(() -> new Decision(hitBand.decisionCode(), "", 0,
-                        snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), hitBand.category()));
+        Decision decision = new Decision(hitBand.decisionCode(),
+                hitBand.name() != null ? hitBand.name() : "",
+                hitBand.priority(),
+                snapshot.ruleVersionId(), snapshot.code(), snapshot.version(), hitBand.category());
         return new EvalResult(true, decision, List.of(decision),
                 scorecardRoot(collect, true, factorTraces, rvId, code, version),
                 null, score, band.category(), null);
