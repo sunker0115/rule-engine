@@ -69,7 +69,7 @@ export default function ConnectorList() {
     <Space style={{ marginBottom: 16 }}>
       <Select
         placeholder={tc('label.tenant')}
-        value={tenantFilter}
+        value={tenantFilter ?? currentId ?? undefined}
         onChange={handleFilterChange(setTenantFilter as (v: unknown) => void)}
         allowClear
         options={activeList.map((tenant) => ({ value: tenant.id, label: `${tenant.name} (${tenant.code})` }))}

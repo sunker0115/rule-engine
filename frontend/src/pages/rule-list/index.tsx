@@ -116,7 +116,7 @@ export default function RuleList() {
     <Space style={{ marginBottom: 16 }}>
       <Select
         placeholder={tc('tenant.placeholder')}
-        value={tenantFilter}
+        value={tenantFilter ?? currentId ?? undefined}
         onChange={(v) => { setTenantFilter(v); setPage(1); }}
         allowClear
         options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}

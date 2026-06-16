@@ -69,7 +69,7 @@ export default function AuditLogList() {
       <Space style={{ marginBottom: 16 }} wrap>
         <Select
           placeholder={tc('label.tenant')}
-          value={tenantFilter}
+          value={tenantFilter ?? currentId ?? undefined}
           onChange={setTenantFilter}
           allowClear
           options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
