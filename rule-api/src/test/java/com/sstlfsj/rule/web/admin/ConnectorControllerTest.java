@@ -74,7 +74,8 @@ class ConnectorControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].connectorCode").value("risk-svc"))
                 .andExpect(jsonPath("$.data[0].name").value("风控打分"))
-                .andExpect(jsonPath("$.data[0].status").value("ACTIVE"));
+                .andExpect(jsonPath("$.data[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data[0].createdAt").value("2026-06-16T00:00"));
 
         verify(service).listActive(1L);
     }
