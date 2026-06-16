@@ -155,6 +155,7 @@ class ConfigServiceImpl implements ConfigService {
                 .collect(java.util.stream.Collectors.toList());
 
         return new RuleDetailVO(
+                rule.getTenantId(),
                 rule.getId(), rule.getCode(), rule.getName(), rule.getStatus().name(),
                 rule.getKind() != null ? rule.getKind().name() : null,
                 scene != null ? scene.getCode() : null,

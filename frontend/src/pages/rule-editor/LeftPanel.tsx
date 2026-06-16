@@ -23,7 +23,8 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
   const ruleStatusOpts = useMemo(() => getRuleStatusOptions(t), [t]);
   const versionStatusOpts = useMemo(() => getVersionStatusOptions(t), [t]);
   const { currentId } = useTenantStore();
-  const tenantId = currentId ?? 0;
+  // 优先用规则自身的 tenantId（从详情带回），避免依赖全局未选时传 0 导致后端校验失败
+  const tenantId = Number(ruleDetail.tenantId) || currentId || 0;
   const { ast, decisionBindings, preGates, triggerEventTypes, script, dirty } = useRuleStore();
   const [saving, setSaving] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);

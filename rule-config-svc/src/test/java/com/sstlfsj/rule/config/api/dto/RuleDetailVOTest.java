@@ -15,8 +15,9 @@ class RuleDetailVOTest {
     void exposesTypedFields() {
         AstNode ast = new AndNode(List.of(), null, null);
         List<DecisionBinding> bindings = List.of(new DecisionBinding("BLOCK", 100));
-        RuleDetailVO vo = new RuleDetailVO(10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
+        RuleDetailVO vo = new RuleDetailVO(9100L, 10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
                 "risk.transfer", ast, bindings, List.of(), List.of(), null, 42L, List.of());
+        assertThat(vo.tenantId()).isEqualTo(9100L);
         assertThat(vo.ruleDefinitionId()).isEqualTo(10L);
         assertThat(vo.code()).isEqualTo("rule.a");
         assertThat(vo.sceneCode()).isEqualTo("risk.transfer");

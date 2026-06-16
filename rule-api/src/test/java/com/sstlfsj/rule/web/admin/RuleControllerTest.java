@@ -47,7 +47,7 @@ class RuleControllerTest {
     @Test
     void getDetail_returns200_withRuleDetail() throws Exception {
         when(configService.getRuleDetail("t1", 10L)).thenReturn(
-                new RuleDetailVO(10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
+                new RuleDetailVO(1L, 10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
                         "risk.transfer",
                         new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
                         java.util.List.of(),
