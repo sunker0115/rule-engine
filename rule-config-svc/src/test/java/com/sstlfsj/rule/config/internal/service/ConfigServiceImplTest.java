@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
@@ -212,17 +213,16 @@ class ConfigServiceImplTest {
     void createDraft_delegatesToPublishService() {
         DraftCreatedResult expected = new DraftCreatedResult(1L, 2L, 1L, "DRAFT");
         var ast = new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null);
-        when(publishService.createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                ast, java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", null, "actor1"))
+        RuleContent content = new RuleContent("规则A", "AST_BOOLEAN", ast,
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), null);
+        when(publishService.createDraft(1L, "risk.transfer", "rule.a", content, "actor1"))
                 .thenReturn(expected);
 
         DraftCreatedResult result = configService.createDraft("1", "risk.transfer",
-                "rule.a", "规则A", ast, java.util.List.of(), java.util.List.of(), java.util.List.of(),
-                "AST_BOOLEAN", null, "actor1");
+                "rule.a", content, "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(1L);
-        verify(publishService).createDraft(1L, "risk.transfer", "rule.a", "规则A",
-                ast, java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", null, "actor1");
+        verify(publishService).createDraft(1L, "risk.transfer", "rule.a", content, "actor1");
     }
 
     @Test
@@ -269,49 +269,27 @@ class ConfigServiceImplTest {
     }
 
     @Test
-    void editDraft_validKind_delegatesWithParsedRuleKind() {
-        when(publishService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+    void editDraft_delegatesContentToPublishService() {
+        when(publishService.editDraft(any(), any(), any(), any()))
                 .thenReturn(new DraftCreatedResult(10L, 20L, 1L, "DRAFT"));
 
-        configService.editDraft("1", 10L, "名", "AST_BOOLEAN",
-                null, null, null, null, null, "actor");
+        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null);
+        configService.editDraft("1", 10L, content, "actor");
 
-        // kind 字符串 "AST_BOOLEAN" 解析为枚举后透传 publishService
-        verify(publishService).editDraft(eq(1L), eq(10L), eq("名"), eq(RuleKind.AST_BOOLEAN),
-                any(), any(), any(), any(), any(), eq("actor"));
+        // tenantId 字符串 "1" 转 Long，content 原样透传 publishService（kind 解析下沉至 publishService）
+        verify(publishService).editDraft(eq(1L), eq(10L), eq(content), eq("actor"));
     }
 
     @Test
-    void editDraft_invalidKind_throwsBeforeDelegating() {
-        // 非法 kind 在 parseKind 阶段即拒，不触达 publishService
-        assertThatThrownBy(() -> configService.editDraft("1", 10L, "名", "BOGUS_KIND",
-                null, null, null, null, null, "actor"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("不支持的规则 kind");
-        verifyNoInteractions(publishService);
-    }
-
-    @Test
-    void newVersion_validKind_delegatesWithParsedRuleKind() {
-        when(publishService.newVersion(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+    void newVersion_delegatesContentToPublishService() {
+        when(publishService.newVersion(any(), any(), any(), any(), any()))
                 .thenReturn(new DraftCreatedResult(10L, 30L, 2L, "DRAFT"));
 
-        configService.newVersion("1", 10L, "名", "AST_BOOLEAN",
-                null, null, null, null, 50L, null, "actor");
+        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null);
+        configService.newVersion("1", 10L, content, 50L, "actor");
 
-        // kind 字符串 "AST_BOOLEAN" 解析为枚举后透传 publishService，fromVersionId 原样透传
-        verify(publishService).newVersion(eq(1L), eq(10L), eq("名"), eq(RuleKind.AST_BOOLEAN),
-                any(), any(), any(), any(), eq(50L), any(), eq("actor"));
-    }
-
-    @Test
-    void newVersion_invalidKind_throwsBeforeDelegating() {
-        // 非法 kind 在 parseKind 阶段即拒，不触达 publishService
-        assertThatThrownBy(() -> configService.newVersion("1", 10L, "名", "BOGUS_KIND",
-                null, null, null, null, null, null, "actor"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("不支持的规则 kind");
-        verifyNoInteractions(publishService);
+        // content 原样透传 publishService，fromVersionId 原样透传
+        verify(publishService).newVersion(eq(1L), eq(10L), eq(content), eq(50L), eq("actor"));
     }
 
     @Test

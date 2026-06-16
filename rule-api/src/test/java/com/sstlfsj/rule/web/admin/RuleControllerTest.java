@@ -2,6 +2,7 @@ package com.sstlfsj.rule.web.admin;
 
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.api.service.ConfigService;
@@ -9,14 +10,15 @@ import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -96,7 +98,7 @@ class RuleControllerTest {
     @Test
     void editDraft_returns200_andCallsService() throws Exception {
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
-        when(configService.editDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.editDraft(any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(put("/admin/v1/rules/10/draft")
@@ -119,9 +121,11 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.version").value(1))
                 .andExpect(jsonPath("$.data.status").value("DRAFT"));
 
-        // version 不变（草稿原地编辑），透传 ruleId / tenantId / name / kind
-        verify(configService).editDraft(eq("t1"), eq(10L), eq("改名后"), eq("AST_BOOLEAN"),
-                any(), any(), any(), any(), any(), eq("user1"));
+        // version 不变（草稿原地编辑），透传 ruleId / tenantId / name / kind（name/kind 入 RuleContent）
+        ArgumentCaptor<RuleContent> contentCaptor = ArgumentCaptor.forClass(RuleContent.class);
+        verify(configService).editDraft(eq("t1"), eq(10L), contentCaptor.capture(), eq("user1"));
+        assertThat(contentCaptor.getValue().name()).isEqualTo("改名后");
+        assertThat(contentCaptor.getValue().kind()).isEqualTo("AST_BOOLEAN");
     }
 
     @Test
@@ -138,7 +142,7 @@ class RuleControllerTest {
     @Test
     void newVersion_returns201_andCallsService() throws Exception {
         DraftCreatedResult result = new DraftCreatedResult(10L, 30L, 3L, "DRAFT");
-        when(configService.newVersion(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.newVersion(any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(post("/admin/v1/rules/10/versions")
@@ -158,9 +162,11 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.version").value(3))
                 .andExpect(jsonPath("$.data.status").value("DRAFT"));
 
-        // 透传 tenantId / ruleId / name / kind / fromVersionId / actorId
-        verify(configService).newVersion(eq("t1"), eq(10L), eq("v3"), eq("AST_BOOLEAN"),
-                any(), any(), any(), any(), eq(50L), any(), eq("user1"));
+        // 透传 tenantId / ruleId / name / kind / fromVersionId / actorId（name/kind 入 RuleContent）
+        ArgumentCaptor<RuleContent> contentCaptor = ArgumentCaptor.forClass(RuleContent.class);
+        verify(configService).newVersion(eq("t1"), eq(10L), contentCaptor.capture(), eq(50L), eq("user1"));
+        assertThat(contentCaptor.getValue().name()).isEqualTo("v3");
+        assertThat(contentCaptor.getValue().kind()).isEqualTo("AST_BOOLEAN");
     }
 
     @Test
@@ -229,7 +235,7 @@ class RuleControllerTest {
     @Test
     void createDraft_returns201_withValidBody() throws Exception {
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
-        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.createDraft(any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(post("/admin/v1/rules")
@@ -254,15 +260,18 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.ruleVersionId").value(20))
                 .andExpect(jsonPath("$.data.status").value("DRAFT"));
 
-        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
-                any(), any(), any(), any(), eq("SCORECARD"), any(), eq("user1"));
+        ArgumentCaptor<RuleContent> contentCaptor = ArgumentCaptor.forClass(RuleContent.class);
+        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"),
+                contentCaptor.capture(), eq("user1"));
+        assertThat(contentCaptor.getValue().name()).isEqualTo("规则A");
+        assertThat(contentCaptor.getValue().kind()).isEqualTo("SCORECARD");
     }
 
     @Test
     void createDraft_nullJsonFields_passedAsNull() throws Exception {
         // body 未带 conditionAst/decisionBindings 等字段时，typed 入参为 null，由 service 兜底默认
         DraftCreatedResult result = new DraftCreatedResult(10L, 20L, 1L, "DRAFT");
-        when(configService.createDraft(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(configService.createDraft(any(), any(), any(), any(), any()))
                 .thenReturn(result);
 
         mockMvc.perform(post("/admin/v1/rules")
@@ -274,9 +283,17 @@ class RuleControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.ruleDefinitionId").value(10));
 
-        // 未传的 typed 字段为 null（不再有 JSON 串默认值），kind 未传也为 null
-        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"), eq("规则A"),
-                isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), eq("user1"));
+        // 未传的 typed 内容字段为 null（不再有 JSON 串默认值），kind 未传也为 null
+        ArgumentCaptor<RuleContent> contentCaptor = ArgumentCaptor.forClass(RuleContent.class);
+        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"),
+                contentCaptor.capture(), eq("user1"));
+        assertThat(contentCaptor.getValue().name()).isEqualTo("规则A");
+        assertThat(contentCaptor.getValue().kind()).isNull();
+        assertThat(contentCaptor.getValue().conditionAst()).isNull();
+        assertThat(contentCaptor.getValue().decisionBindings()).isNull();
+        assertThat(contentCaptor.getValue().preGates()).isNull();
+        assertThat(contentCaptor.getValue().triggerEventTypes()).isNull();
+        assertThat(contentCaptor.getValue().script()).isNull();
     }
 
     @Test

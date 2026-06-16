@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
@@ -44,16 +45,10 @@ public class RuleController {
     public ApiResponse<DraftCreatedResult> createDraft(
             @Valid @RequestBody CreateRuleRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        // DecisionBindingInput(仅 decisionCode) → DecisionBinding：priority 草稿期占位 0，发布时从 decision_definition 回填
-        List<DecisionBinding> bindings = req.decisionBindings() == null ? null
-                : req.decisionBindings().stream()
-                        .map(i -> new DecisionBinding(i.decisionCode(), 0))
-                        .toList();
+        RuleContent content = new RuleContent(req.name(), req.kind(), req.conditionAst(),
+                toBindings(req.decisionBindings()), req.preGates(), req.triggerEventTypes(), req.script());
         return ApiResponse.ok(configService.createDraft(
-                req.tenantId(), req.sceneCode(), req.code(), req.name(),
-                req.conditionAst(), bindings,
-                req.preGates(), req.triggerEventTypes(),
-                req.kind(), req.script(), actorId));
+                req.tenantId(), req.sceneCode(), req.code(), content, actorId));
     }
 
     /**
@@ -69,15 +64,9 @@ public class RuleController {
             @PathVariable Long ruleId,
             @Valid @RequestBody EditDraftRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        // DecisionBindingInput(仅 decisionCode) → DecisionBinding：priority 草稿期占位 0，发布时回填
-        List<DecisionBinding> bindings = req.decisionBindings() == null ? null
-                : req.decisionBindings().stream()
-                        .map(i -> new DecisionBinding(i.decisionCode(), 0))
-                        .toList();
-        return ApiResponse.ok(configService.editDraft(
-                req.tenantId(), ruleId, req.name(), req.kind(),
-                req.conditionAst(), bindings,
-                req.preGates(), req.triggerEventTypes(), req.script(), actorId));
+        RuleContent content = new RuleContent(req.name(), req.kind(), req.conditionAst(),
+                toBindings(req.decisionBindings()), req.preGates(), req.triggerEventTypes(), req.script());
+        return ApiResponse.ok(configService.editDraft(req.tenantId(), ruleId, content, actorId));
     }
 
     /**
@@ -94,16 +83,22 @@ public class RuleController {
             @PathVariable Long ruleId,
             @Valid @RequestBody NewVersionRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        // DecisionBindingInput(仅 decisionCode) → DecisionBinding：priority 草稿期占位 0，发布时回填
-        List<DecisionBinding> bindings = req.decisionBindings() == null ? null
-                : req.decisionBindings().stream()
-                        .map(i -> new DecisionBinding(i.decisionCode(), 0))
-                        .toList();
+        RuleContent content = new RuleContent(req.name(), req.kind(), req.conditionAst(),
+                toBindings(req.decisionBindings()), req.preGates(), req.triggerEventTypes(), req.script());
         return ApiResponse.ok(configService.newVersion(
-                req.tenantId(), ruleId, req.name(), req.kind(),
-                req.conditionAst(), bindings,
-                req.preGates(), req.triggerEventTypes(),
-                req.fromVersionId(), req.script(), actorId));
+                req.tenantId(), ruleId, content, req.fromVersionId(), actorId));
+    }
+
+    /**
+     * DecisionBindingInput(仅 decisionCode) → DecisionBinding：priority 草稿期占位 0，发布时从 decision_definition 回填。
+     * 三端点共用的占位映射。
+     *
+     * @param inputs 请求体决策绑定入参，null 时返回 null（保持三方法对 null 视为空的语义）
+     * @return 占位 priority=0 的决策绑定列表
+     */
+    private static List<DecisionBinding> toBindings(List<com.sstlfsj.rule.web.admin.dto.DecisionBindingInput> inputs) {
+        return inputs == null ? null
+                : inputs.stream().map(i -> new DecisionBinding(i.decisionCode(), 0)).toList();
     }
 
     /**

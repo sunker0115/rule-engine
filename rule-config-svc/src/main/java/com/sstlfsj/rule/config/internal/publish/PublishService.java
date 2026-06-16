@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot;
@@ -161,21 +162,21 @@ public class PublishService {
      *
      * @param tenantId         租户 id
      * @param ruleDefinitionId 规则定义 id
-     * @param name             新规则名称，null/空白时不改
-     * @param kind             规则类型，null 时兜底 AST_BOOLEAN
-     * @param conditionAst     新条件 AST，null 兜底为空 AndNode（由 resolveAndValidate 处理）
-     * @param decisionBindings 新决策绑定（仅 decisionCode + 占位 priority），null 视为空
-     * @param preGates         新前置门控，null 视为空
-     * @param triggerEventTypes 新触发事件类型，null 视为空
-     * @param script           EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
+     * @param content          规则内容（name null/空白时不改；kind null 时回退草稿现有 kind 或 AST_BOOLEAN；
+     *                         conditionAst null 兜底为空 AndNode；decisionBindings/preGates/triggerEventTypes null 视为空）
      * @param actorId          操作人
      * @return 被更新草稿的 id 与版本信息（version 不变）
      */
     @Transactional
-    public DraftCreatedResult editDraft(Long tenantId, Long ruleDefinitionId, String name, RuleKind kind,
-            AstNode conditionAst, List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
-            List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes,
-            ScriptSource script, String actorId) {
+    public DraftCreatedResult editDraft(Long tenantId, Long ruleDefinitionId, RuleContent content, String actorId) {
+        String name = content.name();
+        RuleKind kind = parseKind(content.kind());
+        AstNode conditionAst = content.conditionAst();
+        List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
+        List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
+        List<String> triggerEventTypes = content.triggerEventTypes();
+        ScriptSource script = content.script();
+
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
@@ -233,22 +234,23 @@ public class PublishService {
      *
      * @param tenantId          租户 id
      * @param ruleDefinitionId  规则定义 id
-     * @param name              新规则名称，null/空白时不改
-     * @param kind              规则类型，null 时兜底规则现有 kind 或 AST_BOOLEAN
-     * @param conditionAst      新条件 AST（fromVersionId 非空时忽略，改用克隆值）
-     * @param decisionBindings  新决策绑定（fromVersionId 非空时忽略），null 视为空
-     * @param preGates          新前置门控（fromVersionId 非空时忽略），null 视为空
-     * @param triggerEventTypes 新触发事件类型（fromVersionId 非空时忽略），null 视为空
+     * @param content           规则内容（name null/空白时不改；kind null 时兜底规则现有 kind 或 AST_BOOLEAN；
+     *                          fromVersionId 非空时 conditionAst/decisionBindings/preGates/triggerEventTypes/script 内容字段忽略，改用克隆值）
      * @param fromVersionId     回退源版本 id，非空时克隆其内容；null 时按入参建新草稿
-     * @param script            EXPRESSION_SCRIPT 脚本载体（fromVersionId 非空时忽略，改用克隆值），其它 kind 传 null
      * @param actorId           操作人
      * @return 新建草稿的 id 与版本信息（version = v_max+1）
      */
     @Transactional
-    public DraftCreatedResult newVersion(Long tenantId, Long ruleDefinitionId, String name, RuleKind kind,
-            AstNode conditionAst, List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
-            List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes,
-            Long fromVersionId, ScriptSource script, String actorId) {
+    public DraftCreatedResult newVersion(Long tenantId, Long ruleDefinitionId, RuleContent content,
+            Long fromVersionId, String actorId) {
+        String name = content.name();
+        RuleKind kind = parseKind(content.kind());
+        AstNode conditionAst = content.conditionAst();
+        List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
+        List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
+        List<String> triggerEventTypes = content.triggerEventTypes();
+        ScriptSource script = content.script();
+
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
@@ -618,25 +620,24 @@ public class PublishService {
     /**
      * 创建规则草稿：INSERT rule_definition + rule_version（status=DRAFT）+ audit_log。
      *
-     * @param tenantId          租户 id
-     * @param sceneCode         场景编码
-     * @param code              规则编码
-     * @param name              规则名称
-     * @param conditionAst      条件 AST，null 视为空 AND
-     * @param decisionBindings  决策绑定列表，null 视为空
-     * @param preGates          前置门控列表，null 视为空
-     * @param triggerEventTypes 触发事件类型列表，null 视为空
-     * @param kind              规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT），null 时默认 AST_BOOLEAN
-     * @param script            EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
-     * @param actorId           操作人
+     * @param tenantId  租户 id
+     * @param sceneCode 场景编码
+     * @param code      规则编码
+     * @param content   规则内容（name/kind/conditionAst/decisionBindings/preGates/triggerEventTypes/script，kind null 时默认 AST_BOOLEAN）
+     * @param actorId   操作人
      * @return 新建草稿的 id 和版本信息
      */
     @Transactional
     public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
-                                          String code, String name,
-                                          AstNode conditionAst, java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
-                                          java.util.List<RuleVersionSnapshot.PreGateConfig> preGates, java.util.List<String> triggerEventTypes,
-                                          String kind, ScriptSource script, String actorId) {
+                                          String code, RuleContent content, String actorId) {
+        String name = content.name();
+        String kind = content.kind();
+        AstNode conditionAst = content.conditionAst();
+        java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
+        java.util.List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
+        java.util.List<String> triggerEventTypes = content.triggerEventTypes();
+        ScriptSource script = content.script();
+
         // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
         SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
         if (scene == null) {
@@ -681,6 +682,18 @@ public class PublishService {
                 LocalDateTime.now()));
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, RuleDefinitionStatus.DRAFT.name());
+    }
+
+    /** 解析 kind 字符串为 RuleKind，null/空返回 null（由下游兜底现有 kind 或 AST_BOOLEAN），非法抛 IllegalArgumentException。 */
+    private static RuleKind parseKind(String kind) {
+        if (kind == null || kind.isBlank()) {
+            return null;
+        }
+        try {
+            return RuleKind.valueOf(kind);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("不支持的规则 kind: " + kind);
+        }
     }
 
     /** 用冻结内容组装 DRAFT 版本行（createDraft/newVersion 共用）。 */

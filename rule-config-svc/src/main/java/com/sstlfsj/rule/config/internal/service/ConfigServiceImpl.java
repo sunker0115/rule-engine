@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
@@ -21,12 +22,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.repository.TenantMapper;
-import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
-import com.sstlfsj.rule.kernel.api.model.ScriptSource;
-import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -172,33 +168,19 @@ class ConfigServiceImpl implements ConfigService {
 
     @Override
     public DraftCreatedResult createDraft(String tenantId, String sceneCode,
-            String code, String name,
-            AstNode conditionAst, List<DecisionBinding> decisionBindings,
-            List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            String kind, ScriptSource script, String actorId) {
-        return publishService.createDraft(Long.valueOf(tenantId), sceneCode,
-                code, name,
-                conditionAst, decisionBindings,
-                preGates, triggerEventTypes,
-                kind, script, actorId);
+            String code, RuleContent content, String actorId) {
+        return publishService.createDraft(Long.valueOf(tenantId), sceneCode, code, content, actorId);
     }
 
     @Override
-    public DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
-            AstNode conditionAst, List<DecisionBinding> decisionBindings,
-            List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            ScriptSource script, String actorId) {
-        return publishService.editDraft(Long.valueOf(tenantId), ruleId, name, parseKind(kind),
-                conditionAst, decisionBindings, preGates, triggerEventTypes, script, actorId);
+    public DraftCreatedResult editDraft(String tenantId, Long ruleId, RuleContent content, String actorId) {
+        return publishService.editDraft(Long.valueOf(tenantId), ruleId, content, actorId);
     }
 
     @Override
-    public DraftCreatedResult newVersion(String tenantId, Long ruleId, String name, String kind,
-            AstNode conditionAst, List<DecisionBinding> decisionBindings,
-            List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            Long fromVersionId, ScriptSource script, String actorId) {
-        return publishService.newVersion(Long.valueOf(tenantId), ruleId, name, parseKind(kind),
-                conditionAst, decisionBindings, preGates, triggerEventTypes, fromVersionId, script, actorId);
+    public DraftCreatedResult newVersion(String tenantId, Long ruleId, RuleContent content,
+            Long fromVersionId, String actorId) {
+        return publishService.newVersion(Long.valueOf(tenantId), ruleId, content, fromVersionId, actorId);
     }
 
     @Override
@@ -232,17 +214,5 @@ class ConfigServiceImpl implements ConfigService {
         if (t == null) throw new IllegalArgumentException("租户不存在: " + tenantId);
         t.setStatus(enable ? TenantStatus.ACTIVE : TenantStatus.DISABLED);
         tenantMapper.updateById(t);
-    }
-
-    /** 解析 kind 字符串为 RuleKind，null/空返回 null（由下游兜底 AST_BOOLEAN），非法抛 IllegalArgumentException。 */
-    private static RuleKind parseKind(String kind) {
-        if (kind == null || kind.isBlank()) {
-            return null;
-        }
-        try {
-            return RuleKind.valueOf(kind);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("不支持的规则 kind: " + kind);
-        }
     }
 }

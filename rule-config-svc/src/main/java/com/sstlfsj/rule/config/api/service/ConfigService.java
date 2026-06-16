@@ -2,16 +2,13 @@ package com.sstlfsj.rule.config.api.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
-import com.sstlfsj.rule.kernel.api.model.ScriptSource;
-import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 
 import java.util.List;
 import java.util.Map;
@@ -69,66 +66,40 @@ public interface ConfigService {
     /**
      * 创建规则草稿：新建 rule_definition（DRAFT）+ rule_version（DRAFT）。
      *
-     * @param tenantId              租户 ID
-     * @param sceneCode             场景编码
-     * @param code                  规则编码
-     * @param name                  规则名称
-     * @param conditionAst          条件 AST，null 视为空 AND
-     * @param decisionBindings      决策绑定列表（草稿期 priority 占位，发布时回填），null 视为空
-     * @param preGates              前置门列表，null 视为空
-     * @param triggerEventTypes     触发事件类型列表，null 视为空
-     * @param kind                  规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT），null 时默认 AST_BOOLEAN
-     * @param script                EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
-     * @param actorId               操作人 ID
+     * @param tenantId  租户 ID
+     * @param sceneCode 场景编码
+     * @param code      规则编码
+     * @param content   规则内容（name/kind/conditionAst/decisionBindings/preGates/triggerEventTypes/script，见 {@link RuleContent}）
+     * @param actorId   操作人 ID
      * @return 新建草稿的 ID 信息
      */
     DraftCreatedResult createDraft(String tenantId, String sceneCode,
-            String code, String name,
-            AstNode conditionAst, List<DecisionBinding> decisionBindings,
-            List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            String kind, ScriptSource script, String actorId);
+            String code, RuleContent content, String actorId);
 
     /**
      * 原地编辑规则最新 DRAFT 版本（不增版本）：重跑 resolveAndValidate 冻结新内容到同一草稿行。
      *
-     * @param tenantId          租户 ID
-     * @param ruleId            规则定义 ID
-     * @param name              新规则名称，null/空白时不改
-     * @param kind              规则类型字符串（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时默认 AST_BOOLEAN
-     * @param conditionAst      新条件 AST，null 视为空 AND
-     * @param decisionBindings  新决策绑定列表（草稿期 priority 占位，发布时回填），null 视为空
-     * @param preGates          新前置门列表，null 视为空
-     * @param triggerEventTypes 新触发事件类型列表，null 视为空
-     * @param script            EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
-     * @param actorId           操作人 ID
+     * @param tenantId 租户 ID
+     * @param ruleId   规则定义 ID
+     * @param content  规则内容（见 {@link RuleContent}；name null/空白时不改，kind null 时默认 AST_BOOLEAN）
+     * @param actorId  操作人 ID
      * @return 被更新草稿的 ID 信息（version 不变）
      */
-    DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
-            AstNode conditionAst, List<DecisionBinding> decisionBindings,
-            List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            ScriptSource script, String actorId);
+    DraftCreatedResult editDraft(String tenantId, Long ruleId, RuleContent content, String actorId);
 
     /**
      * 给已发布规则出新版本草稿（v_max+1, DRAFT）：要求当前无未发布 DRAFT。
-     * fromVersionId 非空时为回退（克隆该版本内容并按当前世界重解析）；激活仍走显式 publish。
+     * fromVersionId 非空时为回退（克隆该版本内容并按当前世界重解析，content 内容字段被忽略）；激活仍走显式 publish。
      *
-     * @param tenantId          租户 ID
-     * @param ruleId            规则定义 ID
-     * @param name              新规则名称，null/空白时不改
-     * @param kind              规则类型字符串（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE），null 时下游兜底
-     * @param conditionAst      新条件 AST（fromVersionId 非空时忽略，改用克隆值）
-     * @param decisionBindings  新决策绑定列表（草稿期 priority 占位，发布时回填；fromVersionId 非空时忽略），null 视为空
-     * @param preGates          新前置门列表（fromVersionId 非空时忽略），null 视为空
-     * @param triggerEventTypes 新触发事件类型列表（fromVersionId 非空时忽略），null 视为空
-     * @param fromVersionId     回退源版本 ID，非空时克隆其内容；null 时按入参建新草稿
-     * @param script            EXPRESSION_SCRIPT 脚本载体（fromVersionId 非空时忽略），其它 kind 传 null
-     * @param actorId           操作人 ID
+     * @param tenantId      租户 ID
+     * @param ruleId        规则定义 ID
+     * @param content       规则内容（见 {@link RuleContent}；fromVersionId 非空时内容字段忽略，改用克隆值）
+     * @param fromVersionId 回退源版本 ID，非空时克隆其内容；null 时按入参建新草稿
+     * @param actorId       操作人 ID
      * @return 新建草稿的 ID 信息（version = v_max+1）
      */
-    DraftCreatedResult newVersion(String tenantId, Long ruleId, String name, String kind,
-            AstNode conditionAst, List<DecisionBinding> decisionBindings,
-            List<PreGateConfig> preGates, List<String> triggerEventTypes,
-            Long fromVersionId, ScriptSource script, String actorId);
+    DraftCreatedResult newVersion(String tenantId, Long ruleId, RuleContent content,
+            Long fromVersionId, String actorId);
 
     /**
      * 删整条未发布规则（级联删 rule_definition + 全部 rule_version）：仅当从未发布过。

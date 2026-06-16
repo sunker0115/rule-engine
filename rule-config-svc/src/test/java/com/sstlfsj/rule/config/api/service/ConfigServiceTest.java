@@ -2,15 +2,12 @@ package com.sstlfsj.rule.config.api.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.RuleDetailVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
-import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
-import com.sstlfsj.rule.kernel.api.model.ScriptSource;
-import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -45,10 +42,7 @@ class ConfigServiceTest {
 
         @Override
         public DraftCreatedResult createDraft(String tenantId, String sceneCode,
-                String code, String name,
-                AstNode conditionAst, List<DecisionBinding> decisionBindings,
-                List<PreGateConfig> preGates, List<String> triggerEventTypes,
-                String kind, ScriptSource script, String actorId) {
+                String code, RuleContent content, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -58,18 +52,13 @@ class ConfigServiceTest {
         }
 
         @Override
-        public DraftCreatedResult editDraft(String tenantId, Long ruleId, String name, String kind,
-                AstNode conditionAst, List<DecisionBinding> decisionBindings,
-                List<PreGateConfig> preGates, List<String> triggerEventTypes,
-                ScriptSource script, String actorId) {
+        public DraftCreatedResult editDraft(String tenantId, Long ruleId, RuleContent content, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public DraftCreatedResult newVersion(String tenantId, Long ruleId, String name, String kind,
-                AstNode conditionAst, List<DecisionBinding> decisionBindings,
-                List<PreGateConfig> preGates, List<String> triggerEventTypes,
-                Long fromVersionId, ScriptSource script, String actorId) {
+        public DraftCreatedResult newVersion(String tenantId, Long ruleId, RuleContent content,
+                Long fromVersionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -124,8 +113,8 @@ class ConfigServiceTest {
     @Test
     void createDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.createDraft("t1", "SCENE_A", "RULE_001", "规则名",
-                        null, null, null, null, null, null, "actor"));
+                () -> stub.createDraft("t1", "SCENE_A", "RULE_001",
+                        new RuleContent("规则名", null, null, null, null, null, null), "actor"));
     }
 
     @Test
@@ -137,15 +126,15 @@ class ConfigServiceTest {
     @Test
     void editDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.editDraft("t1", 1L, "名", "AST_BOOLEAN",
-                        null, null, null, null, null, "actor"));
+                () -> stub.editDraft("t1", 1L,
+                        new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null), "actor"));
     }
 
     @Test
     void newVersion_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.newVersion("t1", 1L, "名", "AST_BOOLEAN",
-                        null, null, null, null, null, null, "actor"));
+                () -> stub.newVersion("t1", 1L,
+                        new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null), null, "actor"));
     }
 
     @Test

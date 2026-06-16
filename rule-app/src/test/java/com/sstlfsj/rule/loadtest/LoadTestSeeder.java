@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.loadtest;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
@@ -86,9 +87,10 @@ class LoadTestSeeder {
                 new MetricWriteCommand("demo score", "ATTRIBUTE", "LONG", Map.of(), null, true), ACTOR);
         for (int i = 1; i <= ruleCount; i++) {
             DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
-                    "lt-rule-" + i, "lt rule " + i,
-                    conditionAst(), List.of(new DecisionBinding("PASS", 1)),
-                    List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", null, ACTOR);
+                    "lt-rule-" + i,
+                    new RuleContent("lt rule " + i, "AST_BOOLEAN", conditionAst(),
+                            List.of(new DecisionBinding("PASS", 1)), List.of(), List.of(EVENT_TYPE), null),
+                    ACTOR);
             configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
         }
     }
@@ -116,9 +118,10 @@ class LoadTestSeeder {
                 new MetricWriteCommand("demo agg", "SQL_AGGREGATE", "LONG",
                         Map.of("datasource", "loadtest_ro", "sql", "SELECT 100"), 60, false), ACTOR);
         DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
-                "lt-fetch-rule", "lt fetch rule",
-                conditionAstAgg(), List.of(new DecisionBinding("PASS", 1)),
-                List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", null, ACTOR);
+                "lt-fetch-rule",
+                new RuleContent("lt fetch rule", "AST_BOOLEAN", conditionAstAgg(),
+                        List.of(new DecisionBinding("PASS", 1)), List.of(), List.of(EVENT_TYPE), null),
+                ACTOR);
         configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
     }
 
