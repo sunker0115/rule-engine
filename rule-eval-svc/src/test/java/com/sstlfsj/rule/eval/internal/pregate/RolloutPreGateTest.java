@@ -19,7 +19,7 @@ class RolloutPreGateTest {
         RuleEvent event = new RuleEvent("1", "scene", "EVENT", subjectId,
                 "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         return new PreGateContext("1", "scene", subjectId, event,
-                ruleVersionId, Map.of("percentage", percentage));
+                ruleVersionId, Map.of("percentage", percentage), event.occurredAt());
     }
 
     @Test
@@ -72,7 +72,7 @@ class RolloutPreGateTest {
         RuleEvent event = new RuleEvent("1", "scene", "E", "u1",
                 "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         // 无 percentage 参数
-        PreGateContext ctx = new PreGateContext("1", "scene", "u1", event, 1L, Map.of());
+        PreGateContext ctx = new PreGateContext("1", "scene", "u1", event, 1L, Map.of(), event.occurredAt());
         assertTrue(gate.evaluate(ctx).passed(), "缺少 percentage 配置时 fail-open");
     }
 
@@ -82,9 +82,9 @@ class RolloutPreGateTest {
         RuleEvent event = new RuleEvent("1", "scene", "E", "u1",
                 "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         PreGateContext ctx100 = new PreGateContext("1", "scene", "u1", event, 1L,
-                Map.of("percentage", "100"));
+                Map.of("percentage", "100"), event.occurredAt());
         PreGateContext ctx0 = new PreGateContext("1", "scene", "u1", event, 1L,
-                Map.of("percentage", "0"));
+                Map.of("percentage", "0"), event.occurredAt());
         assertTrue(gate.evaluate(ctx100).passed(), "字符串 '100' 应解析为全量放行");
         assertFalse(gate.evaluate(ctx0).passed(), "字符串 '0' 应解析为全量拦截");
     }
@@ -107,9 +107,9 @@ class RolloutPreGateTest {
         RuleEvent event = new RuleEvent("1", "scene", "E", "userX",
                 "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         PreGateContext ctx1 = new PreGateContext("1", "scene", "userX", event,
-                1L, Map.of("percentage", 50, "experimentId", "exp-001"));
+                1L, Map.of("percentage", 50, "experimentId", "exp-001"), event.occurredAt());
         PreGateContext ctx2 = new PreGateContext("1", "scene", "userX", event,
-                2L, Map.of("percentage", 50, "experimentId", "exp-001"));
+                2L, Map.of("percentage", 50, "experimentId", "exp-001"), event.occurredAt());
 
         // 两个 ruleVersionId 下，相同 experimentId 使结果一致
         assertEquals(gate.evaluate(ctx1).passed(), gate.evaluate(ctx2).passed(),
@@ -125,9 +125,9 @@ class RolloutPreGateTest {
             RuleEvent event = new RuleEvent("1", "scene", "E", "user" + i,
                     "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
             PreGateContext ctxA = new PreGateContext("1", "scene", "user" + i, event,
-                    1L, Map.of("percentage", 50, "experimentId", "exp-A"));
+                    1L, Map.of("percentage", 50, "experimentId", "exp-A"), event.occurredAt());
             PreGateContext ctxB = new PreGateContext("1", "scene", "user" + i, event,
-                    1L, Map.of("percentage", 50, "experimentId", "exp-B"));
+                    1L, Map.of("percentage", 50, "experimentId", "exp-B"), event.occurredAt());
             if (gate.evaluate(ctxA).passed() != gate.evaluate(ctxB).passed()) {
                 anyDifference = true;
                 break;
@@ -150,9 +150,9 @@ class RolloutPreGateTest {
         RuleEvent event = new RuleEvent("1", "scene", "E", "uHit",
                 "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         PreGateContext full = new PreGateContext("1", "scene", "uHit", event, 1L,
-                Map.of("bucketStart", 0, "bucketEnd", 100));
+                Map.of("bucketStart", 0, "bucketEnd", 100), event.occurredAt());
         PreGateContext empty = new PreGateContext("1", "scene", "uHit", event, 1L,
-                Map.of("bucketStart", 0, "bucketEnd", 0));
+                Map.of("bucketStart", 0, "bucketEnd", 0), event.occurredAt());
         assertTrue(gate.evaluate(full).passed(), "[0,100) 必命中");
         assertFalse(gate.evaluate(empty).passed(), "[0,0) 必拦");
     }
@@ -164,9 +164,9 @@ class RolloutPreGateTest {
             RuleEvent event = new RuleEvent("1", "scene", "E", sid,
                     "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
             PreGateContext ruleA = new PreGateContext("1", "scene", sid, event, 1L,
-                    Map.of("experimentId", "exp-mx", "bucketStart", 0, "bucketEnd", 50));
+                    Map.of("experimentId", "exp-mx", "bucketStart", 0, "bucketEnd", 50), event.occurredAt());
             PreGateContext ruleB = new PreGateContext("1", "scene", sid, event, 2L,
-                    Map.of("experimentId", "exp-mx", "bucketStart", 50, "bucketEnd", 100));
+                    Map.of("experimentId", "exp-mx", "bucketStart", 50, "bucketEnd", 100), event.occurredAt());
             boolean a = gate.evaluate(ruleA).passed();
             boolean b = gate.evaluate(ruleB).passed();
             assertTrue(a ^ b, "subject " + sid + " 必须恰好命中 A/B 其一（互斥）");
@@ -178,7 +178,7 @@ class RolloutPreGateTest {
         RuleEvent event = new RuleEvent("1", "scene", "E", "uDet",
                 "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
         PreGateContext c = new PreGateContext("1", "scene", "uDet", event, 7L,
-                Map.of("experimentId", "exp-1", "bucketStart", 10, "bucketEnd", 60));
+                Map.of("experimentId", "exp-1", "bucketStart", 10, "bucketEnd", 60), event.occurredAt());
         assertEquals(gate.evaluate(c).passed(), gate.evaluate(c).passed());
     }
 
@@ -186,7 +186,7 @@ class RolloutPreGateTest {
     void bothPercentageAndRangeAbsent_failOpen() {
         RuleEvent event = new RuleEvent("1", "scene", "E", "u1",
                 "eid", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
-        PreGateContext ctx = new PreGateContext("1", "scene", "u1", event, 1L, Map.of());
+        PreGateContext ctx = new PreGateContext("1", "scene", "u1", event, 1L, Map.of(), event.occurredAt());
         assertTrue(gate.evaluate(ctx).passed(), "无 percentage 也无区间时 fail-open");
     }
 }

@@ -67,8 +67,8 @@ export interface DecisionBinding {
 }
 
 export interface PreGate {
-  gateType: 'ROLLOUT';
-  params: RolloutParams;
+  gateType: 'ROLLOUT' | 'TIME_WINDOW';
+  params: RolloutParams | TimeWindowParams;
 }
 
 export interface RolloutParams {
@@ -76,4 +76,9 @@ export interface RolloutParams {
   bucketStart?: number;
   bucketEnd?: number;
   experimentId?: string;
+}
+
+export interface TimeWindowParams {
+  fromEpochMilli?: number;
+  toEpochMilli?: number;
 }

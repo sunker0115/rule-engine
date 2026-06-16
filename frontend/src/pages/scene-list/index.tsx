@@ -62,8 +62,8 @@ export default function SceneList() {
     try {
       const values = await form.validateFields();
       setConfirmLoading(true);
-      const dp = values.defaultParams;
-      await createScene({ ...values, tenantId, status: 'DISABLED', defaultParams: (dp && Object.keys(dp).length > 0) ? dp : { timezone: 'UTC' } });
+      // default_params 空就空，不默认注入 timezone；运行期时间算子由 TimeZoneResolver 兜底（params > scene 默认 > UTC）
+      await createScene({ ...values, tenantId, status: 'DISABLED', defaultParams: values.defaultParams });
       message.success(tc('message.createSuccess'));
       setModalOpen(false);
       form.resetFields();
@@ -80,7 +80,7 @@ export default function SceneList() {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <h2>{t('title.list')}</h2>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.setFieldValue('defaultParams', { timezone: 'UTC' }); setModalOpen(true); }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
           {t('action.create')}
         </Button>
       </div>

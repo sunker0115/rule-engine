@@ -152,7 +152,7 @@ public class EvalEngine {
         List<RuleVersionSnapshot> passed = new ArrayList<>();
         String firstBlockedBy = null;
         for (RuleVersionSnapshot snap : candidates) {
-            String blockedBy = applyPreGates(event, snap);
+            String blockedBy = applyPreGates(event, snap, now);
             if (blockedBy == null) passed.add(snap);
             else if (firstBlockedBy == null) firstBlockedBy = blockedBy;
         }
@@ -290,15 +290,16 @@ public class EvalEngine {
      *
      * @return null 表示全部通过；非 null 为首个阻断的 gate 类型
      */
-    private String applyPreGates(RuleEvent event, RuleVersionSnapshot snap) {
+    private String applyPreGates(RuleEvent event, RuleVersionSnapshot snap, Instant now) {
         for (RuleVersionSnapshot.PreGateConfig cfg : snap.preGates()) {
             PreGate gate = preGates.get(cfg.gateType());
             // fail-closed:未注册的 gateType 视为拦截(blockedBy=gateType),不静默放行——
             // 配了已砍/未实装的 gate 应被挡住而非漏过(发布期已拒此类配置,此为运行期兜底)
             if (gate == null) return cfg.gateType();
+            // occurredAt 用引擎统一 now(重放/asOf 注入历史时刻),保证时段类 gate 判断可复现
             PreGateContext pCtx = new PreGateContext(
                     event.tenantId(), event.sceneCode(), event.subjectId(),
-                    event, snap.ruleVersionId(), cfg.params());
+                    event, snap.ruleVersionId(), cfg.params(), now);
             PreGateResult result = gate.evaluate(pCtx);
             if (!result.passed()) return result.blockedBy();
         }

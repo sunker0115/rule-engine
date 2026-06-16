@@ -830,12 +830,17 @@ public class PublishService {
     private void validatePreGateParams(List<RuleVersionSnapshot.PreGateConfig> gates) {
         if (gates == null || gates.isEmpty()) return;
         for (RuleVersionSnapshot.PreGateConfig gate : gates) {
-            // pre-gate 收敛:仅 ROLLOUT 是注册的合法 gate;RATE_LIMIT/MUTEX 等已砍,配了即拒绝发布
-            if (!"ROLLOUT".equals(gate.gateType())) {
+            String gateType = gate.gateType();
+            // pre-gate 收敛:仅 ROLLOUT / TIME_WINDOW 是注册的合法 gate;RATE_LIMIT/MUTEX 等已砍,配了即拒绝发布
+            if (!"ROLLOUT".equals(gateType) && !"TIME_WINDOW".equals(gateType)) {
                 throw new IllegalArgumentException(
-                        "不支持的 pre-gate gateType(仅 ROLLOUT 合法): " + gate.gateType());
+                        "不支持的 pre-gate gateType(仅 ROLLOUT/TIME_WINDOW 合法): " + gateType);
             }
             if (gate.params() == null) continue;
+            if ("TIME_WINDOW".equals(gateType)) {
+                validateTimeWindowParams(gate.params());
+                continue;
+            }
             RolloutParams params = RolloutParams.from(gate.params());
 
             if (params.percentage() != null
@@ -861,6 +866,20 @@ public class PublishService {
                 throw new IllegalArgumentException(
                         "ROLLOUT experimentId 不得为空白字符串");
             }
+        }
+    }
+
+    /**
+     * 校验 TIME_WINDOW pre-gate 参数：from/to 均给定时须 from<=to（否则窗口永不命中）；
+     * 单边或皆空合法（皆空即无时段约束 fail-open）。
+     */
+    private void validateTimeWindowParams(Map<String, Object> params) {
+        TimeWindowParams p = TimeWindowParams.from(params);
+        if (p.fromEpochMilli() != null && p.toEpochMilli() != null
+                && p.fromEpochMilli() > p.toEpochMilli()) {
+            throw new IllegalArgumentException(
+                    "TIME_WINDOW fromEpochMilli 必须 <= toEpochMilli，实际: ["
+                            + p.fromEpochMilli() + "," + p.toEpochMilli() + "]");
         }
     }
 

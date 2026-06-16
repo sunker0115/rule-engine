@@ -15,7 +15,7 @@ class PreGateTest {
     private static PreGateContext buildCtx(String gateType) {
         RuleEvent event = new RuleEvent("t1", "SCENE1", "PAYMENT",
                 "u1", "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
-        return new PreGateContext("t1", "SCENE1", "u1", event, null, null);
+        return new PreGateContext("t1", "SCENE1", "u1", event, null, null, Instant.now());
     }
 
     private static final PreGate PASS_GATE = new PreGate() {

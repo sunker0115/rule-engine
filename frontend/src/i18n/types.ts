@@ -345,6 +345,7 @@ export interface RuleTranslation {
     labelPercentage: string; labelBucketStart: string; labelBucketEnd: string;
     labelRange: string; labelRollout: string;
     na: string;
+    rolloutTitle: string; timeWindowTitle: string; descTimeWindow: string;
   };
   decisionBinding: {
     selectPlaceholder: string;

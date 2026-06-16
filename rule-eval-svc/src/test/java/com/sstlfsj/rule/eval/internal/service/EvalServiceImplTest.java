@@ -356,4 +356,20 @@ class EvalServiceImplTest {
         assertDoesNotThrow(() -> impl.evaluate(eventWithPayload(Map.of("amount", 5000, "extra", "x"))));
         verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
     }
+
+    @Test
+    void evaluate_withNodeTrace_returnsHit_andSingleLineTraceLogPathDoesNotThrow() {
+        // 含非空 NodeTrace 的命中结果：doEvaluate 走单行 trace 日志分支（debug 级时格式化），结果不受影响
+        NodeTrace leaf = new NodeTrace(NodeType.CONDITION.tag(), "EQ", null, true,
+                null, null, null, List.of(), 1L, "R1", 1L, null, null);
+        Decision d = new Decision("REJECT", "", 10, 1L);
+        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(leaf), null, null, null, null);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
+
+        EvalResult result = impl.evaluate(event());
+
+        assertTrue(result.ruleHit());
+        assertEquals(1, result.nodeTrace().size());
+        verify(eventPublisher).publish(any(AuditRecordedEvent.class));
+    }
 }

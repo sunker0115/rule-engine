@@ -204,6 +204,10 @@ const rule: RuleTranslation = {
     labelRange: 'Range',
     labelRollout: 'Rollout',
     na: 'N/A',
+    rolloutTitle: 'Rollout',
+    timeWindowTitle: 'Effective Window',
+    descTimeWindow:
+      'Effective window: the rule is evaluated only within the selected start/end time (inclusive); outside it the rule is skipped (recorded as BLOCKED / blockedBy=TIME_WINDOW). Ideal for campaign windows — rules activate/expire automatically without manual toggling.',
   },
   decisionBinding: {
     selectPlaceholder: 'Select Decision',

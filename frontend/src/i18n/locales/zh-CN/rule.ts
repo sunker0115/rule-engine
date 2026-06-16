@@ -203,6 +203,10 @@ const rule: RuleTranslation = {
     labelRange: '区间',
     labelRollout: '放量',
     na: '不适用',
+    rolloutTitle: '灰度放量',
+    timeWindowTitle: '生效时段',
+    descTimeWindow:
+      '生效时段：仅在所选起止时间（闭区间）内规则才参与评估，窗口外自动跳过（落 BLOCKED / blockedBy=TIME_WINDOW）。适合活动起止、灰度时段，规则到点自动生失效，无需人工上下线。',
   },
   decisionBinding: {
     selectPlaceholder: '选择决策',

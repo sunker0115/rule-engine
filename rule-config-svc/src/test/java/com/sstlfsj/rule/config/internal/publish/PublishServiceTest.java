@@ -648,4 +648,53 @@ class PublishServiceTest {
                 "actor");
     }
 
+    // ===== TIME_WINDOW pre-gate 发布期校验 =====
+
+    @Test
+    void createDraft_timeWindowFromAfterTo_rejected() {
+        // TIME_WINDOW from>to 窗口永不命中,发布期应拒
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        sc.setEventTypes(List.of("payment.initiated"));
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        lenient().when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+
+        RuleVersionSnapshot.PreGateConfig timeWindow = new RuleVersionSnapshot.PreGateConfig(
+                "TIME_WINDOW", Map.of("fromEpochMilli", 2000L, "toEpochMilli", 1000L));
+        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.tw",
+                new RuleContent("时段规则", "AST_BOOLEAN",
+                        new AndNode(List.of(), null, null),
+                        List.of(), List.of(timeWindow), List.of(), null),
+                "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("fromEpochMilli 必须 <= toEpochMilli");
+        verify(ruleVersionMapper, never()).insert((RuleVersion) any());
+    }
+
+    @Test
+    void createDraft_timeWindowValid_passes() {
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        sc.setEventTypes(List.of("payment.initiated"));
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
+                .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
+        doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
+                .when(ruleVersionMapper).insert(any(RuleVersion.class));
+
+        RuleVersionSnapshot.PreGateConfig timeWindow = new RuleVersionSnapshot.PreGateConfig(
+                "TIME_WINDOW", Map.of("fromEpochMilli", 1000L, "toEpochMilli", 2000L));
+        DraftCreatedResult r = publishService.createDraft(1L, "PAYMENT", "rule.tw",
+                new RuleContent("时段规则", "AST_BOOLEAN",
+                        new AndNode(List.of(), null, null),
+                        List.of(), List.of(timeWindow), List.of(), null),
+                "actor");
+
+        assertThat(r.status()).isEqualTo("DRAFT");
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(cap.capture());
+        assertThat(cap.getValue().getPreGates()).hasSize(1);
+    }
+
 }

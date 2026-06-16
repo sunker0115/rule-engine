@@ -254,6 +254,34 @@ class EvalEngineTest {
     }
 
     @Test
+    void preGate_receivesEngineNow_asOccurredAt() {
+        // applyPreGates 应把引擎统一 now 透传进 PreGateContext.occurredAt(时段类 gate 据此判断,保证重放可复现)
+        Instant fixedNow = Instant.parse("2026-06-01T00:00:00Z");
+        Instant[] captured = new Instant[1];
+        PreGate capturingGate = new PreGate() {
+            @Override public String gateType() { return "CAPTURE"; }
+            @Override public PreGateResult evaluate(PreGateContext ctx) {
+                captured[0] = ctx.occurredAt();
+                return PreGateResult.pass();
+            }
+        };
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "scene", "t1",
+                EMPTY_AND,
+                List.of(new RuleVersionSnapshot.PreGateConfig("CAPTURE", Map.of())),
+                List.of(new RuleVersionSnapshot.DecisionBinding("BLOCK", 10)),
+                List.of(), "AST_BOOLEAN");
+        EvalContextAssembler asm = new EvalContextAssembler(List.of(), List.of());
+        EvalEngine engine = new EvalEngine(new SceneRuleIndex(), asm,
+                Map.of("CAPTURE", capturingGate),
+                Map.of("AST_BOOLEAN", hitExecutor()), true);
+
+        engine.evaluateWithContext(event("t1", "scene", "EVT"),
+                List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, fixedNow);
+
+        assertEquals(fixedNow, captured[0]);
+    }
+
+    @Test
     void evaluate_multipleSnapshots_highestPriorityWins() {
         SceneRuleIndex index = new SceneRuleIndex();
         RuleVersionSnapshot low  = new RuleVersionSnapshot(1L, "scene", "t1",

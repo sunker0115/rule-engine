@@ -10,8 +10,10 @@ import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.eval.internal.validate.PayloadInputValidator;
 import com.sstlfsj.rule.kernel.api.model.*;
+import com.sstlfsj.rule.kernel.api.trace.NodeTraceFormatter;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计事件，自身不做内联持久化、不派发 action；dry-run 只即时返回不落库。 */
+@Slf4j
 @Service
 class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
@@ -114,6 +117,9 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                     event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow, true);
             // dry-run 只即时返回结果（含 nodeTrace），不落历史（对齐 OPA：试算不写库）
             instrumentation.record(outcome.result().errorCode() != null);
+            if (log.isDebugEnabled()) {
+                log.debug("dry-run trace {}", NodeTraceFormatter.compact(outcome.result().nodeTrace()));
+            }
             return outcome.result();
         }
 
@@ -141,6 +147,10 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs,
                 candidates.stream().map(RuleVersionSnapshot::ruleVersionId).toList()));
         instrumentation.record(result.errorCode() != null);
+        if (log.isDebugEnabled()) {
+            log.debug("eval trace sid={} dur={}ms {}", sessionId, durationMs,
+                    NodeTraceFormatter.compact(result.nodeTrace()));
+        }
         return result;
     }
 
