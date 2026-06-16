@@ -53,4 +53,24 @@ class ScorecardRootNodeTest {
         ScorecardRootNode node = new ScorecardRootNode(List.of(), 0.5);
         assertInstanceOf(AstNode.class, node);
     }
+
+    @Test
+    void compatConstructor_defaultsBandsEmpty() {
+        ScorecardRootNode node = new ScorecardRootNode(List.of(), 60.0);
+        assertTrue(node.bands().isEmpty());
+        assertEquals(60.0, node.threshold(), 1e-9);
+    }
+
+    @Test
+    void bands_nullNormalizedToEmpty() {
+        ScorecardRootNode node = new ScorecardRootNode(List.of(), 60.0, null);
+        assertTrue(node.bands().isEmpty());
+    }
+
+    @Test
+    void bands_retained() {
+        ScoreBand band = new ScoreBand(0, 60, "REJECT", "HIGH_RISK");
+        ScorecardRootNode node = new ScorecardRootNode(List.of(), 60.0, List.of(band));
+        assertEquals(List.of(band), node.bands());
+    }
 }
