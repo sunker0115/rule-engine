@@ -177,7 +177,7 @@ export default function RulesAll() {
         confirmLoading={createLoading}
       >
         <Form form={createForm} layout="vertical">
-          <Form.Item name="tenantId" label={tc('tenant.label')} initialValue={currentId}>
+          <Form.Item name="tenantId" label={tc('label.tenant')} rules={[{ required: true }]} initialValue={currentId}>
             <Select
               options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
             />

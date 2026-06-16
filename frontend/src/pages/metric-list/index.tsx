@@ -209,6 +209,9 @@ export default function MetricList() {
     )}
     <Modal title={t('action.create')} open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} confirmLoading={confirmLoading} width={640}>
       <Form form={form} layout="vertical">
+        <Form.Item name="tenantId" label={tc('label.tenant')} initialValue={currentId ?? undefined} rules={[{ required: true, message: tc('tenant.notSelected') }]}>
+          <Select options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))} placeholder={tc('label.tenant')} />
+        </Form.Item>
         <Form.Item name="metricCode" label={t('form.code')} rules={[{ required: true, pattern: /^[a-z][a-z0-9_.]*$/ }]}>
           <Input placeholder={t('form.codePlaceholder')} />
         </Form.Item>

@@ -95,6 +95,9 @@ export default function DecisionList() {
       confirmLoading={confirmLoading}
     >
       <Form form={form} layout="vertical">
+        <Form.Item name="tenantId" label={tc('label.tenant')} rules={[{ required: true }]} initialValue={tenantId || undefined}>
+          <Select options={activeList.map((ten) => ({ value: ten.id, label: `${ten.name} (${ten.code})` }))} placeholder={tc('label.tenant')} />
+        </Form.Item>
         <Form.Item name="code" label={t('form.code')} rules={[{ required: true }]}>
           <Input disabled={!!editingCode} placeholder={t('form.codePlaceholder')} />
         </Form.Item>
