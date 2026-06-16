@@ -15,4 +15,25 @@ export default defineConfig({
       '/sdk': 'http://localhost:8080',
     },
   },
+  build: {
+    // antd 核心组件整库约 590KB（gzip ~164KB），是稳定的框架 vendor chunk，
+    // 已按库边界拆出 react/antd-rc/codemirror/i18n 等独立 chunk；阈值上调以容纳 antd 框架块
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // 按 node_modules 库边界保守拆分 vendor chunk，避免首屏主 chunk 过大
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'monaco';
+          if (id.includes('codemirror') || id.includes('@codemirror') || id.includes('@lezer')) return 'codemirror';
+          if (id.includes('@ant-design/icons')) return 'antd-icons';
+          if (id.includes('rc-') || id.includes('@rc-component')) return 'antd-rc';
+          if (id.includes('antd') || id.includes('@ant-design')) return 'antd';
+          if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler')) return 'react';
+          if (id.includes('i18next') || id.includes('react-i18next')) return 'i18n';
+          return 'vendor';
+        },
+      },
+    },
+  },
 });
