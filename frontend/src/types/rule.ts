@@ -46,6 +46,22 @@ export interface RuleVersionItem {
   publishedAt?: string;
 }
 
+/** 单个规则版本的完整内容——对齐 GET /admin/v1/rules/{ruleId}/versions/{versionId} */
+export interface RuleVersionContent {
+  ruleVersionId: number;
+  version: number;
+  status: string;
+  kind: string;
+  conditionAst?: AstNode | null;
+  decisionBindings: DecisionBinding[];
+  preGates: PreGate[];
+  triggerEventTypes: string[];
+  script?: { source: string; lang: string } | null;
+  createdAt?: string | null;
+  publishedBy?: string | null;
+  publishedAt?: string | null;
+}
+
 export interface DecisionBinding {
   decisionCode: string;
   scoreRangeMin?: number;

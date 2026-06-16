@@ -19,6 +19,7 @@ export const ENDPOINTS = {
   RULE_VERSIONS: (id: number) => `${ADMIN}/rules/${id}/versions`,
   RULE_DELETE:   (id: number) => `${ADMIN}/rules/${id}`,
   RULE_DELETE_VERSION: (ruleId: number, versionId: number) => `${ADMIN}/rules/${ruleId}/versions/${versionId}`,
+  RULE_VERSION:  (ruleId: number, versionId: number) => `${ADMIN}/rules/${ruleId}/versions/${versionId}`,
   RULE_EXPORT:   `${ADMIN}/rules/export`,
   RULE_IMPORT:   `${ADMIN}/rules/import`,
 
