@@ -12,6 +12,7 @@ import com.sstlfsj.rule.config.api.event.ConnectorChangedEvent;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
 import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
 import com.sstlfsj.rule.config.internal.domain.ConnectorStatus;
+import com.sstlfsj.rule.config.internal.event.ConnectorChangedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.ConnectorDefinitionMapper;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -94,6 +96,7 @@ class ConnectorWriteServiceImplTest {
         ConnectorDefinition existing = new ConnectorDefinition();
         existing.setId(7L);
         existing.setConnectorCode("risk-svc");
+        existing.setStatus(ConnectorStatus.ACTIVE);
         when(mapper.findByCode(1L, "risk-svc")).thenReturn(existing);
 
         svc.update(1L, "risk-svc", cmd(), "u2");
@@ -138,10 +141,17 @@ class ConnectorWriteServiceImplTest {
         assertThat(existing.getStatus()).isEqualTo(ConnectorStatus.DISABLED);
         assertThat(existing.getUpdatedBy()).isEqualTo("u3");
         verify(events).publishEvent(new ConnectorChangedEvent("1", "risk-svc"));
-        verify(events).publishEvent(argThat((Object e) ->
-                e instanceof OperationAuditedEvent a
-                        && "connector_definition".equals(a.targetType())
-                        && "DISABLE".equals(a.action())));
+
+        // 审计快照须坐实状态变迁：before=ACTIVE、after=DISABLED
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(events, atLeastOnce()).publishEvent(captor.capture());
+        OperationAuditedEvent audit = captor.getAllValues().stream()
+                .filter(e -> e instanceof OperationAuditedEvent a && "DISABLE".equals(a.action()))
+                .map(OperationAuditedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(audit.targetType()).isEqualTo("connector_definition");
+        assertThat(((ConnectorChangedSnapshot) audit.beforeSnapshot()).status()).isEqualTo("ACTIVE");
+        assertThat(((ConnectorChangedSnapshot) audit.afterSnapshot()).status()).isEqualTo("DISABLED");
     }
 
     @Test

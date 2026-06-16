@@ -51,7 +51,8 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
         mapper.insert(c);
 
         // CREATE 类 before/after 传同一快照实例，审计行始终 before/after 都有值（照 MetricWriteServiceImpl）
-        ConnectorChangedSnapshot snapshot = new ConnectorChangedSnapshot(connectorCode, cmd.name());
+        ConnectorChangedSnapshot snapshot = new ConnectorChangedSnapshot(
+                connectorCode, cmd.name(), ConnectorStatus.ACTIVE.name());
         publishAudit(tenantId, actorId, "CREATE", c.getId(), snapshot, snapshot);
         eventPublisher.publishEvent(new ConnectorChangedEvent(String.valueOf(tenantId), connectorCode));
         return c.getId();
@@ -65,7 +66,9 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
         }
         validator.validate(cmd.descriptor(), endpointNames.get());
 
-        ConnectorChangedSnapshot before = new ConnectorChangedSnapshot(connectorCode, existing.getName());
+        // update 不改 status，前后快照都带当前状态以保持字段完整
+        String status = existing.getStatus().name();
+        ConnectorChangedSnapshot before = new ConnectorChangedSnapshot(connectorCode, existing.getName(), status);
         existing.setName(cmd.name());
         existing.setDescriptor(cmd.descriptor());
         existing.setUpdatedBy(actorId);
@@ -73,7 +76,7 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
         int n = mapper.updateById(existing);
 
         publishAudit(tenantId, actorId, "UPDATE", existing.getId(), before,
-                new ConnectorChangedSnapshot(connectorCode, cmd.name()));
+                new ConnectorChangedSnapshot(connectorCode, cmd.name(), status));
         eventPublisher.publishEvent(new ConnectorChangedEvent(String.valueOf(tenantId), connectorCode));
         return n;
     }
@@ -85,14 +88,16 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
             throw new IllegalArgumentException("连接器不存在: " + connectorCode);
         }
 
-        ConnectorChangedSnapshot before = new ConnectorChangedSnapshot(connectorCode, existing.getName());
+        // before 在置 DISABLED 前取当前状态（ACTIVE），after 为 DISABLED，使审计能还原状态变迁
+        ConnectorChangedSnapshot before = new ConnectorChangedSnapshot(
+                connectorCode, existing.getName(), existing.getStatus().name());
         existing.setStatus(ConnectorStatus.DISABLED);
         existing.setUpdatedBy(actorId);
         existing.setUpdatedAt(LocalDateTime.now());
         mapper.updateById(existing);
 
         publishAudit(tenantId, actorId, "DISABLE", existing.getId(), before,
-                new ConnectorChangedSnapshot(connectorCode, existing.getName()));
+                new ConnectorChangedSnapshot(connectorCode, existing.getName(), ConnectorStatus.DISABLED.name()));
         eventPublisher.publishEvent(new ConnectorChangedEvent(String.valueOf(tenantId), connectorCode));
     }
 
