@@ -27,7 +27,9 @@ public class ConnectorDefinition {
 
     private ConnectorStatus status;
     private String createdBy;
+    @TableField("created_at")
     private LocalDateTime createdAt;
     private String updatedBy;
+    @TableField("updated_at")
     private LocalDateTime updatedAt;
 }

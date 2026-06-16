@@ -67,7 +67,7 @@ class ConnectorControllerTest {
     @Test
     void listReturnsActiveConnectors() throws Exception {
         when(service.listActive(1L)).thenReturn(List.of(
-                new ConnectorView("risk-svc", "风控打分", "ACTIVE")));
+                new ConnectorView("risk-svc", "风控打分", "ACTIVE", "2026-06-16T00:00", null)));
 
         mockMvc.perform(get("/admin/v1/connectors").param("tenantId", "1"))
                 .andExpect(status().isOk())
