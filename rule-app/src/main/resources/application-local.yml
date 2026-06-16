@@ -16,3 +16,22 @@
 logging:
   level:
     io.opentelemetry.exporter: "OFF"
+
+# ── 本地 stub 上游服务配置 ──────────────────────────────────────────────────
+# StubUpstreamController 跑在同一个 8080 端口（/stub/**），无需额外服务。
+# 在前端"新建连接器"时：endpointRef 填 local-stub，路径模板如 /stub/score/{subjectId}
+# successWhen: path=code op=EQ value=0  valuePath=data.score
+# 需要 API Key 鉴权时把 credentialRef 填 stub-key（值见下方 credentials）。
+engine:
+  rule:
+    fetch:
+      endpoints:
+        - name: local-stub
+          base-url: http://localhost:8080
+          auth-header-name: X-Stub-Key   # 可选，不填鉴权则连接器 auth 选"无"
+          auth-header-value: ${STUB_KEY:local-dev-secret}
+          connect-timeout-ms: 500
+          read-timeout-ms: 2000
+      credentials:
+        - name: stub-key
+          value: ${STUB_KEY:local-dev-secret}
