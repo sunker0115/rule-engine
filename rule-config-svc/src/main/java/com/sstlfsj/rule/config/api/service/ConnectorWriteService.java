@@ -52,7 +52,8 @@ public interface ConnectorWriteService {
      * @param name          名称
      * @param status        状态名
      */
-    record ConnectorView(String connectorCode, String name, String status) {}
+    record ConnectorView(String connectorCode, String name, String status,
+                         String createdAt, String updatedAt) {}
 
     /**
      * 详情视图（含 typed descriptor，出契约边界 status 以 String）。

@@ -123,6 +123,8 @@ class ConnectorWriteServiceImplTest {
         assertThat(views).hasSize(1);
         assertThat(views.getFirst().status()).isEqualTo("ACTIVE");
         assertThat(views.getFirst().connectorCode()).isEqualTo("risk-svc");
+        // createdAt/updatedAt 为 null（mock 对象未设置时间字段）
+        assertThat(views.getFirst().createdAt()).isNull();
     }
 
     @Test

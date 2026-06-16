@@ -105,7 +105,9 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
     @Transactional(readOnly = true)
     public List<ConnectorView> listActive(Long tenantId) {
         return mapper.findActiveByTenant(tenantId).stream()
-                .map(c -> new ConnectorView(c.getConnectorCode(), c.getName(), c.getStatus().name()))
+                .map(c -> new ConnectorView(c.getConnectorCode(), c.getName(), c.getStatus().name(),
+                        c.getCreatedAt() != null ? c.getCreatedAt().toString() : null,
+                        c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null))
                 .toList();
     }
 

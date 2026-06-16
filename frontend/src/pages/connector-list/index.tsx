@@ -17,7 +17,8 @@ export default function ConnectorList() {
   const { currentId, activeList } = useTenantStore();
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [connectors, setConnectors] = useState<ConnectorListItem[]>([]);
-  const tenantId = tenantFilter ?? currentId ?? 0;
+  // 未选租户时自动用第一个可用租户，确保列表默认有内容
+  const tenantId = tenantFilter ?? currentId ?? activeList?.[0]?.id ?? 0;
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
