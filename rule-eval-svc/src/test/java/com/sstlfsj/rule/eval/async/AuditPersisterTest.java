@@ -257,4 +257,54 @@ class AuditPersisterTest {
         assertThat(s.getPayload()).isNull();
         assertThat(s.getCandidateRuleVersionIds()).isNull();
     }
+
+    @Test
+    void hitDecisionsSerializationFails_doesNotDropWholeBatch() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        // mock ObjectMapper：hit_decisions 序列化抛异常。toSession 经 serializeJson 吞掉降级 null，
+        // 不应把异常抛进 .map() 流导致整批 INSERT 丢失（#3）
+        tools.jackson.databind.ObjectMapper om = mock(tools.jackson.databind.ObjectMapper.class);
+        when(om.writeValueAsString(any())).thenThrow(new RuntimeException("serialize boom"));
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        persister.afterPropertiesSet();
+
+        RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                .subjectId("u1").eventId("e-bad").source(EventSource.HTTP).occurredAt(Instant.now()).build();
+        Decision d = new Decision("REJECT", "", 10, 1L);
+        EvalResult r = new EvalResult(true, d, List.of(d), List.of(), null, null, null, null);
+        persister.onAudit(new AuditRecordedEvent(50L, event, EvalMode.PULL, 1, r, null, null, 0, List.of()));
+
+        Thread.sleep(300);
+        persister.destroy();
+
+        // session 仍落库（hit_decisions 降级 null），整批未因单条序列化失败而丢
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, times(1)).insertBatch(captor.capture());
+        EvaluationSession s = captor.getValue().get(0);
+        assertThat(s.getId()).isEqualTo(50L);
+        assertThat(s.getHitDecisions()).isNull();
+    }
+
+    @Test
+    void destroy_drainsEntireQueue_notJustOneBatch() throws Exception {
+        EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
+        TraceWriter traceWriter = mock(TraceWriter.class);
+        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
+        // batchSize=2、flushInterval 很长（不靠定时 flush）：积压 5 条 > batchSize，destroy 必须排空全部（#4）
+        AuditPersister persister = new AuditPersister(2000, 2, 100000, mapper, traceWriter, om, false);
+        persister.afterPropertiesSet();
+        for (int i = 0; i < 5; i++) {
+            RuleEvent ev = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
+                    .subjectId("u").eventId("e" + i).source(EventSource.HTTP).occurredAt(Instant.now()).build();
+            persister.onAudit(new AuditRecordedEvent(100L + i, ev, EvalMode.PULL, 1, EvalResult.miss(), null, null, 0, List.of()));
+        }
+
+        persister.destroy();
+
+        ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
+        verify(mapper, atLeastOnce()).insertBatch(captor.capture());
+        int total = captor.getAllValues().stream().mapToInt(List::size).sum();
+        assertThat(total).isEqualTo(5);   // 全部落库，停机不丢积压
+    }
 }

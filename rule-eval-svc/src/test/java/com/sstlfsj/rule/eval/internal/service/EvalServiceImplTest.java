@@ -265,6 +265,20 @@ class EvalServiceImplTest {
     }
 
     @Test
+    void evaluate_withAsOf_durationMs_isRealElapsed_notHistoricalDiff() {
+        // asOf 远古：durationMs 必须是真实墙钟耗时（小正数），而非 asOf→now 的历史差（会 int 溢出/负值）
+        Instant asOf = Instant.parse("2020-01-01T00:00:00Z");
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        impl.evaluate(event(), asOf);
+
+        ArgumentCaptor<AuditRecordedEvent> cap = ArgumentCaptor.forClass(AuditRecordedEvent.class);
+        verify(eventPublisher).publish(cap.capture());
+        int dur = cap.getValue().durationMs();
+        assertTrue(dur >= 0 && dur < 60_000, "durationMs 应为真实耗时(0~60s)，实际=" + dur);
+    }
+
+    @Test
     void evaluate_withoutAsOf_usesNow() {
         // 不传 asOf（asOf=null）：求值时刻落在调用前后的 Instant.now() 区间内
         stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));

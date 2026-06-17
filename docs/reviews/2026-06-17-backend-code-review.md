@@ -39,21 +39,21 @@
 ### #3 AuditPersister 单条坏数据丢整批
 - **位置**：`rule-eval-svc/.../internal/async/AuditPersister.java:132`（`toSession`）+ `flushBatch:95`
 - **根因**：`toSession` 的 `writeValueAsString` 裸调用无守卫，单条序列化失败抛进 `.map()` 流，被 `catch (RuntimeException ignored)` 整批（≤500）吞掉。
-- **改法**：`toSession` 内所有 `writeValueAsString` 改走已有 `serializeJson`(157) best-effort 包装；`flushBatch` catch 加 `log.warn`（不再静默）。
-- **状态**：待沟通
+- **改法**：`toSession` 的 hit_decisions 改走 `serializeJson` best-effort 包装（失败降级 null，不抛进 stream）；`flushBatch` 两处 catch 加 `log.warn`。
+- **状态**：已修
 
 ### #4 停机丢未消费事件/审计
 - **位置**：`rule-eval-svc/.../internal/dispatch/PushEventDispatcher.java:61`（`stop`）+ `AuditPersister.java:170`（`destroy`）
 - **根因**：`running=false` 后**立即 interrupt** 消费线程，正阻塞在 `poll`/`sleep` 的线程抛 InterruptedException 直接 break，队列剩余不排空。
 - **失败场景**：滚动发布/优雅停机时积压的 PUSH 事件永不评估、审计积压（>500）丢失。
-- **改法**：`running=false` → 消费循环排空队列（`while (!queue.isEmpty()) drain/flush`）→ `join(超时)` 等自然退出 → 仅超时才 interrupt + 最后 best-effort drain。两处同构一并改。
-- **状态**：待沟通
+- **改法**：`AuditPersister.destroy` 改为 `while(!queue.isEmpty()) flushBatch()` 排空整个队列再 join；`PushEventDispatcher.stop` 改为 `running=false` + `join(10s)` 等消费循环排空再退，超时才 interrupt 兜底。
+- **状态**：已修
 
 ### #5 durationMs 用 evalNow(asOf) 产生脏时长
 - **位置**：`rule-eval-svc/.../internal/service/EvalServiceImpl.java:145`
 - **根因**：`durationMs = Duration.between(evalNow, now)`，`evalNow = asOf ?? now`；asOf/replay 时是历史时刻 → 时长变成历史到墙钟间隔，`(int)` 毫秒 ~24.8 天后溢出，`finishedAt` 连带错。
-- **改法**：方法入口单独捕获 `Instant startWall = Instant.now()` 测耗时；evalNow 只用于评估逻辑。一行改动。
-- **状态**：待沟通
+- **改法**：方法入口捕获 `Instant startWall = Instant.now()` 测耗时；evalNow=asOf?startWall 只用于评估逻辑。`durationMs` 用 startWall→now。
+- **状态**：已修
 
 ---
 

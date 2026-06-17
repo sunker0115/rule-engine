@@ -6,6 +6,7 @@ import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
+import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.DisposableBean;
@@ -25,6 +26,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  * <p>best-effort：入队非阻塞，队列满丢弃；批量在虚拟线程消费，不阻塞评估热路径。
  * 审计可丢——溢出/崩溃丢最近未落库审计，{@code uk_tenant_event} 防重复行。
  */
+@Slf4j
 @Component
 // native：HitDecisionView 经 Jackson 序列化 hit_decisions，需注册其 record 组件反射(否则 native 下 writeValueAsString 抛 UnsupportedFeatureError)
 @RegisterReflectionForBinding(AuditPersister.HitDecisionView.class)
@@ -93,15 +95,16 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         try {
             // 多行批量 INSERT 终态 session（uk 重复 eventId 经 ON DUPLICATE KEY 空更新跳过），单次往返/单次 fsync
             sessionMapper.insertBatch(batch.stream().map(this::toSession).toList());
-        } catch (RuntimeException ignored) {
-            // 审计可丢，整批写库失败不影响主流程
+        } catch (RuntimeException ex) {
+            // 审计可丢，整批写库失败不影响主流程；但打 warn 便于区分真故障与正常背压丢弃
+            log.warn("审计 session 批量落库失败(best-effort 丢弃 {} 条)", batch.size(), ex);
         }
         for (AuditRecordedEvent e : batch) {
             try {
                 traceWriter.write(e.event().tenantId(), String.valueOf(e.sessionId()),
                         e.result().nodeTrace());
-            } catch (RuntimeException ignored) {
-                // trace 旁路，失败不影响
+            } catch (RuntimeException ex) {
+                log.warn("node_trace 旁路写失败 sessionId={}", e.sessionId(), ex);
             }
         }
     }
@@ -129,7 +132,8 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setHitRuleCount(r.hitDecisions().size());
         s.setScore(r.score());   // SCORECARD 累计分；其他 kind 为 null
         s.setCategory(r.finalDecision() != null ? r.finalDecision().category() : null);
-        s.setHitDecisions(objectMapper.writeValueAsString(
+        // best-effort 序列化：单条 hit_decisions 序列化失败降级为 null，不抛进 .map() 流导致整批落库丢失
+        s.setHitDecisions(serializeJson(
                 r.hitDecisions().stream()
                         .map(d -> new HitDecisionView(d.code(), d.category(), d.fromRuleVersionId()))
                         .toList()));
@@ -170,9 +174,17 @@ public class AuditPersister implements InitializingBean, DisposableBean {
     @Override
     public void destroy() {
         running = false;
-        flushBatch();
+        // 停机排空整个队列（不止一批），避免积压 > batchSize 的审计被丢
+        while (queue != null && !queue.isEmpty()) {
+            flushBatch();
+        }
         if (consumerThread != null) {
             consumerThread.interrupt();
+            try {
+                consumerThread.join(5000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 }

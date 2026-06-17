@@ -57,10 +57,16 @@ public class PushEventDispatcher {
         }
     }
 
-    /** 优雅停止：等队列排空后中断线程。 */
+    /** 优雅停止：先置 running=false，让消费循环把队列排空后自然退出，再 join；超时才中断兜底，避免停机丢未消费事件。 */
     public void stop() {
         running = false;
         if (consumerThread != null) {
+            try {
+                // consumeLoop 在 running=false 后仍 while(!queue.isEmpty()) 处理完剩余事件再退出
+                consumerThread.join(10000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             consumerThread.interrupt();
         }
     }

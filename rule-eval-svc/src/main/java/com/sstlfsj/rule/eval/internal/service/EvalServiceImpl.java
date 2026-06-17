@@ -104,7 +104,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     }
 
     private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId, Instant asOf) {
-        Instant evalNow = asOf != null ? asOf : Instant.now();
+        Instant startWall = Instant.now();           // 真实墙钟起点，仅用于测耗时
+        Instant evalNow = asOf != null ? asOf : startWall;   // 评估逻辑时刻（asOf 回放/可复现时为历史时刻）
         // dry-run 路径下 specificVersionId 已由 resolveDryRunVersionId 保证非空；此处 != null 为防御性守卫，
         // 防止未来出现"isDryRun=true 但无版本 id"的新调用路径误落候选分支（有副作用）。
         if (isDryRun && specificVersionId != null) {
@@ -142,7 +143,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         EvalResult result = outcome.result();
 
         // 副作用事件化：审计内存 best-effort（可丢）；纯决策，不派发任何 action
-        int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
+        // 用真实墙钟 startWall 测耗时，不用 evalNow（asOf 回放时 evalNow 是历史时刻，会算出天/月级甚至 int 溢出的脏时长）
+        int durationMs = (int) Duration.between(startWall, Instant.now()).toMillis();
         eventPublisher.publish(new AuditRecordedEvent(
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs,
                 candidates.stream().map(RuleVersionSnapshot::ruleVersionId).toList()));
