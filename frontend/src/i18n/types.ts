@@ -479,14 +479,26 @@ export interface ImportExportTranslation {
     upload: string; uploadHint: string;
     preview: string; previewTitle: string;
     existing: string; newDraft: string; skip: string; review: string;
-    importComplete: string;
+    importComplete: string; previewAndImport: string;
     execute: string;
+    policy: {
+      label: string; skip: string; overwrite: string; abort: string;
+      hint: { skip: string; overwrite: string; abort: string };
+    };
+    diff: {
+      title: string; cancel: string; confirm: string;
+      willCreate: string; willOverwrite: string; skipped: string; conflicts: string;
+      ruleCode: string; sceneCode: string; reason: string;
+      conflictType: string; detail: string;
+      conflictHint: string; abortHint: string;
+    };
     result: {
-      title: string; rulesImported: string; scenesCreated: string;
-      scenesSkipped: string; metricsCreated: string; metricsSkipped: string;
+      title: string; willCreate: string; willOverwrite: string; skipped: string;
+      rulesImported: string; scenesCreated: string; scenesSkipped: string;
+      metricsCreated: string; metricsSkipped: string;
       metricsReview: string; decisionsCreated: string; decisionsSkipped: string;
     };
-    error: { parseError: string; missingScene: string };
+    error: { parseError: string; missingScene: string; dryRunFailed: string; applyFailed: string; conflicts: string };
   };
 }
 

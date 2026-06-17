@@ -1,11 +1,14 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport;
+import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
-import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
+import com.sstlfsj.rule.config.internal.bundle.RuleImportService.ImportConflictException;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,9 +21,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * 规则批量导出 / 导入入口（B7 / 08-evolution §2.9）。
- * <p>导出为 Bundle JSON 文件下载，导入为 multipart 文件上传；Service 进出 {@link RuleBundle} 对象，
- * 本 Controller 负责对象 ↔ 文件的转换。权限 v1 沿用 X-Actor-Id，暂不做 EXPORT / PUBLISH 细粒度校验。</p>
+ * 规则批量导出 / 导入入口（Bundle v2）。
+ *
+ * <p>import 支持：
+ * <ul>
+ *   <li>{@code dryRun=true}：返回 diff 报告但不落库；</li>
+ *   <li>{@code policy}：SKIP（默认）/ OVERWRITE / ABORT 三种冲突策略；</li>
+ *   <li>ABORT 策略有冲突时返回 422 + 冲突详情。</li>
+ * </ul>
  */
 @RestController
 @RequiredArgsConstructor
@@ -33,9 +41,7 @@ public class RuleBundleController {
     private final ObjectMapper objectMapper;
 
     /**
-     * GET /admin/v1/rules/export — 按条件导出规则当前 ACTIVE 版本为 Bundle JSON 文件下载。
-     * <p>选取优先级：ruleIds 非空 → 按 id 列表；否则 sceneId 非空 → 该场景全部；否则 → 该租户全部。
-     * 成功返回 attachment 文件；无可导出规则等错误由 GlobalExceptionHandler 转 JSON 错误体。</p>
+     * GET /admin/v1/rules/export — 按条件导出规则当前 ACTIVE 版本为 Bundle v2 JSON 文件。
      *
      * @param tenantId 租户 id
      * @param ruleIds  规则定义 id 列表（逗号分隔，可选）
@@ -56,24 +62,38 @@ public class RuleBundleController {
     }
 
     /**
-     * POST /admin/v1/rules/import — 上传 Bundle JSON 文件，幂等批量导入，规则逐条落为 DRAFT 版本。
+     * POST /admin/v1/rules/import — 导入 Bundle v2。
+     *
+     * <p>{@code dryRun=true} 时返回 diff 报告但不落库；{@code dryRun=false}（默认）真实 apply。
+     * ABORT 策略有冲突时返回 422 Unprocessable Content + conflicts 列表。</p>
      *
      * @param tenantId 目标租户 id
-     * @param actorId  操作人
-     * @param file     Bundle JSON 文件（multipart 字段名 file）
-     * @return 导入结果汇总
+     * @param policy   冲突策略（SKIP / OVERWRITE / ABORT，默认 SKIP）
+     * @param dryRun   true = 仅预览 diff，不落库
+     * @param actorId  操作人（X-Actor-Id）
+     * @param file     Bundle v2 JSON 文件（multipart 字段名 file）
+     * @return diff 报告（dry-run 和 apply 均返回）
      */
     @PostMapping("/import")
-    public ApiResponse<RuleImportResult> importBundle(@RequestParam Long tenantId,
-                                                      @RequestHeader("X-Actor-Id") String actorId,
-                                                      @RequestParam("file") MultipartFile file) {
+    public ResponseEntity<ApiResponse<ImportDiffReport>> importBundle(
+            @RequestParam Long tenantId,
+            @RequestParam(defaultValue = "SKIP") ImportPolicy policy,
+            @RequestParam(defaultValue = "false") boolean dryRun,
+            @RequestHeader("X-Actor-Id") String actorId,
+            @RequestParam("file") MultipartFile file) {
         RuleBundle bundle;
         try {
             bundle = objectMapper.readValue(file.getBytes(), RuleBundle.class);
         } catch (Exception e) {
-            // 文件读取失败（IOException）或 JSON 反序列化失败 → 400
             throw new IllegalArgumentException("Bundle 文件解析失败: " + e.getMessage());
         }
-        return ApiResponse.ok(ruleBundleService.importBundle(tenantId, bundle, actorId));
+        try {
+            ImportDiffReport report = ruleBundleService.importBundle(tenantId, bundle, policy, dryRun, actorId);
+            return ResponseEntity.ok(ApiResponse.ok(report));
+        } catch (ImportConflictException e) {
+            // ABORT 策略有冲突：422 + conflicts 详情
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                    .body(ApiResponse.error("IMPORT_CONFLICT", "Bundle import aborted: conflicts found"));
+        }
     }
 }

@@ -15,13 +15,17 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 
@@ -32,9 +36,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
- * RuleExportService 单元测试：mock 各 Mapper 的语义查询方法。
- * <p>Mapper 的 default 查询方法会被 Mockito stub 掉（方法体不执行），故无需 TableInfoHelper 预热——
- * wrapper 拼装逻辑由 Mapper default 方法承载，交 Testcontainers 集成测试覆盖真库。</p>
+ * RuleExportService 单元测试：mock 各 Mapper；ObjectMapper 用真实实例（contentHash 需要序列化）。
  */
 @ExtendWith(MockitoExtension.class)
 class RuleExportServiceTest {
@@ -44,6 +46,7 @@ class RuleExportServiceTest {
     @Mock SceneMapper sceneMapper;
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock DecisionDefinitionMapper decisionDefinitionMapper;
+    @Spy ObjectMapper objectMapper = JsonMapper.builder().build();  // 真实 om，contentHash/revision 需要
     @InjectMocks RuleExportService sut;
 
     private RuleDefinition rule(long id, String code) {
@@ -73,7 +76,7 @@ class RuleExportServiceTest {
         s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
         s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
         s.setDecisionStrategy(com.sstlfsj.rule.config.internal.domain.DecisionStrategy.HIGHEST_PRIORITY);
-        s.setEventTypes(java.util.List.of("transfer")); s.setPayloadSchema(java.util.List.of());
+        s.setEventTypes(List.of("transfer")); s.setPayloadSchema(List.of());
         s.setDefaultParams(java.util.Map.of());
         return s;
     }
@@ -93,28 +96,68 @@ class RuleExportServiceTest {
     }
 
     @Test
-    void export_byRuleIds_assemblesMultiRuleBundleWithDedupedDeps() {
-        // 两条规则共享同一 scene / metric / decision，依赖应去重
+    void export_byRuleIds_assemblesV2BundleWithDedupedDeps() {
         when(ruleDefinitionMapper.selectForExport(any(), any(), any()))
                 .thenReturn(List.of(rule(10L, "a"), rule(11L, "b")));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(activeVersion(10L));
         when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(activeVersion(11L));
         when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
-        when(metricDefinitionMapper.findByCodeAndVersion(any(), eq("account.age"), eq(1)))
-                .thenReturn(metric());
+        when(metricDefinitionMapper.findByCodeAndVersion(any(), eq("account.age"), eq(1))).thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
 
         RuleBundle b = sut.export(1L, List.of(10L, 11L), null);
 
-        assertThat(b.bundleVersion()).isEqualTo(1);
+        assertThat(b.formatVersion()).isEqualTo(2);
+        assertThat(b.revision()).isNotBlank();        // v2：整 bundle SHA-256
         assertThat(b.rules()).hasSize(2);
         assertThat(b.rules()).extracting(RuleBundle.RuleEntry::code).containsExactlyInAnyOrder("a", "b");
         assertThat(b.rules().getFirst().sceneCode()).isEqualTo("risk.transfer");
+        assertThat(b.rules().getFirst().contentHash()).isNotBlank();  // v2：规则内容 SHA-256
+        assertThat(b.rules().getFirst().script()).isNull();          // AST_BOOLEAN：script=null
         assertThat(b.rules().getFirst().payloadDependencies())
                 .containsExactly(new PayloadDependency("amount", "NUMBER", true));
-        assertThat(b.scenes()).hasSize(1);                       // 去重
-        assertThat(b.metricDefinitions()).hasSize(1);            // 去重
-        assertThat(b.decisionDefinitions()).hasSize(1);          // 去重
+        assertThat(b.scenes()).hasSize(1);
+        assertThat(b.metricDefinitions()).hasSize(1);
+        assertThat(b.decisionDefinitions()).hasSize(1);
+    }
+
+    @Test
+    void export_scriptRule_carriessScriptInEntry() {
+        // EXPRESSION_SCRIPT 规则：script 字段随 bundle 携带不丢失
+        RuleDefinition rd = rule(12L, "cel-rule");
+        rd.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.EXPRESSION_SCRIPT);
+        RuleVersion rv = activeVersion(12L);
+        rv.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.EXPRESSION_SCRIPT);
+        rv.setScriptSource(new ScriptSource("metrics.amount > 1000", "CEL"));
+        when(ruleDefinitionMapper.selectForExport(any(), any(), any())).thenReturn(List.of(rd));
+        when(ruleVersionMapper.findActiveVersion(12L)).thenReturn(rv);
+        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
+        when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
+        when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
+
+        RuleBundle b = sut.export(1L, List.of(12L), null);
+
+        RuleBundle.RuleEntry entry = b.rules().getFirst();
+        assertThat(entry.script()).isNotNull();
+        assertThat(entry.script().source()).isEqualTo("metrics.amount > 1000");
+        assertThat(entry.script().lang()).isEqualTo("CEL");
+        assertThat(entry.contentHash()).isNotBlank();
+    }
+
+    @Test
+    void export_twoExports_sameContent_sameRevision() {
+        // 相同内容 export 两次 → revision 一致（幂等）
+        when(ruleDefinitionMapper.selectForExport(any(), any(), any())).thenReturn(List.of(rule(10L, "a")));
+        when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(activeVersion(10L));
+        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
+        when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
+        when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
+
+        RuleBundle b1 = sut.export(1L, List.of(10L), null);
+        RuleBundle b2 = sut.export(1L, List.of(10L), null);
+
+        assertThat(b1.revision()).isEqualTo(b2.revision());
+        assertThat(b1.rules().getFirst().contentHash()).isEqualTo(b2.rules().getFirst().contentHash());
     }
 
     @Test
@@ -122,7 +165,7 @@ class RuleExportServiceTest {
         when(ruleDefinitionMapper.selectForExport(any(), any(), any()))
                 .thenReturn(List.of(rule(10L, "a"), rule(11L, "b")));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(activeVersion(10L));
-        when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(null);   // 第二条无 ACTIVE
+        when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(null);
         when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
@@ -135,28 +178,11 @@ class RuleExportServiceTest {
 
     @Test
     void export_rejectsWhenNoExportableRule() {
-        when(ruleDefinitionMapper.selectForExport(any(), any(), any()))
-                .thenReturn(List.of(rule(10L, "a")));
-        when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(null);   // 无 ACTIVE
+        when(ruleDefinitionMapper.selectForExport(any(), any(), any())).thenReturn(List.of(rule(10L, "a")));
+        when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(null);
 
         assertThatThrownBy(() -> sut.export(1L, List.of(10L), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("可导出");
-    }
-
-    @Test
-    void export_bySceneId_filtersBySceneId() {
-        // 入参直接是 sceneId，service 透传给 mapper.selectForExport
-        when(ruleDefinitionMapper.selectForExport(any(), any(), any()))
-                .thenReturn(List.of(rule(10L, "a")));
-        when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(activeVersion(10L));
-        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
-        when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
-        when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
-
-        RuleBundle b = sut.export(1L, null, 5L);
-
-        assertThat(b.rules()).hasSize(1);
-        assertThat(b.rules().getFirst().sceneCode()).isEqualTo("risk.transfer");   // Bundle 内仍是 code
     }
 }

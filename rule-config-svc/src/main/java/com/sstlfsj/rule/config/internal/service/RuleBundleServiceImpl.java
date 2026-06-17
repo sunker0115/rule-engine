@@ -1,7 +1,8 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport;
+import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
-import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
 import com.sstlfsj.rule.config.internal.bundle.RuleExportService;
 import com.sstlfsj.rule.config.internal.bundle.RuleImportService;
@@ -24,7 +25,11 @@ class RuleBundleServiceImpl implements RuleBundleService {
     }
 
     @Override
-    public RuleImportResult importBundle(Long tenantId, RuleBundle bundle, String actorId) {
-        return ruleImportService.importBundle(tenantId, bundle, actorId);
+    public ImportDiffReport importBundle(Long tenantId, RuleBundle bundle,
+                                         ImportPolicy policy, boolean dryRun, String actorId) {
+        if (dryRun) {
+            return ruleImportService.dryRun(tenantId, bundle, policy, actorId);
+        }
+        return ruleImportService.apply(tenantId, bundle, policy, actorId);
     }
 }

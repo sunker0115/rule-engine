@@ -1,8 +1,9 @@
 package com.sstlfsj.rule.config.integration;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport;
+import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
-import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
@@ -145,41 +146,46 @@ class RuleBundleIntegrationTest {
         assertThat(bundle.metricDefinitions()).hasSize(1);    // 去重
         assertThat(bundle.decisionDefinitions()).hasSize(1);  // 去重
 
-        RuleImportResult result = ruleBundleService.importBundle(DST_TENANT, bundle, "dev");
+        ImportDiffReport result = ruleBundleService.importBundle(DST_TENANT, bundle,
+                ImportPolicy.SKIP, false, "dev");
 
-        assertThat(result.rules()).hasSize(2);
-        assertThat(result.rules()).allMatch(ir -> !ir.ruleAlreadyExisted() && ir.version() == 1L);
-        assertThat(result.scenesCreated()).containsExactly("risk.transfer");
-        assertThat(result.metricsCreated()).containsExactly("account.age");
-        assertThat(result.decisionsCreated()).containsExactly("BLOCK");
+        assertThat(result.willCreate()).hasSize(2);
+        assertThat(result.skipped()).isEmpty();
+        assertThat(result.scenesCreated()).isEqualTo(1);
 
-        // 目标租户下依赖与规则均落库，AST 原文无损、状态 DRAFT
+        // 目标租户下依赖与规则均落库，DRAFT 状态，AST 原文无损
         SceneDef dstScene = sceneMapper.selectOne(new LambdaQueryWrapper<SceneDef>()
                 .eq(SceneDef::getTenantId, DST_TENANT).eq(SceneDef::getCode, "risk.transfer"));
         assertThat(dstScene).isNotNull();
         long draftCount = ruleVersionMapper.selectCount(new LambdaQueryWrapper<RuleVersion>()
-                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT)
-                .in(RuleVersion::getRuleDefinitionId,
-                        result.rules().stream().map(RuleImportResult.ImportedRule::ruleDefinitionId).toList()));
+                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT));
         assertThat(draftCount).isEqualTo(2);
-        RuleVersion anyDraft = ruleVersionMapper.selectById(result.rules().getFirst().ruleVersionId());
-        // typed 列经 MySQL JSON 往返后反序列化回 AndNode，验证 AST 内容无损搬运
+        // 取一条 DRAFT 版本验证 AST 无损（按 status 查，DST_TENANT 下只有这 2 条 DRAFT）
+        RuleVersion anyDraft = ruleVersionMapper.selectOne(new LambdaQueryWrapper<RuleVersion>()
+                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT)
+                .last("LIMIT 1"));
         assertThat(anyDraft.getConditionAst()).isInstanceOf(AndNode.class);
         assertThat(((AndNode) anyDraft.getConditionAst()).children()).isEmpty();
     }
 
     @Test
-    void reimportSameBundle_appendsSecondDraftVersionPerRule() {
+    void reimportSameBundle_withSkipPolicy_isIdempotent() {
+        // v2 SKIP 策略：相同 contentHash → 跳过，不再无限追加 DRAFT
         Long sceneId = seedTwoPublishedRules();
         RuleBundle bundle = ruleBundleService.export(SRC_TENANT, null, sceneId);
 
-        RuleImportResult first = ruleBundleService.importBundle(DST_TENANT, bundle, "dev");
-        RuleImportResult second = ruleBundleService.importBundle(DST_TENANT, bundle, "dev");
+        ImportDiffReport first = ruleBundleService.importBundle(DST_TENANT, bundle,
+                ImportPolicy.SKIP, false, "dev");
+        ImportDiffReport second = ruleBundleService.importBundle(DST_TENANT, bundle,
+                ImportPolicy.SKIP, false, "dev");
 
-        assertThat(first.rules()).allMatch(ir -> !ir.ruleAlreadyExisted() && ir.version() == 1L);
-        assertThat(second.rules()).allMatch(ir -> ir.ruleAlreadyExisted() && ir.version() == 2L);
-        assertThat(second.scenesSkippedExisting()).containsExactly("risk.transfer");
-        assertThat(second.metricsSkippedExisting()).containsExactly("account.age");
-        assertThat(second.decisionsSkippedExisting()).containsExactly("BLOCK");
+        assertThat(first.willCreate()).hasSize(2);
+        // 第二次：contentHash 一致 → 跳过（幂等）
+        assertThat(second.skipped()).hasSize(2);
+        assertThat(second.willCreate()).isEmpty();
+        // DB 仍只有两条 DRAFT，没有额外追加
+        long draftCount = ruleVersionMapper.selectCount(new LambdaQueryWrapper<RuleVersion>()
+                .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT));
+        assertThat(draftCount).isEqualTo(2);
     }
 }

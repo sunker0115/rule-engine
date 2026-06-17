@@ -1,228 +1,279 @@
 package com.sstlfsj.rule.config.internal.bundle;
 
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport;
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport.RuleImportConflict;
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport.RuleImportItem;
+import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
-import com.sstlfsj.rule.config.api.dto.RuleImportResult;
-import com.sstlfsj.rule.kernel.api.model.RuleKind;
-import com.sstlfsj.rule.kernel.api.model.SourceType;
-import com.sstlfsj.rule.kernel.api.model.SubjectType;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
+import com.sstlfsj.rule.config.api.service.DecisionService;
+import com.sstlfsj.rule.config.api.service.MetricWriteService;
+import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
+import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
-import com.sstlfsj.rule.config.internal.domain.DecisionStatus;
-import com.sstlfsj.rule.config.internal.domain.DecisionStrategy;
-import com.sstlfsj.rule.config.internal.domain.DominantMode;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
-import com.sstlfsj.rule.config.internal.domain.MetricEnums;
-import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
-import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
-import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.domain.SceneStatus;
-import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
-import com.sstlfsj.rule.config.internal.event.RuleImportedSnapshot;
+import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
-import org.springframework.context.ApplicationEventPublisher;
+import com.sstlfsj.rule.config.internal.domain.MetricEnums;
+import com.sstlfsj.rule.kernel.api.model.SourceType;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import lombok.RequiredArgsConstructor;
+import tools.jackson.databind.ObjectMapper;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * 规则批量导入：幂等地把 Bundle 写入目标租户（B7）。
- * <p>单事务内先整体 upsert 依赖（Scene / metric / decision 缺失则建，已存在跳过），
- * 再逐条把规则落为 DRAFT 版本——已存在则追加草稿版本，不覆盖已发布版本。
- * SQL_AGGREGATE 类缺失 metric 不自动创建，列入待审清单。</p>
+ * Bundle v2 import：所有资源走完整 service 写链路（审计/事件/校验全部继承），
+ * 支持 SKIP / OVERWRITE / ABORT 三种冲突策略，以及 dry-run 模式（事务内跑完强制回滚）。
+ *
+ * <h3>架构原则</h3>
+ * <ul>
+ *   <li>规则 import → {@link PublishService#createDraft}，内含 resolveAndValidate（script/metric 校验/依赖冻结）。</li>
+ *   <li>scene/metric/decision → 对应 service write 方法，审计/事件自动继承。</li>
+ *   <li>幂等：ACTIVE 版本 contentHash 一致 → 跳过，不建新版本。</li>
+ *   <li>ABORT：collect-all 模式，全部规则跑完后有冲突整体抛出，事务自然回滚。</li>
+ *   <li>dry-run：事务内完整执行，收集 diff 后抛 {@link DryRunCompletedException} 强制回滚。</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
 public class RuleImportService {
 
+    private final PublishService publishService;
+    private final SceneService sceneService;
+    private final MetricWriteService metricWriteService;
+    private final DecisionService decisionService;
+    // 直接读仅用于 hash 比较，不走写操作
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final SceneMapper sceneMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
-    /** 幂等批量导入 Bundle 到目标租户。 */
+    /**
+     * dry-run：事务内跑完整 import 逻辑，收集 diff 后强制回滚（DB 不落任何数据）。
+     * 返回的 {@link ImportDiffReport} 100% 准确反映真实 apply 的效果。
+     */
     @Transactional
-    public RuleImportResult importBundle(Long tenantId, RuleBundle bundle, String actorId) {
+    public ImportDiffReport dryRun(Long tenantId, RuleBundle bundle, ImportPolicy policy, String actorId) {
+        try {
+            ImportDiffReport report = doImport(tenantId, bundle, policy, actorId);
+            throw new DryRunCompletedException(report);
+        } catch (DryRunCompletedException e) {
+            return e.report;
+        }
+        // Spring @Transactional 在 DryRunCompletedException（RuntimeException）触发回滚
+    }
+
+    /**
+     * 真实 apply：提交所有变更。
+     */
+    @Transactional
+    public ImportDiffReport apply(Long tenantId, RuleBundle bundle, ImportPolicy policy, String actorId) {
+        return doImport(tenantId, bundle, policy, actorId);
+    }
+
+    // ---- 核心 import 逻辑 -----------------------------------------------
+
+    private ImportDiffReport doImport(Long tenantId, RuleBundle bundle, ImportPolicy policy, String actorId) {
         if (bundle == null || bundle.rules() == null || bundle.rules().isEmpty()) {
             throw new IllegalArgumentException("Bundle 结构非法：rules 不得为空");
         }
+        ImportPolicy effectivePolicy = policy != null ? policy : ImportPolicy.SKIP;
 
-        // 2. Scenes upsert + sceneCode → sceneId 映射
-        List<String> scenesCreated = new ArrayList<>();
-        List<String> scenesSkipped = new ArrayList<>();
-        Map<String, Long> sceneIdByCode = new LinkedHashMap<>();
-        if (bundle.scenes() != null) {
-            for (RuleBundle.SceneSnapshot ss : bundle.scenes()) {
-                SceneDef existing = sceneMapper.findByCode(tenantId, ss.code());
-                if (existing != null) {
-                    scenesSkipped.add(ss.code());
-                    sceneIdByCode.put(ss.code(), existing.getId());
-                    continue;
-                }
-                SceneDef s = new SceneDef();
-                s.setTenantId(tenantId);
-                s.setCode(ss.code());
-                s.setName(ss.name());
-                s.setDescription(ss.description());
-                s.setSubjectType(SubjectType.valueOf(ss.subjectType()));
-                s.setDominantMode(DominantMode.valueOf(ss.dominantMode()));
-                s.setDecisionStrategy(DecisionStrategy.valueOf(ss.decisionStrategy()));
-                s.setEventTypes(ss.eventTypes());
-                s.setPayloadSchema(ss.payloadSchema());
-                s.setDefaultParams(ss.defaultParams());
-                s.setStatus(SceneStatus.ACTIVE);
-                s.setCreatedBy(actorId);
-                s.setCreatedAt(LocalDateTime.now());
-                sceneMapper.insert(s);
-                scenesCreated.add(ss.code());
-                sceneIdByCode.put(ss.code(), s.getId());
-            }
-        }
+        // ① scenes
+        int scenesCreated = upsertScenes(tenantId, bundle, actorId);
 
-        // 3. Metrics upsert
-        List<String> metricsCreated = new ArrayList<>();
-        List<String> metricsSkipped = new ArrayList<>();
-        List<String> metricsReview = new ArrayList<>();
-        if (bundle.metricDefinitions() != null) {
-            for (RuleBundle.MetricEntry me : bundle.metricDefinitions()) {
-                MetricDefinition existing = metricDefinitionMapper.findAnyByCode(tenantId, me.metricCode());
-                if (existing != null) {
-                    metricsSkipped.add(me.metricCode());
-                    continue;
-                }
-                // 非法 data_type/source_type 不自动创建(ENUM→VARCHAR 后 DB 不再约束,导入侧由此堵口),交人工 review
-                if (!MetricEnums.DATA_TYPES.contains(me.dataType())
-                        || !MetricEnums.SOURCE_TYPES.contains(me.sourceType())) {
-                    metricsReview.add(me.metricCode());
-                    continue;
-                }
-                if (SourceType.SQL_AGGREGATE.equals(me.sourceType())) {
-                    // SQL 类参数含查询语句，需人工审核，不自动创建（发布期 metric 校验是安全网）
-                    metricsReview.add(me.metricCode());
-                    continue;
-                }
-                MetricDefinition m = new MetricDefinition();
-                m.setTenantId(tenantId);
-                m.setMetricCode(me.metricCode());
-                m.setVersion(me.version() == null ? 1 : me.version());
-                m.setName(me.name());
-                m.setSourceType(me.sourceType());
-                m.setDataType(me.dataType());
-                m.setParams(me.params() != null ? me.params() : java.util.Map.of());
-                m.setCacheTtlSeconds(me.cacheTtlSeconds() == null ? 60 : me.cacheTtlSeconds());
-                m.setAllowProvided(Boolean.TRUE.equals(me.allowProvided()));
-                m.setStatus(MetricStatus.ACTIVE);
-                m.setCreatedBy(actorId);
-                m.setCreatedAt(LocalDateTime.now());
-                metricDefinitionMapper.insert(m);
-                metricsCreated.add(me.metricCode());
-            }
-        }
+        // ② metrics
+        int metricsCreated = upsertMetrics(tenantId, bundle, actorId);
 
-        // 4. Decisions upsert
-        List<String> decisionsCreated = new ArrayList<>();
-        List<String> decisionsSkipped = new ArrayList<>();
-        if (bundle.decisionDefinitions() != null) {
-            for (RuleBundle.DecisionEntry de : bundle.decisionDefinitions()) {
-                DecisionDefinition existing = decisionDefinitionMapper.findByCode(tenantId, de.code());
-                if (existing != null) {
-                    decisionsSkipped.add(de.code());
-                    continue;
-                }
-                DecisionDefinition d = new DecisionDefinition();
-                d.setTenantId(tenantId);
-                d.setCode(de.code());
-                d.setName(de.name());
-                d.setPriority(de.priority());
-                d.setDescription(de.description());
-                d.setStatus(DecisionStatus.ACTIVE);
-                d.setCreatedBy(actorId);
-                d.setCreatedAt(LocalDateTime.now());
-                decisionDefinitionMapper.insert(d);
-                decisionsCreated.add(de.code());
-            }
-        }
+        // ③ decisions
+        int decisionsCreated = upsertDecisions(tenantId, bundle, actorId);
 
-        // 5. Rules 逐条
-        List<RuleImportResult.ImportedRule> importedRules = new ArrayList<>();
+        // ④ rules（走 createDraft，含 resolveAndValidate）
+        List<RuleImportItem> willCreate = new ArrayList<>();
+        List<RuleImportItem> willOverwrite = new ArrayList<>();
+        List<RuleImportItem> skipped = new ArrayList<>();
+        List<RuleImportConflict> conflicts = new ArrayList<>();
+
         for (RuleBundle.RuleEntry rule : bundle.rules()) {
-            Long sceneId = resolveSceneId(tenantId, rule.sceneCode(), sceneIdByCode);
-            RuleKind kind = (rule.kind() == null || rule.kind().isBlank())
-                    ? RuleKind.AST_BOOLEAN : RuleKind.valueOf(rule.kind());
-
-            RuleDefinition rd = ruleDefinitionMapper.findBySceneAndCode(tenantId, sceneId, rule.code());
-            boolean ruleExisted = rd != null;
-            long newVersion;
-            if (rd == null) {
-                rd = new RuleDefinition();
-                rd.setTenantId(tenantId);
-                rd.setSceneId(sceneId);
-                rd.setCode(rule.code());
-                rd.setName(rule.name());
-                rd.setStatus(RuleDefinitionStatus.DRAFT);
-                rd.setKind(kind);
-                rd.setCreatedBy(actorId);
-                rd.setCreatedAt(LocalDateTime.now());
-                ruleDefinitionMapper.insert(rd);
-                newVersion = 1L;
-            } else {
-                // 已存在：追加草稿版本，不动 rule_definition 状态/currentVersion（不覆盖已发布版本）
-                newVersion = ruleVersionMapper.maxVersion(rd.getId()) + 1;
-            }
-
-            RuleVersion rv = new RuleVersion();
-            rv.setRuleDefinitionId(rd.getId());
-            rv.setVersion(newVersion);
-            rv.setConditionAst(rule.conditionAst() != null ? rule.conditionAst()
-                    : new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null));
-            rv.setDecisionBindings(rule.decisionBindings() != null ? rule.decisionBindings() : java.util.List.of());
-            rv.setPreGates(rule.preGates() != null ? rule.preGates() : java.util.List.of());
-            rv.setKind(kind);
-            rv.setTriggerEventTypes(rule.triggerEventTypes() != null ? rule.triggerEventTypes() : java.util.List.of());
-            rv.setMetricDependencies(rule.metricDependencies() != null ? rule.metricDependencies() : java.util.List.of());
-            rv.setPayloadDependencies(rule.payloadDependencies() != null ? rule.payloadDependencies() : java.util.List.of());
-            rv.setStatus(RuleVersionStatus.DRAFT);
-            rv.setCreatedAt(LocalDateTime.now());
-            ruleVersionMapper.insert(rv);
-
-            eventPublisher.publishEvent(new OperationAuditedEvent(
-                    tenantId, actorId, "USER", "IMPORT", "rule_definition", rd.getId().toString(),
-                    null,
-                    new RuleImportedSnapshot(rv.getId(), newVersion, ruleExisted),
-                    LocalDateTime.now()));
-
-            importedRules.add(new RuleImportResult.ImportedRule(
-                    rd.getId(), rv.getId(), newVersion, rule.code(), rule.sceneCode(), ruleExisted));
+            processRule(tenantId, rule, effectivePolicy, actorId,
+                    willCreate, willOverwrite, skipped, conflicts);
         }
 
-        return new RuleImportResult(importedRules,
-                scenesCreated, scenesSkipped,
-                metricsCreated, metricsSkipped, metricsReview,
-                decisionsCreated, decisionsSkipped);
+        if (effectivePolicy == ImportPolicy.ABORT && !conflicts.isEmpty()) {
+            throw new ImportConflictException(
+                    new ImportDiffReport(willCreate, willOverwrite, skipped, conflicts,
+                            scenesCreated, metricsCreated, decisionsCreated));
+        }
+
+        return new ImportDiffReport(willCreate, willOverwrite, skipped, conflicts,
+                scenesCreated, metricsCreated, decisionsCreated);
     }
 
-    /** 按 sceneCode 解析 sceneId：优先本次 upsert 映射，缺失则兜底查库，仍无则报错。 */
-    private Long resolveSceneId(Long tenantId, String sceneCode, Map<String, Long> sceneIdByCode) {
-        Long id = sceneIdByCode.get(sceneCode);
-        if (id != null) return id;
-        SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
+    // ---- 规则逐条处理 -------------------------------------------------------
+
+    private void processRule(Long tenantId, RuleBundle.RuleEntry rule, ImportPolicy policy,
+                             String actorId,
+                             List<RuleImportItem> willCreate, List<RuleImportItem> willOverwrite,
+                             List<RuleImportItem> skipped, List<RuleImportConflict> conflicts) {
+
+        // 解析 sceneId（scene 在 ① 已 upsert，这里直接查库）
+        SceneDef scene = sceneMapper.findByCode(tenantId, rule.sceneCode());
         if (scene == null) {
-            throw new IllegalArgumentException("规则引用的 Scene 不在 Bundle 也不在目标环境: code=" + sceneCode);
+            conflicts.add(new RuleImportConflict(rule.code(), rule.sceneCode(),
+                    "SCENE_NOT_FOUND", "Scene 不在 Bundle 也不在目标环境"));
+            return;
         }
-        sceneIdByCode.put(sceneCode, scene.getId());
-        return scene.getId();
+
+        RuleDefinition existing = ruleDefinitionMapper.findBySceneAndCode(
+                tenantId, scene.getId(), rule.code());
+
+        // 幂等：比较 contentHash
+        if (existing != null && rule.contentHash() != null) {
+            RuleVersion activeVersion = ruleVersionMapper.findActiveVersion(existing.getId());
+            if (activeVersion != null) {
+                String targetHash = RuleContentHasher.ruleHash(
+                        activeVersion.getConditionAst(), activeVersion.getDecisionBindings(),
+                        activeVersion.getPreGates(),
+                        (activeVersion.getKind() != null ? activeVersion.getKind().name() : "AST_BOOLEAN"),
+                        activeVersion.getTriggerEventTypes(), activeVersion.getScriptSource(),
+                        objectMapper);
+                if (rule.contentHash().equals(targetHash)) {
+                    skipped.add(new RuleImportItem(rule.code(), rule.sceneCode(), "内容 hash 一致，无需变更"));
+                    return;
+                }
+            }
+        }
+
+        if (existing != null) {
+            // 目标已存在且 hash 不同
+            switch (policy) {
+                case SKIP -> {
+                    skipped.add(new RuleImportItem(rule.code(), rule.sceneCode(),
+                            "SKIP 策略：目标已存在，保留现有版本"));
+                    return;
+                }
+                case OVERWRITE -> {
+                    // 清掉旧 DRAFT，再建新 DRAFT
+                    RuleVersion draftVersion = ruleVersionMapper.findLatestDraft(existing.getId());
+                    if (draftVersion != null) {
+                        publishService.deleteDraftVersion(tenantId, existing.getId(), draftVersion.getId(), actorId);
+                    }
+                    // 继续往下 createDraft
+                }
+                case ABORT -> {
+                    conflicts.add(new RuleImportConflict(rule.code(), rule.sceneCode(),
+                            "CONTENT_CHANGED", "目标已存在且内容不同，ABORT 策略下记为冲突"));
+                    return;
+                }
+            }
+        }
+
+        // createDraft：走完整 service 链（resolveAndValidate 在内）
+        RuleContent content = new RuleContent(
+                rule.name(), rule.kind(),
+                rule.conditionAst(),
+                rule.decisionBindings() != null ? rule.decisionBindings() : List.of(),
+                rule.preGates() != null ? rule.preGates() : List.of(),
+                rule.triggerEventTypes() != null ? rule.triggerEventTypes() : List.of(),
+                rule.script());
+
+        publishService.createDraft(tenantId, rule.sceneCode(), rule.code(), content, actorId);
+
+        if (existing == null) {
+            willCreate.add(new RuleImportItem(rule.code(), rule.sceneCode(), "目标不存在，将新建"));
+        } else {
+            willOverwrite.add(new RuleImportItem(rule.code(), rule.sceneCode(),
+                    "已清除旧 DRAFT，新建替换版本"));
+        }
+    }
+
+    // ---- scene/metric/decision upsert（走 service 写链，审计自动继承）----
+
+    private int upsertScenes(Long tenantId, RuleBundle bundle, String actorId) {
+        if (bundle.scenes() == null) return 0;
+        int created = 0;
+        for (RuleBundle.SceneSnapshot ss : bundle.scenes()) {
+            if (sceneMapper.findByCode(tenantId, ss.code()) != null) continue;
+            sceneService.createScene(tenantId, ss.code(), ss.name(),
+                    ss.description() != null ? ss.description() : "",
+                    ss.dominantMode(), ss.subjectType(),
+                    ss.eventTypes() != null ? ss.eventTypes() : List.of(),
+                    ss.payloadSchema() != null ? ss.payloadSchema() : List.of(),
+                    ss.defaultParams(),
+                    actorId);
+            created++;
+        }
+        return created;
+    }
+
+    private int upsertMetrics(Long tenantId, RuleBundle bundle, String actorId) {
+        if (bundle.metricDefinitions() == null) return 0;
+        int created = 0;
+        for (RuleBundle.MetricEntry me : bundle.metricDefinitions()) {
+            if (metricDefinitionMapper.findAnyByCode(tenantId, me.metricCode()) != null) continue;
+            // SQL_AGGREGATE / 非法枚举：跳过，交人工处理
+            if (!MetricEnums.DATA_TYPES.contains(me.dataType())
+                    || !MetricEnums.SOURCE_TYPES.contains(me.sourceType())
+                    || SourceType.SQL_AGGREGATE.equals(me.sourceType())) {
+                continue;
+            }
+            var cmd = buildMetricCmd(me);
+            metricWriteService.create(tenantId, me.metricCode(), cmd, actorId);
+            created++;
+        }
+        return created;
+    }
+
+    private int upsertDecisions(Long tenantId, RuleBundle bundle, String actorId) {
+        if (bundle.decisionDefinitions() == null) return 0;
+        int created = 0;
+        for (RuleBundle.DecisionEntry de : bundle.decisionDefinitions()) {
+            if (decisionDefinitionMapper.findByCode(tenantId, de.code()) != null) continue;
+            decisionService.create(tenantId, de.code(), de.name(), de.priority(), de.description(), actorId);
+            created++;
+        }
+        return created;
+    }
+
+    private MetricWriteCommand buildMetricCmd(RuleBundle.MetricEntry me) {
+        return new MetricWriteCommand(
+                me.name(), me.sourceType(), me.dataType(),
+                me.params() != null ? me.params() : java.util.Map.of(),
+                me.cacheTtlSeconds() != null ? me.cacheTtlSeconds() : 60,
+                Boolean.TRUE.equals(me.allowProvided()),
+                false);  // sensitive：bundle 导入默认非敏感，运营可后续自行修改
+    }
+
+    // ---- 内部异常（用于 dry-run 强制回滚 + ABORT 策略）---------------------
+
+    /** dry-run 完成信号：携带 diff report，触发 @Transactional 回滚。 */
+    static class DryRunCompletedException extends RuntimeException {
+        final ImportDiffReport report;
+        DryRunCompletedException(ImportDiffReport report) {
+            super("dry-run completed");
+            this.report = report;
+        }
+    }
+
+    /** ABORT 策略冲突：携带 diff report，触发事务回滚，并被 controller 捕获为 400。 */
+    public static class ImportConflictException extends RuntimeException {
+        private final ImportDiffReport report;
+        public ImportConflictException(ImportDiffReport report) {
+            super("Import aborted: conflicts found");
+            this.report = report;
+        }
+        public ImportDiffReport report() { return report; }
     }
 }
