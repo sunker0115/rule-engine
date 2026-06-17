@@ -64,20 +64,23 @@
 - **根因**：`String.valueOf(mv.value())`，value=null 时产出字面量 `"null"` 去匹配正则。
 - **失败场景**：`field MATCHES "nul.*"`（或 `.*`）对实际 null 的字段误判 TRUE。ConditionEvaluation 只拦 `isError()` 不拦 `value==null`。
 - **改法**：matcher 前判 `value==null → false`；**全仓 grep 平行字符串算子**（Contains/StartsWith/EndsWith 等）是否同款 `String.valueOf(null)` 孪生 bug，一并修。
-- **状态**：待沟通
+- **实际落地**：`MatchesEvaluator:33` 加 `mv==null || mv.value()==null → false`；孪生算子核实——Contains（`instanceof Collection` 守卫）/ StartsWith:21 / EndsWith:22 均已带 null 守卫，无孪生 bug。
+- **状态**：已修（核验 2026-06-17）
 
 ### #7 DeclarativeHttpConnectorHandler HttpClient 泄漏
 - **位置**：`rule-eval-svc/.../internal/metric/fetch/DeclarativeHttpConnectorHandler.java:105`
 - **根因**：每次 fetch `new HttpClient`，从不关闭（JDK21 起持有 selector 线程 + 连接池）。
 - **失败场景**：高 QPS EXTERNAL_HTTP 取数泄漏线程/fd，且每次重做 connect/TLS 失去连接池复用。
 - **改法**：复用共享 HttpClient（线程安全，可单例）；read timeout 走 `HttpRequest.timeout()`（per-request），connectTimeout 用 client 级默认。
-- **状态**：待沟通
+- **实际落地**：`DeclarativeHttpConnectorHandler:68/95/129` 改共享 `sharedHttpClient`（构造器 @Nullable 注入，缺省 `connectTimeout 5s`），read timeout 走 `HttpRequest.timeout()`。
+- **状态**：已修（核验 2026-06-17）
 
 ### #8 MetricDefinitionRegistry.replaceAll 非原子
 - **位置**：`rule-sdk/.../metric/MetricDefinitionRegistry.java:49`
 - **根因**：`removeIf(前缀)` + `for put` 两段操作非原子，热更窗口内评估线程 `get()` 读到"旧删新未写"空洞 → 指标瞬时缺失 → METRIC_FETCH_FAIL 误判。
 - **改法**：内部 `volatile Map` 引用 + copy-on-write——构建新完整 map 后原子换引用，读永远看到一致快照。
-- **状态**：待沟通
+- **实际落地**：`MetricDefinitionRegistry` 字段改 `AtomicReference<Map>`（初值 `Map.of()`）；`put`/`replaceAll` 用 `updateAndGet` 在 `HashMap` 副本上改完后 `Map.copyOf` **无锁 CAS** 原子换引用（不加 synchronized）；`get` 零锁读快照。新增并发回归测试 `replaceAll_concurrentGet_neverSeesTornMissingEntry`（5000 轮并发 replaceAll × get，断言始终命中）；全量 `clean test` 27 模块绿。
+- **状态**：已修（2026-06-17）
 
 ### #9 RuleImportService 重复 DRAFT + scriptSource 丢失
 - **位置**：`rule-config-svc/.../internal/bundle/RuleImportService.java:182` + `RuleBundle.java`(RuleEntry) + `RuleExportService.java:108`
@@ -85,7 +88,8 @@
   - import 到已有规则无条件追加 DRAFT，破坏 `newVersion` 强制的"同时只一条 DRAFT"不变式 → 产生孤儿 DRAFT。
   - `RuleEntry` 无 script 字段，export/import 全程不映射 `scriptSource` → EXPRESSION_SCRIPT 规则 round-trip 后 script=NULL（数据丢失），且 import 不跑 `resolveAndValidate` 不报错。
 - **改法**：① import 前复用"已有 DRAFT 则拒/覆盖"校验；② `RuleEntry` 加 scriptSource，export 填充、import 映射 + 走 resolveAndValidate。
-- **状态**：待沟通
+- **实际落地**：① `RuleImportService:186/191` 已有规则改"有 DRAFT 则 editDraft，否则基于 ACTIVE 建 newVersion"，全走 createDraft/editDraft/newVersion（内含 resolveAndValidate）；② `RuleBundle.RuleEntry:58` 加 `script` 字段（+ contentHash 幂等），`RuleExportService:115/124` 填充、import 映射。
+- **状态**：已修（核验 2026-06-17）
 
 ---
 
@@ -120,7 +124,8 @@
 3. 7 个 service 接口（Audit/Scene/Replay/Metadata/RuleBundle/Job + ConfigService 的 String 部分）`String→Long` + 实现内删 `Long.valueOf`；
 4. 3 处 equals 简化。
 5. **评估侧 kernel/eval-svc 一律不碰**；评估 API 仍走 tenantCode→id resolve（独立维度）；`EvalServiceImpl.parseTenantId` 保留（评估 String→Long 边界）。
-- **状态**：方案 A 已确认 + 边界已标，待落地
+- **实际落地**：`GlobalExceptionHandler:42` 加 `MethodArgumentTypeMismatchException → 400` handler；controller（MetricController / ConnectorController 等）`tenantId` 全改 `@RequestParam Long`，删裸 parse；config-svc / audit-svc service 层无 `Long.valueOf(tenantId)` 残留。
+- **状态**：已修（核验 2026-06-17）
 
 ### 备注项（验证存在，未进 top10）
 - ✅ **publish/newVersion 不检查 rule.status**（已修，89935100）：`PublishService.publish` 入口加 DISABLED 校验。

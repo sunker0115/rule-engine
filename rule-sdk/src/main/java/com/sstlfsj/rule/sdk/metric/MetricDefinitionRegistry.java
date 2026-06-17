@@ -2,9 +2,10 @@ package com.sstlfsj.rule.sdk.metric;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * SDK 本地 metric 定义注册表：键 {@code tenantId:metricCode:version}，值为下发的 {@link MetricDescriptor}。
@@ -12,7 +13,9 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class MetricDefinitionRegistry {
 
-    private final ConcurrentMap<String, MetricDescriptor> definitions = new ConcurrentHashMap<>();
+    // copy-on-write：不可变 map + AtomicReference。写时在副本上改完用无锁 CAS 原子换引用（updateAndGet），
+    // 读零锁拿一致快照，杜绝热更窗口的"旧删新未写"中间态。
+    private final AtomicReference<Map<String, MetricDescriptor>> definitions = new AtomicReference<>(Map.of());
 
     private static String key(String tenantId, String metricCode, int metricVersion) {
         return tenantId + ":" + metricCode + ":" + metricVersion;
@@ -25,7 +28,11 @@ public class MetricDefinitionRegistry {
      * @param descriptor metric 定义快照（版本号取自 descriptor.metricVersion()）
      */
     public void put(String tenantId, MetricDescriptor descriptor) {
-        definitions.put(key(tenantId, descriptor.metricCode(), descriptor.metricVersion()), descriptor);
+        definitions.updateAndGet(cur -> {
+            Map<String, MetricDescriptor> next = new HashMap<>(cur);
+            next.put(key(tenantId, descriptor.metricCode(), descriptor.metricVersion()), descriptor);
+            return Map.copyOf(next);
+        });
     }
 
     /**
@@ -37,7 +44,7 @@ public class MetricDefinitionRegistry {
      * @return 命中的定义；不存在返回 null
      */
     public MetricDescriptor get(String tenantId, String metricCode, int metricVersion) {
-        return definitions.get(key(tenantId, metricCode, metricVersion));
+        return definitions.get().get(key(tenantId, metricCode, metricVersion));
     }
 
     /**
@@ -47,11 +54,15 @@ public class MetricDefinitionRegistry {
      * @param descriptors 该租户最新定义列表（空列表将清空该租户全部定义）
      */
     public void replaceAll(String tenantId, List<MetricDescriptor> descriptors) {
-        // 按租户前缀清理，覆盖所有版本旧条目
+        // copy-on-write + 无锁 CAS：在副本上"清理该租户旧条目 + 写入新条目"后原子换引用，整批一次性可见（无中间态）
         String prefix = tenantId + ":";
-        definitions.keySet().removeIf(k -> k.startsWith(prefix));
-        for (MetricDescriptor d : descriptors) {
-            definitions.put(key(tenantId, d.metricCode(), d.metricVersion()), d);
-        }
+        definitions.updateAndGet(cur -> {
+            Map<String, MetricDescriptor> next = new HashMap<>(cur);
+            next.keySet().removeIf(k -> k.startsWith(prefix));
+            for (MetricDescriptor d : descriptors) {
+                next.put(key(tenantId, d.metricCode(), d.metricVersion()), d);
+            }
+            return Map.copyOf(next);
+        });
     }
 }
