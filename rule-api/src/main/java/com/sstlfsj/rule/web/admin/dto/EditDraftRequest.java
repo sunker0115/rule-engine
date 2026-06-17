@@ -17,4 +17,4 @@ public record EditDraftRequest(
         List<PreGateConfig> preGates,
         List<String> triggerEventTypes,
         ScriptSource script
-) {}
+) implements RuleContentSource {}

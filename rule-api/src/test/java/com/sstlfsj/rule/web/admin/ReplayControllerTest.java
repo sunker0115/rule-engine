@@ -1,10 +1,10 @@
 package com.sstlfsj.rule.web.admin;
 
-import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.eval.api.service.ReplayService;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
+import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,16 +18,14 @@ import static org.mockito.Mockito.when;
 class ReplayControllerTest {
 
     private ReplayService replayService;
-    private AuditService auditService;
-    private SceneService sceneService;
+    private SensitiveRefsResolver sensitiveRefsResolver;
     private ReplayController replayController;
 
     @BeforeEach
     void setUp() {
         replayService = mock(ReplayService.class);
-        auditService = mock(AuditService.class);
-        sceneService = mock(SceneService.class);
-        replayController = new ReplayController(replayService, auditService, sceneService);
+        sensitiveRefsResolver = mock(SensitiveRefsResolver.class);
+        replayController = new ReplayController(replayService, sensitiveRefsResolver);
     }
 
     @Test
@@ -40,8 +38,7 @@ class ReplayControllerTest {
 
     @Test
     void replay_masksSensitiveMetricLeaf() {
-        when(auditService.getSessionSceneCode(100L, 1L)).thenReturn("risk.transfer");
-        when(sceneService.getSensitiveRefs(100L, "risk.transfer"))
+        when(sensitiveRefsResolver.forSession(100L, 1L))
                 .thenReturn(new SceneService.SensitiveRefs(Set.of(), Set.of("user.idno")));
         NodeTrace leaf = new NodeTrace(
                 "ConditionNode", "EQ", "user.idno", true, "511...", "FETCHED",

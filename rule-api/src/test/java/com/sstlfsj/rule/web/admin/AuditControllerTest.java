@@ -4,6 +4,7 @@ import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
 import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.config.api.service.SceneService;
+import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -20,13 +21,13 @@ class AuditControllerTest {
 
     private MockMvc mockMvc;
     private AuditService auditService;
-    private SceneService sceneService;
+    private SensitiveRefsResolver sensitiveRefsResolver;
 
     @BeforeEach
     void setUp() {
         auditService = mock(AuditService.class);
-        sceneService = mock(SceneService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new AuditController(auditService, sceneService)).build();
+        sensitiveRefsResolver = mock(SensitiveRefsResolver.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new AuditController(auditService, sensitiveRefsResolver)).build();
     }
 
     @Test
@@ -113,8 +114,7 @@ class AuditControllerTest {
 
     @Test
     void queryTrace_masksSensitiveLeafValues() throws Exception {
-        when(auditService.getSessionSceneCode(100L, 1L)).thenReturn("risk.transfer");
-        when(sceneService.getSensitiveRefs(100L, "risk.transfer"))
+        when(sensitiveRefsResolver.forSession(100L, 1L))
                 .thenReturn(new SceneService.SensitiveRefs(Set.of("phone"), Set.of()));
         when(auditService.queryTrace(100L, 1L)).thenReturn(List.of(
                 new AuditService.TraceNodeEntry(
@@ -128,9 +128,8 @@ class AuditControllerTest {
 
     @Test
     void queryTrace_configUnavailable_failClosedMasksAll() throws Exception {
-        when(auditService.getSessionSceneCode(100L, 1L)).thenReturn("risk.transfer");
-        when(sceneService.getSensitiveRefs(100L, "risk.transfer"))
-                .thenThrow(new RuntimeException("config down"));
+        when(sensitiveRefsResolver.forSession(100L, 1L))
+                .thenReturn(null);
         when(auditService.queryTrace(100L, 1L)).thenReturn(List.of(
                 new AuditService.TraceNodeEntry(
                         "0.0", "ConditionNode", "EQ", "amount", "100",

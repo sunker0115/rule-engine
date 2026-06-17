@@ -27,6 +27,8 @@ import com.sstlfsj.rule.kernel.api.model.SourceType;
 import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import com.sstlfsj.rule.kernel.api.spi.metric.FetchTraceCollector;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -51,6 +53,8 @@ import java.util.StringJoiner;
 @Component
 @MetricSourceType(SourceType.EXTERNAL_HTTP)
 public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(DeclarativeHttpConnectorHandler.class);
 
     private final HttpEndpointRegistry endpointRegistry;
     private final ConnectorDefinitionResolver connectorResolver;
@@ -279,11 +283,12 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
         return policy.retryOn() != null && policy.retryOn().contains(RetryTrigger.UPSTREAM_5XX);
     }
 
-    /** to（String 细码名）转 MetricFetchError，无法识别归 UPSTREAM_ERROR。 */
+    /** to（String 细码名）转 MetricFetchError，无法识别归 UPSTREAM_ERROR 并告警（暴露 errorMapping.to 配错）。 */
     private static MetricFetchError toFetchError(String to) {
         try {
             return MetricFetchError.valueOf(to);
         } catch (IllegalArgumentException e) {
+            log.warn("connector errorMapping.to 非法细码名 '{}'，回落 UPSTREAM_ERROR——请核对连接器配置", to);
             return MetricFetchError.UPSTREAM_ERROR;
         }
     }
@@ -357,7 +362,11 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
     }
 
     private static long tenantId(String tenantId) {
-        return Long.parseLong(tenantId);
+        try {
+            return Long.parseLong(tenantId);
+        } catch (NumberFormatException e) {
+            return 0L; // 非法 tenantId 归 0，由上层 resolve 查不到对应资源返 NOT_FOUND
+        }
     }
 
     /**
@@ -374,6 +383,8 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
             cur = cur.get(seg);
         }
         if (cur == null || cur.isNull() || cur.isMissingNode()) return null;
+        // 容器节点（Object/Array）非标量：jsonPath 配到非叶子，归 null 而非 asString() 的 ""（后者会绕过上层 null 守卫）
+        if (cur.isObject() || cur.isArray()) return null;
         if (cur.isIntegralNumber()) return cur.longValue();
         if (cur.isFloatingPointNumber()) return cur.doubleValue();
         if (cur.isBoolean()) return cur.booleanValue();

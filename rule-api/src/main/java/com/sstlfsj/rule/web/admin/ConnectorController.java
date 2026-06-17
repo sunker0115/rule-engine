@@ -3,8 +3,8 @@ package com.sstlfsj.rule.web.admin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.ConnectorListQuery;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
+import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
-import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
 import com.sstlfsj.rule.eval.api.FetchTrace;
 import com.sstlfsj.rule.eval.api.service.MetricFetchTestService;
 import com.sstlfsj.rule.web.admin.MetricController.TestRequest;
@@ -41,14 +41,10 @@ public class ConnectorController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<ConnectorDefinition> p = service.listPage(
+        Page<ConnectorView> p = service.listPage(
                 new ConnectorListQuery(tenantId, keyword, status, page, size));
         List<ConnectorResponse> items = p.getRecords().stream()
-                .map(c -> convert.toResponse(new ConnectorWriteService.ConnectorView(
-                        c.getTenantId(), c.getConnectorCode(), c.getName(),
-                        c.getStatus().name(),
-                        c.getCreatedAt() != null ? c.getCreatedAt().toString() : null,
-                        c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null)))
+                .map(convert::toResponse)
                 .toList();
         return ApiResponse.ok(PageResponse.of(items, p.getTotal(), page, size));
     }

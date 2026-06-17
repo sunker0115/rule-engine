@@ -14,7 +14,7 @@ class ImportDiffReportTest {
         var conflict = new ImportDiffReport.RuleImportConflict("rule.b", "scene1", "EXISTING_ACTIVE", "已有 ACTIVE 版本");
 
         ImportDiffReport report = new ImportDiffReport(
-                List.of(item), List.of(), List.of(), List.of(conflict), 1, 0, 2);
+                List.of(item), List.of(), List.of(), List.of(conflict), 1, 0, List.of(), 2);
 
         assertThat(report.willCreate()).containsExactly(item);
         assertThat(report.conflicts()).containsExactly(conflict);

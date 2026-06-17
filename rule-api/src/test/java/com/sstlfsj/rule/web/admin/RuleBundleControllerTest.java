@@ -78,7 +78,7 @@ class RuleBundleControllerTest {
     private ImportDiffReport okReport() {
         return new ImportDiffReport(
                 List.of(new RuleImportItem("rule.a", "risk.transfer", "将新建")),
-                List.of(), List.of(), List.of(), 1, 0, 0);
+                List.of(), List.of(), List.of(), 1, 0, List.of(), 0);
     }
 
     private MockMultipartFile bundleFile() {
@@ -133,7 +133,7 @@ class RuleBundleControllerTest {
     void import_dryRunTrue_returns200WithDiffReport_dbNotPersisted() throws Exception {
         ImportDiffReport dryRunReport = new ImportDiffReport(
                 List.of(new RuleImportItem("rule.a", "risk.transfer", "将新建")),
-                List.of(), List.of(), List.of(), 1, 0, 0);
+                List.of(), List.of(), List.of(), 1, 0, List.of(), 0);
         when(service.importBundle(any(), any(), any(), anyBoolean(), any())).thenReturn(dryRunReport);
 
         mockMvc.perform(multipart("/admin/v1/rules/import")
@@ -168,7 +168,7 @@ class RuleBundleControllerTest {
         ImportDiffReport conflictReport = new ImportDiffReport(
                 List.of(), List.of(), List.of(),
                 List.of(new RuleImportConflict("rule.a", "risk.transfer", "CONTENT_CHANGED", "已存在")),
-                0, 0, 0);
+                0, 0, List.of(), 0);
         when(service.importBundle(any(), any(), any(), anyBoolean(), any()))
                 .thenThrow(new ImportConflictException(conflictReport));
 

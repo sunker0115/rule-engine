@@ -28,6 +28,10 @@ class ConnectorSafetyValidator {
         if (endpointNames != null && !endpointNames.contains(d.endpointRef())) {
             throw new IllegalArgumentException("未注册的 endpointRef: " + d.endpointRef());
         }
+        // resilience 必填：eval 侧 buildRequest 用 readTimeoutMs 设超时，缺失会 NPE 并被误归 UNAUTHORIZED
+        if (d.resilience() == null) {
+            throw new IllegalArgumentException("connector descriptor 缺少 resilience（超时/重试策略必填）");
+        }
         checkPlaceholders(d.request().pathTemplate());
         if (d.request().bodyTemplate() != null) checkPlaceholders(d.request().bodyTemplate());
         for (TemplateParam p : d.request().query()) checkPlaceholders(p.valueTemplate());

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.web.api.EvalController;
+import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -107,7 +108,7 @@ class GlobalExceptionHandlerTest {
         MockMvc evalMvc = MockMvcBuilders
                 .standaloneSetup(new EvalController(mock(EvalService.class),
                         mock(com.sstlfsj.rule.config.api.service.TenantQueryService.class),
-                        mock(com.sstlfsj.rule.config.api.service.SceneService.class)))
+                        mock(SensitiveRefsResolver.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         String badJson = "{\"tenantId\":\"1\",\"occurredAt\":\"not-a-timestamp\"}";

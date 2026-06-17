@@ -17,6 +17,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.web.admin.dto.CreateRuleRequest;
 import com.sstlfsj.rule.web.admin.dto.EditDraftRequest;
 import com.sstlfsj.rule.web.admin.dto.NewVersionRequest;
+import com.sstlfsj.rule.web.admin.dto.RuleContentSource;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -46,10 +47,8 @@ public class RuleController {
     public ApiResponse<DraftCreatedResult> createDraft(
             @Valid @RequestBody CreateRuleRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        RuleContent content = new RuleContent(req.name(), req.kind(), req.conditionAst(),
-                toBindings(req.decisionBindings()), req.preGates(), req.triggerEventTypes(), req.script());
         return ApiResponse.ok(configService.createDraft(
-                req.tenantId(), req.sceneCode(), req.code(), content, actorId));
+                req.tenantId(), req.sceneCode(), req.code(), toContent(req), actorId));
     }
 
     /**
@@ -65,9 +64,7 @@ public class RuleController {
             @PathVariable Long ruleId,
             @Valid @RequestBody EditDraftRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        RuleContent content = new RuleContent(req.name(), req.kind(), req.conditionAst(),
-                toBindings(req.decisionBindings()), req.preGates(), req.triggerEventTypes(), req.script());
-        return ApiResponse.ok(configService.editDraft(req.tenantId(), ruleId, content, actorId));
+        return ApiResponse.ok(configService.editDraft(req.tenantId(), ruleId, toContent(req), actorId));
     }
 
     /**
@@ -84,22 +81,15 @@ public class RuleController {
             @PathVariable Long ruleId,
             @Valid @RequestBody NewVersionRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
-        RuleContent content = new RuleContent(req.name(), req.kind(), req.conditionAst(),
-                toBindings(req.decisionBindings()), req.preGates(), req.triggerEventTypes(), req.script());
         return ApiResponse.ok(configService.newVersion(
-                req.tenantId(), ruleId, content, req.fromVersionId(), actorId));
+                req.tenantId(), ruleId, toContent(req), req.fromVersionId(), actorId));
     }
 
-    /**
-     * DecisionBindingInput(仅 decisionCode) → DecisionBinding：priority 草稿期占位 0，发布时从 decision_definition 回填。
-     * 三端点共用的占位映射。
-     *
-     * @param inputs 请求体决策绑定入参，null 时返回 null（保持三方法对 null 视为空的语义）
-     * @return 占位 priority=0 的决策绑定列表
-     */
-    private static List<DecisionBinding> toBindings(List<com.sstlfsj.rule.web.admin.dto.DecisionBindingInput> inputs) {
-        return inputs == null ? null
-                : inputs.stream().map(i -> new DecisionBinding(i.decisionCode(), 0)).toList();
+    private static RuleContent toContent(RuleContentSource src) {
+        List<DecisionBinding> bindings = src.decisionBindings() == null ? null
+                : src.decisionBindings().stream().map(i -> new DecisionBinding(i.decisionCode(), 0)).toList();
+        return new RuleContent(src.name(), src.kind(), src.conditionAst(), bindings,
+                src.preGates(), src.triggerEventTypes(), src.script());
     }
 
     /**

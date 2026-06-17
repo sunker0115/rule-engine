@@ -15,7 +15,6 @@ import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorDetailView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorView;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService.ConnectorWriteCommand;
-import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
 import com.sstlfsj.rule.config.internal.domain.ConnectorStatus;
 import com.sstlfsj.rule.eval.api.FetchTrace;
 import com.sstlfsj.rule.eval.api.service.MetricFetchTestService;
@@ -70,11 +69,10 @@ class ConnectorControllerTest {
 
     @Test
     void listReturnsPaginatedConnectors() throws Exception {
-        ConnectorDefinition c = new ConnectorDefinition();
-        c.setTenantId(1L); c.setConnectorCode("risk-svc"); c.setName("风控打分");
-        c.setStatus(ConnectorStatus.ACTIVE);
-        Page<ConnectorDefinition> page = new Page<>(1, 20);
-        page.setRecords(List.of(c)); page.setTotal(1);
+        ConnectorView v = new ConnectorView(1L, "risk-svc", "风控打分", ConnectorStatus.ACTIVE.name(),
+                "2026-06-16T00:00", "2026-06-16T01:00");
+        Page<ConnectorView> page = new Page<>(1, 20);
+        page.setRecords(List.of(v)); page.setTotal(1);
         when(service.listPage(any(ConnectorListQuery.class))).thenReturn(page);
 
         mockMvc.perform(get("/admin/v1/connectors").param("tenantId", "1"))

@@ -32,6 +32,8 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Bundle v2 import：所有资源走完整 service 写链路（审计/事件/校验全部继承），
@@ -102,8 +104,9 @@ public class RuleImportService {
         // ① scenes
         int scenesCreated = upsertScenes(tenantId, bundle, actorId);
 
-        // ② metrics
-        int metricsCreated = upsertMetrics(tenantId, bundle, actorId);
+        // ② metrics（跳过项收集进 metricsSkipped 反馈调用方，区分"已存在"与"sourceType 不支持"）
+        List<ImportDiffReport.MetricImportItem> metricsSkipped = new ArrayList<>();
+        int metricsCreated = upsertMetrics(tenantId, bundle, actorId, metricsSkipped);
 
         // ③ decisions
         int decisionsCreated = upsertDecisions(tenantId, bundle, actorId);
@@ -121,7 +124,7 @@ public class RuleImportService {
 
         // ABORT 是否中止由调用方 apply 决定——dry-run 需返回含冲突的 report 让前端展示，不在此抛异常
         return new ImportDiffReport(willCreate, willOverwrite, skipped, conflicts,
-                scenesCreated, metricsCreated, decisionsCreated);
+                scenesCreated, metricsCreated, metricsSkipped, decisionsCreated);
     }
 
     // ---- 规则逐条处理 -------------------------------------------------------
@@ -199,9 +202,13 @@ public class RuleImportService {
 
     private int upsertScenes(Long tenantId, RuleBundle bundle, String actorId) {
         if (bundle.scenes() == null) return 0;
+        // 批量预查已存在 code，避免逐条 findByCode 的 N 次往返
+        List<String> codes = bundle.scenes().stream().map(RuleBundle.SceneSnapshot::code).toList();
+        Set<String> existing = sceneMapper.findByCodes(tenantId, codes).stream()
+                .map(SceneDef::getCode).collect(Collectors.toSet());
         int created = 0;
         for (RuleBundle.SceneSnapshot ss : bundle.scenes()) {
-            if (sceneMapper.findByCode(tenantId, ss.code()) != null) continue;
+            if (existing.contains(ss.code())) continue;
             sceneService.createScene(tenantId, ss.code(), ss.name(),
                     ss.description() != null ? ss.description() : "",
                     ss.dominantMode(), ss.subjectType(),
@@ -214,15 +221,21 @@ public class RuleImportService {
         return created;
     }
 
-    private int upsertMetrics(Long tenantId, RuleBundle bundle, String actorId) {
+    private int upsertMetrics(Long tenantId, RuleBundle bundle, String actorId,
+                              List<ImportDiffReport.MetricImportItem> skipped) {
         if (bundle.metricDefinitions() == null) return 0;
         int created = 0;
         for (RuleBundle.MetricEntry me : bundle.metricDefinitions()) {
-            if (metricDefinitionMapper.findAnyByCode(tenantId, me.metricCode()) != null) continue;
-            // SQL_AGGREGATE / 非法枚举：跳过，交人工处理
+            if (metricDefinitionMapper.findAnyByCode(tenantId, me.metricCode()) != null) {
+                skipped.add(new ImportDiffReport.MetricImportItem(me.metricCode(), "目标已存在，跳过"));
+                continue;
+            }
+            // SQL_AGGREGATE / 非法枚举：不自动导入，记入 report 交人工处理
             if (!MetricEnums.DATA_TYPES.contains(me.dataType())
                     || !MetricEnums.SOURCE_TYPES.contains(me.sourceType())
                     || SourceType.SQL_AGGREGATE.equals(me.sourceType())) {
+                skipped.add(new ImportDiffReport.MetricImportItem(me.metricCode(),
+                        "sourceType=" + me.sourceType() + " 不支持自动导入，需人工处理"));
                 continue;
             }
             var cmd = buildMetricCmd(me);
@@ -234,9 +247,13 @@ public class RuleImportService {
 
     private int upsertDecisions(Long tenantId, RuleBundle bundle, String actorId) {
         if (bundle.decisionDefinitions() == null) return 0;
+        // 批量预查已存在 code，避免逐条 findByCode 的 N 次往返
+        List<String> codes = bundle.decisionDefinitions().stream().map(RuleBundle.DecisionEntry::code).toList();
+        Set<String> existing = decisionDefinitionMapper.findByCodes(tenantId, codes).stream()
+                .map(DecisionDefinition::getCode).collect(Collectors.toSet());
         int created = 0;
         for (RuleBundle.DecisionEntry de : bundle.decisionDefinitions()) {
-            if (decisionDefinitionMapper.findByCode(tenantId, de.code()) != null) continue;
+            if (existing.contains(de.code())) continue;
             decisionService.create(tenantId, de.code(), de.name(), de.priority(), de.description(), actorId);
             created++;
         }

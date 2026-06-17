@@ -18,4 +18,4 @@ public record NewVersionRequest(
         List<String> triggerEventTypes,
         Long fromVersionId,
         ScriptSource script
-) {}
+) implements RuleContentSource {}

@@ -34,7 +34,7 @@ class RuleBundleServiceImplTest {
     }
 
     private ImportDiffReport emptyReport() {
-        return new ImportDiffReport(List.of(), List.of(), List.of(), List.of(), 0, 0, 0);
+        return new ImportDiffReport(List.of(), List.of(), List.of(), List.of(), 0, 0, List.of(), 0);
     }
 
     @Test

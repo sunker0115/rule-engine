@@ -108,8 +108,12 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ConnectorDefinition> listPage(ConnectorListQuery q) {
-        return mapper.searchPage(new Page<>(q.page(), q.size()), q.tenantId(), q.keyword(), q.status());
+    public Page<ConnectorView> listPage(ConnectorListQuery q) {
+        Page<ConnectorDefinition> src = mapper.searchPage(
+                new Page<>(q.page(), q.size()), q.tenantId(), q.keyword(), q.status());
+        Page<ConnectorView> out = new Page<>(src.getCurrent(), src.getSize(), src.getTotal());
+        out.setRecords(src.getRecords().stream().map(this::toView).toList());
+        return out;
     }
 
     @Override
@@ -119,11 +123,7 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
         List<ConnectorDefinition> rows = tenantId == null
                 ? mapper.findAllActive()
                 : mapper.findActiveByTenant(tenantId);
-        return rows.stream()
-                .map(c -> new ConnectorView(c.getTenantId(), c.getConnectorCode(), c.getName(), c.getStatus().name(),
-                        c.getCreatedAt() != null ? c.getCreatedAt().toString() : null,
-                        c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null))
-                .toList();
+        return rows.stream().map(this::toView).toList();
     }
 
     @Override
@@ -135,6 +135,12 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
         }
         return new ConnectorDetailView(c.getConnectorCode(), c.getName(),
                 c.getDescriptor(), c.getStatus().name(),
+                c.getCreatedAt() != null ? c.getCreatedAt().toString() : null,
+                c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null);
+    }
+
+    private ConnectorView toView(ConnectorDefinition c) {
+        return new ConnectorView(c.getTenantId(), c.getConnectorCode(), c.getName(), c.getStatus().name(),
                 c.getCreatedAt() != null ? c.getCreatedAt().toString() : null,
                 c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null);
     }

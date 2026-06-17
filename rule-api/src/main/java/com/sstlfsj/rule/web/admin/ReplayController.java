@@ -1,15 +1,12 @@
 package com.sstlfsj.rule.web.admin;
 
-import com.sstlfsj.rule.audit.api.service.AuditService;
-import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.eval.api.service.ReplayService;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
 import com.sstlfsj.rule.web.mask.TraceMasker;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,11 +17,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ReplayController {
 
-    private static final Logger log = LoggerFactory.getLogger(ReplayController.class);
-
     private final ReplayService replayService;
-    private final AuditService auditService;
-    private final SceneService sceneService;
+    private final SensitiveRefsResolver sensitiveRefsResolver;
 
     /**
      * POST /admin/v1/evaluation-sessions/{sessionId}/replay — 忠实重放一个历史评估会话。
@@ -38,22 +32,10 @@ public class ReplayController {
             @PathVariable Long sessionId,
             @RequestParam Long tenantId) {
         EvalResult result = replayService.replay(tenantId, sessionId);
-        List<NodeTrace> masked = TraceMasker.maskKernel(resolveRefs(tenantId, sessionId), result.nodeTrace());
+        List<NodeTrace> masked = TraceMasker.maskKernel(sensitiveRefsResolver.forSession(tenantId, sessionId), result.nodeTrace());
         return ApiResponse.ok(new EvalResult(result.ruleHit(), result.finalDecision(),
                 result.hitDecisions(), masked, result.errorCode(), result.score(),
                 result.category(), result.decision()));
     }
 
-    /** 解析会话场景的 live 敏感集；失败返回 null（masker fail-closed 全抹，D71）。 */
-    private SceneService.SensitiveRefs resolveRefs(Long tenantId, Long sessionId) {
-        try {
-            String sceneCode = auditService.getSessionSceneCode(tenantId, sessionId);
-            if (sceneCode == null) return null;
-            return sceneService.getSensitiveRefs(tenantId, sceneCode);
-        } catch (RuntimeException e) {
-            log.warn("getSensitiveRefs 失败，replay trace 读时脱敏 fail-closed 全抹: tenantId={}, sessionId={}",
-                    tenantId, sessionId, e);
-            return null;
-        }
-    }
 }

@@ -452,13 +452,10 @@ public class PublishService {
             resolvedAst = new ScorecardRootNode(scRoot.conditions(), scRoot.threshold(), enrichedBands);
         }
 
-        // SCORECARD 的 band decisionCode 已在 enrichBands 回填进 ScoreBand，不再注入 decisionBindings
-        List<RuleVersionSnapshot.DecisionBinding> bindingsWithBands =
-                (RuleKind.SCORECARD.tag().equals(kindTag))
-                        ? bindings
-                        : mergeBandDecisionCodes(bindings, resolvedAst);
+        // SCORECARD 的 band decisionCode 已在 enrichBands 回填进 ScoreBand，不再注入 decisionBindings；
+        // 非 SCORECARD 的 AST 不含 bands，bindings 原样冻结即可
         List<RuleVersionSnapshot.DecisionBinding> frozenBindings =
-                freezeDecisionBindings(tenantId, scene, bindingsWithBands);
+                freezeDecisionBindings(tenantId, scene, bindings);
 
         return new ResolvedDraft(kind, resolvedAst, frozenBindings, gates, triggers, metricDeps, payloadDeps, null);
     }
@@ -772,32 +769,6 @@ public class PublishService {
                     band.category(), d.getName() != null ? d.getName() : "", priority));
         }
         return java.util.Collections.unmodifiableList(result);
-    }
-
-    /**
-     * 把 SCORECARD AST 的 band decisionCode 并入决策绑定列表（去重，已存在的 code 不重复注入）。
-     * 注入项 priority 用 0 占位，后续由 freezeDecisionBindings 从 decision_definition 回填。
-     * 非 SCORECARD 或无 bands 时原样返回。
-     *
-     * @param bindings 草稿原有决策绑定
-     * @param ast      已解析的条件 AST
-     * @return 含 band decisionCode 的绑定列表
-     */
-    private static List<RuleVersionSnapshot.DecisionBinding> mergeBandDecisionCodes(
-            List<RuleVersionSnapshot.DecisionBinding> bindings, AstNode ast) {
-        if (!(ast instanceof ScorecardRootNode scorecardRoot) || scorecardRoot.bands().isEmpty()) {
-            return bindings;
-        }
-        LinkedHashSet<String> existing = bindings.stream()
-                .map(RuleVersionSnapshot.DecisionBinding::decisionCode)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        List<RuleVersionSnapshot.DecisionBinding> merged = new ArrayList<>(bindings);
-        for (ScoreBand band : scorecardRoot.bands()) {
-            if (existing.add(band.decisionCode())) {
-                merged.add(new RuleVersionSnapshot.DecisionBinding(band.decisionCode(), null, 0));
-            }
-        }
-        return merged;
     }
 
     /**
