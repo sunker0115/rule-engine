@@ -254,6 +254,59 @@ class EvalEngineTest {
     }
 
     @Test
+    void firstHit_highPriorityError_returnsErrorWithoutTryingLower() {
+        // FIRST_HIT：高优先级规则取数失败(ERROR) → 直接返回 ERROR，不降级去命中低优先级规则
+        SceneRuleIndex index = new SceneRuleIndex();
+        RuleVersionSnapshot high = new RuleVersionSnapshot(2L, "scene", "t1", EMPTY_AND, List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 20)), List.of(), "AST_BOOLEAN");
+        RuleVersionSnapshot low = new RuleVersionSnapshot(1L, "scene", "t1", EMPTY_AND, List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("PASS", 5)), List.of(), "AST_BOOLEAN");
+        index.update("t1", "scene", "*", List.of(high, low));
+
+        // 高优先级(priority 20)返回 ERROR，低优先级(5)命中 PASS
+        RuleVersionExecutor exec = (snap, ctx) -> snap.ruleVersionId() == 2L
+                ? EvalResult.error(EvalErrorCode.METRIC_FETCH_FAIL)
+                : new EvalResult(true, new Decision("PASS", "", 5, snap.ruleVersionId()),
+                        List.of(new Decision("PASS", "", 5, snap.ruleVersionId())),
+                        List.of(), null, null, null, null);
+        EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
+                Map.of(), Map.of("AST_BOOLEAN", exec), true);
+
+        EvalResult result = engine.evaluateWithContext(event("t1", "scene", "EVT"),
+                engine.match(event("t1", "scene", "EVT")), SceneExecutionStrategy.FIRST_HIT, Instant.now()).result();
+
+        assertFalse(result.ruleHit(), "高优先级 ERROR 时不应降级命中低优先级");
+        assertNull(result.finalDecision());
+        assertEquals(EvalErrorCode.METRIC_FETCH_FAIL.name(), result.errorCode(), "应带出 errorCode");
+    }
+
+    @Test
+    void firstHit_executorThrows_returnsErrorWithoutTryingLower() {
+        // FIRST_HIT：高优先级执行器抛异常 → 返回 ERROR，不静默跳过去命中低优先级
+        SceneRuleIndex index = new SceneRuleIndex();
+        RuleVersionSnapshot high = new RuleVersionSnapshot(2L, "scene", "t1", EMPTY_AND, List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 20)), List.of(), "AST_BOOLEAN");
+        RuleVersionSnapshot low = new RuleVersionSnapshot(1L, "scene", "t1", EMPTY_AND, List.of(),
+                List.of(new RuleVersionSnapshot.DecisionBinding("PASS", 5)), List.of(), "AST_BOOLEAN");
+        index.update("t1", "scene", "*", List.of(high, low));
+
+        RuleVersionExecutor exec = (snap, ctx) -> {
+            if (snap.ruleVersionId() == 2L) throw new RuntimeException("boom");
+            return new EvalResult(true, new Decision("PASS", "", 5, snap.ruleVersionId()),
+                    List.of(new Decision("PASS", "", 5, snap.ruleVersionId())), List.of(), null, null, null, null);
+        };
+        EvalEngine engine = new EvalEngine(index, new EvalContextAssembler(List.of(), List.of()),
+                Map.of(), Map.of("AST_BOOLEAN", exec), true);
+
+        EvalResult result = engine.evaluateWithContext(event("t1", "scene", "EVT"),
+                engine.match(event("t1", "scene", "EVT")), SceneExecutionStrategy.FIRST_HIT, Instant.now()).result();
+
+        assertFalse(result.ruleHit());
+        assertNull(result.finalDecision());
+        assertEquals(EvalErrorCode.CONDITION_EVAL_ERROR.name(), result.errorCode());
+    }
+
+    @Test
     void preGate_receivesEngineNow_asOccurredAt() {
         // applyPreGates 应把引擎统一 now 透传进 PreGateContext.occurredAt(时段类 gate 据此判断,保证重放可复现)
         Instant fixedNow = Instant.parse("2026-06-01T00:00:00Z");

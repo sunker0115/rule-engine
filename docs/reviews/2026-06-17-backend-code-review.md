@@ -14,8 +14,9 @@
 - **根因**：只看 `r.ruleHit()`，ERROR 候选（ruleHit=false + errorCode 非空）被跳过；`catch (Exception ignored)` 吞掉执行器异常，都不收集 errorCode。对比 `evaluateAllCandidates`(223/230) 显式传播——两条策略路径三态处理不对称。
 - **失败场景**：FIRST_HIT 下高优先级规则取数失败（ERROR）被跳过 → 命中低优先级规则触发**错误决策**；或全跳过返回 `miss()` 且 errorCode=null，调用方无法区分"无命中"与"降级失败"。
 - **改法**：循环收集首个非空 errorCode，catch 设 `CONDITION_EVAL_ERROR.name()`（不再 ignored）；无命中时返回带 errorCode 的 EvalResult 而非裸 `miss()`。
-- **待拍板**：高优先级 ERROR 时 FIRST_HIT 应**继续试低优先级**（仅带出 errorCode）还是**直接返回 ERROR 不下试**（避免静默降级命中错误决策）？需对齐 D15。倾向后者更安全。
-- **状态**：待沟通
+- **已定**：高优先级 ERROR/异常 → **直接返回 ERROR，不下试低优先级**（避免静默降级命中错误决策）。
+- **实际落地**：`evaluateFirstHit` 改为——执行器抛异常 → 返回 `CONDITION_EVAL_ERROR`；`r.errorCode()!=null` → 返回该 errorCode；仅真正 miss（无 error）才继续试下一个。EvalEngineTest 加 2 用例（ERROR 候选 / 执行器抛异常）验证不降级命中。
+- **状态**：已修
 
 ### #2 disable 规则运行时不下线
 - **位置**：`rule-config-svc/.../internal/service/ConfigServiceImpl.java:59,83`（`transitionStatus`）+ `RuleVersionReadMapper.loadActiveByScene`

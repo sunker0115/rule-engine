@@ -187,19 +187,28 @@ public class EvalEngine {
         sorted.sort(FIRST_HIT_ORDER);
 
         for (RuleVersionSnapshot snap : sorted) {
+            EvalResult r;
             try {
-                EvalResult r = selectExecutor(snap).execute(snap, ctx);
-                if (r.ruleHit()) {
-                    List<Decision> decisions = resolveRuleDecisions(snap, r);
-                    Decision winner = decisions.isEmpty() ? null
-                            : Collections.max(decisions, DECISION_PRECEDENCE);
-                    // winner==null（命中但无决策/无 binding）不计 FIRST_HIT，与 evaluateAllCandidates 的「无决策即非命中」一致
-                    if (winner == null) continue;
-                    return new EvalResult(true, winner, List.of(winner),
-                            r.nodeTrace(), r.errorCode(), r.score(),
-                            winner.category(), null);
-                }
-            } catch (Exception ignored) {
+                r = selectExecutor(snap).execute(snap, ctx);
+            } catch (Exception e) {
+                // 执行器抛异常：不静默跳过去试低优先级（会命中错误决策），直接返回 ERROR
+                return new EvalResult(false, null, List.of(), List.of(),
+                        EvalErrorCode.CONDITION_EVAL_ERROR.name(), null, null, null);
+            }
+            // 取数失败等 ERROR：高优先级规则不可判定时直接返回 ERROR，不降级去试低优先级（避免命中错误决策、丢失错误信号）
+            if (r.errorCode() != null) {
+                return new EvalResult(false, null, List.of(), r.nodeTrace(),
+                        r.errorCode(), null, null, null);
+            }
+            if (r.ruleHit()) {
+                List<Decision> decisions = resolveRuleDecisions(snap, r);
+                Decision winner = decisions.isEmpty() ? null
+                        : Collections.max(decisions, DECISION_PRECEDENCE);
+                // winner==null（命中但无决策/无 binding）不计 FIRST_HIT，与 evaluateAllCandidates 的「无决策即非命中」一致
+                if (winner == null) continue;
+                return new EvalResult(true, winner, List.of(winner),
+                        r.nodeTrace(), r.errorCode(), r.score(),
+                        winner.category(), null);
             }
         }
         return EvalResult.miss();
