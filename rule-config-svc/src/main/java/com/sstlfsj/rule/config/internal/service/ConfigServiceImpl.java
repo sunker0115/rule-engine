@@ -11,6 +11,9 @@ import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.api.service.ConfigService;
+import com.sstlfsj.rule.config.internal.domain.ActorType;
+import com.sstlfsj.rule.config.internal.domain.AuditAction;
+import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
@@ -60,7 +63,7 @@ class ConfigServiceImpl implements ConfigService {
     public void disable(Long tenantId, Long ruleDefinitionId, String actorId) {
         // 关停：PUBLISHED → DISABLED，单向。
         transitionStatus(tenantId, ruleDefinitionId, actorId,
-                RuleDefinitionStatus.PUBLISHED, RuleDefinitionStatus.DISABLED, "DISABLE", "禁用");
+                RuleDefinitionStatus.PUBLISHED, RuleDefinitionStatus.DISABLED, AuditAction.DISABLE, "禁用");
     }
 
     @Override
@@ -68,7 +71,7 @@ class ConfigServiceImpl implements ConfigService {
     public void enable(Long tenantId, Long ruleDefinitionId, String actorId) {
         // 重新启用：DISABLED → PUBLISHED，单向。
         transitionStatus(tenantId, ruleDefinitionId, actorId,
-                RuleDefinitionStatus.DISABLED, RuleDefinitionStatus.PUBLISHED, "ENABLE", "启用");
+                RuleDefinitionStatus.DISABLED, RuleDefinitionStatus.PUBLISHED, AuditAction.ENABLE, "启用");
     }
 
     /**
@@ -82,7 +85,7 @@ class ConfigServiceImpl implements ConfigService {
      * @param verb   面向用户错误信息中的动词（启用 / 禁用）
      */
     private void transitionStatus(Long tenantId, Long ruleDefinitionId, String actorId,
-            RuleDefinitionStatus from, RuleDefinitionStatus to, String action, String verb) {
+            RuleDefinitionStatus from, RuleDefinitionStatus to, AuditAction action, String verb) {
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
@@ -100,7 +103,7 @@ class ConfigServiceImpl implements ConfigService {
         RuleStatusSnapshot after = new RuleStatusSnapshot(
                 ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", action, "rule_definition",
+                tenantId, actorId, ActorType.USER, action, AuditTargetType.RULE_DEFINITION,
                 ruleDefinitionId.toString(), before, after, LocalDateTime.now()));
 
         // 状态变更须刷新 eval 索引:disable→loader 按 rd.status='PUBLISHED' 过滤摘除、enable→装回。

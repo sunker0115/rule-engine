@@ -7,6 +7,9 @@ import com.sstlfsj.rule.config.api.dto.SceneListItem;
 import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneService;
+import com.sstlfsj.rule.config.internal.domain.ActorType;
+import com.sstlfsj.rule.config.internal.domain.AuditAction;
+import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import com.sstlfsj.rule.config.internal.event.AuditSnapshot;
@@ -60,7 +63,7 @@ class SceneServiceImpl implements SceneService {
         scene.setCreatedBy(actorId);
         sceneMapper.insert(scene);
 
-        publishAudit(tenantId, actorId, "CREATE", "scene",
+        publishAudit(tenantId, actorId, AuditAction.CREATE, AuditTargetType.SCENE,
                 scene.getId() != null ? scene.getId().toString() : sceneCode,
                 null, snapshotOf(scene));
         return scene.getId();
@@ -87,7 +90,7 @@ class SceneServiceImpl implements SceneService {
         scene.setUpdatedBy(cmd.actorId());
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        publishAudit(cmd.tenantId(), cmd.actorId(), "UPDATE", "scene",
+        publishAudit(cmd.tenantId(), cmd.actorId(), AuditAction.UPDATE, AuditTargetType.SCENE,
                 scene.getId().toString(), before, snapshotOf(scene));
         // 场景仍 ACTIVE：发 SceneChangedEvent(active=true) 触发 eval 索引重载，
         // 使 payloadSchema / eventTypes / defaultParams(含 timezone)变更 live 生效(不必等规则 republish)。
@@ -120,7 +123,7 @@ class SceneServiceImpl implements SceneService {
         scene.setUpdatedBy(actorId);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        publishAudit(tenantId, actorId, "DISABLE", "scene",
+        publishAudit(tenantId, actorId, AuditAction.DISABLE, AuditTargetType.SCENE,
                 scene.getId().toString(), before, snapshotOf(scene));
         eventPublisher.publishEvent(new SceneChangedEvent(String.valueOf(tenantId), sceneCode, false));
     }
@@ -136,8 +139,8 @@ class SceneServiceImpl implements SceneService {
         scene.setStatus(newStatus);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        String action = enable ? "ENABLE" : "DISABLE";
-        publishAudit(tenantId, actorId, action, "scene",
+        AuditAction action = enable ? AuditAction.ENABLE : AuditAction.DISABLE;
+        publishAudit(tenantId, actorId, action, AuditTargetType.SCENE,
                 scene.getId().toString(), before, snapshotOf(scene));
         eventPublisher.publishEvent(new SceneChangedEvent(String.valueOf(tenantId), sceneCode, enable));
     }
@@ -218,10 +221,10 @@ class SceneServiceImpl implements SceneService {
                 .build();
     }
 
-    private void publishAudit(Long tenantId, String actor, String action,
-                              String targetType, String targetId,
+    private void publishAudit(Long tenantId, String actor, AuditAction action,
+                              AuditTargetType targetType, String targetId,
                               AuditSnapshot before, AuditSnapshot after) {
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actor, "USER", action, targetType, targetId, before, after, LocalDateTime.now()));
+                tenantId, actor, ActorType.USER, action, targetType, targetId, before, after, LocalDateTime.now()));
     }
 }

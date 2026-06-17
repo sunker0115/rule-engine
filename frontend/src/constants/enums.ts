@@ -100,7 +100,6 @@ export function getAuditActionOptions(t: TFunction) {
     { value: 'CREATE',         label: t('enum.action.CREATE'),         color: 'blue'    },
     { value: 'UPDATE',         label: t('enum.action.UPDATE'),         color: 'blue'    },
     { value: 'PUBLISH',        label: t('enum.action.PUBLISH'),        color: 'green'   },
-    { value: 'PUBLISH_FAILED', label: t('enum.action.PUBLISH_FAILED'), color: 'red'     },
     { value: 'ENABLE',         label: t('enum.action.ENABLE'),         color: 'green'   },
     { value: 'DISABLE',        label: t('enum.action.DISABLE'),        color: 'orange'  },
     { value: 'DELETE',         label: t('enum.action.DELETE'),         color: 'red'     },

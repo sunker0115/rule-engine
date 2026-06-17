@@ -20,7 +20,7 @@ const audit: AuditTranslation = {
   },
   enum: {
     action: {
-      CREATE: 'Create', UPDATE: 'Update', PUBLISH: 'Publish', PUBLISH_FAILED: 'Publish Failed',
+      CREATE: 'Create', UPDATE: 'Update', PUBLISH: 'Publish',
       ENABLE: 'Enable', DISABLE: 'Disable', DELETE: 'Delete', IMPORT: 'Import',
     },
     targetType: { RULE: 'Rule', SCENE: 'Scene', METRIC: 'Metric', DECISION: 'Decision', JOB: 'Job' },

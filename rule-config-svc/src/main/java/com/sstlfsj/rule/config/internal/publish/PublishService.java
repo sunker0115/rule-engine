@@ -143,7 +143,7 @@ public class PublishService {
         ruleDefinitionMapper.updateById(rule);
 
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.PUBLISH, AuditTargetType.RULE_DEFINITION, ruleDefinitionId.toString(),
                 beforeSnap, new RulePublishedSnapshot(draft.getId(), draft.getVersion()), LocalDateTime.now()));
 
         // kind 取被发布的 draft 行（premise A 冻结的权威值），抗"定义级 kind 与版本漂移"
@@ -225,7 +225,7 @@ public class PublishService {
         // 不还原编辑前内容(草稿是可反复改的中间态，内容历史不进审计；线上变更审计在 publish 处)
         DraftCreatedSnapshot snap = new DraftCreatedSnapshot(rule.getId(), draft.getId());
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "UPDATE", "rule_definition", rule.getId().toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.UPDATE, AuditTargetType.RULE_DEFINITION, rule.getId().toString(),
                 snap, snap, LocalDateTime.now()));
         return new DraftCreatedResult(rule.getId(), draft.getId(), draft.getVersion(), RuleDefinitionStatus.DRAFT.name());
     }
@@ -307,7 +307,7 @@ public class PublishService {
 
         DraftCreatedSnapshot snap = new DraftCreatedSnapshot(rule.getId(), rv.getId());
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "CREATE", "rule_definition", rule.getId().toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.CREATE, AuditTargetType.RULE_DEFINITION, rule.getId().toString(),
                 snap, snap, LocalDateTime.now()));
         return new DraftCreatedResult(rule.getId(), rv.getId(), version, RuleDefinitionStatus.DRAFT.name());
     }
@@ -336,7 +336,7 @@ public class PublishService {
         ruleVersionMapper.deleteByRuleDefinitionId(ruleDefinitionId);
         ruleDefinitionMapper.deleteById(ruleDefinitionId);
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "DELETE", "rule_definition", ruleDefinitionId.toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.DELETE, AuditTargetType.RULE_DEFINITION, ruleDefinitionId.toString(),
                 snap, snap, LocalDateTime.now()));
     }
 
@@ -364,7 +364,7 @@ public class PublishService {
         ruleVersionMapper.deleteById(versionId);
         DraftCreatedSnapshot snap = new DraftCreatedSnapshot(ruleDefinitionId, versionId);
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "DELETE", "rule_version", versionId.toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.DELETE, AuditTargetType.RULE_VERSION, versionId.toString(),
                 snap, snap, LocalDateTime.now()));
     }
 
@@ -714,7 +714,7 @@ public class PublishService {
         // CREATE 类 before/after 传同一快照实例，审计行始终 before/after 都有值，避免 null 特殊处理
         DraftCreatedSnapshot draftSnapshot = new DraftCreatedSnapshot(rd.getId(), rv.getId());
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "CREATE", "rule_definition", rd.getId().toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.CREATE, AuditTargetType.RULE_DEFINITION, rd.getId().toString(),
                 draftSnapshot,
                 draftSnapshot,
                 LocalDateTime.now()));

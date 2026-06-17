@@ -1,5 +1,5 @@
 export type ActorType = 'USER' | 'SYSTEM' | 'JOB';
-export type AuditAction = 'CREATE' | 'UPDATE' | 'PUBLISH' | 'PUBLISH_FAILED' | 'ENABLE' | 'DISABLE' | 'DELETE' | 'IMPORT';
+export type AuditAction = 'CREATE' | 'UPDATE' | 'PUBLISH' | 'ENABLE' | 'DISABLE' | 'DELETE' | 'IMPORT';
 
 /** 审计日志项——字段对齐 GET /admin/v1/audit-logs 实际响应 */
 export interface AuditLogItem {

@@ -23,7 +23,6 @@ const audit: AuditTranslation = {
       CREATE: '创建',
       UPDATE: '更新',
       PUBLISH: '发布',
-      PUBLISH_FAILED: '发布失败',
       ENABLE: '启用',
       DISABLE: '禁用',
       DELETE: '删除',

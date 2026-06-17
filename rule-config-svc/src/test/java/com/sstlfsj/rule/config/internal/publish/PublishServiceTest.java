@@ -303,7 +303,7 @@ class PublishServiceTest {
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("CREATE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.CREATE);
         assertThat(audit.beforeSnapshot()).isSameAs(audit.afterSnapshot());
         assertThat(audit.afterSnapshot()).isEqualTo(new DraftCreatedSnapshot(10L, 20L));
     }
@@ -508,8 +508,8 @@ class PublishServiceTest {
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("DELETE");
-        assertThat(audit.targetType()).isEqualTo("rule_definition");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.DELETE);
+        assertThat(audit.targetType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditTargetType.RULE_DEFINITION);
         assertThat(audit.beforeSnapshot()).isInstanceOf(
                 com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot.class);
     }
@@ -539,8 +539,8 @@ class PublishServiceTest {
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("DELETE");
-        assertThat(audit.targetType()).isEqualTo("rule_version");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.DELETE);
+        assertThat(audit.targetType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditTargetType.RULE_VERSION);
         assertThat(audit.beforeSnapshot()).isInstanceOf(
                 com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot.class);
     }

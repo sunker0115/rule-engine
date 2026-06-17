@@ -68,8 +68,8 @@ class ConnectorWriteServiceImplTest {
         verify(events).publishEvent(new ConnectorChangedEvent("1", "risk-svc"));
         verify(events).publishEvent(argThat((Object e) ->
                 e instanceof OperationAuditedEvent a
-                        && "connector_definition".equals(a.targetType())
-                        && "CREATE".equals(a.action())));
+                        && a.targetType() == com.sstlfsj.rule.config.internal.domain.AuditTargetType.CONNECTOR_DEFINITION
+                        && a.action() == com.sstlfsj.rule.config.internal.domain.AuditAction.CREATE));
     }
 
     @Test
@@ -108,7 +108,7 @@ class ConnectorWriteServiceImplTest {
         assertThat(existing.getUpdatedBy()).isEqualTo("u2");
         verify(events).publishEvent(new ConnectorChangedEvent("1", "risk-svc"));
         verify(events).publishEvent(argThat((Object e) ->
-                e instanceof OperationAuditedEvent a && "UPDATE".equals(a.action())));
+                e instanceof OperationAuditedEvent a && a.action() == com.sstlfsj.rule.config.internal.domain.AuditAction.UPDATE));
     }
 
     @Test
@@ -166,10 +166,10 @@ class ConnectorWriteServiceImplTest {
         ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
         verify(events, atLeastOnce()).publishEvent(captor.capture());
         OperationAuditedEvent audit = captor.getAllValues().stream()
-                .filter(e -> e instanceof OperationAuditedEvent a && "DISABLE".equals(a.action()))
+                .filter(e -> e instanceof OperationAuditedEvent a && a.action() == com.sstlfsj.rule.config.internal.domain.AuditAction.DISABLE)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.targetType()).isEqualTo("connector_definition");
+        assertThat(audit.targetType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditTargetType.CONNECTOR_DEFINITION);
         assertThat(((ConnectorChangedSnapshot) audit.beforeSnapshot()).status()).isEqualTo("ACTIVE");
         assertThat(((ConnectorChangedSnapshot) audit.afterSnapshot()).status()).isEqualTo("DISABLED");
     }

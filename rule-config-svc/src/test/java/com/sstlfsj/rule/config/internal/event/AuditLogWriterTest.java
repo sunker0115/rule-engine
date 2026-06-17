@@ -1,6 +1,9 @@
 package com.sstlfsj.rule.config.internal.event;
 
+import com.sstlfsj.rule.config.internal.domain.ActorType;
+import com.sstlfsj.rule.config.internal.domain.AuditAction;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
+import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +36,7 @@ class AuditLogWriterTest {
     void onOperationAudited_serializesTypedSnapshotsAndInserts() {
         LocalDateTime now = LocalDateTime.of(2026, 6, 9, 10, 0);
         OperationAuditedEvent event = new OperationAuditedEvent(
-                1L, "alice", "USER", "CREATE", "rule_definition", "10",
+                1L, "alice", ActorType.USER,AuditAction.CREATE, AuditTargetType.RULE_DEFINITION, "10",
                 new DraftCreatedSnapshot(10L, 20L), new DraftCreatedSnapshot(10L, 20L), now);
 
         writer().onOperationAudited(event);
@@ -43,9 +46,9 @@ class AuditLogWriterTest {
         AuditLog log = captor.getValue();
         assertThat(log.getTenantId()).isEqualTo(1L);
         assertThat(log.getActor()).isEqualTo("alice");
-        assertThat(log.getActorType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.ActorType.USER);
-        assertThat(log.getAction()).isEqualTo("CREATE");
-        assertThat(log.getTargetType()).isEqualTo("rule_definition");
+        assertThat(log.getActorType()).isEqualTo(ActorType.USER);
+        assertThat(log.getAction()).isEqualTo(AuditAction.CREATE);
+        assertThat(log.getTargetType()).isEqualTo(AuditTargetType.RULE_DEFINITION);
         assertThat(log.getTargetId()).isEqualTo("10");
         // 快照序列化为 JSON String：字段名/值与 record 对齐
         assertThat(log.getBeforeSnapshot()).contains("\"ruleDefinitionId\":10", "\"ruleVersionId\":20");
@@ -56,7 +59,7 @@ class AuditLogWriterTest {
     @Test
     void onOperationAudited_serializesMetricSnapshot() {
         OperationAuditedEvent event = new OperationAuditedEvent(
-                1L, "bob", "USER", "UPDATE", "metric_definition", "5",
+                1L, "bob", ActorType.USER,AuditAction.UPDATE, AuditTargetType.METRIC_DEFINITION, "5",
                 null, new MetricChangedSnapshot("amount", 3, true), LocalDateTime.now());
 
         writer().onOperationAudited(event);
@@ -71,7 +74,7 @@ class AuditLogWriterTest {
     @Test
     void onOperationAudited_nullSnapshotsWriteNull() {
         OperationAuditedEvent event = new OperationAuditedEvent(
-                1L, "carol", "USER", "DISABLE", "rule_definition", "9",
+                1L, "carol", ActorType.USER,AuditAction.DISABLE, AuditTargetType.RULE_DEFINITION, "9",
                 null, null, LocalDateTime.now());
 
         writer().onOperationAudited(event);
@@ -88,7 +91,7 @@ class AuditLogWriterTest {
         MDC.put("traceId", "trace-abc-123");
         try {
             OperationAuditedEvent event = new OperationAuditedEvent(
-                    1L, "dave", "USER", "PUBLISH", "rule_definition", "11",
+                    1L, "dave", ActorType.USER,AuditAction.PUBLISH, AuditTargetType.RULE_DEFINITION, "11",
                     null, new RulePublishedSnapshot(30L, 2L), LocalDateTime.now());
 
             writer().onOperationAudited(event);
@@ -105,7 +108,7 @@ class AuditLogWriterTest {
     void onOperationAudited_traceIdNullWhenNoMdc() {
         MDC.remove("traceId");
         OperationAuditedEvent event = new OperationAuditedEvent(
-                1L, "erin", "USER", "DISABLE", "rule_definition", "12",
+                1L, "erin", ActorType.USER,AuditAction.DISABLE, AuditTargetType.RULE_DEFINITION, "12",
                 null, null, LocalDateTime.now());
 
         writer().onOperationAudited(event);

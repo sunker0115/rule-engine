@@ -16,8 +16,8 @@ class AuditLogTest {
         log.setTenantId(100L);
         log.setActor("operator1");
         log.setActorType(ActorType.USER);
-        log.setAction("PUBLISH");
-        log.setTargetType("rule_definition");
+        log.setAction(AuditAction.PUBLISH);
+        log.setTargetType(AuditTargetType.RULE_DEFINITION);
         log.setTargetId("42");
         log.setBeforeSnapshot("{\"status\":\"DRAFT\"}");
         log.setAfterSnapshot("{\"status\":\"PUBLISHED\"}");
@@ -29,8 +29,8 @@ class AuditLogTest {
         assertEquals(100L, log.getTenantId());
         assertEquals("operator1", log.getActor());
         assertEquals(ActorType.USER, log.getActorType());
-        assertEquals("PUBLISH", log.getAction());
-        assertEquals("rule_definition", log.getTargetType());
+        assertEquals(AuditAction.PUBLISH, log.getAction());
+        assertEquals(AuditTargetType.RULE_DEFINITION, log.getTargetType());
         assertEquals("42", log.getTargetId());
         assertEquals("{\"status\":\"DRAFT\"}", log.getBeforeSnapshot());
         assertEquals("{\"status\":\"PUBLISHED\"}", log.getAfterSnapshot());

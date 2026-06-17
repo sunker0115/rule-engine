@@ -83,8 +83,8 @@ class SceneServiceImplTest {
                 ArgumentCaptor.forClass(OperationAuditedEvent.class);
         verify(eventPublisher).publishEvent(auditCaptor.capture());
         OperationAuditedEvent audit = auditCaptor.getValue();
-        assertThat(audit.action()).isEqualTo("CREATE");
-        assertThat(audit.targetType()).isEqualTo("scene");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.CREATE);
+        assertThat(audit.targetType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditTargetType.SCENE);
         assertThat(audit.targetId()).isEqualTo("100");
         assertThat(audit.beforeSnapshot()).isNull();
         assertThat(audit.afterSnapshot()).isInstanceOf(SceneSnapshot.class);
@@ -116,7 +116,7 @@ class SceneServiceImplTest {
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("DISABLE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.DISABLE);
         // disable 审计 before=ACTIVE 快照，after=DISABLED 快照
         assertThat(((SceneSnapshot) audit.beforeSnapshot()).status()).isEqualTo("ACTIVE");
         assertThat(((SceneSnapshot) audit.afterSnapshot()).status()).isEqualTo("DISABLED");
@@ -156,7 +156,7 @@ class SceneServiceImplTest {
         OperationAuditedEvent audit = eventCaptor.getAllValues().stream()
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast).findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("UPDATE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.UPDATE);
         SceneSnapshot before = (SceneSnapshot) audit.beforeSnapshot();
         SceneSnapshot after = (SceneSnapshot) audit.afterSnapshot();
         assertThat(before.payloadSchema()).extracting(PayloadFieldSpec::name).containsExactly("amount");

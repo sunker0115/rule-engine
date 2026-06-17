@@ -87,7 +87,7 @@ class ConfigServiceImplTest {
         OperationAuditedEvent audit = evCaptor.getAllValues().stream()
                 .filter(OperationAuditedEvent.class::isInstance).map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("DISABLE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.DISABLE);
         assertThat(audit.targetId()).isEqualTo("10");
         var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) audit.beforeSnapshot();
         var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) audit.afterSnapshot();
@@ -126,7 +126,7 @@ class ConfigServiceImplTest {
         OperationAuditedEvent audit = evCaptor.getAllValues().stream()
                 .filter(OperationAuditedEvent.class::isInstance).map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("ENABLE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.ENABLE);
         var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) audit.beforeSnapshot();
         var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) audit.afterSnapshot();
         assertThat(before.status()).isEqualTo("DISABLED");

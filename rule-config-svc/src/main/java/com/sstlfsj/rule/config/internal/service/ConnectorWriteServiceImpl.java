@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sstlfsj.rule.config.api.dto.ConnectorListQuery;
 import com.sstlfsj.rule.config.api.event.ConnectorChangedEvent;
 import com.sstlfsj.rule.config.api.service.ConnectorWriteService;
+import com.sstlfsj.rule.config.internal.domain.ActorType;
+import com.sstlfsj.rule.config.internal.domain.AuditAction;
+import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
 import com.sstlfsj.rule.config.internal.domain.ConnectorDefinition;
 import com.sstlfsj.rule.config.internal.domain.ConnectorStatus;
 import com.sstlfsj.rule.config.internal.event.ConnectorChangedSnapshot;
@@ -55,7 +58,7 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
         // CREATE 类 before/after 传同一快照实例，审计行始终 before/after 都有值（照 MetricWriteServiceImpl）
         ConnectorChangedSnapshot snapshot = new ConnectorChangedSnapshot(
                 connectorCode, cmd.name(), ConnectorStatus.ACTIVE.name());
-        publishAudit(tenantId, actorId, "CREATE", c.getId(), snapshot, snapshot);
+        publishAudit(tenantId, actorId, AuditAction.CREATE, c.getId(), snapshot, snapshot);
         eventPublisher.publishEvent(new ConnectorChangedEvent(String.valueOf(tenantId), connectorCode));
         return c.getId();
     }
@@ -77,7 +80,7 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
         existing.setUpdatedAt(LocalDateTime.now());
         int n = mapper.updateById(existing);
 
-        publishAudit(tenantId, actorId, "UPDATE", existing.getId(), before,
+        publishAudit(tenantId, actorId, AuditAction.UPDATE, existing.getId(), before,
                 new ConnectorChangedSnapshot(connectorCode, cmd.name(), status));
         eventPublisher.publishEvent(new ConnectorChangedEvent(String.valueOf(tenantId), connectorCode));
         return n;
@@ -98,7 +101,7 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
         existing.setUpdatedAt(LocalDateTime.now());
         mapper.updateById(existing);
 
-        publishAudit(tenantId, actorId, "DISABLE", existing.getId(), before,
+        publishAudit(tenantId, actorId, AuditAction.DISABLE, existing.getId(), before,
                 new ConnectorChangedSnapshot(connectorCode, existing.getName(), ConnectorStatus.DISABLED.name()));
         eventPublisher.publishEvent(new ConnectorChangedEvent(String.valueOf(tenantId), connectorCode));
     }
@@ -137,10 +140,10 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
     }
 
     /** 发布操作审计事件，由集中监听器 BEFORE_COMMIT 同事务落 audit_log（D14 约定）。 */
-    private void publishAudit(Long tenantId, String actorId, String action, Long id,
+    private void publishAudit(Long tenantId, String actorId, AuditAction action, Long id,
                               ConnectorChangedSnapshot before, ConnectorChangedSnapshot after) {
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", action, "connector_definition", String.valueOf(id),
+                tenantId, actorId, ActorType.USER, action, AuditTargetType.CONNECTOR_DEFINITION, String.valueOf(id),
                 before, after, LocalDateTime.now()));
     }
 }

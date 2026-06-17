@@ -434,7 +434,7 @@ export interface AuditTranslation {
   };
   enum: {
     action: {
-      CREATE: string; UPDATE: string; PUBLISH: string; PUBLISH_FAILED: string;
+      CREATE: string; UPDATE: string; PUBLISH: string;
       ENABLE: string; DISABLE: string; DELETE: string; IMPORT: string;
     };
     targetType: { RULE: string; SCENE: string; METRIC: string; DECISION: string; JOB: string };
