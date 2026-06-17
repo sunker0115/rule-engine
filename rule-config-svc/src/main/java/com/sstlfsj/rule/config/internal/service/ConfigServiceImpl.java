@@ -73,7 +73,7 @@ class ConfigServiceImpl implements ConfigService {
 
     /**
      * 规则启停状态单向迁移（D19 DISABLED↔PUBLISHED 解耦切换）：仅当规则处于 {@code from} 态才迁到 {@code to}，
-     * 其它态（DRAFT/PUBLISHING/PUBLISH_FAILED 或已是目标态）一律拒绝，并落一条对应 action 的审计事件。
+     * 其它态（DRAFT 或已是目标态）一律拒绝，并落一条对应 action 的审计事件。
      * 严格校验源态杜绝"未发布规则被 disable 再 enable 成无 current_version 的脏 PUBLISHED"。
      *
      * @param from   要求的源状态

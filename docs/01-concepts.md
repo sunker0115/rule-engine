@@ -508,7 +508,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 ### 3.11 AuditLog（操作审计，不是一等公民）
 
-**是什么**：D14 引入的"人的行为"记录表，与 `evaluation_session` / `node_trace`（系统行为）严格分离。所有对 Rule / Scene / Metric / Decision / Job 等配置对象的 CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE 操作落 `audit_log` 表（D19：发布事务回滚后单独追加 `PUBLISH_FAILED` 记录）。
+**是什么**：D14 引入的"人的行为"记录表，与 `evaluation_session` / `node_trace`（系统行为）严格分离。所有对 Rule / Scene / Metric / Decision / Job 等配置对象的 CREATE / UPDATE / PUBLISH / ENABLE / DISABLE / DELETE 操作落 `audit_log` 表（D19：发布失败时整事务回滚、审计一并回滚，不写失败记录）。
 
 **字段**：
 
@@ -520,9 +520,9 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 | `actor_type` | `USER` / `SYSTEM` / `JOB` |
 | `target_type` | 操作对象类型：`RULE` / `SCENE` / `METRIC` / `DECISION` / `JOB` / ... |
 | `target_id` | 对象 ID |
-| `action` | 动作：`CREATE` / `UPDATE` / `PUBLISH` / `PUBLISH_FAILED` / `ENABLE` / `DISABLE` / `DELETE` / `IMPORT`（D19：发布事务回滚后单独追加 PUBLISH_FAILED 记录；B7：Bundle 导入逐条落草稿记 IMPORT） |
+| `action` | 动作：`CREATE` / `UPDATE` / `PUBLISH` / `ENABLE` / `DISABLE` / `DELETE` / `IMPORT`（D19：发布是单 DB 原子事务，失败整事务回滚不写审计；B7：Bundle 导入逐条落草稿记 IMPORT） |
 | `before_snapshot` | 变更前的 JSON 全量快照（DELETE / UPDATE 时填） |
-| `after_snapshot` | 变更后的 JSON 全量快照（CREATE / UPDATE / PUBLISH 时填）；`PUBLISH_FAILED` 时填错误诊断 JSON（含 `errorCode` / `stackTrace` 摘要，详见下方关键边界） |
+| `after_snapshot` | 变更后的 JSON 全量快照（CREATE / UPDATE / PUBLISH 时填） |
 | `operated_at` | 操作时间（DDL 列名；与 `evaluation_session.occurred_at` 含义不同，后者是业务事件时间） |
 | `trace_id` | 关联请求链路 ID |
 
@@ -533,16 +533,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 - **审计表只增不改**：DELETE 操作只删 `target` 对象本身，audit_log 行永远保留（合规需要）。
 - **不做篡改防护**（hash chain / WORM 存储）：v1 信任 DB；高合规场景留到 v2。
 - **跨租户管理员**：使用 `tenant_id = "__platform__"` 的特殊 actor 实现，业务约定，不入 schema。
-- **错误诊断信息走 `after_snapshot`**：`PUBLISH_FAILED` 记录的 `errorCode` / `stackTrace` 摘要（D19）以及发布期校验错误码（D20 §3 `UNRESOLVED_VARIABLE` 等）统一放入 `after_snapshot` JSON 字段，不为此另加表列；查询时按 JSON path 取（具体 path 由 05-storage 定义）。**已知 `after_snapshot.errorCode` 值（v1，发布期校验错误码）**：
-
-| errorCode | 含义 |
-|-----------|------|
-| `UNRESOLVED_VARIABLE` | D20 §3 输入引用闭合校验失败：conditionAst 引用了未在 Schema / tenant 级已注册 metric / EvalContext 标准字段中声明的变量名 |
-| `DECISION_CODE_NOT_FOUND` | Rule 的 `decisionBindings` 引用了 Scene 所属 Tenant 未定义的 Decision code |
-| `ZOMBIE_PUBLISHING` | D19 PUBLISHING 残留清扫修正：后台清扫检测到 PUBLISHING 状态超过阈值，强制修正为 PUBLISH_FAILED |
-| `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
-
-新增码需在本清单回填——与运行期 `EvalResult.errorCode` 枚举互不相交（D20 派生约束）。
+- **发布失败不落审计**：发布是单 DB 原子事务（D19），任一步（含 D20 §3 输入引用闭合校验）失败 → 整事务回滚、规则保持原态、**不产生任何中间态、不写审计记录**；错误码（如 `UNRESOLVED_VARIABLE` / `DECISION_CODE_NOT_FOUND`，完整清单见 10-api-contract §七）随 API 错误响应返回前端，不入 `audit_log`。`after_snapshot` 仅承载成功操作（CREATE / UPDATE / PUBLISH）的变更后快照。
 
 ### 3.12 RuleVersion（规则版本快照，不是一等公民）
 

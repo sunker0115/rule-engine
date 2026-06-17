@@ -319,7 +319,7 @@
 
 **v1 落地范围**：
 - **审计字段**（所有核心表）：`created_by` / `created_at` / `updated_by` / `updated_at`；Rule 额外加 `published_by` / `published_at`。详细落点（横切原则、各表字段表如何省略横切字段）见 [`01-concepts.md`](./01-concepts.md) §三 顶部横切说明；
-- **审计表 `audit_log`**：`tenant_id` / `actor` / `target_type`（RULE / SCENE / METRIC_BINDING / ACTION_BINDING / JOB / ...）/ `target_id` / `action`（CREATE / UPDATE / PUBLISH / PUBLISH_FAILED / ENABLE / DISABLE / DELETE）/ `before_snapshot` JSON / `after_snapshot` JSON / `operated_at` / `trace_id`；
+- **审计表 `audit_log`**：`tenant_id` / `actor` / `target_type`（RULE / SCENE / METRIC_BINDING / ACTION_BINDING / JOB / ...）/ `target_id` / `action`（CREATE / UPDATE / PUBLISH / ENABLE / DISABLE / DELETE / IMPORT）/ `before_snapshot` JSON / `after_snapshot` JSON / `operated_at` / `trace_id`；
 - **actor 来源**：上游网关在请求头注入 `X-Actor-Id` / `X-Actor-Type`（USER / SYSTEM / JOB），引擎不验签——验签是网关职责；
 - **跨租户管理员**：通过特殊 `tenant_id = "__platform__"` 的 actor 实现，业务约定，不入 schema。
 
@@ -472,11 +472,11 @@ EvalResult {
 
 ## D19. 规则发布事务性与回滚 ⭐⭐
 
-**为什么重要**：D6 规定了"发布即版本快照不可变"，但**发布过程本身**的事务边界和失败回滚没说。一次发布要写 RuleDefinition 状态 + 新 version 记录 + audit_log，中间任一步骤失败状态机怎么走？多条规则批量发布要不要原子？不表态会出现 DB 残留 PUBLISHING 状态 / 版本号空洞 / 审计与状态不一致。
+**为什么重要**：D6 规定了"发布即版本快照不可变"，但**发布过程本身**的事务边界和失败回滚没说。一次发布要写 RuleDefinition 状态 + 新 version 记录 + audit_log，中间任一步骤失败状态机怎么走？多条规则批量发布要不要原子？不表态会出现版本号空洞 / 审计与状态不一致。
 
 | 选项 | 说明 | 权衡 |
 |------|------|------|
-| ☐ A. 单条规则原子发布 + 批量逐条进度 | 单条发布在一个 DB 事务内完成（状态机迁移 + 新 version 行 + audit_log），失败落 `PUBLISH_FAILED` 待人工确认（详见下文 v1 落地范围）；批量发布前端拆成逐条请求，失败逐条暴露 | 简单可靠；批量进度 UI 易做 |
+| ☐ A. 单条规则原子发布 + 批量逐条进度 | 单条发布在一个 DB 事务内完成（状态机迁移 + 新 version 行 + audit_log），失败则整事务回滚、规则保持原态（详见下文 v1 落地范围）；批量发布前端拆成逐条请求，失败逐条暴露 | 简单可靠；批量进度 UI 易做 |
 | ☐ B. 批量原子发布 | 一次 API 调用内多规则同事务发布 | 跨规则原子；事务大、锁范围广、长事务风险；批量超过 N 条时 DB 压力大 |
 | ☐ C. 无事务保证 | 状态机分步推进，失败由人工修复 | 最简单实现；事故频发 |
 
@@ -485,30 +485,28 @@ EvalResult {
 **状态机摘要**（详见下方 v1 状态机扩展 + v1 落地范围）：
 
 ```
-DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
-                  │                        │  │
-                  │                        │  └──ENABLE/DISABLE──▶ DISABLED
-                  │                        └◀──ENABLE────────────┘
-                  └──事务失败/僵尸清扫──▶ PUBLISH_FAILED ──UI 显式确认──▶ DRAFT
+DRAFT ──发布（单 DB 原子事务）──▶ PUBLISHED
+                                   │  ▲
+                          DISABLE  │  │  ENABLE
+                                   ▼  │
+                                 DISABLED
 ```
 
 **v1 状态机扩展**：
-- `RuleDefinition.status` 枚举：`DRAFT` → `PUBLISHING` → `PUBLISHED` / `PUBLISH_FAILED`；新增 `DISABLED`（独立分支，与 `PUBLISHED` 之间双向切换，详见下文 v1 落地范围"DISABLED 与发布解耦"条目）；
-- `PUBLISHING` 是**瞬时状态**：进入与退出在同一事务内，正常路径上不会被外部观察到；异常 crash / 超时残留时由后台清扫任务（默认 5min 扫一次）将超过 60s 的 `PUBLISHING` 重置为 `PUBLISH_FAILED`；
-- `PUBLISH_FAILED` 是**待人工确认状态**：草稿数据仍在（事务回滚不动草稿内容），但状态不自动回 `DRAFT`——避免运营误以为"上次失败已自动恢复"。用户从 UI 点"重新编辑"显式确认后，状态由 `PUBLISH_FAILED → DRAFT`（单独审计一条 `action=UPDATE`），才能再次发起发布。
+- `RuleDefinition.status` 枚举：仅 `DRAFT` / `PUBLISHED` / `DISABLED`，无任何中间态；
+- 发布是 `DRAFT → PUBLISHED` 的单 DB 原子事务，成功即 PUBLISHED，失败整事务回滚、规则保持原态（DRAFT 内容不动），**不产生任何中间态**；
+- `DISABLED` 是独立分支，与 `PUBLISHED` 之间双向切换（详见下文 v1 落地范围"DISABLED 与发布解耦"条目）。
 
 **v1 落地范围**：
-- **发布事务**（单条规则）单次 DB 事务内完成：
-  1. `rule_definition` 行：`status = DRAFT → PUBLISHING`（CAS 防并发发布）
-  2. `rule_version` 表插入新版本快照行（`version` 单调递增，含完整 AST + decision_bindings + preGates + rollout 不可变冻结；`actions` 字段已由 D27 迁移到 Decision，以 `decision_bindings` JSON 快照形式存储）
-  3. `rule_definition` 行：`status = PUBLISHED`、`current_version = N`、`published_by` / `published_at` 填充
-  4. `audit_log` 表插入一条 `action=PUBLISH` 记录（before/after 快照）
-  5. 事务提交
-- **失败回滚**：任一步抛异常 → 整发布事务回滚（若已进入 PUBLISHING 则状态先自动还原 DRAFT）→ 应用层捕获异常后**另起一个短事务**：将 `rule_definition.status` 从 DRAFT 写为 `PUBLISH_FAILED`，并写一条 `audit_log` 记录 `action=PUBLISH_FAILED`（含 errorCode / stackTrace 摘要）；草稿内容不动，状态停在 `PUBLISH_FAILED` 等待运营从 UI 显式点"重新编辑"才回 DRAFT（与上文 PUBLISH_FAILED 定义一致）；
+- **发布事务**（单条规则）单次 DB 原子事务内完成：
+  1. `rule_version` 表插入新版本快照行（`version` 单调递增，含完整 AST + decision_bindings + preGates + rollout 不可变冻结；`actions` 字段已由 D27 迁移到 Decision，以 `decision_bindings` JSON 快照形式存储）
+  2. `rule_definition` 行：`status = DRAFT → PUBLISHED`、`current_version = N`、`published_by` / `published_at` 填充
+  3. `audit_log` 表插入一条 `action=PUBLISH` 记录（before/after 快照）
+  4. 事务提交
+- **失败回滚**：任一步抛异常 → 整发布事务回滚，规则**保持原态**（仍是 DRAFT，草稿内容不动），**不产生任何中间态**；audit_log 不写失败记录（与主业务同事务，回滚时一并回滚），调用方收到错误码（如 `UNRESOLVED_VARIABLE`）由前端展示，重新编辑后再次发起发布；
 - **"回滚到旧版本" 不是覆盖**：不可变快照（D6）下，"回滚"= 用户在 UI 选择 `version=N-2` 的快照创建新草稿 → 走标准发布流程产出 `version=N+1`（内容等于 N-2），审计链完整可追溯；
 - **批量发布**：v1 **不提供**批量原子 API，前端拆成单条逐次调用，进度按"5 / 12 成功"形式展示，失败明细单独列出；
-- **DISABLED 与发布解耦**：`PUBLISHED → DISABLED` 为关停，`DISABLED → PUBLISHED` 为重新启用，均为独立单事务操作 + 一条对应 `audit_log`（`action=DISABLE` / `action=ENABLE`），不走 `PUBLISHING` 中转，不产生新 `rule_version` 行（`current_version` 指针不变）。
-- **PUBLISHING 残留兜底**：进程在"事务回滚 → 写 PUBLISH_FAILED 的短事务"之间崩溃时，`rule_definition` 可能停留在 `PUBLISHING` 状态。引擎需后台清扫任务定期扫"`PUBLISHING` 且 `updated_at` 早于阈值"的行 → 视同发布失败，状态修正为 `PUBLISH_FAILED` + 追加 `audit_log` 记录 `action=PUBLISH_FAILED, after_snapshot.errorCode=ZOMBIE_PUBLISHING`。清扫频率与超时阈值默认值在 07-operability 给（建议阈值 ≥ 一次发布事务的 P99 ×10），不入决策层。
+- **DISABLED 与发布解耦**：`PUBLISHED → DISABLED` 为关停，`DISABLED → PUBLISHED` 为重新启用，均为独立单事务操作 + 一条对应 `audit_log`（`action=DISABLE` / `action=ENABLE`），不产生新 `rule_version` 行（`current_version` 指针不变）。
 
 **v1 不做的**：
 - 不做批量原子发布（事务跨度大 + DB 锁竞争，运营营销场景按需求频次也用不上）；
@@ -551,7 +549,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 3. **输入引用闭合校验**：
    - 发布校验阶段（D19 事务前置步骤）扫描 AST 所有 `ConditionNode.params` 的变量引用名集合 `V`；
    - 校验 `V ⊆ Scene.payloadSchema 声明的字段名集合 ∪ Scene.metric 白名单 ∪ EvalContext 标准字段`；
-   - 任一引用不在上述集合 → 发布拒绝，状态落 `PUBLISH_FAILED`，audit_log 写 `action=PUBLISH_FAILED` 记录，`after_snapshot` 携带 `errorCode=UNRESOLVED_VARIABLE`（与 §3.11 audit_log 关键边界 "错误诊断信息走 after_snapshot" 对齐）；
+   - 任一引用不在上述集合 → 发布拒绝（抛异常 + 整事务回滚，规则保持原态、不产生中间态、不写审计），返回 `errorCode=UNRESOLVED_VARIABLE` 由前端展示；
    - **是后续预编译切换的前提**——强类型契约确立后，编译期才能确定槽位偏移；
    - **`EvalContext` 标准字段**（v1 闭合枚举，由 02-runtime 维护）：`now` / `tenantId` / `scene` / `eventType` / `occurredAt` / `subjectId` / `ruleVersionId`。
 
@@ -578,7 +576,7 @@ DRAFT ──发布──▶ PUBLISHING ──事务成功──▶ PUBLISHED
 - `ActionResult.errorCode` 枚举追加 `QUEUE_OVERFLOW`，回填 [`01-concepts.md`](./01-concepts.md) §3.7 集中表；
 - `rule_version.metric_dependencies` 字段 + `rule_version.compiled_predicate_ref?` 字段：05-storage DDL 待落；
 - `RuleVersionExecutor` SPI 入 [`README.md`](./README.md) §四 抽象表（01-concepts §四 是"心智级时序"，SPI 不在该处展开）；
-- `UNRESOLVED_VARIABLE` 是发布期 `audit_log` 的 errorCode，与运行期 `EvalResult.errorCode` / `ActionResult.errorCode` 不同维度，不入两个运行期枚举。
+- `UNRESOLVED_VARIABLE` 是发布期校验 errorCode，随发布 API 错误响应返回（发布失败整事务回滚不写审计，D19），与运行期 `EvalResult.errorCode` / `ActionResult.errorCode` 不同维度，不入两个运行期枚举。
 
 ---
 
@@ -1622,7 +1620,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D16 | 链式触发 | A    | 显式禁止 Action 产引擎事件；ActionHandler 不返回事件；业务自走外部 MQ 链式 |
 | D17 | 配置热加载 | A    | DB 轮询 15s + 评估快照锁定 + RuleVersionWatcher 接口预留 |
 | D18 | Action 失败补偿语义 | B    | 默认 continue-on-error，Action 级可声明 failFast；单 Action 失败不影响 **Decision** 内其他 Action（D27 迁移后语义）；补偿不自动触发由外部调度 |
-| D19 | 规则发布事务性 | A    | 单条规则原子发布（状态机：DRAFT → PUBLISHING → PUBLISHED / PUBLISH_FAILED）；批量发布前端逐条提交；回滚 = 用旧版本快照建新草稿 |
+| D19 | 规则发布事务性 | A    | 单条规则原子发布（状态机：DRAFT → PUBLISHED，单 DB 事务；失败回滚保持原态无中间态）；批量发布前端逐条提交；回滚 = 用旧版本快照建新草稿 |
 | D20 | v1 高吞吐评估期落地范围 | A    | metric 批量预拉 + 异步 Dispatcher + 输入闭合校验 + Watcher SPI 多态化；预编译 Predicate SPI 预留 v1.5 切换；alpha 共享 / 嵌入式 SDK / EXPRESSION 叶子留 08-evolution |
 | D21 | 评估观测数据异步写入 | B    | `TraceWriter` 异步批写（队列 + 消费者池 + batch insert，复用 D20 §2 模型）；与 `audit_log` 同步事务严格分离；失败降级丢弃 + 告警，不影响 EvalResult；ConditionNode 与 Pre-Gate trace 同通道；运维参数留 07-operability |
 | D22 | Pre-Gate 拦截对账状态 | A    | 引入第四态 `BLOCKED`；四态：`HIT / MISS / BLOCKED / ERROR`；Pre-Gate 拦截 → BLOCKED；`evaluation_session.blocked_by` 记录拦截 Gate 类型；命中率分母仅含 HIT+MISS |
