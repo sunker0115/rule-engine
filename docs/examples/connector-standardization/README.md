@@ -1,7 +1,7 @@
 # 连接器标准化(connector-standardization)
 
 > **状态**:✅ 对齐当前实现(D72,连接器标准化全栈 P1 写侧 + P2 运行时含 OAuth2 + P3 测试端点/conformance + P4 前端)。
-> 本案例演示 **`EXTERNAL_HTTP` 声明式连接器**端到端:连接器是**可复用命名资源**(不塞 `metric.params`),metric 经 `params={connector,vars}` 引用;descriptor 声明 request 模板 / response 映射 / 鉴权 / 弹性 / 错误映射。契约见 [`../../04-extension.md`](../../04-extension.md) §4.5(C1–C5),设计见 `specs/2026-06-15-metric-fetch-standardization-design.md`。
+> 本案例演示 **`EXTERNAL_HTTP` 声明式连接器**端到端:连接器是**可复用命名资源**(不塞 `metric.params`),metric 经 `params={connector,vars}` 引用;descriptor 声明 request 模板 / response 映射 / 鉴权 / 弹性 / 错误映射。契约见 [`../../04-extension.md`](../../04-extension.md) §4.5(C1–C5),设计见 `specs/archive/2026-06-15-metric-fetch-standardization-design.md`。
 
 ## 一、场景与业务目标
 

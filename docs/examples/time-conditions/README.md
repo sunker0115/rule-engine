@@ -111,4 +111,4 @@ curl -X POST "http://localhost:8080/admin/v1/scenes/tzdemo.win/disable?tenantId=
 
 - **时区优先序**:`条件 params.timezone` > `scene.default_params.timezone` > `UTC`。条件显式带 timezone 时覆盖 scene 默认;scene 默认非法(脏数据)时求值期兜底 UTC(创建期已 fail-fast 拦截合法性)。
 - **被解释的时间**已在上下文里:`time.window` 用 `ctx.now()`(= asOf 或 Instant.now());`time.occurred_at` 用 `event.occurredAt`;DATE_BEFORE/AFTER 用 metric 值。timezone 是把这些时刻投影成墙上时间的"镜片"。
-- 设计见 `docs/superpowers/specs/2026-06-13-time-evaluation-correctness-design.md`(D69 后续①)。
+- 设计见 `docs/superpowers/specs/archive/2026-06-13-time-evaluation-correctness-design.md`(D69 后续①)。

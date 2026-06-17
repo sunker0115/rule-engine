@@ -2,7 +2,7 @@
 
 > 日期:2026-06-13。来源:D20 / 08-evolution.md §2.13。范围:评估期把布尔 AST 编译为 `Predicate<EvalContext>` 闭包,替换解释器树遍历。**本轮不含 alpha/CSE 共享**(独立后续)。
 >
-> 背景评估见 `docs/superpowers/plans/2026-06-13-b1-b3-gap-assessment.md`。
+> 背景评估见 `docs/superpowers/plans/archive/2026-06-13-b1-b3-gap-assessment.md`。
 
 ## 1. 目标与非目标
 

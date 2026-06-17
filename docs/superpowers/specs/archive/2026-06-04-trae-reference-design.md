@@ -2,7 +2,7 @@
 
 > **文档定位**：对 `/Users/sunke/dev/trae_projects`（Trae AI 协作的通用风险决策引擎）进行结构对比分析，提炼对本项目（rule-engine）有参考价值的设计点，并与现有演进锚点挂钩。
 >
-> **前置阅读**：[`00-decisions.md`](../../00-decisions.md)、[`08-evolution.md`](../../08-evolution.md)、[`09-skeleton.md`](../../09-skeleton.md)
+> **前置阅读**：[`00-decisions.md`](../../../00-decisions.md)、[`08-evolution.md`](../../../08-evolution.md)、[`09-skeleton.md`](../../../09-skeleton.md)
 >
 > **使用方式**：本文档是调研快照，不是执行计划。具体实施时回写对应的 `08-evolution.md` 锚点 + `00-decisions.md` 决策条目。
 

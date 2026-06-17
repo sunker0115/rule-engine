@@ -268,7 +268,7 @@
   - 前端 UI：条件分组卡片新增 XOR 选项（显示文案"有且仅有一个满足"）；
   - 无 DDL 变更（AST 存 JSON，加节点类型是 JSON key 变更）；
   - 发布期输入闭合校验（D20 §3）对 XorNode 透明——只关心 ConditionNode 的变量引用，不感知父节点类型。
-- **参考来源**：trae `rule/strategy/RuleXorStrategy.java`，详见 [`docs/superpowers/specs/2026-06-04-trae-reference-design.md`](./specs/2026-06-04-trae-reference-design.md) §三 R1。
+- **参考来源**：trae `rule/strategy/RuleXorStrategy.java`，详见 [`docs/superpowers/specs/archive/2026-06-04-trae-reference-design.md`](./specs/archive/2026-06-04-trae-reference-design.md) §三 R1。
 - **已实装（d12-scorecard-evaluator Task 7）**：`XorNode` sealed AST 节点 + `AstJsonCodec` 映射 + `InterpretedExecutor` / `TracingInterpretedExecutor` 全量遍历分支 + 5 个单测覆盖（恰好一个/全部满足/全部不满足/空/两个满足）。
 - **迁移成本**：低（sealed class + evaluator + 前端编辑器，无 DDL，无 schema 迁移）。
 
@@ -332,6 +332,45 @@
 - **接口衔接面**：新增批量回放任务入口（`POST /admin/v1/replay-batches`，异步任务 + 进度 / 报告查询）+ `BatchReplayService`（编排采样查询 + 逐条调 `evaluateReplay` 的 what-if 变体）；`EvalEngine.evaluateReplay` 抽出"版本来源"参数（当时 / 指定版本）；**不动 D70 捕获落库路径**。
 - **迁移成本**：中（复用 D70 忠实重放核心 + dry-run 取版本逻辑；主要增量是批量任务编排、采样查询、diff 聚合报告，无新存储红线）。
 - **依赖与联动**：**强依赖 D70**（忠实重放 + 三件套捕获默认开；无捕获的存量 session 不可回放，`REPLAY_NOT_REPRODUCIBLE`）；与 §2.24 特征预计算正交；模型节点（若落地，见对照分析第二梯队）落地后，本锚点天然支持"新模型陪跑"（模型分作为 metric 灌入回放）。
+
+### 2.26 规则集静态分析 / 冲突检测（来源 对照成熟决策平台分析 — 治理维度，Drools verifier / DMN 完备性校验同类能力）
+
+- **v1 现状**：规则以**不可变 AST 快照**承载，命中走**倒排索引**匹配（D17），决策由 `decisionBindings` 绑定。具备做静态分析的全部素材（AST 结构 + 优先级 + Decision 绑定），但**无任何规则集级别的一致性/完备性分析**——运营无法得知一个 Scene 下规则是否有死规则、冲突、覆盖缺口。
+- **触发条件**：单 Scene 规则数增长（风控场景尤甚），运营自己无法掌握"哪条规则还活着、哪两条打架、哪个 Decision 没人产出"，规则集腐化但无人察觉。这是"规则引擎"长成"规则**管理**平台"的分水岭。
+- **演进方向（纯静态、离线、只读快照）**：
+  - **死规则检测**：某规则被更高优先级规则在输入空间上完全覆盖，永远命中不到；
+  - **冲突检测**：同一输入下两条规则产出语义冲突的 Decision（按 Decision 优先级/category 判定）；
+  - **冗余/重叠**：条件空间高度重叠的规则提示合并；
+  - **覆盖缺口**：某 Decision 无任何规则路径可产出它（绑定了但触达不到）；
+  - 输出**分析报告**（按 Scene），非阻断——发布期可选挂"警告不拦截"。
+- **接口衔接面**：新增离线 `RuleSetAnalyzer`（读 `rule_version` 快照 + AST + decisionBindings，纯计算）+ 报告查询 API（`GET /admin/v1/scenes/{sceneCode}/analysis`）；前端编辑器右栏可展示告警（复用 06-frontend 元数据驱动渲染）。**不碰评估热路径、零 DDL 红线、不引新基建。**
+- **迁移成本**：中低（一个分析 service + 报告 API；难点在条件空间覆盖判定算法，可按 conditionType 能力分档——区间/枚举可精确判，开放表达式降级为"无法判定"）。
+- **依赖与联动**：建在 D6 不可变快照 + D17 索引之上；与 §2.4 规则间依赖编排正交（那是运行时编排，本锚点是静态质量）；与 §2.27 决策效果闭环互补（静态分析看"逻辑自洽"，效果闭环看"实战准不准"）。
+
+### 2.27 决策效果闭环 / 规则有效性度量（来源 对照成熟决策平台分析 — 效果维度，FICO/Sapiens 规则绩效同类能力）
+
+- **v1 现状**：每次决策落 `evaluation_session`（D21）；可观测体系（§2.6 / §2.22）度量的是**系统级**指标（QPS / 延迟 / 错误率 / 命中率）。**无业务效果度量**——"判 HIGH 的交易事后是不是真欺诈"答不了，单条规则的查准/查全无从谈起。
+- **触发条件**：风控/营销需要持续评估"规则抓得准不准"以迭代规则；监管/风控团队要求规则绩效可量化（误报率、漏报、随时间漂移）。系统级监控绿不代表业务有效。
+- **演进方向（结果标签回灌 → 按规则聚合）**：
+  - 新增**结果标签接入**：业务侧把决策的真实结局（fraud/not、转化/未转化）按 sessionId 或 eventId 回灌；
+  - 按 **规则 / Decision 维度聚合** TP/FP/FN → precision / recall / 误报率，并按时间窗看**漂移**；
+  - 衔接 §2.16 A/B 实验：对照组/实验组的效果差异度量；衔接 §2.25 陪跑：上线前预测 + 上线后实测对照。
+- **接口衔接面**：新增 `decision_outcome` 表（sessionId/eventId 关联 + 标签 + 标签时刻）+ 标签回灌 API（`POST /admin/v1/decision-outcomes`）+ 效果聚合查询 API；聚合可走 §2.6 监控体系或独立报表。
+- **迁移成本**：中（一张关联表 + 回灌 API + 聚合查询；标签延迟到达需按时间窗对账）。
+- **边界纪律**：**标签语义（什么算欺诈/转化）是业务侧职责**，引擎只提供"标签接入位 + 按规则聚合"，不自定义业务判定——守住"引擎做决策不做业务判定"的线。
+- **依赖与联动**：建在 `evaluation_session`（D21）之上；与 §2.25 what-if 陪跑强互补（陪跑答"换规则会怎样"，本锚点答"现规则准不准"）；模型节点落地后天然支持模型 vs 规则效果对比。
+
+### 2.28 规则↔指标血缘与变更影响分析（来源 对照成熟决策平台分析 — 治理维度，数据血缘同类能力）
+
+- **v1 现状**：规则 AST 引用 `metricCode`（评估期扫 AST 收集，D25）；Decision 由 `decisionBindings` 绑定。引用关系**散落在各规则快照内**，无聚合视图——改一个 metric 口径前看不到炸点，也答不了"这个 Decision 由哪些规则产出"。
+- **触发条件**：metric / Decision 数量增长后，运营改 metric 定义（口径、版本，§2.2）或下线 Decision 前需要影响面评估，避免"改了 A 指标悄悄改变了 B 规则的行为"。
+- **演进方向（双向血缘，建在快照上）**：
+  - **正向**：metric → 引用它的规则/Scene 列表（改 metric 的影响面）；
+  - **反向**：Decision → 产出它的规则列表（Decision 覆盖来源）；
+  - **变更影响预检**：metric 定义变更 / Decision 下线时，列出受影响规则 + 可选触发 §2.27 效果对照或 §2.25 回放验证。
+- **接口衔接面**：新增 `LineageIndex`（从 `rule_version` 快照抽 metricCode/decisionCode 引用关系建索引，随发布增量更新——复用 D17 索引热更机制）+ 查询 API（`GET /admin/v1/metrics/{code}/usages`、`GET /admin/v1/decisions/{code}/sources`）。**纯读快照，零 DDL，不碰热路径。**
+- **迁移成本**：低（快照里抽引用建索引 + 查询 API；增量更新挂在既有发布事件上）。
+- **依赖与联动**：建在 D6 快照 + D17 索引热更之上；与 §2.2 metric 版本化联动（版本变更的影响面）；与 §2.26 静态分析共享"读快照抽结构"的底座，可同一分析模块承载。
 
 ---
 

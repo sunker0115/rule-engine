@@ -4,7 +4,7 @@
 
 ## 1. 评估 trace 功能(详见 spec/plan)
 - 设计:`docs/superpowers/specs/2026-06-09-eval-trace-frontend-design.md`
-- 计划:`docs/superpowers/plans/2026-06-09-eval-trace-frontend.md`
+- 计划:`docs/superpowers/plans/archive/2026-06-09-eval-trace-frontend.md`
 - 4 增量:① `ConditionOutcome` 带出 resolvedValue/valueSource + Interpreted/Scorecard 填实 + `ScorecardRoot` 根节点;② tree/table 补全保真 NodeTrace(读 `TraceScope.COLLECT`,关闭零分配);③ NodeTrace 加 `expectedValue`(→ 复用 `node_trace.params` 列)+ `displayLabel`(→ 新增 `display_label` 列),主链 `TraceWriterDbImpl` + dry-run 链 `DryRunTraceWriterDbImpl` 两端 + Flyway `V1_12`;④ `eval_duration_ms` 用 `EvalContext.now` 起点 + 事件 `durationMs`(并修了 `started_at`/`finished_at` 都盖落库时刻的旧 bug)。
 - 落库形态选 **A(自包含)**:label/expected/actual 随 trace 行落库,前端单行可渲染;kind 由 root nodeType 自描述(ScorecardRoot/IfNode/DecisionTableRow/其余)。A→B(运行时-only + 前端叠 AST)低成本可逆。
 
