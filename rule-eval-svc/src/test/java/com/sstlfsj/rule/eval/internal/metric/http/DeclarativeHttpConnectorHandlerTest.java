@@ -370,4 +370,24 @@ class DeclarativeHttpConnectorHandlerTest {
         wireMock.verify(exactly(3), postRequestedFor(urlEqualTo("/score/sub1")));
         assertThat(v.errorCode()).isEqualTo(MetricFetchError.TIMEOUT.tag());
     }
+
+    @Test
+    void injectableHttpClient_multipleSuccessiveFetches_noConnectionErrors() {
+        // 6 参构造器允许注入自定义 HttpClient（#7）：多次 fetch 通过共享 client 连接池正常复用
+        when(resolver.resolve(1L, CONNECTOR)).thenReturn(descriptor(new BearerAuth("tok-ref")));
+        wireMock.stubFor(post(urlEqualTo("/score/sub1")).willReturn(aResponse()
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"code\":0,\"data\":{\"score\":88}}")));
+        java.net.http.HttpClient customClient = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(5)).build();
+        DeclarativeHttpConnectorHandler h = new DeclarativeHttpConnectorHandler(
+                endpointRegistry(), resolver, credentialStore(), oauth2TokenManager, objectMapper, customClient);
+
+        MetricValue v1 = h.fetch(query());
+        MetricValue v2 = h.fetch(query());
+
+        assertThat(v1.value()).isEqualTo(88L);
+        assertThat(v2.value()).isEqualTo(88L);
+        wireMock.verify(exactly(2), postRequestedFor(urlEqualTo("/score/sub1")));
+    }
 }

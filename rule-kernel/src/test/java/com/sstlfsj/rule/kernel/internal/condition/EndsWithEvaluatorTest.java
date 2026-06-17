@@ -42,6 +42,18 @@ class EndsWithEvaluatorTest {
     }
 
     @Test
+    void nullMetricValue_returnsFalse() {
+        // metric value=null："null".endsWith("null")=true 属误命中，修后直接 false
+        java.util.HashMap<String, com.sstlfsj.rule.kernel.api.model.MetricValue> metrics = new java.util.HashMap<>();
+        metrics.put("email", new com.sstlfsj.rule.kernel.api.model.MetricValue(null, "UNKNOWN", "PROVIDED"));
+        RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
+                Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
+        EvalContext ctx = new EvalContext("t1", event, new Subject("sub1", SubjectType.USER, Map.of()),
+                metrics, Instant.parse("2026-06-01T00:00:00Z"));
+        assertThat(evaluator.evaluate(node("email", "null"), ctx)).isFalse();
+    }
+
+    @Test
     void metricMissing_returnsFalse() {
         RuleEvent event = new RuleEvent("e1", "t1", "s1", "sub1", "EVT",
                 Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);

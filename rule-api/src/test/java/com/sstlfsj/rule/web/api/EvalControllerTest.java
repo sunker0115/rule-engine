@@ -183,4 +183,19 @@ class EvalControllerTest {
                         .content(EVENT_JSON))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void evaluate_missingRequiredField_returns400() throws Exception {
+        // @Valid + @NotBlank：tenantCode 为 null → 400，在 toEvent 解析前被 Bean Validation 拦截（或拦截未知租户时同样 400）
+        String noTenantCode = """
+                {"sceneCode":"PAYMENT","eventType":"ORDER",
+                 "subjectId":"u1","eventId":"evt-1","payload":{}}
+                """;
+        mockMvc.perform(post("/api/v1/rule/evaluate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(noTenantCode))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+        verifyNoInteractions(evalService);
+    }
 }

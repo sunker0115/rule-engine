@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.web.api.dto;
 
+import jakarta.validation.constraints.NotBlank;
+
 import java.time.Instant;
 import java.util.Map;
 
@@ -9,11 +11,11 @@ import java.util.Map;
  * asOf 为可选的求值时钟（ISO-8601 Instant）；缺省 null 时引擎用 {@code Instant.now()}。
  */
 public record EvalEventRequest(
-        String tenantCode,
-        String sceneCode,
-        String eventType,
-        String subjectId,
-        String eventId,
+        @NotBlank String tenantCode,
+        @NotBlank String sceneCode,
+        @NotBlank String eventType,
+        @NotBlank String subjectId,
+        @NotBlank String eventId,
         Instant occurredAt,
         Map<String, Object> payload,
         Instant asOf

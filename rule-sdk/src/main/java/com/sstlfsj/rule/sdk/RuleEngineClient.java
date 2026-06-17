@@ -174,10 +174,13 @@ public class RuleEngineClient implements AutoCloseable {
             // SDK 默认不收集 trace（EvalEngine collectTrace=false）→ nodeTrace 为空输出 "[]"；启用 trace 后才有内容
             log.debug("eval trace {}", NodeTraceFormatter.compact(result.nodeTrace()));
         }
-        if (evalResultListener != null) evalResultListener.onResult(sdkEvent, result);
-        if (evalSessionListener != null) evalSessionListener.onSession(sdkEvent, result);
+        if (evalResultListener != null) try { evalResultListener.onResult(sdkEvent, result); }
+                catch (Exception ex) { log.warn("evalResultListener 异常已吞: {}", ex.getMessage(), ex); }
+        if (evalSessionListener != null) try { evalSessionListener.onSession(sdkEvent, result); }
+                catch (Exception ex) { log.warn("evalSessionListener 异常已吞: {}", ex.getMessage(), ex); }
         if (decisionContextListener != null) {
-            decisionContextListener.onEvaluated(sdkEvent, result, outcome.context());
+            try { decisionContextListener.onEvaluated(sdkEvent, result, outcome.context()); }
+            catch (Exception ex) { log.warn("decisionContextListener 异常已吞: {}", ex.getMessage(), ex); }
         }
         return result;
     }

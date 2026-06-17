@@ -30,7 +30,7 @@ public class MatchesEvaluator implements ConditionEvaluator {
     @Override
     public boolean evaluate(ConditionNode node, EvalContext ctx) {
         MetricValue mv = ctx.getMetric(node.metricCode());
-        if (mv == null) return false;
+        if (mv == null || mv.value() == null) return false;  // null 值不匹配任何正则，不应字符串化为 "null"
         Object regex = node.params().get(ConditionParams.REGEX);
         if (regex == null) return false;
         Optional<Pattern> pattern = patternCache.computeIfAbsent(String.valueOf(regex), MatchesEvaluator::compileQuietly);

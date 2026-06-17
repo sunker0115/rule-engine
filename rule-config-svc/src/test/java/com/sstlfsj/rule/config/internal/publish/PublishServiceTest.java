@@ -697,4 +697,18 @@ class PublishServiceTest {
         assertThat(cap.getValue().getPreGates()).hasSize(1);
     }
 
+    @Test
+    void publish_disabledRule_throws() {
+        // DISABLED 规则须先 enable 再发布，不允许通过 publish 路径绕过 transitionStatus 状态机
+        RuleDefinition disabledRule = new RuleDefinition();
+        disabledRule.setId(10L); disabledRule.setTenantId(1L); disabledRule.setSceneId(5L);
+        disabledRule.setStatus(com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus.DISABLED);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(disabledRule);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DISABLED");
+        verify(ruleVersionMapper, never()).findLatestDraft(any());
+    }
+
 }

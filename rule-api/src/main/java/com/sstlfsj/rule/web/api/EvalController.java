@@ -8,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import jakarta.validation.Valid;
 import com.sstlfsj.rule.web.api.dto.EvalEventRequest;
 import com.sstlfsj.rule.web.api.dto.PushEventResponse;
 import com.sstlfsj.rule.web.mask.TraceMasker;
@@ -36,7 +37,7 @@ public class EvalController {
      * @return 是否已接受 */
     @PostMapping("/event")
     public ResponseEntity<ApiResponse<PushEventResponse>> pushEvent(
-            @RequestBody EvalEventRequest req) {
+            @Valid @RequestBody EvalEventRequest req) {
         RuleEvent event = toEvent(req);
         boolean accepted = evalService.acceptEvent(event);
         return ResponseEntity.accepted()
@@ -47,7 +48,7 @@ public class EvalController {
      * @param req 待评估的事件请求体
      * @return 完整评估结果 */
     @PostMapping("/evaluate")
-    public ApiResponse<EvalResult> evaluate(@RequestBody EvalEventRequest req) {
+    public ApiResponse<EvalResult> evaluate(@Valid @RequestBody EvalEventRequest req) {
         return ApiResponse.ok(evalService.evaluate(toEvent(req), req.asOf()));
     }
 
@@ -59,7 +60,7 @@ public class EvalController {
      * @return 评估结果（含节点 trace） */
     @PostMapping("/dry-run")
     public ApiResponse<EvalResult> dryRun(
-            @RequestBody EvalEventRequest req,
+            @Valid @RequestBody EvalEventRequest req,
             @RequestParam(required = false) Long ruleId,
             @RequestParam(required = false) Long ruleVersionId) {
         RuleEvent event = toEvent(req);

@@ -110,6 +110,10 @@ public class PublishService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
+        // DISABLED 规则须先 enable 再发布，否则可通过 publish 路径绕过 transitionStatus 状态机
+        if (rule.getStatus() == RuleDefinitionStatus.DISABLED) {
+            throw new IllegalArgumentException("DISABLED 规则不允许直接发布，需先启用(enable)后再发布");
+        }
         SceneDef scene = sceneMapper.selectById(rule.getSceneId());
         if (scene == null) {
             throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());

@@ -27,6 +27,7 @@ import com.sstlfsj.rule.kernel.api.model.SourceType;
 import com.sstlfsj.rule.kernel.api.model.ValueSource;
 import com.sstlfsj.rule.kernel.api.spi.metric.FetchTraceCollector;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -59,17 +60,36 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
     private final VariableRenderer renderer = new VariableRenderer();
     private final MetricFetchErrorMapper errorMapper = new MetricFetchErrorMapper();
     private final ResiliencePolicyExecutor resilienceExecutor = new ResiliencePolicyExecutor();
+    // 共享 HttpClient（线程安全）：通过构造器 @Nullable 注入——有 Bean 则用注入的，无则默认创建，测试可替换。
+    private final HttpClient sharedHttpClient;
 
+    /** Spring 注入主构造器：使用默认共享 HttpClient（connectTimeout 5s，read timeout 走 HttpRequest.timeout()）。 */
+    @Autowired
     public DeclarativeHttpConnectorHandler(HttpEndpointRegistry endpointRegistry,
                                            ConnectorDefinitionResolver connectorResolver,
                                            CredentialStore credentialStore,
                                            OAuth2TokenManager oauth2TokenManager,
                                            ObjectMapper objectMapper) {
+        this(endpointRegistry, connectorResolver, credentialStore, oauth2TokenManager, objectMapper, null);
+    }
+
+    /**
+     * 允许注入自定义 HttpClient 的构造器（包级可见，供 Spring @Bean 手动装配或测试使用）。
+     * httpClient 为 null 时自动创建默认共享实例。
+     */
+    DeclarativeHttpConnectorHandler(HttpEndpointRegistry endpointRegistry,
+                                    ConnectorDefinitionResolver connectorResolver,
+                                    CredentialStore credentialStore,
+                                    OAuth2TokenManager oauth2TokenManager,
+                                    ObjectMapper objectMapper,
+                                    HttpClient httpClient) {
         this.endpointRegistry = endpointRegistry;
         this.connectorResolver = connectorResolver;
         this.credentialStore = credentialStore;
         this.oauth2TokenManager = oauth2TokenManager;
         this.objectMapper = objectMapper;
+        this.sharedHttpClient = httpClient != null ? httpClient
+                : HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     }
 
     @Override
@@ -102,7 +122,7 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
         ResiliencePolicy policy = descriptor.resilience();
         HttpResponse<String> response;
         try {
-            HttpClient client = client(policy);
+            HttpClient client = sharedHttpClient;
             response = resilienceExecutor.execute(policy, () -> {
                 HttpResponse<String> r = client.send(request, HttpResponse.BodyHandlers.ofString());
                 // 5xx 是正常响应不抛异常；retryOn 含 UPSTREAM_5XX 时主动抛 RetryableUpstreamStatusException 触发重试
@@ -266,13 +286,6 @@ public class DeclarativeHttpConnectorHandler implements MetricSourceHandler {
         } catch (IllegalArgumentException e) {
             return MetricFetchError.UPSTREAM_ERROR;
         }
-    }
-
-    /** 按弹性策略 connectTimeout 建 HttpClient（read 超时在请求上设）。 */
-    private static HttpClient client(ResiliencePolicy policy) {
-        return HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(Math.max(1, policy.connectTimeoutMs())))
-                .build();
     }
 
     private static HttpRequest.BodyPublisher bodyPublisher(String body) {
