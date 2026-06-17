@@ -19,7 +19,7 @@ public interface RuleBundleService {
      * @return 多规则自包含 Bundle
      * @throws IllegalArgumentException 无可导出的 ACTIVE 规则
      */
-    RuleBundle export(String tenantId, List<Long> ruleIds, Long sceneId);
+    RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId);
 
     /**
      * 幂等导入 Bundle 到目标租户：整体 upsert 依赖（Scene / metric / decision 缺失则建），
@@ -31,5 +31,5 @@ public interface RuleBundleService {
      * @return 导入结果汇总
      * @throws IllegalArgumentException Bundle 结构非法
      */
-    RuleImportResult importBundle(String tenantId, RuleBundle bundle, String actorId);
+    RuleImportResult importBundle(Long tenantId, RuleBundle bundle, String actorId);
 }

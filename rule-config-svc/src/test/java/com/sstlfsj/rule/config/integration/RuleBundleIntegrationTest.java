@@ -139,13 +139,13 @@ class RuleBundleIntegrationTest {
     void exportSceneThenImportToAnotherTenant_reconstructsBothRulesAsDraft() {
         Long sceneId = seedTwoPublishedRules();
 
-        RuleBundle bundle = ruleBundleService.export(String.valueOf(SRC_TENANT), null, sceneId);
+        RuleBundle bundle = ruleBundleService.export(SRC_TENANT, null, sceneId);
         assertThat(bundle.rules()).hasSize(2);
         assertThat(bundle.scenes()).hasSize(1);
         assertThat(bundle.metricDefinitions()).hasSize(1);    // 去重
         assertThat(bundle.decisionDefinitions()).hasSize(1);  // 去重
 
-        RuleImportResult result = ruleBundleService.importBundle(String.valueOf(DST_TENANT), bundle, "dev");
+        RuleImportResult result = ruleBundleService.importBundle(DST_TENANT, bundle, "dev");
 
         assertThat(result.rules()).hasSize(2);
         assertThat(result.rules()).allMatch(ir -> !ir.ruleAlreadyExisted() && ir.version() == 1L);
@@ -171,10 +171,10 @@ class RuleBundleIntegrationTest {
     @Test
     void reimportSameBundle_appendsSecondDraftVersionPerRule() {
         Long sceneId = seedTwoPublishedRules();
-        RuleBundle bundle = ruleBundleService.export(String.valueOf(SRC_TENANT), null, sceneId);
+        RuleBundle bundle = ruleBundleService.export(SRC_TENANT, null, sceneId);
 
-        RuleImportResult first = ruleBundleService.importBundle(String.valueOf(DST_TENANT), bundle, "dev");
-        RuleImportResult second = ruleBundleService.importBundle(String.valueOf(DST_TENANT), bundle, "dev");
+        RuleImportResult first = ruleBundleService.importBundle(DST_TENANT, bundle, "dev");
+        RuleImportResult second = ruleBundleService.importBundle(DST_TENANT, bundle, "dev");
 
         assertThat(first.rules()).allMatch(ir -> !ir.ruleAlreadyExisted() && ir.version() == 1L);
         assertThat(second.rules()).allMatch(ir -> ir.ruleAlreadyExisted() && ir.version() == 2L);

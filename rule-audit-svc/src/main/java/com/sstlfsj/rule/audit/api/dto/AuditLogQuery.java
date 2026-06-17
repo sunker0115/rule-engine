@@ -14,7 +14,7 @@ package com.sstlfsj.rule.audit.api.dto;
  * @param size         每页条数
  */
 public record AuditLogQuery(
-        String tenantId,
+        Long tenantId,
         String resourceType,
         Long resourceId,
         String action,

@@ -54,7 +54,7 @@ class AuditServiceImplTest {
         when(evalSessionMapper.selectEvalSessionPage(any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                service.queryEvalSessions(new EvalSessionQuery("100", null, null, null, 0, 20));
+                service.queryEvalSessions(new EvalSessionQuery(100L, null, null, null, 0, 20));
 
         assertThat(result.total()).isEqualTo(1L);
         assertThat(result.items()).hasSize(1);
@@ -72,7 +72,7 @@ class AuditServiceImplTest {
         when(evalSessionMapper.selectEvalSessionPage(any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                service.queryEvalSessions(new EvalSessionQuery("100", null, null, "evt-xyz", 0, 20));
+                service.queryEvalSessions(new EvalSessionQuery(100L, null, null, "evt-xyz", 0, 20));
 
         assertThat(result.total()).isEqualTo(0L);
         assertThat(result.items()).isEmpty();
@@ -97,7 +97,7 @@ class AuditServiceImplTest {
         when(auditLogMapper.selectAuditLogPage(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.AuditLogEntry> result =
-                service.queryAuditLogs(new AuditLogQuery("100", "rule_definition", null, null, null, null, null, 0, 20));
+                service.queryAuditLogs(new AuditLogQuery(100L, "rule_definition", null, null, null, null, null, 0, 20));
 
         assertThat(result.total()).isEqualTo(1L);
         AuditService.AuditLogEntry entry = result.items().get(0);
@@ -120,7 +120,7 @@ class AuditServiceImplTest {
 
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(row));
 
-        List<AuditService.TraceNodeEntry> result = service.queryTrace("100", 1L);
+        List<AuditService.TraceNodeEntry> result = service.queryTrace(100L, 1L);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).nodePath()).isEqualTo("0");
@@ -132,7 +132,7 @@ class AuditServiceImplTest {
     void queryTrace_noRows_返回空列表() {
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of());
 
-        List<AuditService.TraceNodeEntry> result = service.queryTrace("100", 999L);
+        List<AuditService.TraceNodeEntry> result = service.queryTrace(100L, 999L);
 
         assertThat(result).isEmpty();
     }
@@ -148,7 +148,7 @@ class AuditServiceImplTest {
 
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(root));
 
-        List<AuditService.TraceTreeNode> tree = service.queryTraceTree("100", 1L);
+        List<AuditService.TraceTreeNode> tree = service.queryTraceTree(100L, 1L);
 
         assertThat(tree).hasSize(1);
         assertThat(tree.get(0).nodeType()).isEqualTo("AndNode");
@@ -176,7 +176,7 @@ class AuditServiceImplTest {
 
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(rootRow, childRow));
 
-        List<AuditService.TraceTreeNode> tree = service.queryTraceTree("100", 1L);
+        List<AuditService.TraceTreeNode> tree = service.queryTraceTree(100L, 1L);
 
         assertThat(tree).hasSize(1);
         AuditService.TraceTreeNode root = tree.get(0);
@@ -191,7 +191,7 @@ class AuditServiceImplTest {
     void queryTraceTree_空rows返回空列表() {
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of());
 
-        assertThat(service.queryTraceTree("100", 999L)).isEmpty();
+        assertThat(service.queryTraceTree(100L, 999L)).isEmpty();
     }
 
     @Test
@@ -265,12 +265,12 @@ class AuditServiceImplTest {
         row.setSceneCode("risk.transfer");
         when(evalSessionMapper.findSceneCode(1L, 100L)).thenReturn("risk.transfer");
 
-        assertThat(service.getSessionSceneCode("100", 1L)).isEqualTo("risk.transfer");
+        assertThat(service.getSessionSceneCode(100L, 1L)).isEqualTo("risk.transfer");
     }
 
     @Test
     void getSessionSceneCode_sessionNotFound_returnsNull() {
         when(evalSessionMapper.findSceneCode(999L, 100L)).thenReturn(null);
-        assertThat(service.getSessionSceneCode("100", 999L)).isNull();
+        assertThat(service.getSessionSceneCode(100L, 999L)).isNull();
     }
 }

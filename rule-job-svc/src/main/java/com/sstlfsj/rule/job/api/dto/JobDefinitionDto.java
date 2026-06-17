@@ -17,7 +17,7 @@ import com.sstlfsj.rule.job.api.SubjectQuery;
  */
 public record JobDefinitionDto(
         Long id,
-        String tenantId,
+        Long tenantId,
         String sceneCode,
         String code,
         String name,

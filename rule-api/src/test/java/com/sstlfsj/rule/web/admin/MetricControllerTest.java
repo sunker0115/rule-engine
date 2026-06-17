@@ -47,9 +47,9 @@ class MetricControllerTest {
     @Test
     void listMetrics_returns200_withDefinitions() throws Exception {
         // listMetrics 端点委托 listMetricItems(tenantId) → List<MetricListItemVO>
-        when(metadataService.listMetricItems("1")).thenReturn(List.of(
+        when(metadataService.listMetricItems(1L)).thenReturn(List.of(
                 new MetricListItemVO("account.age", 1, "ATTRIBUTE", "LONG", false, 60, java.util.Map.of(),
-                        "账龄", "ACTIVE", "1", null, null)));
+                        "账龄", "ACTIVE", 1L, null, null)));
 
         mockMvc.perform(get("/admin/v1/metrics").param("tenantId", "1"))
                 .andExpect(status().isOk())
@@ -57,16 +57,16 @@ class MetricControllerTest {
                 .andExpect(jsonPath("$.data[0].metricCode").value("account.age"))
                 .andExpect(jsonPath("$.data[0].dataType").value("LONG"));
 
-        verify(metadataService).listMetricItems("1");
+        verify(metadataService).listMetricItems(1L);
     }
 
     // ── GET /admin/v1/metrics/{metricCode} ──────────────────────────────────────
 
     @Test
     void getMetric_returns200_withFullDefinition() throws Exception {
-        when(metadataService.getMetricItem("1", "account.age")).thenReturn(
+        when(metadataService.getMetricItem(1L, "account.age")).thenReturn(
                 new MetricListItemVO("account.age", 2, "ATTRIBUTE", "LONG", false, 60,
-                        java.util.Map.of("window", "30d"), "账龄", "ACTIVE", "1", null, null));
+                        java.util.Map.of("window", "30d"), "账龄", "ACTIVE", 1L, null, null));
 
         mockMvc.perform(get("/admin/v1/metrics/account.age").param("tenantId", "1"))
                 .andExpect(status().isOk())
@@ -76,12 +76,12 @@ class MetricControllerTest {
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.params.window").value("30d"));
 
-        verify(metadataService).getMetricItem("1", "account.age");
+        verify(metadataService).getMetricItem(1L, "account.age");
     }
 
     @Test
     void getMetric_missing_returns400() throws Exception {
-        when(metadataService.getMetricItem("1", "nope"))
+        when(metadataService.getMetricItem(1L, "nope"))
                 .thenThrow(new IllegalArgumentException("Metric 不存在: nope"));
 
         mockMvc.perform(get("/admin/v1/metrics/nope").param("tenantId", "1"))

@@ -28,7 +28,7 @@ class AuditServiceImpl implements AuditService {
     @Override
     public PageResult<AuditLogEntry> queryAuditLogs(AuditLogQuery q) {
         Page<AuditLogRow> mp = auditLogMapper.selectAuditLogPage(
-                new Page<>(q.page() + 1, q.size()), Long.valueOf(q.tenantId()), q.resourceType(), q.resourceId(),
+                new Page<>(q.page() + 1, q.size()), q.tenantId(), q.resourceType(), q.resourceId(),
                 q.action(), q.actorId(), q.from(), q.to());
         List<AuditLogEntry> items = mp.getRecords().stream()
                 .map(r -> new AuditLogEntry(
@@ -51,7 +51,7 @@ class AuditServiceImpl implements AuditService {
     @Override
     public PageResult<EvalSessionEntry> queryEvalSessions(EvalSessionQuery q) {
         Page<EvalSessionRow> mp = evalSessionMapper.selectEvalSessionPage(
-                new Page<>(q.page() + 1, q.size()), Long.valueOf(q.tenantId()), q.sceneCode(), q.status(), q.eventId());
+                new Page<>(q.page() + 1, q.size()), q.tenantId(), q.sceneCode(), q.status(), q.eventId());
         List<EvalSessionEntry> items = mp.getRecords().stream()
                 .map(r -> new EvalSessionEntry(
                         String.valueOf(r.getId()),
@@ -84,10 +84,10 @@ class AuditServiceImpl implements AuditService {
     }
 
     @Override
-    public List<TraceNodeEntry> queryTrace(String tenantId, Long sessionId) {
+    public List<TraceNodeEntry> queryTrace(Long tenantId, Long sessionId) {
         // 按 node_path 字典序返回，单次 session 通常 < 200 行，无需分页
         List<NodeTraceRow> rows = nodeTraceMapper.findBySessionAndTenant(
-                sessionId, Long.valueOf(tenantId));
+                sessionId, tenantId);
         return rows.stream()
                 .map(r -> new TraceNodeEntry(
                         r.getNodePath(),
@@ -105,7 +105,7 @@ class AuditServiceImpl implements AuditService {
     }
 
     @Override
-    public List<TraceTreeNode> queryTraceTree(String tenantId, Long sessionId) {
+    public List<TraceTreeNode> queryTraceTree(Long tenantId, Long sessionId) {
         List<TraceNodeEntry> flat = queryTrace(tenantId, sessionId);
         if (flat.isEmpty()) return List.of();
 
@@ -154,16 +154,16 @@ class AuditServiceImpl implements AuditService {
     }
 
     @Override
-    public String getSessionSceneCode(String tenantId, Long sessionId) {
-        return evalSessionMapper.findSceneCode(sessionId, Long.valueOf(tenantId));
+    public String getSessionSceneCode(Long tenantId, Long sessionId) {
+        return evalSessionMapper.findSceneCode(sessionId, tenantId);
     }
 
     @Override
-    public EvalSessionEntry getSession(String tenantId, Long sessionId) {
+    public EvalSessionEntry getSession(Long tenantId, Long sessionId) {
         EvalSessionRow row = evalSessionMapper.selectOne(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EvalSessionRow>()
                         .eq(EvalSessionRow::getId, sessionId)
-                        .eq(EvalSessionRow::getTenantId, Long.valueOf(tenantId)));
+                        .eq(EvalSessionRow::getTenantId, tenantId));
         if (row == null) return null;
         return new EvalSessionEntry(
                 String.valueOf(row.getId()),

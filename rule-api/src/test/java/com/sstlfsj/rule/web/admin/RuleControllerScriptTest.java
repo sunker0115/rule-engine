@@ -50,7 +50,7 @@ class RuleControllerScriptTest {
                         .header("X-Actor-Id", "user1")
                         .content("""
                             {
-                              "tenantId": "t1",
+                              "tenantId": 1,
                               "sceneCode": "risk.transfer",
                               "code": "rule.script",
                               "name": "脚本规则",
@@ -64,7 +64,7 @@ class RuleControllerScriptTest {
 
         // 捕获透传给 service 的 RuleContent，校验 script 与 conditionAst
         ArgumentCaptor<RuleContent> contentCap = ArgumentCaptor.forClass(RuleContent.class);
-        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.script"),
+        verify(configService).createDraft(eq(1L), eq("risk.transfer"), eq("rule.script"),
                 contentCap.capture(), eq("user1"));
         RuleContent content = contentCap.getValue();
         assertThat(content.name()).isEqualTo("脚本规则");

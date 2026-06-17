@@ -104,7 +104,7 @@ class RuleExportServiceTest {
                 .thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
 
-        RuleBundle b = sut.export("1", List.of(10L, 11L), null);
+        RuleBundle b = sut.export(1L, List.of(10L, 11L), null);
 
         assertThat(b.bundleVersion()).isEqualTo(1);
         assertThat(b.rules()).hasSize(2);
@@ -127,7 +127,7 @@ class RuleExportServiceTest {
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
 
-        RuleBundle b = sut.export("1", List.of(10L, 11L), null);
+        RuleBundle b = sut.export(1L, List.of(10L, 11L), null);
 
         assertThat(b.rules()).hasSize(1);
         assertThat(b.rules().getFirst().code()).isEqualTo("a");
@@ -139,7 +139,7 @@ class RuleExportServiceTest {
                 .thenReturn(List.of(rule(10L, "a")));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(null);   // 无 ACTIVE
 
-        assertThatThrownBy(() -> sut.export("1", List.of(10L), null))
+        assertThatThrownBy(() -> sut.export(1L, List.of(10L), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("可导出");
     }
@@ -154,7 +154,7 @@ class RuleExportServiceTest {
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
 
-        RuleBundle b = sut.export("1", null, 5L);
+        RuleBundle b = sut.export(1L, null, 5L);
 
         assertThat(b.rules()).hasSize(1);
         assertThat(b.rules().getFirst().sceneCode()).isEqualTo("risk.transfer");   // Bundle 内仍是 code

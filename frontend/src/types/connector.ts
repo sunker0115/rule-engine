@@ -110,7 +110,7 @@ export interface ConnectorListItem {
   name: string;
   status?: string;
   descriptor?: ConnectorDescriptor;
-  tenantId?: string;
+  tenantId?: number;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -36,7 +36,7 @@ public class ReplayController {
     @PostMapping("/evaluation-sessions/{sessionId}/replay")
     public ApiResponse<EvalResult> replay(
             @PathVariable Long sessionId,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         EvalResult result = replayService.replay(tenantId, sessionId);
         List<NodeTrace> masked = TraceMasker.maskKernel(resolveRefs(tenantId, sessionId), result.nodeTrace());
         return ApiResponse.ok(new EvalResult(result.ruleHit(), result.finalDecision(),
@@ -45,7 +45,7 @@ public class ReplayController {
     }
 
     /** 解析会话场景的 live 敏感集；失败返回 null（masker fail-closed 全抹，D71）。 */
-    private SceneService.SensitiveRefs resolveRefs(String tenantId, Long sessionId) {
+    private SceneService.SensitiveRefs resolveRefs(Long tenantId, Long sessionId) {
         try {
             String sceneCode = auditService.getSessionSceneCode(tenantId, sessionId);
             if (sceneCode == null) return null;

@@ -12,7 +12,7 @@ package com.sstlfsj.rule.config.api.dto;
  * @param size      每页条数
  */
 public record RuleListQuery(
-        String tenantId,
+        Long tenantId,
         String sceneCode,
         String status,
         String from,

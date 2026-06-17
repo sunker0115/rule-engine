@@ -36,6 +36,9 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/test/required-param")
         public String requiredParam(@RequestParam String name) { return name; }
+
+        @GetMapping("/test/typed-param")
+        public String typedParam(@RequestParam Long tenantId) { return String.valueOf(tenantId); }
     }
 
     @BeforeEach
@@ -79,6 +82,16 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void typeMismatchParam_returns400_notInternalError() throws Exception {
+        // 非数字 tenantId 绑定到 Long 参数失败 → 400 INVALID_ARGUMENT，而非兜底 500
+        mockMvc.perform(get("/test/typed-param").param("tenantId", "acme").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("tenantId")));
     }
 
     @Test

@@ -58,33 +58,33 @@ class RuleBundleControllerTest {
 
     @Test
     void export_byRuleIds_returnsAttachmentFile() throws Exception {
-        when(service.export(eq("t1"), eq(List.of(1L, 2L)), eq(null))).thenReturn(sampleBundle());
+        when(service.export(eq(1L), eq(List.of(1L, 2L)), eq(null))).thenReturn(sampleBundle());
 
         // 响应体是 Bundle JSON 文件原文（非 ApiResponse 包裹），故 jsonPath 直接落在 Bundle 字段上
         mockMvc.perform(get("/admin/v1/rules/export")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .param("ruleIds", "1,2"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
-                        org.hamcrest.Matchers.containsString("attachment; filename=\"rule-bundle-t1-")))
+                        org.hamcrest.Matchers.containsString("attachment; filename=\"rule-bundle-1-")))
                 .andExpect(jsonPath("$.bundleVersion").value(1))
                 .andExpect(jsonPath("$.rules[0].code").value("rule.a"))
                 .andExpect(jsonPath("$.scenes[0].code").value("risk.transfer"));
 
-        verify(service).export("t1", List.of(1L, 2L), null);
+        verify(service).export(1L, List.of(1L, 2L), null);
     }
 
     @Test
     void export_bySceneId_returnsAttachmentFile() throws Exception {
-        when(service.export(eq("t1"), eq(null), eq(5L))).thenReturn(sampleBundle());
+        when(service.export(eq(1L), eq(null), eq(5L))).thenReturn(sampleBundle());
 
         mockMvc.perform(get("/admin/v1/rules/export")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .param("sceneId", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rules[0].code").value("rule.a"));
 
-        verify(service).export("t1", null, 5L);
+        verify(service).export(1L, null, 5L);
     }
 
     @Test
@@ -100,7 +100,7 @@ class RuleBundleControllerTest {
                 List.of("risk.transfer"), List.of(),
                 List.of("account.age"), List.of(), List.of(),
                 List.of("BLOCK"), List.of());
-        when(service.importBundle(eq("t1"), any(), eq("user1"))).thenReturn(result);
+        when(service.importBundle(eq(1L), any(), eq("user1"))).thenReturn(result);
 
         String bundleJson = """
                 {"bundleVersion":1,"exportedAt":"t","sourceTenantId":"9",
@@ -121,7 +121,7 @@ class RuleBundleControllerTest {
 
         mockMvc.perform(multipart("/admin/v1/rules/import")
                         .file(file)
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .header("X-Actor-Id", "user1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -129,6 +129,6 @@ class RuleBundleControllerTest {
                 .andExpect(jsonPath("$.data.rules[0].version").value(1))
                 .andExpect(jsonPath("$.data.scenesCreated[0]").value("risk.transfer"));
 
-        verify(service).importBundle(eq("t1"), any(), eq("user1"));
+        verify(service).importBundle(eq(1L), any(), eq("user1"));
     }
 }

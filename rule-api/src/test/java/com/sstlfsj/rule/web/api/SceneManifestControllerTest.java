@@ -35,7 +35,7 @@ class SceneManifestControllerTest {
     @Test
     void inputManifest_returns200_withUnionFields() throws Exception {
         when(tenantQueryService.resolveIdByCode("acme")).thenReturn(9001L);
-        when(metadataService.getInputManifest("9001", "demo.login", null))
+        when(metadataService.getInputManifest(9001L, "demo.login", null))
                 .thenReturn(new InputManifestResponse(List.of(
                         new InputFieldSpec("amount", "DECIMAL", true),
                         new InputFieldSpec("country", "STRING", true))));
@@ -51,7 +51,7 @@ class SceneManifestControllerTest {
     @Test
     void inputManifest_passesEventTypeThrough() throws Exception {
         when(tenantQueryService.resolveIdByCode("acme")).thenReturn(9001L);
-        when(metadataService.getInputManifest("9001", "demo.login", "login"))
+        when(metadataService.getInputManifest(9001L, "demo.login", "login"))
                 .thenReturn(new InputManifestResponse(List.of()));
 
         mockMvc.perform(get("/api/v1/rule/scenes/demo.login/input-manifest")
@@ -59,7 +59,7 @@ class SceneManifestControllerTest {
                         .param("eventType", "login"))
                 .andExpect(status().isOk());
 
-        verify(metadataService).getInputManifest("9001", "demo.login", "login");
+        verify(metadataService).getInputManifest(9001L, "demo.login", "login");
     }
 
     @Test

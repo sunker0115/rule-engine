@@ -16,12 +16,12 @@ class RuleBundleServiceTest {
 
     @Test
     void interfaceMethodSignatures_compileAndReflect() throws NoSuchMethodException {
-        // export 签名：(String, List<Long>, Long) → RuleBundle
-        var exportMethod = RuleBundleService.class.getMethod("export", String.class, List.class, Long.class);
+        // export 签名：(Long, List<Long>, Long) → RuleBundle
+        var exportMethod = RuleBundleService.class.getMethod("export", Long.class, List.class, Long.class);
         assertThat(exportMethod.getReturnType()).isEqualTo(RuleBundle.class);
 
-        // importBundle 签名：(String, RuleBundle, String) → RuleImportResult
-        var importMethod = RuleBundleService.class.getMethod("importBundle", String.class, RuleBundle.class, String.class);
+        // importBundle 签名：(Long, RuleBundle, String) → RuleImportResult
+        var importMethod = RuleBundleService.class.getMethod("importBundle", Long.class, RuleBundle.class, String.class);
         assertThat(importMethod.getReturnType()).isEqualTo(RuleImportResult.class);
     }
 }

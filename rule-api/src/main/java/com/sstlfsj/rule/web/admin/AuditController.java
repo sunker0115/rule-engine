@@ -32,7 +32,7 @@ public class AuditController {
      * @return 分页评估会话列表 */
     @GetMapping("/evaluation-sessions")
     public ApiResponse<PageResponse<AuditService.EvalSessionEntry>> querySessions(
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestParam(required = false) String sceneCode,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String eventId,
@@ -49,7 +49,7 @@ public class AuditController {
     @GetMapping("/evaluation-sessions/{sessionId}")
     public ResponseEntity<ApiResponse<AuditService.EvalSessionEntry>> getSession(
             @PathVariable Long sessionId,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         AuditService.EvalSessionEntry session = auditService.getSession(tenantId, sessionId);
         if (session == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -65,7 +65,7 @@ public class AuditController {
     @GetMapping("/evaluation-sessions/{sessionId}/trace")
     public ApiResponse<List<AuditService.TraceNodeEntry>> queryTrace(
             @PathVariable Long sessionId,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         List<AuditService.TraceNodeEntry> trace = auditService.queryTrace(tenantId, sessionId);
         return ApiResponse.ok(TraceMasker.maskFlat(resolveRefs(tenantId, sessionId), trace));
     }
@@ -74,7 +74,7 @@ public class AuditController {
     @GetMapping("/evaluation-sessions/{sessionId}/trace/tree")
     public ApiResponse<List<AuditService.TraceTreeNode>> getTraceTree(
             @PathVariable Long sessionId,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         List<AuditService.TraceTreeNode> tree = auditService.queryTraceTree(tenantId, sessionId);
         return ApiResponse.ok(TraceMasker.maskTree(resolveRefs(tenantId, sessionId), tree));
     }
@@ -86,7 +86,7 @@ public class AuditController {
      * @param sessionId 评估会话 ID
      * @return 场景敏感集；会话/场景缺失或查询异常时返回 null
      */
-    private SceneService.SensitiveRefs resolveRefs(String tenantId, Long sessionId) {
+    private SceneService.SensitiveRefs resolveRefs(Long tenantId, Long sessionId) {
         try {
             String sceneCode = auditService.getSessionSceneCode(tenantId, sessionId);
             if (sceneCode == null) return null; // 会话/场景缺失 → fail-closed
@@ -105,7 +105,7 @@ public class AuditController {
      * @return 分页审计日志列表 */
     @GetMapping("/audit-logs")
     public ApiResponse<PageResponse<AuditService.AuditLogEntry>> queryAuditLogs(
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestParam(required = false) String resourceType,
             @RequestParam(required = false) Long resourceId,
             @RequestParam(required = false) String action,

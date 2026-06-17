@@ -46,7 +46,7 @@ class RuleControllerTest {
 
     @Test
     void getDetail_returns200_withRuleDetail() throws Exception {
-        when(configService.getRuleDetail("t1", 10L)).thenReturn(
+        when(configService.getRuleDetail(1L, 10L)).thenReturn(
                 new RuleDetailVO(1L, 10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
                         "risk.transfer",
                         new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
@@ -57,7 +57,7 @@ class RuleControllerTest {
                         42L,
                         java.util.List.of()));
 
-        mockMvc.perform(get("/admin/v1/rules/10").param("tenantId", "t1"))
+        mockMvc.perform(get("/admin/v1/rules/10").param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.ruleDefinitionId").value(10))
@@ -65,18 +65,18 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.conditionAst.type").value("AndNode"))
                 .andExpect(jsonPath("$.data.currentVersionId").value(42));
 
-        verify(configService).getRuleDetail("t1", 10L);
+        verify(configService).getRuleDetail(1L, 10L);
     }
 
     @Test
     void getVersion_returns200_withTypedVersionContent() throws Exception {
-        when(configService.getRuleVersion("t1", 10L, 20L)).thenReturn(
+        when(configService.getRuleVersion(1L, 10L, 20L)).thenReturn(
                 new RuleVersionContentVO(20L, 2L, "ACTIVE", "AST_BOOLEAN",
                         new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
                         java.util.List.of(), java.util.List.of(), java.util.List.of("TXN"),
                         null, "2026-06-16T00:00", "u1", "2026-06-16T01:00"));
 
-        mockMvc.perform(get("/admin/v1/rules/10/versions/20").param("tenantId", "t1"))
+        mockMvc.perform(get("/admin/v1/rules/10/versions/20").param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.ruleVersionId").value(20))
                 .andExpect(jsonPath("$.data.version").value(2))
@@ -85,14 +85,14 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.conditionAst.type").value("AndNode"))
                 .andExpect(jsonPath("$.data.triggerEventTypes[0]").value("TXN"));
 
-        verify(configService).getRuleVersion("t1", 10L, 20L);
+        verify(configService).getRuleVersion(1L, 10L, 20L);
     }
 
     @Test
     void createDraft_returns400_whenAstTypeUnknown() throws Exception {
         // conditionAst 多态 type 不存在 → typed 绑定反序列化失败 → 400（本期新失败模式）
         String badBody = """
-                {"tenantId":"t1","sceneCode":"s","code":"c","name":"n",
+                {"tenantId":1,"sceneCode":"s","code":"c","name":"n",
                  "conditionAst":{"type":"NoSuchNode"}}
                 """;
         mockMvc.perform(post("/admin/v1/rules")
@@ -108,12 +108,12 @@ class RuleControllerTest {
         when(configService.publish(any(), any(), any())).thenReturn(null);
 
         mockMvc.perform(post("/admin/v1/rules/1/publish")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .header("X-Actor-Id", "user1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(configService).publish("t1", 1L, "user1");
+        verify(configService).publish(1L, 1L, "user1");
     }
 
     @Test
@@ -127,7 +127,7 @@ class RuleControllerTest {
                         .header("X-Actor-Id", "user1")
                         .content("""
                             {
-                              "tenantId": "t1",
+                              "tenantId": 1,
                               "name": "改名后",
                               "kind": "AST_BOOLEAN",
                               "conditionAst": {"type":"AndNode","children":[]},
@@ -144,7 +144,7 @@ class RuleControllerTest {
 
         // version 不变（草稿原地编辑），透传 ruleId / tenantId / name / kind（name/kind 入 RuleContent）
         ArgumentCaptor<RuleContent> contentCaptor = ArgumentCaptor.forClass(RuleContent.class);
-        verify(configService).editDraft(eq("t1"), eq(10L), contentCaptor.capture(), eq("user1"));
+        verify(configService).editDraft(eq(1L), eq(10L), contentCaptor.capture(), eq("user1"));
         assertThat(contentCaptor.getValue().name()).isEqualTo("改名后");
         assertThat(contentCaptor.getValue().kind()).isEqualTo("AST_BOOLEAN");
     }
@@ -171,7 +171,7 @@ class RuleControllerTest {
                         .header("X-Actor-Id", "user1")
                         .content("""
                             {
-                              "tenantId": "t1",
+                              "tenantId": 1,
                               "name": "v3",
                               "kind": "AST_BOOLEAN",
                               "fromVersionId": 50
@@ -185,7 +185,7 @@ class RuleControllerTest {
 
         // 透传 tenantId / ruleId / name / kind / fromVersionId / actorId（name/kind 入 RuleContent）
         ArgumentCaptor<RuleContent> contentCaptor = ArgumentCaptor.forClass(RuleContent.class);
-        verify(configService).newVersion(eq("t1"), eq(10L), contentCaptor.capture(), eq(50L), eq("user1"));
+        verify(configService).newVersion(eq(1L), eq(10L), contentCaptor.capture(), eq(50L), eq("user1"));
         assertThat(contentCaptor.getValue().name()).isEqualTo("v3");
         assertThat(contentCaptor.getValue().kind()).isEqualTo("AST_BOOLEAN");
     }
@@ -206,12 +206,12 @@ class RuleControllerTest {
         doNothing().when(configService).deleteRule(any(), any(), any());
 
         mockMvc.perform(delete("/admin/v1/rules/10")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .header("X-Actor-Id", "user1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(configService).deleteRule("t1", 10L, "user1");
+        verify(configService).deleteRule(1L, 10L, "user1");
     }
 
     @Test
@@ -219,12 +219,12 @@ class RuleControllerTest {
         doNothing().when(configService).deleteDraftVersion(any(), any(), any(), any());
 
         mockMvc.perform(delete("/admin/v1/rules/10/versions/100")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .header("X-Actor-Id", "user1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(configService).deleteDraftVersion("t1", 10L, 100L, "user1");
+        verify(configService).deleteDraftVersion(1L, 10L, 100L, "user1");
     }
 
     @Test
@@ -232,12 +232,12 @@ class RuleControllerTest {
         doNothing().when(configService).disable(any(), any(), any());
 
         mockMvc.perform(post("/admin/v1/rules/2/disable")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .header("X-Actor-Id", "user1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(configService).disable("t1", 2L, "user1");
+        verify(configService).disable(1L, 2L, "user1");
     }
 
     @Test
@@ -245,12 +245,12 @@ class RuleControllerTest {
         doNothing().when(configService).enable(any(), any(), any());
 
         mockMvc.perform(post("/admin/v1/rules/2/enable")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .header("X-Actor-Id", "user1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(configService).enable("t1", 2L, "user1");
+        verify(configService).enable(1L, 2L, "user1");
     }
 
     @Test
@@ -264,7 +264,7 @@ class RuleControllerTest {
                         .header("X-Actor-Id", "user1")
                         .content("""
                             {
-                              "tenantId": "t1",
+                              "tenantId": 1,
                               "sceneCode": "risk.transfer",
                               "code": "rule.a",
                               "name": "规则A",
@@ -282,7 +282,7 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.status").value("DRAFT"));
 
         ArgumentCaptor<RuleContent> contentCaptor = ArgumentCaptor.forClass(RuleContent.class);
-        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"),
+        verify(configService).createDraft(eq(1L), eq("risk.transfer"), eq("rule.a"),
                 contentCaptor.capture(), eq("user1"));
         assertThat(contentCaptor.getValue().name()).isEqualTo("规则A");
         assertThat(contentCaptor.getValue().kind()).isEqualTo("SCORECARD");
@@ -299,14 +299,14 @@ class RuleControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Actor-Id", "user1")
                         .content("""
-                            {"tenantId":"t1","sceneCode":"risk.transfer","code":"rule.a","name":"规则A"}
+                            {"tenantId":1,"sceneCode":"risk.transfer","code":"rule.a","name":"规则A"}
                             """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.ruleDefinitionId").value(10));
 
         // 未传的 typed 内容字段为 null（不再有 JSON 串默认值），kind 未传也为 null
         ArgumentCaptor<RuleContent> contentCaptor = ArgumentCaptor.forClass(RuleContent.class);
-        verify(configService).createDraft(eq("t1"), eq("risk.transfer"), eq("rule.a"),
+        verify(configService).createDraft(eq(1L), eq("risk.transfer"), eq("rule.a"),
                 contentCaptor.capture(), eq("user1"));
         assertThat(contentCaptor.getValue().name()).isEqualTo("规则A");
         assertThat(contentCaptor.getValue().kind()).isNull();
@@ -342,11 +342,11 @@ class RuleControllerTest {
         rd.setStatus(com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus.PUBLISHED);
         rd.setCurrentVersion(42L);
         page.setRecords(java.util.List.of(rd));
-        when(configService.listRules(new RuleListQuery("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20))).thenReturn(page);
+        when(configService.listRules(new RuleListQuery(1L, "risk.transfer", "PUBLISHED", null, null, 1, 20))).thenReturn(page);
         when(configService.getSceneCodeMap(java.util.Set.of(5L))).thenReturn(java.util.Map.of(5L, "risk.transfer"));
 
         mockMvc.perform(get("/admin/v1/rules")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .param("sceneCode", "risk.transfer")
                         .param("status", "PUBLISHED"))
                 .andExpect(status().isOk())
@@ -356,7 +356,7 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.items[0].code").value("rule.a"))
                 .andExpect(jsonPath("$.data.items[0].status").value("PUBLISHED"));
 
-        verify(configService).listRules(new RuleListQuery("t1", "risk.transfer", "PUBLISHED", null, null, 1, 20));
+        verify(configService).listRules(new RuleListQuery(1L, "risk.transfer", "PUBLISHED", null, null, 1, 20));
     }
 
     @Test
@@ -364,14 +364,14 @@ class RuleControllerTest {
         com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> emptyPage =
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
         emptyPage.setRecords(java.util.List.of());
-        when(configService.listRules(new RuleListQuery("t1", null, null, null, null, 1, 20))).thenReturn(emptyPage);
+        when(configService.listRules(new RuleListQuery(1L, null, null, null, null, 1, 20))).thenReturn(emptyPage);
 
         mockMvc.perform(get("/admin/v1/rules")
-                        .param("tenantId", "t1"))
+                        .param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.total").value(0));
 
-        verify(configService).listRules(new RuleListQuery("t1", null, null, null, null, 1, 20));
+        verify(configService).listRules(new RuleListQuery(1L, null, null, null, null, 1, 20));
     }
 }

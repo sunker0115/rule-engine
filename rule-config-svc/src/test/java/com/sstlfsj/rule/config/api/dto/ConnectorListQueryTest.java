@@ -19,8 +19,8 @@ class ConnectorListQueryTest {
 
     @Test
     void validQuery_preservesAllFields() {
-        var q = new ConnectorListQuery("1", "risk", "ACTIVE", 2, 10);
-        assertThat(q.tenantId()).isEqualTo("1");
+        var q = new ConnectorListQuery(1L, "risk", "ACTIVE", 2, 10);
+        assertThat(q.tenantId()).isEqualTo(1L);
         assertThat(q.keyword()).isEqualTo("risk");
         assertThat(q.status()).isEqualTo("ACTIVE");
         assertThat(q.page()).isEqualTo(2);

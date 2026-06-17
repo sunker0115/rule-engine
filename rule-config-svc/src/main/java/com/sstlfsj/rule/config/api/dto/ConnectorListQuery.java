@@ -10,7 +10,7 @@ package com.sstlfsj.rule.config.api.dto;
  * @param size      每页条数
  */
 public record ConnectorListQuery(
-        String tenantId,
+        Long tenantId,
         String keyword,
         String status,
         int page,

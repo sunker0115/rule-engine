@@ -46,7 +46,7 @@ class SceneServiceImplTest {
     void createScene_insertsSceneAndPublishesAuditEvent() {
         when(sceneMapper.insert((SceneDef) any())).thenReturn(1);
 
-        sceneService.createScene("1", "PAYMENT", "支付场景",
+        sceneService.createScene(1L, "PAYMENT", "支付场景",
                 null, null, null, null, null, null, "actor1");
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
@@ -65,7 +65,7 @@ class SceneServiceImplTest {
             return 1;
         }).when(sceneMapper).insert((SceneDef) any());
 
-        sceneService.createScene("1", "PAYMENT", "支付场景",
+        sceneService.createScene(1L, "PAYMENT", "支付场景",
                 "支付业务场景", "PUSH", "USER",
                 List.of("payment.initiated"),
                 List.of(field("amount")),
@@ -103,7 +103,7 @@ class SceneServiceImplTest {
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
 
-        sceneService.disableScene("1", "PAYMENT", "actor1");
+        sceneService.disableScene(1L, "PAYMENT", "actor1");
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).updateById(sceneCaptor.capture());
@@ -142,7 +142,7 @@ class SceneServiceImplTest {
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
 
         List<PayloadFieldSpec> newSchema = List.of(field("amount"), field("currency"));
-        sceneService.updateScene(new UpdateSceneCommand("1", "PAYMENT", null, null, null, newSchema, null, "actor1"));
+        sceneService.updateScene(new UpdateSceneCommand(1L, "PAYMENT", null, null, null, newSchema, null, "actor1"));
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).updateById(sceneCaptor.capture());
@@ -187,7 +187,7 @@ class SceneServiceImplTest {
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         com.sstlfsj.rule.config.api.dto.SceneDetailDto dto =
-                sceneService.getScene("1", "PAYMENT");
+                sceneService.getScene(1L, "PAYMENT");
 
         assertThat(dto.sceneCode()).isEqualTo("PAYMENT");
         assertThat(dto.eventTypes()).containsExactly("payment.initiated");
@@ -199,7 +199,7 @@ class SceneServiceImplTest {
     @Test
     void getScene_sceneNotFound_抛IllegalArgument() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(null);
-        assertThatThrownBy(() -> sceneService.getScene("1", "NOT_EXIST"))
+        assertThatThrownBy(() -> sceneService.getScene(1L, "NOT_EXIST"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Scene 不存在");
     }
@@ -215,7 +215,7 @@ class SceneServiceImplTest {
         s.setStatus(SceneStatus.ACTIVE);
         when(sceneMapper.findByTenantId(eq(1L), isNull())).thenReturn(List.of(s));
 
-        var list = sceneService.listScenes("1", null);
+        var list = sceneService.listScenes(1L, null);
 
         assertThat(list).hasSize(1);
         assertThat(list.get(0).id()).isEqualTo(5L);
@@ -251,7 +251,7 @@ class SceneServiceImplTest {
         when(metricDefinitionMapper.findActiveByTenant(100L))
                 .thenReturn(List.of(sensitiveMetric, plainMetric));
 
-        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs("100", "risk.transfer");
+        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs(100L, "risk.transfer");
 
         assertThat(refs.payloadFields()).containsExactly("phone");
         assertThat(refs.metricCodes()).containsExactly("user.idno");
@@ -266,7 +266,7 @@ class SceneServiceImplTest {
         when(sceneMapper.findByCode(100L, "s1")).thenReturn(scene);
         when(metricDefinitionMapper.findActiveByTenant(100L)).thenReturn(List.of());
 
-        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs("100", "s1");
+        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs(100L, "s1");
 
         assertThat(refs.payloadFields()).isEmpty();
         assertThat(refs.metricCodes()).isEmpty();
@@ -275,7 +275,7 @@ class SceneServiceImplTest {
     @Test
     void getSensitiveRefs_sceneNotFound_throws() {
         when(sceneMapper.findByCode(100L, "missing")).thenReturn(null);
-        assertThatThrownBy(() -> sceneService.getSensitiveRefs("100", "missing"))
+        assertThatThrownBy(() -> sceneService.getSensitiveRefs(100L, "missing"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

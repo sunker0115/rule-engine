@@ -47,7 +47,7 @@ class CreateSceneRequestTest {
     @Test
     void valid_minimal_request_passesValidation() {
         // 只填必填三字段，其余 D13 字段为 null
-        var req = new CreateSceneRequest("t1", "fraud", "欺诈检测",
+        var req = new CreateSceneRequest(1L, "fraud", "欺诈检测",
                 null, null, null, null, null, null);
         Set<ConstraintViolation<CreateSceneRequest>> violations = validator.validate(req);
         assertThat(violations).isEmpty();
@@ -56,7 +56,7 @@ class CreateSceneRequestTest {
     @Test
     void valid_full_request_passesValidation() {
         // 填写所有 D13 字段
-        var req = new CreateSceneRequest("t1", "payment", "支付场景",
+        var req = new CreateSceneRequest(1L, "payment", "支付场景",
                 "描述", "PUSH", "USER",
                 List.of("payment.initiated"), null, null);
         Set<ConstraintViolation<CreateSceneRequest>> violations = validator.validate(req);
@@ -64,8 +64,8 @@ class CreateSceneRequestTest {
     }
 
     @Test
-    void blank_tenantId_failsValidation() {
-        var req = new CreateSceneRequest("", "fraud", "欺诈检测",
+    void null_tenantId_failsValidation() {
+        var req = new CreateSceneRequest(null, "fraud", "欺诈检测",
                 null, null, null, null, null, null);
         Set<ConstraintViolation<CreateSceneRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("tenantId"));
@@ -73,7 +73,7 @@ class CreateSceneRequestTest {
 
     @Test
     void null_sceneCode_failsValidation() {
-        var req = new CreateSceneRequest("t1", null, "欺诈检测",
+        var req = new CreateSceneRequest(1L, null, "欺诈检测",
                 null, null, null, null, null, null);
         Set<ConstraintViolation<CreateSceneRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("sceneCode"));
@@ -81,7 +81,7 @@ class CreateSceneRequestTest {
 
     @Test
     void blank_name_failsValidation() {
-        var req = new CreateSceneRequest("t1", "fraud", "  ",
+        var req = new CreateSceneRequest(1L, "fraud", "  ",
                 null, null, null, null, null, null);
         Set<ConstraintViolation<CreateSceneRequest>> violations = validator.validate(req);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("name"));

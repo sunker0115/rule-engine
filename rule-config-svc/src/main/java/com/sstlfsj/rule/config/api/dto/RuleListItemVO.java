@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
  * @param createdAt        创建时间
  */
 public record RuleListItemVO(
-        String tenantId,
+        Long tenantId,
         Long ruleDefinitionId,
         String code,
         String name,

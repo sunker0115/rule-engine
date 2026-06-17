@@ -55,11 +55,10 @@ public class RuleImportService {
 
     /** 幂等批量导入 Bundle 到目标租户。 */
     @Transactional
-    public RuleImportResult importBundle(String tenantIdStr, RuleBundle bundle, String actorId) {
+    public RuleImportResult importBundle(Long tenantId, RuleBundle bundle, String actorId) {
         if (bundle == null || bundle.rules() == null || bundle.rules().isEmpty()) {
             throw new IllegalArgumentException("Bundle 结构非法：rules 不得为空");
         }
-        Long tenantId = Long.valueOf(tenantIdStr);
 
         // 2. Scenes upsert + sceneCode → sceneId 映射
         List<String> scenesCreated = new ArrayList<>();

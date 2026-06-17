@@ -9,7 +9,7 @@ import com.sstlfsj.rule.kernel.api.operator.OperatorSpec;
 public interface MetadataService {
 
     /** 启/禁 metric。 */
-    void toggleMetricStatus(String tenantId, String metricCode, boolean enable);
+    void toggleMetricStatus(Long tenantId, String metricCode, boolean enable);
 
     /**
      * 返回指定租户的 metric 运行时定义列表，供嵌入式 SDK 下发（仅元数据，不含凭证）。
@@ -19,7 +19,7 @@ public interface MetadataService {
      * @return MetricDescriptor 列表（含 params/cacheTtl/allowProvided）
      */
     /** 查询租户全部 metric 运行时定义（对外接口，保留简单参数）。 */
-    default java.util.List<MetricDescriptor> listMetricDefinitions(String tenantId, java.util.List<String> scenes) {
+    default java.util.List<MetricDescriptor> listMetricDefinitions(Long tenantId, java.util.List<String> scenes) {
         return listMetricDefinitions(new MetricListQuery(tenantId, scenes));
     }
 
@@ -27,7 +27,7 @@ public interface MetadataService {
     java.util.List<MetricDescriptor> listMetricDefinitions(MetricListQuery q);
 
     /** 管理后台：查询租户 metric 完整信息（含 name/status/时间/tenantId）。 */
-    java.util.List<MetricListItemVO> listMetricItems(String tenantId);
+    java.util.List<MetricListItemVO> listMetricItems(Long tenantId);
 
     /**
      * 管理后台：查询租户内单个 metric 完整定义，供前端编辑器直接加载。
@@ -36,7 +36,7 @@ public interface MetadataService {
      * @param metricCode metric 编码
      * @return metric 列表项 VO；不存在抛 {@link IllegalArgumentException}
      */
-    MetricListItemVO getMetricItem(String tenantId, String metricCode);
+    MetricListItemVO getMetricItem(Long tenantId, String metricCode);
 
     /**
      * 返回指定场景的元数据，包括可用条件类型和指标列表。
@@ -45,7 +45,7 @@ public interface MetadataService {
      * @param sceneCode 待查询的场景编码
      * @return 包含条件/指标类型列表的元数据响应
      */
-    MetadataResponse getSceneMetadata(String tenantId, String sceneCode);
+    MetadataResponse getSceneMetadata(Long tenantId, String sceneCode);
 
     /**
      * 查场景输入参数清单：该场景所有 ACTIVE 规则引用的 payload 字段并集
@@ -56,7 +56,7 @@ public interface MetadataService {
      * @param eventType 事件类型；非空时仅纳入 triggerEventTypes 含该值或为空（通配）的规则，null/空白表示不收窄
      * @return 输入字段并集（按 name 去重，保持首次出现顺序）
      */
-    InputManifestResponse getInputManifest(String tenantId, String sceneCode, String eventType);
+    InputManifestResponse getInputManifest(Long tenantId, String sceneCode, String eventType);
 
     record MetadataResponse(
             java.util.List<OperatorSpec> conditionTypes,

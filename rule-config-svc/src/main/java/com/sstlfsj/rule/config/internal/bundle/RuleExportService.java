@@ -43,8 +43,8 @@ public class RuleExportService {
 
     /** 按条件批量导出规则当前 ACTIVE 版本为 Bundle。 */
     @Transactional(readOnly = true)
-    public RuleBundle export(String tenantIdStr, List<Long> ruleIds, Long sceneId) {
-        Long tid = Long.valueOf(tenantIdStr);
+    public RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId) {
+        Long tid = tenantId;
 
         List<RuleDefinition> ruleDefs = ruleDefinitionMapper.selectForExport(tid, ruleIds, sceneId);
 
@@ -115,7 +115,8 @@ public class RuleExportService {
                     rv.getPayloadDependencies() != null ? rv.getPayloadDependencies() : List.of()));
         }
 
-        return new RuleBundle(1, Instant.now().toString(), tenantIdStr,
+        // sourceTenantId 是 Bundle 诊断字段（String 契约），由 Long 转出
+        return new RuleBundle(1, Instant.now().toString(), String.valueOf(tenantId),
                 rules, scenes, metricEntries, decisionEntries);
     }
 

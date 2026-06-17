@@ -39,6 +39,6 @@ public class SceneManifestController {
             throw new IllegalArgumentException("未知或缺失的租户 code: " + tenantCode);
         }
         return ApiResponse.ok(
-                metadataService.getInputManifest(String.valueOf(tenantId), sceneCode, eventType));
+                metadataService.getInputManifest(tenantId, sceneCode, eventType));
     }
 }

@@ -36,7 +36,7 @@ public class ConnectorController {
      */
     @GetMapping
     public ApiResponse<PageResponse<ConnectorResponse>> list(
-            @RequestParam(required = false) String tenantId,
+            @RequestParam(required = false) Long tenantId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
@@ -62,9 +62,9 @@ public class ConnectorController {
      */
     @GetMapping("/{connectorCode}")
     public ApiResponse<ConnectorDetailResponse> getByCode(@PathVariable String connectorCode,
-                                                          @RequestParam String tenantId) {
+                                                          @RequestParam Long tenantId) {
         return ApiResponse.ok(convert.toDetailResponse(
-                service.getByCode(Long.valueOf(tenantId), connectorCode)));
+                service.getByCode(tenantId, connectorCode)));
     }
 
     /**
@@ -78,11 +78,11 @@ public class ConnectorController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Long> create(@RequestParam String tenantId,
+    public ApiResponse<Long> create(@RequestParam Long tenantId,
                                     @RequestParam String connectorCode,
                                     @RequestHeader("X-Actor-Id") String actorId,
                                     @RequestBody ConnectorRequest req) {
-        Long id = service.create(Long.valueOf(tenantId), connectorCode,
+        Long id = service.create(tenantId, connectorCode,
                 new ConnectorWriteCommand(req.name(), req.descriptor()), actorId);
         return ApiResponse.ok(id);
     }
@@ -98,10 +98,10 @@ public class ConnectorController {
      */
     @PutMapping("/{connectorCode}")
     public ApiResponse<Integer> update(@PathVariable String connectorCode,
-                                       @RequestParam String tenantId,
+                                       @RequestParam Long tenantId,
                                        @RequestHeader("X-Actor-Id") String actorId,
                                        @RequestBody ConnectorRequest req) {
-        int n = service.update(Long.valueOf(tenantId), connectorCode,
+        int n = service.update(tenantId, connectorCode,
                 new ConnectorWriteCommand(req.name(), req.descriptor()), actorId);
         return ApiResponse.ok(n);
     }
@@ -116,9 +116,9 @@ public class ConnectorController {
      */
     @PostMapping("/{connectorCode}/disable")
     public ApiResponse<Void> disable(@PathVariable String connectorCode,
-                                     @RequestParam String tenantId,
+                                     @RequestParam Long tenantId,
                                      @RequestHeader("X-Actor-Id") String actorId) {
-        service.disable(Long.valueOf(tenantId), connectorCode, actorId);
+        service.disable(tenantId, connectorCode, actorId);
         return ApiResponse.ok(null);
     }
 
@@ -132,9 +132,9 @@ public class ConnectorController {
      */
     @PostMapping("/{connectorCode}:test")
     public ApiResponse<FetchTrace> test(@PathVariable String connectorCode,
-                                        @RequestParam String tenantId,
+                                        @RequestParam Long tenantId,
                                         @RequestBody TestRequest req) {
-        return ApiResponse.ok(testService.testConnector(Long.valueOf(tenantId), connectorCode,
+        return ApiResponse.ok(testService.testConnector(tenantId, connectorCode,
                 req.sampleVars(), req.samplePayload(), req.sampleSubjectId()));
     }
 }

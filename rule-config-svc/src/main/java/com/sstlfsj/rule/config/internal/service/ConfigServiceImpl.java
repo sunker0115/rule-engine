@@ -50,13 +50,13 @@ class ConfigServiceImpl implements ConfigService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    public RuleVersionSnapshot publish(String tenantId, Long ruleDefinitionId, String actorId) {
-        return publishService.publish(Long.valueOf(tenantId), ruleDefinitionId, actorId);
+    public RuleVersionSnapshot publish(Long tenantId, Long ruleDefinitionId, String actorId) {
+        return publishService.publish(tenantId, ruleDefinitionId, actorId);
     }
 
     @Override
     @Transactional
-    public void disable(String tenantId, Long ruleDefinitionId, String actorId) {
+    public void disable(Long tenantId, Long ruleDefinitionId, String actorId) {
         // 关停：PUBLISHED → DISABLED，单向。
         transitionStatus(tenantId, ruleDefinitionId, actorId,
                 RuleDefinitionStatus.PUBLISHED, RuleDefinitionStatus.DISABLED, "DISABLE", "禁用");
@@ -64,7 +64,7 @@ class ConfigServiceImpl implements ConfigService {
 
     @Override
     @Transactional
-    public void enable(String tenantId, Long ruleDefinitionId, String actorId) {
+    public void enable(Long tenantId, Long ruleDefinitionId, String actorId) {
         // 重新启用：DISABLED → PUBLISHED，单向。
         transitionStatus(tenantId, ruleDefinitionId, actorId,
                 RuleDefinitionStatus.DISABLED, RuleDefinitionStatus.PUBLISHED, "ENABLE", "启用");
@@ -80,10 +80,10 @@ class ConfigServiceImpl implements ConfigService {
      * @param action 审计动作（ENABLE / DISABLE）
      * @param verb   面向用户错误信息中的动词（启用 / 禁用）
      */
-    private void transitionStatus(String tenantId, Long ruleDefinitionId, String actorId,
+    private void transitionStatus(Long tenantId, Long ruleDefinitionId, String actorId,
             RuleDefinitionStatus from, RuleDefinitionStatus to, String action, String verb) {
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
-        if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
+        if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
         if (rule.getStatus() != from) {
@@ -99,7 +99,7 @@ class ConfigServiceImpl implements ConfigService {
         RuleStatusSnapshot after = new RuleStatusSnapshot(
                 ruleDefinitionId, rule.getStatus().name(), rule.getCurrentVersion());
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                Long.valueOf(tenantId), actorId, "USER", action, "rule_definition",
+                tenantId, actorId, "USER", action, "rule_definition",
                 ruleDefinitionId.toString(), before, after, LocalDateTime.now()));
     }
 
@@ -107,7 +107,7 @@ class ConfigServiceImpl implements ConfigService {
     public Page<RuleDefinition> listRules(RuleListQuery q) {
         Long sceneId = null;
         if (q.sceneCode() != null && !q.sceneCode().isBlank()) {
-            SceneDef scene = sceneMapper.findByCode(Long.valueOf(q.tenantId()), q.sceneCode());
+            SceneDef scene = sceneMapper.findByCode(q.tenantId(), q.sceneCode());
             if (scene == null) {
                 return new Page<>(q.page(), q.size());
             }
@@ -120,7 +120,7 @@ class ConfigServiceImpl implements ConfigService {
                 ? LocalDate.parse(q.to()) : null;
 
         return ruleDefinitionMapper.selectRulePage(
-                new Page<>(q.page(), q.size()), Long.valueOf(q.tenantId()), sceneId, q.status(), fromDate, toDate);
+                new Page<>(q.page(), q.size()), q.tenantId(), sceneId, q.status(), fromDate, toDate);
     }
 
     @Override
@@ -131,9 +131,9 @@ class ConfigServiceImpl implements ConfigService {
     }
 
     @Override
-    public RuleDetailVO getRuleDetail(String tenantId, Long ruleId) {
+    public RuleDetailVO getRuleDetail(Long tenantId, Long ruleId) {
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleId);
-        if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
+        if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleId);
         }
         SceneDef scene = sceneMapper.selectById(rule.getSceneId());
@@ -169,9 +169,9 @@ class ConfigServiceImpl implements ConfigService {
     }
 
     @Override
-    public RuleVersionContentVO getRuleVersion(String tenantId, Long ruleId, Long versionId) {
+    public RuleVersionContentVO getRuleVersion(Long tenantId, Long ruleId, Long versionId) {
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleId);
-        if (rule == null || !tenantId.equals(String.valueOf(rule.getTenantId()))) {
+        if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleId);
         }
         RuleVersion v = ruleVersionMapper.selectById(versionId);
@@ -188,30 +188,30 @@ class ConfigServiceImpl implements ConfigService {
     }
 
     @Override
-    public DraftCreatedResult createDraft(String tenantId, String sceneCode,
+    public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
             String code, RuleContent content, String actorId) {
-        return publishService.createDraft(Long.valueOf(tenantId), sceneCode, code, content, actorId);
+        return publishService.createDraft(tenantId, sceneCode, code, content, actorId);
     }
 
     @Override
-    public DraftCreatedResult editDraft(String tenantId, Long ruleId, RuleContent content, String actorId) {
-        return publishService.editDraft(Long.valueOf(tenantId), ruleId, content, actorId);
+    public DraftCreatedResult editDraft(Long tenantId, Long ruleId, RuleContent content, String actorId) {
+        return publishService.editDraft(tenantId, ruleId, content, actorId);
     }
 
     @Override
-    public DraftCreatedResult newVersion(String tenantId, Long ruleId, RuleContent content,
+    public DraftCreatedResult newVersion(Long tenantId, Long ruleId, RuleContent content,
             Long fromVersionId, String actorId) {
-        return publishService.newVersion(Long.valueOf(tenantId), ruleId, content, fromVersionId, actorId);
+        return publishService.newVersion(tenantId, ruleId, content, fromVersionId, actorId);
     }
 
     @Override
-    public void deleteRule(String tenantId, Long ruleId, String actorId) {
-        publishService.deleteRule(Long.valueOf(tenantId), ruleId, actorId);
+    public void deleteRule(Long tenantId, Long ruleId, String actorId) {
+        publishService.deleteRule(tenantId, ruleId, actorId);
     }
 
     @Override
-    public void deleteDraftVersion(String tenantId, Long ruleId, Long versionId, String actorId) {
-        publishService.deleteDraftVersion(Long.valueOf(tenantId), ruleId, versionId, actorId);
+    public void deleteDraftVersion(Long tenantId, Long ruleId, Long versionId, String actorId) {
+        publishService.deleteDraftVersion(tenantId, ruleId, versionId, actorId);
     }
 
     @Override

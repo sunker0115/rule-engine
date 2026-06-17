@@ -101,7 +101,7 @@ class RuleImportServiceTest {
         doAnswer(inv -> { ((RuleVersion) inv.getArgument(0)).setId(rvSeq.incrementAndGet()); return 1; })
                 .when(ruleVersionMapper).insert(any(RuleVersion.class));
 
-        RuleImportResult r = sut.importBundle("1", bundle("ATTRIBUTE", "rule.a", "rule.b"), "dev");
+        RuleImportResult r = sut.importBundle(1L, bundle("ATTRIBUTE", "rule.a", "rule.b"), "dev");
 
         assertThat(r.rules()).hasSize(2);
         assertThat(r.rules()).allMatch(ir -> !ir.ruleAlreadyExisted() && ir.version() == 1L
@@ -129,7 +129,7 @@ class RuleImportServiceTest {
         when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
         stubInserts(5L, 10L, new AtomicLong(100));
 
-        RuleImportResult r = sut.importBundle("1", bundle("SQL_AGGREGATE", "rule.a"), "dev");
+        RuleImportResult r = sut.importBundle(1L, bundle("SQL_AGGREGATE", "rule.a"), "dev");
 
         assertThat(r.metricsRequiringReview()).containsExactly("account.age");
         assertThat(r.metricsCreated()).isEmpty();
@@ -154,7 +154,7 @@ class RuleImportServiceTest {
                         "ATTRIBUTE", "FLOAT", java.util.Map.of(), 3600, true)),
                 List.of(new RuleBundle.DecisionEntry("BLOCK", "拦截", 100, "拦截交易")));
 
-        RuleImportResult r = sut.importBundle("1", bad, "dev");
+        RuleImportResult r = sut.importBundle(1L, bad, "dev");
 
         assertThat(r.metricsRequiringReview()).containsExactly("account.age");
         assertThat(r.metricsCreated()).isEmpty();
@@ -183,7 +183,7 @@ class RuleImportServiceTest {
         doAnswer(inv -> { ((RuleVersion) inv.getArgument(0)).setId(101L); return 1; })
                 .when(ruleVersionMapper).insert(any(RuleVersion.class));
 
-        RuleImportResult r = sut.importBundle("1", bundle("ATTRIBUTE", "rule.a"), "dev");
+        RuleImportResult r = sut.importBundle(1L, bundle("ATTRIBUTE", "rule.a"), "dev");
 
         assertThat(r.rules()).hasSize(1);
         RuleImportResult.ImportedRule ir = r.rules().getFirst();
@@ -201,7 +201,7 @@ class RuleImportServiceTest {
     void import_rejectsEmptyRules() {
         RuleBundle bad = new RuleBundle(1, "t", "1", List.of(),
                 List.of(), List.of(), List.of());
-        assertThatThrownBy(() -> sut.importBundle("1", bad, "dev"))
+        assertThatThrownBy(() -> sut.importBundle(1L, bad, "dev"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

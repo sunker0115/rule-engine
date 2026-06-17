@@ -1,5 +1,5 @@
 export interface SceneListItem {
-  tenantId: string;
+  tenantId: number;
   id: number;
   sceneCode: string;
   name: string;

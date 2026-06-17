@@ -4,7 +4,7 @@ export type AuditAction = 'CREATE' | 'UPDATE' | 'PUBLISH' | 'PUBLISH_FAILED' | '
 /** 审计日志项——字段对齐 GET /admin/v1/audit-logs 实际响应 */
 export interface AuditLogItem {
   id: number;
-  tenantId: string;
+  tenantId: number;
   resourceType: string;   // API 字段名
   resourceId: number;      // API 字段名
   action: AuditAction;

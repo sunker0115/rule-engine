@@ -18,7 +18,7 @@ public interface JobService {
      * @param tenantId 租户 ID
      * @param jobId    Job 主键
      */
-    void enableJob(String tenantId, Long jobId);
+    void enableJob(Long tenantId, Long jobId);
 
     /**
      * 禁用 Job 并从调度器撤销。
@@ -26,7 +26,7 @@ public interface JobService {
      * @param tenantId 租户 ID
      * @param jobId    Job 主键
      */
-    void disableJob(String tenantId, Long jobId);
+    void disableJob(Long tenantId, Long jobId);
 
     /**
      * 查询租户全部 Job。
@@ -34,7 +34,7 @@ public interface JobService {
      * @param tenantId 租户 ID
      * @return Job 列表
      */
-    List<JobDefinitionDto> listJobs(String tenantId);
+    List<JobDefinitionDto> listJobs(Long tenantId);
 
     /**
      * 查询单个 Job 详情。
@@ -43,7 +43,7 @@ public interface JobService {
      * @param jobId    Job 主键
      * @return Job 详情
      */
-    JobDefinitionDto getJob(String tenantId, Long jobId);
+    JobDefinitionDto getJob(Long tenantId, Long jobId);
 
     /**
      * 手动触发一次 Job（管理能力，不经调度器）。
@@ -52,7 +52,7 @@ public interface JobService {
      * @param jobId    Job 主键
      * @return 本次执行记录
      */
-    JobExecutionVO triggerOnce(String tenantId, Long jobId);
+    JobExecutionVO triggerOnce(Long tenantId, Long jobId);
 
     /**
      * 查询 Job 最近若干次执行记录。
@@ -62,5 +62,5 @@ public interface JobService {
      * @param limit    返回条数上限
      * @return 执行记录列表（按触发时间倒序）
      */
-    List<JobExecutionVO> recentExecutions(String tenantId, Long jobId, int limit);
+    List<JobExecutionVO> recentExecutions(Long tenantId, Long jobId, int limit);
 }

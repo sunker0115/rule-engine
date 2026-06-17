@@ -113,7 +113,7 @@ public class RuleController {
     @PostMapping("/{ruleId}/publish")
     public ApiResponse<RuleVersionSnapshot> publish(
             @PathVariable Long ruleId,
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestHeader("X-Actor-Id") String actorId) {
         return ApiResponse.ok(configService.publish(tenantId, ruleId, actorId));
     }
@@ -129,7 +129,7 @@ public class RuleController {
     @PostMapping("/{ruleId}/disable")
     public ApiResponse<Void> disable(
             @PathVariable Long ruleId,
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestHeader("X-Actor-Id") String actorId) {
         configService.disable(tenantId, ruleId, actorId);
         return ApiResponse.ok(null);
@@ -146,7 +146,7 @@ public class RuleController {
     @PostMapping("/{ruleId}/enable")
     public ApiResponse<Void> enable(
             @PathVariable Long ruleId,
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestHeader("X-Actor-Id") String actorId) {
         configService.enable(tenantId, ruleId, actorId);
         return ApiResponse.ok(null);
@@ -163,7 +163,7 @@ public class RuleController {
     @DeleteMapping("/{ruleId}")
     public ApiResponse<Void> deleteRule(
             @PathVariable Long ruleId,
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestHeader("X-Actor-Id") String actorId) {
         configService.deleteRule(tenantId, ruleId, actorId);
         return ApiResponse.ok(null);
@@ -182,7 +182,7 @@ public class RuleController {
     public ApiResponse<Void> deleteDraftVersion(
             @PathVariable Long ruleId,
             @PathVariable Long versionId,
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestHeader("X-Actor-Id") String actorId) {
         configService.deleteDraftVersion(tenantId, ruleId, versionId, actorId);
         return ApiResponse.ok(null);
@@ -202,7 +202,7 @@ public class RuleController {
      */
     @GetMapping
     public ApiResponse<PageResponse<RuleListItemVO>> listRules(
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestParam(required = false) String sceneCode,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String from,
@@ -217,7 +217,7 @@ public class RuleController {
 
         List<RuleListItemVO> vos = rdPage.getRecords().stream()
                 .map(rd -> new RuleListItemVO(
-                        String.valueOf(rd.getTenantId()),
+                        rd.getTenantId(),
                         rd.getId(), rd.getCode(), rd.getName(),
                         rd.getKind() != null ? rd.getKind().name() : null,
                         sceneCodeMap.getOrDefault(rd.getSceneId(), null),
@@ -237,7 +237,7 @@ public class RuleController {
      */
     @GetMapping("/{ruleId}")
     public ApiResponse<RuleDetailVO> getDetail(@PathVariable Long ruleId,
-                                               @RequestParam String tenantId) {
+                                               @RequestParam Long tenantId) {
         return ApiResponse.ok(configService.getRuleDetail(tenantId, ruleId));
     }
 
@@ -252,7 +252,7 @@ public class RuleController {
     @GetMapping("/{ruleId}/versions/{versionId}")
     public ApiResponse<RuleVersionContentVO> getVersion(@PathVariable Long ruleId,
                                                         @PathVariable Long versionId,
-                                                        @RequestParam String tenantId) {
+                                                        @RequestParam Long tenantId) {
         return ApiResponse.ok(configService.getRuleVersion(tenantId, ruleId, versionId));
     }
 }

@@ -27,13 +27,13 @@ class MetadataControllerTest {
     void getMetadata_returns200_withResponse() throws Exception {
         MetadataService.MetadataResponse resp = new MetadataService.MetadataResponse(
                 List.of(), List.of(), List.of("payment.create", "payment.update"), List.of());
-        when(metadataService.getSceneMetadata("t1", "PAYMENT")).thenReturn(resp);
+        when(metadataService.getSceneMetadata(1L, "PAYMENT")).thenReturn(resp);
 
         mockMvc.perform(get("/admin/v1/scenes/PAYMENT/metadata")
-                        .param("tenantId", "t1"))
+                        .param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(metadataService).getSceneMetadata("t1", "PAYMENT");
+        verify(metadataService).getSceneMetadata(1L, "PAYMENT");
     }
 }

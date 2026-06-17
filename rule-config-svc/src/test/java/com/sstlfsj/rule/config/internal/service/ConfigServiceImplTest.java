@@ -55,7 +55,7 @@ class ConfigServiceImplTest {
         );
         when(publishService.publish(1L, 10L, "actor1")).thenReturn(expected);
 
-        RuleVersionSnapshot result = configService.publish("1", 10L, "actor1");
+        RuleVersionSnapshot result = configService.publish(1L, 10L, "actor1");
 
         assertThat(result.ruleVersionId()).isEqualTo(42L);
         verify(publishService).publish(1L, 10L, "actor1");
@@ -70,7 +70,7 @@ class ConfigServiceImplTest {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
 
-        configService.disable("1", 10L, "actor1");
+        configService.disable(1L, 10L, "actor1");
 
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
@@ -100,7 +100,7 @@ class ConfigServiceImplTest {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
 
-        configService.enable("1", 10L, "actor1");
+        configService.enable(1L, 10L, "actor1");
 
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
@@ -126,7 +126,7 @@ class ConfigServiceImplTest {
         rule.setStatus(RuleDefinitionStatus.DRAFT);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
 
-        assertThatThrownBy(() -> configService.disable("1", 10L, "actor1"))
+        assertThatThrownBy(() -> configService.disable(1L, 10L, "actor1"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("仅 PUBLISHED 规则可禁用");
         verify(ruleDefinitionMapper, never()).updateById((RuleDefinition) any());
@@ -142,7 +142,7 @@ class ConfigServiceImplTest {
         rule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
 
-        assertThatThrownBy(() -> configService.enable("1", 10L, "actor1"))
+        assertThatThrownBy(() -> configService.enable(1L, 10L, "actor1"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("仅 DISABLED 规则可启用");
         verify(ruleDefinitionMapper, never()).updateById((RuleDefinition) any());
@@ -172,7 +172,7 @@ class ConfigServiceImplTest {
         mockPage.setRecords(java.util.List.of(rd));
         when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any(), any(), any())).thenReturn(mockPage);
 
-        var result = configService.listRules(new RuleListQuery("1", "risk.transfer", "PUBLISHED", null, null, 1, 20));
+        var result = configService.listRules(new RuleListQuery(1L, "risk.transfer", "PUBLISHED", null, null, 1, 20));
 
         assertThat(result.getTotal()).isEqualTo(1);
         assertThat(result.getRecords()).hasSize(1);
@@ -190,7 +190,7 @@ class ConfigServiceImplTest {
     void listRules_sceneNotFound_returnsEmptyPage() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(null);
 
-        var result = configService.listRules(new RuleListQuery("1", "nonexistent.scene", null, null, null, 1, 20));
+        var result = configService.listRules(new RuleListQuery(1L, "nonexistent.scene", null, null, null, 1, 20));
 
         assertThat(result.getRecords()).isEmpty();
         assertThat(result.getTotal()).isEqualTo(0);
@@ -204,7 +204,7 @@ class ConfigServiceImplTest {
         emptyPage.setRecords(java.util.List.of());
         when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any(), any(), any())).thenReturn(emptyPage);
 
-        var result = configService.listRules(new RuleListQuery("1", null, null, null, null, 1, 20));
+        var result = configService.listRules(new RuleListQuery(1L, null, null, null, null, 1, 20));
 
         assertThat(result.getRecords()).isEmpty();
         verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any(), any(), any());
@@ -220,7 +220,7 @@ class ConfigServiceImplTest {
         when(publishService.createDraft(1L, "risk.transfer", "rule.a", content, "actor1"))
                 .thenReturn(expected);
 
-        DraftCreatedResult result = configService.createDraft("1", "risk.transfer",
+        DraftCreatedResult result = configService.createDraft(1L, "risk.transfer",
                 "rule.a", content, "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(1L);
@@ -250,7 +250,7 @@ class ConfigServiceImplTest {
         active.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(active);
 
-        RuleDetailVO vo = configService.getRuleDetail("1", 10L);
+        RuleDetailVO vo = configService.getRuleDetail(1L, 10L);
 
         assertThat(vo.ruleDefinitionId()).isEqualTo(10L);
         assertThat(vo.code()).isEqualTo("rule.a");
@@ -265,7 +265,7 @@ class ConfigServiceImplTest {
     @Test
     void getRuleDetail_规则不存在_抛IllegalArgument() {
         when(ruleDefinitionMapper.selectById(99L)).thenReturn(null);
-        assertThatThrownBy(() -> configService.getRuleDetail("1", 99L))
+        assertThatThrownBy(() -> configService.getRuleDetail(1L, 99L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("规则不存在");
     }
@@ -276,7 +276,7 @@ class ConfigServiceImplTest {
                 .thenReturn(new DraftCreatedResult(10L, 20L, 1L, "DRAFT"));
 
         RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null);
-        configService.editDraft("1", 10L, content, "actor");
+        configService.editDraft(1L, 10L, content, "actor");
 
         // tenantId 字符串 "1" 转 Long，content 原样透传 publishService（kind 解析下沉至 publishService）
         verify(publishService).editDraft(eq(1L), eq(10L), eq(content), eq("actor"));
@@ -288,7 +288,7 @@ class ConfigServiceImplTest {
                 .thenReturn(new DraftCreatedResult(10L, 30L, 2L, "DRAFT"));
 
         RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null);
-        configService.newVersion("1", 10L, content, 50L, "actor");
+        configService.newVersion(1L, 10L, content, 50L, "actor");
 
         // content 原样透传 publishService，fromVersionId 原样透传
         verify(publishService).newVersion(eq(1L), eq(10L), eq(content), eq(50L), eq("actor"));
@@ -296,7 +296,7 @@ class ConfigServiceImplTest {
 
     @Test
     void deleteRule_delegatesWithTenantIdConvertedToLong() {
-        configService.deleteRule("1", 10L, "actor");
+        configService.deleteRule(1L, 10L, "actor");
 
         // tenantId 字符串 "1" 转 Long 后透传 publishService
         verify(publishService).deleteRule(1L, 10L, "actor");
@@ -304,7 +304,7 @@ class ConfigServiceImplTest {
 
     @Test
     void deleteDraftVersion_delegatesWithTenantIdConvertedToLong() {
-        configService.deleteDraftVersion("1", 10L, 100L, "actor");
+        configService.deleteDraftVersion(1L, 10L, 100L, "actor");
 
         // tenantId 字符串 "1" 转 Long 后透传 publishService，versionId 原样透传
         verify(publishService).deleteDraftVersion(1L, 10L, 100L, "actor");
@@ -326,7 +326,7 @@ class ConfigServiceImplTest {
         v.setTriggerEventTypes(List.of("TXN"));
         when(ruleVersionMapper.selectById(20L)).thenReturn(v);
 
-        RuleVersionContentVO vo = configService.getRuleVersion("1", 10L, 20L);
+        RuleVersionContentVO vo = configService.getRuleVersion(1L, 10L, 20L);
 
         assertThat(vo.ruleVersionId()).isEqualTo(20L);
         assertThat(vo.version()).isEqualTo(2L);
@@ -347,7 +347,7 @@ class ConfigServiceImplTest {
         v.setRuleDefinitionId(99L); // 不属于 rule 10
         when(ruleVersionMapper.selectById(20L)).thenReturn(v);
 
-        assertThatThrownBy(() -> configService.getRuleVersion("1", 10L, 20L))
+        assertThatThrownBy(() -> configService.getRuleVersion(1L, 10L, 20L))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -358,7 +358,7 @@ class ConfigServiceImplTest {
         rule.setTenantId(2L); // 实际属租户 2
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
 
-        assertThatThrownBy(() -> configService.getRuleVersion("1", 10L, 20L))
+        assertThatThrownBy(() -> configService.getRuleVersion(1L, 10L, 20L))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -32,6 +32,8 @@ public class SdkMetricDefinitionController {
         List<String> sceneList = (scenes == null || scenes.isBlank())
                 ? List.of()
                 : Arrays.stream(scenes.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
-        return ApiResponse.ok(metadataService.listMetricDefinitions(new MetricListQuery(tenantId, sceneList)));
+        // SDK 评估侧入口保持 String tenantId（SPI 不透明标识），在边界处转 Long 喂 config 写链路 Query
+        return ApiResponse.ok(metadataService.listMetricDefinitions(
+                new MetricListQuery(Long.parseLong(tenantId), sceneList)));
     }
 }

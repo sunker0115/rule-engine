@@ -65,7 +65,7 @@ class ReplayServiceImplTest {
         when(evalEngine.evaluateReplay(any(), anyList(), anyMap(), any()))
                 .thenReturn(new EvalOutcome(EvalResult.hit(), null));
 
-        EvalResult result = impl.replay("1", 100L);
+        EvalResult result = impl.replay(1L, 100L);
 
         assertThat(result.ruleHit()).isTrue();
         // 冻结 metric total=200、payload 透传：以 anyMap/anyList 校验委托链路成立
@@ -76,7 +76,7 @@ class ReplayServiceImplTest {
     @Test
     void replay_sessionNotFound_throws() {
         when(sessionMapper.selectById(404L)).thenReturn(null);
-        assertThatThrownBy(() -> impl.replay("1", 404L))
+        assertThatThrownBy(() -> impl.replay(1L, 404L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("REPLAY_SESSION_NOT_FOUND");
     }
@@ -84,7 +84,7 @@ class ReplayServiceImplTest {
     @Test
     void replay_crossTenant_throwsNotFound() {
         when(sessionMapper.selectById(100L)).thenReturn(fullSession());  // tenant=1
-        assertThatThrownBy(() -> impl.replay("2", 100L))
+        assertThatThrownBy(() -> impl.replay(2L, 100L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("REPLAY_SESSION_NOT_FOUND");
     }
@@ -94,7 +94,7 @@ class ReplayServiceImplTest {
         EvaluationSession s = fullSession();
         s.setPayload(null);   // 存量行 / 捕获未开
         when(sessionMapper.selectById(100L)).thenReturn(s);
-        assertThatThrownBy(() -> impl.replay("1", 100L))
+        assertThatThrownBy(() -> impl.replay(1L, 100L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("REPLAY_NOT_REPRODUCIBLE");
         verifyNoInteractions(evalEngine);
@@ -104,7 +104,7 @@ class ReplayServiceImplTest {
     void replay_candidateVersionMissing_throws() {
         when(sessionMapper.selectById(100L)).thenReturn(fullSession());
         when(snapshotLoader.loadById(11L)).thenReturn(null);   // 版本不存在
-        assertThatThrownBy(() -> impl.replay("1", 100L))
+        assertThatThrownBy(() -> impl.replay(1L, 100L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("REPLAY_VERSION_MISSING");
         verifyNoInteractions(evalEngine);

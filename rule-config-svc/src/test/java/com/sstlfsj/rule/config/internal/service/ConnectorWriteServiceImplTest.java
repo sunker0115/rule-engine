@@ -139,7 +139,7 @@ class ConnectorWriteServiceImplTest {
         mockPage.setRecords(List.of(c)); mockPage.setTotal(1);
         when(mapper.searchPage(any(), any(), any(), any())).thenReturn(mockPage);
 
-        var result = svc.listPage(new ConnectorListQuery("1", null, null, 1, 20));
+        var result = svc.listPage(new ConnectorListQuery(1L, null, null, 1, 20));
 
         assertThat(result.getTotal()).isEqualTo(1);
         assertThat(result.getRecords()).hasSize(1);

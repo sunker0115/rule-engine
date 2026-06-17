@@ -66,14 +66,14 @@ public class EvalController {
         EvalResult result = evalService.dryRun(event, ruleId, ruleVersionId);
         // D71 读时脱敏：按 (租户, 场景) live 敏感集抹去 nodeTrace 中敏感叶子值，raw 仍按原样落库
         List<NodeTrace> masked = TraceMasker.maskKernel(
-                resolveRefs(event.tenantId(), req.sceneCode()), result.nodeTrace());
+                resolveRefs(Long.parseLong(event.tenantId()), req.sceneCode()), result.nodeTrace());
         return ApiResponse.ok(new EvalResult(result.ruleHit(), result.finalDecision(),
                 result.hitDecisions(), masked, result.errorCode(), result.score(),
                 result.category(), result.decision()));
     }
 
     /** 解析 (租户, 场景) 的 live 敏感集；失败返回 null（masker fail-closed 全抹，D71）。 */
-    private SceneService.SensitiveRefs resolveRefs(String tenantId, String sceneCode) {
+    private SceneService.SensitiveRefs resolveRefs(Long tenantId, String sceneCode) {
         try {
             return sceneService.getSensitiveRefs(tenantId, sceneCode);
         } catch (RuntimeException e) {

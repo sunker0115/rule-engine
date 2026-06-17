@@ -13,7 +13,7 @@ export interface MetricDescriptor {
   status?: string;
   createdAt?: string;
   updatedAt?: string;
-  tenantId?: string;
+  tenantId?: number;
 }
 
 export interface MetricImpactResult {

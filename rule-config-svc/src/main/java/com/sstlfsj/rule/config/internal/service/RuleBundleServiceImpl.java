@@ -19,12 +19,12 @@ class RuleBundleServiceImpl implements RuleBundleService {
     private final RuleImportService ruleImportService;
 
     @Override
-    public RuleBundle export(String tenantId, List<Long> ruleIds, Long sceneId) {
+    public RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId) {
         return ruleExportService.export(tenantId, ruleIds, sceneId);
     }
 
     @Override
-    public RuleImportResult importBundle(String tenantId, RuleBundle bundle, String actorId) {
+    public RuleImportResult importBundle(Long tenantId, RuleBundle bundle, String actorId) {
         return ruleImportService.importBundle(tenantId, bundle, actorId);
     }
 }

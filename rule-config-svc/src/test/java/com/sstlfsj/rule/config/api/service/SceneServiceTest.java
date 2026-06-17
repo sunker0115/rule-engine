@@ -16,7 +16,7 @@ class SceneServiceTest {
 
     private final SceneService stub = new SceneService() {
         @Override
-        public Long createScene(String tenantId, String sceneCode, String name,
+        public Long createScene(Long tenantId, String sceneCode, String name,
                                 String description, String dominantMode, String subjectType,
                                 List<String> eventTypes, List<PayloadFieldSpec> payloadSchema,
                                 Map<String, Object> defaultParams, String actorId) {
@@ -29,27 +29,27 @@ class SceneServiceTest {
         }
 
         @Override
-        public SceneDetailDto getScene(String tenantId, String sceneCode) {
+        public SceneDetailDto getScene(Long tenantId, String sceneCode) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public void disableScene(String tenantId, String sceneCode, String actorId) {
+        public void disableScene(Long tenantId, String sceneCode, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public List<SceneListItem> listScenes(String tenantId, String status) {
+        public List<SceneListItem> listScenes(Long tenantId, String status) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public void toggleSceneStatus(String tenantId, String sceneCode, boolean enable, String actorId) {
+        public void toggleSceneStatus(Long tenantId, String sceneCode, boolean enable, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public SensitiveRefs getSensitiveRefs(String tenantId, String sceneCode) {
+        public SensitiveRefs getSensitiveRefs(Long tenantId, String sceneCode) {
             throw new UnsupportedOperationException("stub");
         }
     };
@@ -57,31 +57,31 @@ class SceneServiceTest {
     @Test
     void createScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.createScene("t1", "SCENE_A", "场景A",
+                () -> stub.createScene(1L, "SCENE_A", "场景A",
                         null, null, null, null, null, null, "actor"));
     }
 
     @Test
     void updateScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.updateScene(new UpdateSceneCommand("t1", "SCENE_A", null, null, null, null, null, "actor")));
+                () -> stub.updateScene(new UpdateSceneCommand(1L, "SCENE_A", null, null, null, null, null, "actor")));
     }
 
     @Test
     void getScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.getScene("t1", "SCENE_A"));
+                () -> stub.getScene(1L, "SCENE_A"));
     }
 
     @Test
     void disableScene_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.disableScene("t1", "SCENE_A", "actor"));
+                () -> stub.disableScene(1L, "SCENE_A", "actor"));
     }
 
     @Test
     void listScenes_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.listScenes("t1", null));
+                () -> stub.listScenes(1L, null));
     }
 }

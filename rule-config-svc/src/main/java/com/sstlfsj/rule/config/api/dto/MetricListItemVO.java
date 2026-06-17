@@ -13,7 +13,7 @@ public record MetricListItemVO(
         java.util.Map<String, Object> params,
         String name,
         String status,
-        String tenantId,
+        Long tenantId,
         java.time.LocalDateTime createdAt,
         java.time.LocalDateTime updatedAt
 ) {}

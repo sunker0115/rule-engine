@@ -35,7 +35,7 @@ class CreateRuleRequestTest {
     @Test
     void decisionBindingsSerializeBackToSameShape() {
         CreateRuleRequest req = new CreateRuleRequest(
-                "1", "s", "c", "n", "AST_BOOLEAN",
+                1L, "s", "c", "n", "AST_BOOLEAN",
                 new AndNode(java.util.List.of(), null, null),
                 java.util.List.of(new DecisionBindingInput("REVIEW")),
                 java.util.List.of(),

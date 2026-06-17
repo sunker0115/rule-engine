@@ -32,7 +32,7 @@ public class SceneController {
      */
     @GetMapping
     public ApiResponse<List<SceneListItem>> listScenes(
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestParam(required = false) String status) {
         return ApiResponse.ok(sceneService.listScenes(tenantId, status));
     }
@@ -62,7 +62,7 @@ public class SceneController {
     @GetMapping("/{sceneCode}")
     public ApiResponse<SceneDetailDto> getScene(
             @PathVariable String sceneCode,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         return ApiResponse.ok(sceneService.getScene(tenantId, sceneCode));
     }
 
@@ -91,7 +91,7 @@ public class SceneController {
     @PutMapping("/{sceneCode}/status")
     public ApiResponse<Map<String, Object>> toggleStatus(
             @PathVariable String sceneCode,
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestParam boolean enable,
             @RequestHeader("X-Actor-Id") String actorId) {
         sceneService.toggleSceneStatus(tenantId, sceneCode, enable, actorId);

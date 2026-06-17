@@ -7,12 +7,12 @@ import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** ReplayService 契约：replay(String tenantId, Long sessionId) -> EvalResult。行为测试见 ReplayServiceImplTest。 */
+/** ReplayService 契约：replay(Long tenantId, Long sessionId) -> EvalResult。行为测试见 ReplayServiceImplTest。 */
 class ReplayServiceTest {
 
     @Test
     void declaresReplay_withTenantAndSessionId_returningEvalResult() throws Exception {
-        Method m = ReplayService.class.getMethod("replay", String.class, Long.class);
+        Method m = ReplayService.class.getMethod("replay", Long.class, Long.class);
         assertThat(m.getReturnType()).isEqualTo(EvalResult.class);
     }
 }

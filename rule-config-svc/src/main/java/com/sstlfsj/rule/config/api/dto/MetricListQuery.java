@@ -8,4 +8,4 @@ import java.util.List;
  * @param tenantId 租户 ID（必填）
  * @param scenes   场景编码列表（选填，v1 暂不按场景白名单过滤）
  */
-public record MetricListQuery(String tenantId, List<String> scenes) {}
+public record MetricListQuery(Long tenantId, List<String> scenes) {}

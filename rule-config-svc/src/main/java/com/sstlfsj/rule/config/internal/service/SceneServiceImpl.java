@@ -39,12 +39,12 @@ class SceneServiceImpl implements SceneService {
 
     @Override
     @Transactional
-    public Long createScene(String tenantId, String sceneCode, String name,
+    public Long createScene(Long tenantId, String sceneCode, String name,
                             String description, String dominantMode, String subjectType,
                             List<String> eventTypes, List<PayloadFieldSpec> payloadSchema,
                             Map<String, Object> defaultParams, String actorId) {
         SceneDef scene = new SceneDef();
-        scene.setTenantId(Long.valueOf(tenantId));
+        scene.setTenantId(tenantId);
         scene.setCode(sceneCode);
         scene.setName(name);
         scene.setDescription(description);
@@ -60,7 +60,7 @@ class SceneServiceImpl implements SceneService {
         scene.setCreatedBy(actorId);
         sceneMapper.insert(scene);
 
-        publishAudit(Long.valueOf(tenantId), actorId, "CREATE", "scene",
+        publishAudit(tenantId, actorId, "CREATE", "scene",
                 scene.getId() != null ? scene.getId().toString() : sceneCode,
                 null, snapshotOf(scene));
         return scene.getId();
@@ -69,7 +69,7 @@ class SceneServiceImpl implements SceneService {
     @Override
     @Transactional
     public void updateScene(UpdateSceneCommand cmd) {
-        SceneDef scene = findScene(Long.valueOf(cmd.tenantId()), cmd.sceneCode());
+        SceneDef scene = findScene(cmd.tenantId(), cmd.sceneCode());
         SceneSnapshot before = snapshotOf(scene);
 
         if (cmd.name() != null) scene.setName(cmd.name());
@@ -87,24 +87,25 @@ class SceneServiceImpl implements SceneService {
         scene.setUpdatedBy(cmd.actorId());
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        publishAudit(Long.valueOf(cmd.tenantId()), cmd.actorId(), "UPDATE", "scene",
+        publishAudit(cmd.tenantId(), cmd.actorId(), "UPDATE", "scene",
                 scene.getId().toString(), before, snapshotOf(scene));
         // 场景仍 ACTIVE：发 SceneChangedEvent(active=true) 触发 eval 索引重载，
         // 使 payloadSchema / eventTypes / defaultParams(含 timezone)变更 live 生效(不必等规则 republish)。
-        eventPublisher.publishEvent(new SceneChangedEvent(cmd.tenantId(), cmd.sceneCode(), true));
+        // 事件 tenantId 为评估侧 SPI 不透明标识，保持 String
+        eventPublisher.publishEvent(new SceneChangedEvent(String.valueOf(cmd.tenantId()), cmd.sceneCode(), true));
     }
 
     @Override
-    public SceneDetailDto getScene(String tenantId, String sceneCode) {
-        SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
+    public SceneDetailDto getScene(Long tenantId, String sceneCode) {
+        SceneDef scene = findScene(tenantId, sceneCode);
         return toDto(scene);
     }
 
     @Override
-    public List<SceneListItem> listScenes(String tenantId, String status) {
+    public List<SceneListItem> listScenes(Long tenantId, String status) {
         SceneStatus statusFilter = (status != null && !status.isBlank()) ? SceneStatus.valueOf(status) : null;
-        return sceneMapper.findByTenantId(Long.valueOf(tenantId), statusFilter).stream()
-                .map(s -> new SceneListItem(s.getId(), String.valueOf(s.getTenantId()), s.getCode(), s.getName(),
+        return sceneMapper.findByTenantId(tenantId, statusFilter).stream()
+                .map(s -> new SceneListItem(s.getId(), s.getTenantId(), s.getCode(), s.getName(),
                         s.getDominantMode().name(), s.getSubjectType().name(), s.getStatus().name(),
                         s.getCreatedAt(), s.getUpdatedAt()))
                 .toList();
@@ -112,22 +113,22 @@ class SceneServiceImpl implements SceneService {
 
     @Override
     @Transactional
-    public void disableScene(String tenantId, String sceneCode, String actorId) {
-        SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
+    public void disableScene(Long tenantId, String sceneCode, String actorId) {
+        SceneDef scene = findScene(tenantId, sceneCode);
         SceneSnapshot before = snapshotOf(scene);
         scene.setStatus(SceneStatus.DISABLED);
         scene.setUpdatedBy(actorId);
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
-        publishAudit(Long.valueOf(tenantId), actorId, "DISABLE", "scene",
+        publishAudit(tenantId, actorId, "DISABLE", "scene",
                 scene.getId().toString(), before, snapshotOf(scene));
-        eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, false));
+        eventPublisher.publishEvent(new SceneChangedEvent(String.valueOf(tenantId), sceneCode, false));
     }
 
     @Override
     @Transactional
-    public void toggleSceneStatus(String tenantId, String sceneCode, boolean enable, String actorId) {
-        SceneDef scene = findScene(Long.valueOf(tenantId), sceneCode);
+    public void toggleSceneStatus(Long tenantId, String sceneCode, boolean enable, String actorId) {
+        SceneDef scene = findScene(tenantId, sceneCode);
         SceneStatus newStatus = enable ? SceneStatus.ACTIVE : SceneStatus.DISABLED;
         if (scene.getStatus() == newStatus) return;
 
@@ -136,16 +137,15 @@ class SceneServiceImpl implements SceneService {
         scene.setUpdatedAt(LocalDateTime.now());
         sceneMapper.updateById(scene);
         String action = enable ? "ENABLE" : "DISABLE";
-        publishAudit(Long.valueOf(tenantId), actorId, action, "scene",
+        publishAudit(tenantId, actorId, action, "scene",
                 scene.getId().toString(), before, snapshotOf(scene));
-        eventPublisher.publishEvent(new SceneChangedEvent(tenantId, sceneCode, enable));
+        eventPublisher.publishEvent(new SceneChangedEvent(String.valueOf(tenantId), sceneCode, enable));
     }
 
     @Override
-    public SensitiveRefs getSensitiveRefs(String tenantId, String sceneCode) {
-        Long tid = Long.valueOf(tenantId);
+    public SensitiveRefs getSensitiveRefs(Long tenantId, String sceneCode) {
         // scene 不存在直接抛——调用方(rule-api)捕获后 fail-closed 全抹
-        SceneDef scene = findScene(tid, sceneCode);
+        SceneDef scene = findScene(tenantId, sceneCode);
         List<PayloadFieldSpec> schema = scene.getPayloadSchema() != null
                 ? scene.getPayloadSchema() : List.of();
         Set<String> payloadFields = schema.stream()
@@ -153,7 +153,7 @@ class SceneServiceImpl implements SceneService {
                 .map(PayloadFieldSpec::name)
                 .collect(Collectors.toSet());
         // metric 敏感性租户级共享(D54)：取该租户全部 ACTIVE metric 中 sensitive=true 的码
-        Set<String> metricCodes = metricDefinitionMapper.findActiveByTenant(tid).stream()
+        Set<String> metricCodes = metricDefinitionMapper.findActiveByTenant(tenantId).stream()
                 .filter(m -> Boolean.TRUE.equals(m.getSensitive()))
                 .map(com.sstlfsj.rule.config.internal.domain.MetricDefinition::getMetricCode)
                 .collect(Collectors.toSet());
@@ -197,7 +197,7 @@ class SceneServiceImpl implements SceneService {
                 ? scene.getDefaultParams() : Map.of();
         return new SceneDetailDto(
                 scene.getId(),
-                String.valueOf(scene.getTenantId()),
+                scene.getTenantId(),
                 scene.getCode(),
                 scene.getName(),
                 scene.getDescription(),

@@ -106,8 +106,7 @@ public class ConnectorWriteServiceImpl implements ConnectorWriteService {
     @Override
     @Transactional(readOnly = true)
     public Page<ConnectorDefinition> listPage(ConnectorListQuery q) {
-        Long tid = (q.tenantId() != null && !q.tenantId().isBlank()) ? Long.valueOf(q.tenantId()) : null;
-        return mapper.searchPage(new Page<>(q.page(), q.size()), tid, q.keyword(), q.status());
+        return mapper.searchPage(new Page<>(q.page(), q.size()), q.tenantId(), q.keyword(), q.status());
     }
 
     @Override

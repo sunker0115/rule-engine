@@ -33,7 +33,7 @@ class JobServiceImpl implements JobService {
 
     @Override
     @Transactional
-    public void enableJob(String tenantId, Long jobId) {
+    public void enableJob(Long tenantId, Long jobId) {
         JobDefinition def = findJob(tenantId, jobId);
         rejectIfPullScene(tenantId, def.getSceneCode());
         def.setStatus(JobStatus.ACTIVE);
@@ -44,7 +44,7 @@ class JobServiceImpl implements JobService {
 
     @Override
     @Transactional
-    public void disableJob(String tenantId, Long jobId) {
+    public void disableJob(Long tenantId, Long jobId) {
         JobDefinition def = findJob(tenantId, jobId);
         def.setStatus(JobStatus.DISABLED);
         def.setUpdatedAt(LocalDateTime.now());
@@ -53,25 +53,25 @@ class JobServiceImpl implements JobService {
     }
 
     @Override
-    public List<JobDefinitionDto> listJobs(String tenantId) {
-        return jobMapper.findByTenantId(Long.valueOf(tenantId)).stream()
+    public List<JobDefinitionDto> listJobs(Long tenantId) {
+        return jobMapper.findByTenantId(tenantId).stream()
                 .map(this::toDto)
                 .toList();
     }
 
     @Override
-    public JobDefinitionDto getJob(String tenantId, Long jobId) {
+    public JobDefinitionDto getJob(Long tenantId, Long jobId) {
         return toDto(findJob(tenantId, jobId));
     }
 
     @Override
-    public JobExecutionVO triggerOnce(String tenantId, Long jobId) {
+    public JobExecutionVO triggerOnce(Long tenantId, Long jobId) {
         JobDefinition def = findJob(tenantId, jobId);
         return toVO(jobRunner.run(def));
     }
 
     @Override
-    public List<JobExecutionVO> recentExecutions(String tenantId, Long jobId, int limit) {
+    public List<JobExecutionVO> recentExecutions(Long tenantId, Long jobId, int limit) {
         findJob(tenantId, jobId);
         return executionMapper.findRecent(jobId, limit).stream()
                 .map(JobServiceImpl::toVO)
@@ -79,16 +79,16 @@ class JobServiceImpl implements JobService {
     }
 
     /** 绑定 Scene 为 PULL 时拒绝——PULL 是同步业务调用语义，定时触发无意义（§3.10）。 */
-    private void rejectIfPullScene(String tenantId, String sceneCode) {
+    private void rejectIfPullScene(Long tenantId, String sceneCode) {
         SceneDetailDto scene = sceneService.getScene(tenantId, sceneCode);
         if ("PULL".equals(scene.dominantMode())) {
             throw new IllegalArgumentException("PULL Scene 不允许绑定 Job: " + sceneCode);
         }
     }
 
-    private JobDefinition findJob(String tenantId, Long jobId) {
+    private JobDefinition findJob(Long tenantId, Long jobId) {
         JobDefinition def = jobMapper.selectById(jobId);
-        if (def == null || !def.getTenantId().equals(Long.valueOf(tenantId))) {
+        if (def == null || !def.getTenantId().equals(tenantId)) {
             throw new IllegalArgumentException("Job 不存在: " + jobId);
         }
         return def;
@@ -97,7 +97,7 @@ class JobServiceImpl implements JobService {
     private JobDefinitionDto toDto(JobDefinition def) {
         return new JobDefinitionDto(
                 def.getId(),
-                String.valueOf(def.getTenantId()),
+                def.getTenantId(),
                 def.getSceneCode(),
                 def.getCode(),
                 def.getName(),
@@ -111,7 +111,7 @@ class JobServiceImpl implements JobService {
         return new JobExecutionVO(
                 exec.getId(),
                 exec.getJobDefinitionId(),
-                String.valueOf(exec.getTenantId()),
+                exec.getTenantId(),
                 exec.getTriggerAt(),
                 exec.getStatus().name(),
                 exec.getSubjectCount() != null ? exec.getSubjectCount() : 0,

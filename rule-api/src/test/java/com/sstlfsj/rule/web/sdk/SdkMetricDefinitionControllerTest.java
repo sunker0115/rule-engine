@@ -41,7 +41,7 @@ class SdkMetricDefinitionControllerTest {
                         "risk.score", "SQL_AGGREGATE", "LONG", false, 60, Map.of("dataType", "LONG"))));
 
         mockMvc.perform(get("/sdk/v1/metric-definitions")
-                        .param("tenantId", "t1")
+                        .param("tenantId", "1")
                         .param("scenes", "fraud"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].metricCode").value("risk.score"))
@@ -56,10 +56,10 @@ class SdkMetricDefinitionControllerTest {
 
     @Test
     void getMetricDefinitions_emptyScenes_returnsArray() throws Exception {
-        when(metadataService.listMetricDefinitions(eq("t1"), any())).thenReturn(List.of());
+        when(metadataService.listMetricDefinitions(any(MetricListQuery.class))).thenReturn(List.of());
 
         mockMvc.perform(get("/sdk/v1/metric-definitions")
-                        .param("tenantId", "t1"))
+                        .param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray());
     }

@@ -11,7 +11,7 @@ package com.sstlfsj.rule.audit.api.dto;
  * @param size      每页条数
  */
 public record EvalSessionQuery(
-        String tenantId,
+        Long tenantId,
         String sceneCode,
         String status,
         String eventId,

@@ -32,7 +32,7 @@ public class MetricController {
      * @return metric 定义列表
      */
     @GetMapping
-    public ApiResponse<List<MetricListItemVO>> listMetrics(@RequestParam String tenantId) {
+    public ApiResponse<List<MetricListItemVO>> listMetrics(@RequestParam Long tenantId) {
         return ApiResponse.ok(metadataService.listMetricItems(tenantId));
     }
 
@@ -45,7 +45,7 @@ public class MetricController {
      */
     @GetMapping("/{metricCode}")
     public ApiResponse<MetricListItemVO> getMetric(@PathVariable String metricCode,
-                                                   @RequestParam String tenantId) {
+                                                   @RequestParam Long tenantId) {
         return ApiResponse.ok(metadataService.getMetricItem(tenantId, metricCode));
     }
 
@@ -60,11 +60,11 @@ public class MetricController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Long> create(@RequestParam String tenantId,
+    public ApiResponse<Long> create(@RequestParam Long tenantId,
                                     @RequestParam String metricCode,
                                     @RequestHeader("X-Actor-Id") String actorId,
                                     @RequestBody MetricWriteCommand cmd) {
-        return ApiResponse.ok(service.create(Long.parseLong(tenantId), metricCode, cmd, actorId));
+        return ApiResponse.ok(service.create(tenantId, metricCode, cmd, actorId));
     }
 
     /**
@@ -79,11 +79,11 @@ public class MetricController {
      */
     @PutMapping("/{metricCode}")
     public ApiResponse<Integer> update(@PathVariable String metricCode,
-                                       @RequestParam String tenantId,
+                                       @RequestParam Long tenantId,
                                        @RequestParam(defaultValue = "false") boolean breakingChange,
                                        @RequestHeader("X-Actor-Id") String actorId,
                                        @RequestBody MetricWriteCommand cmd) {
-        return ApiResponse.ok(service.update(Long.parseLong(tenantId), metricCode, cmd, breakingChange, actorId));
+        return ApiResponse.ok(service.update(tenantId, metricCode, cmd, breakingChange, actorId));
     }
 
     /**
@@ -97,8 +97,8 @@ public class MetricController {
     @GetMapping("/{metricCode}/versions/{version}/impact")
     public ApiResponse<ImpactResponse> impact(@PathVariable String metricCode,
                                               @PathVariable int version,
-                                              @RequestParam String tenantId) {
-        List<RuleRef> rules = service.findReferencingRules(Long.parseLong(tenantId), metricCode, version);
+                                              @RequestParam Long tenantId) {
+        List<RuleRef> rules = service.findReferencingRules(tenantId, metricCode, version);
         return ApiResponse.ok(new ImpactResponse(metricCode, version, rules, rules.size()));
     }
 
@@ -117,7 +117,7 @@ public class MetricController {
     @PutMapping("/{metricCode}/status")
     public ApiResponse<Map<String, String>> toggleStatus(
             @PathVariable String metricCode,
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestParam boolean enable) {
         metadataService.toggleMetricStatus(tenantId, metricCode, enable);
         return ApiResponse.ok(Map.of("status", enable ? "ACTIVE" : "DISABLED"));
@@ -133,9 +133,9 @@ public class MetricController {
      */
     @PostMapping("/{metricCode}:test")
     public ApiResponse<FetchTrace> test(@PathVariable String metricCode,
-                                        @RequestParam String tenantId,
+                                        @RequestParam Long tenantId,
                                         @RequestBody TestRequest req) {
-        return ApiResponse.ok(testService.test(Long.valueOf(tenantId), metricCode,
+        return ApiResponse.ok(testService.test(tenantId, metricCode,
                 req.sampleVars(), req.samplePayload(), req.sampleSubjectId()));
     }
 

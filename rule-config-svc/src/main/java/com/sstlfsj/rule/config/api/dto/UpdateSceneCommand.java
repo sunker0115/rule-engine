@@ -5,7 +5,7 @@ import java.util.Map;
 
 /** updateScene 的入参 DTO，后续参数>3 的方法统一以此模式收口。 */
 public record UpdateSceneCommand(
-        String tenantId,
+        Long tenantId,
         String sceneCode,
         String name,
         String description,

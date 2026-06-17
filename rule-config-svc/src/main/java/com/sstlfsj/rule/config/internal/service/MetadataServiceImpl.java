@@ -58,22 +58,22 @@ class MetadataServiceImpl implements MetadataService {
     }
 
     @Override
-    public void toggleMetricStatus(String tenantId, String metricCode, boolean enable) {
-        MetricDefinition m = metricDefinitionMapper.findAnyByCode(Long.valueOf(tenantId), metricCode);
+    public void toggleMetricStatus(Long tenantId, String metricCode, boolean enable) {
+        MetricDefinition m = metricDefinitionMapper.findAnyByCode(tenantId, metricCode);
         if (m == null) throw new IllegalArgumentException("Metric 不存在: " + metricCode);
         m.setStatus(enable ? MetricStatus.ACTIVE : MetricStatus.DISABLED);
         metricDefinitionMapper.updateById(m);
     }
 
     @Override
-    public MetadataResponse getSceneMetadata(String tenantId, String sceneCode) {
-        SceneDef scene = sceneMapper.findByCode(Long.valueOf(tenantId), sceneCode);
+    public MetadataResponse getSceneMetadata(Long tenantId, String sceneCode) {
+        SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
         if (scene == null) {
             throw new IllegalArgumentException("Scene 不存在: " + sceneCode);
         }
 
         // metric 在 tenant 级对所有 scene 可用（无 scene 级绑定白名单，配置闭环 B 轮决策二）
-        List<MetricDefinition> metrics = metricDefinitionMapper.findActiveByTenant(Long.valueOf(tenantId));
+        List<MetricDefinition> metrics = metricDefinitionMapper.findActiveByTenant(tenantId);
 
         List<MetricMeta> metricMetas = metrics.stream()
                 .map(m -> new MetricMeta(m.getMetricCode(), m.getName(),
@@ -94,7 +94,7 @@ class MetadataServiceImpl implements MetadataService {
 
     @Override
     public List<MetricDescriptor> listMetricDefinitions(MetricListQuery q) {
-        Long tid = Long.valueOf(q.tenantId());
+        Long tid = q.tenantId();
 
         // scenes 为空（FetchMode.ALL）：返回该租户全部 ACTIVE 定义（新规则只能绑 ACTIVE）
         if (q.scenes() == null || q.scenes().isEmpty()) {
@@ -123,8 +123,8 @@ class MetadataServiceImpl implements MetadataService {
     }
 
     @Override
-    public InputManifestResponse getInputManifest(String tenantId, String sceneCode, String eventType) {
-        Long tid = Long.valueOf(tenantId);
+    public InputManifestResponse getInputManifest(Long tenantId, String sceneCode, String eventType) {
+        Long tid = tenantId;
         SceneDef scene = sceneMapper.findByCode(tid, sceneCode);
         if (scene == null) {
             return new InputManifestResponse(List.of());
@@ -192,15 +192,15 @@ class MetadataServiceImpl implements MetadataService {
     }
 
     @Override
-    public java.util.List<MetricListItemVO> listMetricItems(String tenantId) {
-        return metricDefinitionMapper.findActiveByTenant(Long.valueOf(tenantId)).stream()
+    public java.util.List<MetricListItemVO> listMetricItems(Long tenantId) {
+        return metricDefinitionMapper.findActiveByTenant(tenantId).stream()
                 .map(this::toListItem)
                 .toList();
     }
 
     @Override
-    public MetricListItemVO getMetricItem(String tenantId, String metricCode) {
-        MetricDefinition m = metricDefinitionMapper.findAnyByCode(Long.valueOf(tenantId), metricCode);
+    public MetricListItemVO getMetricItem(Long tenantId, String metricCode) {
+        MetricDefinition m = metricDefinitionMapper.findAnyByCode(tenantId, metricCode);
         if (m == null) throw new IllegalArgumentException("Metric 不存在: " + metricCode);
         return toListItem(m);
     }
@@ -216,7 +216,7 @@ class MetadataServiceImpl implements MetadataService {
                 m.getParams(),
                 m.getName(),
                 m.getStatus() != null ? m.getStatus().name() : null,
-                String.valueOf(m.getTenantId()),
+                m.getTenantId(),
                 m.getCreatedAt(),
                 m.getUpdatedAt());
     }

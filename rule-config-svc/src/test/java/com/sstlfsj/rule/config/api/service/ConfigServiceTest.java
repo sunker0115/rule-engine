@@ -22,17 +22,17 @@ class ConfigServiceTest {
 
     private final ConfigService stub = new ConfigService() {
         @Override
-        public RuleVersionSnapshot publish(String tenantId, Long ruleDefinitionId, String actorId) {
+        public RuleVersionSnapshot publish(Long tenantId, Long ruleDefinitionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public void disable(String tenantId, Long ruleDefinitionId, String actorId) {
+        public void disable(Long tenantId, Long ruleDefinitionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public void enable(String tenantId, Long ruleDefinitionId, String actorId) {
+        public void enable(Long tenantId, Long ruleDefinitionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -42,39 +42,39 @@ class ConfigServiceTest {
         }
 
         @Override
-        public DraftCreatedResult createDraft(String tenantId, String sceneCode,
+        public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
                 String code, RuleContent content, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public RuleDetailVO getRuleDetail(String tenantId, Long ruleId) {
+        public RuleDetailVO getRuleDetail(Long tenantId, Long ruleId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public RuleVersionContentVO getRuleVersion(String tenantId, Long ruleId, Long versionId) {
+        public RuleVersionContentVO getRuleVersion(Long tenantId, Long ruleId, Long versionId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public DraftCreatedResult editDraft(String tenantId, Long ruleId, RuleContent content, String actorId) {
+        public DraftCreatedResult editDraft(Long tenantId, Long ruleId, RuleContent content, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public DraftCreatedResult newVersion(String tenantId, Long ruleId, RuleContent content,
+        public DraftCreatedResult newVersion(Long tenantId, Long ruleId, RuleContent content,
                 Long fromVersionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public void deleteRule(String tenantId, Long ruleId, String actorId) {
+        public void deleteRule(Long tenantId, Long ruleId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public void deleteDraftVersion(String tenantId, Long ruleId, Long versionId, String actorId) {
+        public void deleteDraftVersion(Long tenantId, Long ruleId, Long versionId, String actorId) {
             throw new UnsupportedOperationException("stub");
         }
 
@@ -89,25 +89,25 @@ class ConfigServiceTest {
     @Test
     void publish_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.publish("t1", 1L, "actor"));
+                () -> stub.publish(1L, 1L, "actor"));
     }
 
     @Test
     void disable_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.disable("t1", 1L, "actor"));
+                () -> stub.disable(1L, 1L, "actor"));
     }
 
     @Test
     void enable_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.enable("t1", 1L, "actor"));
+                () -> stub.enable(1L, 1L, "actor"));
     }
 
     @Test
     void listRules_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.listRules(new RuleListQuery("t1", null, null, null, null, 1, 20)));
+                () -> stub.listRules(new RuleListQuery(1L, null, null, null, null, 1, 20)));
     }
 
     @Test
@@ -119,39 +119,39 @@ class ConfigServiceTest {
     @Test
     void createDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.createDraft("t1", "SCENE_A", "RULE_001",
+                () -> stub.createDraft(1L, "SCENE_A", "RULE_001",
                         new RuleContent("规则名", null, null, null, null, null, null), "actor"));
     }
 
     @Test
     void getRuleDetail_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.getRuleDetail("t1", 1L));
+                () -> stub.getRuleDetail(1L, 1L));
     }
 
     @Test
     void editDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.editDraft("t1", 1L,
+                () -> stub.editDraft(1L, 1L,
                         new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null), "actor"));
     }
 
     @Test
     void newVersion_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.newVersion("t1", 1L,
+                () -> stub.newVersion(1L, 1L,
                         new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null), null, "actor"));
     }
 
     @Test
     void deleteRule_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.deleteRule("t1", 1L, "actor"));
+                () -> stub.deleteRule(1L, 1L, "actor"));
     }
 
     @Test
     void deleteDraftVersion_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
-                () -> stub.deleteDraftVersion("t1", 1L, 100L, "actor"));
+                () -> stub.deleteDraftVersion(1L, 1L, 100L, "actor"));
     }
 }

@@ -26,7 +26,7 @@ public interface ConfigService {
      * @param actorId          触发发布的操作人 ID
      * @return 新激活的规则版本快照
      */
-    RuleVersionSnapshot publish(String tenantId, Long ruleDefinitionId, String actorId);
+    RuleVersionSnapshot publish(Long tenantId, Long ruleDefinitionId, String actorId);
 
     /**
      * 禁用规则定义：仅 PUBLISHED → DISABLED，其它态拒绝。倒排索引热摘除。
@@ -35,7 +35,7 @@ public interface ConfigService {
      * @param ruleDefinitionId 待禁用的规则定义 ID
      * @param actorId          触发禁用的操作人 ID
      */
-    void disable(String tenantId, Long ruleDefinitionId, String actorId);
+    void disable(Long tenantId, Long ruleDefinitionId, String actorId);
 
     /**
      * 重新启用规则定义：仅 DISABLED → PUBLISHED，其它态拒绝。指向原 current_version，不增版本。
@@ -44,7 +44,7 @@ public interface ConfigService {
      * @param ruleDefinitionId 待启用的规则定义 ID
      * @param actorId          触发启用的操作人 ID
      */
-    void enable(String tenantId, Long ruleDefinitionId, String actorId);
+    void enable(Long tenantId, Long ruleDefinitionId, String actorId);
 
     /**
      * 查询规则列表，支持按 sceneCode / status / 时间范围 过滤，结果分页返回。
@@ -62,7 +62,7 @@ public interface ConfigService {
      * @param ruleId   规则定义 ID
      * @return 规则详情
      */
-    RuleDetailVO getRuleDetail(String tenantId, Long ruleId);
+    RuleDetailVO getRuleDetail(Long tenantId, Long ruleId);
 
     /**
      * 取某规则的指定版本完整内容（历史版本查看 / diff）。
@@ -73,7 +73,7 @@ public interface ConfigService {
      * @param versionId 规则版本 ID
      * @return 该版本完整内容
      */
-    RuleVersionContentVO getRuleVersion(String tenantId, Long ruleId, Long versionId);
+    RuleVersionContentVO getRuleVersion(Long tenantId, Long ruleId, Long versionId);
 
     /**
      * 创建规则草稿：新建 rule_definition（DRAFT）+ rule_version（DRAFT）。
@@ -85,7 +85,7 @@ public interface ConfigService {
      * @param actorId   操作人 ID
      * @return 新建草稿的 ID 信息
      */
-    DraftCreatedResult createDraft(String tenantId, String sceneCode,
+    DraftCreatedResult createDraft(Long tenantId, String sceneCode,
             String code, RuleContent content, String actorId);
 
     /**
@@ -97,7 +97,7 @@ public interface ConfigService {
      * @param actorId  操作人 ID
      * @return 被更新草稿的 ID 信息（version 不变）
      */
-    DraftCreatedResult editDraft(String tenantId, Long ruleId, RuleContent content, String actorId);
+    DraftCreatedResult editDraft(Long tenantId, Long ruleId, RuleContent content, String actorId);
 
     /**
      * 给已发布规则出新版本草稿（v_max+1, DRAFT）：要求当前无未发布 DRAFT。
@@ -110,7 +110,7 @@ public interface ConfigService {
      * @param actorId       操作人 ID
      * @return 新建草稿的 ID 信息（version = v_max+1）
      */
-    DraftCreatedResult newVersion(String tenantId, Long ruleId, RuleContent content,
+    DraftCreatedResult newVersion(Long tenantId, Long ruleId, RuleContent content,
             Long fromVersionId, String actorId);
 
     /**
@@ -120,7 +120,7 @@ public interface ConfigService {
      * @param ruleId   规则定义 ID
      * @param actorId  操作人 ID
      */
-    void deleteRule(String tenantId, Long ruleId, String actorId);
+    void deleteRule(Long tenantId, Long ruleId, String actorId);
 
     /**
      * 删单个待发布草稿版本：仅当该版本是 DRAFT（线上 ACTIVE/SUPERSEDED 不动）。
@@ -130,7 +130,7 @@ public interface ConfigService {
      * @param versionId 待删版本 ID（须归属该规则）
      * @param actorId   操作人 ID
      */
-    void deleteDraftVersion(String tenantId, Long ruleId, Long versionId, String actorId);
+    void deleteDraftVersion(Long tenantId, Long ruleId, Long versionId, String actorId);
 
     /**
      * 查询所有启用状态的租户，供前端下拉选择器使用。

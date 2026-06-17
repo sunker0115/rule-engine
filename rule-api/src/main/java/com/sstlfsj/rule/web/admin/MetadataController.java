@@ -19,7 +19,7 @@ public class MetadataController {
     @GetMapping("/{sceneCode}/metadata")
     public ApiResponse<MetadataService.MetadataResponse> getMetadata(
             @PathVariable String sceneCode,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         return ApiResponse.ok(metadataService.getSceneMetadata(tenantId, sceneCode));
     }
 }

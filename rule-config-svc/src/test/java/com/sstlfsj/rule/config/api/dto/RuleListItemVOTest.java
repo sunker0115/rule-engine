@@ -9,7 +9,7 @@ class RuleListItemVOTest {
     @Test
     void fields_roundTrip() {
         LocalDateTime publishedAt = LocalDateTime.of(2026, 6, 1, 10, 0);
-        RuleListItemVO vo = new RuleListItemVO("1", 10L, "rule.a", "规则A", "AST_BOOLEAN", "risk.transfer", "PUBLISHED", 42L, publishedAt, null);
+        RuleListItemVO vo = new RuleListItemVO(1L, 10L, "rule.a", "规则A", "AST_BOOLEAN", "risk.transfer", "PUBLISHED", 42L, publishedAt, null);
 
         assertThat(vo.ruleDefinitionId()).isEqualTo(10L);
         assertThat(vo.code()).isEqualTo("rule.a");
@@ -23,7 +23,7 @@ class RuleListItemVOTest {
 
     @Test
     void nullableFields_allowNull() {
-        RuleListItemVO vo = new RuleListItemVO("1", 1L, "rule.b", "规则B", null, null, "DRAFT", null, null, null);
+        RuleListItemVO vo = new RuleListItemVO(1L, 1L, "rule.b", "规则B", null, null, "DRAFT", null, null, null);
 
         assertThat(vo.kind()).isNull();
         assertThat(vo.sceneCode()).isNull();

@@ -18,14 +18,14 @@ class SceneDetailDtoTest {
         Map<String, Object> params = Map.of("timezone", "Asia/Shanghai");
 
         SceneDetailDto dto = new SceneDetailDto(
-                1L, "t1", "PAYMENT", "支付场景",
+                1L, 100L, "PAYMENT", "支付场景",
                 "描述", "PUSH", "USER",
                 List.of("payment.initiated"),
                 schema, params, "ACTIVE"
         );
 
         assertThat(dto.id()).isEqualTo(1L);
-        assertThat(dto.tenantId()).isEqualTo("t1");
+        assertThat(dto.tenantId()).isEqualTo(100L);
         assertThat(dto.sceneCode()).isEqualTo("PAYMENT");
         assertThat(dto.name()).isEqualTo("支付场景");
         assertThat(dto.description()).isEqualTo("描述");

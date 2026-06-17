@@ -11,7 +11,7 @@ public interface AuditService {
     /** 审计日志条目，记录资源变更的操作历史。 */
     record AuditLogEntry(
             Long id,
-            String tenantId,
+            Long tenantId,
             String resourceType,
             Long resourceId,
             String action,
@@ -37,7 +37,7 @@ public interface AuditService {
     /** 评估会话条目，记录一次规则评估的基本信息。 */
     record EvalSessionEntry(
             String sessionId,
-            String tenantId,
+            Long tenantId,
             String sceneCode,
             String eventId,
             String status,
@@ -93,7 +93,7 @@ public interface AuditService {
      * @param sessionId 评估会话 ID
      * @return 节点 trace 列表（无分页，单次 session 通常 < 200 行）
      */
-    List<TraceNodeEntry> queryTrace(String tenantId, Long sessionId);
+    List<TraceNodeEntry> queryTrace(Long tenantId, Long sessionId);
 
     /** 嵌套树节点，与 §3.3 dry-run nodeTrace 格式一致。 */
     record TraceTreeNode(
@@ -118,7 +118,7 @@ public interface AuditService {
      * @param sessionId 评估会话 ID
      * @return 根节点列表（正常 AST 只有一个根，Pre-Gate 阻断时可能为空）
      */
-    List<TraceTreeNode> queryTraceTree(String tenantId, Long sessionId);
+    List<TraceTreeNode> queryTraceTree(Long tenantId, Long sessionId);
 
     /** 按规则定义查询历史评估会话的条目，含关联的规则版本号。 */
     record RuleSessionEntry(
@@ -151,7 +151,7 @@ public interface AuditService {
      * @param sessionId 评估会话 ID
      * @return 场景编码；会话不存在返回 null
      */
-    String getSessionSceneCode(String tenantId, Long sessionId);
+    String getSessionSceneCode(Long tenantId, Long sessionId);
 
     /**
      * 查询单次评估会话详情。
@@ -160,5 +160,5 @@ public interface AuditService {
      * @param sessionId 评估会话 ID
      * @return 会话详情；不存在返回 null
      */
-    EvalSessionEntry getSession(String tenantId, Long sessionId);
+    EvalSessionEntry getSession(Long tenantId, Long sessionId);
 }

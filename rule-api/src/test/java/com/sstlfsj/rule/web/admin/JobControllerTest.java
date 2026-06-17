@@ -34,18 +34,18 @@ class JobControllerTest {
     }
 
     private JobDefinitionDto jobDto() {
-        return new JobDefinitionDto(5L, "1", "fraud", "j1", "Job1", "0 0 0 * * *",
+        return new JobDefinitionDto(5L, 1L, "fraud", "j1", "Job1", "0 0 0 * * *",
                 new com.sstlfsj.rule.job.api.BeanMethodQuery("demo#subjects"), "login", "ACTIVE");
     }
 
     private JobExecutionVO execVO() {
-        return new JobExecutionVO(9L, 5L, "1", LocalDateTime.now(), "SUCCESS",
+        return new JobExecutionVO(9L, 5L, 1L, LocalDateTime.now(), "SUCCESS",
                 2, 2, 0, null, LocalDateTime.now());
     }
 
     @Test
     void listJobsReturns200() throws Exception {
-        when(jobService.listJobs("1")).thenReturn(List.of(jobDto()));
+        when(jobService.listJobs(1L)).thenReturn(List.of(jobDto()));
 
         mockMvc.perform(get("/admin/v1/jobs").param("tenantId", "1"))
                 .andExpect(status().isOk())
@@ -53,12 +53,12 @@ class JobControllerTest {
                 .andExpect(jsonPath("$.data[0].code").value("j1"))
                 .andExpect(jsonPath("$.data[0].status").value("ACTIVE"));
 
-        verify(jobService).listJobs("1");
+        verify(jobService).listJobs(1L);
     }
 
     @Test
     void getJobReturns200() throws Exception {
-        when(jobService.getJob("1", 5L)).thenReturn(jobDto());
+        when(jobService.getJob(1L, 5L)).thenReturn(jobDto());
 
         mockMvc.perform(get("/admin/v1/jobs/5").param("tenantId", "1"))
                 .andExpect(status().isOk())
@@ -69,28 +69,28 @@ class JobControllerTest {
 
     @Test
     void enableJobReturns200() throws Exception {
-        doNothing().when(jobService).enableJob("1", 5L);
+        doNothing().when(jobService).enableJob(1L, 5L);
 
         mockMvc.perform(post("/admin/v1/jobs/5/enable").param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(jobService).enableJob("1", 5L);
+        verify(jobService).enableJob(1L, 5L);
     }
 
     @Test
     void disableJobReturns200() throws Exception {
-        doNothing().when(jobService).disableJob("1", 5L);
+        doNothing().when(jobService).disableJob(1L, 5L);
 
         mockMvc.perform(post("/admin/v1/jobs/5/disable").param("tenantId", "1"))
                 .andExpect(status().isOk());
 
-        verify(jobService).disableJob("1", 5L);
+        verify(jobService).disableJob(1L, 5L);
     }
 
     @Test
     void triggerJobReturns200WithExecution() throws Exception {
-        when(jobService.triggerOnce("1", 5L)).thenReturn(execVO());
+        when(jobService.triggerOnce(1L, 5L)).thenReturn(execVO());
 
         mockMvc.perform(post("/admin/v1/jobs/5/trigger").param("tenantId", "1"))
                 .andExpect(status().isOk())
@@ -100,12 +100,12 @@ class JobControllerTest {
 
     @Test
     void recentExecutionsReturns200() throws Exception {
-        when(jobService.recentExecutions("1", 5L, 20)).thenReturn(List.of(execVO()));
+        when(jobService.recentExecutions(1L, 5L, 20)).thenReturn(List.of(execVO()));
 
         mockMvc.perform(get("/admin/v1/jobs/5/executions").param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].status").value("SUCCESS"));
 
-        verify(jobService).recentExecutions("1", 5L, 20);
+        verify(jobService).recentExecutions(1L, 5L, 20);
     }
 }

@@ -152,7 +152,7 @@ class EvalControllerTest {
     @Test
     void dryRun_masksSensitivePayloadLeaf() throws Exception {
         // 敏感 payload 字段 phone 的叶子 actualValue 在 dry-run 出口被脱敏为 "***"，非敏感 amount 保留原值
-        when(sceneService.getSensitiveRefs("9001", "PAYMENT"))
+        when(sceneService.getSensitiveRefs(9001L, "PAYMENT"))
                 .thenReturn(new SceneService.SensitiveRefs(java.util.Set.of("phone"), java.util.Set.of()));
         NodeTrace sensitiveLeaf = new NodeTrace(
                 "ConditionNode", "EQ", "phone", true, "13800001111", "PAYLOAD",

@@ -20,13 +20,13 @@ class AuditServiceTest {
     void auditLogEntry_字段赋值与读取正确() {
         Instant now = Instant.now();
         AuditLogEntry entry = new AuditLogEntry(
-                1L, "t1", "SCENE", 42L,
+                1L, 1L, "SCENE", 42L,
                 "CREATE", "u1", "USER",
                 null, "{\"name\":\"s1\"}", now
         );
 
         assertThat(entry.id()).isEqualTo(1L);
-        assertThat(entry.tenantId()).isEqualTo("t1");
+        assertThat(entry.tenantId()).isEqualTo(1L);
         assertThat(entry.resourceType()).isEqualTo("SCENE");
         assertThat(entry.resourceId()).isEqualTo(42L);
         assertThat(entry.action()).isEqualTo("CREATE");
@@ -41,12 +41,12 @@ class AuditServiceTest {
     void evalSessionEntry_字段赋值与读取正确() {
         Instant now = Instant.now();
         EvalSessionEntry entry = new EvalSessionEntry(
-                "sess-001", "t1", "scene-A", "evt-001", "COMPLETED", "HIT", 42, now, now,
+                "sess-001", 1L, "scene-A", "evt-001", "COMPLETED", "HIT", 42, now, now,
                 "ORDER", "subj-1", "API", "STANDARD", null, null, 5, 3, 85.5, "HIGH", now, "{\"ast\":{}}"
         );
 
         assertThat(entry.sessionId()).isEqualTo("sess-001");
-        assertThat(entry.tenantId()).isEqualTo("t1");
+        assertThat(entry.tenantId()).isEqualTo(1L);
         assertThat(entry.sceneCode()).isEqualTo("scene-A");
         assertThat(entry.eventId()).isEqualTo("evt-001");
         assertThat(entry.status()).isEqualTo("COMPLETED");
@@ -82,7 +82,7 @@ class AuditServiceTest {
     @Test
     void auditLogEntry_resourceId允许为null() {
         AuditLogEntry entry = new AuditLogEntry(
-                2L, "t1", "RULE_DEFINITION", null,
+                2L, 1L, "RULE_DEFINITION", null,
                 "DELETE", "u2", "SYSTEM",
                 "{}", null, Instant.now()
         );

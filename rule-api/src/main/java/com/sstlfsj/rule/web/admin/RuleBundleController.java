@@ -43,7 +43,7 @@ public class RuleBundleController {
      * @return Bundle JSON 文件（Content-Disposition: attachment）
      */
     @GetMapping("/export")
-    public ResponseEntity<byte[]> export(@RequestParam String tenantId,
+    public ResponseEntity<byte[]> export(@RequestParam Long tenantId,
                                          @RequestParam(required = false) List<Long> ruleIds,
                                          @RequestParam(required = false) Long sceneId) {
         RuleBundle bundle = ruleBundleService.export(tenantId, ruleIds, sceneId);
@@ -64,7 +64,7 @@ public class RuleBundleController {
      * @return 导入结果汇总
      */
     @PostMapping("/import")
-    public ApiResponse<RuleImportResult> importBundle(@RequestParam String tenantId,
+    public ApiResponse<RuleImportResult> importBundle(@RequestParam Long tenantId,
                                                       @RequestHeader("X-Actor-Id") String actorId,
                                                       @RequestParam("file") MultipartFile file) {
         RuleBundle bundle;

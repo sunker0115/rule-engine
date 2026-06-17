@@ -33,9 +33,9 @@ public class ReplayServiceImpl implements ReplayService {
     private final ObjectMapper objectMapper;
 
     @Override
-    public EvalResult replay(String tenantId, Long sessionId) {
+    public EvalResult replay(Long tenantId, Long sessionId) {
         EvaluationSession s = sessionMapper.selectById(sessionId);
-        if (s == null || !String.valueOf(s.getTenantId()).equals(tenantId)) {
+        if (s == null || !s.getTenantId().equals(tenantId)) {
             throw new IllegalArgumentException("REPLAY_SESSION_NOT_FOUND: " + sessionId);
         }
         if (s.getPayload() == null || s.getCandidateRuleVersionIds() == null || s.getContextSnapshot() == null) {
