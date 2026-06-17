@@ -62,13 +62,18 @@ class ConfigServiceImplTest {
     }
 
     @Test
-    void disable_updatesStatusAndPublishesAuditEvent() {
+    void disable_updatesStatus_publishesAudit_andIndexRefreshEvent() {
         RuleDefinition rule = new RuleDefinition();
         rule.setId(10L);
         rule.setTenantId(1L);
+        rule.setSceneId(5L);
+        rule.setCurrentVersion(100L);
         rule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        com.sstlfsj.rule.config.internal.domain.SceneDef scene = new com.sstlfsj.rule.config.internal.domain.SceneDef();
+        scene.setId(5L); scene.setCode("PAYMENT");
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
 
         configService.disable(1L, 10L, "actor1");
 
@@ -76,29 +81,39 @@ class ConfigServiceImplTest {
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
         assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.DISABLED);
 
-        ArgumentCaptor<OperationAuditedEvent> evCaptor =
-                ArgumentCaptor.forClass(OperationAuditedEvent.class);
-        verify(eventPublisher).publishEvent(evCaptor.capture());
-        OperationAuditedEvent ev = evCaptor.getValue();
-        assertThat(ev.action()).isEqualTo("DISABLE");
-        assertThat(ev.targetType()).isEqualTo("rule_definition");
-        assertThat(ev.targetId()).isEqualTo("10");
-        assertThat(ev.actorType()).isEqualTo("USER");
-        // before 记禁用前状态(PUBLISHED)，after 记 DISABLED(审计完整性)
-        var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.beforeSnapshot();
-        var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.afterSnapshot();
+        // 发两个事件：审计(DISABLE) + RulePublishedEvent(触发 eval 索引重建，配合 loader 的 rd.status 过滤摘除该规则)
+        ArgumentCaptor<Object> evCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, org.mockito.Mockito.times(2)).publishEvent(evCaptor.capture());
+        OperationAuditedEvent audit = evCaptor.getAllValues().stream()
+                .filter(OperationAuditedEvent.class::isInstance).map(OperationAuditedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(audit.action()).isEqualTo("DISABLE");
+        assertThat(audit.targetId()).isEqualTo("10");
+        var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) audit.beforeSnapshot();
+        var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) audit.afterSnapshot();
         assertThat(before.status()).isEqualTo("PUBLISHED");
         assertThat(after.status()).isEqualTo("DISABLED");
+        com.sstlfsj.rule.config.api.event.RulePublishedEvent idx = evCaptor.getAllValues().stream()
+                .filter(com.sstlfsj.rule.config.api.event.RulePublishedEvent.class::isInstance)
+                .map(com.sstlfsj.rule.config.api.event.RulePublishedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(idx.sceneCode()).isEqualTo("PAYMENT");
+        assertThat(idx.tenantId()).isEqualTo("1");
     }
 
     @Test
-    void enable_disabledRule_togglesToPublishedWithEnableAudit() {
+    void enable_disabledRule_togglesToPublished_publishesAudit_andIndexRefreshEvent() {
         RuleDefinition rule = new RuleDefinition();
         rule.setId(10L);
         rule.setTenantId(1L);
+        rule.setSceneId(5L);
+        rule.setCurrentVersion(100L);
         rule.setStatus(RuleDefinitionStatus.DISABLED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
+        com.sstlfsj.rule.config.internal.domain.SceneDef scene = new com.sstlfsj.rule.config.internal.domain.SceneDef();
+        scene.setId(5L); scene.setCode("PAYMENT");
+        when(sceneMapper.selectById(5L)).thenReturn(scene);
 
         configService.enable(1L, 10L, "actor1");
 
@@ -106,15 +121,19 @@ class ConfigServiceImplTest {
         verify(ruleDefinitionMapper).updateById(rdCaptor.capture());
         assertThat(rdCaptor.getValue().getStatus()).isEqualTo(RuleDefinitionStatus.PUBLISHED);
 
-        ArgumentCaptor<OperationAuditedEvent> evCaptor =
-                ArgumentCaptor.forClass(OperationAuditedEvent.class);
-        verify(eventPublisher).publishEvent(evCaptor.capture());
-        OperationAuditedEvent ev = evCaptor.getValue();
-        assertThat(ev.action()).isEqualTo("ENABLE");
-        var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.beforeSnapshot();
-        var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) ev.afterSnapshot();
+        ArgumentCaptor<Object> evCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, org.mockito.Mockito.times(2)).publishEvent(evCaptor.capture());
+        OperationAuditedEvent audit = evCaptor.getAllValues().stream()
+                .filter(OperationAuditedEvent.class::isInstance).map(OperationAuditedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(audit.action()).isEqualTo("ENABLE");
+        var before = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) audit.beforeSnapshot();
+        var after = (com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot) audit.afterSnapshot();
         assertThat(before.status()).isEqualTo("DISABLED");
         assertThat(after.status()).isEqualTo("PUBLISHED");
+        assertThat(evCaptor.getAllValues().stream()
+                .anyMatch(com.sstlfsj.rule.config.api.event.RulePublishedEvent.class::isInstance))
+                .as("enable 也应发 RulePublishedEvent 触发索引把规则装回").isTrue();
     }
 
     @Test

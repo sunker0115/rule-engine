@@ -9,6 +9,7 @@ import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
+import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
@@ -101,6 +102,14 @@ class ConfigServiceImpl implements ConfigService {
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, "USER", action, "rule_definition",
                 ruleDefinitionId.toString(), before, after, LocalDateTime.now()));
+
+        // 状态变更须刷新 eval 索引:disable→loader 按 rd.status='PUBLISHED' 过滤摘除、enable→装回。
+        // 复用 RulePublishedEvent（提交后异步，Modulith）触发该 scene 索引重建 + 编译缓存清除。
+        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        if (scene != null) {
+            eventPublisher.publishEvent(new RulePublishedEvent(
+                    String.valueOf(tenantId), scene.getCode(), rule.getCurrentVersion()));
+        }
     }
 
     @Override

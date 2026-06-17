@@ -22,8 +22,14 @@
 - **根因**：disable/enable 只 `UPDATE rd.status` + 发 `OperationAuditedEvent`（审计），**不发索引失效事件**；索引 loader 只过滤 `rv.status='ACTIVE'`，不看 `rd.status`。DISABLED 规则的 rv 仍 ACTIVE 且索引不刷新。
 - **失败场景**：disable 一条线上规则 → 审计 DISABLED，但 eval-svc 仍评估它、仍出决策，直到该 scene 偶发其它 publish 才刷索引。已禁用规则实质无法运行时下线。
 - **改法**：① loader join `rule_definition` 加 `rd.status='PUBLISHED'` 过滤；② disable/enable 发索引失效事件（复用 `SceneChangedEvent` 或新增 `RuleStatusChangedEvent`）触发重建。
-- **修前必须确认**：`MetricWriteServiceImpl` 有注释称"故意不按 rd.status 过滤"——先 grep 是否有监听 rule 状态变更的索引摘除 listener，确认是真 gap 还是有我们没看到的机制。**本条最该优先确认。**
-- **状态**：待沟通（先确认设计意图）
+- **已确认为真 gap**：无任何监听 rule 状态变更的索引摘除 listener；`MetricWriteServiceImpl` 那条注释只是说明"eval 与影响面判断口径一致地都漏了 rd.status"，非保护性设计。
+- **实际落地**：
+  - ① `RuleVersionReadMapper.loadAllActive/loadActiveByScene` 两处 SQL 加 `AND rd.status='PUBLISHED'`——DISABLED 规则不进倒排索引。
+  - ② `ConfigServiceImpl.transitionStatus`（disable/enable）发 `RulePublishedEvent` 触发该 scene 索引重建（复用现有 listener，自动覆盖索引重载 + 编译缓存清除）。
+  - ③ 端到端暴露：`onRulePublished` 逐桶 `update` 在空结果时不清旧桶（disable 掉 scene 唯一规则后残留）→ 新增 `SceneRuleIndex.replaceScene`（先写新桶、再删该 scene 已不存在的旧桶，空结果也摘除），`RuleIndexEventListener`/`SceneIndexEventListener` 改用它——**顺带根治备注项 finder #8 的 torn-index**。
+  - `MetricWriteServiceImpl.findActiveByRuleDefIds`（影响面判断）保留不过滤 rd.status（保守多算 DISABLED），注释已更新说明。
+- **验证**：全量 clean test 绿；端到端 disable→ruleHit=False、enable→恢复命中。
+- **状态**：已修
 
 ---
 

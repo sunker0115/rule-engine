@@ -33,6 +33,7 @@ public interface RuleVersionReadMapper {
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
             WHERE rv.status = 'ACTIVE'
+              AND rd.status = 'PUBLISHED'
             """)
     List<RuleVersionRow> loadAllActive();
 
@@ -58,6 +59,7 @@ public interface RuleVersionReadMapper {
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
             INNER JOIN scene s ON rd.scene_id = s.id
             WHERE rv.status = 'ACTIVE'
+              AND rd.status = 'PUBLISHED'
               AND rd.tenant_id = #{tenantId}
               AND s.code = #{sceneCode}
             """)

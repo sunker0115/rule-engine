@@ -123,6 +123,24 @@ class RuleVersionReadMapperTest {
     }
 
     @Test
+    void loadAllActive_filtersByRuleDefinitionPublishedStatus() throws Exception {
+        // 索引只装 rule_definition.status=PUBLISHED 的 ACTIVE 版本，否则 DISABLED 规则仍进索引继续出决策
+        Method method = RuleVersionReadMapper.class.getMethod("loadAllActive");
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.status = 'PUBLISHED'"),
+                "loadAllActive 应过滤 rd.status='PUBLISHED'，使 DISABLED 规则不进倒排索引");
+    }
+
+    @Test
+    void loadActiveByScene_filtersByRuleDefinitionPublishedStatus() throws Exception {
+        Method method = RuleVersionReadMapper.class.getMethod(
+                "loadActiveByScene", Long.class, String.class);
+        String sql = method.getAnnotation(Select.class).value()[0];
+        assertTrue(sql.contains("rd.status = 'PUBLISHED'"),
+                "loadActiveByScene 应过滤 rd.status='PUBLISHED'，热更重建时摘除 DISABLED 规则");
+    }
+
+    @Test
     void loadById_returnsRuleVersionRow() throws Exception {
         Method method = RuleVersionReadMapper.class.getMethod("loadById", Long.class);
         assertEquals(RuleVersionRow.class, method.getReturnType());

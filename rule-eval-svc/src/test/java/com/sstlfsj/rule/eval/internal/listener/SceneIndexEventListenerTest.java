@@ -44,7 +44,8 @@ class SceneIndexEventListenerTest {
         listener.onSceneChanged(event);
 
         verify(loader).loadBySceneWithStrategy("1", "fraud_check", index);
-        verifyNoMoreInteractions(index);
+        // 空结果也调 replaceScene（摘除残留旧桶）
+        verify(index).replaceScene("1", "fraud_check", Map.of());
     }
 
     /** 场景启用且 loader 返回快照时，每个 eventType 桶都写入索引。 */
@@ -58,6 +59,6 @@ class SceneIndexEventListenerTest {
 
         listener.onSceneChanged(event);
 
-        verify(index).update("1", "fraud_check", "*", List.of(snap));
+        verify(index).replaceScene("1", "fraud_check", Map.of("*", List.of(snap)));
     }
 }
