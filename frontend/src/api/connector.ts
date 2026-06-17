@@ -20,7 +20,7 @@ export async function listConnectors(params: {
   const res = await apiClient.get<ApiResponse<PageResponse<ConnectorListItem>>>(ENDPOINTS.CONNECTORS, {
     params,
   });
-  return res.data;
+  return res.data.data;
 }
 
 /** 新建连接器（connectorCode 走 query，X-Actor-Id 由请求拦截器注入） */
@@ -39,7 +39,7 @@ export async function getConnector(connectorCode: string, tenantId: number) {
     ENDPOINTS.CONNECTOR_DETAIL(connectorCode),
     { params: { tenantId } },
   );
-  return res.data;
+  return res.data.data;
 }
 
 /** 禁用连接器（仅 disable，无 enable；X-Actor-Id 由请求拦截器注入） */
@@ -54,5 +54,6 @@ export async function testConnector(connectorCode: string, tenantId: number, sam
     sample,
     { params: { tenantId } },
   );
-  return res.data;
+  return res.data.data;
 }
+

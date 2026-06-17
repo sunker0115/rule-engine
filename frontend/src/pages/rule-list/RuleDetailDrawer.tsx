@@ -51,7 +51,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
     if (open && ruleDefinitionId && currentId) {
       setLoading(true);
       getRule(currentId, ruleDefinitionId)
-        .then((res) => setDetail(res.data ?? null))
+        .then((res) => setDetail(res ?? null))
         .finally(() => setLoading(false));
     }
     return () => setDetail(null);

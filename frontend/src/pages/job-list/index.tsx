@@ -22,7 +22,7 @@ export default function JobList() {
     setLoading(true);
     try {
       const data = await listJobs(currentId);
-      setJobs(data.data ?? []);
+      setJobs(data ?? []);
     } finally {
       setLoading(false);
     }

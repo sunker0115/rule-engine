@@ -6,5 +6,5 @@ export async function getInputManifest(tenantCode: string, sceneCode: string, ev
   const params: Record<string, string> = { tenantCode };
   if (eventType) params.eventType = eventType;
   const res = await apiClient.get<ApiResponse<InputManifest>>(ENDPOINTS.INPUT_MANIFEST(sceneCode), { params });
-  return res.data;
+  return res.data.data;
 }

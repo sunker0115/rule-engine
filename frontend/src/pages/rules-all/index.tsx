@@ -25,7 +25,7 @@ function defaultTrueFor(lang?: string): string {
 async function fetchDefaultMetric(tenantId: number, sceneCode: string): Promise<string> {
   try {
     const res = await getSceneMetadata(tenantId, sceneCode);
-    return res.data?.availableMetrics?.[0]?.metricCode ?? '';
+    return res?.availableMetrics?.[0]?.metricCode ?? '';
   } catch {
     return '';
   }
@@ -109,19 +109,14 @@ export default function RulesAll() {
           setCreateOpen(true);
           // 拉取引擎语言列表（需任一 sceneCode，取第一个）
           try {
-            const sRes = await listScenes(tenantId);
-            const scenes = sRes.data ?? [];
+            const scenes = await listScenes(tenantId);
             if (scenes.length > 0) {
               const meta = await getSceneMetadata(tenantId, scenes[0].sceneCode);
-              const langs = meta.data?.expressionLangs ?? ['CEL'];
+              const langs = meta?.expressionLangs ?? ['CEL'];
               setLangOptions(langs.map((l: string) => ({ value: l, label: l })));
             }
+            setSceneOpts(scenes.map((s) => ({ value: s.sceneCode, label: `${s.name} (${s.sceneCode})` })));
           } catch { /* keep default */ }
-          try {
-            const apiRes = await listScenes(tenantId);
-            const list = apiRes.data ?? [];
-            setSceneOpts(list.map((s) => ({ value: s.sceneCode, label: `${s.name} (${s.sceneCode})` })));
-          } catch { setSceneOpts([]); }
         }}>
           {t('action.create')}
         </Button>

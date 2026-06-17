@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Table, Select, Input, DatePicker, Tag, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -27,15 +27,20 @@ export default function AuditLogList() {
   const [filters, setFilters] = useState<Record<string, unknown>>({});
   const tenantId = tenantFilter ?? currentId ?? 0;
 
+  // 请求序号：文本筛选/分页连续触发时仅最新请求的结果生效，丢弃旧响应（根治竞态）
+  const reqSeq = useRef(0);
+
   const load = async () => {
     if (!tenantId) return;
+    const seq = ++reqSeq.current;
     setLoading(true);
     try {
       const data = await listAuditLogs({ tenantId, page, size: pageSize, ...filters });
+      if (seq !== reqSeq.current) return; // 有新请求在飞，丢弃本响应
       setLogs(data.items ?? []);
       setTotal(data.total ?? 0);
     } finally {
-      setLoading(false);
+      if (seq === reqSeq.current) setLoading(false);
     }
   };
 

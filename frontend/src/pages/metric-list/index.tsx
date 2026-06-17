@@ -52,7 +52,7 @@ export default function MetricList() {
   useEffect(() => {
     if (!tenantId || sourceType !== 'EXTERNAL_HTTP') return;
     listConnectors({ tenantId, size: 200 }).then((r) => {
-      setConnectors((r.data?.items ?? []).map((c) => ({ value: c.connectorCode, label: `${c.name} (${c.connectorCode})` })));
+      setConnectors((r?.items ?? []).map((c) => ({ value: c.connectorCode, label: `${c.name} (${c.connectorCode})` })));
     }).catch(() => {});
     // 切类型时清空 vars 状态
     setVarsKeys([]);
@@ -65,7 +65,7 @@ export default function MetricList() {
     setLoadingConnector(true);
     try {
       const res = await getConnector(code, tenantId);
-      const keys = extractVarsKeys(res.data?.descriptor ?? {} as ConnectorDescriptor);
+      const keys = extractVarsKeys(res?.descriptor ?? {} as ConnectorDescriptor);
       setVarsKeys(keys);
       // 清空旧 vars 值
       keys.forEach((k) => form.setFieldValue(['params', 'vars', k], undefined));
@@ -76,7 +76,7 @@ export default function MetricList() {
   const load = async () => {
     if (!tenantId) return;
     setLoading(true);
-    try { const data = await listMetrics(tenantId); setMetrics(data.data ?? []); }
+    try { const data = await listMetrics(tenantId); setMetrics(data ?? []); }
     finally { setLoading(false); }
   };
 

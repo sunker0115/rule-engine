@@ -22,7 +22,7 @@ export default function VersionContentDrawer({ open, onClose, tenantId, ruleId, 
     if (!open || !versionId || !tenantId) return;
     setLoading(true);
     getRuleVersion(tenantId, ruleId, versionId)
-      .then((res) => setContent(res.data ?? null))
+      .then((res) => setContent(res ?? null))
       .finally(() => setLoading(false));
   }, [open, versionId, ruleId, tenantId]);
 

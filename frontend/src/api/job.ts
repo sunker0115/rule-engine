@@ -4,7 +4,7 @@ import type { ApiResponse, PageResponse, JobItem, JobExecutionItem } from '@/typ
 
 export async function listJobs(tenantId: number) {
   const res = await apiClient.get<ApiResponse<JobItem[]>>(ENDPOINTS.JOB_LIST, { params: { tenantId } });
-  return res.data;
+  return res.data.data;
 }
 
 export async function triggerJob(tenantId: number, jobId: number) {

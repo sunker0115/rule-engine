@@ -23,7 +23,7 @@ export default function DecisionList() {
   const load = async () => {
     if (!tenantId) return;
     setLoading(true);
-    try { const data = await listDecisions(tenantId); setDecisions(data.data ?? []); }
+    try { const data = await listDecisions(tenantId); setDecisions(data ?? []); }
     finally { setLoading(false); }
   };
 

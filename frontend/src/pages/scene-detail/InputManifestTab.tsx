@@ -21,7 +21,7 @@ export default function InputManifestTab({ sceneCode, tenantCode, eventTypes }: 
     setLoading(true);
     try {
       const data = await getInputManifest(tenantCode, sceneCode, eventType);
-      setFields(data.data?.fields ?? []);
+      setFields(data?.fields ?? []);
     } finally {
       setLoading(false);
     }

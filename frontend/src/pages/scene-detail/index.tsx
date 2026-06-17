@@ -24,7 +24,7 @@ export default function SceneDetail() {
     setLoading(true);
     try {
       const data = await getScene(currentId, sceneCode);
-      setScene(data.data ?? null);
+      setScene(data ?? null);
     } finally {
       setLoading(false);
     }

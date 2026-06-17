@@ -6,14 +6,14 @@ export async function listScenes(tenantId: number, params?: Record<string, unkno
   const res = await apiClient.get<ApiResponse<SceneListItem[]>>(ENDPOINTS.SCENE_LIST, {
     params: { tenantId, ...params },
   });
-  return res.data;
+  return res.data.data;
 }
 
 export async function getScene(tenantId: number, sceneCode: string) {
   const res = await apiClient.get<ApiResponse<SceneDetail>>(ENDPOINTS.SCENE_DETAIL(sceneCode), {
     params: { tenantId },
   });
-  return res.data;
+  return res.data.data;
 }
 
 export async function createScene(body: Record<string, unknown>) {

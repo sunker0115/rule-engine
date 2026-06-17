@@ -35,7 +35,7 @@ export default function SceneList() {
       const params: Record<string, unknown> = {};
       if (statusFilter) params.status = statusFilter;
       const data = await listScenes(tenantId, params);
-      setScenes(data.data ?? []);
+      setScenes(data ?? []);
     } finally {
       setLoading(false);
     }

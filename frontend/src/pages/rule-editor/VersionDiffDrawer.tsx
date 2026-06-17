@@ -43,8 +43,8 @@ export default function VersionDiffDrawer({ open, onClose, tenantId, ruleId, ver
       getRuleVersion(tenantId, ruleId, currentVersionId),
     ])
       .then(([histRes, curRes]) => {
-        setBefore(histRes.data ?? null);
-        setAfter(curRes.data ?? null);
+        setBefore(histRes ?? null);
+        setAfter(curRes ?? null);
       })
       .finally(() => setLoading(false));
   }, [open, versionId, currentVersionId, ruleId, tenantId]);

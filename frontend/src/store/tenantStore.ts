@@ -1,15 +1,6 @@
 import { create } from 'zustand';
-import apiClient from '@/api/client';
-import { ENDPOINTS } from '@/constants/api-endpoints';
-
-interface TenantInfo {
-  id: number;
-  code: string;
-  name: string;
-  status: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
+import { listTenants } from '@/api/tenant';
+import type { TenantInfo } from '@/types';
 
 interface TenantState {
   current: string | null;
@@ -47,8 +38,7 @@ export const useTenantStore = create<TenantState>((set, get) => ({
     const params: Record<string, string> = {};
     if (keyword) params.keyword = keyword;
     if (status) params.status = status;
-    const res = await apiClient.get(ENDPOINTS.TENANT_LIST, { params });
-    return res.data?.data ?? [];
+    return await listTenants(params);
   },
 
   setCurrent: (code: string | null) => {

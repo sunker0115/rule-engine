@@ -11,13 +11,13 @@ export async function listRules(tenantId: number, sceneCode?: string, params?: R
 
 export async function getRule(tenantId: number, ruleDefinitionId: number) {
   const res = await apiClient.get<ApiResponse<RuleDetail>>(ENDPOINTS.RULE_DETAIL(ruleDefinitionId), { params: { tenantId } });
-  return res.data;
+  return res.data.data;
 }
 
 export async function getRuleVersion(tenantId: number, ruleDefinitionId: number, versionId: number) {
   const res = await apiClient.get<ApiResponse<RuleVersionContent>>(
     ENDPOINTS.RULE_VERSION(ruleDefinitionId, versionId), { params: { tenantId } });
-  return res.data;
+  return res.data.data;
 }
 
 export async function createRule(tenantId: number, body: Record<string, unknown>) {

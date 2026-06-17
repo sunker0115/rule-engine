@@ -4,7 +4,7 @@ import type { ApiResponse, FetchTestSample, FetchTrace, MetricDescriptor, Metric
 
 export async function listMetrics(tenantId: number) {
   const res = await apiClient.get<ApiResponse<MetricDescriptor[]>>(ENDPOINTS.METRIC_LIST, { params: { tenantId } });
-  return res.data;
+  return res.data.data;
 }
 
 /** 取单个 metric 完整定义（结构同 list item） */
@@ -13,7 +13,7 @@ export async function getMetric(metricCode: string, tenantId: number) {
     ENDPOINTS.METRIC_DETAIL(metricCode),
     { params: { tenantId } },
   );
-  return res.data;
+  return res.data.data;
 }
 
 export async function createMetric(tenantId: number, metricCode: string, body: Record<string, unknown>) {
@@ -28,7 +28,7 @@ export async function getMetricImpact(tenantId: number, metricCode: string, metr
   const res = await apiClient.get<ApiResponse<MetricImpactResult>>(
     ENDPOINTS.METRIC_IMPACT(metricCode, metricVersion), { params: { tenantId } }
   );
-  return res.data;
+  return res.data.data;
 }
 
 /** 自助试算 metric 取数：用样例输入实打实取数一次，返回分阶段取数链路 trace */
@@ -38,5 +38,6 @@ export async function testMetric(metricCode: string, tenantId: number, sample: F
     sample,
     { params: { tenantId } },
   );
-  return res.data;
+  return res.data.data;
 }
+

@@ -24,7 +24,7 @@ function defaultTrueFor(lang?: string): string {
 async function fetchDefaultMetric(tenantId: number, sceneCode: string): Promise<string> {
   try {
     const res = await getSceneMetadata(tenantId, sceneCode);
-    return res.data?.availableMetrics?.[0]?.metricCode ?? '';
+    return res?.availableMetrics?.[0]?.metricCode ?? '';
   } catch {
     return '';
   }
@@ -62,7 +62,7 @@ export default function RuleList() {
     if (currentId && sceneCode) {
       try {
         const meta = await getSceneMetadata(currentId, sceneCode);
-        const langs = meta.data?.expressionLangs ?? ['CEL'];
+        const langs = meta?.expressionLangs ?? ['CEL'];
         setLangOptions(langs.map((l: string) => ({ value: l, label: l })));
       } catch { /* keep default */ }
     }

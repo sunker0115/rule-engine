@@ -62,7 +62,7 @@ export default function RuleEditor() {
     setLoading(true);
     try {
       const detailRes = await getRule(currentId, Number(ruleId));
-      const detail = detailRes.data;
+      const detail = detailRes;
       if (detail) {
         setRuleDetail(detail);
         loadFromDetail(
@@ -77,9 +77,9 @@ export default function RuleEditor() {
           getSceneMetadata(currentId, detail.sceneCode),
           getScene(currentId, detail.sceneCode),
         ]);
-        const meta = metaRes.data ?? null;
+        const meta = metaRes ?? null;
         if (meta) {
-          const schema = extractPayloadSchema(sceneRes.data?.payloadSchema);
+          const schema = extractPayloadSchema(sceneRes?.payloadSchema);
           meta.payloadFieldNames = schema.names;
           meta.payloadFieldTypes = schema.types;
         }

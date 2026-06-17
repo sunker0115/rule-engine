@@ -19,7 +19,7 @@ export default function CenterPanel({ metadata }: Props) {
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
 
   useEffect(() => {
-    if (currentId) listDecisions(currentId).then((d) => setDecisions(d.data ?? []));
+    if (currentId) listDecisions(currentId).then((d) => setDecisions(d ?? []));
   }, [currentId]);
 
   const shared = {

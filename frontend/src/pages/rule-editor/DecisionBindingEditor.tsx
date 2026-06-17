@@ -18,7 +18,7 @@ export default function DecisionBindingEditor({ kind, value = [], onChange }: Pr
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
 
   useEffect(() => {
-    if (currentId) listDecisions(currentId).then((d) => setDecisions(d.data ?? []));
+    if (currentId) listDecisions(currentId).then((d) => setDecisions(d ?? []));
   }, [currentId]);
 
   const handleAdd = () => {

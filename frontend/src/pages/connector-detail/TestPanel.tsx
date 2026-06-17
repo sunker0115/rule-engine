@@ -86,7 +86,7 @@ export default function TestPanel({ connectorCode, isEdit, descriptor, tenantId 
         samplePayload: buildObj(payloadKeys, payloadVals),
         sampleSubjectId: subjectId.trim() || undefined,
       });
-      if (res.data) setTrace(res.data);
+      if (res) setTrace(res);
     } catch {
       // 错误已由 axios 响应拦截器统一 message.error 透出
     } finally {

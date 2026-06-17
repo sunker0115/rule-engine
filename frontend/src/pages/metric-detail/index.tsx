@@ -30,7 +30,7 @@ export default function MetricDetail() {
     setLoading(true);
     try {
       const data = await getMetric(metricCode, currentId);
-      setMetric(data.data ?? null);
+      setMetric(data ?? null);
     } finally { setLoading(false); }
   };
 
@@ -67,7 +67,7 @@ export default function MetricDetail() {
     setImpactLoading(true);
     try {
       const data = await getMetricImpact(currentId, metricCode, metric.metricVersion);
-      setAffectedRules(data.data?.affectedRules ?? []);
+      setAffectedRules(data?.affectedRules ?? []);
     } finally { setImpactLoading(false); }
   };
 

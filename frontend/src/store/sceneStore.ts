@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import apiClient from '@/api/client';
-import { ENDPOINTS } from '@/constants/api-endpoints';
+import { listScenes, getScene } from '@/api/scene';
+import { getSceneMetadata } from '@/api/metadata';
 import type { SceneListItem, SceneDetail, SceneMetadata } from '@/types';
 
 interface SceneState {
@@ -22,18 +22,15 @@ export const useSceneStore = create<SceneState>((set) => ({
 
   loadList: async (tenantId: number) => {
     set({ loading: true });
-    const res = await apiClient.get(ENDPOINTS.SCENE_LIST, { params: { tenantId } });
-    set({ list: res.data?.data ?? [], loading: false });
+    try { set({ list: await listScenes(tenantId) }); } finally { set({ loading: false }); }
   },
 
   loadDetail: async (tenantId: number, sceneCode: string) => {
-    const res = await apiClient.get(ENDPOINTS.SCENE_DETAIL(sceneCode), { params: { tenantId } });
-    set({ current: res.data?.data ?? null });
+    set({ current: await getScene(tenantId, sceneCode) });
   },
 
   loadMetadata: async (tenantId: number, sceneCode: string) => {
-    const res = await apiClient.get(ENDPOINTS.SCENE_METADATA(sceneCode), { params: { tenantId } });
-    set({ metadata: res.data?.data ?? null });
+    set({ metadata: await getSceneMetadata(tenantId, sceneCode) });
   },
 
   clearCurrent: () => set({ current: null, metadata: null }),

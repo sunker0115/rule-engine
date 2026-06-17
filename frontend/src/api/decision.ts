@@ -4,7 +4,7 @@ import type { ApiResponse, DecisionItem } from '@/types';
 
 export async function listDecisions(tenantId: number) {
   const res = await apiClient.get<ApiResponse<DecisionItem[]>>(ENDPOINTS.DECISION_LIST, { params: { tenantId } });
-  return res.data;
+  return res.data.data;
 }
 
 export async function createDecision(tenantId: number, body: Record<string, unknown>) {

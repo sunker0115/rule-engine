@@ -118,7 +118,7 @@ export default function SceneEdit() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      try { const data = await getScene(currentId, sceneCode); if (!cancelled) setScene(data.data ?? null); }
+      try { const data = await getScene(currentId, sceneCode); if (!cancelled) setScene(data ?? null); }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };

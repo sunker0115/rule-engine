@@ -65,7 +65,7 @@ export default function ConnectorDetail() {
     setLoading(true);
     getConnector(routeCode, tenantId)
       .then((res) => {
-        const found = res.data;
+        const found = res;
         if (found) {
           setConnectorCode(found.connectorCode);
           setName(found.name ?? '');

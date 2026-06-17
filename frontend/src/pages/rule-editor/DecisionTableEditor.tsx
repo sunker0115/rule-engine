@@ -24,7 +24,7 @@ export default function DecisionTableEditor({
 
   useEffect(() => {
     if (currentId) listDecisions(currentId).then((d) => {
-      setDecisions((d.data ?? []).map((item) => ({ value: item.code, label: `${item.code} (${item.name})` })));
+      setDecisions((d ?? []).map((item) => ({ value: item.code, label: `${item.code} (${item.name})` })));
     });
   }, [currentId]);
 

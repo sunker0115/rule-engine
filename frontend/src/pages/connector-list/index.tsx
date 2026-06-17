@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Table, Button, Input, Select, Space, message, Empty } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -32,8 +32,11 @@ export default function ConnectorList() {
   // 与其他列表页一致：筛选器选中 > store 当前租户，没选则为 0（守卫不加载）
   const tenantId = tenantFilter ?? currentId ?? 0;
 
+  const reqSeq = useRef(0);
+
   const load = async () => {
     if (!tenantId) return;
+    const seq = ++reqSeq.current;
     setLoading(true);
     try {
       const res = await listConnectors({
@@ -43,10 +46,11 @@ export default function ConnectorList() {
         page,
         size: pageSize,
       });
-      setConnectors(res.data?.items ?? []);
-      setTotal(res.data?.total ?? 0);
+      if (seq !== reqSeq.current) return; // 有新请求在飞，丢弃本响应
+      setConnectors(res?.items ?? []);
+      setTotal(res?.total ?? 0);
     } finally {
-      setLoading(false);
+      if (seq === reqSeq.current) setLoading(false);
     }
   };
 

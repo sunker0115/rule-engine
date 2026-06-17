@@ -11,3 +11,4 @@ export * from './audit';
 export * from './job';
 export * from './import-export';
 export * from './metadata';
+export * from './tenant';
