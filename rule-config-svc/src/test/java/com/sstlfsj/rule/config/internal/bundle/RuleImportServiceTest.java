@@ -58,6 +58,7 @@ class RuleImportServiceTest {
     @Mock MetricDefinitionMapper metricDefinitionMapper;
     @Mock DecisionDefinitionMapper decisionDefinitionMapper;
     @Spy ObjectMapper objectMapper = JsonMapper.builder().build();
+    @Mock org.springframework.transaction.PlatformTransactionManager transactionManager;
     @InjectMocks RuleImportService sut;
 
     private RuleBundle.RuleEntry entry(String code, String hash) {
@@ -147,7 +148,7 @@ class RuleImportServiceTest {
     // ---- OVERWRITE policy ---------------------------------------------
 
     @Test
-    void apply_overwrite_existingDraft_deletesOldDraftAndCreatesNew() {
+    void apply_overwrite_existingDraft_editsDraftInPlace() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
         when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any()))
                 .thenReturn(existingRuleDef("rule.a"));
@@ -158,12 +159,13 @@ class RuleImportServiceTest {
         ImportDiffReport r = sut.apply(1L, bundle("rule.a"), ImportPolicy.OVERWRITE, "dev");
 
         assertThat(r.willOverwrite()).hasSize(1);
-        verify(publishService).deleteDraftVersion(1L, 10L, 50L, "dev");
-        verify(publishService).createDraft(eq(1L), any(), eq("rule.a"), any(), eq("dev"));
+        // 已存在规则 + 有 DRAFT → editDraft 原地更新（不能 createDraft，code 会重复）
+        verify(publishService).editDraft(eq(1L), eq(10L), any(), eq("dev"));
+        verify(publishService, never()).createDraft(any(), any(), any(), any(), any());
     }
 
     @Test
-    void apply_overwrite_noDraft_createsDirectly() {
+    void apply_overwrite_noDraft_createsNewVersion() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
         when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any()))
                 .thenReturn(existingRuleDef("rule.a"));
@@ -173,8 +175,9 @@ class RuleImportServiceTest {
         ImportDiffReport r = sut.apply(1L, bundle("rule.a"), ImportPolicy.OVERWRITE, "dev");
 
         assertThat(r.willOverwrite()).hasSize(1);
-        verify(publishService, never()).deleteDraftVersion(any(), any(), any(), any());
-        verify(publishService).createDraft(any(), any(), any(), any(), any());
+        // 已存在规则 + 无 DRAFT → newVersion 基于 ACTIVE 建新 DRAFT（不能 createDraft）
+        verify(publishService).newVersion(eq(1L), eq(10L), any(), eq(null), eq("dev"));
+        verify(publishService, never()).createDraft(any(), any(), any(), any(), any());
     }
 
     // ---- ABORT policy -------------------------------------------------
@@ -201,14 +204,18 @@ class RuleImportServiceTest {
     // ---- dryRun -------------------------------------------------------
 
     @Test
-    void dryRun_returnsReport_withoutPersisting() {
+    void dryRun_returnsReport_andMarksTransactionRollbackOnly() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
         when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
-        // createDraft 被调但事务回滚，这里只验证 dryRun 返回正确 report
+        // TransactionTemplate 需要 txManager.getTransaction 返回 status；验证 dryRun 强制 setRollbackOnly
+        org.springframework.transaction.TransactionStatus status =
+                mock(org.springframework.transaction.TransactionStatus.class);
+        when(transactionManager.getTransaction(any())).thenReturn(status);
+
         ImportDiffReport r = sut.dryRun(1L, bundle("rule.a"), ImportPolicy.SKIP, "dev");
 
         assertThat(r.willCreate()).hasSize(1).allMatch(i -> "rule.a".equals(i.ruleCode()));
-        // 注：实际事务回滚确保 DB 无数据，mock 测试不检查回滚
+        verify(status).setRollbackOnly();  // dry-run 必须强制回滚
     }
 
     // ---- empty bundle -------------------------------------------------

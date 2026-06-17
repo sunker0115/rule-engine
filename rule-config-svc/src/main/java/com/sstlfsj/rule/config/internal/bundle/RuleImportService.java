@@ -25,7 +25,9 @@ import com.sstlfsj.rule.config.internal.domain.MetricEnums;
 import com.sstlfsj.rule.kernel.api.model.SourceType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
@@ -40,8 +42,8 @@ import java.util.List;
  *   <li>规则 import → {@link PublishService#createDraft}，内含 resolveAndValidate（script/metric 校验/依赖冻结）。</li>
  *   <li>scene/metric/decision → 对应 service write 方法，审计/事件自动继承。</li>
  *   <li>幂等：ACTIVE 版本 contentHash 一致 → 跳过，不建新版本。</li>
- *   <li>ABORT：collect-all 模式，全部规则跑完后有冲突整体抛出，事务自然回滚。</li>
- *   <li>dry-run：事务内完整执行，收集 diff 后抛 {@link DryRunCompletedException} 强制回滚。</li>
+ *   <li>ABORT：collect-all 模式，全部规则跑完收集所有冲突；apply 时有冲突抛异常回滚，dry-run 返回含冲突的 report。</li>
+ *   <li>dry-run：TransactionTemplate + setRollbackOnly 强制回滚，DB 不落任何数据。</li>
  * </ul>
  */
 @Service
@@ -59,28 +61,34 @@ public class RuleImportService {
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
     private final ObjectMapper objectMapper;
+    private final PlatformTransactionManager transactionManager;
 
     /**
-     * dry-run：事务内跑完整 import 逻辑，收集 diff 后强制回滚（DB 不落任何数据）。
-     * 返回的 {@link ImportDiffReport} 100% 准确反映真实 apply 的效果。
+     * dry-run：在真实数据上跑完整 import 后强制回滚（DB 不落任何数据），返回的 diff 100% 准确反映真实 apply。
+     *
+     * <p>必须用编程式事务 + {@code setRollbackOnly}：不能用 {@code @Transactional} + 自抛自 catch 异常——
+     * 异常被本方法 catch 后方法正常返回，Spring 认为无异常，事务照常提交不回滚（曾踩此坑）。</p>
      */
-    @Transactional
     public ImportDiffReport dryRun(Long tenantId, RuleBundle bundle, ImportPolicy policy, String actorId) {
-        try {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        return tx.execute(status -> {
             ImportDiffReport report = doImport(tenantId, bundle, policy, actorId);
-            throw new DryRunCompletedException(report);
-        } catch (DryRunCompletedException e) {
-            return e.report;
-        }
-        // Spring @Transactional 在 DryRunCompletedException（RuntimeException）触发回滚
+            status.setRollbackOnly();
+            return report;
+        });
     }
 
     /**
-     * 真实 apply：提交所有变更。
+     * 真实 apply：提交所有变更。ABORT 策略有冲突时抛 {@link ImportConflictException} 触发回滚。
      */
     @Transactional
     public ImportDiffReport apply(Long tenantId, RuleBundle bundle, ImportPolicy policy, String actorId) {
-        return doImport(tenantId, bundle, policy, actorId);
+        ImportDiffReport report = doImport(tenantId, bundle, policy, actorId);
+        ImportPolicy effective = policy != null ? policy : ImportPolicy.SKIP;
+        if (effective == ImportPolicy.ABORT && !report.conflicts().isEmpty()) {
+            throw new ImportConflictException(report);
+        }
+        return report;
     }
 
     // ---- 核心 import 逻辑 -----------------------------------------------
@@ -111,12 +119,7 @@ public class RuleImportService {
                     willCreate, willOverwrite, skipped, conflicts);
         }
 
-        if (effectivePolicy == ImportPolicy.ABORT && !conflicts.isEmpty()) {
-            throw new ImportConflictException(
-                    new ImportDiffReport(willCreate, willOverwrite, skipped, conflicts,
-                            scenesCreated, metricsCreated, decisionsCreated));
-        }
-
+        // ABORT 是否中止由调用方 apply 决定——dry-run 需返回含冲突的 report 让前端展示，不在此抛异常
         return new ImportDiffReport(willCreate, willOverwrite, skipped, conflicts,
                 scenesCreated, metricsCreated, decisionsCreated);
     }
@@ -156,31 +159,7 @@ public class RuleImportService {
             }
         }
 
-        if (existing != null) {
-            // 目标已存在且 hash 不同
-            switch (policy) {
-                case SKIP -> {
-                    skipped.add(new RuleImportItem(rule.code(), rule.sceneCode(),
-                            "SKIP 策略：目标已存在，保留现有版本"));
-                    return;
-                }
-                case OVERWRITE -> {
-                    // 清掉旧 DRAFT，再建新 DRAFT
-                    RuleVersion draftVersion = ruleVersionMapper.findLatestDraft(existing.getId());
-                    if (draftVersion != null) {
-                        publishService.deleteDraftVersion(tenantId, existing.getId(), draftVersion.getId(), actorId);
-                    }
-                    // 继续往下 createDraft
-                }
-                case ABORT -> {
-                    conflicts.add(new RuleImportConflict(rule.code(), rule.sceneCode(),
-                            "CONTENT_CHANGED", "目标已存在且内容不同，ABORT 策略下记为冲突"));
-                    return;
-                }
-            }
-        }
-
-        // createDraft：走完整 service 链（resolveAndValidate 在内）
+        // 走完整 service 链（createDraft/editDraft/newVersion 均内含 resolveAndValidate）
         RuleContent content = new RuleContent(
                 rule.name(), rule.kind(),
                 rule.conditionAst(),
@@ -189,13 +168,30 @@ public class RuleImportService {
                 rule.triggerEventTypes() != null ? rule.triggerEventTypes() : List.of(),
                 rule.script());
 
-        publishService.createDraft(tenantId, rule.sceneCode(), rule.code(), content, actorId);
-
         if (existing == null) {
+            // 目标不存在 → 新建规则 + DRAFT
+            publishService.createDraft(tenantId, rule.sceneCode(), rule.code(), content, actorId);
             willCreate.add(new RuleImportItem(rule.code(), rule.sceneCode(), "目标不存在，将新建"));
-        } else {
-            willOverwrite.add(new RuleImportItem(rule.code(), rule.sceneCode(),
-                    "已清除旧 DRAFT，新建替换版本"));
+            return;
+        }
+
+        // 目标已存在且 hash 不同
+        switch (policy) {
+            case SKIP -> skipped.add(new RuleImportItem(rule.code(), rule.sceneCode(),
+                    "SKIP 策略：目标已存在，保留现有版本"));
+            case OVERWRITE -> {
+                // 已存在规则不能用 createDraft（code 重复）：有 DRAFT 则原地 editDraft，否则基于 ACTIVE 建 newVersion
+                RuleVersion draftVersion = ruleVersionMapper.findLatestDraft(existing.getId());
+                if (draftVersion != null) {
+                    publishService.editDraft(tenantId, existing.getId(), content, actorId);
+                } else {
+                    publishService.newVersion(tenantId, existing.getId(), content, null, actorId);
+                }
+                willOverwrite.add(new RuleImportItem(rule.code(), rule.sceneCode(),
+                        draftVersion != null ? "原地更新现有 DRAFT" : "基于 ACTIVE 建新 DRAFT 版本"));
+            }
+            case ABORT -> conflicts.add(new RuleImportConflict(rule.code(), rule.sceneCode(),
+                    "CONTENT_CHANGED", "目标已存在且内容不同，ABORT 策略下记为冲突"));
         }
     }
 
@@ -256,18 +252,9 @@ public class RuleImportService {
                 false);  // sensitive：bundle 导入默认非敏感，运营可后续自行修改
     }
 
-    // ---- 内部异常（用于 dry-run 强制回滚 + ABORT 策略）---------------------
+    // ---- 内部异常（ABORT 策略）---------------------
 
-    /** dry-run 完成信号：携带 diff report，触发 @Transactional 回滚。 */
-    static class DryRunCompletedException extends RuntimeException {
-        final ImportDiffReport report;
-        DryRunCompletedException(ImportDiffReport report) {
-            super("dry-run completed");
-            this.report = report;
-        }
-    }
-
-    /** ABORT 策略冲突：携带 diff report，触发事务回滚，并被 controller 捕获为 400。 */
+    /** ABORT 策略冲突：携带 diff report，触发事务回滚，并被 controller 捕获为 422。 */
     public static class ImportConflictException extends RuntimeException {
         private final ImportDiffReport report;
         public ImportConflictException(ImportDiffReport report) {
