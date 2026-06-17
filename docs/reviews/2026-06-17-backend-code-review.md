@@ -123,11 +123,11 @@
 - **状态**：方案 A 已确认 + 边界已标，待落地
 
 ### 备注项（验证存在，未进 top10）
-- **publish/newVersion 不检查 rule.status**：`PublishService` —— DISABLED 规则若有 DRAFT 可经 publish 翻 PUBLISHED，绕过 `transitionStatus` 状态机（审计记 PUBLISH 而非 ENABLE）。改法：publish 入口加 status 校验。
-- **EvalController 缺 @Valid**：`/api/v1/rule/evaluate` 收只含 tenantCode 的 body，null sceneCode/eventId 流入引擎/审计。改法：`@Valid` + `EvalEventRequest` 字段加 `@NotBlank`。
-- **RuleEngineClient listener 不吞异常**：`evalResultListener`/`evalSessionListener` 调用未包 try/catch，host 回调抛异常中断 `evaluate()`。改法：包 try/catch(吞+log)，对齐 `decisionContextListener`。
-- **publish 并发竞态**：两并发 publish 同规则，`markSuperseded` 可能漏掉对方刚激活版本，留 >1 ACTIVE（无行锁/乐观版本）。改法：`rule_definition` 行锁或乐观版本号。
-- **ObservabilityAlarmChecker 用进程累计计数器算 error rate**：warm-up 后告警失效。改法：改滑动窗口/速率。
+- ✅ **publish/newVersion 不检查 rule.status**（已修，89935100）：`PublishService.publish` 入口加 DISABLED 校验。
+- ✅ **EvalController 缺 @Valid**（已修，89935100）：`@Valid` + `EvalEventRequest` 字段 `@NotBlank`。
+- ✅ **RuleEngineClient listener 不吞异常**（已修，89935100）：三个 listener 调用包 try/catch(吞+warn)。
+- ⏸ **publish 并发竞态**（已评估，暂不修）：两并发 publish 同规则不同 draft 可能留 >1 ACTIVE。场景罕见（需 A publish + B newVersion 后 publish 精确交错）+ admin 低频。用户决定：不用 DB 悲观锁；乐观锁 `@Version` 投入产出不划算，暂跳过。
+- ✅ **ObservabilityAlarmChecker 累计计数器算 error rate**（已修）：改增量滑动窗口——`checkErrorRate` 用自上次 check 的增量（deltaErrors/deltaTotal）算本周期错误率，不再被历史累计稀释/拉高。配 2 个特性测试（第二健康窗口不误报 / 第二高错窗口再告警）。
 
 ---
 
