@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Select, Input, InputNumber, Table, Popconfirm, Typography } from 'antd';
+import { Button, Select, Input, InputNumber, Table, Popconfirm } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -90,12 +90,9 @@ export default function DecisionTableEditor({
 
   return (
     <div style={{ padding: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <Typography.Text strong>{t('editor.decisionTable.title')}</Typography.Text>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button size="small" icon={<PlusOutlined />} onClick={addColumn}>{t('editor.decisionTable.addColumn')}</Button>
-          <Button size="small" icon={<PlusOutlined />} onClick={addRow}>{t('editor.decisionTable.addRow')}</Button>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+        <Button size="small" icon={<PlusOutlined />} onClick={addColumn}>{t('editor.decisionTable.addColumn')}</Button>
+        <Button size="small" icon={<PlusOutlined />} onClick={addRow}>{t('editor.decisionTable.addRow')}</Button>
       </div>
 
       <Table

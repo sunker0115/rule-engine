@@ -292,13 +292,13 @@ export interface RuleTranslation {
       addBand: string; bandOverlap: string;
     };
     decisionTree: {
-      title: string; condition: string;
+      condition: string;
       then: string; else: string;
       selectDecision: string; toLeaf: string; toBranch: string;
       addElse: string; removeElse: string;
     };
     decisionTable: {
-      title: string; addColumn: string; addRow: string;
+      addColumn: string; addRow: string;
       emptyRowHint: string; metric: string; deleteColumn: string;
       cellPlaceholder: string; decisionCode: string;
       decisionPlaceholder: string; deleteRowConfirm: string;

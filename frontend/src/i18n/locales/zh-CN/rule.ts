@@ -111,7 +111,6 @@ const rule: RuleTranslation = {
       bandOverlap: '区间重叠',
     },
     decisionTree: {
-      title: '决策树',
       condition: '条件：',
       then: '满足时',
       else: '否则',
@@ -122,7 +121,6 @@ const rule: RuleTranslation = {
       removeElse: '移除',
     },
     decisionTable: {
-      title: '决策表',
       addColumn: '加列',
       addRow: '加行',
       emptyRowHint: '暂无数据行，点击「加行」添加',
