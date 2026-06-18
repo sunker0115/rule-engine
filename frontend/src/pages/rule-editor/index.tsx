@@ -83,6 +83,8 @@ export default function RuleEditor() {
 
   const load = async () => {
     if (!currentId || !ruleId) return;
+    // 切换规则（同路由切 ruleId，组件不 remount）时清掉残留的血缘抽屉打开请求
+    clearOpen();
     setLoading(true);
     try {
       const detailRes = await getRule(currentId, Number(ruleId));
