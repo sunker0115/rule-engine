@@ -1,6 +1,6 @@
 import apiClient from './client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
-import type { ApiResponse, FetchTestSample, FetchTrace, MetricDescriptor, MetricImpactResult } from '@/types';
+import type { ApiResponse, FetchTestSample, FetchTrace, MetricDescriptor, MetricImpactResult, UsageCount } from '@/types';
 
 export async function listMetrics(tenantId: number) {
   const res = await apiClient.get<ApiResponse<MetricDescriptor[]>>(ENDPOINTS.METRIC_LIST, { params: { tenantId } });
@@ -28,6 +28,12 @@ export async function getMetricImpact(tenantId: number, metricCode: string, metr
   const res = await apiClient.get<ApiResponse<MetricImpactResult>>(
     ENDPOINTS.METRIC_IMPACT(metricCode, metricVersion), { params: { tenantId } }
   );
+  return res.data.data;
+}
+
+/** 血缘：批量取 metric 被引用计数 */
+export async function getMetricUsageCounts(tenantId: number): Promise<UsageCount[]> {
+  const res = await apiClient.get<ApiResponse<UsageCount[]>>(ENDPOINTS.METRIC_USAGE_COUNTS, { params: { tenantId } });
   return res.data.data;
 }
 

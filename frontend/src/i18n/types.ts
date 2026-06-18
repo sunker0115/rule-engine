@@ -637,6 +637,20 @@ export interface RuleSetAnalysisTranslation {
   sevTag: { ERROR: string; WARN: string; INFO: string; SKIP: string };
 }
 
+// ===== lineage 命名空间（产出 / 引用血缘）=====
+export interface LineageTranslation {
+  drawerTitle: string;
+  metricDrawerTitle: string;
+  count: string;
+  empty: string;
+  toEditor: string;
+  badge: string;
+  col: { ruleCode: string; ruleName: string; scene: string; status: string };
+  editorChip: string;
+  disableGuardTitle: string;
+  disableGuardConfirm: string;
+}
+
 export interface TranslationResources {
   common: CommonTranslation;
   scene: SceneTranslation;
@@ -649,4 +663,5 @@ export interface TranslationResources {
   importExport: ImportExportTranslation;
   connector: ConnectorTranslation;
   analysis: RuleSetAnalysisTranslation;
+  lineage: LineageTranslation;
 }

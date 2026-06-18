@@ -9,6 +9,7 @@ import job from './job';
 import importExport from './import-export';
 import connector from './connector';
 import analysis from './analysis';
+import lineage from './lineage';
 
 const en = {
   common,
@@ -22,6 +23,7 @@ const en = {
   importExport,
   connector,
   analysis,
+  lineage,
 };
 
 export default en;
