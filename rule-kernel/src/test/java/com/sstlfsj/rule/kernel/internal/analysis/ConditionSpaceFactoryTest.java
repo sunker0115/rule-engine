@@ -238,4 +238,30 @@ class ConditionSpaceFactoryTest {
         ConditionSpace s = ConditionSpaceFactory.from(node(ConditionTypes.EQ, Map.of()));
         assertThat(s.isUnknown()).isTrue();
     }
+
+    // ---------- fromOperator：算子+参数直入口（决策表单元格共用） ----------
+
+    @Test
+    void from_operator_maps_same_as_from_node() {
+        // from(node) 委托 fromOperator(type, params)：两者对同一 (算子,参数) 给出一致空间
+        ConditionSpace direct = ConditionSpaceFactory.fromOperator(
+                ConditionTypes.GT, Map.of(ConditionParams.THRESHOLD, 100));
+        assertThat(direct.subsumes(ConditionSpace.eq(101.0))).isEqualTo(Tri.TRUE);
+        assertThat(direct.subsumes(ConditionSpace.eq(100.0))).isEqualTo(Tri.FALSE);
+    }
+
+    @Test
+    void from_operator_between_with_min_max_params() {
+        ConditionSpace s = ConditionSpaceFactory.fromOperator(
+                ConditionTypes.BETWEEN, Map.of(ConditionParams.MIN, 10, ConditionParams.MAX, 20));
+        assertThat(s.subsumes(ConditionSpace.eq(15.0))).isEqualTo(Tri.TRUE);
+        assertThat(s.subsumes(ConditionSpace.eq(25.0))).isEqualTo(Tri.FALSE);
+    }
+
+    @Test
+    void from_operator_unmodelable_operator_degrades_to_unknown() {
+        ConditionSpace s = ConditionSpaceFactory.fromOperator(
+                ConditionTypes.MATCHES, Map.of(ConditionParams.REGEX, "^A.*"));
+        assertThat(s.isUnknown()).isTrue();
+    }
 }

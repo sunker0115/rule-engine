@@ -33,8 +33,20 @@ public final class ConditionSpaceFactory {
      * @return 满足该条件的取值空间；无法静态精确表达时为 {@link ConditionSpace#unknown(String)}
      */
     public static ConditionSpace from(ConditionNode node) {
-        String type = node.conditionType();
-        var params = node.params();
+        return fromOperator(node.conditionType(), node.params());
+    }
+
+    /**
+     * 求某算子在给定操作数参数下的取值空间。叶子条件与决策表单元格共用此核心映射。
+     *
+     * <p>决策表单元格 = (列算子, 单元格值)：调用方按算子约定构造 params（GT→{threshold}、
+     * BETWEEN→{min,max}、IN→{values}），再调用本方法，避免重复区间映射逻辑。
+     *
+     * @param type   算子码（conditionType）
+     * @param params 该算子的操作数参数（键见 {@link ConditionParams}）
+     * @return 满足该条件的取值空间；无法静态精确表达时为 {@link ConditionSpace#unknown(String)}
+     */
+    public static ConditionSpace fromOperator(String type, Map<String, Object> params) {
         return switch (type) {
             case ConditionTypes.GT -> numericThreshold(params, ConditionSpace::gt, "GT");
             case ConditionTypes.GTE -> numericThreshold(params, ConditionSpace::gte, "GTE");
