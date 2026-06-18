@@ -3,7 +3,7 @@
 整理自文档中所有"未实装 / 留到 v1.5 / 留到 v2 / 演进方向"标注。
 按**执行性质**分组：主动推进序列 → 大件能力 → 触发式 → v3 远期；组内按建议执行顺序排列。
 
-> 主动推进序列**已落地移除**：B6 Metric 版本化、B7 规则导出/导入、B1 EXPRESSION_SCRIPT evaluator、B5 预编译执行器、**B31 规则集静态分析（2026-06-18）**。"治理与效果"已落地第一件（B31），序列剩 B32 决策效果闭环 / B33 血缘（08-evo §2.27–2.28）。
+> 主动推进序列**已落地移除**：B6 Metric 版本化、B7 规则导出/导入、B1 EXPRESSION_SCRIPT evaluator、B5 预编译执行器、B31 规则集静态分析（2026-06-18）、**B33 规则↔指标血缘（2026-06-19）**。"治理与效果"已落地 B31 + B33，序列**仅剩 B32 决策效果闭环**（08-evo §2.27），是当前唯一主动推进项。
 
 ---
 
@@ -11,10 +11,10 @@
 
 | 序 | # | 功能 | 来源 | 预计改动范围 | 备注 |
 |---|---|------|------|------------|------|
-| 1 | B32 | **决策效果闭环 / 规则有效性度量** | 08-evo §2.27 | `decision_outcome` 表（关联 sessionId/eventId + 结果标签）+ 标签回灌 API（`POST /admin/v1/decision-outcomes`）+ 按规则 / Decision 聚合 TP/FP/precision/recall + 漂移 | 把引擎从"决策工具"变"风控平台"；建在 `evaluation_session` 上；**标签语义是业务侧职责**，引擎只提供接入位 + 聚合 |
-| 2 | B33 | **规则↔指标血缘与变更影响分析** | 08-evo §2.28 | `LineageIndex` 从快照抽 metricCode/decisionCode 引用建索引（挂发布事件增量更新，复用 D17 热更）+ 双向查询 API（metric→规则 / Decision→规则） | 低成本；改 metric 口径 / 下线 Decision 前看炸点；与 B31 共享"读快照抽结构"底座（已随 B31 落地，可复用 `internal/analysis` 读快照范式） |
+| 1 | B32 | **决策效果闭环 / 规则有效性度量** | 08-evo §2.27 | `decision_outcome` 表（关联 sessionId/eventId + 结果标签）+ 标签回灌 API（`POST /admin/v1/decision-outcomes`）+ 按规则 / Decision 聚合 TP/FP/precision/recall + 漂移 | 把引擎从"决策工具"变"风控平台"；建在 `evaluation_session`（D21）之上，**B33 血缘已落地**提供「按规则/Decision 聚合」的结构基础。**标签语义是业务侧职责**，引擎只提供接入位 + 聚合（守"做决策不做业务判定"线）。<br>**开工前待敲定**：① 标签接入 API（按 sessionId 还是 eventId 关联、单条/批量回灌）② 延迟标签按时间窗对账 ③ 聚合落点（独立 `decision_outcome` 表 + 报表查询 vs 复用 §2.6 监控体系）④ 与 §2.16 A/B、§2.25 陪跑衔接。<br>**价值门控（重要）**：核心价值（TP/FP/precision/recall/漂移）依赖**业务侧真实结果标签**回灌——开发期无生产标签，只能建好「接入位 + 聚合骨架」并验「回灌落库 + 聚合 SQL 正确」，**验不到真实效果**。故开工时机：有真实标签来源 / 业务明确要规则绩效量化时；否则本质偏「触发式」。 |
 
 > **已落地（从主动推进序列移除）**：
+> - **B33 规则↔指标血缘与变更影响分析（2026-06-19，08-evo §2.28 已实装块）**：反向 **Decision→规则**（`DecisionService.findRulesProducingDecision` 按需扫 ACTIVE rule_version 的 `decision_bindings`，专用投影 `findActiveWithDecisionByRuleDefIds`）+ metric 版本无关 `GET /metrics/{code}/sources`（对称 decision）+ 批量计数 `/decisions·metrics/usage-counts` + `GET /decisions/{code}` 详情。前端复用 §2.26 B31 治理范式统一两侧呈现：列表「被引用」徽标 + 血缘抽屉（按场景分组、可点定位下钻编辑器）+ **Decision 详情页**（消除与 Metric 不对称）+「被引用规则」Tab + 编辑器 metric/decision 反向徽标 + **停用 Decision 前血缘拦截**。**与原计划偏差（重要）**：metric→规则按需扫（`findReferencingRules`）早随 B6 已存在，常驻 `LineageIndex` 对它属 over-engineering 且双轨重复——**放弃 LineageIndex，沿用按需扫房规、零索引、零 DDL、不碰评估热路径**（血缘是冷的治理查询，读已提交 DB 强一致优先）。口径：仅认发布期冻结的 `decision_bindings` / `metric_dependencies`（EXPRESSION_SCRIPT 脚本体内 metric 引用漏报，与脚本不透明一致）。**顺带修的编辑器问题**：① 新版本 `tenantId` 错发 query param + 改克隆当前版本（原会报"tenantId 不能为 null"/ 建空白草稿）② 接入「丢弃草稿 / 删除规则」闭合版本生命周期（草稿三出口：发布/丢弃/继续编辑）③ 保存草稿后规则集分析自动重算（轻量 reanalyze，无需刷新）。
 > - B31 规则集静态分析 / 冲突检测（2026-06-18，08-evo §2.26 已实装块）：7 类检查（不一致/死规则/冲突/重叠/覆盖缺口/**冗余**/未分析），`ConditionSpace` 区间推理 + 6 detector + `RuleSetAnalyzer`，hit-policy-aware、零误报；`RuleAnalysisService`（**草稿优先**）+ `GET /admin/v1/scenes/{code}/analysis` + 前端左栏摘要条入口。覆盖 AST_BOOLEAN/决策树/决策表（合取语义），**故意不做**评分卡/脚本/决策树跨树/DMN 完备性。**与原计划偏差**：前端落在左栏摘要条+抽屉（非右栏）；新增规则内冗余检测；FIRST_HIT 等优先级保守降级。
 > - B1 EXPRESSION_SCRIPT evaluator（`ScriptExecutor` + `ExpressionEngine` SPI；引擎扩到 6 个 cel/aviator/qlexpress/jsonlogic/jexl/groovy。**对象池前提被取代**——SPI 走线程安全单例 + 按源码哈希缓存编译产物，无需 commons-pool2 池化非线程安全 ScriptEngine）。
 > - B5 预编译执行器 `CompiledExecutor`（08-evo §2.13 / D67，2026-06-13；纯编译版 + `PrecompileMode`/`CompiledPredicateEvictor`；alpha 节点共享为可选 add-on）。
