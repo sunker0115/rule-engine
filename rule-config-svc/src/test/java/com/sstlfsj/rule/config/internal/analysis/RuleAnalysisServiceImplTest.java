@@ -18,6 +18,8 @@ import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -118,6 +120,55 @@ class RuleAnalysisServiceImplTest {
         assertThat(report.conflicts()).isEmpty();
         assertThat(report.coverageGaps()).isEmpty();
         assertThat(report.unanalyzableRules()).isEmpty();
+    }
+
+    /** A(优先级 9) age>10 完全覆盖 B(优先级 1) age∈[20,30]:HIGHEST_PRIORITY/FIRST_HIT 下 B 死,ALL_HITS 下不死。 */
+    private ConditionNode between(int min, int max) {
+        return new ConditionNode(ConditionTypes.BETWEEN, "age", null,
+                Map.of(ConditionParams.MIN, min, ConditionParams.MAX, max), 0.0, null, ValueRef.METRIC);
+    }
+
+    private void stubWideCoversNarrow(DecisionStrategy strategy) {
+        when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, strategy));
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+                .thenReturn(List.of(ruleDef(11L, "R_a"), ruleDef(12L, "R_b")));
+        RuleVersion wide = activeVersion(11L, cond(ConditionTypes.GT, "age", 10));
+        wide.setDecisionBindings(List.of(new DecisionBinding("D_A", 9)));
+        RuleVersion narrow = activeVersion(12L, between(20, 30));
+        narrow.setDecisionBindings(List.of(new DecisionBinding("D_B", 1)));
+        when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(wide);
+        when(ruleVersionMapper.findActiveVersion(12L)).thenReturn(narrow);
+    }
+
+    @ParameterizedTest
+    @EnumSource(DecisionStrategy.class)
+    void decision_strategy_maps_through_and_drives_dead_rule_judgment(DecisionStrategy strategy) {
+        // 把 DecisionStrategy→SceneExecutionStrategy 的契约钉在端到端行为上:
+        // ALL_HITS 全量收集不掩盖 → 无死规则;HIGHEST_PRIORITY/FIRST_HIT 高优先级覆盖 → B 死。
+        // 若映射错(如 ALL_HITS 被错配成 HIGHEST_PRIORITY),本断言会失败。
+        stubWideCoversNarrow(strategy);
+
+        RuleSetAnalysisReport report = sut.analyze(1L, "scene-1");
+
+        if (strategy == DecisionStrategy.ALL_HITS) {
+            assertThat(report.deadRules()).isEmpty();
+        } else {
+            assertThat(report.deadRules())
+                    .extracting(f -> f.deadRuleCode(), f -> f.coveredByRuleCode())
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("R_b", "R_a"));
+        }
+    }
+
+    @Test
+    void null_decision_strategy_falls_back_to_highest_priority() {
+        // decisionStrategy 为 null → 回落 HIGHEST_PRIORITY → 与显式 HIGHEST_PRIORITY 同样判 B 死
+        stubWideCoversNarrow(null);
+
+        RuleSetAnalysisReport report = sut.analyze(1L, "scene-1");
+
+        assertThat(report.deadRules())
+                .extracting(f -> f.deadRuleCode())
+                .containsExactly("R_b");
     }
 
     @Test

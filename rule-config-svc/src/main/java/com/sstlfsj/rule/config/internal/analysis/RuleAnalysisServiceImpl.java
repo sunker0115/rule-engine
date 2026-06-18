@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.analysis;
 
 import com.sstlfsj.rule.config.api.service.RuleAnalysisService;
+import com.sstlfsj.rule.config.internal.domain.DecisionStrategy;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -59,11 +60,16 @@ public class RuleAnalysisServiceImpl implements RuleAnalysisService {
         return RuleSetAnalyzer.analyze(sceneCode, analyzableRules, strategy);
     }
 
-    /** scene.decision_strategy 同名映射到 kernel 执行策略;为空回落 HIGHEST_PRIORITY。 */
+    /** scene.decision_strategy 映射到 kernel 执行策略;为空回落 HIGHEST_PRIORITY。穷尽 switch 让加值时编译期报缺 case。 */
     private SceneExecutionStrategy mapStrategy(SceneDef scene) {
-        if (scene.getDecisionStrategy() == null) {
+        DecisionStrategy s = scene.getDecisionStrategy();
+        if (s == null) {
             return SceneExecutionStrategy.HIGHEST_PRIORITY;
         }
-        return SceneExecutionStrategy.valueOf(scene.getDecisionStrategy().name());
+        return switch (s) {
+            case HIGHEST_PRIORITY -> SceneExecutionStrategy.HIGHEST_PRIORITY;
+            case ALL_HITS -> SceneExecutionStrategy.ALL_HITS;
+            case FIRST_HIT -> SceneExecutionStrategy.FIRST_HIT;
+        };
     }
 }
