@@ -83,7 +83,10 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
   };
 
   const handleNewVersion = async () => {
-    await newVersion(tenantId, ruleDetail.ruleDefinitionId);
+    // 出新版本：克隆当前 ACTIVE 版本为新草稿（fromVersionId=当前版本），而非建空白草稿丢失规则逻辑
+    const fromVersionId = ruleDetail.currentVersionId
+      ?? ruleDetail.versions?.find(v => v.status === 'ACTIVE')?.ruleVersionId;
+    await newVersion(tenantId, ruleDetail.ruleDefinitionId, fromVersionId);
     message.success(tc('message.createSuccess'));
     onUpdated();
   };
