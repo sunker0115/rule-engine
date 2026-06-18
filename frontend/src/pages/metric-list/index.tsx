@@ -1,12 +1,12 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Switch, message, Space, Empty } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listMetrics, createMetric, getMetricUsageCounts, getMetricImpact } from '@/api/metric';
+import { listMetrics, createMetric, getMetricUsageCounts, getMetricSources } from '@/api/metric';
 import { listConnectors, getConnector } from '@/api/connector';
-import type { ConnectorDescriptor, LineageRuleRef } from '@/types';
+import type { ConnectorDescriptor } from '@/types';
 import { getMetricColumns } from '@/config/columns/metric';
 import LineageDrawer from '@/components/lineage/LineageDrawer';
 import apiClient from '@/api/client';
@@ -92,24 +92,6 @@ export default function MetricList() {
   };
 
   useEffect(() => { load(); }, [tenantId]);
-
-  // metric 血缘走版本感知的 getMetricImpact，需适配成 LineageDrawer 要的 (tenantId,code)=>{sources}：
-  // 用当前列表行的版本（metricVersion）查影响面，受影响规则字段与 LineageRuleRef 同构，直接 map。
-  const metricLineageFetcher = useCallback(
-    async (tid: number, code: string): Promise<{ sources: LineageRuleRef[] }> => {
-      const version = metrics.find((m) => m.metricCode === code)?.metricVersion ?? 1;
-      const impact = await getMetricImpact(tid, code, version);
-      const sources: LineageRuleRef[] = (impact?.affectedRules ?? []).map((r) => ({
-        ruleDefinitionId: r.ruleDefinitionId,
-        ruleCode: r.ruleCode,
-        ruleName: r.ruleName,
-        sceneCode: r.sceneCode,
-        status: r.status,
-      }));
-      return { sources };
-    },
-    [metrics],
-  );
 
   const dataSource = useMemo(() => {
     let result = metrics;
@@ -267,7 +249,7 @@ export default function MetricList() {
       code={lineageCode ?? ''}
       title={tl('metricDrawerTitle', { code: lineageCode ?? '' })}
       tenantId={tenantId}
-      fetcher={metricLineageFetcher}
+      fetcher={getMetricSources}
       onClose={() => setLineageCode(null)}
     />
   </>);

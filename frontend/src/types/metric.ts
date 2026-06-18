@@ -1,3 +1,5 @@
+import type { LineageRuleRef } from './decision';
+
 export type SourceType = 'ATTRIBUTE' | 'SQL_AGGREGATE' | 'EXTERNAL_HTTP' | 'STREAM';
 export type MetricDataType = 'LONG' | 'DOUBLE' | 'STRING' | 'BOOLEAN' | 'LIST' | 'DATE' | 'DATETIME';
 
@@ -21,6 +23,13 @@ export interface MetricImpactResult {
   metricVersion: number;
   affectedRules: AffectedRule[];
   affectedRuleCount: number;
+}
+
+/** 血缘：引用某 metric 的规则来源（版本无关，对称 DecisionSources） */
+export interface MetricSources {
+  metricCode: string;
+  sources: LineageRuleRef[];
+  sourceCount: number;
 }
 
 export interface AffectedRule {

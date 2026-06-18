@@ -92,6 +92,17 @@ public class MetricController {
         return ApiResponse.ok(service.update(tenantId, metricCode, cmd, breakingChange, actorId));
     }
 
+    /** GET /admin/v1/metrics/{code}/sources — 引用该 metric 的 ACTIVE 规则（版本无关，血缘默认视图）。 */
+    @GetMapping("/{code}/sources")
+    public ApiResponse<MetricSourcesResponse> sources(@PathVariable String code, @RequestParam Long tenantId) {
+        List<RuleRef> rules = service.findRulesReferencingMetric(tenantId, code);
+        return ApiResponse.ok(new MetricSourcesResponse(code, rules, rules.size()));
+    }
+
+    /** Metric 被引用规则响应（版本无关血缘）。 */
+    public record MetricSourcesResponse(String metricCode,
+                                        List<RuleRef> sources, int sourceCount) {}
+
     /**
      * GET /admin/v1/metrics/{metricCode}/versions/{version}/impact — 查询引用该版本的 ACTIVE 规则清单。
      *

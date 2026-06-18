@@ -24,6 +24,16 @@ public interface MetricWriteService {
     List<RuleRef> findReferencingRules(Long tenantId, String metricCode, int metricVersion);
 
     /**
+     * 查询引用某 metric 的所有 ACTIVE 规则（版本无关，跨全部版本聚合）。usages / 血缘默认视图。
+     * 版本特定的影响面用 {@link #findReferencingRules}。
+     *
+     * @param tenantId   租户 id
+     * @param metricCode metric 编码
+     * @return 引用该 metric 的规则引用项（按 ruleDefinition 去重）；无引用返回空列表
+     */
+    List<RuleRef> findRulesReferencingMetric(Long tenantId, String metricCode);
+
+    /**
      * 一次扫聚合 tenant 下每个 metricCode 的 ACTIVE 规则引用计数（版本无关，列表徽标用）。
      *
      * @param tenantId 租户 id

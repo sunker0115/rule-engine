@@ -9,9 +9,9 @@ import { useLineageStore } from '@/store/lineageStore';
 import { getRule } from '@/api/rule';
 import { getSceneMetadata } from '@/api/metadata';
 import { getScene, getAnalysis } from '@/api/scene';
-import { getMetricUsageCounts, getMetricImpact } from '@/api/metric';
+import { getMetricUsageCounts, getMetricSources } from '@/api/metric';
 import { getDecisionUsageCounts, getDecisionSources } from '@/api/decision';
-import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType, RuleVersionItem, RuleSetAnalysisReport, LineageRuleRef } from '@/types';
+import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType, RuleVersionItem, RuleSetAnalysisReport } from '@/types';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
@@ -139,27 +139,13 @@ export default function RuleEditor() {
   // 定位 finding 对应规则：编辑器为单规则视图，关闭抽屉让用户看到当前规则编辑区与 badge
   const handleLocate = () => setAnalysisOpen(false);
 
-  // metric 血缘适配 fetcher：版本取自 metadata.availableMetrics（T9 范式），affectedRules 与 LineageRuleRef 同构直接 map
-  const metricLineageFetcher = async (tid: number, code: string): Promise<{ sources: LineageRuleRef[] }> => {
-    const version = metadata?.availableMetrics?.find((m) => m.metricCode === code)?.metricVersion ?? 1;
-    const impact = await getMetricImpact(tid, code, version);
-    const sources: LineageRuleRef[] = (impact?.affectedRules ?? []).map((r) => ({
-      ruleDefinitionId: r.ruleDefinitionId,
-      ruleCode: r.ruleCode,
-      ruleName: r.ruleName,
-      sceneCode: r.sceneCode,
-      status: r.status,
-    }));
-    return { sources };
-  };
-
-  // 一个共享抽屉实例：按 openRequest.kind 决定标题与 fetcher
+  // 一个共享抽屉实例：按 openRequest.kind 决定标题与 fetcher（metric 走版本无关 /sources，与 decision 同口径）
   const lineageTitle = openRequest
     ? openRequest.kind === 'metric'
       ? tl('metricDrawerTitle', { code: openRequest.code })
       : tl('drawerTitle', { code: openRequest.code })
     : '';
-  const lineageFetcher = openRequest?.kind === 'metric' ? metricLineageFetcher : getDecisionSources;
+  const lineageFetcher = openRequest?.kind === 'metric' ? getMetricSources : getDecisionSources;
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!ruleDetail) return <div>{t('editor.notFound')}</div>;

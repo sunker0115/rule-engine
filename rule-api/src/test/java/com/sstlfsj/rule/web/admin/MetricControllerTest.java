@@ -267,4 +267,34 @@ class MetricControllerTest {
                 .andExpect(jsonPath("$.data[0].code").value("account.age"))
                 .andExpect(jsonPath("$.data[0].count").value(5));
     }
+
+    // ── GET /admin/v1/metrics/{code}/sources（版本无关血缘）──────────────────────
+
+    @Test
+    void sources_returns200_withMetricSourcesResponse() throws Exception {
+        List<RuleRef> refs = List.of(
+                new RuleRef(10L, "risk.transfer", "转账风控", "risk.transfer", "ACTIVE"),
+                new RuleRef(11L, "risk.login",    "登录风控", "risk.login",    "DISABLED")
+        );
+        when(service.findRulesReferencingMetric(1L, "account.age")).thenReturn(refs);
+
+        mockMvc.perform(get("/admin/v1/metrics/account.age/sources").param("tenantId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.metricCode").value("account.age"))
+                .andExpect(jsonPath("$.data.sourceCount").value(2))
+                .andExpect(jsonPath("$.data.sources").isArray())
+                .andExpect(jsonPath("$.data.sources.length()").value(2))
+                .andExpect(jsonPath("$.data.sources[0].ruleCode").value("risk.transfer"))
+                .andExpect(jsonPath("$.data.sources[0].sceneCode").value("risk.transfer"))
+                .andExpect(jsonPath("$.data.sources[1].ruleName").value("登录风控"));
+
+        verify(service).findRulesReferencingMetric(1L, "account.age");
+    }
+
+    @Test
+    void sources_missingTenantId_returns400() throws Exception {
+        mockMvc.perform(get("/admin/v1/metrics/account.age/sources"))
+                .andExpect(status().isBadRequest());
+    }
 }

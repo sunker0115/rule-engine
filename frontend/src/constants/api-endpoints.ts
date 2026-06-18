@@ -31,6 +31,7 @@ export const ENDPOINTS = {
   METRIC_UPDATE: (code: string) => `${ADMIN}/metrics/${code}`,
   METRIC_TOGGLE_STATUS: (code: string) => `${ADMIN}/metrics/${code}/status`,
   METRIC_IMPACT: (code: string, version: number) => `${ADMIN}/metrics/${code}/versions/${version}/impact`,
+  METRIC_SOURCES: (code: string) => `${ADMIN}/metrics/${code}/sources`,
   METRIC_TEST:   (code: string) => `${ADMIN}/metrics/${code}:test`,
 
   // Connector
