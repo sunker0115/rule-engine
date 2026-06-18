@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 决策表行内分析（DMN 风格）：在<b>同一张决策表内部</b>，找出行对的输入相交、决策冲突与被掩盖的死行。
@@ -102,7 +103,7 @@ public final class DecisionTableDetector {
                 String decJ = rows.get(j).decisionCode();
 
                 if (ci.overlaps(cj) == Tri.TRUE) {
-                    if (java.util.Objects.equals(decI, decJ)) {
+                    if (Objects.equals(decI, decJ)) {
                         overlaps.add(new OverlapFinding(locI, locJ,
                                 locI + " 与 " + locJ + " 输入相交且决策相同(" + decI + ")，可考虑合并",
                                 Severity.INFO));

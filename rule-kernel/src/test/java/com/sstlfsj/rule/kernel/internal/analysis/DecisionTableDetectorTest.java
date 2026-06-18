@@ -117,6 +117,45 @@ class DecisionTableDetectorTest {
     }
 
     @Test
+    void same_metric_two_columns_meet_narrows_dimension() {
+        // 同一行内 age@METRIC 两列都非 wildcard：行1 (age>10 ∧ age<50) meet 收窄为 (10,50)；
+        // 行2 age in [20,30] ⊆ (10,50) → 行1 ⊇ 行2 真相交。验证 dims.merge(meet) 走真实交集路径。
+        AnalyzableRule t = table("TM1",
+                List.of(col("age", ConditionTypes.GT), col("age", ConditionTypes.LT), col("age", ConditionTypes.BETWEEN)),
+                List.of(
+                        new DecisionTableNode.Row(Arrays.asList(10, 50, null), "D_SAME"),
+                        new DecisionTableNode.Row(Arrays.asList(null, null, List.of(20, 30)), "D_SAME")));
+
+        DecisionTableDetector.DecisionTableFindings r = DecisionTableDetector.detect(List.of(t));
+
+        // 收窄维 (10,50) 与 [20,30] 相交且同决策 → overlap；且 (10,50) ⊇ [20,30] → 行2 死行
+        assertThat(r.overlaps()).hasSize(1);
+        assertThat(r.overlaps().getFirst().locA()).isEqualTo("TM1#row1");
+        assertThat(r.deadRows()).hasSize(1);
+        assertThat(r.deadRows().getFirst().deadRuleCode()).isEqualTo("TM1#row2");
+    }
+
+    @Test
+    void same_metric_two_columns_meet_contradiction_yields_empty_dimension() {
+        // 行1 age>50 ∧ age<5 → meet 为空维（该行恒不命中）。钉住空维的真实行为：
+        // 空集 overlaps 任何空间 = FALSE → 行1 与正常行2 (age in [10,20]) 不相交 → 无 overlap / conflict；
+        // 空集 subsumes 非空 = FALSE（恒不命中的行不掩盖别人），且 [10,20] 不 subsumes 空集（unionKeys 含 age 维，
+        // [10,20].subsumes(Empty)=TRUE 但方向是 row2⊇row1，而 i<j 仅判 row_i ⊇ row_j 即 row1⊇row2=FALSE）→ 无死行。
+        AnalyzableRule t = table("TM2",
+                List.of(col("age", ConditionTypes.GT), col("age", ConditionTypes.LT), col("age", ConditionTypes.BETWEEN)),
+                List.of(
+                        new DecisionTableNode.Row(Arrays.asList(50, 5, null), "D_A"),
+                        new DecisionTableNode.Row(Arrays.asList(null, null, List.of(10, 20)), "D_B")));
+
+        DecisionTableDetector.DecisionTableFindings r = DecisionTableDetector.detect(List.of(t));
+
+        // 恒不命中的空维行不产生任何行内发现（零误报）
+        assertThat(r.overlaps()).isEmpty();
+        assertThat(r.conflicts()).isEmpty();
+        assertThat(r.deadRows()).isEmpty();
+    }
+
+    @Test
     void non_decision_table_rule_is_skipped() {
         // 非决策表规则（AST_BOOLEAN）不参与行内分析
         ConditionNode c = new ConditionNode(ConditionTypes.GT, "age", null, Map.of("threshold", 10), 0.0);
