@@ -1,166 +1,138 @@
 # 规则↔指标血缘与变更影响分析（B33）— 设计
 
-> 状态：设计稿（2026-06-18）。来源 `08-evolution.md` §2.28（治理维度）。配套底座：D6 快照、D17 索引热更（`SceneRuleIndex` + `SceneIndexEventListener` + `IndexStartupLoader`）、B31 静态分析读快照范式。
+> 状态：设计稿（2026-06-18，v2 收敛版）。来源 `08-evolution.md` §2.28（治理维度）。
 >
-> 核心立场：**血缘是「同源同刷新的第二投影」，不是独立读模型。** 与运行时 `SceneRuleIndex` 共用同一批 ACTIVE 快照、同一刷新触发，一次 reload 喂两个投影，永不分叉。纯读快照，零 DDL，不碰评估热路径。
+> 核心立场（**v2 关键修正**）：metric→规则的影响面查询**本仓已实现**（`MetricWriteService.findReferencingRules` + `GET /admin/v1/metrics/{code}/versions/{version}/impact`，按需扫 DB、版本感知、强一致）。B33 真正缺口只有**反向：Decision→规则**。故放弃 §2.28 字面的「常驻 LineageIndex + D17 热更」——那对已有按需扫机制是 over-engineering 且双轨重复。B33 收敛为「沿用既有按需扫房规，补齐反向方向 + 对称 API + 前端入口」。
 
 ---
 
 ## 一、范围与不变量
 
-**做什么**：在已发布规则集上建双向血缘索引，回答两类治理问题，并提供变更前影响预检。
+**做什么**：补齐 Decision→规则反向血缘，使「改 metric / 下线 Decision 前看影响面」双向闭环。
 
-- **正向**：metric → 引用它的规则/Scene（改 metric 口径前看炸点）。
-- **反向**：Decision → 产出它的规则（Decision 覆盖来源）。
-- **变更影响预检**：改 metric / 下线 Decision 前，列出受影响规则清单。
+- **正向 metric→规则**：已有，不动（`findReferencingRules` + `/metrics/{code}/versions/{version}/impact`）。
+- **反向 Decision→规则**（本次新增）：列出产出某 Decision 的 ACTIVE 规则，兼作下线 Decision 前的影响预检。
+- **前端入口**（本次新增）：Decision 详情处「产出来源」入口调反向查询。
 
-**v1 范围 = C**：双向查询 API + 变更影响预检端点 + 前端入口。
+**v1 范围 = C 收敛实现**：双向查询（正向复用 + 反向新增）+ 变更影响预检（metric 侧已有 / Decision 侧 = `/sources`）+ 前端入口。
 
 **不变量（不得破）**：
 
-1. **只反映 ACTIVE 线上现实**：索引随发布事件更新，草稿态不进索引。语义对齐「改 metric 看线上炸点」。
-2. **与运行时索引强一致**：`LineageIndex` 与 `SceneRuleIndex` 来自同一快照列表、同一刷新瞬间构建；不允许两索引分叉（分叉会给出假安全信号——说 metric 没人用、实则评估仍在引用）。
-3. **零 AST 重走，复用冻结真相源**：metric 引用取 `snapshot.metricDependencies()`、Decision 引用取 `snapshot.decisionBindings()`，两者均为发布期已冻结的快照顶层字段，不另写遍历器。
-4. **零 DDL、不碰热路径、不自动触发下游**：纯内存读索引；不自动触发 §2.27 效果对照 / §2.25 回放，只留挂钩位。
+1. **沿用既有按需扫 DB 房规**：与 `findReferencingRules` 同一范式——扫 ACTIVE `rule_version`、读已提交 DB（强一致），不引入常驻内存索引、不挂事件、不碰评估热路径。
+2. **只反映 ACTIVE 线上现实**：口径对齐既有实现——以 `rv.status=ACTIVE` 判定「参与评估」，不按 `rule_definition.status` 过滤。
+3. **复用冻结真相源**：Decision 引用取 `rule_version.decision_bindings`（typed `List<DecisionBinding>`，发布期冻结），不另写 AST 遍历。
+4. **外科式新增**：不重构已工作的 `findReferencingRules`；反向查询自成一体，结构上镜像但不强行抽公共扫描器（避免在同一改动里动 proven 代码；如需 DRY 抽取另立）。
 
 ---
 
 ## 二、总体架构
 
 ```
-配置发布 ── SceneChangedEvent / RulePublishedEvent ──▶ eval-svc 既有 reload 路径
-                                                          │
-                          loader.loadBySceneWithStrategy(scene)  ← 单次快照加载
-                                                          │
-                              ┌───────────────────────────┴───────────────────────────┐
-                              ▼                                                         ▼
-                  sceneRuleIndex.replaceScene(...)                       lineageIndex.replaceScene(...)
-                  （运行时倒排索引，评估用）                              （血缘反向索引，治理用）
-                                                                                        │
-                                                          ┌─────────────────────────────┘
-                                                          ▼
-                                          LineageQueryService（eval-svc，纯读内存）
-                                                          ▲
-                                                          │
-                                   LineageController（rule-api，/admin/v1，admin 侧）
+GET /admin/v1/decisions/{code}/sources  (rule-api, admin)
+              │
+              ▼
+DecisionService.findRulesProducingDecision(tenantId, decisionCode)   (config-svc)
+              │  按需扫，强一致
+              ├─ ruleDefinitionMapper.findByTenant(tenantId)
+              ├─ sceneMapper.findByIds(sceneIds)            → sceneId→sceneCode
+              ├─ ruleVersionMapper.findActiveByRuleDefIds() → ACTIVE rule_version
+              └─ 筛 rv.getDecisionBindings() 含 decisionCode → List<RuleRef>
 ```
 
-启动全量：`IndexStartupLoader.onApplicationReady` 同样一次加载喂两个索引。
+与既有 `MetricWriteServiceImpl.findReferencingRules` 完全同骨架，仅过滤谓词不同（metricDependencies 含 (code,version) → decisionBindings 含 code）。
 
 ---
 
 ## 三、组件设计
 
-### 3.1 `LineageIndex`（rule-kernel `internal/index`，纯 Java）
+### 3.1 `DecisionService.findRulesProducingDecision`（config-svc）
 
-`SceneRuleIndex` 的姊妹，纯 Java 无 Spring，可在 eval-svc / sdk 共用。两张反向索引 + 租户隔离：
+接口（`config/api/service/DecisionService.java` 新增方法）：
 
-- `metricCode → Set<RuleRef>`
-- `decisionCode → Set<RuleRef>`
-
-`RuleRef`（kernel `api/model` 或 `internal/index`，纯 record）：
-
-```
-RuleRef(String tenantId, String sceneCode, String ruleCode, long version, Long ruleVersionId)
-```
-
-足够定位产出规则；`equals/hashCode` 按 `ruleVersionId`（不可变唯一）去重。
-
-方法：
-
-- `replaceScene(String tenantId, String sceneCode, Collection<RuleVersionSnapshot> snapshots)`
-  原子替换该 (tenant, scene) 在两张反向 map 中的全部贡献。仿 `SceneRuleIndex.replaceScene`：先按新快照集重算该 scene 的所有 (metricCode/decisionCode → RuleRef) 条目，再摘除该 scene 已不在新集合中的旧条目。空集合也能摘干净（scene 规则全禁用/删除）。
-- `remove(String tenantId, String sceneCode)`：scene 禁用时移除该 scene 全部贡献。
-- `metricUsages(String tenantId, String metricCode)` → `List<RuleRef>`（按 sceneCode、ruleCode 确定性排序）。
-- `decisionSources(String tenantId, String decisionCode)` → `List<RuleRef>`。
-
-**抽取逻辑（封装在 `replaceScene` 内）**：对每条 snapshot——
-- metric：`snapshot.metricDependencies()` 取 `metricCode`（已覆盖 AST_BOOLEAN/评分卡/决策树/决策表，见 `MetricDependencyCollector`）。
-- decision：`snapshot.decisionBindings()` 取 `decisionCode`。
-
-**索引内部组织**：反向 map 用扁平 `metricCode → Set<RuleRef>`（`RuleRef` 自带 sceneCode）；为支持「按 scene 摘除旧条目」而不全表扫，另维护正向反查表 `sceneKey → Set<String>`（该 scene 引用过的 metricCode/decisionCode 集合，`sceneKey = tenant:scene`）。`replaceScene` 流程：
-
-1. 用反查表取该 scene 旧引用的 code 集，对这些 code 的 `Set<RuleRef>` 删除 sceneKey 匹配的项（targeted，O(本 scene 引用数) 而非 O(全部)）；
-2. 从新快照抽 code → 对应 `Set<RuleRef>` 加入新 RuleRef；
-3. 反查表更新为新 code 集。
-
-正向反查表是「为风控规模」的实质需要（避免每次发布 O(全部 metric) 扫描），非投机。
-
-**并发**：反向 map 与反查表用 `ConcurrentHashMap`；治理查询是冷路径，按 scene 维度增删的近原子语义（与 `SceneRuleIndex` 一致）足够，不追求跨 scene 全局快照隔离。
-
-### 3.2 喂数据（eval-svc，扩既有 reload 路径）
-
-`LineageIndex` 注册为 bean（`EvalAutoConfiguration`，仿 `sceneRuleIndex()`）。
-
-- **`SceneIndexEventListener.onSceneChanged`**：listener 已拿到 `byEventType` 快照（且已 dedup 成 `distinct` 喂 scriptWarmer）。把同一份 `distinct` 快照集分发给第二个 sink：
-  - `active=false` → `lineageIndex.remove(tenant, scene)`（与 `sceneRuleIndex.remove` 并列）。
-  - `active=true` → `lineageIndex.replaceScene(tenant, scene, distinct)`（与 `sceneRuleIndex.replaceScene` 并列）。
-- **`IndexStartupLoader.onApplicationReady`**：启动全量加载时，同一批快照按 scene 分组后同样喂 `lineageIndex.replaceScene`。
-
-listener 只多「路由到第二 sink」一行调用，抽取逻辑全在 `LineageIndex` 内。两索引同源同刷新，结构上不可能分叉。
-
-> **设计决策**：为何不用独立 `LineageIndexEventListener`？血缘与运行时索引数据完全同源、同刷新触发、无独立重建节奏——是「二级索引/单次 build 多投影」（DB 二级索引、Drools KieBase reload 范式），不是「可独立演进的 CQRS 读模型」。独立 listener 的收益（独立演进/重建/故障隔离）对不上本场景，而其代价（两索引分叉→假安全信号、同批快照扫两遍 DB）正好砸在风控用例上。故否决。
-
-### 3.3 `LineageQueryService`（eval-svc）
-
-纯读 `LineageIndex` 的 service 接口（`api/service`）+ 实现（`internal`）：
-
-```
-List<RuleRef> metricUsages(String tenantId, String metricCode);
-List<RuleRef> decisionSources(String tenantId, String decisionCode);
+```java
+/**
+ * 查询产出某 decision 的所有 ACTIVE 规则（下线 decision 前评估影响面 / Decision 覆盖来源）。
+ * 口径同 findReferencingRules：以 rv.status=ACTIVE 判定参与评估，不按 rule_definition.status 过滤。
+ *
+ * @param tenantId     租户 id
+ * @param decisionCode decision 编码
+ * @return 产出该 decision 的规则引用项；无引用返回空列表
+ */
+List<RuleRef> findRulesProducingDecision(Long tenantId, String decisionCode);
 ```
 
-变更影响预检复用上述两查询——见 §3.4 端点语义。
+返回类型 `RuleRef`：`DecisionService` 内嵌 record，字段镜像 `MetricWriteService.RuleRef`（不复用 metric 侧嵌套类型——避免 Decision 服务依赖 metric 服务的内部类型；轻微结构重复可接受）：
 
-### 3.4 `LineageController`（rule-api，admin 侧）
-
-rule-api 读 eval 索引已有 `SdkSnapshotController` 先例。tenant 从请求上下文取（同其它 admin API）。
-
-- `GET /admin/v1/metrics/{code}/usages` → 引用该 metric 的规则清单（正向）。
-- `GET /admin/v1/decisions/{code}/sources` → 产出该 Decision 的规则清单（反向）。
-- `GET /admin/v1/metrics/{code}/impact` → **变更影响预检**：改/下线该 metric 前的受影响规则清单。语义 = `usages` 结果 + 「将失效」标注（受影响规则数、涉及 Scene 列表）。**不**自动触发回放/效果对照。
-- `GET /admin/v1/decisions/{code}/impact` → 下线该 Decision 前的受影响（产出）规则清单。
-
-响应 DTO（rule-api `web/admin/dto`，DTO↔RuleRef 走 MapStruct 或字段极少时手写）：
-
-```
-LineageUsageResponse(String code, List<RuleRefView> rules)
-RuleRefView(String sceneCode, String ruleCode, long version, Long ruleVersionId)
-ImpactResponse(String code, int affectedRuleCount, List<String> affectedScenes, List<RuleRefView> rules)
+```java
+/** 产出某 decision 的规则引用项。sceneCode 由 rule_definition.scene_id 关联；status 为 rule_definition.status。 */
+record RuleRef(Long ruleDefinitionId, String ruleCode, String ruleName,
+               String sceneCode, String status) {}
 ```
 
-`RuleRefView` 按 (sceneCode, ruleCode) 确定性排序。
+实现（`DecisionServiceImpl`）：
 
-### 3.5 前端入口
+- 依赖新增：`RuleDefinitionMapper` / `RuleVersionMapper` / `SceneMapper`（追加 final 字段，`@RequiredArgsConstructor` 自动注入）。
+- 方法体四步骤镜像 `findReferencingRules`：findByTenant → findByIds(scene) → findActiveByRuleDefIds → 筛选；过滤谓词 = `containsDecision(rv.getDecisionBindings(), decisionCode)`：
 
-参考 B31 落点风格（不照搬右栏方案，以实际信息架构为准）：
+```java
+private boolean containsDecision(List<DecisionBinding> bindings, String decisionCode) {
+    if (bindings == null || bindings.isEmpty()) return false;
+    return bindings.stream().anyMatch(b -> decisionCode.equals(b.decisionCode()));
+}
+```
 
-- **metric 详情页 / 列表行**：「被引用」面板/入口，调 `usages`；编辑或下线 metric 前可点「影响预检」调 `impact`。
-- **Decision 详情页**：「产出来源」面板，调 `sources`。
+- `@Transactional(readOnly = true)`。
 
-具体 UI 落点（独立面板 vs 抽屉 vs 行内徽标）在前端实现阶段定，本 spec 不锁死视觉形态，只锁定「两个查询入口 + 两个影响预检入口」的数据契约。
+### 3.2 `DecisionController` 端点（rule-api，admin 侧）
+
+`/admin/v1/decisions`（既有 controller，新增一个 GET）：
+
+```java
+/** GET /admin/v1/decisions/{code}/sources — 产出该 decision 的 ACTIVE 规则清单（兼作下线影响预检）。 */
+@GetMapping("/{code}/sources")
+public ApiResponse<DecisionSourcesResponse> sources(@PathVariable String code,
+                                                    @RequestParam Long tenantId) {
+    List<RuleRef> rules = decisionService.findRulesProducingDecision(tenantId, code);
+    return ApiResponse.ok(new DecisionSourcesResponse(code, rules, rules.size()));
+}
+```
+
+响应 DTO（与 `MetricController.ImpactResponse` 同风格，定义在 controller 内嵌或 `web/admin/dto`）：
+
+```java
+/** Decision 产出来源响应：产出某 decision 的规则清单（兼作下线影响面）。 */
+record DecisionSourcesResponse(String decisionCode, List<RuleRef> sources, int sourceCount) {}
+```
+
+`tenantId` 用 `@RequestParam Long`（同 `MetricController`/`DecisionController` 既有端点）。
+
+### 3.3 前端入口
+
+- **Decision 详情/列表**：「产出来源」入口/面板，调 `GET /admin/v1/decisions/{code}/sources`，列出产出规则（sceneCode / ruleCode / ruleName / status）；下线 Decision 前可见影响面。
+- metric 侧影响面端点（`/versions/{version}/impact`）已存在；若前端尚无入口，顺带补一个对称入口（实现期确认是否已有，避免重复）。
+- 具体 UI 落点（详情页面板 vs 列表行抽屉）实现期定，本 spec 只锁数据契约。
 
 ---
 
 ## 四、边界 / 不做
 
-- 不持久化血缘（纯内存，随索引热更重建；进程重启由 `IndexStartupLoader` 全量重建）。
-- 不自动触发 §2.27 效果对照 / §2.25 回放——`impact` 端点只返回清单，挂钩位留给后续。
-- 草稿态血缘不做（只反映 ACTIVE）；若未来要「草稿态预检」另立。
-- **已知缺口（文档明记）**：EXPRESSION_SCRIPT 规则的 metric 引用藏在脚本体内、不进 `metricDependencies` → 血缘漏报该类引用，与 §2.28「脚本不透明」一致。Decision 引用仅取 `decisionBindings`（文档既定绑定模型）。
+- 不建常驻索引、不挂事件、零 DDL、不碰评估热路径。
+- 不自动触发 §2.27 效果对照 / §2.25 回放。
+- metric→规则不重做（既有 `findReferencingRules` 不动）；不强行抽 metric/decision 公共扫描器（外科式新增，DRY 抽取另立）。
+- **已知缺口（沿袭既有实现，文档明记）**：Decision 引用仅取 `decision_bindings`（文档既定绑定模型）；决策树叶子 / 决策表输出格若携带不在 bindings 内的 decisionCode 不计入（与既有 metric 侧「只认 metric_dependencies」对称——只认发布期冻结的结构化引用）。
 
 ---
 
 ## 五、测试策略
 
-- **kernel 单测（`LineageIndexTest`）**：`replaceScene` 增/改/摘除、`remove`、`metricUsages`/`decisionSources` 查询、租户隔离、同 metric 被多规则引用去重、scene 规则全删后摘干净、两层结构按 scene 差量摘除正确性。
-- **eval-svc 集成测（真 MySQL，仿 `SceneIndexEventListenerTest`）**：
-  - 发布 → `SceneChangedEvent` 喂入 → `usages`/`sources` 命中。
-  - `IndexStartupLoader` 启动全量加载后查询命中。
-  - scene 禁用（`active=false`）→ 血缘条目摘除。
-  - 同一次 reload 后 `SceneRuleIndex` 与 `LineageIndex` 对该 scene 的规则集一致（强一致回归）。
-- **rule-api controller 测**：四个端点请求/响应契约 + tenant 上下文。
-- **功能端到端**（schema 无改动，但走配置→发布→查询链路）：起服务，建 metric/Decision/规则并发布，查四个端点验证清单正确，验证 metric 下线预检拦到引用规则。
+- **config-svc 单测（`DecisionServiceImplTest`，真 MySQL，镜像 `MetricWriteServiceImplTest` 的 findReferencingRules 用例）**：
+  - 建 decision + 建引用它的 ACTIVE rule_version → `findRulesProducingDecision` 命中、字段（ruleCode/sceneCode/status）正确。
+  - 多规则产出同一 decision → 全部返回。
+  - 无引用 → 空列表。
+  - 引用别的 decision 的规则 → 不返回（谓词精确）。
+  - 口径回归：`rv.status=ACTIVE` 但 `rd.status=DISABLED` 的规则仍返回。
+- **rule-api controller 测**：`GET /admin/v1/decisions/{code}/sources` 请求/响应契约 + tenant param + 计数正确。
+- **功能端到端**（走配置→发布→查询链路）：起服务，建 Decision、建绑定它的规则并发布，查 `/sources` 验证清单正确；下线该 Decision 前 `/sources` 返回引用规则（影响预检生效）。
 
 ---
 
@@ -168,10 +140,9 @@ ImpactResponse(String code, int affectedRuleCount, List<String> affectedScenes, 
 
 | 模块 | 新增/改动 |
 |---|---|
-| rule-kernel | `internal/index/LineageIndex`（新）、`RuleRef` record（新） |
-| rule-eval-svc | `EvalAutoConfiguration` 注册 `lineageIndex` bean；`SceneIndexEventListener` / `IndexStartupLoader` 各加第二 sink 调用；`LineageQueryService` + impl（新） |
-| rule-api | `LineageController`（新）、`web/admin/dto` 响应 DTO + MapStruct convert（新） |
-| frontend | metric/Decision 血缘入口 + 影响预检入口（新） |
-| docs | `08-evolution.md` §2.28 从「演进方向」改写为「已实装」块（实装后） |
+| rule-config-svc | `DecisionService` 新增 `findRulesProducingDecision` + 内嵌 `RuleRef` record；`DecisionServiceImpl` 加 3 mapper 依赖 + 方法实现 + `containsDecision` 私有谓词 |
+| rule-api | `DecisionController` 新增 `GET /{code}/sources` + `DecisionSourcesResponse` DTO；（可选）前端缺失时补 metric impact 对称入口 |
+| frontend | Decision「产出来源」入口（调 `/sources`） |
+| docs | `08-evolution.md` §2.28 从「演进方向：LineageIndex」重写为「已实装：沿用按需扫，补反向」 |
 
-无 DB 迁移、无 kernel SPI 变更、无评估热路径改动。
+无 DB 迁移、无 kernel 改动、无 SPI 变更、无评估热路径改动、不动既有 `findReferencingRules`。
