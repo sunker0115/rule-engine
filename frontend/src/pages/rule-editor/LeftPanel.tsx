@@ -20,13 +20,15 @@ interface Props {
   /** 打开试算抽屉；传入 version 则针对该历史版本，不传走默认最新版本 */
   onOpenDryRun: (version?: RuleVersionItem) => void;
   onUpdated: () => void;
+  /** 轻量重算规则集分析（保存草稿后用——内容变了但状态/版本未变，无需全量 onUpdated）。 */
+  onReanalyze?: () => void;
   /** 规则集分析报告（null 表示尚未拉取）。 */
   analysisReport?: RuleSetAnalysisReport | null;
   /** 点击摘要条打开规则集分析抽屉。 */
   onOpenAnalysis?: () => void;
 }
 
-export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysisReport, onOpenAnalysis }: Props) {
+export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReanalyze, analysisReport, onOpenAnalysis }: Props) {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
   const ta = useTranslation('analysis').t;
@@ -64,6 +66,8 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
         script,
       });
       message.success(tc('message.saveSuccess'));
+      // 草稿存盘后内容变了，规则集分析失效——轻量重算（不走全量 onUpdated，避免冗余请求）
+      onReanalyze?.();
     } finally { setSaving(false); }
   };
 

@@ -120,6 +120,14 @@ export default function RuleEditor() {
           Object.fromEntries((metricCounts ?? []).map((c) => [c.code, c.count])),
           Object.fromEntries((decisionCounts ?? []).map((c) => [c.code, c.count])),
         );
+
+        // 分析随重载刷新：发布/丢弃/新版本走 load 时一并重算（这些操作改了 ACTIVE/版本，本就该全量重载）；
+        // 非可分析 kind 清空。保存草稿不走 load——它只让分析失效，走轻量 reanalyze（见 onReanalyze）。
+        if (isAnalyzableKind(detail.kind)) {
+          fetchAnalysis(detail.sceneCode, Number(detail.tenantId) || currentId || 0);
+        } else {
+          setAnalysisReport(null);
+        }
       }
     } finally {
       setLoading(false);
@@ -128,13 +136,12 @@ export default function RuleEditor() {
 
   useEffect(() => { load(); }, [currentId, ruleId]);
 
-  // 规则详情就绪后拉取规则集分析（用于左栏摘要条 + 按钮未读计数）；非可分析 kind 不拉取
-  useEffect(() => {
+  // 轻量重算：仅刷新规则集分析（保存草稿后用——内容变了但状态/版本/计数都没变，无需全量 load）
+  const reanalyze = () => {
     if (ruleDetail && isAnalyzableKind(ruleDetail.kind)) {
       fetchAnalysis(ruleDetail.sceneCode, Number(ruleDetail.tenantId) || currentId || 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ruleDetail?.sceneCode, ruleDetail?.tenantId, ruleDetail?.kind]);
+  };
 
   // 定位 finding 对应规则：编辑器为单规则视图，关闭抽屉让用户看到当前规则编辑区与 badge
   const handleLocate = () => setAnalysisOpen(false);
@@ -164,6 +171,7 @@ export default function RuleEditor() {
           ruleDetail={ruleDetail}
           onOpenDryRun={openDryRun}
           onUpdated={load}
+          onReanalyze={reanalyze}
           analysisReport={analysisReport}
           onOpenAnalysis={() => setAnalysisOpen(true)}
         />
@@ -215,7 +223,7 @@ export default function RuleEditor() {
         sceneCode={ruleDetail.sceneCode}
         report={analysisReport}
         loading={analysisLoading}
-        onReanalyze={() => fetchAnalysis(ruleDetail.sceneCode, Number(ruleDetail.tenantId) || currentId || 0)}
+        onReanalyze={reanalyze}
         onLocate={handleLocate}
       />
 
