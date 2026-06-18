@@ -370,15 +370,15 @@
 
 ### 2.28 规则↔指标血缘与变更影响分析（来源 对照成熟决策平台分析 — 治理维度，数据血缘同类能力）
 
-- **v1 现状**：规则 AST 引用 `metricCode`（评估期扫 AST 收集，D25）；Decision 由 `decisionBindings` 绑定。引用关系**散落在各规则快照内**，无聚合视图——改一个 metric 口径前看不到炸点，也答不了"这个 Decision 由哪些规则产出"。
-- **触发条件**：metric / Decision 数量增长后，运营改 metric 定义（口径、版本，§2.2）或下线 Decision 前需要影响面评估，避免"改了 A 指标悄悄改变了 B 规则的行为"。
-- **演进方向（双向血缘，建在快照上）**：
-  - **正向**：metric → 引用它的规则/Scene 列表（改 metric 的影响面）；
-  - **反向**：Decision → 产出它的规则列表（Decision 覆盖来源）；
-  - **变更影响预检**：metric 定义变更 / Decision 下线时，列出受影响规则 + 可选触发 §2.27 效果对照或 §2.25 回放验证。
-- **接口衔接面**：新增 `LineageIndex`（从 `rule_version` 快照抽 metricCode/decisionCode 引用关系建索引，随发布增量更新——复用 D17 索引热更机制）+ 查询 API（`GET /admin/v1/metrics/{code}/usages`、`GET /admin/v1/decisions/{code}/sources`）。**纯读快照，零 DDL，不碰热路径。**
-- **迁移成本**：低（快照里抽引用建索引 + 查询 API；增量更新挂在既有发布事件上）。
-- **依赖与联动**：建在 D6 快照 + D17 索引热更之上；与 §2.2 metric 版本化联动（版本变更的影响面）；与 §2.26 静态分析共享"读快照抽结构"的底座，可同一分析模块承载。
+**已实装（B33 / 2026-06-18）：双向血缘 + 变更影响预检，沿用按需扫快照、零常驻索引。**
+
+- **正向 metric→规则（早随 B6 实装）**：`MetricWriteService.findReferencingRules` + `GET /admin/v1/metrics/{code}/versions/{version}/impact`——按需扫该租户全部 ACTIVE `rule_version` 的 `metric_dependencies`，版本感知、读已提交 DB（强一致）。2026-06-18 补**版本无关批量计数** `GET /admin/v1/metrics/usage-counts`（一次扫聚合 `metricCode→引用规则数`，供列表徽标）。
+- **反向 Decision→规则（2026-06-18 补齐）**：`DecisionService.findRulesProducingDecision` 扫 ACTIVE `rule_version` 的 `decision_bindings`，对称 `findReferencingRules` 范式（专用投影 `findActiveWithDecisionByRuleDefIds` 含 decision_bindings 列）；`GET /admin/v1/decisions/{code}/sources`（产出该 Decision 的规则，兼作下线影响预检）+ `GET /admin/v1/decisions/{code}`（详情）+ `GET /admin/v1/decisions/usage-counts`（批量计数）。
+- **前端（复用 §2.26 B31 治理范式统一）**：「徽标 + 抽屉 + 可点定位卡片」统一 Decision/Metric 血缘呈现——列表「被 N 引用」徽标点开血缘抽屉、详情页「被引用规则」Tab（可下钻规则编辑器）、规则编辑器 metric/decision 旁挂反向血缘徽标；新增 **Decision 详情页**消除与 Metric 详情的信息架构不对称；**停用 Decision 前血缘拦截**（仍被 ACTIVE 规则产出则二次确认列出受影响规则）。
+- **落点**：`rule-config-svc` `DecisionServiceImpl` / `MetricWriteServiceImpl`（按需扫，`@Transactional(readOnly=true)`）+ `rule-api` `DecisionController` / `MetricController`；前端 `components/lineage/`（抽屉/表格/hook）+ Decision/Metric 列表与详情 + 编辑器徽标。
+- **与原设想偏差（重要）**：原"演进方向"拟建常驻 `LineageIndex`（从快照抽引用建索引、挂发布事件增量更新、复用 D17 热更）。实装前核实发现 metric→规则的按需扫 DB（`findReferencingRules`）**早已存在**，常驻索引对它是 over-engineering 且双轨重复；血缘是**冷路径**（治理查询，非评估热路径），按需扫强一致且足够。故**放弃 LineageIndex，沿用既有按需扫房规、只补反向方向 + 批量计数 + 前端统一**——无新增索引、零 DDL、不挂事件、不碰评估热路径。
+- **已知缺口**：仅认发布期冻结的结构化引用——Decision 仅 `decision_bindings`、metric 仅 `metric_dependencies`；EXPRESSION_SCRIPT 脚本体内引用的 metric 不进 `metric_dependencies`，故脚本规则的 metric 血缘漏报（与脚本不透明一致）。
+- **依赖与联动**：建在 D6 快照之上；与 §2.2 metric 版本化联动（版本变更的影响面）；与 §2.26 静态分析共享"读快照抽结构"的范式（但各自按需扫，未合并模块）。
 
 ---
 

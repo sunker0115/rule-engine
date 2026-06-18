@@ -31,6 +31,7 @@ export const ENDPOINTS = {
   METRIC_UPDATE: (code: string) => `${ADMIN}/metrics/${code}`,
   METRIC_TOGGLE_STATUS: (code: string) => `${ADMIN}/metrics/${code}/status`,
   METRIC_IMPACT: (code: string, version: number) => `${ADMIN}/metrics/${code}/versions/${version}/impact`,
+  METRIC_SOURCES: (code: string) => `${ADMIN}/metrics/${code}/sources`,
   METRIC_TEST:   (code: string) => `${ADMIN}/metrics/${code}:test`,
 
   // Connector
@@ -43,6 +44,12 @@ export const ENDPOINTS = {
   // Decision
   DECISION_LIST:   `${ADMIN}/decisions`,
   DECISION_CREATE: `${ADMIN}/decisions`,
+  DECISION_GET:           (code: string) => `${ADMIN}/decisions/${code}`,
+  DECISION_DISABLE:       (code: string) => `${ADMIN}/decisions/${code}/disable`,
+  DECISION_ENABLE:        (code: string) => `${ADMIN}/decisions/${code}/enable`,
+  DECISION_SOURCES:       (code: string) => `${ADMIN}/decisions/${code}/sources`,
+  DECISION_USAGE_COUNTS:  `${ADMIN}/decisions/usage-counts`,
+  METRIC_USAGE_COUNTS:    `${ADMIN}/metrics/usage-counts`,
 
   // Metadata
   SCENE_METADATA: (sceneCode: string) => `${ADMIN}/scenes/${sceneCode}/metadata`,

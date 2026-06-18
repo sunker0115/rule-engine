@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.service;
 
 import lombok.RequiredArgsConstructor;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
+import com.sstlfsj.rule.config.api.service.UsageCount;
 import com.sstlfsj.rule.config.internal.MetricProperties;
 import com.sstlfsj.rule.config.internal.domain.ActorType;
 import com.sstlfsj.rule.config.internal.domain.AuditAction;
@@ -26,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -156,6 +159,70 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         return result;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<RuleRef> findRulesReferencingMetric(Long tenantId, String metricCode) {
+        // 第一步：查该 tenant 下所有 rule_definition，取 id/code/name/sceneId/status
+        List<RuleDefinition> defs = ruleDefinitionMapper.findByTenant(tenantId);
+        if (defs.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, RuleDefinition> defMap = defs.stream()
+                .collect(Collectors.toMap(RuleDefinition::getId, d -> d));
+
+        // 第二步：批量查 scene，建 sceneId → sceneCode 索引
+        Set<Long> sceneIds = defs.stream()
+                .map(RuleDefinition::getSceneId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> sceneCodeMap = sceneIds.isEmpty() ? Map.of() :
+                sceneMapper.findByIds(sceneIds)
+                        .stream()
+                        .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
+
+        // 第三步：查这批 rule_definition_id 下所有 ACTIVE rule_version（沿用既有投影，metric_dependencies 在内）
+        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defMap.keySet());
+
+        // 第四步：筛出 metric_dependencies 含该 metricCode（任意版本）的规则；
+        // 同一 rule_definition 跨多版本引用同 metric 只出一条（按 ruleDefinitionId 去重，
+        // 与 countRuleUsages 去重口径一致）——这是"哪些规则用了它"，不是"多少个版本引用"。
+        Set<Long> seenRuleDefIds = new HashSet<>();
+        List<RuleRef> result = new ArrayList<>();
+        for (RuleVersion rv : activeVersions) {
+            if (!containsMetricCode(rv.getMetricDependencies(), metricCode)) {
+                continue;
+            }
+            if (!seenRuleDefIds.add(rv.getRuleDefinitionId())) {
+                continue;
+            }
+            RuleDefinition def = defMap.get(rv.getRuleDefinitionId());
+            String sceneCode = sceneCodeMap.getOrDefault(def.getSceneId(), "");
+            result.add(new RuleRef(def.getId(), def.getCode(), def.getName(),
+                    sceneCode, def.getStatus().name()));
+        }
+        return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UsageCount> countRuleUsages(Long tenantId) {
+        List<RuleDefinition> defs = ruleDefinitionMapper.findByTenant(tenantId);
+        if (defs.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> defIds = defs.stream().map(RuleDefinition::getId).collect(Collectors.toSet());
+        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defIds);
+        Map<String, Integer> counts = new HashMap<>();
+        for (RuleVersion rv : activeVersions) {
+            List<MetricDependency> deps = rv.getMetricDependencies();
+            if (deps == null) continue;
+            // 版本无关 + 同一规则对同一 metricCode 去重
+            deps.stream().map(MetricDependency::metricCode).filter(Objects::nonNull).distinct()
+                    .forEach(code -> counts.merge(code, 1, Integer::sum));
+        }
+        return counts.entrySet().stream().map(e -> new UsageCount(e.getKey(), e.getValue())).toList();
+    }
+
     /** 判断 typed metricDependencies 列表是否包含指定 (metricCode, metricVersion)；null 视为不包含。 */
     private boolean containsDependency(List<MetricDependency> deps,
                                        String metricCode, int metricVersion) {
@@ -164,6 +231,14 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         }
         return deps.stream().anyMatch(
                 d -> metricCode.equals(d.metricCode()) && d.metricVersion() == metricVersion);
+    }
+
+    /** 判断 typed metricDependencies 列表是否含指定 metricCode（任意版本）；null 视为不包含。 */
+    private boolean containsMetricCode(List<MetricDependency> deps, String metricCode) {
+        if (deps == null || deps.isEmpty()) {
+            return false;
+        }
+        return deps.stream().anyMatch(d -> metricCode.equals(d.metricCode()));
     }
 
     /**

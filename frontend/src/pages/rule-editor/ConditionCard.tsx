@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { ConditionNode, ConditionTypeMeta, MetricDescriptor } from '@/types';
 import { paramLabel, paramWidget } from '@/utils/param-registry';
 import { conditionTypeLabel } from '@/utils/condition-type-label';
+import { useLineageStore } from '@/store/lineageStore';
 
 interface Props {
   node: ConditionNode;
@@ -24,8 +25,12 @@ export default function ConditionCard({
   node, conditionTypes, availableMetrics, payloadFieldNames, onChange, onDelete,
 }: Props) {
   const { t } = useTranslation('rule');
+  const tl = useTranslation('lineage').t;
+  const { metricUsage, requestOpen } = useLineageStore();
   const meta = useMemo(() => findMeta(conditionTypes, node.conditionType), [conditionTypes, node.conditionType]);
   const requiresMetric = meta?.requiresMetric ?? true;
+  // 反向血缘徽标：仅在选中 metric 且被引用计数 > 0 时显示，避免干扰
+  const metricUsageCount = node.metricCode ? metricUsage[node.metricCode] ?? 0 : 0;
 
   const setParam = useCallback((key: string, value: unknown) => {
     onChange({ ...node, params: { ...node.params, [key]: value } });
@@ -155,6 +160,14 @@ export default function ConditionCard({
             popupMatchSelectWidth={false}
             options={availableMetrics.map((m) => ({ value: m.metricCode, label: m.metricCode }))}
           />
+        )}
+        {requiresMetric && node.valueRef !== 'PAYLOAD' && node.metricCode && metricUsageCount > 0 && (
+          <a
+            onClick={(e) => { e.stopPropagation(); requestOpen({ code: node.metricCode!, kind: 'metric' }); }}
+            style={{ color: '#0969da', fontSize: 12, whiteSpace: 'nowrap' }}
+          >
+            {tl('editorChip', { n: metricUsageCount })}
+          </a>
         )}
         {node.valueRef === 'PAYLOAD' && (
           <Select

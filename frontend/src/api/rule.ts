@@ -45,9 +45,9 @@ export async function enableRule(tenantId: number, ruleDefinitionId: number) {
   return apiClient.post(ENDPOINTS.RULE_ENABLE(ruleDefinitionId), null, { params: { tenantId } });
 }
 
-/** 新版本/回退 */
+/** 新版本/回退——tenantId 在 body 中（后端 NewVersionRequest @RequestBody，与 editDraft 一致；勿用 query param） */
 export async function newVersion(tenantId: number, ruleDefinitionId: number, fromVersionId?: number) {
-  return apiClient.post(ENDPOINTS.RULE_VERSIONS(ruleDefinitionId), { fromVersionId }, { params: { tenantId } });
+  return apiClient.post(ENDPOINTS.RULE_VERSIONS(ruleDefinitionId), { tenantId, fromVersionId });
 }
 
 export async function deleteRule(tenantId: number, ruleDefinitionId: number) {

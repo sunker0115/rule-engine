@@ -137,6 +137,27 @@ class RuleAnalysisIT {
     }
 
     @Test
+    void findActiveWithDecisionByRuleDefIds_readsDecisionBindingsFromDb() {
+        // 回归守卫：findActiveByRuleDefIds 的部分列投影不含 decision_bindings，真 DB 上会回填 null；
+        // 此处经真实写路径发布带 decision binding 的规则，验证专用投影方法 findActiveWithDecisionByRuleDefIds
+        // 真能读出 decisionBindings（非 null），守住 DecisionServiceImpl 反向血缘/计数不踩投影坑。
+        sceneService.createScene(TENANT, SCENE, "风控分析场景", null,
+                "PUSH", "USER", List.of(EVENT), null, null, ACTOR);
+        createMetric("amount");
+        decisionService.create(TENANT, "BLOCK", "拦截", 100, null, ACTOR);
+        publishRule("R_block", flatAnd(cmp(ConditionTypes.GT, "amount", 1000)), "BLOCK");
+
+        Long ruleDefId = ruleDefinitionMapper.findBySceneAndCode(
+                TENANT, sceneMapper.findByCode(TENANT, SCENE).getId(), "R_block").getId();
+        List<RuleVersion> active = ruleVersionMapper.findActiveWithDecisionByRuleDefIds(List.of(ruleDefId));
+
+        assertThat(active).hasSize(1);
+        assertThat(active.get(0).getDecisionBindings())
+                .extracting(DecisionBinding::decisionCode)
+                .containsExactly("BLOCK");
+    }
+
+    @Test
     void persistedAst_flowsThroughAnalyzer_surfacesDeadOverlapAndIncoherence() {
         // scene：createScene 固定 HIGHEST_PRIORITY 策略（严格优先级 → 死规则判定生效）
         sceneService.createScene(TENANT, SCENE, "风控分析场景", null,

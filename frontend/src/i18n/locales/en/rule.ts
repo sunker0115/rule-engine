@@ -111,7 +111,6 @@ const rule: RuleTranslation = {
       bandOverlap: 'Range overlap',
     },
     decisionTree: {
-      title: 'Decision Tree',
       condition: 'Condition:',
       then: 'THEN',
       else: 'ELSE',
@@ -122,7 +121,6 @@ const rule: RuleTranslation = {
       removeElse: 'Remove',
     },
     decisionTable: {
-      title: 'Decision Table',
       addColumn: 'Add Column',
       addRow: 'Add Row',
       emptyRowHint: 'No rows yet. Click "Add Row" to add.',

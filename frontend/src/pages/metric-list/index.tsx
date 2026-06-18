@@ -4,10 +4,11 @@ import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listMetrics, createMetric } from '@/api/metric';
+import { listMetrics, createMetric, getMetricUsageCounts, getMetricSources } from '@/api/metric';
 import { listConnectors, getConnector } from '@/api/connector';
 import type { ConnectorDescriptor } from '@/types';
 import { getMetricColumns } from '@/config/columns/metric';
+import LineageDrawer from '@/components/lineage/LineageDrawer';
 import apiClient from '@/api/client';
 import { ENDPOINTS } from '@/constants/api-endpoints';
 import { ROUTES, route } from '@/constants/routes';
@@ -18,9 +19,13 @@ export default function MetricList() {
   const navigate = useNavigate();
   const { t } = useTranslation('metric');
   const tc = useTranslation('common').t;
+  const tl = useTranslation('lineage').t;
   const { currentId, activeList, setCurrentById } = useTenantStore();
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [metrics, setMetrics] = useState<MetricDescriptor[]>([]);
+  const [usageMap, setUsageMap] = useState<Record<string, number>>({});
+  // 血缘抽屉：点击徽标打开，code 决定拉取目标
+  const [lineageCode, setLineageCode] = useState<string | null>(null);
   const tenantId = tenantFilter ?? currentId ?? 0;
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -76,8 +81,14 @@ export default function MetricList() {
   const load = async () => {
     if (!tenantId) return;
     setLoading(true);
-    try { const data = await listMetrics(tenantId); setMetrics(data ?? []); }
-    finally { setLoading(false); }
+    try {
+      const [data, counts] = await Promise.all([
+        listMetrics(tenantId),
+        getMetricUsageCounts(tenantId),
+      ]);
+      setMetrics(data ?? []);
+      setUsageMap(Object.fromEntries((counts ?? []).map((c) => [c.code, c.count])));
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [tenantId]);
@@ -199,7 +210,9 @@ export default function MetricList() {
       />
     </Space>
     {tenantId ? (
-      <Table columns={getMetricColumns(t, tc, handleToggleStatus)} dataSource={dataSource} rowKey="metricCode" loading={loading}
+      <Table
+        columns={getMetricColumns(t, tc, handleToggleStatus, tl, usageMap, (code) => setLineageCode(code))}
+        dataSource={dataSource} rowKey="metricCode" loading={loading}
         scroll={{ y: 'calc(100vh - 312px)' }}
         onRow={(r) => ({ onClick: () => navigate(route(ROUTES.METRIC_DETAIL, { metricCode: r.metricCode })), style: { cursor: 'pointer' } })} />
     ) : (
@@ -231,5 +244,13 @@ export default function MetricList() {
         {renderParamsFields()}
       </Form>
     </Modal>
+    <LineageDrawer
+      open={!!lineageCode}
+      code={lineageCode ?? ''}
+      title={tl('metricDrawerTitle', { code: lineageCode ?? '' })}
+      tenantId={tenantId}
+      fetcher={getMetricSources}
+      onClose={() => setLineageCode(null)}
+    />
   </>);
 }

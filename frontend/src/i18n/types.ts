@@ -144,6 +144,7 @@ export interface MetricTranslation {
     allowProvided: string;
     cacheTtl: string;
     status: string;
+    usage: string;
   };
   enum: {
     sourceType: {
@@ -178,9 +179,6 @@ export interface MetricTranslation {
   };
   searchPlaceholder: string;
   detail: { basicInfo: string; version: string; notFound: string };
-  impact: {
-    column: { ruleCode: string; ruleName: string; sceneCode: string; status: string };
-  };
   test: {
     title: string;
     sampleVars: string;
@@ -218,8 +216,8 @@ export interface MetricTranslation {
 // ===== decision 命名空间 =====
 export interface DecisionTranslation {
   title: { list: string };
-  action: { create: string; edit: string };
-  column: { code: string; name: string; priority: string; status: string; description: string; createdAt: string; updatedAt: string };
+  action: { create: string; edit: string; disable: string; enable: string };
+  column: { code: string; name: string; priority: string; status: string; description: string; createdAt: string; updatedAt: string; usage: string };
   form: {
     code: string;
     codePlaceholder: string;
@@ -229,6 +227,7 @@ export interface DecisionTranslation {
     priorityExtra: string;
     description: string;
   };
+  detail: { basicInfo: string; sources: string; notFound: string };
 }
 
 // ===== rule 命名空间 =====
@@ -292,13 +291,13 @@ export interface RuleTranslation {
       addBand: string; bandOverlap: string;
     };
     decisionTree: {
-      title: string; condition: string;
+      condition: string;
       then: string; else: string;
       selectDecision: string; toLeaf: string; toBranch: string;
       addElse: string; removeElse: string;
     };
     decisionTable: {
-      title: string; addColumn: string; addRow: string;
+      addColumn: string; addRow: string;
       emptyRowHint: string; metric: string; deleteColumn: string;
       cellPlaceholder: string; decisionCode: string;
       decisionPlaceholder: string; deleteRowConfirm: string;
@@ -637,6 +636,20 @@ export interface RuleSetAnalysisTranslation {
   sevTag: { ERROR: string; WARN: string; INFO: string; SKIP: string };
 }
 
+// ===== lineage 命名空间（产出 / 引用血缘）=====
+export interface LineageTranslation {
+  drawerTitle: string;
+  metricDrawerTitle: string;
+  count: string;
+  empty: string;
+  toEditor: string;
+  badge: string;
+  col: { ruleCode: string; ruleName: string; scene: string; status: string };
+  editorChip: string;
+  disableGuardTitle: string;
+  disableGuardConfirm: string;
+}
+
 export interface TranslationResources {
   common: CommonTranslation;
   scene: SceneTranslation;
@@ -649,4 +662,5 @@ export interface TranslationResources {
   importExport: ImportExportTranslation;
   connector: ConnectorTranslation;
   analysis: RuleSetAnalysisTranslation;
+  lineage: LineageTranslation;
 }

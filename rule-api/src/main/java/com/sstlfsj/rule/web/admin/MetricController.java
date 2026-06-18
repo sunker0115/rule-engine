@@ -36,6 +36,12 @@ public class MetricController {
         return ApiResponse.ok(metadataService.listMetricItems(tenantId));
     }
 
+    /** GET /admin/v1/metrics/usage-counts — tenant 下每个 metric 的被引用计数（列表徽标，版本无关）。 */
+    @GetMapping("/usage-counts")
+    public ApiResponse<List<com.sstlfsj.rule.config.api.service.UsageCount>> usageCounts(@RequestParam Long tenantId) {
+        return ApiResponse.ok(service.countRuleUsages(tenantId));
+    }
+
     /**
      * GET /admin/v1/metrics/{metricCode} — 查单个 metric 完整定义，供前端编辑器加载。
      *
@@ -85,6 +91,17 @@ public class MetricController {
                                        @RequestBody MetricWriteCommand cmd) {
         return ApiResponse.ok(service.update(tenantId, metricCode, cmd, breakingChange, actorId));
     }
+
+    /** GET /admin/v1/metrics/{code}/sources — 引用该 metric 的 ACTIVE 规则（版本无关，血缘默认视图）。 */
+    @GetMapping("/{code}/sources")
+    public ApiResponse<MetricSourcesResponse> sources(@PathVariable String code, @RequestParam Long tenantId) {
+        List<RuleRef> rules = service.findRulesReferencingMetric(tenantId, code);
+        return ApiResponse.ok(new MetricSourcesResponse(code, rules, rules.size()));
+    }
+
+    /** Metric 被引用规则响应（版本无关血缘）。 */
+    public record MetricSourcesResponse(String metricCode,
+                                        List<RuleRef> sources, int sourceCount) {}
 
     /**
      * GET /admin/v1/metrics/{metricCode}/versions/{version}/impact — 查询引用该版本的 ACTIVE 规则清单。

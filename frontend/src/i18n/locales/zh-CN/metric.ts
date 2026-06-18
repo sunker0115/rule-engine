@@ -12,6 +12,7 @@ const metric: MetricTranslation = {
     allowProvided: '允许外部注入',
     cacheTtl: '缓存(秒)',
     status: '状态',
+    usage: '被引用',
   },
   enum: {
     sourceType: {
@@ -58,9 +59,6 @@ const metric: MetricTranslation = {
   },
   searchPlaceholder: '搜索名称或编码',
   detail: { basicInfo: '基本信息', version: '版本', notFound: '指标不存在' },
-  impact: {
-    column: { ruleCode: '规则编码', ruleName: '规则名称', sceneCode: '场景', status: '状态' },
-  },
   test: {
     title: '试算',
     sampleVars: '样例变量 (vars)',

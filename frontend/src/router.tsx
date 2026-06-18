@@ -17,6 +17,7 @@ const MetricDetail       = lazy(() => import('@/pages/metric-detail'));
 const ConnectorList      = lazy(() => import('@/pages/connector-list'));
 const ConnectorDetail    = lazy(() => import('@/pages/connector-detail'));
 const DecisionList       = lazy(() => import('@/pages/decision-list'));
+const DecisionDetail     = lazy(() => import('@/pages/decision-detail'));
 const EvalSession        = lazy(() => import('@/pages/eval-session'));
 const EvalSessionDetail  = lazy(() => import('@/pages/eval-session-detail'));
 const AuditLog           = lazy(() => import('@/pages/audit-log'));
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
       { path: ROUTES.CONNECTOR_NEW,     element: <LazyPage><ConnectorDetail /></LazyPage> },
       { path: ROUTES.CONNECTOR_DETAIL,  element: <LazyPage><ConnectorDetail /></LazyPage> },
       { path: ROUTES.DECISIONS,      element: <LazyPage><DecisionList /></LazyPage> },
+      { path: ROUTES.DECISION_DETAIL, element: <LazyPage><DecisionDetail /></LazyPage> },
       { path: ROUTES.SESSIONS,       element: <LazyPage><EvalSession /></LazyPage> },
       { path: ROUTES.SESSION_DETAIL, element: <LazyPage><EvalSessionDetail /></LazyPage> },
       { path: ROUTES.AUDIT_LOGS,     element: <LazyPage><AuditLog /></LazyPage> },

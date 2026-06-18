@@ -1,47 +1,54 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, message, Space } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listDecisions, createDecision, updateDecision } from '@/api/decision';
+import { listDecisions, createDecision, enableDecision, disableDecision, getDecisionUsageCounts, getDecisionSources } from '@/api/decision';
 import { getDecisionColumns } from '@/config/columns/decision';
+import { ROUTES, route } from '@/constants/routes';
+import LineageDrawer from '@/components/lineage/LineageDrawer';
 import type { DecisionItem } from '@/types';
 
 export default function DecisionList() {
+  const navigate = useNavigate();
   const { t } = useTranslation('decision');
   const tc = useTranslation('common').t;
+  const tl = useTranslation('lineage').t;
   const { currentId, activeList, setCurrentById } = useTenantStore();
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
+  const [usageMap, setUsageMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingCode, setEditingCode] = useState<string | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [form] = Form.useForm();
+  // 血缘抽屉：点击徽标打开，code 决定拉取目标
+  const [lineageCode, setLineageCode] = useState<string | null>(null);
   const tenantId = tenantFilter ?? currentId ?? 0;
 
   const load = async () => {
     if (!tenantId) return;
     setLoading(true);
-    try { const data = await listDecisions(tenantId); setDecisions(data ?? []); }
-    finally { setLoading(false); }
+    try {
+      const [data, counts] = await Promise.all([
+        listDecisions(tenantId),
+        getDecisionUsageCounts(tenantId),
+      ]);
+      setDecisions(data ?? []);
+      setUsageMap(Object.fromEntries((counts ?? []).map((c) => [c.code, c.count])));
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [tenantId]);
 
-  const handleSubmit = async () => {
+  const handleCreate = async () => {
     const values = await form.validateFields();
     setConfirmLoading(true);
     try {
-      if (editingCode) {
-        await updateDecision(tenantId, editingCode, values);
-        message.success(tc('message.updateSuccess'));
-      } else {
-        await createDecision(tenantId, { ...values, tenantId });
-        message.success(tc('message.createSuccess'));
-      }
+      await createDecision(tenantId, { ...values, tenantId });
+      message.success(tc('message.createSuccess'));
       setModalOpen(false);
-      setEditingCode(null);
       form.resetFields();
       load();
     } catch { /* handled by interceptor */ }
@@ -49,14 +56,7 @@ export default function DecisionList() {
   };
 
   const openCreate = () => {
-    setEditingCode(null);
     form.resetFields();
-    setModalOpen(true);
-  };
-
-  const openEdit = (record: DecisionItem) => {
-    setEditingCode(record.code);
-    form.setFieldsValue(record);
     setModalOpen(true);
   };
 
@@ -76,22 +76,37 @@ export default function DecisionList() {
       />
     </Space>
     <Table
-      columns={getDecisionColumns(t, tc, async (code, enabled) => {
-        await updateDecision(tenantId, code, { status: enabled ? 'ACTIVE' : 'DISABLED' });
-        message.success(enabled ? tc('message.enabled') : tc('message.disabled'));
-        load();
-      })}
+      columns={getDecisionColumns(
+        t, tc,
+        async (code, enabled) => {
+          await (enabled ? enableDecision(tenantId, code) : disableDecision(tenantId, code));
+          message.success(enabled ? tc('message.enabled') : tc('message.disabled'));
+          load();
+        },
+        tl, usageMap, (code) => setLineageCode(code),
+      )}
       dataSource={decisions}
       rowKey="code"
       loading={loading}
       scroll={{ y: 'calc(100vh - 312px)' }}
-      onRow={(record) => ({ onClick: () => openEdit(record), style: { cursor: 'pointer' } })}
+      onRow={(record) => ({
+        onClick: () => navigate(route(ROUTES.DECISION_DETAIL, { code: record.code })),
+        style: { cursor: 'pointer' },
+      })}
+    />
+    <LineageDrawer
+      open={!!lineageCode}
+      code={lineageCode ?? ''}
+      title={tl('drawerTitle', { code: lineageCode ?? '' })}
+      tenantId={tenantId}
+      fetcher={getDecisionSources}
+      onClose={() => setLineageCode(null)}
     />
     <Modal
-      title={editingCode ? `${t('action.edit')}: ${editingCode}` : t('action.create')}
+      title={t('action.create')}
       open={modalOpen}
-      onOk={handleSubmit}
-      onCancel={() => { setModalOpen(false); setEditingCode(null); form.resetFields(); }}
+      onOk={handleCreate}
+      onCancel={() => { setModalOpen(false); form.resetFields(); }}
       confirmLoading={confirmLoading}
     >
       <Form form={form} layout="vertical">
@@ -99,7 +114,7 @@ export default function DecisionList() {
           <Select options={activeList.map((ten) => ({ value: ten.id, label: `${ten.name} (${ten.code})` }))} placeholder={tc('label.tenant')} />
         </Form.Item>
         <Form.Item name="code" label={t('form.code')} rules={[{ required: true }]}>
-          <Input disabled={!!editingCode} placeholder={t('form.codePlaceholder')} />
+          <Input placeholder={t('form.codePlaceholder')} />
         </Form.Item>
         <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}>
           <Input />

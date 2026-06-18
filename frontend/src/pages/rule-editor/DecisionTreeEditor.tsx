@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Select, Typography, Tag } from 'antd';
+import { Button, Select, Tag } from 'antd';
 import { PlusOutlined, DeleteOutlined, SwapOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -139,9 +139,6 @@ export default function DecisionTreeEditor({
 
   return (
     <div style={{ padding: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <Typography.Text strong>{t('editor.decisionTree.title')}</Typography.Text>
-      </div>
       {renderIfNode(root, onChange, 0)}
     </div>
   );

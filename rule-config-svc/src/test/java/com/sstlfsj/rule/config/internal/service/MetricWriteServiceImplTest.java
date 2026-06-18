@@ -7,6 +7,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.RuleRef;
+import com.sstlfsj.rule.config.api.service.UsageCount;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
@@ -425,6 +426,85 @@ class MetricWriteServiceImplTest {
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
 
         assertThat(result).isEmpty();
+    }
+
+    // ── findRulesReferencingMetric（版本无关，按规则去重）──────────────────────
+
+    @Test
+    void findRulesReferencingMetric_dedupsByRuleAcrossVersions() {
+        // rd1：两条 ACTIVE rule_version 都引用 account.age（不同版本），应只出一条 RuleRef
+        // rd2：一条引用 account.age v3，单独出一条
+        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
+        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", 11L, "DISABLED");
+
+        RuleVersion rv1 = ruleVersion(1001L, 101L, List.of(new MetricDependency("account.age", 1)));
+        RuleVersion rv2 = ruleVersion(1002L, 101L, List.of(new MetricDependency("account.age", 2)));
+        RuleVersion rv3 = ruleVersion(1003L, 102L, List.of(new MetricDependency("account.age", 3)));
+
+        when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd1, rd2));
+        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv1, rv2, rv3));
+        when(sceneMapper.findByIds(any()))
+                .thenReturn(List.of(scene(10L, "risk.transfer"), scene(11L, "risk.login")));
+
+        List<RuleRef> result = sut.findRulesReferencingMetric(TENANT, "account.age");
+
+        // 跨版本去重：rd1 只一条；共两条规则
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(RuleRef::ruleDefinitionId)
+                .containsExactlyInAnyOrder(101L, 102L);
+        assertThat(result).anySatisfy(ref -> {
+            assertThat(ref.ruleCode()).isEqualTo("risk.transfer");
+            assertThat(ref.sceneCode()).isEqualTo("risk.transfer");
+            assertThat(ref.status()).isEqualTo("PUBLISHED");
+        });
+        assertThat(result).anySatisfy(ref -> {
+            assertThat(ref.ruleName()).isEqualTo("登录风控");
+            assertThat(ref.sceneCode()).isEqualTo("risk.login");
+            assertThat(ref.status()).isEqualTo("DISABLED");
+        });
+    }
+
+    @Test
+    void findRulesReferencingMetric_differentMetricCode_notIncluded() {
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
+        RuleVersion rv = ruleVersion(1001L, 101L, List.of(new MetricDependency("user.level", 1)));
+
+        when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd));
+        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
+        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene(10L, "risk.transfer")));
+
+        List<RuleRef> result = sut.findRulesReferencingMetric(TENANT, "account.age");
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void findRulesReferencingMetric_noActiveRules_returnsEmpty() {
+        when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of());
+
+        List<RuleRef> result = sut.findRulesReferencingMetric(TENANT, "account.age");
+
+        assertThat(result).isEmpty();
+        verifyNoInteractions(ruleVersionMapper);
+    }
+
+    // ── countRuleUsages（版本无关批量计数）────────────────────────────────────
+
+    @Test
+    void countRuleUsages_aggregatesPerMetricCode_dedupPerRule() {
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账", 10L, "PUBLISHED");
+        // rv1 引用 account.age v1；rv2 引用 account.age v2 + user.level v1；
+        // 同一规则跨版本引用同 metric → 按 metricCode 去重（account.age 计 2 条规则版本，user.level 计 1）
+        RuleVersion rv1 = ruleVersion(1001L, 101L, List.of(new MetricDependency("account.age", 1)));
+        RuleVersion rv2 = ruleVersion(1002L, 101L,
+                List.of(new MetricDependency("account.age", 2), new MetricDependency("user.level", 1)));
+        when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd));
+        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv1, rv2));
+
+        List<UsageCount> counts = sut.countRuleUsages(1L);
+
+        assertThat(counts).anySatisfy(c -> { assertThat(c.code()).isEqualTo("account.age"); assertThat(c.count()).isEqualTo(2); });
+        assertThat(counts).anySatisfy(c -> { assertThat(c.code()).isEqualTo("user.level"); assertThat(c.count()).isEqualTo(1); });
     }
 
     // ── sensitive 列（D71 读时脱敏声明位）─────────────────────────────────────

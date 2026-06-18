@@ -60,6 +60,15 @@ class RuleVersionMapperTest {
     }
 
     @Test
+    void findActiveWithDecisionByRuleDefIds_defaultMethodExists_withCorrectSignature()
+            throws NoSuchMethodException {
+        Method m = RuleVersionMapper.class.getDeclaredMethod(
+                "findActiveWithDecisionByRuleDefIds", Collection.class);
+        assertTrue(m.isDefault(), "findActiveWithDecisionByRuleDefIds 应为 default 方法");
+        assertEquals(java.util.List.class, m.getReturnType());
+    }
+
+    @Test
     void hasNonDraftVersion_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
         Method m = RuleVersionMapper.class.getDeclaredMethod("hasNonDraftVersion", Long.class);
         assertTrue(m.isDefault(), "hasNonDraftVersion 应为 default 方法");
