@@ -7,6 +7,7 @@ export const ENDPOINTS = {
   SCENE_DETAIL:  (sceneCode: string) => `${ADMIN}/scenes/${sceneCode}`,
   SCENE_CREATE:  `${ADMIN}/scenes`,
   SCENE_TOGGLE_STATUS: (sceneCode: string) => `${ADMIN}/scenes/${sceneCode}/status`,
+  SCENE_ANALYSIS: (sceneCode: string) => `${ADMIN}/scenes/${sceneCode}/analysis`,
 
   // Rule
   RULE_LIST:     `${ADMIN}/rules`,

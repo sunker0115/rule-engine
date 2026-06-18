@@ -8,6 +8,7 @@ import audit from './audit';
 import job from './job';
 import importExport from './import-export';
 import connector from './connector';
+import analysis from './analysis';
 
 const en = {
   common,
@@ -20,6 +21,7 @@ const en = {
   job,
   importExport,
   connector,
+  analysis,
 };
 
 export default en;

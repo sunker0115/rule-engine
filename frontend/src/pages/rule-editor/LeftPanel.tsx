@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip } from 'antd';
-import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined } from '@ant-design/icons';
+import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip, Badge } from 'antd';
+import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
@@ -10,18 +10,24 @@ import { formatDateTime } from '@/utils/format';
 import RuleSessionsDrawer from './RuleSessionsDrawer';
 import VersionContentDrawer from './VersionContentDrawer';
 import VersionDiffDrawer from './VersionDiffDrawer';
-import type { RuleDetail as RuleDetailType, RuleVersionItem } from '@/types';
+import { summarize, worstSeverityForRule } from './analysisSummary';
+import type { RuleDetail as RuleDetailType, RuleVersionItem, RuleSetAnalysisReport } from '@/types';
 
 interface Props {
   ruleDetail: RuleDetailType;
   /** 打开试算抽屉；传入 version 则针对该历史版本，不传走默认最新版本 */
   onOpenDryRun: (version?: RuleVersionItem) => void;
   onUpdated: () => void;
+  /** 规则集分析报告（null 表示尚未拉取）。 */
+  analysisReport?: RuleSetAnalysisReport | null;
+  /** 点击摘要条打开规则集分析抽屉。 */
+  onOpenAnalysis?: () => void;
 }
 
-export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props) {
+export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysisReport, onOpenAnalysis }: Props) {
   const { t } = useTranslation('rule');
   const tc = useTranslation('common').t;
+  const ta = useTranslation('analysis').t;
   const ruleStatusOpts = useMemo(() => getRuleStatusOptions(t), [t]);
   const versionStatusOpts = useMemo(() => getVersionStatusOptions(t), [t]);
   const { currentId } = useTenantStore();
@@ -89,11 +95,41 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
   const draftVersion = (ruleDetail.versions ?? []).find(v => v.status === 'DRAFT');
   const hasDraft = draftVersion !== undefined;
 
+  // 规则集分析：scene 级摘要 + 当前规则的最坏严重度（用于 badge）
+  const summary = analysisReport ? summarize(analysisReport) : null;
+  const ruleSeverity = analysisReport ? worstSeverityForRule(analysisReport, ruleDetail.code) : null;
+  const badgeColor: Record<string, string> = { ERROR: 'error', WARN: 'orange', INFO: 'blue', NA: 'default' };
+  const badgeLabel: Record<string, string> = {
+    ERROR: ta('badge.ERROR'), WARN: ta('badge.WARN'), INFO: ta('badge.INFO'), NA: ta('badge.NA'),
+  };
+
   return (
     <div style={{ padding: 16 }}>
+      {summary && (
+        <div
+          onClick={onOpenAnalysis}
+          title={ta('summaryBarTooltip')}
+          style={{
+            display: 'flex', gap: 10, alignItems: 'center',
+            padding: '6px 10px', marginBottom: 12,
+            background: '#fafbfc', border: '1px solid #eaecef', borderRadius: 6,
+            cursor: 'pointer', fontSize: 12,
+          }}
+        >
+          <span style={{ color: '#cf222e' }}>⛔ {summary.error}</span>
+          <span style={{ color: '#bc4c00' }}>🔴 {summary.warn}</span>
+          <span style={{ color: '#bf8700' }}>🟠 {summary.info}</span>
+          <span style={{ color: '#8c959f' }}>⚪ {summary.unanalyzable}</span>
+        </div>
+      )}
       <h3>{t('editor.leftPanel.ruleInfo')}</h3>
       <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-        <Descriptions.Item label={t('column.code')}>{ruleDetail.code}</Descriptions.Item>
+        <Descriptions.Item label={t('column.code')}>
+          {ruleDetail.code}
+          {ruleSeverity && (
+            <Tag color={badgeColor[ruleSeverity]} style={{ marginLeft: 6 }}>{badgeLabel[ruleSeverity]}</Tag>
+          )}
+        </Descriptions.Item>
         <Descriptions.Item label={tc('label.name')}>{ruleDetail.name}</Descriptions.Item>
         <Descriptions.Item label={t('column.kind')}><Tag>{ruleDetail.kind}</Tag></Descriptions.Item>
         {ruleDetail.kind === 'EXPRESSION_SCRIPT' && ruleDetail.script && (
@@ -116,6 +152,13 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated }: Props
         )}
         <Button block onClick={() => onOpenDryRun()} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
         <Button block onClick={() => setSessionsOpen(true)} style={{ marginBottom: 8 }}>{t('action.sessions')}</Button>
+        {onOpenAnalysis && (
+          <Badge count={summary?.findingCount ?? 0} size="small" offset={[-4, 2]} style={{ width: '100%' }}>
+            <Button block icon={<SafetyCertificateOutlined />} onClick={onOpenAnalysis} style={{ marginBottom: 8 }}>
+              {ta('button')}
+            </Button>
+          </Badge>
+        )}
 
         <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerPublish')}</Divider>
         {hasDraft && (

@@ -12,3 +12,4 @@ export * from './job';
 export * from './import-export';
 export * from './metadata';
 export * from './tenant';
+export * from './analysis';

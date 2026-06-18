@@ -614,6 +614,27 @@ export interface ConnectorTranslation {
   };
 }
 
+// ===== analysis 命名空间（规则集静态分析）=====
+export interface RuleSetAnalysisTranslation {
+  button: string;
+  title: string;
+  reanalyze: string;
+  empty: string;
+  loadError: string;
+  summaryBarTooltip: string;
+  group: {
+    incoherences: string;
+    deadRules: string;
+    conflicts: string;
+    coverageGaps: string;
+    overlaps: string;
+    unanalyzable: string;
+  };
+  unanalyzableNote: string;
+  sevTag: { ERROR: string; WARN: string; INFO: string; SKIP: string };
+  badge: { ERROR: string; WARN: string; INFO: string; NA: string };
+}
+
 export interface TranslationResources {
   common: CommonTranslation;
   scene: SceneTranslation;
@@ -625,4 +646,5 @@ export interface TranslationResources {
   job: JobTranslation;
   importExport: ImportExportTranslation;
   connector: ConnectorTranslation;
+  analysis: RuleSetAnalysisTranslation;
 }

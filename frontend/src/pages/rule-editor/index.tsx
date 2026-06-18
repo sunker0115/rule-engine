@@ -7,12 +7,13 @@ import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { getRule } from '@/api/rule';
 import { getSceneMetadata } from '@/api/metadata';
-import { getScene } from '@/api/scene';
-import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType, RuleVersionItem } from '@/types';
+import { getScene, getAnalysis } from '@/api/scene';
+import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType, RuleVersionItem, RuleSetAnalysisReport } from '@/types';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
 import DryRunDrawer from './DryRunDrawer';
+import RuleAnalysisDrawer from './RuleAnalysisDrawer';
 
 const { Sider, Content } = Layout;
 
@@ -50,11 +51,27 @@ export default function RuleEditor() {
   // 当前要试算的目标版本；null 表示走默认（最新 DRAFT/ACTIVE 版本）
   const [dryRunTarget, setDryRunTarget] = useState<RuleVersionItem | null>(null);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [analysisReport, setAnalysisReport] = useState<RuleSetAnalysisReport | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
   // 打开试算抽屉：传入 version 则针对该历史版本，否则默认最新版本
   const openDryRun = (version?: RuleVersionItem) => {
     setDryRunTarget(version ?? null);
     setDryRunOpen(true);
+  };
+
+  // 规则集分析：只读、按需拉取（tenantId 优先用规则自身的，未选全局时不至于传 0）
+  const fetchAnalysis = async (sceneCode: string, tenantId: number) => {
+    if (!tenantId) return;
+    setAnalysisLoading(true);
+    try {
+      setAnalysisReport(await getAnalysis(sceneCode, tenantId));
+    } catch {
+      setAnalysisReport(null);
+    } finally {
+      setAnalysisLoading(false);
+    }
   };
 
   const load = async () => {
@@ -92,6 +109,17 @@ export default function RuleEditor() {
 
   useEffect(() => { load(); }, [currentId, ruleId]);
 
+  // 规则详情就绪后拉取规则集分析（用于左栏摘要条 + 按钮未读计数）
+  useEffect(() => {
+    if (ruleDetail) {
+      fetchAnalysis(ruleDetail.sceneCode, Number(ruleDetail.tenantId) || currentId || 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ruleDetail?.sceneCode, ruleDetail?.tenantId]);
+
+  // 定位 finding 对应规则：编辑器为单规则视图，关闭抽屉让用户看到当前规则编辑区与 badge
+  const handleLocate = () => setAnalysisOpen(false);
+
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!ruleDetail) return <div>{t('editor.notFound')}</div>;
 
@@ -105,7 +133,13 @@ export default function RuleEditor() {
   return (
     <Layout style={{ background: '#fff', height: 'calc(100vh - 64px - 48px)' }}>
       <Sider width={260} style={{ background: '#fafafa', borderRight: '1px solid #f0f0f0', overflow: 'auto' }}>
-        <LeftPanel ruleDetail={ruleDetail} onOpenDryRun={openDryRun} onUpdated={load} />
+        <LeftPanel
+          ruleDetail={ruleDetail}
+          onOpenDryRun={openDryRun}
+          onUpdated={load}
+          analysisReport={analysisReport}
+          onOpenAnalysis={() => setAnalysisOpen(true)}
+        />
       </Sider>
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <Content style={{ flex: 1, overflow: 'auto', padding: 16 }}>
@@ -146,6 +180,16 @@ export default function RuleEditor() {
         eventTypes={metadata?.eventTypes ?? ruleDetail.triggerEventTypes ?? []}
         payloadFieldNames={metadata?.payloadFieldNames ?? []}
         payloadFieldTypes={metadata?.payloadFieldTypes}
+      />
+
+      <RuleAnalysisDrawer
+        open={analysisOpen}
+        onClose={() => setAnalysisOpen(false)}
+        sceneCode={ruleDetail.sceneCode}
+        report={analysisReport}
+        loading={analysisLoading}
+        onReanalyze={() => fetchAnalysis(ruleDetail.sceneCode, Number(ruleDetail.tenantId) || currentId || 0)}
+        onLocate={handleLocate}
       />
     </Layout>
   );
