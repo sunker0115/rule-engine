@@ -14,6 +14,7 @@ import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
 import DryRunDrawer from './DryRunDrawer';
 import RuleAnalysisDrawer from './RuleAnalysisDrawer';
+import { isAnalyzableKind } from './analysisSummary';
 
 const { Sider, Content } = Layout;
 
@@ -109,13 +110,13 @@ export default function RuleEditor() {
 
   useEffect(() => { load(); }, [currentId, ruleId]);
 
-  // 规则详情就绪后拉取规则集分析（用于左栏摘要条 + 按钮未读计数）
+  // 规则详情就绪后拉取规则集分析（用于左栏摘要条 + 按钮未读计数）；非可分析 kind 不拉取
   useEffect(() => {
-    if (ruleDetail) {
+    if (ruleDetail && isAnalyzableKind(ruleDetail.kind)) {
       fetchAnalysis(ruleDetail.sceneCode, Number(ruleDetail.tenantId) || currentId || 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ruleDetail?.sceneCode, ruleDetail?.tenantId]);
+  }, [ruleDetail?.sceneCode, ruleDetail?.tenantId, ruleDetail?.kind]);
 
   // 定位 finding 对应规则：编辑器为单规则视图，关闭抽屉让用户看到当前规则编辑区与 badge
   const handleLocate = () => setAnalysisOpen(false);

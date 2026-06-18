@@ -10,7 +10,7 @@ import { formatDateTime } from '@/utils/format';
 import RuleSessionsDrawer from './RuleSessionsDrawer';
 import VersionContentDrawer from './VersionContentDrawer';
 import VersionDiffDrawer from './VersionDiffDrawer';
-import { summarize, worstSeverityForRule } from './analysisSummary';
+import { summarize, worstSeverityForRule, isAnalyzableKind } from './analysisSummary';
 import type { RuleDetail as RuleDetailType, RuleVersionItem, RuleSetAnalysisReport } from '@/types';
 
 interface Props {
@@ -95,8 +95,10 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
   const draftVersion = (ruleDetail.versions ?? []).find(v => v.status === 'DRAFT');
   const hasDraft = draftVersion !== undefined;
 
+  // 规则集分析仅对合取语义 kind 有意义（SCORECARD / EXPRESSION_SCRIPT 不可静态分析），不可分析时隐藏摘要条与按钮
+  const analyzable = isAnalyzableKind(ruleDetail.kind);
   // 规则集分析：scene 级摘要 + 当前规则的最坏严重度（用于 badge）
-  const summary = analysisReport ? summarize(analysisReport) : null;
+  const summary = analyzable && analysisReport ? summarize(analysisReport) : null;
   const ruleSeverity = analysisReport ? worstSeverityForRule(analysisReport, ruleDetail.code) : null;
   const badgeColor: Record<string, string> = { ERROR: 'error', WARN: 'orange', INFO: 'blue', NA: 'default' };
   // badge 直接显严重度词，不锁某一类别名（WARN 可由死规则/冲突/缺口产出）
@@ -153,7 +155,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
         )}
         <Button block onClick={() => onOpenDryRun()} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
         <Button block onClick={() => setSessionsOpen(true)} style={{ marginBottom: 8 }}>{t('action.sessions')}</Button>
-        {onOpenAnalysis && (
+        {analyzable && onOpenAnalysis && (
           <Badge count={summary?.findingCount ?? 0} size="small" offset={[-4, 2]} style={{ width: '100%' }}>
             <Button block icon={<SafetyCertificateOutlined />} onClick={onOpenAnalysis} style={{ marginBottom: 8 }}>
               {ta('button')}

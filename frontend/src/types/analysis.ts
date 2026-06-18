@@ -47,6 +47,15 @@ export interface UnanalyzableRule {
   reason: string;
 }
 
+/** 冗余条件——规则内某条件被另一条件蕴含，恒为冗余（严重度恒 INFO）。 */
+export interface RedundancyFinding {
+  ruleCode: string;
+  redundantCondition: string;
+  impliedByCondition: string;
+  reason: string;
+  severity: Severity;
+}
+
 /** 规则集静态分析报告——对齐 GET /admin/v1/scenes/{sceneCode}/analysis 响应。 */
 export interface RuleSetAnalysisReport {
   sceneCode: string;
@@ -56,4 +65,5 @@ export interface RuleSetAnalysisReport {
   overlaps: Overlap[];
   coverageGaps: CoverageGap[];
   unanalyzableRules: UnanalyzableRule[];
+  redundancies: RedundancyFinding[];
 }

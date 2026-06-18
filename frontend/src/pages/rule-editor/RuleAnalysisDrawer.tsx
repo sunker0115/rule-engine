@@ -73,13 +73,19 @@ export default function RuleAnalysisDrawer({ open, onClose, sceneCode, report, l
       reason: x.reason,
       locate: ruleCodeOf(x.locA),
     }));
+    const redundancies: FindingRow[] = report.redundancies.map((x, i) => ({
+      key: `red-${i}`,
+      title: `${x.ruleCode} : ${x.redundantCondition} ⇐ ${x.impliedByCondition}`,
+      reason: x.reason,
+      locate: x.ruleCode,
+    }));
     const unanalyzable: FindingRow[] = report.unanalyzableRules.map((x, i) => ({
       key: `na-${i}`,
       title: x.ruleCode,
       reason: x.reason,
       locate: x.ruleCode,
     }));
-    return { incoherences, deadRules, conflicts, coverageGaps, overlaps, unanalyzable };
+    return { incoherences, deadRules, conflicts, coverageGaps, overlaps, redundancies, unanalyzable };
   }, [report]);
 
   const totalFindings =
@@ -87,7 +93,8 @@ export default function RuleAnalysisDrawer({ open, onClose, sceneCode, report, l
     (report?.deadRules.length ?? 0) +
     (report?.conflicts.length ?? 0) +
     (report?.coverageGaps.length ?? 0) +
-    (report?.overlaps.length ?? 0);
+    (report?.overlaps.length ?? 0) +
+    (report?.redundancies.length ?? 0);
 
   const renderItems = (rows: FindingRow[], severity: Severity, grayed = false) =>
     rows.map((r) => (
@@ -147,6 +154,11 @@ export default function RuleAnalysisDrawer({ open, onClose, sceneCode, report, l
           children: groups.overlaps.length ? renderItems(groups.overlaps, 'INFO') : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('empty')} />,
         },
         {
+          key: 'redundancies',
+          label: groupHeader(t('group.redundancies'), groups.redundancies.length, t('sevTag.INFO'), SEV_COLOR.INFO),
+          children: groups.redundancies.length ? renderItems(groups.redundancies, 'INFO') : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('empty')} />,
+        },
+        {
           key: 'unanalyzable',
           label: groupHeader(t('group.unanalyzable'), groups.unanalyzable.length, t('sevTag.SKIP'), 'default'),
           children: groups.unanalyzable.length ? (
@@ -171,6 +183,7 @@ export default function RuleAnalysisDrawer({ open, onClose, sceneCode, report, l
         groups.conflicts.length && 'conflicts',
         groups.coverageGaps.length && 'coverageGaps',
         groups.overlaps.length && 'overlaps',
+        groups.redundancies.length && 'redundancies',
       ].filter(Boolean) as string[]
     : [];
 
@@ -203,6 +216,7 @@ export default function RuleAnalysisDrawer({ open, onClose, sceneCode, report, l
             <Tag color={SEV_COLOR.WARN}>{t('group.conflicts')} {report.conflicts.length}</Tag>
             <Tag color={SEV_COLOR.WARN}>{t('group.coverageGaps')} {report.coverageGaps.length}</Tag>
             <Tag color={SEV_COLOR.INFO}>{t('group.overlaps')} {report.overlaps.length}</Tag>
+            <Tag color={SEV_COLOR.INFO}>{t('group.redundancies')} {report.redundancies.length}</Tag>
             <Tag color="default">{t('group.unanalyzable')} {report.unanalyzableRules.length}</Tag>
           </Space>
           {totalFindings === 0 && report.unanalyzableRules.length === 0 ? (

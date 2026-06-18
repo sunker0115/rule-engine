@@ -629,6 +629,7 @@ export interface RuleSetAnalysisTranslation {
     coverageGaps: string;
     overlaps: string;
     unanalyzable: string;
+    redundancies: string;
   };
   unanalyzableNote: string;
   sevTag: { ERROR: string; WARN: string; INFO: string; SKIP: string };

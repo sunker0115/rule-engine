@@ -14,6 +14,7 @@ const analysis: RuleSetAnalysisTranslation = {
     coverageGaps: '覆盖缺口',
     overlaps: '重叠 / 冗余',
     unanalyzable: '未分析',
+    redundancies: '冗余条件',
   },
   unanalyzableNote: '灰显，非"无问题"——超出 v1 精确推理，已跳过以避免误判。',
   sevTag: { ERROR: 'ERROR', WARN: 'WARN', INFO: 'INFO', SKIP: 'SKIP' },

@@ -14,6 +14,7 @@ const analysis: RuleSetAnalysisTranslation = {
     coverageGaps: 'Coverage Gaps',
     overlaps: 'Overlaps / Redundancy',
     unanalyzable: 'Not Analyzed',
+    redundancies: 'Redundant Conditions',
   },
   unanalyzableNote: 'Grayed out — NOT "no issue". Beyond v1 precise reasoning, skipped to avoid false positives.',
   sevTag: { ERROR: 'ERROR', WARN: 'WARN', INFO: 'INFO', SKIP: 'SKIP' },

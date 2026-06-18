@@ -1,4 +1,12 @@
-import type { RuleSetAnalysisReport, Severity } from '@/types';
+import type { RuleKind, RuleSetAnalysisReport, Severity } from '@/types';
+
+/** 仅合取语义（conjunction）的规则种类可做静态分析；SCORECARD / EXPRESSION_SCRIPT 不可静态分析。 */
+export const ANALYZABLE_KINDS: readonly RuleKind[] = ['AST_BOOLEAN', 'DECISION_TREE', 'DECISION_TABLE'];
+
+/** 当前规则种类是否支持规则集静态分析。 */
+export function isAnalyzableKind(kind: RuleKind): boolean {
+  return ANALYZABLE_KINDS.includes(kind);
+}
 
 /** loc 形如 "R1" 或 "R1#row2"——取 # 前规则码部分。 */
 function ruleCodeOf(loc: string): string {
@@ -23,7 +31,8 @@ export function summarize(report: RuleSetAnalysisReport): AnalysisSummary {
     report.deadRules.filter((x) => x.severity === s).length +
     report.conflicts.filter((x) => x.severity === s).length +
     report.overlaps.filter((x) => x.severity === s).length +
-    report.coverageGaps.filter((x) => x.severity === s).length;
+    report.coverageGaps.filter((x) => x.severity === s).length +
+    report.redundancies.filter((x) => x.severity === s).length;
   const error = bySev('ERROR');
   const warn = bySev('WARN');
   const info = bySev('INFO');
@@ -51,6 +60,7 @@ export function worstSeverityForRule(report: RuleSetAnalysisReport, ruleCode: st
   report.deadRules.forEach((x) => x.deadRuleCode === ruleCode && bump(x.severity));
   report.conflicts.forEach((x) => (ruleCodeOf(x.locA) === ruleCode || ruleCodeOf(x.locB) === ruleCode) && bump(x.severity));
   report.overlaps.forEach((x) => (ruleCodeOf(x.locA) === ruleCode || ruleCodeOf(x.locB) === ruleCode) && bump(x.severity));
+  report.redundancies.forEach((x) => x.ruleCode === ruleCode && bump(x.severity));
   if (worst) return worst;
   if (report.unanalyzableRules.some((x) => x.ruleCode === ruleCode)) return 'NA';
   return null;
