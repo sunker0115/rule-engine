@@ -36,6 +36,12 @@ public class MetricController {
         return ApiResponse.ok(metadataService.listMetricItems(tenantId));
     }
 
+    /** GET /admin/v1/metrics/usage-counts — tenant 下每个 metric 的被引用计数（列表徽标，版本无关）。 */
+    @GetMapping("/usage-counts")
+    public ApiResponse<List<com.sstlfsj.rule.config.api.service.UsageCount>> usageCounts(@RequestParam Long tenantId) {
+        return ApiResponse.ok(service.countRuleUsages(tenantId));
+    }
+
     /**
      * GET /admin/v1/metrics/{metricCode} — 查单个 metric 完整定义，供前端编辑器加载。
      *

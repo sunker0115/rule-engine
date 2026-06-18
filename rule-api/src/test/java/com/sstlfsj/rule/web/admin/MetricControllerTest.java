@@ -255,4 +255,16 @@ class MetricControllerTest {
 
         verify(testService).test(eq(1L), eq("account.age"), any(), any(), eq("s1"));
     }
+
+    // ── GET /admin/v1/metrics/usage-counts ──────────────────────────────────────
+
+    @Test
+    void usageCounts_returns200() throws Exception {
+        when(service.countRuleUsages(1L)).thenReturn(
+                List.of(new com.sstlfsj.rule.config.api.service.UsageCount("account.age", 5)));
+        mockMvc.perform(get("/admin/v1/metrics/usage-counts").param("tenantId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].code").value("account.age"))
+                .andExpect(jsonPath("$.data[0].count").value(5));
+    }
 }
