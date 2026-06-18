@@ -347,6 +347,14 @@
 - **迁移成本**：中低（一个分析 service + 报告 API；难点在条件空间覆盖判定算法，可按 conditionType 能力分档——区间/枚举可精确判，开放表达式降级为"无法判定"）。
 - **依赖与联动**：建在 D6 不可变快照 + D17 索引之上；与 §2.4 规则间依赖编排正交（那是运行时编排，本锚点是静态质量）；与 §2.27 决策效果闭环互补（静态分析看"逻辑自洽"，效果闭环看"实战准不准"）。
 
+**已实装（B31 / 2026-06-18）：**
+
+- **7 类检查**：① 不一致 incoherence（单规则条件矛盾，cube 为空集，ERROR）② 死规则/遮蔽 dead（被更高优先级规则在输入空间上完全覆盖）③ 冲突 conflict（输入相交、决策对立）④ 重叠 overlap（输入相交、决策相同，可合并，INFO）⑤ 覆盖缺口 coverageGap（绑定的 Decision 无任何规则路径产出）⑥ **冗余 redundancy（单规则内一条件被同组另一条件蕴含，可简化；AST_BOOLEAN 扁平 AND + 决策树 IfNode + 决策表行内复用同机制）** ⑦ 未分析 unanalyzable 灰名单。
+- **算法**：`ConditionSpace`（区间/点集三态推理，几何=DMN Calvanese 2016 超矩形）+ 6 个 detector + `RuleSetAnalyzer` 编排；检查命名/语义对齐 **Drools Verifier**。**hit-policy-aware**：HIGHEST_PRIORITY/ALL_HITS/FIRST_HIT 各自语义与 `EvalEngine` 运行时"谁胜出"一致。**零误报**：任一维 UNKNOWN / 不可投影即降级，宁漏报不误报。
+- **覆盖范围（精确推理仅这些）**：AST_BOOLEAN 顶层 AND-of-条件 + 决策表行内；**故意不做**：决策树**跨树**区间分析（整条进 unanalyzable）、评分卡（加权语义非合取）、表达式脚本（不透明）。**保守降级（漏报非误报）**：FIRST_HIT 等优先级 masking 因 tie-break(ruleVersionId) 分析期不可见而不报；DMN 全输入域"missing rule"完备性缺口推迟。
+- **草稿优先**：分析取每条规则的 DRAFT 版本优先、否则 ACTIVE，反映"待发布编辑态"，支持发布前自查。
+- **落点**：`rule-kernel` `internal/analysis`（算法）+ `api/analysis`（报告契约，纯 Java 无 Spring/Jackson）；`rule-config-svc` `RuleAnalysisService`（读快照编排，真 MySQL 集成测试）；`rule-api` `RuleAnalysisController`（`GET /admin/v1/scenes/{sceneCode}/analysis`）；前端**左栏摘要条（唯一入口，点击进抽屉）+ 抽屉分类展示 + 规则 badge**，非可分析 kind 隐藏入口。（注：本锚点原"接口衔接面"写"前端右栏展示"，实际落在左栏摘要条+抽屉，右栏保持节点属性不动——以此实装为准。）
+
 ### 2.27 决策效果闭环 / 规则有效性度量（来源 对照成熟决策平台分析 — 效果维度，FICO/Sapiens 规则绩效同类能力）
 
 - **v1 现状**：每次决策落 `evaluation_session`（D21）；可观测体系（§2.6 / §2.22）度量的是**系统级**指标（QPS / 延迟 / 错误率 / 命中率）。**无业务效果度量**——"判 HIGH 的交易事后是不是真欺诈"答不了，单条规则的查准/查全无从谈起。
