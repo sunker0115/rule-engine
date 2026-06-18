@@ -59,9 +59,6 @@ const metric: MetricTranslation = {
   },
   searchPlaceholder: 'Search by name or code',
   detail: { basicInfo: 'Basic Info', version: 'Version', notFound: 'Metric not found' },
-  impact: {
-    column: { ruleCode: 'Rule Code', ruleName: 'Rule Name', sceneCode: 'Scene', status: 'Status' },
-  },
   test: {
     title: 'Try Out',
     sampleVars: 'Sample Vars',

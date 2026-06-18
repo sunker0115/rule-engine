@@ -179,9 +179,6 @@ export interface MetricTranslation {
   };
   searchPlaceholder: string;
   detail: { basicInfo: string; version: string; notFound: string };
-  impact: {
-    column: { ruleCode: string; ruleName: string; sceneCode: string; status: string };
-  };
   test: {
     title: string;
     sampleVars: string;
