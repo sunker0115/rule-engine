@@ -41,6 +41,8 @@ public final class RuleSetAnalyzer {
             Comparator.comparing(DeadRuleFinding::deadRuleCode).thenComparing(DeadRuleFinding::coveredByRuleCode);
     private static final Comparator<IncoherenceFinding> INCOHERENCE_ORDER =
             Comparator.comparing(IncoherenceFinding::ruleCode);
+    private static final Comparator<RedundancyFinding> REDUNDANCY_ORDER =
+            Comparator.comparing(RedundancyFinding::ruleCode).thenComparing(RedundancyFinding::redundantCondition);
 
     private RuleSetAnalyzer() {}
 
@@ -81,8 +83,11 @@ public final class RuleSetAnalyzer {
 
         List<UnanalyzableRule> unanalyzable = collectUnanalyzable(rules);
 
-        // 单规则内冗余条件检测（AST_BOOLEAN / DECISION_TREE 的扁平 AND 组），detect 已确定性排序
-        List<RedundancyFinding> redundancies = RedundancyDetector.detect(rules);
+        // 冗余条件：AST_BOOLEAN / DECISION_TREE 扁平 AND 组（RedundancyDetector）+ 决策表行内同维列
+        // （DecisionTableDetector）合并入同一列表，按 (ruleCode, redundantCondition) 升序确定性排序
+        List<RedundancyFinding> redundancies = new ArrayList<>(RedundancyDetector.detect(rules));
+        redundancies.addAll(table.redundancies());
+        redundancies.sort(REDUNDANCY_ORDER);
 
         return new RuleSetAnalysisReport(sceneCode,
                 incoherences, deadRules, conflicts, overlaps, coverageGaps, unanalyzable, redundancies);

@@ -190,6 +190,33 @@ class RuleSetAnalyzerTest {
     }
 
     @Test
+    void decision_table_redundant_row_merges_into_redundancies_sorted() {
+        // AST_BOOLEAN R_red：amount<=10 ∧ amount==10 → "R_red" 行内冗余；
+        // 决策表 T_tab 行 amount<=10 + amount==10 → "T_tab#row1" 行内冗余。
+        // 两源合并入 report.redundancies，按 (ruleCode, redundantCondition) 升序：R_red < T_tab#row1
+        AstNode redundant = new AndNode(List.of(
+                cond(ConditionTypes.LTE, "amount", 10),
+                cond(ConditionTypes.EQ, "amount", 10)),
+                null, null);
+        AnalyzableRule astRule = booleanRule("R_red", redundant, "D_X", 1);
+        AnalyzableRule tableRule = new AnalyzableRule("T_tab", 1L,
+                new DecisionTableNode(
+                        List.of(new DecisionTableNode.Column("amount", ConditionTypes.LTE),
+                                new DecisionTableNode.Column("amount", ConditionTypes.EQ)),
+                        List.of(new DecisionTableNode.Row(List.of(10, 10), "D_A"))),
+                List.of(), RuleKind.DECISION_TABLE.tag());
+
+        RuleSetAnalysisReport report = RuleSetAnalyzer.analyze(
+                "scene-1", List.of(astRule, tableRule), SceneExecutionStrategy.FIRST_HIT);
+
+        assertThat(report.redundancies())
+                .extracting(f -> f.ruleCode(), f -> f.redundantCondition())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("R_red", "amount LTE 10"),
+                        org.assertj.core.groups.Tuple.tuple("T_tab#row1", "amount LTE 10"));
+    }
+
+    @Test
     void empty_rules_returns_all_empty_report_with_scene_code() {
         RuleSetAnalysisReport report = RuleSetAnalyzer.analyze(
                 "scene-empty", List.of(), SceneExecutionStrategy.HIGHEST_PRIORITY);

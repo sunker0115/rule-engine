@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.analysis.ConflictFinding;
 import com.sstlfsj.rule.kernel.api.analysis.DeadRuleFinding;
 import com.sstlfsj.rule.kernel.api.analysis.IncoherenceFinding;
 import com.sstlfsj.rule.kernel.api.analysis.OverlapFinding;
+import com.sstlfsj.rule.kernel.api.analysis.RedundancyFinding;
 import com.sstlfsj.rule.kernel.api.analysis.Severity;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
@@ -21,7 +22,7 @@ import java.util.Objects;
 
 /**
  * 决策表行内分析（DMN 风格）：在<b>同一张决策表内部</b>，找出行对的输入相交、决策冲突、被掩盖的死行，
- * 以及单行内列条件相互矛盾的不一致行。
+ * 单行内列条件相互矛盾的不一致行，以及单行内同维两列一方蕴含另一方的冗余列。
  *
  * <p>每行投影为一个 {@link RuleCube}：列 i 的取值空间由 {@code ConditionSpaceFactory.fromOperator(列算子, 单元格参数)}
  * 求得，维度键为 {@code 列.metricCode + "@" + 列.valueRef}；同一 metric 出现在多列时按 {@link ConditionSpace#meet} 取交。
@@ -57,11 +58,13 @@ public final class DecisionTableDetector {
      * @param conflicts    异决策相交行对（歧义冲突）
      * @param deadRows     被在先行完全覆盖的死行（FIRST_HIT 永不命中）
      * @param incoherences 自身列条件相互矛盾、空维永不命中的行
+     * @param redundancies 同一行内同维两列一方蕴含另一方、较宽列冗余可删
      */
     public record DecisionTableFindings(List<OverlapFinding> overlaps,
                                         List<ConflictFinding> conflicts,
                                         List<DeadRuleFinding> deadRows,
-                                        List<IncoherenceFinding> incoherences) {}
+                                        List<IncoherenceFinding> incoherences,
+                                        List<RedundancyFinding> redundancies) {}
 
     /**
      * 对规则集中所有决策表逐表做行内分析。
@@ -74,13 +77,14 @@ public final class DecisionTableDetector {
         List<ConflictFinding> conflicts = new ArrayList<>();
         List<DeadRuleFinding> deadRows = new ArrayList<>();
         List<IncoherenceFinding> incoherences = new ArrayList<>();
+        List<RedundancyFinding> redundancies = new ArrayList<>();
 
         for (AnalyzableRule rule : rules) {
             if (!RuleKind.DECISION_TABLE.tag().equals(rule.kind())
                     || !(rule.ast() instanceof DecisionTableNode table)) {
                 continue;
             }
-            analyzeTable(rule.ruleCode(), table, overlaps, conflicts, deadRows, incoherences);
+            analyzeTable(rule.ruleCode(), table, overlaps, conflicts, deadRows, incoherences, redundancies);
         }
 
         overlaps.sort(Comparator.comparing(OverlapFinding::locA).thenComparing(OverlapFinding::locB));
@@ -88,14 +92,17 @@ public final class DecisionTableDetector {
         deadRows.sort(Comparator.comparing(DeadRuleFinding::deadRuleCode)
                 .thenComparing(DeadRuleFinding::coveredByRuleCode));
         incoherences.sort(Comparator.comparing(IncoherenceFinding::ruleCode));
-        return new DecisionTableFindings(overlaps, conflicts, deadRows, incoherences);
+        redundancies.sort(Comparator.comparing(RedundancyFinding::ruleCode)
+                .thenComparing(RedundancyFinding::redundantCondition));
+        return new DecisionTableFindings(overlaps, conflicts, deadRows, incoherences, redundancies);
     }
 
     private static void analyzeTable(String tableCode, DecisionTableNode table,
                                      List<OverlapFinding> overlaps,
                                      List<ConflictFinding> conflicts,
                                      List<DeadRuleFinding> deadRows,
-                                     List<IncoherenceFinding> incoherences) {
+                                     List<IncoherenceFinding> incoherences,
+                                     List<RedundancyFinding> redundancies) {
         List<DecisionTableNode.Column> columns = table.columns();
         List<DecisionTableNode.Row> rows = table.rows();
 
@@ -103,12 +110,14 @@ public final class DecisionTableDetector {
         for (int i = 0; i < rows.size(); i++) {
             RuleCube cube = rowCube(columns, rows.get(i));
             cubes.add(cube);
-            // 列条件相互矛盾（空维）→ 该行永不命中，记为行内不一致
+            // 列条件相互矛盾（空维）→ 该行永不命中，记为行内不一致；不一致行的冗余无意义，跳过冗余检测
             if (cube.isIncoherent()) {
                 String loc = loc(tableCode, i);
                 incoherences.add(new IncoherenceFinding(loc,
                         "决策表行 " + loc + " 列条件相互矛盾，该行永不命中", Severity.ERROR));
+                continue;
             }
+            detectRowRedundancy(tableCode, i, columns, rows.get(i), redundancies);
         }
 
         for (int i = 0; i < rows.size(); i++) {
@@ -147,6 +156,68 @@ public final class DecisionTableDetector {
                 }
             }
         }
+    }
+
+    /**
+     * 行内冗余检测：同一行内同维（{@code metricCode@valueRef}）的多个非通配单元格，
+     * 若较宽列 X 被较窄列 Y 蕴含（{@code spaceX.subsumes(spaceY) == TRUE}）→ X 冗余可删。
+     *
+     * <p>逐列计算<b>单列</b>取值空间（同 {@link #rowCube} 用的 {@code paramsFor + fromOperator}，但在
+     * 同维 {@code meet} <b>之前</b>逐列保留），按维度键分组；每组 ≥2 单元格时对有序对 (X, Y) 判定。
+     * 精确重复（互相 subsumes）按确定性规则仅报靠后单元格为冗余。任一为 UNKNOWN 跳过（零误报）。
+     * 每个冗余单元格至多报告一次（找到首个蕴含它的伙伴即停）。
+     */
+    private static void detectRowRedundancy(String tableCode, int rowIndex,
+                                            List<DecisionTableNode.Column> columns, DecisionTableNode.Row row,
+                                            List<RedundancyFinding> out) {
+        List<Object> cells = row.conditions();
+        // 维度键 → 该维上各非通配单元格（保列序），单元格携带其单列空间与人类可读描述
+        Map<String, List<Cell>> byDim = new LinkedHashMap<>();
+        for (int i = 0; i < columns.size(); i++) {
+            Object cellValue = (i < cells.size()) ? cells.get(i) : null;
+            if (cellValue == null) {
+                continue; // 通配单元格不是条件
+            }
+            DecisionTableNode.Column col = columns.get(i);
+            ConditionSpace space = ConditionSpaceFactory.fromOperator(col.operator(), paramsFor(col.operator(), cellValue));
+            byDim.computeIfAbsent(dimKey(col), k -> new ArrayList<>())
+                    .add(new Cell(space, describe(col, cellValue)));
+        }
+
+        String loc = loc(tableCode, rowIndex);
+        for (List<Cell> group : byDim.values()) {
+            if (group.size() < 2) {
+                continue;
+            }
+            for (int xi = 0; xi < group.size(); xi++) {
+                Cell x = group.get(xi);
+                for (int yi = 0; yi < group.size(); yi++) {
+                    if (xi == yi) {
+                        continue;
+                    }
+                    Cell y = group.get(yi);
+                    if (x.space().subsumes(y.space()) != Tri.TRUE) {
+                        continue;
+                    }
+                    // X ⊇ Y：Y 更严格、蕴含 X。若同时 Y ⊇ X（精确重复），仅当 X 下标更大时算冗余，避免双报。
+                    boolean equalSpaces = y.space().subsumes(x.space()) == Tri.TRUE;
+                    if (equalSpaces && xi < yi) {
+                        continue;
+                    }
+                    out.add(new RedundancyFinding(loc, x.describe(), y.describe(),
+                            x.describe() + " 被同行 " + y.describe() + " 蕴含，可删除", Severity.INFO));
+                    break; // 每个冗余单元格至多报告一次
+                }
+            }
+        }
+    }
+
+    /** 行内冗余检测的单元格视图：单列取值空间 + 人类可读描述。 */
+    private record Cell(ConditionSpace space, String describe) {}
+
+    /** 单元格的人类可读描述：{@code metricCode 算子 单元格值}（如 {@code amount LTE 10}），与 RedundancyDetector 一致。 */
+    private static String describe(DecisionTableNode.Column col, Object cellValue) {
+        return col.metricCode() + " " + col.operator() + " " + cellValue;
     }
 
     /** 行 loc 标识：0-based 下标 → {@code ruleCode + "#row" + (r+1)}（1-based、人类可读）。 */

@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.analysis.ConflictFinding;
 import com.sstlfsj.rule.kernel.api.analysis.DeadRuleFinding;
 import com.sstlfsj.rule.kernel.api.analysis.IncoherenceFinding;
 import com.sstlfsj.rule.kernel.api.analysis.OverlapFinding;
+import com.sstlfsj.rule.kernel.api.analysis.RedundancyFinding;
 import com.sstlfsj.rule.kernel.api.analysis.Severity;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -198,6 +199,59 @@ class DecisionTableDetectorTest {
         assertThat(r.overlaps()).hasSize(1);
         assertThat(r.deadRows()).hasSize(1);
         assertThat(r.deadRows().getFirst().deadRuleCode()).isEqualTo("T6#row2");
+    }
+
+    @Test
+    void row_with_two_columns_one_implying_other_emits_redundancy() {
+        // 同一行 amount@METRIC 两列：amount<=10（宽）被 amount==10（窄、蕴含）覆盖 → amount LTE 10 冗余
+        AnalyzableRule t = table("TR1",
+                List.of(col("amount", ConditionTypes.LTE), col("amount", ConditionTypes.EQ)),
+                List.of(new DecisionTableNode.Row(Arrays.asList(10, 10), "D_A")));
+
+        DecisionTableDetector.DecisionTableFindings r = DecisionTableDetector.detect(List.of(t));
+
+        assertThat(r.redundancies()).hasSize(1);
+        RedundancyFinding f = r.redundancies().getFirst();
+        assertThat(f.ruleCode()).isEqualTo("TR1#row1");
+        assertThat(f.redundantCondition()).isEqualTo("amount LTE 10");
+        assertThat(f.impliedByCondition()).isEqualTo("amount EQ 10");
+        assertThat(f.severity()).isEqualTo(Severity.INFO);
+    }
+
+    @Test
+    void row_with_two_columns_not_implying_emits_no_redundancy() {
+        // amount>5 与 amount<100 互不蕴含（各含对方不覆盖的点）→ 无冗余
+        AnalyzableRule t = table("TR2",
+                List.of(col("amount", ConditionTypes.GT), col("amount", ConditionTypes.LT)),
+                List.of(new DecisionTableNode.Row(Arrays.asList(5, 100), "D_A")));
+
+        DecisionTableDetector.DecisionTableFindings r = DecisionTableDetector.detect(List.of(t));
+
+        assertThat(r.redundancies()).isEmpty();
+    }
+
+    @Test
+    void wildcard_cell_is_not_a_condition_no_redundancy() {
+        // 通配单元格（null）不是条件 → 不参与冗余判定
+        AnalyzableRule t = table("TR3",
+                List.of(col("amount", ConditionTypes.LTE), col("amount", ConditionTypes.EQ)),
+                List.of(new DecisionTableNode.Row(Arrays.asList(10, null), "D_A")));
+
+        DecisionTableDetector.DecisionTableFindings r = DecisionTableDetector.detect(List.of(t));
+
+        assertThat(r.redundancies()).isEmpty();
+    }
+
+    @Test
+    void unknown_cell_does_not_yield_false_redundancy() {
+        // 正则列不可建模 → UNKNOWN，subsumes 降级 UNKNOWN → 零误报
+        AnalyzableRule t = table("TR4",
+                List.of(col("name", ConditionTypes.MATCHES), col("name", ConditionTypes.EQ)),
+                List.of(new DecisionTableNode.Row(Arrays.asList("^A.*", "A"), "D_A")));
+
+        DecisionTableDetector.DecisionTableFindings r = DecisionTableDetector.detect(List.of(t));
+
+        assertThat(r.redundancies()).isEmpty();
     }
 
     @Test
