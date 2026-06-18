@@ -46,6 +46,15 @@ public class DecisionController {
         return ApiResponse.ok(null);
     }
 
+    /** POST /admin/v1/decisions/{code}/enable?tenantId=xxx — 启用 decision。 */
+    @PostMapping("/{code}/enable")
+    public ApiResponse<Void> enable(@PathVariable String code,
+                                    @RequestParam Long tenantId,
+                                    @RequestHeader("X-Actor-Id") String actorId) {
+        decisionService.enable(tenantId, code, actorId);
+        return ApiResponse.ok(null);
+    }
+
     /** GET /admin/v1/decisions?tenantId=xxx — 列出 tenant 下所有 decision。 */
     @GetMapping
     public ApiResponse<List<DecisionDefinition>> list(@RequestParam Long tenantId) {

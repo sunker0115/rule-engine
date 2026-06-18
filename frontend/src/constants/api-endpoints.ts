@@ -44,6 +44,8 @@ export const ENDPOINTS = {
   DECISION_LIST:   `${ADMIN}/decisions`,
   DECISION_CREATE: `${ADMIN}/decisions`,
   DECISION_GET:           (code: string) => `${ADMIN}/decisions/${code}`,
+  DECISION_DISABLE:       (code: string) => `${ADMIN}/decisions/${code}/disable`,
+  DECISION_ENABLE:        (code: string) => `${ADMIN}/decisions/${code}/enable`,
   DECISION_SOURCES:       (code: string) => `${ADMIN}/decisions/${code}/sources`,
   DECISION_USAGE_COUNTS:  `${ADMIN}/decisions/usage-counts`,
   METRIC_USAGE_COUNTS:    `${ADMIN}/metrics/usage-counts`,

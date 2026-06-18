@@ -4,7 +4,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listDecisions, createDecision, updateDecision, getDecisionUsageCounts, getDecisionSources } from '@/api/decision';
+import { listDecisions, createDecision, enableDecision, disableDecision, getDecisionUsageCounts, getDecisionSources } from '@/api/decision';
 import { getDecisionColumns } from '@/config/columns/decision';
 import { ROUTES, route } from '@/constants/routes';
 import LineageDrawer from '@/components/lineage/LineageDrawer';
@@ -79,7 +79,7 @@ export default function DecisionList() {
       columns={getDecisionColumns(
         t, tc,
         async (code, enabled) => {
-          await updateDecision(tenantId, code, { status: enabled ? 'ACTIVE' : 'DISABLED' });
+          await (enabled ? enableDecision(tenantId, code) : disableDecision(tenantId, code));
           message.success(enabled ? tc('message.enabled') : tc('message.disabled'));
           load();
         },

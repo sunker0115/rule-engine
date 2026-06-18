@@ -28,6 +28,9 @@ public interface DecisionService {
     /** 停用 decision（status → DISABLED）。 */
     void disable(Long tenantId, String code, String actorId);
 
+    /** 启用 decision（status → ACTIVE）。 */
+    void enable(Long tenantId, String code, String actorId);
+
     /** 列出 tenant 下所有 decision。 */
     List<DecisionDefinition> list(Long tenantId);
 

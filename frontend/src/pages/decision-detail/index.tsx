@@ -4,7 +4,7 @@ import { Descriptions, Button, Tabs, Spin, message, Form, Input, InputNumber, Ta
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { getDecision, updateDecision, getDecisionSources } from '@/api/decision';
+import { getDecision, updateDecision, enableDecision, disableDecision, getDecisionSources } from '@/api/decision';
 import { ROUTES } from '@/constants/routes';
 import { colorOf, getStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
@@ -52,14 +52,14 @@ export default function DecisionDetail() {
     if (!decision || !currentId || !code) return;
     const enabling = decision.status !== 'ACTIVE';
     if (enabling) {
-      await updateDecision(currentId, code, { status: 'ACTIVE' });
+      await enableDecision(currentId, code);
       message.success(tc('message.enabled'));
       load();
       return;
     }
     const res = await getDecisionSources(currentId, code);
     const doDisable = async () => {
-      await updateDecision(currentId, code, { status: 'DISABLED' });
+      await disableDecision(currentId, code);
       message.success(tc('message.disabled'));
       load();
     };

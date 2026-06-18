@@ -90,6 +90,24 @@ class DecisionServiceImplTest {
     }
 
     @Test
+    void enable_setsStatusActive() {
+        DecisionDefinition existing = new DecisionDefinition();
+        existing.setId(7L); existing.setTenantId(9001L); existing.setCode("REJECT");
+        existing.setStatus(DecisionStatus.DISABLED);
+        when(mapper.findByCode(9001L, "REJECT")).thenReturn(existing);
+
+        sut.enable(9001L, "REJECT", "actor");
+
+        ArgumentCaptor<DecisionDefinition> cap = ArgumentCaptor.forClass(DecisionDefinition.class);
+        verify(mapper).updateById(cap.capture());
+        assertThat(cap.getValue().getStatus()).isEqualTo(DecisionStatus.ACTIVE);
+        // 审计动作须为 ENABLE（与 disable 的 DISABLE 对称）
+        ArgumentCaptor<OperationAuditedEvent> evt = ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher).publishEvent(evt.capture());
+        assertThat(evt.getValue().action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.ENABLE);
+    }
+
+    @Test
     void update_rejectsWhenNotFound() {
         when(mapper.findByCode(9001L, "X")).thenReturn(null);
         assertThatThrownBy(() -> sut.update(9001L, "X", "n", 1, null, "actor"))

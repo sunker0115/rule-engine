@@ -91,6 +91,17 @@ public class DecisionServiceImpl implements DecisionService {
     }
 
     @Override
+    @Transactional
+    public void enable(Long tenantId, String code, String actorId) {
+        DecisionDefinition d = requireDecision(tenantId, code);
+        d.setStatus(DecisionStatus.ACTIVE);
+        d.setUpdatedBy(actorId);
+        d.setUpdatedAt(LocalDateTime.now());
+        mapper.updateById(d);
+        audit(tenantId, actorId, AuditAction.ENABLE, d.getId());
+    }
+
+    @Override
     public List<DecisionDefinition> list(Long tenantId) {
         return mapper.selectList(new LambdaQueryWrapper<DecisionDefinition>()
                 .eq(DecisionDefinition::getTenantId, tenantId));

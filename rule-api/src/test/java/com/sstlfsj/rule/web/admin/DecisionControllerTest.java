@@ -34,6 +34,12 @@ class DecisionControllerTest {
     }
 
     @Test
+    void enable_delegatesToService() {
+        controller.enable("REJECT", 9001L, "actor");
+        verify(service).enable(9001L, "REJECT", "actor");
+    }
+
+    @Test
     void list_delegatesToService() {
         when(service.list(9001L)).thenReturn(List.of(new DecisionDefinition()));
         var resp = controller.list(9001L);

@@ -15,6 +15,16 @@ export async function updateDecision(tenantId: number, code: string, body: Recor
   return apiClient.put(`${ENDPOINTS.DECISION_LIST}/${code}`, body, { params: { tenantId } });
 }
 
+/** 停用 decision（status → DISABLED，走专用端点，正确审计 DISABLE） */
+export async function disableDecision(tenantId: number, code: string) {
+  return apiClient.post(ENDPOINTS.DECISION_DISABLE(code), null, { params: { tenantId } });
+}
+
+/** 启用 decision（status → ACTIVE，走专用端点，正确审计 ENABLE） */
+export async function enableDecision(tenantId: number, code: string) {
+  return apiClient.post(ENDPOINTS.DECISION_ENABLE(code), null, { params: { tenantId } });
+}
+
 /** 取单个 decision 完整定义 */
 export async function getDecision(tenantId: number, code: string) {
   const res = await apiClient.get<ApiResponse<DecisionItem>>(ENDPOINTS.DECISION_GET(code), { params: { tenantId } });
