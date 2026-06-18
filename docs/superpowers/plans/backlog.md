@@ -20,6 +20,7 @@
 > - B5 预编译执行器 `CompiledExecutor`（08-evo §2.13 / D67，2026-06-13；纯编译版 + `PrecompileMode`/`CompiledPredicateEvictor`；alpha 节点共享为可选 add-on）。
 > - B7 规则导出 / 导入（2026-06-06，08-evo §2.9 + 10-api-contract §4.8–4.9）；**解锁 B15**（模板市场依赖 B7 + B11）。
 > - B6 Metric 版本化（档1，2026-06-06，08-evo §2.2）。
+> - B17 payloadSchema 字段引用严格校验（核心早随 D13 实装——`PublishService.freezePayloadDeps` 发布期拒绝引用未声明 payload 字段，含 ConditionNode + 决策表 PAYLOAD 列；2026-06-18 补 `UNRESOLVED_VARIABLE:` 语义前缀对齐错误码契约）。**严格契约**：无 payloadSchema 也拒 payload 引用（强制声明）。原"留 v3"判断有误，实为已实装。
 
 ---
 
@@ -59,5 +60,4 @@
 
 | # | 功能 | 来源 | 备注 |
 |---|------|------|------|
-| B15 | **规则模板市场** | 08-evo §2.10 | 依赖 B11（跨 Scene 复用）+ B7（导出导入）；v3 范畴 |
-| B17 | **payloadSchema 字段引用校验**（AST ConditionNode 引用 payload 字段） | 08-evo §2.12 | 需约定 ConditionNode.params 字段引用编码规范；留 v3 |
+| B15 | **规则模板市场** | 08-evo §2.10 | 依赖 B11（跨 Scene 复用，未做）+ B7（导出导入，已做）；v3 范畴 |
