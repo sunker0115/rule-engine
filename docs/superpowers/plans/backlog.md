@@ -3,7 +3,7 @@
 整理自文档中所有"未实装 / 留到 v1.5 / 留到 v2 / 演进方向"标注。
 按**执行性质**分组：主动推进序列 → 大件能力 → 触发式 → v3 远期；组内按建议执行顺序排列。
 
-> 主动推进序列**已落地移除**：B6 Metric 版本化、B7 规则导出/导入、B1 EXPRESSION_SCRIPT evaluator、B5 预编译执行器。求值能力已完整，序列重心转入"**治理与效果**"三件（08-evo §2.26–2.28，按杠杆排序）。
+> 主动推进序列**已落地移除**：B6 Metric 版本化、B7 规则导出/导入、B1 EXPRESSION_SCRIPT evaluator、B5 预编译执行器、**B31 规则集静态分析（2026-06-18）**。"治理与效果"已落地第一件（B31），序列剩 B32 决策效果闭环 / B33 血缘（08-evo §2.27–2.28）。
 
 ---
 
@@ -11,11 +11,11 @@
 
 | 序 | # | 功能 | 来源 | 预计改动范围 | 备注 |
 |---|---|------|------|------------|------|
-| 1 | B31 | **规则集静态分析 / 冲突检测** | 08-evo §2.26 | 离线 `RuleSetAnalyzer` 读快照（AST + 决策绑定）算死规则 / 冲突 / 冗余 / 覆盖缺口 + 报告 API（`GET /admin/v1/scenes/{code}/analysis`）；前端编辑器右栏告警展示 | **最高杠杆、最低成本**：纯读快照、零 DDL、不碰热路径；规则集腐化的治理分水岭。难点在条件空间覆盖判定，按 conditionType 能力分档 |
-| 2 | B32 | **决策效果闭环 / 规则有效性度量** | 08-evo §2.27 | `decision_outcome` 表（关联 sessionId/eventId + 结果标签）+ 标签回灌 API（`POST /admin/v1/decision-outcomes`）+ 按规则 / Decision 聚合 TP/FP/precision/recall + 漂移 | 把引擎从"决策工具"变"风控平台"；建在 `evaluation_session` 上；**标签语义是业务侧职责**，引擎只提供接入位 + 聚合 |
-| 3 | B33 | **规则↔指标血缘与变更影响分析** | 08-evo §2.28 | `LineageIndex` 从快照抽 metricCode/decisionCode 引用建索引（挂发布事件增量更新，复用 D17 热更）+ 双向查询 API（metric→规则 / Decision→规则） | 低成本；改 metric 口径 / 下线 Decision 前看炸点；与 B31 共享"读快照抽结构"底座，可同一分析模块承载 |
+| 1 | B32 | **决策效果闭环 / 规则有效性度量** | 08-evo §2.27 | `decision_outcome` 表（关联 sessionId/eventId + 结果标签）+ 标签回灌 API（`POST /admin/v1/decision-outcomes`）+ 按规则 / Decision 聚合 TP/FP/precision/recall + 漂移 | 把引擎从"决策工具"变"风控平台"；建在 `evaluation_session` 上；**标签语义是业务侧职责**，引擎只提供接入位 + 聚合 |
+| 2 | B33 | **规则↔指标血缘与变更影响分析** | 08-evo §2.28 | `LineageIndex` 从快照抽 metricCode/decisionCode 引用建索引（挂发布事件增量更新，复用 D17 热更）+ 双向查询 API（metric→规则 / Decision→规则） | 低成本；改 metric 口径 / 下线 Decision 前看炸点；与 B31 共享"读快照抽结构"底座（已随 B31 落地，可复用 `internal/analysis` 读快照范式） |
 
 > **已落地（从主动推进序列移除）**：
+> - B31 规则集静态分析 / 冲突检测（2026-06-18，08-evo §2.26 已实装块）：7 类检查（不一致/死规则/冲突/重叠/覆盖缺口/**冗余**/未分析），`ConditionSpace` 区间推理 + 6 detector + `RuleSetAnalyzer`，hit-policy-aware、零误报；`RuleAnalysisService`（**草稿优先**）+ `GET /admin/v1/scenes/{code}/analysis` + 前端左栏摘要条入口。覆盖 AST_BOOLEAN/决策树/决策表（合取语义），**故意不做**评分卡/脚本/决策树跨树/DMN 完备性。**与原计划偏差**：前端落在左栏摘要条+抽屉（非右栏）；新增规则内冗余检测；FIRST_HIT 等优先级保守降级。
 > - B1 EXPRESSION_SCRIPT evaluator（`ScriptExecutor` + `ExpressionEngine` SPI；引擎扩到 6 个 cel/aviator/qlexpress/jsonlogic/jexl/groovy。**对象池前提被取代**——SPI 走线程安全单例 + 按源码哈希缓存编译产物，无需 commons-pool2 池化非线程安全 ScriptEngine）。
 > - B5 预编译执行器 `CompiledExecutor`（08-evo §2.13 / D67，2026-06-13；纯编译版 + `PrecompileMode`/`CompiledPredicateEvictor`；alpha 节点共享为可选 add-on）。
 > - B7 规则导出 / 导入（2026-06-06，08-evo §2.9 + 10-api-contract §4.8–4.9）；**解锁 B15**（模板市场依赖 B7 + B11）。
