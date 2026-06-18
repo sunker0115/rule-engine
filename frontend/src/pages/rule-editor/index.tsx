@@ -5,15 +5,19 @@ import { MenuFoldOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
+import { useLineageStore } from '@/store/lineageStore';
 import { getRule } from '@/api/rule';
 import { getSceneMetadata } from '@/api/metadata';
 import { getScene, getAnalysis } from '@/api/scene';
-import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType, RuleVersionItem, RuleSetAnalysisReport } from '@/types';
+import { getMetricUsageCounts, getMetricImpact } from '@/api/metric';
+import { getDecisionUsageCounts, getDecisionSources } from '@/api/decision';
+import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType, RuleVersionItem, RuleSetAnalysisReport, LineageRuleRef } from '@/types';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
 import DryRunDrawer from './DryRunDrawer';
 import RuleAnalysisDrawer from './RuleAnalysisDrawer';
+import LineageDrawer from '@/components/lineage/LineageDrawer';
 import { isAnalyzableKind } from './analysisSummary';
 
 const { Sider, Content } = Layout;
@@ -44,7 +48,9 @@ export default function RuleEditor() {
   const { ruleId } = useParams<{ ruleId: string }>();
   const { currentId } = useTenantStore();
   const { t } = useTranslation('rule');
+  const tl = useTranslation('lineage').t;
   const { loadFromDetail } = useRuleStore();
+  const { setUsage, openRequest, clearOpen } = useLineageStore();
   const [loading, setLoading] = useState(true);
   const [ruleDetail, setRuleDetail] = useState<RuleDetailType | null>(null);
   const [metadata, setMetadata] = useState<SceneMetadataType | null>(null);
@@ -102,6 +108,16 @@ export default function RuleEditor() {
           meta.payloadFieldTypes = schema.types;
         }
         setMetadata(meta);
+
+        // 反向血缘计数：一次性拉取 metric/decision 被引用计数，下传给徽标（经 lineageStore，避免穿透多层 props）
+        const [metricCounts, decisionCounts] = await Promise.all([
+          getMetricUsageCounts(currentId),
+          getDecisionUsageCounts(currentId),
+        ]);
+        setUsage(
+          Object.fromEntries((metricCounts ?? []).map((c) => [c.code, c.count])),
+          Object.fromEntries((decisionCounts ?? []).map((c) => [c.code, c.count])),
+        );
       }
     } finally {
       setLoading(false);
@@ -120,6 +136,28 @@ export default function RuleEditor() {
 
   // 定位 finding 对应规则：编辑器为单规则视图，关闭抽屉让用户看到当前规则编辑区与 badge
   const handleLocate = () => setAnalysisOpen(false);
+
+  // metric 血缘适配 fetcher：版本取自 metadata.availableMetrics（T9 范式），affectedRules 与 LineageRuleRef 同构直接 map
+  const metricLineageFetcher = async (tid: number, code: string): Promise<{ sources: LineageRuleRef[] }> => {
+    const version = metadata?.availableMetrics?.find((m) => m.metricCode === code)?.metricVersion ?? 1;
+    const impact = await getMetricImpact(tid, code, version);
+    const sources: LineageRuleRef[] = (impact?.affectedRules ?? []).map((r) => ({
+      ruleDefinitionId: r.ruleDefinitionId,
+      ruleCode: r.ruleCode,
+      ruleName: r.ruleName,
+      sceneCode: r.sceneCode,
+      status: r.status,
+    }));
+    return { sources };
+  };
+
+  // 一个共享抽屉实例：按 openRequest.kind 决定标题与 fetcher
+  const lineageTitle = openRequest
+    ? openRequest.kind === 'metric'
+      ? tl('metricDrawerTitle', { code: openRequest.code })
+      : tl('drawerTitle', { code: openRequest.code })
+    : '';
+  const lineageFetcher = openRequest?.kind === 'metric' ? metricLineageFetcher : getDecisionSources;
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!ruleDetail) return <div>{t('editor.notFound')}</div>;
@@ -191,6 +229,15 @@ export default function RuleEditor() {
         loading={analysisLoading}
         onReanalyze={() => fetchAnalysis(ruleDetail.sceneCode, Number(ruleDetail.tenantId) || currentId || 0)}
         onLocate={handleLocate}
+      />
+
+      <LineageDrawer
+        open={!!openRequest}
+        code={openRequest?.code ?? ''}
+        title={lineageTitle}
+        tenantId={currentId ?? 0}
+        fetcher={lineageFetcher}
+        onClose={clearOpen}
       />
     </Layout>
   );
