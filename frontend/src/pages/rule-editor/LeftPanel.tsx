@@ -99,8 +99,9 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
   const summary = analysisReport ? summarize(analysisReport) : null;
   const ruleSeverity = analysisReport ? worstSeverityForRule(analysisReport, ruleDetail.code) : null;
   const badgeColor: Record<string, string> = { ERROR: 'error', WARN: 'orange', INFO: 'blue', NA: 'default' };
+  // badge 直接显严重度词，不锁某一类别名（WARN 可由死规则/冲突/缺口产出）
   const badgeLabel: Record<string, string> = {
-    ERROR: ta('badge.ERROR'), WARN: ta('badge.WARN'), INFO: ta('badge.INFO'), NA: ta('badge.NA'),
+    ERROR: ta('sevTag.ERROR'), WARN: ta('sevTag.WARN'), INFO: ta('sevTag.INFO'), NA: ta('sevTag.SKIP'),
   };
 
   return (
@@ -117,8 +118,8 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
           }}
         >
           <span style={{ color: '#cf222e' }}>⛔ {summary.error}</span>
-          <span style={{ color: '#bc4c00' }}>🔴 {summary.warn}</span>
-          <span style={{ color: '#bf8700' }}>🟠 {summary.info}</span>
+          <span style={{ color: '#bf8700' }}>🟠 {summary.warn}</span>
+          <span style={{ color: '#0969da' }}>🔵 {summary.info}</span>
           <span style={{ color: '#8c959f' }}>⚪ {summary.unanalyzable}</span>
         </div>
       )}

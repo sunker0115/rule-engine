@@ -632,7 +632,6 @@ export interface RuleSetAnalysisTranslation {
   };
   unanalyzableNote: string;
   sevTag: { ERROR: string; WARN: string; INFO: string; SKIP: string };
-  badge: { ERROR: string; WARN: string; INFO: string; NA: string };
 }
 
 export interface TranslationResources {

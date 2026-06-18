@@ -17,7 +17,6 @@ const analysis: RuleSetAnalysisTranslation = {
   },
   unanalyzableNote: '灰显，非"无问题"——超出 v1 精确推理，已跳过以避免误判。',
   sevTag: { ERROR: 'ERROR', WARN: 'WARN', INFO: 'INFO', SKIP: 'SKIP' },
-  badge: { ERROR: '不一致', WARN: '冲突', INFO: '重叠', NA: '未分析' },
 };
 
 export default analysis;

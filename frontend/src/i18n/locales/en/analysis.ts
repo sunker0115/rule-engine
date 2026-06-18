@@ -17,7 +17,6 @@ const analysis: RuleSetAnalysisTranslation = {
   },
   unanalyzableNote: 'Grayed out — NOT "no issue". Beyond v1 precise reasoning, skipped to avoid false positives.',
   sevTag: { ERROR: 'ERROR', WARN: 'WARN', INFO: 'INFO', SKIP: 'SKIP' },
-  badge: { ERROR: 'incoherent', WARN: 'conflict', INFO: 'overlap', NA: 'n/a' },
 };
 
 export default analysis;
