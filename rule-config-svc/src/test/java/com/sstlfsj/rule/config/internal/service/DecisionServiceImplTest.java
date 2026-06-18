@@ -107,7 +107,7 @@ class DecisionServiceImplTest {
         RuleVersion rv4 = ruleVersion(1004L, 102L, List.of());
 
         when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd1, rd2));
-        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv1, rv2, rv3, rv4));
+        when(ruleVersionMapper.findActiveWithDecisionByRuleDefIds(any())).thenReturn(List.of(rv1, rv2, rv3, rv4));
         when(sceneMapper.findByIds(any())).thenReturn(List.of(scene(10L, "risk.transfer"), scene(11L, "risk.login")));
 
         List<RuleRef> result = sut.findRulesProducingDecision(TENANT, "REJECT");
@@ -137,12 +137,27 @@ class DecisionServiceImplTest {
         RuleVersion rv3 = ruleVersion(1003L, 101L, List.of(new DecisionBinding("REJECT", 8), new DecisionBinding("REJECT", 7)));
 
         when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd));
-        when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv1, rv2, rv3));
+        when(ruleVersionMapper.findActiveWithDecisionByRuleDefIds(any())).thenReturn(List.of(rv1, rv2, rv3));
 
         List<UsageCount> counts = sut.countRuleUsages(TENANT);
 
         assertThat(counts).anySatisfy(c -> { assertThat(c.code()).isEqualTo("REJECT"); assertThat(c.count()).isEqualTo(3); });
         assertThat(counts).anySatisfy(c -> { assertThat(c.code()).isEqualTo("REVIEW"); assertThat(c.count()).isEqualTo(1); });
+    }
+
+    @Test
+    void countRuleUsages_skipsNullDecisionCode() {
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账", 10L, "PUBLISHED");
+        // decisionCode 为 null 的绑定（异常数据）须被过滤，不得触发 merge NPE
+        RuleVersion rv = ruleVersion(1001L, 101L, List.of(
+                new DecisionBinding(null, 1), new DecisionBinding("REJECT", 2)));
+
+        when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd));
+        when(ruleVersionMapper.findActiveWithDecisionByRuleDefIds(any())).thenReturn(List.of(rv));
+
+        List<UsageCount> counts = sut.countRuleUsages(TENANT);
+
+        assertThat(counts).extracting(UsageCount::code).containsExactly("REJECT");
     }
 
     @Test

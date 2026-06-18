@@ -116,7 +116,7 @@ public class DecisionServiceImpl implements DecisionService {
         Map<Long, RuleDefinition> defMap = defs.stream()
                 .collect(Collectors.toMap(RuleDefinition::getId, d -> d));
         Map<Long, String> sceneCodeMap = sceneCodeMap(defs);
-        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defMap.keySet());
+        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveWithDecisionByRuleDefIds(defMap.keySet());
 
         List<RuleRef> result = new ArrayList<>();
         for (RuleVersion rv : activeVersions) {
@@ -137,13 +137,13 @@ public class DecisionServiceImpl implements DecisionService {
             return List.of();
         }
         Set<Long> defIds = defs.stream().map(RuleDefinition::getId).collect(Collectors.toSet());
-        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defIds);
+        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveWithDecisionByRuleDefIds(defIds);
         Map<String, Integer> counts = new HashMap<>();
         for (RuleVersion rv : activeVersions) {
             List<DecisionBinding> bindings = rv.getDecisionBindings();
             if (bindings == null) continue;
-            // 同一规则版本对同一 decisionCode 多次绑定只计一次
-            bindings.stream().map(DecisionBinding::decisionCode).distinct()
+            // 同一规则版本对同一 decisionCode 多次绑定只计一次；decisionCode 必填，null 防御性过滤避免 merge NPE
+            bindings.stream().map(DecisionBinding::decisionCode).filter(Objects::nonNull).distinct()
                     .forEach(code -> counts.merge(code, 1, Integer::sum));
         }
         return counts.entrySet().stream().map(e -> new UsageCount(e.getKey(), e.getValue())).toList();
