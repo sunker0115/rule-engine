@@ -8,7 +8,7 @@
 
 | 计划文件 | 说明 | 状态 |
 |---------|------|------|
-| [realtime-streaming-risk-control](2026-06-17-realtime-streaming-risk-control.md) | 实时流式风控完整设计（Kafka + Flink + Redis 特征库 + STREAM MetricSource，对接现有引擎）；落地 08-evolution §2.24 | 📐 |
+| [realtime-streaming-risk-control-design](../specs/2026-06-17-realtime-streaming-risk-control-design.md) | 实时流式风控完整设计（Kafka + Flink + Redis 特征库 + STREAM MetricSource）。**设计稿在 `specs/`**（与 d5c-cep-design 同处）；承载 backlog B8 CEP + B29 物化特征 + 08-evo §2.24 | 📐 |
 | [d5c-cep](2026-06-03-d5c-cep.md) | D5-C / B8：CEP 复杂事件处理——**已被上面的流式风控设计覆盖取代**，落地时归并并归档，backlog B8 指向新设计 | 🔲 superseded |
 
 ## 已完成（归档）
