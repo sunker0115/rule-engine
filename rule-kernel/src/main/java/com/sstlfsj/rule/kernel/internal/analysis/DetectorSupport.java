@@ -14,14 +14,11 @@ final class DetectorSupport {
      * <p>不可投影（非 AST_BOOLEAN flat-AND）或无决策绑定的规则被剔除；保留输入顺序，
      * 使两两遍历中靠前规则恒为 "A"，输出可复现。
      *
-     * @param rules 原始规则列表（可空）
+     * @param rules 原始规则列表（由编排层传入，非 null）
      * @return 投影后的比较单元，按输入序
      */
     static List<ProjectedRule> project(List<AnalyzableRule> rules) {
         List<ProjectedRule> projected = new ArrayList<>();
-        if (rules == null) {
-            return projected;
-        }
         for (AnalyzableRule rule : rules) {
             ProjectedRule.of(rule).ifPresent(projected::add);
         }

@@ -42,7 +42,8 @@ public final class DeadRuleDetector {
                 if (a == b) {
                     continue;
                 }
-                // A 完全包含 B 且严格更高优先级 → B 死；严格 > 天然规避 A↔B 互含时双向重复报
+                // A 完全包含 B 且严格更高优先级 → B 死；严格 > 天然规避 A↔B 互含时双向重复报。
+                // FIRST_HIT 同样以 priority 严格大于作为保守掩盖判据：等优先级的 tie-break 顺序分析期不可见，故不报，与 HIGHEST_PRIORITY 一致。
                 if (a.cube().subsumes(b.cube()) == Tri.TRUE
                         && a.effectivePriority() > b.effectivePriority()) {
                     String reason = b.ruleCode() + " 被 " + a.ruleCode()
