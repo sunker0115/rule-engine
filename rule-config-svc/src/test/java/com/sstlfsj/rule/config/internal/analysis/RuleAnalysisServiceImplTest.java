@@ -14,6 +14,7 @@ import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
+import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,18 @@ class RuleAnalysisServiceImplTest {
         return v;
     }
 
+    private RuleVersion draftVersion(long rdId, AstNode ast) {
+        RuleVersion v = new RuleVersion();
+        v.setId(200L + rdId);
+        v.setRuleDefinitionId(rdId);
+        v.setVersion(2L);
+        v.setStatus(RuleVersionStatus.DRAFT);
+        v.setKind(RuleKind.AST_BOOLEAN);
+        v.setConditionAst(ast);
+        v.setDecisionBindings(List.of(new DecisionBinding("D_PASS", 1)));
+        return v;
+    }
+
     @Test
     void scene_with_two_active_rules_overlap_is_reported() {
         // R_a age>10 与 R_b age>20 区间相交、同决策 → 应得到一条 overlap,验证拆 AnalyzableRule + 调分析器接线正确
@@ -86,6 +99,8 @@ class RuleAnalysisServiceImplTest {
         RuleDefinition rdA = ruleDef(11L, "R_a");
         RuleDefinition rdB = ruleDef(12L, "R_b");
         when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L))).thenReturn(List.of(rdA, rdB));
+        when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(null);
+        when(ruleVersionMapper.findLatestDraft(12L)).thenReturn(null);
         when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(activeVersion(11L, cond(ConditionTypes.GT, "age", 10)));
         when(ruleVersionMapper.findActiveVersion(12L)).thenReturn(activeVersion(12L, cond(ConditionTypes.GT, "age", 20)));
 
@@ -136,6 +151,8 @@ class RuleAnalysisServiceImplTest {
         wide.setDecisionBindings(List.of(new DecisionBinding("D_A", 9)));
         RuleVersion narrow = activeVersion(12L, between(20, 30));
         narrow.setDecisionBindings(List.of(new DecisionBinding("D_B", 1)));
+        when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(null);
+        when(ruleVersionMapper.findLatestDraft(12L)).thenReturn(null);
         when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(wide);
         when(ruleVersionMapper.findActiveVersion(12L)).thenReturn(narrow);
     }
@@ -172,16 +189,71 @@ class RuleAnalysisServiceImplTest {
     }
 
     @Test
-    void rule_definition_without_active_version_is_skipped() {
-        // 规则定义存在但无 ACTIVE 版本(findActiveVersion 返回 null) → 跳过,不入分析,返回空报告
+    void rule_definition_without_draft_or_active_version_is_skipped() {
+        // 规则定义存在但既无 DRAFT 也无 ACTIVE → 跳过,不入分析,返回空报告
         when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
         when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
                 .thenReturn(List.of(ruleDef(11L, "R_a")));
+        when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(null);
         when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(null);
 
         RuleSetAnalysisReport report = sut.analyze(1L, "scene-1");
 
         assertThat(report.overlaps()).isEmpty();
         assertThat(report.unanalyzableRules()).isEmpty();
+    }
+
+    @Test
+    void rule_definition_with_only_active_version_is_analyzed() {
+        // 仅有 ACTIVE(无 DRAFT) → 回落 ACTIVE,行为不变:两规则区间相交得到一条 overlap
+        when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+                .thenReturn(List.of(ruleDef(11L, "R_a"), ruleDef(12L, "R_b")));
+        when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(null);
+        when(ruleVersionMapper.findLatestDraft(12L)).thenReturn(null);
+        when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(activeVersion(11L, cond(ConditionTypes.GT, "age", 10)));
+        when(ruleVersionMapper.findActiveVersion(12L)).thenReturn(activeVersion(12L, cond(ConditionTypes.GT, "age", 20)));
+
+        RuleSetAnalysisReport report = sut.analyze(1L, "scene-1");
+
+        assertThat(report.overlaps()).hasSize(1);
+        assertThat(report.overlaps().getFirst().locA()).isEqualTo("R_a");
+    }
+
+    @Test
+    void rule_definition_with_only_draft_version_is_analyzed() {
+        // 用户场景:规则只有从未发布的 DRAFT 版本 → 现也被分析。
+        // 草稿条件 age>20 ∧ age>10 同 AND 组冗余(age>20 蕴含 age>10) → 应产出一条 redundancy,证明草稿已纳入分析。
+        when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+                .thenReturn(List.of(ruleDef(11L, "R_a")));
+        AstNode redundant = new AndNode(
+                List.of(cond(ConditionTypes.GT, "age", 20), cond(ConditionTypes.GT, "age", 10)),
+                null, null);
+        when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(draftVersion(11L, redundant));
+
+        RuleSetAnalysisReport report = sut.analyze(1L, "scene-1");
+
+        assertThat(report.redundancies())
+                .extracting(f -> f.ruleCode())
+                .contains("R_a");
+    }
+
+    @Test
+    void draft_is_preferred_over_active_when_both_exist() {
+        // 同一规则同时有 DRAFT 与 ACTIVE:应分析 DRAFT。
+        // 给两规则的 DRAFT 设相交区间 → overlap 命中;若误用 ACTIVE(不相交)则无 overlap。
+        when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
+        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+                .thenReturn(List.of(ruleDef(11L, "R_a"), ruleDef(12L, "R_b")));
+        // DRAFT 相交(age>10 与 age>20),ACTIVE 不相交(age<0 与 age>100)
+        when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(draftVersion(11L, cond(ConditionTypes.GT, "age", 10)));
+        when(ruleVersionMapper.findLatestDraft(12L)).thenReturn(draftVersion(12L, cond(ConditionTypes.GT, "age", 20)));
+
+        RuleSetAnalysisReport report = sut.analyze(1L, "scene-1");
+
+        // 命中 overlap 证明分析的是相交的 DRAFT,而非不相交的 ACTIVE;且未回落查 ACTIVE
+        assertThat(report.overlaps()).hasSize(1);
+        assertThat(report.overlaps().getFirst().locA()).isEqualTo("R_a");
     }
 }

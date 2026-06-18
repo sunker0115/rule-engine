@@ -21,12 +21,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 规则集静态分析编排实现:解析场景 → 取其全部 ACTIVE 规则版本快照 →
+ * 规则集静态分析编排实现:解析场景 → 取其全部规则的待分析版本快照 →
  * 拆成 kernel 轻量输入 {@link AnalyzableRule} → 调 {@link RuleSetAnalyzer} 返回报告。
  *
- * <p>读路径与 {@code RuleExportService} 一致:findByCode → findByTenantAndSceneIds → findActiveVersion;
- * 无 ACTIVE 版本的规则定义跳过。decision_strategy 同名映射到 kernel 的 {@link SceneExecutionStrategy},
- * 为空时回落 HIGHEST_PRIORITY。</p>
+ * <p>版本选取「草稿优先,否则 ACTIVE」:每个规则定义优先取其 DRAFT 版本(发布生命周期保证至多一个),
+ * 无 DRAFT 时回落 ACTIVE,两者皆无则跳过该定义。语义是反映场景的待发布编辑态
+ * ——「当前所有草稿一旦发布后场景将是什么样」,供发布前自检。</p>
+ *
+ * <p>decision_strategy 同名映射到 kernel 的 {@link SceneExecutionStrategy},为空时回落 HIGHEST_PRIORITY。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -49,12 +51,14 @@ public class RuleAnalysisServiceImpl implements RuleAnalysisService {
         List<RuleDefinition> ruleDefs = ruleDefinitionMapper.findByTenantAndSceneIds(tenantId, List.of(scene.getId()));
         List<AnalyzableRule> analyzableRules = new ArrayList<>();
         for (RuleDefinition rd : ruleDefs) {
-            RuleVersion active = ruleVersionMapper.findActiveVersion(rd.getId());
-            if (active == null) continue;
-            String kind = (active.getKind() != null ? active.getKind() : RuleKind.AST_BOOLEAN).name();
+            // 草稿优先,否则 ACTIVE:反映待发布编辑态(发布生命周期保证至多一个 DRAFT)
+            RuleVersion draft = ruleVersionMapper.findLatestDraft(rd.getId());
+            RuleVersion version = (draft != null) ? draft : ruleVersionMapper.findActiveVersion(rd.getId());
+            if (version == null) continue;
+            String kind = (version.getKind() != null ? version.getKind() : RuleKind.AST_BOOLEAN).name();
             analyzableRules.add(new AnalyzableRule(
-                    rd.getCode(), active.getVersion(), active.getConditionAst(),
-                    active.getDecisionBindings(), kind));
+                    rd.getCode(), version.getVersion(), version.getConditionAst(),
+                    version.getDecisionBindings(), kind));
         }
 
         return RuleSetAnalyzer.analyze(sceneCode, analyzableRules, strategy);
