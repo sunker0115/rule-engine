@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
 import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip } from 'antd';
-import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ROUTES } from '@/constants/routes';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
-import { editDraft, publishRule, disableRule, enableRule, newVersion } from '@/api/rule';
+import { editDraft, publishRule, disableRule, enableRule, newVersion, deleteDraftVersion, deleteRule } from '@/api/rule';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
 import RuleSessionsDrawer from './RuleSessionsDrawer';
@@ -30,6 +32,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
   const ta = useTranslation('analysis').t;
   const ruleStatusOpts = useMemo(() => getRuleStatusOptions(t), [t]);
   const versionStatusOpts = useMemo(() => getVersionStatusOptions(t), [t]);
+  const navigate = useNavigate();
   const { currentId } = useTenantStore();
   // 优先用规则自身的 tenantId（从详情带回），避免依赖全局未选时传 0 导致后端校验失败
   const tenantId = Number(ruleDetail.tenantId) || currentId || 0;
@@ -91,12 +94,29 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
     onUpdated();
   };
 
+  // 丢弃草稿：删除待发布 DRAFT，回到已发布/停用的基线版本（草稿三出口之一：发布/丢弃/继续编辑）
+  const handleDiscardDraft = async () => {
+    if (!draftVersion) return;
+    await deleteDraftVersion(tenantId, ruleDetail.ruleDefinitionId, draftVersion.ruleVersionId);
+    message.success(tc('message.deleteSuccess'));
+    onUpdated();
+  };
+
+  // 删除整条规则：未发布过的新规则无基线版本可回退，丢弃即删规则本身（删后离开编辑器回列表）
+  const handleDeleteRule = async () => {
+    await deleteRule(tenantId, ruleDetail.ruleDefinitionId);
+    message.success(tc('message.deleteSuccess'));
+    navigate(ROUTES.RULES);
+  };
+
   const isDraft = ruleDetail.status === 'DRAFT';
   const isPublished = ruleDetail.status === 'PUBLISHED';
   const isDisabled = ruleDetail.status === 'DISABLED';
   // 待发布的即草稿版本，发布确认框展示其真实版本号
   const draftVersion = (ruleDetail.versions ?? []).find(v => v.status === 'DRAFT');
   const hasDraft = draftVersion !== undefined;
+  // 有已发布/停用的基线版本可回退（丢弃草稿后回到它）；未发布的新规则无基线，丢弃即删规则
+  const hasBaseVersion = isPublished || isDisabled;
 
   // 规则集分析仅对合取语义 kind 有意义（SCORECARD / EXPRESSION_SCRIPT 不可静态分析），不可分析时隐藏摘要条与按钮
   const analyzable = isAnalyzableKind(ruleDetail.kind);
@@ -170,11 +190,35 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
 
         <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerPublish')}</Divider>
         {hasDraft && (
-          <Popconfirm title={t('version.publishConfirm').replace('{version}', String(draftVersion?.version ?? ''))} onConfirm={handlePublish}>
-            <Button type="primary" block style={{ background: '#52c41a', borderColor: '#52c41a', marginBottom: 8 }}>
-              {t('action.publish')}
-            </Button>
-          </Popconfirm>
+          <>
+            <Popconfirm title={t('version.publishConfirm').replace('{version}', String(draftVersion?.version ?? ''))} onConfirm={handlePublish}>
+              <Button type="primary" block style={{ background: '#52c41a', borderColor: '#52c41a', marginBottom: 8 }}>
+                {t('action.publish')}
+              </Button>
+            </Popconfirm>
+            {/* 草稿的另一个出口：丢弃。有基线版本→只删草稿回基线；新规则无基线→删整条规则 */}
+            {hasBaseVersion ? (
+              <Popconfirm
+                title={t('version.deleteDraftConfirm')}
+                onConfirm={handleDiscardDraft}
+                okText={tc('button.confirm')}
+                cancelText={tc('button.cancel')}
+                okButtonProps={{ danger: true }}
+              >
+                <Button block icon={<DeleteOutlined />} style={{ marginBottom: 8 }}>{t('action.deleteDraft')}</Button>
+              </Popconfirm>
+            ) : (
+              <Popconfirm
+                title={t('version.deleteRuleConfirm')}
+                onConfirm={handleDeleteRule}
+                okText={tc('button.confirm')}
+                cancelText={tc('button.cancel')}
+                okButtonProps={{ danger: true }}
+              >
+                <Button danger block icon={<DeleteOutlined />} style={{ marginBottom: 8 }}>{t('action.deleteRule')}</Button>
+              </Popconfirm>
+            )}
+          </>
         )}
 
         {(isPublished || isDisabled) && (
