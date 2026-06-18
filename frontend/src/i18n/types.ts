@@ -144,6 +144,7 @@ export interface MetricTranslation {
     allowProvided: string;
     cacheTtl: string;
     status: string;
+    usage: string;
   };
   enum: {
     sourceType: {

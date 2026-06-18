@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Descriptions, Button, Tabs, Table, Spin, message, Form, Input, InputNumber, Select, Switch, Modal, Space } from 'antd';
+import { Descriptions, Button, Tabs, Spin, message, Form, Input, InputNumber, Select, Switch, Modal, Space } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { getMetric, updateMetric, getMetricImpact } from '@/api/metric';
 import { ROUTES } from '@/constants/routes';
-import { getSourceTypeOptions, getDataTypeOptions, colorOf, getStatusOptions } from '@/constants/enums';
+import { getSourceTypeOptions, getDataTypeOptions } from '@/constants/enums';
+import LineageTable from '@/components/lineage/LineageTable';
 import TestPanel from './TestPanel';
-import type { MetricDescriptor, AffectedRule } from '@/types';
-import type { ColumnsType } from 'antd/es/table';
+import type { MetricDescriptor, LineageRuleRef } from '@/types';
 
 export default function MetricDetail() {
   const { metricCode } = useParams<{ metricCode: string }>();
@@ -22,8 +22,11 @@ export default function MetricDetail() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
+  const [activeTab, setActiveTab] = useState('info');
   const [impactLoading, setImpactLoading] = useState(false);
-  const [affectedRules, setAffectedRules] = useState<AffectedRule[]>([]);
+  const [impactRows, setImpactRows] = useState<LineageRuleRef[]>([]);
+  // 影响面查询版本：默认当前版本，可切到历史版本重查
+  const [impactVersion, setImpactVersion] = useState<number | undefined>(undefined);
 
   const load = async () => {
     if (!currentId || !metricCode) return;
@@ -62,27 +65,38 @@ export default function MetricDetail() {
     } finally { setSaving(false); }
   };
 
-  const loadImpact = async () => {
-    if (!currentId || !metricCode || !metric) return;
+  // metric 加载后把影响面查询版本初始化为当前版本
+  useEffect(() => { if (metric) setImpactVersion(metric.metricVersion); }, [metric?.metricVersion]);
+
+  // 切到 impact Tab 或切换版本时自动查影响面（去掉手动按钮）；受影响规则与 LineageRuleRef 同构，直接 map
+  useEffect(() => {
+    if (activeTab !== 'impact' || !currentId || !metricCode || impactVersion === undefined) return;
+    let cancelled = false;
     setImpactLoading(true);
-    try {
-      const data = await getMetricImpact(currentId, metricCode, metric.metricVersion);
-      setAffectedRules(data?.affectedRules ?? []);
-    } finally { setImpactLoading(false); }
-  };
+    getMetricImpact(currentId, metricCode, impactVersion)
+      .then((data) => {
+        if (cancelled) return;
+        const rows: LineageRuleRef[] = (data?.affectedRules ?? []).map((r) => ({
+          ruleDefinitionId: r.ruleDefinitionId,
+          ruleCode: r.ruleCode,
+          ruleName: r.ruleName,
+          sceneCode: r.sceneCode,
+          status: r.status,
+        }));
+        setImpactRows(rows);
+      })
+      .finally(() => { if (!cancelled) setImpactLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, currentId, metricCode, impactVersion]);
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!metric) return <div>{t('detail.notFound')}</div>;
 
-  const impactColumns: ColumnsType<AffectedRule> = [
-    { title: t('impact.column.ruleCode'), dataIndex: 'ruleCode', key: 'ruleCode' },
-    { title: t('impact.column.ruleName'), dataIndex: 'ruleName', key: 'ruleName' },
-    { title: t('impact.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode' },
-    {
-      title: t('impact.column.status'), dataIndex: 'status', key: 'status',
-      render: (v: string) => <span style={{ color: colorOf(getStatusOptions(tc), v as never) }}>{v}</span>,
-    },
-  ];
+  // 版本选项：1..当前版本（版本号顺序递增，历史版本均存在）
+  const versionOptions = Array.from({ length: metric.metricVersion }, (_, i) => {
+    const v = i + 1;
+    return { value: v, label: `v${v}` };
+  });
 
   const tabItems = [
     {
@@ -120,8 +134,16 @@ export default function MetricDetail() {
       label: t('action.queryImpact'),
       children: (
         <div>
-          <Button type="primary" onClick={loadImpact} loading={impactLoading} style={{ marginBottom: 16 }}>{t('action.queryImpact')}</Button>
-          <Table columns={impactColumns} dataSource={affectedRules} rowKey="ruleDefinitionId" loading={impactLoading} size="small" />
+          <Space style={{ marginBottom: 16 }}>
+            <span>{t('detail.version')}</span>
+            <Select
+              value={impactVersion}
+              onChange={setImpactVersion}
+              options={versionOptions}
+              style={{ width: 120 }}
+            />
+          </Space>
+          <LineageTable rows={impactRows} loading={impactLoading} />
         </div>
       ),
     },
@@ -138,7 +160,7 @@ export default function MetricDetail() {
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(ROUTES.METRICS)}>{tc('button.back')}</Button>
         <h2 style={{ margin: 0 }}>{metric.name} ({metric.metricCode})</h2>
       </div>
-      <Tabs items={tabItems} />
+      <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
     </div>
   );
 }

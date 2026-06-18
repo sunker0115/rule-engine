@@ -12,6 +12,7 @@ const metric: MetricTranslation = {
     allowProvided: 'Provided',
     cacheTtl: 'Cache (s)',
     status: 'Status',
+    usage: 'Referenced',
   },
   enum: {
     sourceType: {

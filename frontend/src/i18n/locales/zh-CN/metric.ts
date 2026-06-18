@@ -12,6 +12,7 @@ const metric: MetricTranslation = {
     allowProvided: '允许外部注入',
     cacheTtl: '缓存(秒)',
     status: '状态',
+    usage: '被引用',
   },
   enum: {
     sourceType: {
