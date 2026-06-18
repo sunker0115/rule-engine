@@ -581,7 +581,8 @@ public class PublishService {
         for (String field : payloadFields) {
             PayloadFieldSpec spec = specByName.get(field);
             if (spec == null) {
-                throw new IllegalArgumentException("规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
+                throw new IllegalArgumentException(
+                        "UNRESOLVED_VARIABLE: 规则引用的 payload 字段未在 scene.payloadSchema 声明: " + field);
             }
             String dataTypeTag = PayloadDataTypeMapper.toDataTypeTag(spec.type());
             payloadTypeMap.put(field, dataTypeTag);

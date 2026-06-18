@@ -68,6 +68,8 @@ class PublishServicePayloadTest {
                         List.of(), List.of(), List.of(), null),
                 "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
+                // 消息须带语义前缀 UNRESOLVED_VARIABLE（项目"消息前缀=语义错误码"约定，docs 10-api-contract §七）
+                .hasMessageStartingWith("UNRESOLVED_VARIABLE")
                 .hasMessageContaining("amount");
     }
 
