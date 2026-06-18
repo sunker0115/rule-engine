@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.service;
 
 import lombok.RequiredArgsConstructor;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
+import com.sstlfsj.rule.config.api.service.UsageCount;
 import com.sstlfsj.rule.config.internal.MetricProperties;
 import com.sstlfsj.rule.config.internal.domain.ActorType;
 import com.sstlfsj.rule.config.internal.domain.AuditAction;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -154,6 +156,26 @@ public class MetricWriteServiceImpl implements MetricWriteService {
             }
         }
         return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UsageCount> countRuleUsages(Long tenantId) {
+        List<RuleDefinition> defs = ruleDefinitionMapper.findByTenant(tenantId);
+        if (defs.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> defIds = defs.stream().map(RuleDefinition::getId).collect(Collectors.toSet());
+        List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defIds);
+        Map<String, Integer> counts = new HashMap<>();
+        for (RuleVersion rv : activeVersions) {
+            List<MetricDependency> deps = rv.getMetricDependencies();
+            if (deps == null) continue;
+            // 版本无关 + 同一规则对同一 metricCode 去重
+            deps.stream().map(MetricDependency::metricCode).filter(Objects::nonNull).distinct()
+                    .forEach(code -> counts.merge(code, 1, Integer::sum));
+        }
+        return counts.entrySet().stream().map(e -> new UsageCount(e.getKey(), e.getValue())).toList();
     }
 
     /** 判断 typed metricDependencies 列表是否包含指定 (metricCode, metricVersion)；null 视为不包含。 */
