@@ -7,6 +7,8 @@ const analysis: RuleSetAnalysisTranslation = {
   empty: 'No issues found',
   loadError: 'Analysis failed',
   summaryBarTooltip: 'Open rule-set analysis',
+  summaryBarHint: 'View analysis',
+  allClear: 'No issues',
   group: {
     incoherences: 'Incoherences',
     deadRules: 'Dead / Shadowed',

@@ -622,6 +622,8 @@ export interface RuleSetAnalysisTranslation {
   empty: string;
   loadError: string;
   summaryBarTooltip: string;
+  summaryBarHint: string;
+  allClear: string;
   group: {
     incoherences: string;
     deadRules: string;

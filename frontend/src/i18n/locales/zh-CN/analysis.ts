@@ -7,6 +7,8 @@ const analysis: RuleSetAnalysisTranslation = {
   empty: '未发现问题',
   loadError: '分析失败',
   summaryBarTooltip: '点击查看规则集分析',
+  summaryBarHint: '点击查看分析',
+  allClear: '无问题',
   group: {
     incoherences: '不一致',
     deadRules: '死规则 / 遮蔽',

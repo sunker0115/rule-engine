@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip, Badge } from 'antd';
-import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip } from 'antd';
+import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
@@ -112,6 +112,8 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
         <div
           onClick={onOpenAnalysis}
           title={ta('summaryBarTooltip')}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f3f6'; e.currentTarget.style.borderColor = '#d0d7de'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#fafbfc'; e.currentTarget.style.borderColor = '#eaecef'; }}
           style={{
             display: 'flex', gap: 10, alignItems: 'center',
             padding: '6px 10px', marginBottom: 12,
@@ -119,10 +121,17 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
             cursor: 'pointer', fontSize: 12,
           }}
         >
-          <span style={{ color: '#cf222e' }}>⛔ {summary.error}</span>
-          <span style={{ color: '#bf8700' }}>🟠 {summary.warn}</span>
-          <span style={{ color: '#0969da' }}>🔵 {summary.info}</span>
-          <span style={{ color: '#8c959f' }}>⚪ {summary.unanalyzable}</span>
+          {summary.findingCount === 0 && summary.unanalyzable === 0 ? (
+            <span style={{ color: '#1a7f37' }}>✓ {ta('allClear')}</span>
+          ) : (
+            <>
+              <span style={{ color: '#cf222e' }}>⛔ {summary.error}</span>
+              <span style={{ color: '#bf8700' }}>🟠 {summary.warn}</span>
+              <span style={{ color: '#0969da' }}>🔵 {summary.info}</span>
+              <span style={{ color: '#8c959f' }}>⚪ {summary.unanalyzable}</span>
+            </>
+          )}
+          <span style={{ marginLeft: 'auto', color: '#8c959f' }}>{ta('summaryBarHint')} ›</span>
         </div>
       )}
       <h3>{t('editor.leftPanel.ruleInfo')}</h3>
@@ -155,13 +164,6 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, analysi
         )}
         <Button block onClick={() => onOpenDryRun()} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
         <Button block onClick={() => setSessionsOpen(true)} style={{ marginBottom: 8 }}>{t('action.sessions')}</Button>
-        {analyzable && onOpenAnalysis && (
-          <Badge count={summary?.findingCount ?? 0} size="small" offset={[-4, 2]} style={{ width: '100%' }}>
-            <Button block icon={<SafetyCertificateOutlined />} onClick={onOpenAnalysis} style={{ marginBottom: 8 }}>
-              {ta('button')}
-            </Button>
-          </Badge>
-        )}
 
         <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerPublish')}</Divider>
         {hasDraft && (
