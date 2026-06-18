@@ -2,7 +2,7 @@ import type { DecisionTranslation } from '../../types';
 
 const decision: DecisionTranslation = {
   title: { list: 'Decisions' },
-  action: { create: 'New Decision', edit: 'Edit Decision' },
+  action: { create: 'New Decision', edit: 'Edit Decision', disable: 'Disable', enable: 'Enable' },
   column: {
     code: 'Code',
     name: 'Name',
@@ -11,6 +11,7 @@ const decision: DecisionTranslation = {
     description: 'Description',
     createdAt: 'Created',
     updatedAt: 'Updated',
+    usage: 'Referenced',
   },
   form: {
     code: 'Code',
@@ -21,6 +22,7 @@ const decision: DecisionTranslation = {
     priorityExtra: 'Lower value = higher priority',
     description: 'Description',
   },
+  detail: { basicInfo: 'Basic Info', sources: 'Referenced By', notFound: 'Decision not found' },
 };
 
 export default decision;

@@ -218,8 +218,8 @@ export interface MetricTranslation {
 // ===== decision 命名空间 =====
 export interface DecisionTranslation {
   title: { list: string };
-  action: { create: string; edit: string };
-  column: { code: string; name: string; priority: string; status: string; description: string; createdAt: string; updatedAt: string };
+  action: { create: string; edit: string; disable: string; enable: string };
+  column: { code: string; name: string; priority: string; status: string; description: string; createdAt: string; updatedAt: string; usage: string };
   form: {
     code: string;
     codePlaceholder: string;
@@ -229,6 +229,7 @@ export interface DecisionTranslation {
     priorityExtra: string;
     description: string;
   };
+  detail: { basicInfo: string; sources: string; notFound: string };
 }
 
 // ===== rule 命名空间 =====

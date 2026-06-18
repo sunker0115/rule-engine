@@ -13,6 +13,7 @@ export const ROUTES = {
   CONNECTOR_NEW:  '/connectors/new',
   CONNECTOR_DETAIL: '/connectors/:connectorCode',
   DECISIONS:      '/decisions',
+  DECISION_DETAIL: '/decisions/:code',
   SESSIONS:       '/sessions',
   SESSION_DETAIL: '/sessions/:sessionId',
   AUDIT_LOGS:     '/audit-logs',
