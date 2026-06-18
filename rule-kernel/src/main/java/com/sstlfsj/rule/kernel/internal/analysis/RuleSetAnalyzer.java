@@ -38,6 +38,8 @@ public final class RuleSetAnalyzer {
             Comparator.comparing(ConflictFinding::locA).thenComparing(ConflictFinding::locB);
     private static final Comparator<DeadRuleFinding> DEAD_ORDER =
             Comparator.comparing(DeadRuleFinding::deadRuleCode).thenComparing(DeadRuleFinding::coveredByRuleCode);
+    private static final Comparator<IncoherenceFinding> INCOHERENCE_ORDER =
+            Comparator.comparing(IncoherenceFinding::ruleCode);
 
     private RuleSetAnalyzer() {}
 
@@ -57,7 +59,7 @@ public final class RuleSetAnalyzer {
                     List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
         }
 
-        List<IncoherenceFinding> incoherences = IncoherenceDetector.detect(rules);
+        List<IncoherenceFinding> incoherences = new ArrayList<>(IncoherenceDetector.detect(rules));
         List<CoverageGapFinding> coverageGaps = CoverageGapDetector.detect(rules);
 
         // 两两立方体分析（仅扁平 AST_BOOLEAN）
@@ -70,9 +72,11 @@ public final class RuleSetAnalyzer {
         overlaps.addAll(table.overlaps());
         conflicts.addAll(table.conflicts());
         deadRules.addAll(table.deadRows());
+        incoherences.addAll(table.incoherences());
         overlaps.sort(OVERLAP_ORDER);
         conflicts.sort(CONFLICT_ORDER);
         deadRules.sort(DEAD_ORDER);
+        incoherences.sort(INCOHERENCE_ORDER);
 
         List<UnanalyzableRule> unanalyzable = collectUnanalyzable(rules);
 

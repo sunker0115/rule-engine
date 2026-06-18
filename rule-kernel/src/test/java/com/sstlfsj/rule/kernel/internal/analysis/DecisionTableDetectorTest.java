@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.internal.analysis;
 
 import com.sstlfsj.rule.kernel.api.analysis.ConflictFinding;
 import com.sstlfsj.rule.kernel.api.analysis.DeadRuleFinding;
+import com.sstlfsj.rule.kernel.api.analysis.IncoherenceFinding;
 import com.sstlfsj.rule.kernel.api.analysis.OverlapFinding;
 import com.sstlfsj.rule.kernel.api.analysis.Severity;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
@@ -137,10 +138,8 @@ class DecisionTableDetectorTest {
 
     @Test
     void same_metric_two_columns_meet_contradiction_yields_empty_dimension() {
-        // 行1 age>50 ∧ age<5 → meet 为空维（该行恒不命中）。钉住空维的真实行为：
-        // 空集 overlaps 任何空间 = FALSE → 行1 与正常行2 (age in [10,20]) 不相交 → 无 overlap / conflict；
-        // 空集 subsumes 非空 = FALSE（恒不命中的行不掩盖别人），且 [10,20] 不 subsumes 空集（unionKeys 含 age 维，
-        // [10,20].subsumes(Empty)=TRUE 但方向是 row2⊇row1，而 i<j 仅判 row_i ⊇ row_j 即 row1⊇row2=FALSE）→ 无死行。
+        // 行1 age>50 ∧ age<5 → meet 为空维（该行恒不命中）→ 行内不一致 incoherence。
+        // 空维行不参与与正常行2 (age in [10,20]) 的两两比较 → 无 overlap / conflict / dead（零误报）。
         AnalyzableRule t = table("TM2",
                 List.of(col("age", ConditionTypes.GT), col("age", ConditionTypes.LT), col("age", ConditionTypes.BETWEEN)),
                 List.of(
@@ -149,10 +148,27 @@ class DecisionTableDetectorTest {
 
         DecisionTableDetector.DecisionTableFindings r = DecisionTableDetector.detect(List.of(t));
 
-        // 恒不命中的空维行不产生任何行内发现（零误报）
+        // 矛盾行 → ERROR 级 incoherence，loc 为 TM2#row1
+        assertThat(r.incoherences()).hasSize(1);
+        IncoherenceFinding inc = r.incoherences().getFirst();
+        assertThat(inc.ruleCode()).isEqualTo("TM2#row1");
+        assertThat(inc.severity()).isEqualTo(Severity.ERROR);
+        assertThat(inc.reason()).contains("TM2#row1");
+        // 恒不命中的空维行不参与两两比较 → 无 overlap / conflict / dead 发现（零误报）
         assertThat(r.overlaps()).isEmpty();
         assertThat(r.conflicts()).isEmpty();
         assertThat(r.deadRows()).isEmpty();
+    }
+
+    @Test
+    void coherent_rows_emit_no_incoherence() {
+        // 列条件不矛盾的行不产生 incoherence
+        AnalyzableRule t = table("TM3", List.of(col("age", ConditionTypes.GT)),
+                List.of(row("D_A", 10), row("D_B", 20)));
+
+        DecisionTableDetector.DecisionTableFindings r = DecisionTableDetector.detect(List.of(t));
+
+        assertThat(r.incoherences()).isEmpty();
     }
 
     @Test

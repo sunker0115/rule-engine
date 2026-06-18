@@ -148,6 +148,30 @@ class RuleSetAnalyzerTest {
     }
 
     @Test
+    void decision_table_incoherent_row_merges_into_report_incoherences_sorted() {
+        // 决策表 T1 行1 age>50 ∧ age<5 列矛盾 → 行内 incoherence "T1#row1"；
+        // AST_BOOLEAN R_bad age>30 ∧ age<10 自相矛盾 → "R_bad"。两源合并后按 ruleCode 升序：R_bad < T1#row1
+        AstNode bad = new AndNode(List.of(
+                cond(ConditionTypes.GT, "age", 30),
+                cond(ConditionTypes.LT, "age", 10)),
+                null, null);
+        AnalyzableRule table = new AnalyzableRule("T1", 1L,
+                new DecisionTableNode(
+                        List.of(new DecisionTableNode.Column("age", ConditionTypes.GT),
+                                new DecisionTableNode.Column("age", ConditionTypes.LT)),
+                        List.of(new DecisionTableNode.Row(List.of(50, 5), "D_A"))),
+                List.of(), RuleKind.DECISION_TABLE.tag());
+
+        RuleSetAnalysisReport report = RuleSetAnalyzer.analyze(
+                "scene-1", List.of(table, booleanRule("R_bad", bad, "D_X", 1)),
+                SceneExecutionStrategy.HIGHEST_PRIORITY);
+
+        assertThat(report.incoherences())
+                .extracting(f -> f.ruleCode())
+                .containsExactly("R_bad", "T1#row1");
+    }
+
+    @Test
     void empty_rules_returns_all_empty_report_with_scene_code() {
         RuleSetAnalysisReport report = RuleSetAnalyzer.analyze(
                 "scene-empty", List.of(), SceneExecutionStrategy.HIGHEST_PRIORITY);

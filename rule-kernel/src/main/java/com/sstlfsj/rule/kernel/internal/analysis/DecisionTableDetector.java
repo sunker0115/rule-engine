@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.internal.analysis;
 
 import com.sstlfsj.rule.kernel.api.analysis.ConflictFinding;
 import com.sstlfsj.rule.kernel.api.analysis.DeadRuleFinding;
+import com.sstlfsj.rule.kernel.api.analysis.IncoherenceFinding;
 import com.sstlfsj.rule.kernel.api.analysis.OverlapFinding;
 import com.sstlfsj.rule.kernel.api.analysis.Severity;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
@@ -19,7 +20,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 决策表行内分析（DMN 风格）：在<b>同一张决策表内部</b>，找出行对的输入相交、决策冲突与被掩盖的死行。
+ * 决策表行内分析（DMN 风格）：在<b>同一张决策表内部</b>，找出行对的输入相交、决策冲突、被掩盖的死行，
+ * 以及单行内列条件相互矛盾的不一致行。
  *
  * <p>每行投影为一个 {@link RuleCube}：列 i 的取值空间由 {@code ConditionSpaceFactory.fromOperator(列算子, 单元格参数)}
  * 求得，维度键为 {@code 列.metricCode + "@" + 列.valueRef}；同一 metric 出现在多列时按 {@link ConditionSpace#meet} 取交。
@@ -35,6 +37,10 @@ import java.util.Objects;
  * </ul>
  * 任一关系为 {@code UNKNOWN} 一律跳过（零误报）。
  *
+ * <p>建立每行立方体时，若 {@code cube.isIncoherent()}（任一维度因同 metric 多列 meet 为空集）→ 该行列条件
+ * 相互矛盾、永不命中，记 {@link Severity#ERROR} 级 {@link IncoherenceFinding}；此类行不参与上述两两比较
+ * （永不命中既不相交也不掩盖他行）。仅精确空集触发，{@code UNKNOWN} 维不触发（零误报）。
+ *
  * <p>loc 标识：行 r（0-based 下标）→ {@code ruleCode + "#row" + (r+1)}（1-based、人类可读）。
  *
  * <p><b>未来工作</b>：本 v1 不做表内输入空间完整性分析（DMN "missing rule" —— 整个输入域上的覆盖缺口），
@@ -45,15 +51,17 @@ public final class DecisionTableDetector {
     private DecisionTableDetector() {}
 
     /**
-     * 决策表行内分析的三类发现汇总。
+     * 决策表行内分析的四类发现汇总。
      *
-     * @param overlaps  同决策相交行对（可合并提示）
-     * @param conflicts 异决策相交行对（歧义冲突）
-     * @param deadRows  被在先行完全覆盖的死行（FIRST_HIT 永不命中）
+     * @param overlaps     同决策相交行对（可合并提示）
+     * @param conflicts    异决策相交行对（歧义冲突）
+     * @param deadRows     被在先行完全覆盖的死行（FIRST_HIT 永不命中）
+     * @param incoherences 自身列条件相互矛盾、空维永不命中的行
      */
     public record DecisionTableFindings(List<OverlapFinding> overlaps,
                                         List<ConflictFinding> conflicts,
-                                        List<DeadRuleFinding> deadRows) {}
+                                        List<DeadRuleFinding> deadRows,
+                                        List<IncoherenceFinding> incoherences) {}
 
     /**
      * 对规则集中所有决策表逐表做行内分析。
@@ -65,36 +73,53 @@ public final class DecisionTableDetector {
         List<OverlapFinding> overlaps = new ArrayList<>();
         List<ConflictFinding> conflicts = new ArrayList<>();
         List<DeadRuleFinding> deadRows = new ArrayList<>();
+        List<IncoherenceFinding> incoherences = new ArrayList<>();
 
         for (AnalyzableRule rule : rules) {
             if (!RuleKind.DECISION_TABLE.tag().equals(rule.kind())
                     || !(rule.ast() instanceof DecisionTableNode table)) {
                 continue;
             }
-            analyzeTable(rule.ruleCode(), table, overlaps, conflicts, deadRows);
+            analyzeTable(rule.ruleCode(), table, overlaps, conflicts, deadRows, incoherences);
         }
 
         overlaps.sort(Comparator.comparing(OverlapFinding::locA).thenComparing(OverlapFinding::locB));
         conflicts.sort(Comparator.comparing(ConflictFinding::locA).thenComparing(ConflictFinding::locB));
         deadRows.sort(Comparator.comparing(DeadRuleFinding::deadRuleCode)
                 .thenComparing(DeadRuleFinding::coveredByRuleCode));
-        return new DecisionTableFindings(overlaps, conflicts, deadRows);
+        incoherences.sort(Comparator.comparing(IncoherenceFinding::ruleCode));
+        return new DecisionTableFindings(overlaps, conflicts, deadRows, incoherences);
     }
 
     private static void analyzeTable(String tableCode, DecisionTableNode table,
                                      List<OverlapFinding> overlaps,
                                      List<ConflictFinding> conflicts,
-                                     List<DeadRuleFinding> deadRows) {
+                                     List<DeadRuleFinding> deadRows,
+                                     List<IncoherenceFinding> incoherences) {
         List<DecisionTableNode.Column> columns = table.columns();
         List<DecisionTableNode.Row> rows = table.rows();
 
         List<RuleCube> cubes = new ArrayList<>(rows.size());
-        for (DecisionTableNode.Row row : rows) {
-            cubes.add(rowCube(columns, row));
+        for (int i = 0; i < rows.size(); i++) {
+            RuleCube cube = rowCube(columns, rows.get(i));
+            cubes.add(cube);
+            // 列条件相互矛盾（空维）→ 该行永不命中，记为行内不一致
+            if (cube.isIncoherent()) {
+                String loc = loc(tableCode, i);
+                incoherences.add(new IncoherenceFinding(loc,
+                        "决策表行 " + loc + " 列条件相互矛盾，该行永不命中", Severity.ERROR));
+            }
         }
 
         for (int i = 0; i < rows.size(); i++) {
+            // 不一致行永不命中，既不相交也不掩盖他行 → 跳过两两比较（与空集 overlaps/subsumes 恒 FALSE 语义一致）
+            if (cubes.get(i).isIncoherent()) {
+                continue;
+            }
             for (int j = i + 1; j < rows.size(); j++) {
+                if (cubes.get(j).isIncoherent()) {
+                    continue;
+                }
                 RuleCube ci = cubes.get(i);
                 RuleCube cj = cubes.get(j);
                 String locI = loc(tableCode, i);
