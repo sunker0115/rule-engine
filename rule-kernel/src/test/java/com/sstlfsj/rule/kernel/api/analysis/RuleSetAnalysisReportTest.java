@@ -17,6 +17,8 @@ class RuleSetAnalysisReportTest {
         var overlap = new OverlapFinding("R4", "R5", "ranges intersect", Severity.INFO);
         var coverageGap = new CoverageGapFinding("D_REVIEW", "no rule path yields it", Severity.WARN);
         var unanalyzable = new UnanalyzableRule("R6", "contains OR/regex");
+        var redundancy = new RedundancyFinding("R7", "amount LTE 10", "amount EQ 10",
+                "amount LTE 10 被同组 amount EQ 10 蕴含，可删除", Severity.INFO);
 
         var report = new RuleSetAnalysisReport(
                 "scene-1",
@@ -25,7 +27,8 @@ class RuleSetAnalysisReportTest {
                 List.of(conflict),
                 List.of(overlap),
                 List.of(coverageGap),
-                List.of(unanalyzable)
+                List.of(unanalyzable),
+                List.of(redundancy)
         );
 
         assertThat(report.sceneCode()).isEqualTo("scene-1");
@@ -70,6 +73,14 @@ class RuleSetAnalysisReportTest {
         assertThat(report.unanalyzableRules()).singleElement().satisfies(f -> {
             assertThat(f.ruleCode()).isEqualTo("R6");
             assertThat(f.reason()).isEqualTo("contains OR/regex");
+        });
+
+        // 单规则内冗余条件
+        assertThat(report.redundancies()).singleElement().satisfies(f -> {
+            assertThat(f.ruleCode()).isEqualTo("R7");
+            assertThat(f.redundantCondition()).isEqualTo("amount LTE 10");
+            assertThat(f.impliedByCondition()).isEqualTo("amount EQ 10");
+            assertThat(f.severity()).isEqualTo(Severity.INFO);
         });
     }
 }

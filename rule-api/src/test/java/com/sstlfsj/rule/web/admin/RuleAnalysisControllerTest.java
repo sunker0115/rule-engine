@@ -36,6 +36,7 @@ class RuleAnalysisControllerTest {
                 List.of(new ConflictFinding("R3", "R4", "APPROVE", "REJECT", "输入相交产出对立", Severity.ERROR)),
                 List.of(),
                 List.of(),
+                List.of(),
                 List.of());
         when(ruleAnalysisService.analyze(1L, "PAYMENT")).thenReturn(report);
 

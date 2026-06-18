@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.analysis.CoverageGapFinding;
 import com.sstlfsj.rule.kernel.api.analysis.DeadRuleFinding;
 import com.sstlfsj.rule.kernel.api.analysis.IncoherenceFinding;
 import com.sstlfsj.rule.kernel.api.analysis.OverlapFinding;
+import com.sstlfsj.rule.kernel.api.analysis.RedundancyFinding;
 import com.sstlfsj.rule.kernel.api.analysis.RuleSetAnalysisReport;
 import com.sstlfsj.rule.kernel.api.analysis.UnanalyzableRule;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -56,7 +57,7 @@ public final class RuleSetAnalyzer {
                                                 SceneExecutionStrategy strategy) {
         if (rules == null || rules.isEmpty()) {
             return new RuleSetAnalysisReport(sceneCode,
-                    List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                    List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
         }
 
         List<IncoherenceFinding> incoherences = new ArrayList<>(IncoherenceDetector.detect(rules));
@@ -80,8 +81,11 @@ public final class RuleSetAnalyzer {
 
         List<UnanalyzableRule> unanalyzable = collectUnanalyzable(rules);
 
+        // 单规则内冗余条件检测（AST_BOOLEAN / DECISION_TREE 的扁平 AND 组），detect 已确定性排序
+        List<RedundancyFinding> redundancies = RedundancyDetector.detect(rules);
+
         return new RuleSetAnalysisReport(sceneCode,
-                incoherences, deadRules, conflicts, overlaps, coverageGaps, unanalyzable);
+                incoherences, deadRules, conflicts, overlaps, coverageGaps, unanalyzable, redundancies);
     }
 
     /** 收集未被立方体两两分析覆盖、且非决策表的规则，按 ruleCode 升序确定性排列。 */

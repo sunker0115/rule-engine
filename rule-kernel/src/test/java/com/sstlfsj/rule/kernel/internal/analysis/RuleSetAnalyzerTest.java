@@ -172,6 +172,24 @@ class RuleSetAnalyzerTest {
     }
 
     @Test
+    void rule_with_redundant_conditions_populates_redundancies() {
+        // amount <= 10 AND amount == 10 → <= 10 被 == 10 蕴含 → redundancies 非空
+        AstNode redundant = new AndNode(List.of(
+                cond(ConditionTypes.LTE, "amount", 10),
+                cond(ConditionTypes.EQ, "amount", 10)),
+                null, null);
+
+        RuleSetAnalysisReport report = RuleSetAnalyzer.analyze(
+                "scene-1", List.of(booleanRule("R_red", redundant, "D_X", 1)),
+                SceneExecutionStrategy.HIGHEST_PRIORITY);
+
+        assertThat(report.redundancies())
+                .extracting(f -> f.ruleCode(), f -> f.redundantCondition(), f -> f.impliedByCondition())
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                        "R_red", "amount LTE 10", "amount EQ 10"));
+    }
+
+    @Test
     void empty_rules_returns_all_empty_report_with_scene_code() {
         RuleSetAnalysisReport report = RuleSetAnalyzer.analyze(
                 "scene-empty", List.of(), SceneExecutionStrategy.HIGHEST_PRIORITY);
@@ -183,6 +201,7 @@ class RuleSetAnalyzerTest {
         assertThat(report.overlaps()).isEmpty();
         assertThat(report.coverageGaps()).isEmpty();
         assertThat(report.unanalyzableRules()).isEmpty();
+        assertThat(report.redundancies()).isEmpty();
     }
 
     @Test
