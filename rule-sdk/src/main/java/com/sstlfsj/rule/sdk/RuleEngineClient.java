@@ -15,6 +15,7 @@ import com.sstlfsj.rule.kernel.api.spi.metric.MetricCache;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricDefinitionResolver;
 import com.sstlfsj.rule.kernel.api.spi.metric.MetricSourceHandler;
 import com.sstlfsj.rule.kernel.api.spi.pregate.PreGate;
+import com.sstlfsj.rule.kernel.api.trace.NodeTraceFormatter;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
@@ -30,6 +31,8 @@ import com.sstlfsj.rule.sdk.source.MetricDefinitionSource;
 import com.sstlfsj.rule.sdk.source.PollingMetricDefinitionSource;
 import com.sstlfsj.rule.sdk.source.PollingRuleSource;
 import com.sstlfsj.rule.sdk.source.RuleSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -46,6 +49,8 @@ import java.util.concurrent.ExecutorService;
  * 支持四种规则来源：HTTP 轮询、JSON 文件、代码 DSL、多源混用。
  */
 public class RuleEngineClient implements AutoCloseable {
+
+    private static final Logger log = LoggerFactory.getLogger(RuleEngineClient.class);
 
     private final EvalEngine evalEngine;
     private final List<PollingRuleSource> pollingSources;
@@ -165,10 +170,17 @@ public class RuleEngineClient implements AutoCloseable {
         EvalOutcome outcome = evalEngine.evaluateWithContext(
                 sdkEvent, evalEngine.match(sdkEvent), java.time.Instant.now());
         EvalResult result = outcome.result();
-        if (evalResultListener != null) evalResultListener.onResult(sdkEvent, result);
-        if (evalSessionListener != null) evalSessionListener.onSession(sdkEvent, result);
+        if (log.isDebugEnabled()) {
+            // SDK 默认不收集 trace（EvalEngine collectTrace=false）→ nodeTrace 为空输出 "[]"；启用 trace 后才有内容
+            log.debug("eval trace {}", NodeTraceFormatter.compact(result.nodeTrace()));
+        }
+        if (evalResultListener != null) try { evalResultListener.onResult(sdkEvent, result); }
+                catch (Exception ex) { log.warn("evalResultListener 异常已吞: {}", ex.getMessage(), ex); }
+        if (evalSessionListener != null) try { evalSessionListener.onSession(sdkEvent, result); }
+                catch (Exception ex) { log.warn("evalSessionListener 异常已吞: {}", ex.getMessage(), ex); }
         if (decisionContextListener != null) {
-            decisionContextListener.onEvaluated(sdkEvent, result, outcome.context());
+            try { decisionContextListener.onEvaluated(sdkEvent, result, outcome.context()); }
+            catch (Exception ex) { log.warn("decisionContextListener 异常已吞: {}", ex.getMessage(), ex); }
         }
         return result;
     }

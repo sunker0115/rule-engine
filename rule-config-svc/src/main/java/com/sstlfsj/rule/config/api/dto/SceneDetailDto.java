@@ -8,7 +8,7 @@ import java.util.Map;
  */
 public record SceneDetailDto(
         Long id,
-        String tenantId,
+        Long tenantId,
         String sceneCode,
         String name,
         String description,

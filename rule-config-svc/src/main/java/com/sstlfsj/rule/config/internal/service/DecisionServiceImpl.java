@@ -2,6 +2,9 @@ package com.sstlfsj.rule.config.internal.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sstlfsj.rule.config.api.service.DecisionService;
+import com.sstlfsj.rule.config.internal.domain.ActorType;
+import com.sstlfsj.rule.config.internal.domain.AuditAction;
+import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.DecisionStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
@@ -41,7 +44,7 @@ public class DecisionServiceImpl implements DecisionService {
         d.setCreatedBy(actorId);
         d.setCreatedAt(LocalDateTime.now());
         mapper.insert(d);
-        audit(tenantId, actorId, "CREATE", d.getId());
+        audit(tenantId, actorId, AuditAction.CREATE, d.getId());
         return d.getId();
     }
 
@@ -56,7 +59,7 @@ public class DecisionServiceImpl implements DecisionService {
         d.setUpdatedBy(actorId);
         d.setUpdatedAt(LocalDateTime.now());
         mapper.updateById(d);
-        audit(tenantId, actorId, "UPDATE", d.getId());
+        audit(tenantId, actorId, AuditAction.UPDATE, d.getId());
     }
 
     @Override
@@ -67,7 +70,7 @@ public class DecisionServiceImpl implements DecisionService {
         d.setUpdatedBy(actorId);
         d.setUpdatedAt(LocalDateTime.now());
         mapper.updateById(d);
-        audit(tenantId, actorId, "DISABLE", d.getId());
+        audit(tenantId, actorId, AuditAction.DISABLE, d.getId());
     }
 
     @Override
@@ -84,9 +87,9 @@ public class DecisionServiceImpl implements DecisionService {
         return d;
     }
 
-    private void audit(Long tenantId, String actorId, String action, Long id) {
+    private void audit(Long tenantId, String actorId, AuditAction action, Long id) {
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", action, "decision_definition", String.valueOf(id),
+                tenantId, actorId, ActorType.USER, action, AuditTargetType.DECISION_DEFINITION, String.valueOf(id),
                 null, null, LocalDateTime.now()));
     }
 }

@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.publish;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
@@ -165,9 +166,11 @@ class PublishServiceTest {
         md.setMetricCode("amount"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
 
-        DraftCreatedResult r = publishService.editDraft(1L, 10L, "新名", RuleKind.AST_BOOLEAN,
-                new ConditionNode("GT", "amount", null, Map.of("threshold", 5), 0.0),
-                List.of(), List.of(), List.of(), null, "actor");
+        DraftCreatedResult r = publishService.editDraft(1L, 10L,
+                new RuleContent("新名", RuleKind.AST_BOOLEAN.name(),
+                        new ConditionNode("GT", "amount", null, Map.of("threshold", 5), 0.0),
+                        List.of(), List.of(), List.of(), null),
+                "actor");
 
         assertThat(r.version()).isEqualTo(1L);
         assertThat(r.status()).isEqualTo("DRAFT");
@@ -195,9 +198,11 @@ class PublishServiceTest {
 
         // 合法 ScorecardRootNode（叶子 weight>0），kind 入参传 null
         ConditionNode leaf = new ConditionNode("GT", "score", null, Map.of("threshold", 1), 5.0);
-        publishService.editDraft(1L, 10L, null, null,
-                new ScorecardRootNode(List.of(leaf), 60.0),
-                List.of(), List.of(), List.of(), null, "actor");
+        publishService.editDraft(1L, 10L,
+                new RuleContent(null, null,
+                        new ScorecardRootNode(List.of(leaf), 60.0, java.util.List.of()),
+                        List.of(), List.of(), List.of(), null),
+                "actor");
 
         ArgumentCaptor<RuleVersion> rvCap = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).updateById(rvCap.capture());
@@ -216,9 +221,11 @@ class PublishServiceTest {
         when(sceneMapper.selectById(5L)).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);
 
-        assertThatThrownBy(() -> publishService.editDraft(1L, 10L, "名", RuleKind.AST_BOOLEAN,
-                new ConditionNode("GT", "amount", null, Map.of(), 0.0),
-                List.of(), List.of(), List.of(), null, "actor"))
+        assertThatThrownBy(() -> publishService.editDraft(1L, 10L,
+                new RuleContent("名", RuleKind.AST_BOOLEAN.name(),
+                        new ConditionNode("GT", "amount", null, Map.of(), 0.0),
+                        List.of(), List.of(), List.of(), null),
+                "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("缺少必填参数键");
         verify(ruleVersionMapper, never()).updateById((RuleVersion) any());
@@ -229,8 +236,10 @@ class PublishServiceTest {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(null);
-        assertThatThrownBy(() -> publishService.editDraft(1L, 10L, "n", RuleKind.AST_BOOLEAN,
-                new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), null, "actor"))
+        assertThatThrownBy(() -> publishService.editDraft(1L, 10L,
+                new RuleContent("n", RuleKind.AST_BOOLEAN.name(),
+                        new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), null),
+                "actor"))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("草稿");
     }
 
@@ -258,9 +267,11 @@ class PublishServiceTest {
 
         // SCORECARD + 空 AndNode 现会被结构校验拒，改用 AST_BOOLEAN + 空 AndNode（无 metric/payload 引用）
         DraftCreatedResult result = publishService.createDraft(
-                1L, "risk.transfer", "rule.test", "测试规则",
-                new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
-                java.util.List.of(), java.util.List.of(), java.util.List.of(), "AST_BOOLEAN", null, "actor1");
+                1L, "risk.transfer", "rule.test",
+                new RuleContent("测试规则", "AST_BOOLEAN",
+                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
+                        java.util.List.of(), java.util.List.of(), java.util.List.of(), null),
+                "actor1");
 
         assertThat(result.ruleDefinitionId()).isEqualTo(10L);
         assertThat(result.ruleVersionId()).isEqualTo(20L);
@@ -292,7 +303,7 @@ class PublishServiceTest {
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("CREATE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.CREATE);
         assertThat(audit.beforeSnapshot()).isSameAs(audit.afterSnapshot());
         assertThat(audit.afterSnapshot()).isEqualTo(new DraftCreatedSnapshot(10L, 20L));
     }
@@ -302,8 +313,8 @@ class PublishServiceTest {
         when(sceneMapper.findByCode(any(), any())).thenReturn(null);
 
         assertThrows(IllegalArgumentException.class, () ->
-                publishService.createDraft(1L, "nonexistent", "rule.test", "测试",
-                        null, null, null, null, null, null, "actor1"));
+                publishService.createDraft(1L, "nonexistent", "rule.test",
+                        new RuleContent("测试", null, null, null, null, null, null), "actor1"));
     }
 
     @Test
@@ -317,8 +328,8 @@ class PublishServiceTest {
         when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(new RuleDefinition());
 
         assertThrows(IllegalArgumentException.class, () ->
-                publishService.createDraft(1L, "risk.transfer", "rule.test", "测试",
-                        null, null, null, null, null, null, "actor1"));
+                publishService.createDraft(1L, "risk.transfer", "rule.test",
+                        new RuleContent("测试", null, null, null, null, null, null), "actor1"));
 
         verify(ruleDefinitionMapper, never()).insert(any(RuleDefinition.class));
     }
@@ -332,8 +343,8 @@ class PublishServiceTest {
         when(sceneMapper.findByCode(any(), any())).thenReturn(draftScene);
 
         assertThatThrownBy(() -> publishService.createDraft(
-                1L, "risk.transfer", "rule.test", "测试规则",
-                null, null, null, null, "NO_SUCH_KIND", null, "actor1"))
+                1L, "risk.transfer", "rule.test",
+                new RuleContent("测试规则", "NO_SUCH_KIND", null, null, null, null, null), "actor1"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("不支持的规则 kind");
     }
@@ -352,9 +363,11 @@ class PublishServiceTest {
         doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
                 .when(ruleVersionMapper).insert(any(RuleVersion.class));
 
-        publishService.createDraft(1L, "risk.transfer", "rule.test", "测试规则",
-                new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
-                java.util.List.of(), java.util.List.of(), java.util.List.of(), null, null, "actor1");
+        publishService.createDraft(1L, "risk.transfer", "rule.test",
+                new RuleContent("测试规则", null,
+                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
+                        java.util.List.of(), java.util.List.of(), java.util.List.of(), null),
+                "actor1");
 
         ArgumentCaptor<RuleDefinition> rdCaptor = ArgumentCaptor.forClass(RuleDefinition.class);
         verify(ruleDefinitionMapper).insert(rdCaptor.capture());
@@ -376,9 +389,11 @@ class PublishServiceTest {
         md.setMetricCode("account.age"); md.setDataType("LONG"); md.setVersion(3); md.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
 
-        publishService.createDraft(1L, "PAYMENT", "rule.test", "测试",
-                new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0),
-                List.of(), List.of(), List.of(), "AST_BOOLEAN", null, "actor1");
+        publishService.createDraft(1L, "PAYMENT", "rule.test",
+                new RuleContent("测试", "AST_BOOLEAN",
+                        new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0),
+                        List.of(), List.of(), List.of(), null),
+                "actor1");
 
         ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
         verify(ruleVersionMapper).insert(cap.capture());
@@ -398,9 +413,11 @@ class PublishServiceTest {
                 .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of());
 
-        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.test", "测试",
-                new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0),
-                List.of(), List.of(), List.of(), "AST_BOOLEAN", null, "actor1"))
+        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.test",
+                new RuleContent("测试", "AST_BOOLEAN",
+                        new ConditionNode("GT", "account.age", null, Map.of("threshold", 30), 0.0),
+                        List.of(), List.of(), List.of(), null),
+                "actor1"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ACTIVE");
     }
@@ -418,9 +435,11 @@ class PublishServiceTest {
         md.setMetricCode("amount"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
 
-        DraftCreatedResult r = publishService.newVersion(1L, 10L, null, RuleKind.AST_BOOLEAN,
-                new ConditionNode("GT", "amount", null, Map.of("threshold", 9), 0.0),
-                List.of(), List.of(), List.of(), null, null, "actor");
+        DraftCreatedResult r = publishService.newVersion(1L, 10L,
+                new RuleContent(null, RuleKind.AST_BOOLEAN.name(),
+                        new ConditionNode("GT", "amount", null, Map.of("threshold", 9), 0.0),
+                        List.of(), List.of(), List.of(), null),
+                null, "actor");
 
         assertThat(r.version()).isEqualTo(2L);
         assertThat(r.status()).isEqualTo("DRAFT");
@@ -435,8 +454,10 @@ class PublishServiceTest {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
         when(sceneMapper.selectById(5L)).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);   // 已有 DRAFT
-        assertThatThrownBy(() -> publishService.newVersion(1L, 10L, null, RuleKind.AST_BOOLEAN,
-                new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), null, null, "actor"))
+        assertThatThrownBy(() -> publishService.newVersion(1L, 10L,
+                new RuleContent(null, RuleKind.AST_BOOLEAN.name(),
+                        new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), null),
+                null, "actor"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("待发布");
     }
 
@@ -458,8 +479,9 @@ class PublishServiceTest {
         md.setMetricCode("amount"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
 
-        DraftCreatedResult r = publishService.newVersion(1L, 10L, null, RuleKind.AST_BOOLEAN,
-                null, null, null, null, 50L, null, "actor");
+        DraftCreatedResult r = publishService.newVersion(1L, 10L,
+                new RuleContent(null, RuleKind.AST_BOOLEAN.name(), null, null, null, null, null),
+                50L, "actor");
 
         assertThat(r.version()).isEqualTo(3L);   // v_max+1,克隆 v1 内容
         ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
@@ -486,8 +508,8 @@ class PublishServiceTest {
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("DELETE");
-        assertThat(audit.targetType()).isEqualTo("rule_definition");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.DELETE);
+        assertThat(audit.targetType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditTargetType.RULE_DEFINITION);
         assertThat(audit.beforeSnapshot()).isInstanceOf(
                 com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot.class);
     }
@@ -517,8 +539,8 @@ class PublishServiceTest {
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("DELETE");
-        assertThat(audit.targetType()).isEqualTo("rule_version");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.DELETE);
+        assertThat(audit.targetType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditTargetType.RULE_VERSION);
         assertThat(audit.beforeSnapshot()).isInstanceOf(
                 com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot.class);
     }
@@ -531,6 +553,162 @@ class PublishServiceTest {
         assertThatThrownBy(() -> publishService.deleteDraftVersion(1L, 10L, 100L, "actor"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("DRAFT");
         verify(ruleVersionMapper, never()).deleteById((Long) any());
+    }
+
+    // ===== SCORECARD bands 发布期校验 + band decisionCode 回填 =====
+
+    @Test
+    void scorecardBands_overlap_rejected() {
+        // [0,60) 与 [50,80) 重叠 → 拒绝
+        ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
+                List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "A", null),
+                        new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(50, 80, "B", null)));
+        decisionsExist("A", "B");
+        assertThatThrownBy(() -> publishScorecard(ast))
+                .hasMessageContaining("重叠");
+    }
+
+    @Test
+    void scorecardBands_minGeMax_rejected() {
+        ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
+                List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(80, 60, "A", null)));
+        decisionsExist("A");
+        assertThatThrownBy(() -> publishScorecard(ast))
+                .hasMessageContaining("minScore");
+    }
+
+    @Test
+    void scorecardBands_decisionNotFound_rejectedByEnrichBands() {
+        // bands 里 decisionCode 不存在 → enrichBands 应拒绝
+        ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
+                List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "MISSING", null)));
+        decisionsExist(/* none */);
+        assertThatThrownBy(() -> publishScorecard(ast))
+                .hasMessageContaining("DECISION_CODE_NOT_FOUND");
+    }
+
+    @Test
+    void scorecardBands_valid_enrichesBandsInAstNotDecisionBindings() {
+        ScorecardRootNode ast = new ScorecardRootNode(List.of(weightedCond()), 0.0,
+                List.of(new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "REJECT", "HIGH"),
+                        new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(60, 100, "PASS", "LOW")));
+        decisionsExist("REJECT", "PASS");
+
+        publishScorecard(ast);
+
+        // band 的 name/priority 直接回填进 ScoreBand（不再注入 decisionBindings）
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(cap.capture());
+        assertThat(cap.getValue().getDecisionBindings()).isEmpty();
+        ScorecardRootNode resolved = (ScorecardRootNode) cap.getValue().getConditionAst();
+        com.sstlfsj.rule.kernel.api.model.ast.ScoreBand reject = resolved.bands().stream()
+                .filter(b -> b.decisionCode().equals("REJECT")).findFirst().orElseThrow();
+        assertThat(reject.name()).isEqualTo("REJECT-name");
+        assertThat(reject.priority()).isEqualTo(7);
+        assertThat(reject.category()).isEqualTo("HIGH");
+    }
+
+    /** 带 weight>0 的 SCORECARD 叶子条件（无 metric/payload 引用，走纯条件）。 */
+    private static ConditionNode weightedCond() {
+        return new ConditionNode("GT", "score", null, Map.of("threshold", 1), 5.0);
+    }
+
+    /** mock decisionDefinitionMapper.findByCodes：给定 codes 视为存在（name=<code>-name, priority=7）。 */
+    private void decisionsExist(String... codes) {
+        List<DecisionDefinition> defs = new java.util.ArrayList<>();
+        for (String c : codes) {
+            DecisionDefinition d = new DecisionDefinition();
+            d.setCode(c);
+            d.setName(c + "-name");
+            d.setPriority(7);
+            d.setStatus(DecisionStatus.ACTIVE);
+            defs.add(d);
+        }
+        // lenient：bands 结构非法的用例在 validateKindStructure 即拒，触不到 findByCodes
+        lenient().when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(defs);
+    }
+
+    /** 经 createDraft 发布一条 SCORECARD 规则，触发 resolveAndValidate（含 validateKindStructure + freezeDecisionBindings）。 */
+    private DraftCreatedResult publishScorecard(ScorecardRootNode ast) {
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        sc.setEventTypes(List.of("payment.initiated"));
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("score"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
+        lenient().when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+        lenient().doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
+                .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
+        lenient().doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
+                .when(ruleVersionMapper).insert(any(RuleVersion.class));
+        return publishService.createDraft(1L, "PAYMENT", "rule.scorecard",
+                new RuleContent("评分卡", RuleKind.SCORECARD.name(), ast,
+                        List.of(), List.of(), List.of(), null),
+                "actor");
+    }
+
+    // ===== TIME_WINDOW pre-gate 发布期校验 =====
+
+    @Test
+    void createDraft_timeWindowFromAfterTo_rejected() {
+        // TIME_WINDOW from>to 窗口永不命中,发布期应拒
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        sc.setEventTypes(List.of("payment.initiated"));
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        lenient().when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+
+        RuleVersionSnapshot.PreGateConfig timeWindow = new RuleVersionSnapshot.PreGateConfig(
+                "TIME_WINDOW", Map.of("fromEpochMilli", 2000L, "toEpochMilli", 1000L));
+        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.tw",
+                new RuleContent("时段规则", "AST_BOOLEAN",
+                        new AndNode(List.of(), null, null),
+                        List.of(), List.of(timeWindow), List.of(), null),
+                "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("fromEpochMilli 必须 <= toEpochMilli");
+        verify(ruleVersionMapper, never()).insert((RuleVersion) any());
+    }
+
+    @Test
+    void createDraft_timeWindowValid_passes() {
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        sc.setEventTypes(List.of("payment.initiated"));
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
+                .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
+        doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
+                .when(ruleVersionMapper).insert(any(RuleVersion.class));
+
+        RuleVersionSnapshot.PreGateConfig timeWindow = new RuleVersionSnapshot.PreGateConfig(
+                "TIME_WINDOW", Map.of("fromEpochMilli", 1000L, "toEpochMilli", 2000L));
+        DraftCreatedResult r = publishService.createDraft(1L, "PAYMENT", "rule.tw",
+                new RuleContent("时段规则", "AST_BOOLEAN",
+                        new AndNode(List.of(), null, null),
+                        List.of(), List.of(timeWindow), List.of(), null),
+                "actor");
+
+        assertThat(r.status()).isEqualTo("DRAFT");
+        ArgumentCaptor<RuleVersion> cap = ArgumentCaptor.forClass(RuleVersion.class);
+        verify(ruleVersionMapper).insert(cap.capture());
+        assertThat(cap.getValue().getPreGates()).hasSize(1);
+    }
+
+    @Test
+    void publish_disabledRule_throws() {
+        // DISABLED 规则须先 enable 再发布，不允许通过 publish 路径绕过 transitionStatus 状态机
+        RuleDefinition disabledRule = new RuleDefinition();
+        disabledRule.setId(10L); disabledRule.setTenantId(1L); disabledRule.setSceneId(5L);
+        disabledRule.setStatus(com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus.DISABLED);
+        when(ruleDefinitionMapper.selectById(10L)).thenReturn(disabledRule);
+
+        assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DISABLED");
+        verify(ruleVersionMapper, never()).findLatestDraft(any());
     }
 
 }

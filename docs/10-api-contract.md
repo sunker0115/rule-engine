@@ -315,13 +315,17 @@ POST /admin/v1/rules/{ruleDefinitionId}/publish
 
 **响应**：发布成功 200，返回新激活的 `RuleVersionSnapshot`；当前无 DRAFT 可发布返回 400；草稿写入期校验已前移，publish 不再做解析校验（premise A 下校验失败的草稿无法落库）。
 
-### 4.3 禁用规则
+### 4.3 禁用 / 启用规则
 
 ```
 POST /admin/v1/rules/{ruleDefinitionId}/disable
+POST /admin/v1/rules/{ruleDefinitionId}/enable
 ```
 
-效果：`rule_definition.status = DISABLED`，Matcher 倒排索引热摘除（≤15s 全实例收敛，D17）。
+disable 与 enable 是 `PUBLISHED ↔ DISABLED` 两个**单向**操作（D19 解耦切换，独立单事务、不增 `rule_version`、`current_version` 指针不变）：
+
+- **disable**：仅 `PUBLISHED → DISABLED`，其它源态（DRAFT 等）返回 400；效果 `rule_definition.status = DISABLED`，Matcher 倒排索引热摘除（≤15s 全实例收敛，D17），审计 `action=DISABLE`。
+- **enable**：仅 `DISABLED → PUBLISHED`，其它源态返回 400；指回原 `current_version`，索引热加回，审计 `action=ENABLE`。
 
 ### 4.3.1 删除规则（deleteRule，D56）
 
@@ -661,14 +665,15 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 
 > **Action 执行 errorCode 已移除（D60）**：引擎纯决策化，整个动作子系统及 `ActionResult.errorCode` 枚举一并删除；"命中后做什么"归消费方 / 流程引擎，其执行错误码由下游编排层自行定义。
 
-### 发布期 errorCode（audit_log.after_snapshot.errorCode）
+### 发布期 errorCode（发布 API 错误响应）
+
+发布是单 DB 原子事务（D19），任一步校验失败 → 整事务回滚、规则保持原态、不写审计；errorCode 随发布请求的 HTTP 400 错误响应返回：
 
 | errorCode | 含义 |
 |-----------|------|
 | `UNRESOLVED_VARIABLE` | conditionAst / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内）。含 `valueRef=PAYLOAD` 的 ConditionNode 其 `metricCode`（payload 字段名）未在 `Scene.payloadSchema` 声明的情形——发布拒绝，message 指明该未声明字段 |
 | `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了该 Rule 所属 Tenant 未定义的 Decision（Decision 是 Tenant 级实体，D26/D54） |
-| `ZOMBIE_PUBLISHING` | 后台清扫检测到 PUBLISHING 状态残留超时，强制修正为 PUBLISH_FAILED（D19） |
-| `HANDLER_EXCEPTION` | 发布事务内未分类异常，`after_snapshot` 含 stackTrace 摘要 |
+| `HANDLER_EXCEPTION` | 发布事务内未分类异常，message 含异常摘要 |
 
 ---
 

@@ -3,6 +3,7 @@ package com.sstlfsj.rule.config.internal.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
+import com.sstlfsj.rule.config.internal.domain.SceneStatus;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.Collection;
@@ -37,6 +38,14 @@ public interface SceneMapper extends BaseMapper<SceneDef> {
     default List<SceneDef> findByTenantId(Long tenantId) {
         return selectList(new LambdaQueryWrapper<SceneDef>()
                 .eq(SceneDef::getTenantId, tenantId)
+                .orderByDesc(SceneDef::getId));
+    }
+
+    /** 按 tenantId 查该租户 Scene，可选状态过滤，按 id 倒序。 */
+    default List<SceneDef> findByTenantId(Long tenantId, SceneStatus status) {
+        return selectList(new LambdaQueryWrapper<SceneDef>()
+                .eq(SceneDef::getTenantId, tenantId)
+                .eq(status != null, SceneDef::getStatus, status)
                 .orderByDesc(SceneDef::getId));
     }
 }

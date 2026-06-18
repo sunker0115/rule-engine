@@ -1,0 +1,11 @@
+{
+  "name": "用户风险评分（外部 HTTP）",
+  "sourceType": "EXTERNAL_HTTP",
+  "dataType": "DOUBLE",
+  "params": {
+    "connector": "risk-score-connector",
+    "vars": { "channel": "login" }
+  },
+  "cacheTtlSeconds": 60,
+  "allowProvided": true
+}

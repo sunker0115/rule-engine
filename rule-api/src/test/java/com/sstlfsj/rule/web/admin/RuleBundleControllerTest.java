@@ -1,8 +1,12 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport;
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport.RuleImportItem;
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport.RuleImportConflict;
+import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
-import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
+import com.sstlfsj.rule.config.internal.bundle.RuleImportService.ImportConflictException;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,24 +22,39 @@ import tools.jackson.databind.json.JsonMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** RuleBundleController 单元测试：export（文件下载）/ import（文件上传）端点。 */
+/** RuleBundleController v2 单元测试：export / import（含 dryRun、policy、ABORT 冲突）端点。 */
 class RuleBundleControllerTest {
 
     private MockMvc mockMvc;
     private RuleBundleService service;
 
+    private static final String BUNDLE_JSON = """
+            {"formatVersion":2,"revision":"rev","exportedAt":"t","sourceTenant":"9",
+             "rules":[{"code":"rule.a","name":"规则A","kind":"AST_BOOLEAN",
+                     "sceneCode":"risk.transfer",
+                     "conditionAst":{"type":"AndNode","children":[]},
+                     "decisionBindings":[],"preGates":[],"triggerEventTypes":[],
+                     "metricDependencies":[],"payloadDependencies":[],"script":null,"contentHash":"h1"}],
+             "scenes":[{"code":"risk.transfer","name":"转账风控","description":null,
+                      "subjectType":"USER","dominantMode":"PUSH",
+                      "decisionStrategy":"HIGHEST_PRIORITY","eventTypes":[],
+                      "payloadSchema":[],"defaultParams":{}}],
+             "metricDefinitions":[],"decisionDefinitions":[]}
+            """;
+
     @BeforeEach
     void setUp() {
         service = mock(RuleBundleService.class);
         JsonMapper mapper = JsonMapper.builder().build();
-        // 导出返回 byte[]，需 ByteArrayHttpMessageConverter；导入结果与错误体走 Jackson 转换器
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new RuleBundleController(service, mapper))
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -45,90 +64,135 @@ class RuleBundleControllerTest {
     }
 
     private RuleBundle sampleBundle() {
-        return new RuleBundle(1, "2026-06-06T10:00:00Z", "1",
+        return new RuleBundle(2, "rev", "2026-06-06T10:00:00Z", "1",
                 List.of(new RuleBundle.RuleEntry("rule.a", "规则A", "AST_BOOLEAN", "risk.transfer",
-                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
-                        java.util.List.of(), java.util.List.of(), java.util.List.of(),
-                        List.of(new MetricDependency("account.age", 1)), java.util.List.of())),
+                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(List.of(), null, null),
+                        List.of(), List.of(), List.of(),
+                        List.of(new MetricDependency("account.age", 1)), List.of(),
+                        null, "hash-a")),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", null, "USER",
-                        "PUSH", "HIGHEST_PRIORITY", java.util.List.of(), java.util.List.of(),
-                        java.util.Map.of())),
+                        "PUSH", "HIGHEST_PRIORITY", List.of(), List.of(), java.util.Map.of())),
                 List.of(), List.of());
     }
 
-    @Test
-    void export_byRuleIds_returnsAttachmentFile() throws Exception {
-        when(service.export(eq("t1"), eq(List.of(1L, 2L)), eq(null))).thenReturn(sampleBundle());
-
-        // 响应体是 Bundle JSON 文件原文（非 ApiResponse 包裹），故 jsonPath 直接落在 Bundle 字段上
-        mockMvc.perform(get("/admin/v1/rules/export")
-                        .param("tenantId", "t1")
-                        .param("ruleIds", "1,2"))
-                .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
-                        org.hamcrest.Matchers.containsString("attachment; filename=\"rule-bundle-t1-")))
-                .andExpect(jsonPath("$.bundleVersion").value(1))
-                .andExpect(jsonPath("$.rules[0].code").value("rule.a"))
-                .andExpect(jsonPath("$.scenes[0].code").value("risk.transfer"));
-
-        verify(service).export("t1", List.of(1L, 2L), null);
+    private ImportDiffReport okReport() {
+        return new ImportDiffReport(
+                List.of(new RuleImportItem("rule.a", "risk.transfer", "将新建")),
+                List.of(), List.of(), List.of(), 1, 0, List.of(), 0);
     }
 
+    private MockMultipartFile bundleFile() {
+        return new MockMultipartFile("file", "bundle.json", "application/json",
+                BUNDLE_JSON.getBytes(StandardCharsets.UTF_8));
+    }
+
+    // ---- export -------------------------------------------------------
+
     @Test
-    void export_bySceneId_returnsAttachmentFile() throws Exception {
-        when(service.export(eq("t1"), eq(null), eq(5L))).thenReturn(sampleBundle());
+    void export_byRuleIds_returnsAttachmentFile() throws Exception {
+        when(service.export(eq(1L), eq(List.of(1L, 2L)), eq(null))).thenReturn(sampleBundle());
 
         mockMvc.perform(get("/admin/v1/rules/export")
-                        .param("tenantId", "t1")
-                        .param("sceneId", "5"))
+                        .param("tenantId", "1").param("ruleIds", "1,2"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.rules[0].code").value("rule.a"));
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
+                        containsString("attachment; filename=\"rule-bundle-1-")))
+                .andExpect(jsonPath("$.formatVersion").value(2))
+                .andExpect(jsonPath("$.rules[0].code").value("rule.a"))
+                .andExpect(jsonPath("$.rules[0].contentHash").value("hash-a"));
 
-        verify(service).export("t1", null, 5L);
+        verify(service).export(1L, List.of(1L, 2L), null);
     }
 
     @Test
     void export_returns400_whenTenantIdMissing() throws Exception {
-        mockMvc.perform(get("/admin/v1/rules/export"))
-                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/admin/v1/rules/export")).andExpect(status().isBadRequest());
     }
 
-    @Test
-    void import_uploadFile_returns200_withResult() throws Exception {
-        RuleImportResult result = new RuleImportResult(
-                List.of(new RuleImportResult.ImportedRule(10L, 100L, 1L, "rule.a", "risk.transfer", false)),
-                List.of("risk.transfer"), List.of(),
-                List.of("account.age"), List.of(), List.of(),
-                List.of("BLOCK"), List.of());
-        when(service.importBundle(eq("t1"), any(), eq("user1"))).thenReturn(result);
+    // ---- import: SKIP default -----------------------------------------
 
-        String bundleJson = """
-                {"bundleVersion":1,"exportedAt":"t","sourceTenantId":"9",
-                 "rules":[{"code":"rule.a","name":"规则A","kind":"AST_BOOLEAN",
-                         "sceneCode":"risk.transfer",
-                         "conditionAst":{"type":"AndNode","children":[]},
-                         "decisionBindings":[],"preGates":[],"triggerEventTypes":[],
-                         "metricDependencies":[]}],
-                 "scenes":[{"code":"risk.transfer","name":"转账风控","description":null,
-                          "subjectType":"USER","dominantMode":"PUSH",
-                          "decisionStrategy":"HIGHEST_PRIORITY","eventTypes":[],
-                          "payloadSchema":[],"defaultParams":{}}],
-                 "metricDefinitions":[],"decisionDefinitions":[]}
-                """;
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "rule-bundle.json", "application/json",
-                bundleJson.getBytes(StandardCharsets.UTF_8));
+    @Test
+    void import_defaultPolicy_skipDryRunFalse_returns200WithDiffReport() throws Exception {
+        when(service.importBundle(any(), any(), any(), anyBoolean(), any())).thenReturn(okReport());
 
         mockMvc.perform(multipart("/admin/v1/rules/import")
-                        .file(file)
-                        .param("tenantId", "t1")
-                        .header("X-Actor-Id", "user1"))
+                        .file(bundleFile())
+                        .param("tenantId", "1")
+                        .header("X-Actor-Id", "u1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.rules[0].ruleDefinitionId").value(10))
-                .andExpect(jsonPath("$.data.rules[0].version").value(1))
-                .andExpect(jsonPath("$.data.scenesCreated[0]").value("risk.transfer"));
+                .andExpect(jsonPath("$.data.willCreate[0].ruleCode").value("rule.a"))
+                .andExpect(jsonPath("$.data.scenesCreated").value(1));
 
-        verify(service).importBundle(eq("t1"), any(), eq("user1"));
+        verify(service).importBundle(eq(1L), any(RuleBundle.class), eq(ImportPolicy.SKIP), eq(false), eq("u1"));
+    }
+
+    // ---- import: dryRun=true ------------------------------------------
+
+    @Test
+    void import_dryRunTrue_returns200WithDiffReport_dbNotPersisted() throws Exception {
+        ImportDiffReport dryRunReport = new ImportDiffReport(
+                List.of(new RuleImportItem("rule.a", "risk.transfer", "将新建")),
+                List.of(), List.of(), List.of(), 1, 0, List.of(), 0);
+        when(service.importBundle(any(), any(), any(), anyBoolean(), any())).thenReturn(dryRunReport);
+
+        mockMvc.perform(multipart("/admin/v1/rules/import")
+                        .file(bundleFile())
+                        .param("tenantId", "1")
+                        .param("dryRun", "true")
+                        .header("X-Actor-Id", "u1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.willCreate[0].ruleCode").value("rule.a"));
+    }
+
+    // ---- import: OVERWRITE policy -------------------------------------
+
+    @Test
+    void import_policyOverwrite_passedToService() throws Exception {
+        when(service.importBundle(any(), any(), any(), anyBoolean(), any())).thenReturn(okReport());
+
+        mockMvc.perform(multipart("/admin/v1/rules/import")
+                        .file(bundleFile())
+                        .param("tenantId", "1")
+                        .param("policy", "OVERWRITE")
+                        .header("X-Actor-Id", "u1"))
+                .andExpect(status().isOk());
+
+        verify(service).importBundle(eq(1L), any(RuleBundle.class), eq(ImportPolicy.OVERWRITE), eq(false), eq("u1"));
+    }
+
+    // ---- import: ABORT with conflicts → 422 --------------------------
+
+    @Test
+    void import_policyAbortWithConflicts_returns422() throws Exception {
+        ImportDiffReport conflictReport = new ImportDiffReport(
+                List.of(), List.of(), List.of(),
+                List.of(new RuleImportConflict("rule.a", "risk.transfer", "CONTENT_CHANGED", "已存在")),
+                0, 0, List.of(), 0);
+        when(service.importBundle(any(), any(), any(), anyBoolean(), any()))
+                .thenThrow(new ImportConflictException(conflictReport));
+
+        mockMvc.perform(multipart("/admin/v1/rules/import")
+                        .file(bundleFile())
+                        .param("tenantId", "1")
+                        .param("policy", "ABORT")
+                        .header("X-Actor-Id", "u1"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("IMPORT_CONFLICT"));
+    }
+
+    // ---- import: malformed JSON → 400 --------------------------------
+
+    @Test
+    void import_malformedJson_returns400() throws Exception {
+        MockMultipartFile badFile = new MockMultipartFile("file", "bad.json",
+                "application/json", "not-json".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/admin/v1/rules/import")
+                        .file(badFile)
+                        .param("tenantId", "1")
+                        .header("X-Actor-Id", "u1"))
+                .andExpect(status().isBadRequest());
     }
 }

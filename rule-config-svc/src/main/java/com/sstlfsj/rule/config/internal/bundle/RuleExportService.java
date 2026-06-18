@@ -17,6 +17,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -27,9 +28,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 规则批量导出：按条件查规则集合，组装多规则自包含 Bundle（B7）。
+ * 规则批量导出：按条件查规则集合，组装多规则自包含 Bundle v2。
+ *
  * <p>选取优先级 ruleIds → sceneId → 整租户；每条仅导当前 ACTIVE rule_version（无则跳过）。
- * scenes / metrics / decisions 跨规则去重。</p>
+ * scenes / metrics / decisions 跨规则去重。
+ * v2 新增：{@link RuleBundle.RuleEntry#script} 携带脚本源码；
+ * {@link RuleBundle.RuleEntry#contentHash} 用于 import 幂等判断；
+ * {@link RuleBundle#revision} 整 Bundle 内容摘要。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -40,13 +45,12 @@ public class RuleExportService {
     private final SceneMapper sceneMapper;
     private final MetricDefinitionMapper metricDefinitionMapper;
     private final DecisionDefinitionMapper decisionDefinitionMapper;
+    private final ObjectMapper objectMapper;
 
-    /** 按条件批量导出规则当前 ACTIVE 版本为 Bundle。 */
+    /** 按条件批量导出规则当前 ACTIVE 版本为 Bundle v2。 */
     @Transactional(readOnly = true)
-    public RuleBundle export(String tenantIdStr, List<Long> ruleIds, Long sceneId) {
-        Long tid = Long.valueOf(tenantIdStr);
-
-        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.selectForExport(tid, ruleIds, sceneId);
+    public RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId) {
+        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.selectForExport(tenantId, ruleIds, sceneId);
 
         // 1. 逐条取 ACTIVE rule_version，无则跳过；同时收集 sceneId / metricDep / decisionCode
         List<RuleVersion> activeVersions = new ArrayList<>();
@@ -83,7 +87,7 @@ public class RuleExportService {
         List<RuleBundle.MetricEntry> metricEntries = new ArrayList<>();
         for (MetricDependency dep : metricDeps) {
             MetricDefinition m = metricDefinitionMapper.findByCodeAndVersion(
-                    tid, dep.metricCode(), dep.metricVersion());
+                    tenantId, dep.metricCode(), dep.metricVersion());
             if (m != null) {
                 metricEntries.add(new RuleBundle.MetricEntry(
                         m.getMetricCode(), m.getVersion(), m.getName(),
@@ -93,29 +97,41 @@ public class RuleExportService {
         }
 
         // 4. decisions（去重）
-        List<DecisionDefinition> decisions = decisionDefinitionMapper.findByCodes(tid, decisionCodes);
+        List<DecisionDefinition> decisions = decisionDefinitionMapper.findByCodes(tenantId, decisionCodes);
         List<RuleBundle.DecisionEntry> decisionEntries = decisions.stream()
                 .map(d -> new RuleBundle.DecisionEntry(
                         d.getCode(), d.getName(), d.getPriority(), d.getDescription()))
                 .toList();
 
-        // 5. rules
+        // 5. rules（v2：携带 script + contentHash）
         List<RuleBundle.RuleEntry> rules = new ArrayList<>();
         for (int i = 0; i < exportable.size(); i++) {
             RuleDefinition rd = exportable.get(i);
             RuleVersion rv = activeVersions.get(i);
             SceneDef scene = sceneById.get(rd.getSceneId());
+            String kindName = (rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN).name();
+            String contentHash = RuleContentHasher.ruleHash(
+                    rv.getConditionAst(), rv.getDecisionBindings(), rv.getPreGates(),
+                    kindName, rv.getTriggerEventTypes(), rv.getScriptSource(),
+                    objectMapper);
             rules.add(new RuleBundle.RuleEntry(
-                    rd.getCode(), rd.getName(),
-                    (rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN).name(),
+                    rd.getCode(), rd.getName(), kindName,
                     scene != null ? scene.getCode() : null,
                     rv.getConditionAst(), rv.getDecisionBindings(),
                     rv.getPreGates(), rv.getTriggerEventTypes(),
                     rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of(),
-                    rv.getPayloadDependencies() != null ? rv.getPayloadDependencies() : List.of()));
+                    rv.getPayloadDependencies() != null ? rv.getPayloadDependencies() : List.of(),
+                    rv.getScriptSource(),   // v2：EXPRESSION_SCRIPT 规则携带脚本
+                    contentHash));
         }
 
-        return new RuleBundle(1, Instant.now().toString(), tenantIdStr,
+        // 6. 先建不含 revision 的 bundle，再算整 bundle revision 写入
+        RuleBundle bundleWithoutRevision = new RuleBundle(
+                2, null, Instant.now().toString(), String.valueOf(tenantId),
+                rules, scenes, metricEntries, decisionEntries);
+        String revision = RuleContentHasher.bundleRevision(bundleWithoutRevision);
+        return new RuleBundle(
+                2, revision, bundleWithoutRevision.exportedAt(), bundleWithoutRevision.sourceTenant(),
                 rules, scenes, metricEntries, decisionEntries);
     }
 

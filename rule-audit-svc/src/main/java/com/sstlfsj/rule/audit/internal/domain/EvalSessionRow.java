@@ -22,4 +22,17 @@ public class EvalSessionRow {
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
     private Integer evalDurationMs;
+    private String eventType;
+    private String subjectId;
+    private String source;
+    private String mode;
+    private String blockedBy;
+    private String errorCode;
+    private Integer candidateRuleCount;
+    private Integer hitRuleCount;
+    private Double score;
+    private String category;
+    private LocalDateTime occurredAt;
+    private String contextSnapshot;
+    private String hitDecisions;
 }

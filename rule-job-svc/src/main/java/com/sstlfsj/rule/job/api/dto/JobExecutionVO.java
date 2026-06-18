@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 public record JobExecutionVO(
         Long id,
         Long jobDefinitionId,
-        String tenantId,
+        Long tenantId,
         LocalDateTime triggerAt,
         String status,
         int subjectCount,

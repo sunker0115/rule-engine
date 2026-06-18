@@ -18,6 +18,10 @@ public class ObservabilityAlarmChecker {
     private final MeterRegistry meterRegistry;
     private final ObservabilityAlarmProperties props;
     private final ApplicationEventPublisher eventPublisher;
+    // 滑动窗口基线：上次 check 时的累计计数快照，用于算"本周期（自上次 check）增量错误率"。
+    // @Scheduled fixedDelay 串行触发，无重入，普通字段即可（无需同步）。
+    private double lastTotal = 0;
+    private double lastErrors = 0;
 
     public ObservabilityAlarmChecker(MeterRegistry meterRegistry,
                                      ObservabilityAlarmProperties props,
@@ -35,10 +39,16 @@ public class ObservabilityAlarmChecker {
     }
 
     void checkErrorRate() {
+        // 用增量滑动窗口而非进程累计：累计 rate 在 warm-up 后会被巨大分母稀释（新错误冲不破阈值），
+        // 或被早期错误永久拉高（告警latch 不复位）。增量 = 本周期内的真实错误率，对当前健康度敏感。
         double total = count(RuleMetrics.EVAL_TOTAL);
-        if (total == 0) return;
         double errors = count(RuleMetrics.EVAL_ERROR_TOTAL);
-        double rate = errors / total;
+        double deltaTotal = total - lastTotal;
+        double deltaErrors = errors - lastErrors;
+        lastTotal = total;
+        lastErrors = errors;
+        if (deltaTotal <= 0) return;   // 本周期无新评估（或计数器重置后首拍），跳过
+        double rate = deltaErrors / deltaTotal;
         if (rate > props.getEvalErrorRateThreshold()) {
             eventPublisher.publishEvent(new EvalAlarmEvent(
                     RuleMetrics.EVAL_ERROR_TOTAL,

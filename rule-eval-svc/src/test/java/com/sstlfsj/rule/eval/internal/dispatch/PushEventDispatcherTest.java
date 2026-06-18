@@ -92,6 +92,23 @@ class PushEventDispatcherTest {
     }
 
     @Test
+    void stop_waitsForInflightQueueToDrain() throws InterruptedException {
+        // 消费较慢 + 不等待立即 stop（队列仍有积压）：stop 应排空队列处理完所有事件再退，不丢未消费事件（#4）
+        int total = 5;
+        CopyOnWriteArrayList<String> processed = new CopyOnWriteArrayList<>();
+        PushEventDispatcher dispatcher = new PushEventDispatcher(100, e -> {
+            try { Thread.sleep(50); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            processed.add(e.eventId());
+        });
+        dispatcher.start();
+        for (int i = 0; i < total; i++) dispatcher.submit(event("evt-" + i));
+
+        dispatcher.stop();   // 立即停（不 await）；stop 内部 join 等消费循环排空
+
+        assertEquals(total, processed.size(), "stop 应排空队列，未消费事件不丢");
+    }
+
+    @Test
     void queueSize_and_capacity_exposed() {
         PushEventDispatcher dispatcher = new PushEventDispatcher(100, e -> {});
         dispatcher.start();

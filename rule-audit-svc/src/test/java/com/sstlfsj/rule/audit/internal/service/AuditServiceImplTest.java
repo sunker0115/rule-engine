@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.audit.internal.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.audit.internal.domain.AuditLogRow;
 import com.sstlfsj.rule.audit.internal.domain.EvalSessionRow;
@@ -49,10 +51,10 @@ class AuditServiceImplTest {
         Page<EvalSessionRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of(row));
         mp.setTotal(1L);
-        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any())).thenReturn(mp);
+        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                service.queryEvalSessions("100", null, 0, 20);
+                service.queryEvalSessions(new EvalSessionQuery(100L, null, null, null, 0, 20));
 
         assertThat(result.total()).isEqualTo(1L);
         assertThat(result.items()).hasSize(1);
@@ -67,10 +69,10 @@ class AuditServiceImplTest {
         Page<EvalSessionRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of());
         mp.setTotal(0L);
-        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any())).thenReturn(mp);
+        when(evalSessionMapper.selectEvalSessionPage(any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                service.queryEvalSessions("100", "evt-xyz", 0, 20);
+                service.queryEvalSessions(new EvalSessionQuery(100L, null, null, "evt-xyz", 0, 20));
 
         assertThat(result.total()).isEqualTo(0L);
         assertThat(result.items()).isEmpty();
@@ -92,10 +94,10 @@ class AuditServiceImplTest {
         Page<AuditLogRow> mp = new Page<>(1, 20);
         mp.setRecords(List.of(row));
         mp.setTotal(1L);
-        when(auditLogMapper.selectAuditLogPage(any(), any(), any(), any())).thenReturn(mp);
+        when(auditLogMapper.selectAuditLogPage(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(mp);
 
         AuditService.PageResult<AuditService.AuditLogEntry> result =
-                service.queryAuditLogs("100", "rule_definition", null, 0, 20);
+                service.queryAuditLogs(new AuditLogQuery(100L, "rule_definition", null, null, null, null, null, 0, 20));
 
         assertThat(result.total()).isEqualTo(1L);
         AuditService.AuditLogEntry entry = result.items().get(0);
@@ -118,7 +120,7 @@ class AuditServiceImplTest {
 
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(row));
 
-        List<AuditService.TraceNodeEntry> result = service.queryTrace("100", 1L);
+        List<AuditService.TraceNodeEntry> result = service.queryTrace(100L, 1L);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).nodePath()).isEqualTo("0");
@@ -130,7 +132,7 @@ class AuditServiceImplTest {
     void queryTrace_noRows_返回空列表() {
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of());
 
-        List<AuditService.TraceNodeEntry> result = service.queryTrace("100", 999L);
+        List<AuditService.TraceNodeEntry> result = service.queryTrace(100L, 999L);
 
         assertThat(result).isEmpty();
     }
@@ -146,7 +148,7 @@ class AuditServiceImplTest {
 
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(root));
 
-        List<AuditService.TraceTreeNode> tree = service.queryTraceTree("100", 1L);
+        List<AuditService.TraceTreeNode> tree = service.queryTraceTree(100L, 1L);
 
         assertThat(tree).hasSize(1);
         assertThat(tree.get(0).nodeType()).isEqualTo("AndNode");
@@ -174,7 +176,7 @@ class AuditServiceImplTest {
 
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of(rootRow, childRow));
 
-        List<AuditService.TraceTreeNode> tree = service.queryTraceTree("100", 1L);
+        List<AuditService.TraceTreeNode> tree = service.queryTraceTree(100L, 1L);
 
         assertThat(tree).hasSize(1);
         AuditService.TraceTreeNode root = tree.get(0);
@@ -189,7 +191,7 @@ class AuditServiceImplTest {
     void queryTraceTree_空rows返回空列表() {
         when(nodeTraceMapper.findBySessionAndTenant(any(), any())).thenReturn(List.of());
 
-        assertThat(service.queryTraceTree("100", 999L)).isEmpty();
+        assertThat(service.queryTraceTree(100L, 999L)).isEmpty();
     }
 
     @Test
@@ -263,12 +265,12 @@ class AuditServiceImplTest {
         row.setSceneCode("risk.transfer");
         when(evalSessionMapper.findSceneCode(1L, 100L)).thenReturn("risk.transfer");
 
-        assertThat(service.getSessionSceneCode("100", 1L)).isEqualTo("risk.transfer");
+        assertThat(service.getSessionSceneCode(100L, 1L)).isEqualTo("risk.transfer");
     }
 
     @Test
     void getSessionSceneCode_sessionNotFound_returnsNull() {
         when(evalSessionMapper.findSceneCode(999L, 100L)).thenReturn(null);
-        assertThat(service.getSessionSceneCode("100", 999L)).isNull();
+        assertThat(service.getSessionSceneCode(100L, 999L)).isNull();
     }
 }

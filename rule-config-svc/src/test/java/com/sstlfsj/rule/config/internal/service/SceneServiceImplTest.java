@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
+import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 import com.sstlfsj.rule.config.api.event.SceneChangedEvent;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -45,7 +46,7 @@ class SceneServiceImplTest {
     void createScene_insertsSceneAndPublishesAuditEvent() {
         when(sceneMapper.insert((SceneDef) any())).thenReturn(1);
 
-        sceneService.createScene("1", "PAYMENT", "支付场景",
+        sceneService.createScene(1L, "PAYMENT", "支付场景",
                 null, null, null, null, null, null, "actor1");
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
@@ -64,7 +65,7 @@ class SceneServiceImplTest {
             return 1;
         }).when(sceneMapper).insert((SceneDef) any());
 
-        sceneService.createScene("1", "PAYMENT", "支付场景",
+        sceneService.createScene(1L, "PAYMENT", "支付场景",
                 "支付业务场景", "PUSH", "USER",
                 List.of("payment.initiated"),
                 List.of(field("amount")),
@@ -82,8 +83,8 @@ class SceneServiceImplTest {
                 ArgumentCaptor.forClass(OperationAuditedEvent.class);
         verify(eventPublisher).publishEvent(auditCaptor.capture());
         OperationAuditedEvent audit = auditCaptor.getValue();
-        assertThat(audit.action()).isEqualTo("CREATE");
-        assertThat(audit.targetType()).isEqualTo("scene");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.CREATE);
+        assertThat(audit.targetType()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditTargetType.SCENE);
         assertThat(audit.targetId()).isEqualTo("100");
         assertThat(audit.beforeSnapshot()).isNull();
         assertThat(audit.afterSnapshot()).isInstanceOf(SceneSnapshot.class);
@@ -102,7 +103,7 @@ class SceneServiceImplTest {
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
 
-        sceneService.disableScene("1", "PAYMENT", "actor1");
+        sceneService.disableScene(1L, "PAYMENT", "actor1");
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).updateById(sceneCaptor.capture());
@@ -115,7 +116,7 @@ class SceneServiceImplTest {
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast)
                 .findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("DISABLE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.DISABLE);
         // disable 审计 before=ACTIVE 快照，after=DISABLED 快照
         assertThat(((SceneSnapshot) audit.beforeSnapshot()).status()).isEqualTo("ACTIVE");
         assertThat(((SceneSnapshot) audit.afterSnapshot()).status()).isEqualTo("DISABLED");
@@ -141,7 +142,7 @@ class SceneServiceImplTest {
         when(sceneMapper.updateById((SceneDef) any())).thenReturn(1);
 
         List<PayloadFieldSpec> newSchema = List.of(field("amount"), field("currency"));
-        sceneService.updateScene("1", "PAYMENT", null, null, newSchema, null, "actor1");
+        sceneService.updateScene(new UpdateSceneCommand(1L, "PAYMENT", null, null, null, newSchema, null, "actor1"));
 
         ArgumentCaptor<SceneDef> sceneCaptor = ArgumentCaptor.forClass(SceneDef.class);
         verify(sceneMapper).updateById(sceneCaptor.capture());
@@ -155,7 +156,7 @@ class SceneServiceImplTest {
         OperationAuditedEvent audit = eventCaptor.getAllValues().stream()
                 .filter(OperationAuditedEvent.class::isInstance)
                 .map(OperationAuditedEvent.class::cast).findFirst().orElseThrow();
-        assertThat(audit.action()).isEqualTo("UPDATE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.UPDATE);
         SceneSnapshot before = (SceneSnapshot) audit.beforeSnapshot();
         SceneSnapshot after = (SceneSnapshot) audit.afterSnapshot();
         assertThat(before.payloadSchema()).extracting(PayloadFieldSpec::name).containsExactly("amount");
@@ -186,7 +187,7 @@ class SceneServiceImplTest {
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
 
         com.sstlfsj.rule.config.api.dto.SceneDetailDto dto =
-                sceneService.getScene("1", "PAYMENT");
+                sceneService.getScene(1L, "PAYMENT");
 
         assertThat(dto.sceneCode()).isEqualTo("PAYMENT");
         assertThat(dto.eventTypes()).containsExactly("payment.initiated");
@@ -198,7 +199,7 @@ class SceneServiceImplTest {
     @Test
     void getScene_sceneNotFound_抛IllegalArgument() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(null);
-        assertThatThrownBy(() -> sceneService.getScene("1", "NOT_EXIST"))
+        assertThatThrownBy(() -> sceneService.getScene(1L, "NOT_EXIST"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Scene 不存在");
     }
@@ -212,9 +213,9 @@ class SceneServiceImplTest {
         s.setDominantMode(com.sstlfsj.rule.config.internal.domain.DominantMode.PUSH);
         s.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
         s.setStatus(SceneStatus.ACTIVE);
-        when(sceneMapper.findByTenantId(1L)).thenReturn(List.of(s));
+        when(sceneMapper.findByTenantId(eq(1L), isNull())).thenReturn(List.of(s));
 
-        var list = sceneService.listScenes("1");
+        var list = sceneService.listScenes(1L, null);
 
         assertThat(list).hasSize(1);
         assertThat(list.get(0).id()).isEqualTo(5L);
@@ -250,7 +251,7 @@ class SceneServiceImplTest {
         when(metricDefinitionMapper.findActiveByTenant(100L))
                 .thenReturn(List.of(sensitiveMetric, plainMetric));
 
-        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs("100", "risk.transfer");
+        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs(100L, "risk.transfer");
 
         assertThat(refs.payloadFields()).containsExactly("phone");
         assertThat(refs.metricCodes()).containsExactly("user.idno");
@@ -265,7 +266,7 @@ class SceneServiceImplTest {
         when(sceneMapper.findByCode(100L, "s1")).thenReturn(scene);
         when(metricDefinitionMapper.findActiveByTenant(100L)).thenReturn(List.of());
 
-        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs("100", "s1");
+        SceneService.SensitiveRefs refs = sceneService.getSensitiveRefs(100L, "s1");
 
         assertThat(refs.payloadFields()).isEmpty();
         assertThat(refs.metricCodes()).isEmpty();
@@ -274,7 +275,7 @@ class SceneServiceImplTest {
     @Test
     void getSensitiveRefs_sceneNotFound_throws() {
         when(sceneMapper.findByCode(100L, "missing")).thenReturn(null);
-        assertThatThrownBy(() -> sceneService.getSensitiveRefs("100", "missing"))
+        assertThatThrownBy(() -> sceneService.getSensitiveRefs(100L, "missing"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

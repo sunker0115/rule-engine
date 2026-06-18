@@ -153,7 +153,7 @@ public class EvalContextAssembler {
         }
 
         if (!needFetch.isEmpty()) {
-            fetchConcurrently(event, now, needFetch, descriptors, metrics);
+            fetchConcurrently(event, subject, now, needFetch, descriptors, metrics);
         }
         injectPayload(event, metrics);
         return new EvalContext(event.tenantId(), event, subject, metrics, env);
@@ -189,18 +189,20 @@ public class EvalContextAssembler {
         return chosen;
     }
 
-    private void fetchConcurrently(RuleEvent event, Instant now, Set<String> codes,
+    private void fetchConcurrently(RuleEvent event, Subject subject, Instant now, Set<String> codes,
                                    Map<String, MetricDescriptor> descriptors,
                                    Map<String, MetricValue> metrics) {
         ExecutorService exec = fetchExecutor != null ? fetchExecutor : ForkJoinPool.commonPool();
         long timeoutMs = fetchTimeoutMs > 0 ? fetchTimeoutMs : Long.MAX_VALUE;
 
+        // 主体属性：subject 在 assemble 起始即同步加载完成，取数时已就绪（subject.* 绑定不引入跨阶段并发）
+        Map<String, Object> subjectAttributes = subject.attributes();
         List<String> orderedCodes = new ArrayList<>(codes);
         List<Callable<MetricValue>> tasks = new ArrayList<>(orderedCodes.size());
         for (String code : orderedCodes) {
             MetricDescriptor def = descriptors.get(code);
             MetricQuery query = new MetricQuery(code, event.tenantId(), event.subjectId(),
-                    def.params(), event.payload(), now);
+                    def.params(), event.payload(), now, subjectAttributes);
             MetricSourceHandler handler = handlersBySourceType.get(def.sourceType());
             tasks.add(() -> {
                 if (handler == null) return MetricValue.error(EvalErrorCode.METRIC_FETCH_FAIL);

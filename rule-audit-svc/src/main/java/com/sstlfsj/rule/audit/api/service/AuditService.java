@@ -1,5 +1,8 @@
 package com.sstlfsj.rule.audit.api.service;
 
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
+
 import java.util.List;
 
 /** 提供审计日志和评估会话的查询能力。 */
@@ -8,7 +11,7 @@ public interface AuditService {
     /** 审计日志条目，记录资源变更的操作历史。 */
     record AuditLogEntry(
             Long id,
-            String tenantId,
+            Long tenantId,
             String resourceType,
             Long resourceId,
             String action,
@@ -25,37 +28,45 @@ public interface AuditService {
     /**
      * 分页查询审计日志。
      *
-     * @param tenantId     租户标识
-     * @param resourceType 资源类型（如 SCENE、RULE_DEFINITION）
-     * @param resourceId   资源 ID，null 表示不过滤
-     * @param page         页码（从 0 开始）
-     * @param size         每页条数
+     * @param q 封装所有查询条件（tenantId / resourceType / resourceId / action / actorId / from / to / page / size），
+     *          新增筛选字段只需改 AuditLogQuery record
      * @return 分页结果
      */
-    PageResult<AuditLogEntry> queryAuditLogs(String tenantId, String resourceType,
-                                              Long resourceId, int page, int size);
+    PageResult<AuditLogEntry> queryAuditLogs(AuditLogQuery q);
 
     /** 评估会话条目，记录一次规则评估的基本信息。 */
     record EvalSessionEntry(
             String sessionId,
-            String tenantId,
+            Long tenantId,
             String sceneCode,
             String eventId,
             String status,
-            java.time.Instant startedAt
+            String finalDecision,
+            Integer evalDurationMs,
+            java.time.Instant startedAt,
+            java.time.Instant finishedAt,
+            String eventType,
+            String subjectId,
+            String source,
+            String mode,
+            String blockedBy,
+            String errorCode,
+            Integer candidateRuleCount,
+            Integer hitRuleCount,
+            Double score,
+            String category,
+            java.time.Instant occurredAt,
+            String contextSnapshot
     ) {}
 
     /**
      * 分页查询评估会话记录。
      *
-     * @param tenantId 租户标识
-     * @param eventId  事件 ID，null 表示不过滤
-     * @param page     页码（从 0 开始）
-     * @param size     每页条数
+     * @param q 封装所有查询条件（tenantId / sceneCode / status / eventId / page / size），
+     *          新增筛选字段只需改 EvalSessionQuery record
      * @return 分页结果
      */
-    PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String eventId,
-                                                    int page, int size);
+    PageResult<EvalSessionEntry> queryEvalSessions(EvalSessionQuery q);
 
     /** 节点 trace 条目，对应 node_trace 表一行。 */
     record TraceNodeEntry(
@@ -82,7 +93,7 @@ public interface AuditService {
      * @param sessionId 评估会话 ID
      * @return 节点 trace 列表（无分页，单次 session 通常 < 200 行）
      */
-    List<TraceNodeEntry> queryTrace(String tenantId, Long sessionId);
+    List<TraceNodeEntry> queryTrace(Long tenantId, Long sessionId);
 
     /** 嵌套树节点，与 §3.3 dry-run nodeTrace 格式一致。 */
     record TraceTreeNode(
@@ -107,7 +118,7 @@ public interface AuditService {
      * @param sessionId 评估会话 ID
      * @return 根节点列表（正常 AST 只有一个根，Pre-Gate 阻断时可能为空）
      */
-    List<TraceTreeNode> queryTraceTree(String tenantId, Long sessionId);
+    List<TraceTreeNode> queryTraceTree(Long tenantId, Long sessionId);
 
     /** 按规则定义查询历史评估会话的条目，含关联的规则版本号。 */
     record RuleSessionEntry(
@@ -140,5 +151,14 @@ public interface AuditService {
      * @param sessionId 评估会话 ID
      * @return 场景编码；会话不存在返回 null
      */
-    String getSessionSceneCode(String tenantId, Long sessionId);
+    String getSessionSceneCode(Long tenantId, Long sessionId);
+
+    /**
+     * 查询单次评估会话详情。
+     *
+     * @param tenantId  租户标识
+     * @param sessionId 评估会话 ID
+     * @return 会话详情；不存在返回 null
+     */
+    EvalSessionEntry getSession(Long tenantId, Long sessionId);
 }

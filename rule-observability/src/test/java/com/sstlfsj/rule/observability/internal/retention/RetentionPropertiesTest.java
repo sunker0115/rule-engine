@@ -6,7 +6,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 验证 RetentionProperties 绑定 engine.rule.retention.* 子集，默认 enabled/30/7/1000。 */
+/** 验证 RetentionProperties 绑定 engine.rule.retention.* 子集，默认 enabled/30/1000。 */
 class RetentionPropertiesTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -21,7 +21,6 @@ class RetentionPropertiesTest {
             RetentionProperties props = ctx.getBean(RetentionProperties.class);
             assertThat(props.isEnabled()).isTrue();
             assertThat(props.getNodeTraceDays()).isEqualTo(30);
-            assertThat(props.getDryRunSessionDays()).isEqualTo(7);
             assertThat(props.getBatchSize()).isEqualTo(1000);
         });
     }
@@ -31,13 +30,11 @@ class RetentionPropertiesTest {
         runner.withPropertyValues(
                         "engine.rule.retention.enabled=false",
                         "engine.rule.retention.node-trace-days=60",
-                        "engine.rule.retention.dry-run-session-days=14",
                         "engine.rule.retention.batch-size=500")
                 .run(ctx -> {
                     RetentionProperties props = ctx.getBean(RetentionProperties.class);
                     assertThat(props.isEnabled()).isFalse();
                     assertThat(props.getNodeTraceDays()).isEqualTo(60);
-                    assertThat(props.getDryRunSessionDays()).isEqualTo(14);
                     assertThat(props.getBatchSize()).isEqualTo(500);
                 });
     }

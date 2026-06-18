@@ -110,7 +110,7 @@ class AstDataTypeResolverTest {
     void resolve_scorecardRootNode_freezesLeafDataTypes() {
         ScorecardRootNode sc = new ScorecardRootNode(List.of(
                 new ConditionNode("GT", "score", null, Map.of("threshold", 60), 0.4)
-        ), 0.6);
+        ), 0.6, java.util.List.of());
         Map<String, String> typeMap = Map.of("score", "DOUBLE");
 
         AstNode result = AstDataTypeResolver.resolve(sc, typeMap, Map.of());
@@ -118,6 +118,20 @@ class AstDataTypeResolverTest {
         assertThat(result).isInstanceOf(ScorecardRootNode.class);
         assertThat(((ScorecardRootNode) result).conditions().get(0).dataType())
                 .isEqualTo("DOUBLE");
+    }
+
+    @Test
+    void resolve_scorecardRootNode_preservesBands() {
+        // resolve 重建 ScorecardRootNode 时必须保留 bands（发布期 band decisionCode 回填依赖此）
+        com.sstlfsj.rule.kernel.api.model.ast.ScoreBand band =
+                new com.sstlfsj.rule.kernel.api.model.ast.ScoreBand(0, 60, "REJECT", "HIGH");
+        ScorecardRootNode sc = new ScorecardRootNode(List.of(
+                new ConditionNode("GT", "score", null, Map.of("threshold", 60), 0.4)
+        ), 0.6, List.of(band));
+
+        AstNode result = AstDataTypeResolver.resolve(sc, Map.of("score", "DOUBLE"), Map.of());
+
+        assertThat(((ScorecardRootNode) result).bands()).containsExactly(band);
     }
 
     @Test

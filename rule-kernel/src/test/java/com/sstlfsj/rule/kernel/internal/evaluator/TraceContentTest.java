@@ -60,7 +60,7 @@ class TraceContentTest {
     void scorecardTrace_wrapsFactorsInScorecardRoot_withLeafValues() {
         ConditionNode f1 = new ConditionNode("GTE", "score", "score>=0",
                 Map.of("threshold", 0), 50.0, "LONG");
-        ScorecardRootNode root = new ScorecardRootNode(List.of(f1), 50.0);
+        ScorecardRootNode root = new ScorecardRootNode(List.of(f1), 50.0, java.util.List.of());
         ScorecardExecutor exec = new ScorecardExecutor(Map.of("GTE", gte));
         RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
                 .ruleVersionId(9L).tenantId("1").sceneCode("PAY").conditionAst(root)
@@ -139,7 +139,7 @@ class TraceContentTest {
     void scorecardExecutor_threadsSnapshotCodeAndVersion_intoRootAndFactors() {
         ConditionNode f1 = new ConditionNode("GTE", "score", "score>=0",
                 Map.of("threshold", 0), 50.0, "LONG");
-        ScorecardRootNode root = new ScorecardRootNode(List.of(f1), 50.0);
+        ScorecardRootNode root = new ScorecardRootNode(List.of(f1), 50.0, java.util.List.of());
         ScorecardExecutor exec = new ScorecardExecutor(Map.of("GTE", gte));
         RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
                 .ruleVersionId(9L).tenantId("1").sceneCode("PAY").conditionAst(root)

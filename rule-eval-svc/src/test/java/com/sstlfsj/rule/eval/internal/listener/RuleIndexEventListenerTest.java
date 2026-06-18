@@ -39,9 +39,9 @@ class RuleIndexEventListenerTest {
 
         ruleListener.onRulePublished(event);
 
-        // 策略由 loadBySceneWithStrategy 写入 index，此处只验证快照写入
+        // 策略由 loadBySceneWithStrategy 写入 index，此处只验证快照经 replaceScene 原子替换写入
         verify(loader).loadBySceneWithStrategy("1", "fraud_check", index);
-        verify(index).update("1", "fraud_check", "RISK_EVENT", List.of(snap));
+        verify(index).replaceScene("1", "fraud_check", Map.of("RISK_EVENT", List.of(snap)));
     }
 
     @Test
@@ -65,6 +65,6 @@ class RuleIndexEventListenerTest {
         sceneListener.onSceneChanged(event);
 
         verify(loader).loadBySceneWithStrategy("1", "fraud_check", index);
-        verify(index).update("1", "fraud_check", "*", List.of(snap));
+        verify(index).replaceScene("1", "fraud_check", Map.of("*", List.of(snap)));
     }
 }

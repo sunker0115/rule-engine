@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.web.api.EvalController;
+import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -36,6 +37,9 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/test/required-param")
         public String requiredParam(@RequestParam String name) { return name; }
+
+        @GetMapping("/test/typed-param")
+        public String typedParam(@RequestParam Long tenantId) { return String.valueOf(tenantId); }
     }
 
     @BeforeEach
@@ -82,6 +86,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void typeMismatchParam_returns400_notInternalError() throws Exception {
+        // 非数字 tenantId 绑定到 Long 参数失败 → 400 INVALID_ARGUMENT，而非兜底 500
+        mockMvc.perform(get("/test/typed-param").param("tenantId", "acme").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("tenantId")));
+    }
+
+    @Test
     void noResourceFound_returns404_withErrorCode() {
         NoResourceFoundException ex = new NoResourceFoundException(HttpMethod.GET, "/api/v1/rules", "/api/v1/rules");
         ApiResponse<Void> resp = new GlobalExceptionHandler().handleNotFound(ex);
@@ -94,7 +108,7 @@ class GlobalExceptionHandlerTest {
         MockMvc evalMvc = MockMvcBuilders
                 .standaloneSetup(new EvalController(mock(EvalService.class),
                         mock(com.sstlfsj.rule.config.api.service.TenantQueryService.class),
-                        mock(com.sstlfsj.rule.config.api.service.SceneService.class)))
+                        mock(SensitiveRefsResolver.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         String badJson = "{\"tenantId\":\"1\",\"occurredAt\":\"not-a-timestamp\"}";

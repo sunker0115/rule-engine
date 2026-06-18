@@ -39,11 +39,12 @@ public class RuleIndexEventListener {
     public void onRulePublished(RulePublishedEvent event) {
         Map<String, List<RuleVersionSnapshot>> byEventType =
                 loader.loadBySceneWithStrategy(event.tenantId(), event.sceneCode(), index);
+        // 原子替换该 scene 全部桶:规则被 disable 后 byEventType 变空/变少,replaceScene 会摘除残留旧桶
+        // （逐个 update 在空结果时无法清除旧桶，会导致已禁用规则仍留在索引继续出决策）
+        index.replaceScene(event.tenantId(), event.sceneCode(), byEventType);
         // 同一快照可分属多个 eventType 桶,按引用去重后预热一次
         Set<RuleVersionSnapshot> distinct = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Map.Entry<String, List<RuleVersionSnapshot>> entry : byEventType.entrySet()) {
-            index.update(event.tenantId(), event.sceneCode(),
-                         entry.getKey(), entry.getValue());
             distinct.addAll(entry.getValue());
         }
         scriptWarmer.warmUpIfEager(new ArrayList<>(distinct));

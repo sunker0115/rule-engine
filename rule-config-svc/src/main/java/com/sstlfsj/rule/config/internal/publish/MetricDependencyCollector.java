@@ -41,9 +41,12 @@ class MetricDependencyCollector {
             }
             // DecisionLeafNode：终止节点，无 metric 依赖
             case DecisionLeafNode ignored -> {}
-            // DecisionTableNode：遍历列头中的 metricCode
+            // DecisionTableNode：遍历列头中的 metricCode；PAYLOAD 列不计入 metric 依赖
             case DecisionTableNode dt ->
-                    dt.columns().forEach(col -> { if (col.metricCode() != null) acc.add(col.metricCode()); });
+                    dt.columns().forEach(col -> {
+                        if (col.valueRef() == ValueRef.PAYLOAD) return;
+                        if (col.metricCode() != null && !col.metricCode().isBlank()) acc.add(col.metricCode());
+                    });
         }
     }
 }

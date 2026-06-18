@@ -6,8 +6,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 验证 RetentionProperties 绑定 engine.rule.retention.* 子集，默认 enabled/90/7/1000。 */
-// action_execution 保留属性已随动作子系统移除
+/** 验证 RetentionProperties 绑定 engine.rule.retention.* 子集，默认 enabled/90/1000。 */
+// action_execution 保留属性已随动作子系统移除；dry_run_session 保留属性已随 dry-run 不落库移除
 class RetentionPropertiesTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -22,7 +22,6 @@ class RetentionPropertiesTest {
             RetentionProperties props = ctx.getBean(RetentionProperties.class);
             assertThat(props.isEnabled()).isTrue();
             assertThat(props.getEvaluationSessionDays()).isEqualTo(90);
-            assertThat(props.getDryRunSessionDays()).isEqualTo(7);
             assertThat(props.getBatchSize()).isEqualTo(1000);
         });
     }
@@ -32,13 +31,11 @@ class RetentionPropertiesTest {
         runner.withPropertyValues(
                         "engine.rule.retention.enabled=false",
                         "engine.rule.retention.evaluation-session-days=120",
-                        "engine.rule.retention.dry-run-session-days=14",
                         "engine.rule.retention.batch-size=500")
                 .run(ctx -> {
                     RetentionProperties props = ctx.getBean(RetentionProperties.class);
                     assertThat(props.isEnabled()).isFalse();
                     assertThat(props.getEvaluationSessionDays()).isEqualTo(120);
-                    assertThat(props.getDryRunSessionDays()).isEqualTo(14);
                     assertThat(props.getBatchSize()).isEqualTo(500);
                 });
     }

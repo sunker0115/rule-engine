@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.config.internal.event;
 
-import com.sstlfsj.rule.config.internal.domain.ActorType;
 import com.sstlfsj.rule.config.internal.domain.AuditLog;
 import com.sstlfsj.rule.config.internal.repository.AuditLogMapper;
 import tools.jackson.core.JacksonException;
@@ -27,7 +26,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
         RulePublishedSnapshot.class,
         RuleStatusSnapshot.class,
         RuleImportedSnapshot.class,
-        MetricChangedSnapshot.class
+        MetricChangedSnapshot.class,
+        ConnectorChangedSnapshot.class
 })
 public class AuditLogWriter {
 
@@ -44,7 +44,7 @@ public class AuditLogWriter {
         AuditLog log = new AuditLog();
         log.setTenantId(event.tenantId());
         log.setActor(event.actor());
-        log.setActorType(ActorType.valueOf(event.actorType()));
+        log.setActorType(event.actorType());
         log.setAction(event.action());
         log.setTargetType(event.targetType());
         log.setTargetId(event.targetId());

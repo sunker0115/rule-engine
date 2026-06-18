@@ -3,6 +3,9 @@ package com.sstlfsj.rule.config.internal.service;
 import lombok.RequiredArgsConstructor;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.internal.MetricProperties;
+import com.sstlfsj.rule.config.internal.domain.ActorType;
+import com.sstlfsj.rule.config.internal.domain.AuditAction;
+import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricEnums;
 import com.sstlfsj.rule.config.internal.domain.MetricStatus;
@@ -61,7 +64,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
 
         // CREATE 类 before/after 传同一快照实例，审计行始终 before/after 都有值，避免 null 特殊处理
         MetricChangedSnapshot createSnapshot = new MetricChangedSnapshot(metricCode, 1, null);
-        publishAudit(tenantId, actorId, "CREATE", m.getId().toString(), createSnapshot, createSnapshot);
+        publishAudit(tenantId, actorId, AuditAction.CREATE, m.getId().toString(), createSnapshot, createSnapshot);
         return m.getId();
     }
 
@@ -87,7 +90,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
             active.setUpdatedAt(LocalDateTime.now());
             metricDefinitionMapper.updateById(active);
 
-            publishAudit(tenantId, actorId, "UPDATE", active.getId().toString(),
+            publishAudit(tenantId, actorId, AuditAction.UPDATE, active.getId().toString(),
                     null, new MetricChangedSnapshot(metricCode, active.getVersion(), false));
             return active.getVersion();
         }
@@ -109,7 +112,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         next.setCreatedAt(LocalDateTime.now());
         metricDefinitionMapper.insert(next);
 
-        publishAudit(tenantId, actorId, "UPDATE", next.getId().toString(),
+        publishAudit(tenantId, actorId, AuditAction.UPDATE, next.getId().toString(),
                 null, new MetricChangedSnapshot(metricCode, newVersion, true));
         return newVersion;
     }
@@ -189,10 +192,10 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     }
 
     /** 发布操作审计事件，由集中监听器 BEFORE_COMMIT 同事务落 audit_log（D14 约定）。 */
-    private void publishAudit(Long tenantId, String actorId, String action,
+    private void publishAudit(Long tenantId, String actorId, AuditAction action,
                             String targetId, AuditSnapshot beforeSnapshot, AuditSnapshot afterSnapshot) {
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", action, "metric_definition", targetId,
+                tenantId, actorId, ActorType.USER, action, AuditTargetType.METRIC_DEFINITION, targetId,
                 beforeSnapshot, afterSnapshot, LocalDateTime.now()));
     }
 }

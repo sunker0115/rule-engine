@@ -48,7 +48,7 @@ class JobServiceImplTest {
     JobServiceImpl service;
 
     private SceneDetailDto scene(String mode) {
-        return new SceneDetailDto(1L, "1", "s1", "name", null, mode, "USER",
+        return new SceneDetailDto(1L, 1L, "s1", "name", null, mode, "USER",
                 List.of(), List.of(), Map.of(), "ACTIVE");
     }
 
@@ -65,9 +65,9 @@ class JobServiceImplTest {
     void enableJobForPushSceneRegistersSchedule() {
         JobDefinition d = job(JobStatus.DISABLED);
         when(jobMapper.selectById(5L)).thenReturn(d);
-        when(sceneService.getScene("1", "s1")).thenReturn(scene("PUSH"));
+        when(sceneService.getScene(1L, "s1")).thenReturn(scene("PUSH"));
 
-        service.enableJob("1", 5L);
+        service.enableJob(1L, 5L);
 
         assertEquals(JobStatus.ACTIVE, d.getStatus());
         verify(scheduleManager).register(d);
@@ -77,9 +77,9 @@ class JobServiceImplTest {
     void rejectsEnableForPullScene() {
         JobDefinition d = job(JobStatus.DISABLED);
         when(jobMapper.selectById(5L)).thenReturn(d);
-        when(sceneService.getScene("1", "s1")).thenReturn(scene("PULL"));
+        when(sceneService.getScene(1L, "s1")).thenReturn(scene("PULL"));
 
-        assertThrows(IllegalArgumentException.class, () -> service.enableJob("1", 5L));
+        assertThrows(IllegalArgumentException.class, () -> service.enableJob(1L, 5L));
 
         verify(scheduleManager, never()).register(any());
     }
@@ -89,7 +89,7 @@ class JobServiceImplTest {
         JobDefinition d = job(JobStatus.ACTIVE);
         when(jobMapper.selectById(5L)).thenReturn(d);
 
-        service.disableJob("1", 5L);
+        service.disableJob(1L, 5L);
 
         assertEquals(JobStatus.DISABLED, d.getStatus());
         verify(jobMapper).updateById(d);
@@ -103,14 +103,14 @@ class JobServiceImplTest {
         d.setTenantId(999L);
         when(jobMapper.selectById(5L)).thenReturn(d);
 
-        assertThrows(IllegalArgumentException.class, () -> service.getJob("1", 5L));
+        assertThrows(IllegalArgumentException.class, () -> service.getJob(1L, 5L));
     }
 
     @Test
     void rejectsUnknownJob() {
         when(jobMapper.selectById(5L)).thenReturn(null);
 
-        assertThrows(IllegalArgumentException.class, () -> service.getJob("1", 5L));
+        assertThrows(IllegalArgumentException.class, () -> service.getJob(1L, 5L));
     }
 
     @Test
@@ -119,7 +119,7 @@ class JobServiceImplTest {
         d.setSubjectQuery("{\"type\":\"BEAN_METHOD\",\"ref\":\"a#b\"}");
         when(jobMapper.selectById(5L)).thenReturn(d);
 
-        JobDefinitionDto dto = service.getJob("1", 5L);
+        JobDefinitionDto dto = service.getJob(1L, 5L);
 
         assertThat(dto.subjectQuery()).isInstanceOf(BeanMethodQuery.class);
         assertThat(((BeanMethodQuery) dto.subjectQuery()).ref()).isEqualTo("a#b");

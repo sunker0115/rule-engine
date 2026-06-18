@@ -8,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
+import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,7 +26,7 @@ class EvalControllerTest {
     private MockMvc mockMvc;
     private EvalService evalService;
     private TenantQueryService tenantQueryService;
-    private SceneService sceneService;
+    private SensitiveRefsResolver sensitiveRefsResolver;
 
     private static final String EVENT_JSON = """
             {"tenantCode":"acme","sceneCode":"PAYMENT","eventType":"ORDER",
@@ -37,9 +38,9 @@ class EvalControllerTest {
     void setUp() {
         evalService = mock(EvalService.class);
         tenantQueryService = mock(TenantQueryService.class);
-        sceneService = mock(SceneService.class);
+        sensitiveRefsResolver = mock(SensitiveRefsResolver.class);
         when(tenantQueryService.resolveIdByCode("acme")).thenReturn(9001L);
-        mockMvc = MockMvcBuilders.standaloneSetup(new EvalController(evalService, tenantQueryService, sceneService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new EvalController(evalService, tenantQueryService, sensitiveRefsResolver))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -152,7 +153,7 @@ class EvalControllerTest {
     @Test
     void dryRun_masksSensitivePayloadLeaf() throws Exception {
         // 敏感 payload 字段 phone 的叶子 actualValue 在 dry-run 出口被脱敏为 "***"，非敏感 amount 保留原值
-        when(sceneService.getSensitiveRefs("9001", "PAYMENT"))
+        when(sensitiveRefsResolver.forScene(9001L, "PAYMENT"))
                 .thenReturn(new SceneService.SensitiveRefs(java.util.Set.of("phone"), java.util.Set.of()));
         NodeTrace sensitiveLeaf = new NodeTrace(
                 "ConditionNode", "EQ", "phone", true, "13800001111", "PAYLOAD",
@@ -182,5 +183,20 @@ class EvalControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(EVENT_JSON))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void evaluate_missingRequiredField_returns400() throws Exception {
+        // @Valid + @NotBlank：tenantCode 为 null → 400，在 toEvent 解析前被 Bean Validation 拦截（或拦截未知租户时同样 400）
+        String noTenantCode = """
+                {"sceneCode":"PAYMENT","eventType":"ORDER",
+                 "subjectId":"u1","eventId":"evt-1","payload":{}}
+                """;
+        mockMvc.perform(post("/api/v1/rule/evaluate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(noTenantCode))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+        verifyNoInteractions(evalService);
     }
 }

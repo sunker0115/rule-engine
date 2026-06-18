@@ -1,15 +1,11 @@
 package com.sstlfsj.rule.observability;
 
-import com.sstlfsj.rule.kernel.api.spi.trace.DryRunTraceWriter;
-import com.sstlfsj.rule.kernel.api.spi.trace.NoopDryRunTraceWriter;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import com.sstlfsj.rule.observability.internal.alarm.ObservabilityAlarmChecker;
 import com.sstlfsj.rule.observability.internal.alarm.ObservabilityAlarmListener;
-import com.sstlfsj.rule.observability.internal.repository.DryRunNodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.retention.RetentionProperties;
 import com.sstlfsj.rule.observability.internal.retention.TraceRetentionCleaner;
-import com.sstlfsj.rule.observability.internal.trace.DryRunTraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.NoopTraceWriter;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterDbImpl;
 import com.sstlfsj.rule.observability.internal.trace.TraceWriterProperties;
@@ -32,11 +28,6 @@ class ObservabilityAutoConfigurationTest {
         @Bean
         NodeTraceMapper nodeTraceMapper() {
             return mock(NodeTraceMapper.class);
-        }
-
-        @Bean
-        DryRunNodeTraceMapper dryRunNodeTraceMapper() {
-            return mock(DryRunNodeTraceMapper.class);
         }
 
         @Bean
@@ -84,33 +75,6 @@ class ObservabilityAutoConfigurationTest {
     }
 
     @Test
-    void dryRunTraceWriterDb_registeredByDefault() {
-        runnerWithMapper.run(ctx -> {
-            assertThat(ctx).hasSingleBean(DryRunTraceWriter.class);
-            assertThat(ctx.getBean(DryRunTraceWriter.class)).isInstanceOf(DryRunTraceWriterDbImpl.class);
-        });
-    }
-
-    @Test
-    void dryRunTraceWriterDb_registeredWhenEnabled() {
-        runnerWithMapper.withPropertyValues("engine.rule.trace.enabled=true")
-                .run(ctx -> {
-                    assertThat(ctx).hasSingleBean(DryRunTraceWriter.class);
-                    assertThat(ctx.getBean(DryRunTraceWriter.class)).isInstanceOf(DryRunTraceWriterDbImpl.class);
-                });
-    }
-
-    @Test
-    void noopDryRunTraceWriter_registeredWhenDisabled() {
-        // 关 retention 避免清理 bean 在无 mapper 的精简 runner 中尝试注入
-        runnerWithMapper.withPropertyValues("engine.rule.trace.enabled=false", "engine.rule.retention.enabled=false")
-                .run(ctx -> {
-                    assertThat(ctx).hasSingleBean(DryRunTraceWriter.class);
-                    assertThat(ctx.getBean(DryRunTraceWriter.class)).isInstanceOf(NoopDryRunTraceWriter.class);
-                });
-    }
-
-    @Test
     void traceWriterProperties_registeredWithHardcodedDefaults() {
         runnerWithMapper.run(ctx -> {
             TraceWriterProperties props = ctx.getBean(TraceWriterProperties.class);
@@ -147,7 +111,6 @@ class ObservabilityAutoConfigurationTest {
             RetentionProperties props = ctx.getBean(RetentionProperties.class);
             assertThat(props.isEnabled()).isTrue();
             assertThat(props.getNodeTraceDays()).isEqualTo(30);
-            assertThat(props.getDryRunSessionDays()).isEqualTo(7);
             assertThat(props.getBatchSize()).isEqualTo(1000);
         });
     }

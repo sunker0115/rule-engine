@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.eval.internal.service;
 
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
-import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
 import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
@@ -27,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计；dry-run 发 DryRunRecordedEvent 事件。 */
+/** doEvaluate 事件驱动后的单测：PULL 主路径只经 DomainEventPublisher 发布审计；dry-run 只即时返回不落库。 */
 @ExtendWith(MockitoExtension.class)
 class EvalServiceImplTest {
 
@@ -160,7 +159,7 @@ class EvalServiceImplTest {
     }
 
     @Test
-    void dryRun_publishesDryRunRecorded() {
+    void dryRun_returnsResult_withoutPersisting() {
         RuleVersionSnapshot snap = snapshot(42L, "PASS");
         EvalContext engineCtx = ctx();
         when(snapshotLoader.loadById(42L)).thenReturn(snap);
@@ -170,11 +169,8 @@ class EvalServiceImplTest {
 
         impl.dryRun(event(), null, 42L);
 
-        // dry-run 改事件驱动：发 DryRunRecordedEvent 事件由异步 persister 落 dry_run_session
-        verify(eventPublisher).publish(argThat(o ->
-                o instanceof DryRunRecordedEvent d
-                        && d.ruleVersionId().equals(42L)
-                        && d.context() == engineCtx));
+        // dry-run 只即时返回（对齐 OPA：试算不写历史），不发任何落库事件
+        verifyNoInteractions(eventPublisher);
         // dry-run 始终强制收集 trace：必须以 collectTrace=true 调用引擎
         verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(),
                 any(SceneExecutionStrategy.class), any(Instant.class), eq(true));
@@ -194,8 +190,6 @@ class EvalServiceImplTest {
 
         verify(ruleVersionReadMapper).latestVersionIdByRule(1L, 5L);
         verify(snapshotLoader).loadById(77L);
-        verify(eventPublisher).publish(argThat(o ->
-                o instanceof DryRunRecordedEvent d && d.ruleVersionId().equals(77L)));
         // dry-run 永不落候选分支：不走 match
         verify(evalEngine, never()).match(any(RuleEvent.class));
     }
@@ -268,6 +262,20 @@ class EvalServiceImplTest {
         ArgumentCaptor<Instant> nowCaptor = ArgumentCaptor.forClass(Instant.class);
         verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(), nowCaptor.capture());
         assertEquals(asOf, nowCaptor.getValue());
+    }
+
+    @Test
+    void evaluate_withAsOf_durationMs_isRealElapsed_notHistoricalDiff() {
+        // asOf 远古：durationMs 必须是真实墙钟耗时（小正数），而非 asOf→now 的历史差（会 int 溢出/负值）
+        Instant asOf = Instant.parse("2020-01-01T00:00:00Z");
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(EvalResult.miss(), ctx()));
+
+        impl.evaluate(event(), asOf);
+
+        ArgumentCaptor<AuditRecordedEvent> cap = ArgumentCaptor.forClass(AuditRecordedEvent.class);
+        verify(eventPublisher).publish(cap.capture());
+        int dur = cap.getValue().durationMs();
+        assertTrue(dur >= 0 && dur < 60_000, "durationMs 应为真实耗时(0~60s)，实际=" + dur);
     }
 
     @Test
@@ -361,5 +369,21 @@ class EvalServiceImplTest {
 
         assertDoesNotThrow(() -> impl.evaluate(eventWithPayload(Map.of("amount", 5000, "extra", "x"))));
         verify(evalEngine).evaluateWithContext(any(RuleEvent.class), anyList(), any(Instant.class));
+    }
+
+    @Test
+    void evaluate_withNodeTrace_returnsHit_andSingleLineTraceLogPathDoesNotThrow() {
+        // 含非空 NodeTrace 的命中结果：doEvaluate 走单行 trace 日志分支（debug 级时格式化），结果不受影响
+        NodeTrace leaf = new NodeTrace(NodeType.CONDITION.tag(), "EQ", null, true,
+                null, null, null, List.of(), 1L, "R1", 1L, null, null);
+        Decision d = new Decision("REJECT", "", 10, 1L);
+        EvalResult engineResult = new EvalResult(true, d, List.of(d), List.of(leaf), null, null, null, null);
+        stubPull(snapshot(1L, "REJECT"), new EvalOutcome(engineResult, ctx()));
+
+        EvalResult result = impl.evaluate(event());
+
+        assertTrue(result.ruleHit());
+        assertEquals(1, result.nodeTrace().size());
+        verify(eventPublisher).publish(any(AuditRecordedEvent.class));
     }
 }

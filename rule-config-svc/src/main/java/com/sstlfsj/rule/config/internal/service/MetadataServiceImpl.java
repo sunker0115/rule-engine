@@ -1,7 +1,10 @@
 package com.sstlfsj.rule.config.internal.service;
 
+import com.sstlfsj.rule.config.api.dto.MetricListItemVO;
+import com.sstlfsj.rule.config.api.dto.MetricListQuery;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
+import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.SceneDef;
@@ -14,6 +17,7 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -37,35 +41,39 @@ class MetadataServiceImpl implements MetadataService {
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final List<OperatorSpec> customSpecs;
+    private final List<ExpressionEngine> expressionEngines;
 
-    /**
-     * @param sceneMapper            场景查询 Mapper
-     * @param metricDefinitionMapper metric 定义查询 Mapper
-     * @param ruleDefinitionMapper   规则定义查询 Mapper
-     * @param ruleVersionMapper      规则版本查询 Mapper
-     * @param customSpecs            自定义 {@code @Bean OperatorSpec} 列表（无声明时 Spring 注入空列表）
-     */
     MetadataServiceImpl(SceneMapper sceneMapper,
                         MetricDefinitionMapper metricDefinitionMapper,
                         RuleDefinitionMapper ruleDefinitionMapper,
                         RuleVersionMapper ruleVersionMapper,
-                        List<OperatorSpec> customSpecs) {
+                        List<OperatorSpec> customSpecs,
+                        List<ExpressionEngine> expressionEngines) {
         this.sceneMapper = sceneMapper;
         this.metricDefinitionMapper = metricDefinitionMapper;
         this.ruleDefinitionMapper = ruleDefinitionMapper;
         this.ruleVersionMapper = ruleVersionMapper;
         this.customSpecs = customSpecs != null ? customSpecs : List.of();
+        this.expressionEngines = expressionEngines != null ? expressionEngines : List.of();
     }
 
     @Override
-    public MetadataResponse getSceneMetadata(String tenantId, String sceneCode) {
-        SceneDef scene = sceneMapper.findByCode(Long.valueOf(tenantId), sceneCode);
+    public void toggleMetricStatus(Long tenantId, String metricCode, boolean enable) {
+        MetricDefinition m = metricDefinitionMapper.findAnyByCode(tenantId, metricCode);
+        if (m == null) throw new IllegalArgumentException("Metric 不存在: " + metricCode);
+        m.setStatus(enable ? MetricStatus.ACTIVE : MetricStatus.DISABLED);
+        metricDefinitionMapper.updateById(m);
+    }
+
+    @Override
+    public MetadataResponse getSceneMetadata(Long tenantId, String sceneCode) {
+        SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
         if (scene == null) {
             throw new IllegalArgumentException("Scene 不存在: " + sceneCode);
         }
 
         // metric 在 tenant 级对所有 scene 可用（无 scene 级绑定白名单，配置闭环 B 轮决策二）
-        List<MetricDefinition> metrics = metricDefinitionMapper.findActiveByTenant(Long.valueOf(tenantId));
+        List<MetricDefinition> metrics = metricDefinitionMapper.findActiveByTenant(tenantId);
 
         List<MetricMeta> metricMetas = metrics.stream()
                 .map(m -> new MetricMeta(m.getMetricCode(), m.getName(),
@@ -78,22 +86,25 @@ class MetadataServiceImpl implements MetadataService {
         ConditionTypeCatalog.all().forEach(s -> merged.put(s.code(), s));
         customSpecs.forEach(s -> merged.putIfAbsent(s.code(), s));
         List<OperatorSpec> conditionTypes = List.copyOf(merged.values());
-        return new MetadataResponse(conditionTypes, metricMetas);
+        List<String> langs = expressionEngines.stream()
+                .map(ExpressionEngine::lang).distinct().toList();
+        return new MetadataResponse(conditionTypes, metricMetas,
+                scene.getEventTypes() != null ? scene.getEventTypes() : java.util.List.of(), langs);
     }
 
     @Override
-    public List<MetricDescriptor> listMetricDefinitions(String tenantId, List<String> scenes) {
-        Long tid = Long.valueOf(tenantId);
+    public List<MetricDescriptor> listMetricDefinitions(MetricListQuery q) {
+        Long tid = q.tenantId();
 
         // scenes 为空（FetchMode.ALL）：返回该租户全部 ACTIVE 定义（新规则只能绑 ACTIVE）
-        if (scenes == null || scenes.isEmpty()) {
+        if (q.scenes() == null || q.scenes().isEmpty()) {
             return metricDefinitionMapper.findActiveByTenant(tid)
                     .stream().map(this::toDescriptor).toList();
         }
 
         // scenes 非空（FetchMode.DECLARED）：按被规则引用的精确 (code,version) 并集下发，含 SUPERSEDED。
         // 存量快照可能绑旧版（SUPERSEDED），若只下发 ACTIVE 版，评估期 resolve(code,oldVersion) 返回 null → 评估失败。
-        Set<MetricDependency> deps = collectRequiredDeps(tid, scenes);
+        Set<MetricDependency> deps = collectRequiredDeps(tid, q.scenes());
         if (deps.isEmpty()) return List.of();
 
         List<MetricDescriptor> result = new ArrayList<>();
@@ -112,8 +123,8 @@ class MetadataServiceImpl implements MetadataService {
     }
 
     @Override
-    public InputManifestResponse getInputManifest(String tenantId, String sceneCode, String eventType) {
-        Long tid = Long.valueOf(tenantId);
+    public InputManifestResponse getInputManifest(Long tenantId, String sceneCode, String eventType) {
+        Long tid = tenantId;
         SceneDef scene = sceneMapper.findByCode(tid, sceneCode);
         if (scene == null) {
             return new InputManifestResponse(List.of());
@@ -178,6 +189,36 @@ class MetadataServiceImpl implements MetadataService {
                 Boolean.TRUE.equals(m.getAllowProvided()),
                 m.getCacheTtlSeconds() == null ? 0 : m.getCacheTtlSeconds(),
                 params);
+    }
+
+    @Override
+    public java.util.List<MetricListItemVO> listMetricItems(Long tenantId) {
+        return metricDefinitionMapper.findActiveByTenant(tenantId).stream()
+                .map(this::toListItem)
+                .toList();
+    }
+
+    @Override
+    public MetricListItemVO getMetricItem(Long tenantId, String metricCode) {
+        MetricDefinition m = metricDefinitionMapper.findAnyByCode(tenantId, metricCode);
+        if (m == null) throw new IllegalArgumentException("Metric 不存在: " + metricCode);
+        return toListItem(m);
+    }
+
+    /** MetricDefinition → admin 列表项 VO（含 name/status/时间/tenantId）。 */
+    private MetricListItemVO toListItem(MetricDefinition m) {
+        return new MetricListItemVO(
+                m.getMetricCode(),
+                m.getVersion() == null ? 1 : m.getVersion(),
+                m.getSourceType(), m.getDataType(),
+                Boolean.TRUE.equals(m.getAllowProvided()),
+                m.getCacheTtlSeconds() == null ? 0 : m.getCacheTtlSeconds(),
+                m.getParams(),
+                m.getName(),
+                m.getStatus() != null ? m.getStatus().name() : null,
+                m.getTenantId(),
+                m.getCreatedAt(),
+                m.getUpdatedAt());
     }
 
 }

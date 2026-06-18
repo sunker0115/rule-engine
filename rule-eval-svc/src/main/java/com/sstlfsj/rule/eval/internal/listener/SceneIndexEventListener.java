@@ -44,11 +44,11 @@ public class SceneIndexEventListener {
         }
         Map<String, List<RuleVersionSnapshot>> byEventType =
                 loader.loadBySceneWithStrategy(event.tenantId(), event.sceneCode(), index);
+        // 原子替换该 scene 全部桶（空结果也能摘除残留旧桶，避免 torn 索引）
+        index.replaceScene(event.tenantId(), event.sceneCode(), byEventType);
         // 同一快照可分属多个 eventType 桶,按引用去重后预热一次
         Set<RuleVersionSnapshot> distinct = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Map.Entry<String, List<RuleVersionSnapshot>> entry : byEventType.entrySet()) {
-            index.update(event.tenantId(), event.sceneCode(),
-                         entry.getKey(), entry.getValue());
             distinct.addAll(entry.getValue());
         }
         scriptWarmer.warmUpIfEager(new ArrayList<>(distinct));

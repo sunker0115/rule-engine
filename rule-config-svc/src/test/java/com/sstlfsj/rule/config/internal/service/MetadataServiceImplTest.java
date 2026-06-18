@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -36,7 +37,7 @@ class MetadataServiceImplTest {
 
     private MetadataServiceImpl newService(List<OperatorSpec> customSpecs) {
         return new MetadataServiceImpl(sceneMapper, metricDefinitionMapper,
-                ruleDefinitionMapper, ruleVersionMapper, customSpecs);
+                ruleDefinitionMapper, ruleVersionMapper, customSpecs, List.of());
     }
 
     @Test
@@ -55,7 +56,7 @@ class MetadataServiceImplTest {
         metric.setAllowProvided(false);
         when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of(metric));
 
-        MetadataService.MetadataResponse response = newService(List.of()).getSceneMetadata("1", "PAYMENT");
+        MetadataService.MetadataResponse response = newService(List.of()).getSceneMetadata(1L, "PAYMENT");
 
         assertThat(response.availableMetrics()).hasSize(1);
         assertThat(response.availableMetrics().get(0).metricCode()).isEqualTo("user.age");
@@ -72,7 +73,7 @@ class MetadataServiceImplTest {
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         when(metricDefinitionMapper.findActiveByTenant(any())).thenReturn(List.of());
 
-        MetadataService.MetadataResponse resp = newService(List.of()).getSceneMetadata("1", "PAYMENT");
+        MetadataService.MetadataResponse resp = newService(List.of()).getSceneMetadata(1L, "PAYMENT");
 
         assertThat(resp.conditionTypes()).isNotEmpty();
         OperatorSpec gt = resp.conditionTypes().stream()
@@ -96,7 +97,7 @@ class MetadataServiceImplTest {
 
         MetadataServiceImpl service = newService(List.of());
 
-        List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of());
+        List<MetricDescriptor> defs = service.listMetricDefinitions(1L, List.of());
 
         assertThat(defs).hasSize(1);
         MetricDescriptor d = defs.get(0);
@@ -121,7 +122,7 @@ class MetadataServiceImplTest {
 
         MetadataServiceImpl service = newService(List.of());
 
-        List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of());
+        List<MetricDescriptor> defs = service.listMetricDefinitions(1L, List.of());
         assertThat(defs.get(0).cacheTtlSeconds()).isZero();
         assertThat(defs.get(0).params()).containsEntry("dataType", "LONG");
     }
@@ -157,7 +158,7 @@ class MetadataServiceImplTest {
 
         MetadataServiceImpl service = newService(List.of());
 
-        List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of("fraud"));
+        List<MetricDescriptor> defs = service.listMetricDefinitions(1L, List.of("fraud"));
 
         // 仅返回并集内的 risk.score；account.balance 未被引用故不下发
         assertThat(defs).extracting(MetricDescriptor::metricCode).containsExactly("risk.score");
@@ -184,7 +185,7 @@ class MetadataServiceImplTest {
         MetadataServiceImpl service = newService(List.of());
 
         // scenes 给了但规则无 metric 依赖 → 空列表（收紧语义，区别于旧的全量返回）
-        assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();
+        assertThat(service.listMetricDefinitions(1L, List.of("fraud"))).isEmpty();
     }
 
     @Test
@@ -193,7 +194,7 @@ class MetadataServiceImplTest {
 
         MetadataServiceImpl service = newService(List.of());
 
-        assertThat(service.listMetricDefinitions("1", List.of("nope"))).isEmpty();
+        assertThat(service.listMetricDefinitions(1L, List.of("nope"))).isEmpty();
     }
 
     /**
@@ -238,7 +239,7 @@ class MetadataServiceImplTest {
 
         MetadataServiceImpl service = newService(List.of());
 
-        List<MetricDescriptor> defs = service.listMetricDefinitions("1", List.of("fraud"));
+        List<MetricDescriptor> defs = service.listMetricDefinitions(1L, List.of("fraud"));
 
         assertThat(defs).hasSize(1);
         MetricDescriptor d = defs.get(0);
@@ -277,7 +278,39 @@ class MetadataServiceImplTest {
         MetadataServiceImpl service = newService(List.of());
 
         // 容错：跳过缺失定义，不抛异常，返回空列表
-        assertThat(service.listMetricDefinitions("1", List.of("fraud"))).isEmpty();
+        assertThat(service.listMetricDefinitions(1L, List.of("fraud"))).isEmpty();
+    }
+
+    @Test
+    void getMetricItem_returnsFullDefinition() {
+        MetricDefinition m = new MetricDefinition();
+        m.setMetricCode("account.balance");
+        m.setVersion(2);
+        m.setSourceType("SQL_AGGREGATE");
+        m.setDataType("DECIMAL");
+        m.setAllowProvided(false);
+        m.setCacheTtlSeconds(60);
+        m.setParams(java.util.Map.of("window", "30d"));
+        m.setName("余额");
+        m.setStatus(MetricStatus.ACTIVE);
+        m.setTenantId(1L);
+        when(metricDefinitionMapper.findAnyByCode(1L, "account.balance")).thenReturn(m);
+
+        var vo = newService(List.of()).getMetricItem(1L, "account.balance");
+
+        assertThat(vo.metricCode()).isEqualTo("account.balance");
+        assertThat(vo.metricVersion()).isEqualTo(2);
+        assertThat(vo.status()).isEqualTo("ACTIVE");
+        assertThat(vo.params()).containsEntry("window", "30d");
+        assertThat(vo.name()).isEqualTo("余额");
+    }
+
+    @Test
+    void getMetricItem_missing_throws() {
+        when(metricDefinitionMapper.findAnyByCode(1L, "nope")).thenReturn(null);
+
+        assertThatThrownBy(() -> newService(List.of()).getMetricItem(1L, "nope"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -311,7 +344,7 @@ class MetadataServiceImplTest {
         when(ruleVersionMapper.findActiveWithPayloadByRuleDefIds(any())).thenReturn(List.of(rv1, rv2));
 
         MetadataService.InputManifestResponse resp =
-                newService(List.of()).getInputManifest("1", "demo.login", null);
+                newService(List.of()).getInputManifest(1L, "demo.login", null);
 
         assertThat(resp.fields())
                 .extracting(MetadataService.InputFieldSpec::name)
@@ -334,7 +367,7 @@ class MetadataServiceImplTest {
                 .requiresMetric(false).build();
 
         MetadataService.MetadataResponse resp =
-                newService(List.of(custom)).getSceneMetadata("1", "PAYMENT");
+                newService(List.of(custom)).getSceneMetadata(1L, "PAYMENT");
 
         assertThat(resp.conditionTypes()).extracting(OperatorSpec::code).contains("geo.within");
     }
@@ -355,7 +388,7 @@ class MetadataServiceImplTest {
                 .requiresMetric(false).build();
 
         MetadataService.MetadataResponse resp =
-                newService(List.of(fake)).getSceneMetadata("1", "PAYMENT");
+                newService(List.of(fake)).getSceneMetadata(1L, "PAYMENT");
 
         // 内置优先：自定义 GT 不覆盖内置 GT
         OperatorSpec gt = resp.conditionTypes().stream()

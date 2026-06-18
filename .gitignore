@@ -27,5 +27,9 @@ logs/
 # CodeGraph index (local tooling)
 .codegraph/
 
+# Claude superpowers artifacts
+.superpowers/
+docs/superpowers/plans/
+
 # maven-shade 生成物
 dependency-reduced-pom.xml

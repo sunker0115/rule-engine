@@ -14,8 +14,6 @@ public class RetentionProperties {
     private boolean enabled = true;
     /** node_trace 保留天数。 */
     private int nodeTraceDays = 30;
-    /** dry_run trace 保留天数（与 dry_run_session 同窗）。 */
-    private int dryRunSessionDays = 7;
     /** 单批删除上限。 */
     private int batchSize = 1000;
 }

@@ -106,7 +106,7 @@ class MetricWriteServiceImplTest {
         ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
         verify(eventPublisher, times(1)).publishEvent(auditCaptor.capture());
         OperationAuditedEvent audit = auditCaptor.getValue();
-        assertThat(audit.action()).isEqualTo("CREATE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.CREATE);
         assertThat(audit.beforeSnapshot()).isSameAs(audit.afterSnapshot());
         assertThat(audit.afterSnapshot()).isEqualTo(new MetricChangedSnapshot(CODE, 1, null));
     }
@@ -201,7 +201,7 @@ class MetricWriteServiceImplTest {
         ArgumentCaptor<OperationAuditedEvent> auditCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
         verify(eventPublisher, times(1)).publishEvent(auditCaptor.capture());
         OperationAuditedEvent audit = auditCaptor.getValue();
-        assertThat(audit.action()).isEqualTo("UPDATE");
+        assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.UPDATE);
         assertThat(audit.beforeSnapshot()).isNull();
         assertThat(audit.afterSnapshot()).isEqualTo(new MetricChangedSnapshot(CODE, 2, false));
     }

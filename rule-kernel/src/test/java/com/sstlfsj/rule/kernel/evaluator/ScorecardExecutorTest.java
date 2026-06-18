@@ -5,6 +5,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.ast.ScoreBand;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
@@ -41,7 +42,7 @@ class ScorecardExecutorTest {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 30.0),
                 new ConditionNode(ALWAYS_TRUE, "m2", null, Map.of(), 70.0)
-        ), 80.0);
+        ), 80.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.ruleHit()).isTrue();
@@ -53,7 +54,7 @@ class ScorecardExecutorTest {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE,  "m1", null, Map.of(), 30.0),
                 new ConditionNode(ALWAYS_FALSE, "m2", null, Map.of(), 70.0)
-        ), 80.0);
+        ), 80.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(
                 Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse))
                 .execute(snapshot(root), ctx());
@@ -65,7 +66,7 @@ class ScorecardExecutorTest {
     void scoreEqualsThreshold_isHit() {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 50.0)
-        ), 50.0);
+        ), 50.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.ruleHit()).isTrue();
@@ -74,7 +75,7 @@ class ScorecardExecutorTest {
 
     @Test
     void noConditions_scoreZero_miss() {
-        ScorecardRootNode root = new ScorecardRootNode(List.of(), 1.0);
+        ScorecardRootNode root = new ScorecardRootNode(List.of(), 1.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of())
                 .execute(snapshot(root), ctx());
         assertThat(result.ruleHit()).isFalse();
@@ -86,7 +87,7 @@ class ScorecardExecutorTest {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE,  "m1", null, Map.of(), 30.0),
                 new ConditionNode(ALWAYS_FALSE, "m2", null, Map.of(), 20.0)
-        ), 100.0);
+        ), 100.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(
                 Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse))
                 .execute(snapshot(root), ctx());
@@ -101,7 +102,7 @@ class ScorecardExecutorTest {
         // weight=null 时即使条件命中也不累加分数，且不抛 NPE（AST_BOOLEAN 场景兼容）
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), null)
-        ), 0.0);
+        ), 0.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.score()).isEqualTo(0.0);
@@ -113,7 +114,7 @@ class ScorecardExecutorTest {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE,  "m1", null, Map.of(), 30.0),
                 new ConditionNode(ALWAYS_FALSE, "m2", null, Map.of(), 70.0)
-        ), 80.0);
+        ), 80.0, java.util.List.of());
         ScorecardExecutor executor = new ScorecardExecutor(
                 Map.of(ALWAYS_TRUE, alwaysTrue, ALWAYS_FALSE, alwaysFalse));
         RuleVersionSnapshot snap = snapshot(root);
@@ -128,10 +129,87 @@ class ScorecardExecutorTest {
     }
 
     @Test
+    void bandsHit_emitsDecisionWithCategory() {
+        // score=70 落 [60,80) → REVIEW/MEDIUM
+        ScoreBand low = new ScoreBand(0, 60, "REJECT", "HIGH");
+        ScoreBand mid = new ScoreBand(60, 80, "REVIEW", "MEDIUM");
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
+        ), 0.0, List.of(low, mid));
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.score()).isEqualTo(70.0);
+        assertThat(result.finalDecision().code()).isEqualTo("REVIEW");
+        assertThat(result.category()).isEqualTo("MEDIUM");
+        assertThat(result.hitDecisions()).hasSize(1);
+    }
+
+    @Test
+    void bandsWithNamePriority_decisionContainsNameAndPriority() {
+        // band 含回填的 name/priority → Decision 应直接从 band 读，不索引 decisionBindings
+        ScoreBand rich = new ScoreBand(60, 100, "PASS", "LOW", "通过", 100);
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
+        ), 0.0, List.of(new ScoreBand(0, 60, "REJECT", "HIGH", "拒绝", 1), rich));
+        // decisionBindings 为空（评分卡发布后不再注入）——执行器直接从 band 读
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(
+                1L, "scene1", "t1", root, null, List.of(), null, null);
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snap, ctx());
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.score()).isEqualTo(70.0);
+        assertThat(result.finalDecision().code()).isEqualTo("PASS");
+        assertThat(result.finalDecision().name()).isEqualTo("通过");
+        assertThat(result.finalDecision().priority()).isEqualTo(100);
+        assertThat(result.category()).isEqualTo("LOW");
+    }
+
+    @Test
+    void belowThreshold_notHit_withBands() {
+        // score=10 < threshold 50 → 弃权，带 score 无 decision
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 10.0)
+        ), 50.0, List.of(new ScoreBand(0, 100, "X", null)));
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.ruleHit()).isFalse();
+        assertThat(result.score()).isEqualTo(10.0);
+        assertThat(result.finalDecision()).isNull();
+    }
+
+    @Test
+    void scoreInGap_hitsButNoBandDecision() {
+        // bands 只覆盖 [0,60)，score=70 落空隙 → 命中但无段决策（回退 binding）
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
+        ), 0.0, List.of(new ScoreBand(0, 60, "REJECT", null)));
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.finalDecision()).isNull();
+        assertThat(result.hitDecisions()).isEmpty();
+    }
+
+    @Test
+    void noBands_legacyThresholdBehaviorUnchanged() {
+        // bands 空 → 老逻辑：score>=threshold 命中，无 decision
+        ScorecardRootNode root = new ScorecardRootNode(List.of(
+                new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 70.0)
+        ), 60.0, java.util.List.of());
+        EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
+                .execute(snapshot(root), ctx());
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(result.score()).isEqualTo(70.0);
+        assertThat(result.finalDecision()).isNull();
+        assertThat(result.hitDecisions()).isEmpty();
+    }
+
+    @Test
     void category_and_decision_areNull_forScorecard() {
         ScorecardRootNode root = new ScorecardRootNode(List.of(
                 new ConditionNode(ALWAYS_TRUE, "m1", null, Map.of(), 50.0)
-        ), 50.0);
+        ), 50.0, java.util.List.of());
         EvalResult result = new ScorecardExecutor(Map.of(ALWAYS_TRUE, alwaysTrue))
                 .execute(snapshot(root), ctx());
         assertThat(result.category()).isNull();

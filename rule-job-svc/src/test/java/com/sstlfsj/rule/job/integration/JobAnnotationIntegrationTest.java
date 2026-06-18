@@ -143,7 +143,7 @@ class JobAnnotationIntegrationTest {
     @Test
     void annotationJobTriggerProducesEvaluationSessions() throws InterruptedException {
         JobDefinition def = jobMapper.findByTenantSceneCode(1L, "fraud_check", "test-anno-job");
-        JobExecutionVO exec = jobService.triggerOnce("1", def.getId());
+        JobExecutionVO exec = jobService.triggerOnce(1L, def.getId());
 
         assertThat(exec.status()).isEqualTo("SUCCESS");
         assertThat(exec.successCount()).isEqualTo(2);

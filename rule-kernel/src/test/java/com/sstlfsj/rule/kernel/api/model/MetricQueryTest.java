@@ -28,4 +28,16 @@ class MetricQueryTest {
         assertEquals(1, q.eventPayload().get("p"));
         assertEquals(NOW, q.now());
     }
+
+    @Test
+    void sixArgConstructor_defaultsSubjectAttributesToEmpty() {
+        MetricQuery q = new MetricQuery("score", "t1", "u1", Map.of(), Map.of(), NOW);
+        assertTrue(q.subjectAttributes().isEmpty());
+    }
+
+    @Test
+    void sevenArgConstructor_retainsSubjectAttributes() {
+        MetricQuery q = new MetricQuery("score", "t1", "u1", Map.of(), Map.of(), NOW, Map.of("level", "VIP"));
+        assertEquals("VIP", q.subjectAttributes().get("level"));
+    }
 }

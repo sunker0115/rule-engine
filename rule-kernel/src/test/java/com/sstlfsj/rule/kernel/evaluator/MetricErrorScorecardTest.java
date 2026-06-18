@@ -19,7 +19,7 @@ class MetricErrorScorecardTest {
     void anyErrorCondition_wholeCardError_noScore() {
         ConditionNode c1 = new ConditionNode("GT", "good", null, Map.of("threshold", 1), 10.0, "LONG");
         ConditionNode c2 = new ConditionNode("GT", "broken", null, Map.of("threshold", 1), 10.0, "LONG");
-        ScorecardRootNode root = new ScorecardRootNode(List.of(c1, c2), 5.0);
+        ScorecardRootNode root = new ScorecardRootNode(List.of(c1, c2), 5.0, java.util.List.of());
         RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
                 .ruleVersionId(1L).sceneCode("PAY").tenantId("1").conditionAst(root)
                 .kind("SCORECARD").build();

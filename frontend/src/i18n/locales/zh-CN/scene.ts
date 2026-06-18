@@ -1,0 +1,66 @@
+import type { SceneTranslation } from '../../types';
+
+const scene: SceneTranslation = {
+  title: { list: '场景列表', detail: '场景详情' },
+  action: { create: '新建场景', detail: '详情' },
+  column: {
+    sceneCode: '场景编码',
+    name: '名称',
+    dominantMode: '模式',
+    subjectType: '主体类型',
+    status: '状态',
+    actions: '操作',
+  },
+  enum: {
+    dominantMode: { PUSH: 'PUSH (异步)', PULL: 'PULL (同步)', HYBRID: 'HYBRID (混合)' },
+  },
+  form: {
+    code: '场景编码',
+    codePlaceholder: '如 risk.transfer',
+    name: '名称',
+    dominantMode: '使用模式',
+    subjectType: '主体类型',
+    description: '说明',
+    payloadSchema: '载荷字段定义 (JSON)',
+    payloadSchemaExtra: '定义 payload 允许的字段与类型',
+    eventTypes: '事件类型白名单',
+    eventTypesPlaceholder: '输入后回车添加',
+    defaultParams: '默认参数 (JSON)',
+    defaultParamsExtra: '场景级缺省参数',
+    decisionStrategy: '决策策略',
+    status: '状态',
+  },
+  detail: {
+    basicInfo: '基本信息',
+    inputManifest: '输入清单',
+    ruleList: '规则列表',
+    notFound: '场景不存在',
+  },
+  inputManifest: {
+    info: '调用方对该场景发评估请求时，payload 需包含以下字段',
+    filterEventType: '按事件类型筛选',
+    filterAll: '全部事件类型',
+    column: { name: '字段名', dataType: '类型', required: '必填' },
+    required: '必填',
+    optional: '可选',
+    sensitive: '敏感',
+    exampleTitle: '请求体 payload 示例',
+    sourceNote: '清单数据来源：已发布规则中实际引用 payload 的字段（非 payloadSchema 声明）。无规则或规则全部走 metric 时，清单为空。',
+    selectEventTypeFirst: '请先选择事件类型',
+  },
+  searchPlaceholder: '搜索名称或编码',
+  edit: {
+    title: '编辑场景 — {{code}}',
+    noFields: '暂无字段',
+    fieldName: '字段名',
+    fieldType: '类型',
+    fieldRequired: '必填',
+    fieldSensitive: '敏感',
+    addField: '添加字段',
+    addParam: '添加参数',
+    paramName: '参数名',
+    paramValue: '参数值',
+  },
+};
+
+export default scene;

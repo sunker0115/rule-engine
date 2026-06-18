@@ -28,7 +28,7 @@ public class JobController {
      * @return Job 列表
      */
     @GetMapping
-    public ApiResponse<List<JobDefinitionDto>> listJobs(@RequestParam String tenantId) {
+    public ApiResponse<List<JobDefinitionDto>> listJobs(@RequestParam Long tenantId) {
         return ApiResponse.ok(jobService.listJobs(tenantId));
     }
 
@@ -41,7 +41,7 @@ public class JobController {
      */
     @GetMapping("/{id}")
     public ApiResponse<JobDefinitionDto> getJob(
-            @PathVariable Long id, @RequestParam String tenantId) {
+            @PathVariable Long id, @RequestParam Long tenantId) {
         return ApiResponse.ok(jobService.getJob(tenantId, id));
     }
 
@@ -53,7 +53,7 @@ public class JobController {
      */
     @PostMapping("/{id}/enable")
     public ApiResponse<Void> enableJob(
-            @PathVariable Long id, @RequestParam String tenantId) {
+            @PathVariable Long id, @RequestParam Long tenantId) {
         jobService.enableJob(tenantId, id);
         return ApiResponse.ok(null);
     }
@@ -66,7 +66,7 @@ public class JobController {
      */
     @PostMapping("/{id}/disable")
     public ApiResponse<Void> disableJob(
-            @PathVariable Long id, @RequestParam String tenantId) {
+            @PathVariable Long id, @RequestParam Long tenantId) {
         jobService.disableJob(tenantId, id);
         return ApiResponse.ok(null);
     }
@@ -80,7 +80,7 @@ public class JobController {
      */
     @PostMapping("/{id}/trigger")
     public ApiResponse<JobExecutionVO> triggerJob(
-            @PathVariable Long id, @RequestParam String tenantId) {
+            @PathVariable Long id, @RequestParam Long tenantId) {
         return ApiResponse.ok(jobService.triggerOnce(tenantId, id));
     }
 
@@ -94,7 +94,7 @@ public class JobController {
      */
     @GetMapping("/{id}/executions")
     public ApiResponse<List<JobExecutionVO>> recentExecutions(
-            @PathVariable Long id, @RequestParam String tenantId,
+            @PathVariable Long id, @RequestParam Long tenantId,
             @RequestParam(defaultValue = "20") int limit) {
         return ApiResponse.ok(jobService.recentExecutions(tenantId, id, limit));
     }

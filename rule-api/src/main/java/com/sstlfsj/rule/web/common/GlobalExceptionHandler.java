@@ -5,10 +5,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -33,6 +36,22 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleMissingParam(MissingServletRequestParameterException ex) {
         return ApiResponse.error("INVALID_ARGUMENT", ex.getParameterName() + " 参数必填");
+    }
+
+    /** 路径/查询参数类型转换失败（如 Long tenantId/id 收到非数字）→ 400，而非兜底 500。 */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return ApiResponse.error("INVALID_ARGUMENT",
+                "参数 " + ex.getName() + " 类型不合法: " + ex.getValue());
+    }
+
+    /** ResponseStatusException → 透传 HTTP 状态码，不进入兜底 500。 */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatus(ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(ApiResponse.error(ex.getStatusCode().value() == 404 ? "NOT_FOUND" : "INVALID_ARGUMENT",
+                        ex.getReason()));
     }
 
     /** 业务层主动抛出的非法参数 → 400。 */

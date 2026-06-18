@@ -16,9 +16,12 @@ public interface EvalSessionReadMapper extends BaseMapper<EvalSessionRow> {
 
     /** 评估会话分页：按租户过滤，eventId 非空时附加条件，按开始时间倒序。 */
     default Page<EvalSessionRow> selectEvalSessionPage(Page<EvalSessionRow> page,
-                                                       Long tenantId, String eventId) {
+                                                       Long tenantId, String sceneCode,
+                                                       String status, String eventId) {
         return selectPage(page, new LambdaQueryWrapper<EvalSessionRow>()
                 .eq(EvalSessionRow::getTenantId, tenantId)
+                .eq(sceneCode != null, EvalSessionRow::getSceneCode, sceneCode)
+                .eq(status != null, EvalSessionRow::getStatus, status)
                 .eq(eventId != null, EvalSessionRow::getEventId, eventId)
                 .orderByDesc(EvalSessionRow::getStartedAt));
     }

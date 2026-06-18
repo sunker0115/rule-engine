@@ -1,0 +1,66 @@
+import type { SceneTranslation } from '../../types';
+
+const scene: SceneTranslation = {
+  title: { list: 'Scenes', detail: 'Scene Detail' },
+  action: { create: 'New Scene', detail: 'Detail' },
+  column: {
+    sceneCode: 'Scene Code',
+    name: 'Name',
+    dominantMode: 'Mode',
+    subjectType: 'Subject Type',
+    status: 'Status',
+    actions: 'Actions',
+  },
+  enum: {
+    dominantMode: { PUSH: 'PUSH (Async)', PULL: 'PULL (Sync)', HYBRID: 'HYBRID' },
+  },
+  form: {
+    code: 'Scene Code',
+    codePlaceholder: 'e.g. risk.transfer',
+    name: 'Name',
+    dominantMode: 'Mode',
+    subjectType: 'Subject Type',
+    description: 'Description',
+    payloadSchema: 'Payload Schema (JSON)',
+    payloadSchemaExtra: 'Define allowed payload fields and types',
+    eventTypes: 'Event Type Whitelist',
+    eventTypesPlaceholder: 'Type and press Enter',
+    defaultParams: 'Default Params (JSON)',
+    defaultParamsExtra: 'Scene-level default parameters',
+    decisionStrategy: 'Decision Strategy',
+    status: 'Status',
+  },
+  detail: {
+    basicInfo: 'Basic Info',
+    inputManifest: 'Input Manifest',
+    ruleList: 'Rules',
+    notFound: 'Scene not found',
+  },
+  inputManifest: {
+    info: 'Callers must include the following fields in payload when evaluating against this scene',
+    filterEventType: 'Filter by event type',
+    filterAll: 'All event types',
+    column: { name: 'Field', dataType: 'Type', required: 'Required' },
+    required: 'Required',
+    optional: 'Optional',
+    sensitive: 'Sensitive',
+    exampleTitle: 'Request Payload Example',
+    sourceNote: 'Source: payload fields actually referenced by published rules. Empty when no rules or all rules use metrics only.',
+    selectEventTypeFirst: 'Select an event type first',
+  },
+  searchPlaceholder: 'Search by name or code',
+  edit: {
+    title: 'Edit Scene — {{code}}',
+    noFields: 'No fields',
+    fieldName: 'Field Name',
+    fieldType: 'Type',
+    fieldRequired: 'Required',
+    fieldSensitive: 'Sensitive',
+    addField: 'Add Field',
+    addParam: 'Add Parameter',
+    paramName: 'Param Name',
+    paramValue: 'Param Value',
+  },
+};
+
+export default scene;

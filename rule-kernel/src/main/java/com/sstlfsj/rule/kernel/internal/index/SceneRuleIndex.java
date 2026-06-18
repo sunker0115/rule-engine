@@ -69,6 +69,28 @@ public class SceneRuleIndex {
     }
 
     /**
+     * 原子替换某 scene 的全部 eventType 桶：先写入新桶，再删除该 scene 下不在新集合中的旧桶。
+     * 比逐个 {@link #update} 安全——当 byEventType 为空（该 scene 规则全部禁用/删除）时也能摘除残留旧桶，
+     * 且新桶先 put 再删旧，避免"全清→重填"的空窗口。
+     *
+     * @param tenantId    租户标识
+     * @param sceneCode   场景编码
+     * @param byEventType eventType → 快照列表（该 scene 当前完整集合，可为空 Map）
+     */
+    public void replaceScene(String tenantId, String sceneCode,
+                             Map<String, List<RuleVersionSnapshot>> byEventType) {
+        String prefix = tenantId + ":" + sceneCode + ":";
+        Set<String> newKeys = new HashSet<>();
+        for (Map.Entry<String, List<RuleVersionSnapshot>> e : byEventType.entrySet()) {
+            String key = prefix + e.getKey();
+            index.put(key, List.copyOf(e.getValue()));
+            newKeys.add(key);
+        }
+        // 删除该 scene 下已不在新集合的旧桶（规则禁用/删除后，对应 eventType 桶不再出现 → 摘除）
+        index.keySet().removeIf(k -> k.startsWith(prefix) && !newKeys.contains(k));
+    }
+
+    /**
      * 删除给定租户和场景的所有索引条目（如场景被禁用时调用）。
      *
      * @param tenantId  租户标识

@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.publish;
 
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
@@ -61,9 +62,11 @@ class PublishServicePayloadTest {
         doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
                 .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
 
-        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.demo", "测试规则",
-                new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD),
-                List.of(), List.of(), List.of(), "AST_BOOLEAN", null, "actor"))
+        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.demo",
+                new RuleContent("测试规则", "AST_BOOLEAN",
+                        new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD),
+                        List.of(), List.of(), List.of(), null),
+                "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("amount");
     }

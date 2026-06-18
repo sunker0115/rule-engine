@@ -1,0 +1,13 @@
+{
+  "tenantId": "9001",
+  "sceneCode": "demo.connector",
+  "name": "演示连接器取数风控",
+  "description": "端到端剧本:EXTERNAL_HTTP 声明式连接器取外部风险评分驱动决策(PULL 同步评估)",
+  "dominantMode": "PULL",
+  "subjectType": "USER",
+  "eventTypes": ["login"],
+  "payloadSchema": [
+    { "name": "ip", "type": "string", "required": true }
+  ],
+  "defaultParams": { "timezone": "Asia/Shanghai" }
+}

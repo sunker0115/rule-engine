@@ -3,7 +3,6 @@ package com.sstlfsj.rule.eval;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.eval.internal.TraceProperties;
 import com.sstlfsj.rule.eval.internal.metric.sql.FetchResourceProperties;
-import com.sstlfsj.rule.eval.internal.repository.DryRunSessionMapper;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.eval.internal.retention.RetentionProperties;
 import com.sstlfsj.rule.eval.internal.retention.SessionRetentionCleaner;
@@ -211,7 +210,6 @@ class EvalAutoConfigurationTest {
     void sessionRetentionCleaner_returnsInstance() {
         SessionRetentionCleaner cleaner = config.sessionRetentionCleaner(
                 mock(EvaluationSessionMapper.class),
-                mock(DryRunSessionMapper.class),
                 new RetentionProperties());
         assertNotNull(cleaner);
     }

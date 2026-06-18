@@ -1,0 +1,111 @@
+import { useEffect, useState } from 'react';
+import { Table, Select, Tag, Space } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useTenantStore } from '@/store/tenantStore';
+import { listSessions } from '@/api/evalSession';
+import { ROUTES, route } from '@/constants/routes';
+import { colorOf, labelOf, getSessionStatusOptions } from '@/constants/enums';
+import { formatDateTime } from '@/utils/format';
+import type { EvalSessionItem } from '@/types';
+import type { ColumnsType } from 'antd/es/table';
+
+export default function EvalSessionList() {
+  const navigate = useNavigate();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
+  const { t } = useTranslation('eval');
+  const tc = useTranslation('common').t;
+  const [sessions, setSessions] = useState<EvalSessionItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
+  const [filters, setFilters] = useState<Record<string, unknown>>({});
+
+  const tenantId = tenantFilter ?? currentId ?? 0;
+
+  const load = async () => {
+    if (!tenantId) return;
+    setLoading(true);
+    try {
+      const data = await listSessions({ tenantId, page, size: pageSize, ...filters });
+      setSessions(data.items ?? []);
+      setTotal(data.total ?? 0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [tenantId, page, pageSize, filters]);
+
+  const columns: ColumnsType<EvalSessionItem> = [
+    {
+      title: t('session.column.sessionId'), dataIndex: 'sessionId', key: 'sessionId', width: 80,
+      render: (v: number) => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(route(ROUTES.SESSION_DETAIL, { sessionId: v })); }}>{v}</a>
+      ),
+    },
+    { title: tc('label.tenant'), dataIndex: 'tenantId', key: 'tenantId', width: 60 },
+    { title: t('session.column.eventId'), dataIndex: 'eventId', key: 'eventId', width: 200, ellipsis: true },
+    { title: t('session.column.sceneCode'), dataIndex: 'sceneCode', key: 'sceneCode', width: 100, ellipsis: true },
+    { title: t('session.column.subjectId'), dataIndex: 'subjectId', key: 'subjectId', width: 120, ellipsis: true },
+    { title: t('session.column.source'), dataIndex: 'source', key: 'source', width: 60 },
+    { title: t('session.column.mode'), dataIndex: 'mode', key: 'mode', width: 60 },
+    {
+      title: t('session.column.finalDecision'), dataIndex: 'finalDecision', key: 'finalDecision', width: 100, ellipsis: true,
+      render: (v: string) => v || '-',
+    },
+    {
+      title: t('session.column.evalDuration'), dataIndex: 'evalDurationMs', key: 'evalDurationMs', width: 100,
+      render: (v: number) => v != null ? v : '-',
+    },
+    {
+      title: t('session.column.status'), dataIndex: 'status', key: 'status', width: 80,
+      render: (v: string) => <Tag color={colorOf(getSessionStatusOptions(t), v as never)}>{labelOf(getSessionStatusOptions(t), v as never)}</Tag>,
+    },
+    { title: t('session.column.occurredAt'), dataIndex: 'occurredAt', key: 'occurredAt', width: 170, render: (v: string | undefined, r: EvalSessionItem) => formatDateTime(v ?? r.startedAt) },
+  ];
+
+  return (
+    <div>
+      <h2 style={{ marginBottom: 16 }}>{t('title.sessionList')}</h2>
+      <Space style={{ marginBottom: 16 }}>
+        <Select
+          placeholder={tc('label.tenant')}
+          value={tenantFilter ?? currentId ?? undefined}
+          onChange={(v) => { setTenantFilter(v); setCurrentById(v); setPage(1); }}
+          allowClear
+          options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+          style={{ width: 200 }}
+        />
+        <Select
+          placeholder={t('session.filter.status')}
+          style={{ width: 120 }}
+          allowClear
+          options={getSessionStatusOptions(t)}
+          onChange={(v) => { setFilters((f) => ({ ...f, status: v || undefined })); setPage(1); }}
+        />
+      </Space>
+      <Table
+        columns={columns}
+        dataSource={sessions}
+        rowKey="sessionId"
+        loading={loading}
+        scroll={{ x: 'max-content', y: 'calc(100vh - 312px)' }}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          showSizeChanger: true,
+          showTotal: (total) => tc('label.paginationTotal', { total }),
+          onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+        }}
+        onRow={(record) => ({
+          onClick: () => navigate(route(ROUTES.SESSION_DETAIL, { sessionId: record.sessionId }), { state: { session: record } }),
+          style: { cursor: 'pointer' },
+        })}
+      />
+    </div>
+  );
+}

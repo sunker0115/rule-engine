@@ -112,7 +112,8 @@
 - 按时间倒序列出 `audit_log` 条目（PUBLISH / DISABLE / UPDATE 等，枚举值同 05-storage DDL `audit_log.action`）
 - 每条目展开 → diff 视图（before_snapshot vs after_snapshot，JSON diff 高亮）
 - 点击"操作人"→ 可按 actor 过滤；同时显示 actorType（USER / SYSTEM / JOB）
-- 发布失败条目（`action=PUBLISH_FAILED`）：红色标记 + `after_snapshot.errorCode` tooltip（`UNRESOLVED_VARIABLE` / `DECISION_CODE_NOT_FOUND` 等，完整清单见 10-api-contract §七）
+
+发布失败不落审计（D19：单 DB 原子事务失败整事务回滚、规则保持原态），错误码（`UNRESOLVED_VARIABLE` / `DECISION_CODE_NOT_FOUND` 等，完整清单见 10-api-contract §七）随发布请求的 API 错误响应即时返回，由发布操作页直接提示，不进审计日志。
 
 ---
 

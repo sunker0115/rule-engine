@@ -97,4 +97,11 @@ public interface RuleVersionMapper extends BaseMapper<RuleVersion> {
         return delete(new LambdaQueryWrapper<RuleVersion>()
                 .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId));
     }
+
+    /** 查规则全部版本行，按版本号倒序。 */
+    default List<RuleVersion> findByRuleDefId(Long ruleDefinitionId) {
+        return selectList(new LambdaQueryWrapper<RuleVersion>()
+                .eq(RuleVersion::getRuleDefinitionId, ruleDefinitionId)
+                .orderByDesc(RuleVersion::getVersion));
+    }
 }

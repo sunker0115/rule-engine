@@ -3,7 +3,6 @@ package com.sstlfsj.rule.eval.internal.service;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.eval.internal.async.AuditRecordedEvent;
-import com.sstlfsj.rule.eval.internal.async.DryRunRecordedEvent;
 import com.sstlfsj.rule.eval.internal.dispatch.PushEventDispatcher;
 import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.event.DomainEventPublisher;
@@ -11,8 +10,10 @@ import com.sstlfsj.rule.eval.internal.repository.RuleVersionReadMapper;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
 import com.sstlfsj.rule.eval.internal.validate.PayloadInputValidator;
 import com.sstlfsj.rule.kernel.api.model.*;
+import com.sstlfsj.rule.kernel.api.trace.NodeTraceFormatter;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
@@ -22,7 +23,8 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计/dry-run 事件，自身不做内联持久化、不派发 action。 */
+/** EvalService 实现：委托 EvalEngine 做纯计算，仅经 DomainEventPublisher 发布审计事件，自身不做内联持久化、不派发 action；dry-run 只即时返回不落库。 */
+@Slf4j
 @Service
 class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
 
@@ -102,7 +104,8 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
     }
 
     private EvalResult doEvaluate(RuleEvent event, EvalMode mode, boolean isDryRun, Long specificVersionId, Instant asOf) {
-        Instant evalNow = asOf != null ? asOf : Instant.now();
+        Instant startWall = Instant.now();           // 真实墙钟起点，仅用于测耗时
+        Instant evalNow = asOf != null ? asOf : startWall;   // 评估逻辑时刻（asOf 回放/可复现时为历史时刻）
         // dry-run 路径下 specificVersionId 已由 resolveDryRunVersionId 保证非空；此处 != null 为防御性守卫，
         // 防止未来出现"isDryRun=true 但无版本 id"的新调用路径误落候选分支（有副作用）。
         if (isDryRun && specificVersionId != null) {
@@ -113,13 +116,11 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
             // dry-run 始终强制收集 NodeTrace（需回传 nodeTrace），不受全局 trace 开关影响
             EvalOutcome outcome = evalEngine.evaluateWithContext(
                     event, List.of(snap), SceneExecutionStrategy.HIGHEST_PRIORITY, evalNow, true);
-            // dry-run 终态事件化：请求线程生成 id（snowflake，INPUT），异步 persister 落 dry_run_session + trace
-            long dryRunId = IdWorker.getId();
-            int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
-            eventPublisher.publish(new DryRunRecordedEvent(
-                    dryRunId, event, specificVersionId, snap.code(), snap.version(),
-                    outcome.result(), outcome.context(), durationMs));
+            // dry-run 只即时返回结果（含 nodeTrace），不落历史（对齐 OPA：试算不写库）
             instrumentation.record(outcome.result().errorCode() != null);
+            if (log.isDebugEnabled()) {
+                log.debug("dry-run trace {}", NodeTraceFormatter.compact(outcome.result().nodeTrace()));
+            }
             return outcome.result();
         }
 
@@ -142,11 +143,16 @@ class EvalServiceImpl implements EvalService, InitializingBean, DisposableBean {
         EvalResult result = outcome.result();
 
         // 副作用事件化：审计内存 best-effort（可丢）；纯决策，不派发任何 action
-        int durationMs = (int) Duration.between(evalNow, Instant.now()).toMillis();
+        // 用真实墙钟 startWall 测耗时，不用 evalNow（asOf 回放时 evalNow 是历史时刻，会算出天/月级甚至 int 溢出的脏时长）
+        int durationMs = (int) Duration.between(startWall, Instant.now()).toMillis();
         eventPublisher.publish(new AuditRecordedEvent(
                 sessionId, event, mode, candidates.size(), result, outcome.context(), outcome.blockedBy(), durationMs,
                 candidates.stream().map(RuleVersionSnapshot::ruleVersionId).toList()));
         instrumentation.record(result.errorCode() != null);
+        if (log.isDebugEnabled()) {
+            log.debug("eval trace sid={} dur={}ms {}", sessionId, durationMs,
+                    NodeTraceFormatter.compact(result.nodeTrace()));
+        }
         return result;
     }
 

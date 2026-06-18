@@ -1,14 +1,16 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
-import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.common.PageResponse;
+import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
 import com.sstlfsj.rule.web.mask.TraceMasker;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -18,23 +20,39 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AuditController {
 
-    private static final Logger log = LoggerFactory.getLogger(AuditController.class);
-
     private final AuditService auditService;
-    private final SceneService sceneService;
+    private final SensitiveRefsResolver sensitiveRefsResolver;
 
     /** GET /admin/v1/evaluation-sessions — 分页查询评估会话
      * @param tenantId 租户 @param eventId 可选过滤 @param page 页码 @param size 每页大小
      * @return 分页评估会话列表 */
     @GetMapping("/evaluation-sessions")
     public ApiResponse<PageResponse<AuditService.EvalSessionEntry>> querySessions(
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
+            @RequestParam(required = false) String sceneCode,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false) String eventId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         AuditService.PageResult<AuditService.EvalSessionEntry> result =
-                auditService.queryEvalSessions(tenantId, eventId, page - 1, size);
+                auditService.queryEvalSessions(new EvalSessionQuery(tenantId, sceneCode, status, eventId, page - 1, size));
         return ApiResponse.ok(PageResponse.of(result.items(), result.total(), page, size));
+    }
+
+    /** GET /admin/v1/evaluation-sessions/{sessionId} — 查询单次评估会话详情
+     * @param sessionId 评估会话 ID @param tenantId 租户
+     * @return 会话详情；不存在返回 404 */
+    @GetMapping("/evaluation-sessions/{sessionId}")
+    public ResponseEntity<ApiResponse<AuditService.EvalSessionEntry>> getSession(
+            @PathVariable Long sessionId,
+            @RequestParam Long tenantId) {
+        AuditService.EvalSessionEntry session = auditService.getSession(tenantId, sessionId);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("NOT_FOUND",
+                            "会话不存在: sessionId=" + sessionId + ", tenantId=" + tenantId));
+        }
+        return ResponseEntity.ok(ApiResponse.ok(session));
     }
 
     /** GET /admin/v1/evaluation-sessions/{sessionId}/trace — 查询评估节点 trace
@@ -43,52 +61,38 @@ public class AuditController {
     @GetMapping("/evaluation-sessions/{sessionId}/trace")
     public ApiResponse<List<AuditService.TraceNodeEntry>> queryTrace(
             @PathVariable Long sessionId,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         List<AuditService.TraceNodeEntry> trace = auditService.queryTrace(tenantId, sessionId);
-        return ApiResponse.ok(TraceMasker.maskFlat(resolveRefs(tenantId, sessionId), trace));
+        return ApiResponse.ok(TraceMasker.maskFlat(sensitiveRefsResolver.forSession(tenantId, sessionId), trace));
     }
 
     /** GET /admin/v1/evaluation-sessions/{sessionId}/trace/tree — 嵌套树格式（§6.2 完整契约） */
     @GetMapping("/evaluation-sessions/{sessionId}/trace/tree")
     public ApiResponse<List<AuditService.TraceTreeNode>> getTraceTree(
             @PathVariable Long sessionId,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         List<AuditService.TraceTreeNode> tree = auditService.queryTraceTree(tenantId, sessionId);
-        return ApiResponse.ok(TraceMasker.maskTree(resolveRefs(tenantId, sessionId), tree));
+        return ApiResponse.ok(TraceMasker.maskTree(sensitiveRefsResolver.forSession(tenantId, sessionId), tree));
     }
 
-    /**
-     * 解析会话所属场景的 live 敏感集；查询失败返回 null（masker 据此 fail-closed 全抹，D71）。
-     *
-     * @param tenantId  租户标识
-     * @param sessionId 评估会话 ID
-     * @return 场景敏感集；会话/场景缺失或查询异常时返回 null
-     */
-    private SceneService.SensitiveRefs resolveRefs(String tenantId, Long sessionId) {
-        try {
-            String sceneCode = auditService.getSessionSceneCode(tenantId, sessionId);
-            if (sceneCode == null) return null; // 会话/场景缺失 → fail-closed
-            return sceneService.getSensitiveRefs(tenantId, sceneCode);
-        } catch (RuntimeException e) {
-            log.warn("getSensitiveRefs 失败，trace 读时脱敏 fail-closed 全抹: tenantId={}, sessionId={}",
-                    tenantId, sessionId, e);
-            return null;
-        }
-    }
-
-    /** GET /admin/v1/audit-logs — 分页查询操作审计日志
+    /** GET /admin/v1/audit-logs — 分页查询操作审计日志，支持多条件筛选
      * @param tenantId 租户 @param resourceType 可选资源类型 @param resourceId 可选资源 ID
+     * @param action 可选操作类型 @param actorId 可选操作人 @param from 起始时间 @param to 结束时间
      * @param page 页码 @param size 每页大小
      * @return 分页审计日志列表 */
     @GetMapping("/audit-logs")
     public ApiResponse<PageResponse<AuditService.AuditLogEntry>> queryAuditLogs(
-            @RequestParam String tenantId,
+            @RequestParam Long tenantId,
             @RequestParam(required = false) String resourceType,
             @RequestParam(required = false) Long resourceId,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String actorId,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         AuditService.PageResult<AuditService.AuditLogEntry> result =
-                auditService.queryAuditLogs(tenantId, resourceType, resourceId, page - 1, size);
+                auditService.queryAuditLogs(new AuditLogQuery(tenantId, resourceType, resourceId, action, actorId, from, to, page - 1, size));
         return ApiResponse.ok(PageResponse.of(result.items(), result.total(), page, size));
     }
 

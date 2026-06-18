@@ -1,0 +1,1 @@
+export { getMenuItems } from './menu';

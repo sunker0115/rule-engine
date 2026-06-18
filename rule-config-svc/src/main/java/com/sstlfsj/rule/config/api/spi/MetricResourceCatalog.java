@@ -13,4 +13,12 @@ public interface MetricResourceCatalog {
 
     /** @return 已注册的命名 HTTP 端点名集合。 */
     Set<String> endpointNames();
+
+    /**
+     * 取指定租户内已注册（ACTIVE）的连接器编码集合，供 metric 发布期 params.connector 引用闭合校验。
+     *
+     * @param tenantId 租户 id
+     * @return ACTIVE 连接器编码集合
+     */
+    Set<String> connectorNames(Long tenantId);
 }

@@ -23,14 +23,14 @@ class SceneServiceImplPayloadTypeTest {
     @Test
     void createScene_illegalType_throws() {
         assertThrows(IllegalArgumentException.class,
-                () -> service.createScene("1", "SCENE_A", "场景A", null, null, null,
+                () -> service.createScene(1L, "SCENE_A", "场景A", null, null, null,
                         null, List.of(field("STRIGN")), null, "actor"));
     }
 
     @Test
     void createScene_illegalTimezone_throws() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.createScene("1", "SCENE_A", "场景A", null, null, null,
+                () -> service.createScene(1L, "SCENE_A", "场景A", null, null, null,
                         null, List.of(), Map.of("timezone", "Asia/Xxx"), "actor"));
         org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("timezone"));
     }
@@ -40,7 +40,7 @@ class SceneServiceImplPayloadTypeTest {
         // 合法时区不应在校验处抛 IllegalArgumentException；后续 null mapper.insert 会 NPE，
         // 故断言抛出的不是带 timezone 文案的 IllegalArgumentException（校验已放行）。
         try {
-            service.createScene("1", "SCENE_A", "场景A", null, null, null,
+            service.createScene(1L, "SCENE_A", "场景A", null, null, null,
                     null, List.of(), Map.of("timezone", "Asia/Shanghai"), "actor");
         } catch (IllegalArgumentException e) {
             org.junit.jupiter.api.Assertions.assertFalse(e.getMessage() != null

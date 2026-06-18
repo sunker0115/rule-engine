@@ -1,35 +1,44 @@
 package com.sstlfsj.rule.config.api.service;
 
+import com.sstlfsj.rule.config.api.dto.ImportDiffReport;
+import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
-import com.sstlfsj.rule.config.api.dto.RuleImportResult;
 
 import java.util.List;
 
-/** 规则批量导出 / 导入（B7 / 08-evolution §2.9）。 */
+/**
+ * 规则批量导出 / 导入（Bundle v2）。
+ *
+ * <p>import 支持三种冲突策略（{@link ImportPolicy}）和 dry-run 模式：
+ * dry-run=true 时返回 diff 报告但不落库；dry-run=false 时真实 apply。</p>
+ */
 public interface RuleBundleService {
 
     /**
-     * 按条件批量导出规则的当前 ACTIVE 版本为自包含 Bundle。
-     * <p>选取优先级：ruleIds 非空 → 按 id 列表；否则 sceneId 非空 → 该场景全部；否则 → 该租户全部。
-     * 对每条规则仅导当前 ACTIVE 版本，无 ACTIVE 版本者跳过；最终无可导出规则时报错。</p>
+     * 按条件批量导出规则的当前 ACTIVE 版本为自包含 Bundle v2（含 script / contentHash / revision）。
      *
      * @param tenantId 租户 id
      * @param ruleIds  规则定义 id 列表（可为 null / 空）
      * @param sceneId  场景 id（可为 null）
-     * @return 多规则自包含 Bundle
+     * @return 多规则自包含 Bundle v2
      * @throws IllegalArgumentException 无可导出的 ACTIVE 规则
      */
-    RuleBundle export(String tenantId, List<Long> ruleIds, Long sceneId);
+    RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId);
 
     /**
-     * 幂等导入 Bundle 到目标租户：整体 upsert 依赖（Scene / metric / decision 缺失则建），
-     * 逐条把规则落为 DRAFT 版本（已存在则追加草稿版本，不覆盖已发布版本）。
+     * 导入 Bundle 到目标租户。
+     *
+     * <p>dry-run=true 时事务内完整执行后强制回滚，返回 diff 报告但不落库。
+     * dry-run=false 时真实 apply，所有资源走完整 service 链（审计/事件/校验全部继承）。</p>
      *
      * @param tenantId 目标租户 id
-     * @param bundle   导入 Bundle
+     * @param bundle   Bundle v2
+     * @param policy   冲突处理策略（null 默认 SKIP）
+     * @param dryRun   true = dry-run，false = apply
      * @param actorId  操作人（来自 X-Actor-Id）
-     * @return 导入结果汇总
-     * @throws IllegalArgumentException Bundle 结构非法
+     * @return diff 报告（dry-run 和 apply 均返回）
+     * @throws com.sstlfsj.rule.config.internal.bundle.RuleImportService.ImportConflictException ABORT 策略有冲突时
      */
-    RuleImportResult importBundle(String tenantId, RuleBundle bundle, String actorId);
+    ImportDiffReport importBundle(Long tenantId, RuleBundle bundle,
+                                  ImportPolicy policy, boolean dryRun, String actorId);
 }

@@ -1,0 +1,59 @@
+import apiClient from './client';
+import { ENDPOINTS } from '@/constants/api-endpoints';
+import type {
+  ApiResponse,
+  ConnectorListItem,
+  ConnectorWriteBody,
+  FetchTestSample,
+  FetchTrace,
+  PageResponse,
+} from '@/types';
+
+/** 分页查询连接器（照规则列表范式，tenantId 可选） */
+export async function listConnectors(params: {
+  tenantId?: number;
+  keyword?: string;
+  status?: string;
+  page?: number;
+  size?: number;
+}) {
+  const res = await apiClient.get<ApiResponse<PageResponse<ConnectorListItem>>>(ENDPOINTS.CONNECTORS, {
+    params,
+  });
+  return res.data.data;
+}
+
+/** 新建连接器（connectorCode 走 query，X-Actor-Id 由请求拦截器注入） */
+export async function createConnector(tenantId: number, connectorCode: string, body: ConnectorWriteBody) {
+  return apiClient.post(ENDPOINTS.CONNECTORS, body, { params: { tenantId, connectorCode } });
+}
+
+/** 更新连接器描述符 */
+export async function updateConnector(connectorCode: string, tenantId: number, body: ConnectorWriteBody) {
+  return apiClient.put(ENDPOINTS.CONNECTOR_UPDATE(connectorCode), body, { params: { tenantId } });
+}
+
+/** 取单个连接器完整信息（含 typed descriptor），供编辑态回填 */
+export async function getConnector(connectorCode: string, tenantId: number) {
+  const res = await apiClient.get<ApiResponse<ConnectorListItem>>(
+    ENDPOINTS.CONNECTOR_DETAIL(connectorCode),
+    { params: { tenantId } },
+  );
+  return res.data.data;
+}
+
+/** 禁用连接器（仅 disable，无 enable；X-Actor-Id 由请求拦截器注入） */
+export async function disableConnector(connectorCode: string, tenantId: number) {
+  return apiClient.post(ENDPOINTS.CONNECTOR_DISABLE(connectorCode), null, { params: { tenantId } });
+}
+
+/** 自助测试连接器：返回分阶段取数链路 trace */
+export async function testConnector(connectorCode: string, tenantId: number, sample: FetchTestSample) {
+  const res = await apiClient.post<ApiResponse<FetchTrace>>(
+    ENDPOINTS.CONNECTOR_TEST(connectorCode),
+    sample,
+    { params: { tenantId } },
+  );
+  return res.data.data;
+}
+

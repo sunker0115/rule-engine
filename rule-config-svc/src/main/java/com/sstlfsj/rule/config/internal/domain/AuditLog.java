@@ -16,8 +16,8 @@ public class AuditLog {
     private Long tenantId;
     private String actor;
     private ActorType actorType;
-    private String action;
-    private String targetType;
+    private AuditAction action;
+    private AuditTargetType targetType;
     private String targetId;
     private String beforeSnapshot;
     private String afterSnapshot;

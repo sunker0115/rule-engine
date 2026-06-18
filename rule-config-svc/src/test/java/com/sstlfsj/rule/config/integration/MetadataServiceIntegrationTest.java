@@ -165,20 +165,20 @@ class MetadataServiceIntegrationTest {
 
     @Test
     void allMode_noScenes_returnsAllActiveDefinitions() {
-        List<MetricDescriptor> defs = metadataService.listMetricDefinitions("1", List.of());
+        List<MetricDescriptor> defs = metadataService.listMetricDefinitions(1L, List.of());
         assertThat(defs).extracting(MetricDescriptor::metricCode)
                 .containsExactlyInAnyOrder("risk.score", "account.balance", "user.age");
     }
 
     @Test
     void declaredMode_singleScene_filtersToMetricDependencyUnion() {
-        List<MetricDescriptor> defs = metadataService.listMetricDefinitions("1", List.of("fraud"));
+        List<MetricDescriptor> defs = metadataService.listMetricDefinitions(1L, List.of("fraud"));
         assertThat(defs).extracting(MetricDescriptor::metricCode).containsExactly("risk.score");
     }
 
     @Test
     void declaredMode_multiScene_unionOfDeps_excludesUnreferenced() {
-        List<MetricDescriptor> defs = metadataService.listMetricDefinitions("1", List.of("fraud", "payment"));
+        List<MetricDescriptor> defs = metadataService.listMetricDefinitions(1L, List.of("fraud", "payment"));
         // risk.score + account.balance 在并集内；user.age 未被引用，排除
         assertThat(defs).extracting(MetricDescriptor::metricCode)
                 .containsExactlyInAnyOrder("risk.score", "account.balance");
@@ -186,7 +186,7 @@ class MetadataServiceIntegrationTest {
 
     @Test
     void declaredMode_unknownScene_returnsEmpty() {
-        assertThat(metadataService.listMetricDefinitions("1", List.of("nope"))).isEmpty();
+        assertThat(metadataService.listMetricDefinitions(1L, List.of("nope"))).isEmpty();
     }
 
     /**
@@ -210,7 +210,7 @@ class MetadataServiceIntegrationTest {
                         new PayloadDependency("country", "STRING", true))));
 
         MetadataService.InputManifestResponse resp =
-                metadataService.getInputManifest("1", "fraud", null);
+                metadataService.getInputManifest(1L, "fraud", null);
 
         assertThat(resp.fields())
                 .extracting(MetadataService.InputFieldSpec::name)

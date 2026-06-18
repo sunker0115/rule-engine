@@ -1,0 +1,70 @@
+import type { CommonTranslation } from '../../types';
+
+const common: CommonTranslation = {
+  app: { title: '规则引擎运营平台' },
+  header: { actorLabel: '操作人' },
+  tenant: { placeholder: '选择租户', notSelected: '请先选择当前租户后再查看', goSelect: '前往租户页选择' },
+  button: {
+    back: '返回',
+    save: '保存',
+    cancel: '取消',
+    edit: '编辑',
+    delete: '删除',
+    confirm: '确认',
+    submit: '提交',
+    refresh: '刷新',
+    copy: '复制 JSON',
+  },
+  label: {
+    id: '编号',
+    code: '编码',
+    name: '名称',
+    status: '状态',
+    description: '说明',
+    actions: '操作',
+    createdAt: '创建时间',
+    updatedAt: '更新时间',
+    none: '-',
+    yes: '是',
+    no: '否',
+    all: '全部',
+    tenant: '租户',
+    searchPlaceholder: '搜索编码或名称',
+    paginationTotal: '共 {{total}} 条',
+  },
+  enum: {
+    status: { ACTIVE: '启用', DISABLED: '禁用' },
+    actorType: { USER: '用户', SYSTEM: '系统', JOB: '任务' },
+  },
+  message: {
+    createSuccess: '创建成功',
+    updateSuccess: '更新成功',
+    deleteSuccess: '删除成功',
+    saveSuccess: '保存成功',
+    loadError: '加载失败',
+    confirmDelete: '确认删除？此操作不可撤销',
+    enabled: '已启用',
+    disabled: '已禁用',
+  },
+  validation: {
+    required: '请输入',
+    jsonFormat: 'JSON 格式错误',
+  },
+  title: {
+    tenantList: '租户列表',
+  },
+  menu: {
+    tenants: '租户管理',
+    scenes: '场景管理',
+    rules: '规则管理',
+    metrics: '指标管理',
+    connectors: '连接器',
+    decisions: '决策管理',
+    sessions: '评估会话',
+    auditLogs: '审计日志',
+    jobs: '任务管理',
+    importExport: '导入导出',
+  },
+};
+
+export default common;

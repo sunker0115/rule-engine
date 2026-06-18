@@ -1,6 +1,5 @@
 package com.sstlfsj.rule.observability.internal.retention;
 
-import com.sstlfsj.rule.observability.internal.repository.DryRunNodeTraceMapper;
 import com.sstlfsj.rule.observability.internal.repository.NodeTraceMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,20 +8,17 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.time.LocalDateTime;
 import java.util.function.ToIntFunction;
 
-/** 定时清理超期 trace（node_trace / dry_run_node_trace），各按自己保留窗，分批短事务、幂等。 */
+/** 定时清理超期 trace（node_trace），按保留窗分批短事务、幂等。 */
 public class TraceRetentionCleaner {
 
     private static final Logger log = LoggerFactory.getLogger(TraceRetentionCleaner.class);
 
     private final NodeTraceMapper nodeTraceMapper;
-    private final DryRunNodeTraceMapper dryRunNodeTraceMapper;
     private final RetentionProperties props;
 
     public TraceRetentionCleaner(NodeTraceMapper nodeTraceMapper,
-                                 DryRunNodeTraceMapper dryRunNodeTraceMapper,
                                  RetentionProperties props) {
         this.nodeTraceMapper = nodeTraceMapper;
-        this.dryRunNodeTraceMapper = dryRunNodeTraceMapper;
         this.props = props;
     }
 
@@ -31,9 +27,7 @@ public class TraceRetentionCleaner {
     public void purge() {
         int nt = purgeLoop(c -> nodeTraceMapper.purgeOlderThan(c, props.getBatchSize()),
                 LocalDateTime.now().minusDays(props.getNodeTraceDays()));
-        int dr = purgeLoop(c -> dryRunNodeTraceMapper.purgeOlderThan(c, props.getBatchSize()),
-                LocalDateTime.now().minusDays(props.getDryRunSessionDays()));
-        log.info("retention 清理 trace 完成 node_trace={} dry_run_node_trace={}", nt, dr);
+        log.info("retention 清理 trace 完成 node_trace={}", nt);
     }
 
     /** 分批循环删，直到单批不足 batchSize；返回累计删除数。 */

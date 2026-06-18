@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import lombok.RequiredArgsConstructor;
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.dto.SceneListItem;
+import com.sstlfsj.rule.config.api.dto.UpdateSceneCommand;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.admin.dto.CreateSceneRequest;
@@ -12,6 +13,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /** 场景管理入口：创建、更新、查询场景（D13）。 */
 @RestController
@@ -22,14 +24,17 @@ public class SceneController {
     private final SceneService sceneService;
 
     /**
-     * GET /admin/v1/scenes — 查询租户全部场景（精简列表，供前端场景选择器 / 列表页）。
+     * GET /admin/v1/scenes — 查询租户场景（精简列表，供前端场景选择器 / 列表页）。
      *
      * @param tenantId 租户 ID
+     * @param status   可选状态过滤（null 返回全部）
      * @return 场景精简列表
      */
     @GetMapping
-    public ApiResponse<List<SceneListItem>> listScenes(@RequestParam String tenantId) {
-        return ApiResponse.ok(sceneService.listScenes(tenantId));
+    public ApiResponse<List<SceneListItem>> listScenes(
+            @RequestParam Long tenantId,
+            @RequestParam(required = false) String status) {
+        return ApiResponse.ok(sceneService.listScenes(tenantId, status));
     }
 
     /**
@@ -57,7 +62,7 @@ public class SceneController {
     @GetMapping("/{sceneCode}")
     public ApiResponse<SceneDetailDto> getScene(
             @PathVariable String sceneCode,
-            @RequestParam String tenantId) {
+            @RequestParam Long tenantId) {
         return ApiResponse.ok(sceneService.getScene(tenantId, sceneCode));
     }
 
@@ -71,10 +76,25 @@ public class SceneController {
             @Valid @RequestBody UpdateSceneRequest req,
             @RequestHeader("X-Actor-Id") String actorId) {
         sceneService.updateScene(
-                req.tenantId(), sceneCode,
-                req.name(), req.eventTypes(),
-                req.payloadSchema(), req.defaultParams(),
-                actorId);
+                new UpdateSceneCommand(req.tenantId(), sceneCode, req.name(), req.description(),
+                        req.eventTypes(), req.payloadSchema(), req.defaultParams(), actorId));
         return ApiResponse.ok(null);
+    }
+
+    /**
+     * PUT /admin/v1/scenes/{sceneCode}/status — 启/禁用场景。
+     *
+     * @param sceneCode 场景编码
+     * @param tenantId  租户 ID
+     * @param enable    true 启用，false 禁用
+     */
+    @PutMapping("/{sceneCode}/status")
+    public ApiResponse<Map<String, Object>> toggleStatus(
+            @PathVariable String sceneCode,
+            @RequestParam Long tenantId,
+            @RequestParam boolean enable,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        sceneService.toggleSceneStatus(tenantId, sceneCode, enable, actorId);
+        return ApiResponse.ok(Map.of("status", enable ? "ACTIVE" : "DISABLED"));
     }
 }

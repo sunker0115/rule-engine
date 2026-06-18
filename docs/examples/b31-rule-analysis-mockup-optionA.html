@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>B31 规则集分析 mockup · 方案A 右栏 tab — rule-engine</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;margin:0;color:#24292f;background:#f6f8fa}
+  .top{padding:14px 20px;background:#fff;border-bottom:1px solid #d0d7de}
+  .top h2{margin:0 0 3px;font-size:17px} .sub{color:#57606a;font-size:12.5px;margin:0}
+  .toolbar{display:flex;align-items:center;gap:8px;padding:8px 20px;background:#fff;border-bottom:1px solid #d0d7de}
+  .toolbar .scene{font-weight:600;font-size:13px;margin-right:auto}
+  .toolbar .scene .tag{font-weight:400;color:#57606a;font-size:11px;border:1px solid #d0d7de;border-radius:10px;padding:1px 8px;margin-left:6px}
+  button{cursor:pointer;border:1px solid #d0d7de;background:#f6f8fa;border-radius:6px;padding:4px 12px;font-size:12.5px;color:#24292f}
+  button:hover{background:#eef1f4}
+  .wrap{display:flex;height:calc(100vh - 96px)}
+  .col{border-right:1px solid #d0d7de;background:#fff;overflow:auto}
+  .col.left{width:230px} .col.center{flex:1} .col.right{width:300px;border-right:none}
+  .ch{padding:7px 12px;font-size:12px;font-weight:600;color:#57606a;background:#fafbfc;border-bottom:1px solid #eaecef;position:sticky;top:0}
+  .cb{padding:10px 12px;font-size:12.5px}
+  .rule{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;cursor:pointer}
+  .rule:hover{background:#f3f4f6} .rule.sel{background:#ddf4ff;outline:1px solid #54aeff} .rule .nm{flex:1}
+  .badge{font-size:11px;border-radius:10px;padding:0 6px;line-height:16px;white-space:nowrap}
+  .b-err{background:#ffebe9;color:#cf222e;border:1px solid #ffcec9}
+  .b-dead{background:#fff1e5;color:#bc4c00;border:1px solid #ffd8b5}
+  .b-conf{background:#fff8c5;color:#9a6700;border:1px solid #eac54f}
+  .b-na{background:#eef1f4;color:#57606a;border:1px solid #d0d7de}
+  .scenehdr{font-weight:600;color:#1f6feb;margin:2px 0 6px;font-size:12px}
+  .ast{background:#0d1117;color:#c9d1d9;border-radius:6px;padding:12px;font-size:12px;line-height:1.7;font-family:ui-monospace,Menlo,monospace}
+  .ast .kw{color:#ff7b72} .ast .fn{color:#d2a8ff} .ast .num{color:#79c0ff} .ast .hl{background:#373e47;border-radius:3px;padding:0 3px}
+  /* 右栏 tab */
+  .tabs{display:flex;border-bottom:1px solid #d0d7de;background:#fafbfc;position:sticky;top:0;z-index:2}
+  .tab{flex:1;text-align:center;padding:8px;font-size:12.5px;cursor:pointer;color:#57606a;border-bottom:2px solid transparent}
+  .tab.on{color:#1f6feb;border-bottom-color:#1f6feb;font-weight:600;background:#fff}
+  .tab .dot{background:#cf222e;color:#fff;border-radius:9px;font-size:10px;padding:0 5px;margin-left:4px}
+  .pane{display:none;padding:10px 12px} .pane.on{display:block}
+  .prop label{display:block;color:#57606a;font-size:11px;margin:8px 0 2px}
+  .prop input{width:100%;padding:4px 6px;border:1px solid #d0d7de;border-radius:5px;font-size:12px}
+  /* 窄条分析报告(空间紧) */
+  .asum{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+  .pill{border-radius:11px;padding:1px 7px;font-size:10.5px}
+  .sev-ERROR{background:#cf222e;color:#fff} .sev-WARN{background:#bf8700;color:#fff} .sev-INFO{background:#0969da;color:#fff} .sev-NA{background:#8c959f;color:#fff}
+  .agrp{margin-bottom:4px}
+  .agh{display:flex;align-items:center;gap:5px;padding:5px 4px;cursor:pointer;font-size:12px;font-weight:600}
+  .agh .cnt{color:#57606a;font-weight:400;font-size:11px} .agh .arr{margin-left:auto;color:#8c959f}
+  .agrp.open .agh .arr{transform:rotate(90deg)}
+  .aitems{display:none} .agrp.open .aitems{display:block}
+  .aitem{border-left:3px solid #d0d7de;background:#f6f8fa;border-radius:0 5px 5px 0;padding:6px 8px;margin:4px 0;cursor:pointer;font-size:11.5px}
+  .aitem:hover{background:#eef1f4}
+  .aitem.err{border-left-color:#cf222e} .aitem.dead{border-left-color:#bc4c00} .aitem.conf{border-left-color:#bf8700}
+  .aitem.ovl{border-left-color:#0969da} .aitem.gap{border-left-color:#bf8700} .aitem.na{border-left-color:#8c959f}
+  .aitem .h{font-weight:600;margin-bottom:2px} .aitem .d{color:#57606a;line-height:1.45}
+  .aitem code{background:#e7e9eb;border-radius:3px;padding:0 3px;font-size:10.5px}
+  .arebtn{width:100%;margin-top:6px}
+  .ref{color:#57606a;font-size:11px;padding:10px 20px}
+</style>
+</head>
+<body>
+<div class="top">
+  <h2>规则集静态分析 — 方案 A（右栏 tab，常驻内联）</h2>
+  <p class="sub">分析报告挤进右栏「分析」tab，和属性面板共用 ~300px 窄条。对比方案 B（独立全高抽屉）。</p>
+</div>
+
+<div class="toolbar">
+  <div class="scene">规则编辑器 · scene <span class="tag">trading.fraud_screen</span><span class="tag">HIGHEST_PRIORITY</span></div>
+  <button>保存草稿</button>
+  <button>试算</button>
+</div>
+
+<div class="wrap">
+  <!-- 左栏 -->
+  <div class="col left">
+    <div class="ch">Scene / Rule</div>
+    <div class="cb">
+      <div class="scenehdr">▾ trading.fraud_screen</div>
+      <div class="rule" data-rule="R1" onclick="sel(this)"><span class="nm">R1 高额夜间</span><span class="badge b-dead">🔴 死</span></div>
+      <div class="rule" data-rule="R2" onclick="sel(this)"><span class="nm">R2 新户大额</span><span class="badge b-conf">🟠 冲突</span></div>
+      <div class="rule sel" data-rule="R3" onclick="sel(this)"><span class="nm">R3 通用拦截</span></div>
+      <div class="rule" data-rule="R4" onclick="sel(this)"><span class="nm">R4 白名单放行</span><span class="badge b-conf">🟠 冲突</span></div>
+      <div class="rule" data-rule="R5" onclick="sel(this)"><span class="nm">R5 年龄校验</span><span class="badge b-err">⛔ 不一致</span></div>
+      <div class="rule" data-rule="R6" onclick="sel(this)"><span class="nm">R6 复合条件</span><span class="badge b-na">⚪ 未分析</span></div>
+      <div class="scenehdr" style="margin-top:10px">▾ 决策表</div>
+      <div class="rule" data-rule="T1" onclick="sel(this)"><span class="nm">额度风险矩阵</span><span class="badge b-conf">🟠 重叠</span></div>
+    </div>
+  </div>
+
+  <!-- 中栏 -->
+  <div class="col center">
+    <div class="ch">AST 编辑器 — R3 通用拦截</div>
+    <div class="cb">
+      <div class="ast"><span class="kw">IF</span>  amount <span class="hl">&gt;</span> <span class="num">1000</span>
+   <span class="kw">AND</span>  account_age_days <span class="hl">&lt;</span> <span class="num">90</span>
+<span class="kw">THEN</span> <span class="fn">decision</span> = BLOCK  <span style="color:#6e7781">// priority 50</span></div>
+    </div>
+  </div>
+
+  <!-- 右栏:tab 切换 属性 / 分析 -->
+  <div class="col right">
+    <div class="tabs">
+      <div class="tab" onclick="rtab(0)">属性</div>
+      <div class="tab on" onclick="rtab(1)">分析<span class="dot">3</span></div>
+    </div>
+    <!-- 属性 pane -->
+    <div class="pane prop" id="p0">
+      <label>规则 code</label><input value="R3" readonly>
+      <label>kind</label><input value="AST_BOOLEAN" readonly>
+      <label>decision 绑定</label><input value="BLOCK (priority 50)" readonly>
+      <label>状态</label><input value="DRAFT" readonly>
+    </div>
+    <!-- 分析 pane(窄条) -->
+    <div class="pane on" id="p1">
+      <div class="asum">
+        <span class="pill sev-ERROR">不一致1</span><span class="pill sev-WARN">死1</span>
+        <span class="pill sev-WARN">冲突1</span><span class="pill sev-WARN">缺口1</span>
+        <span class="pill sev-INFO">重叠2</span><span class="pill sev-NA">未分析1</span>
+      </div>
+      <div class="agrp open"><div class="agh" onclick="tg(this)">⛔ 不一致 <span class="cnt">(1)</span><span class="arr">▸</span></div>
+        <div class="aitems"><div class="aitem err" onclick="hl('R5')"><div class="h">R5 永不命中</div>
+          <div class="d"><code>age==20</code> 且 <code>age==30</code> → 空集</div></div></div></div>
+      <div class="agrp open"><div class="agh" onclick="tg(this)">🔴 死规则 <span class="cnt">(1)</span><span class="arr">▸</span></div>
+        <div class="aitems"><div class="aitem dead" onclick="hl('R1')"><div class="h">R1 被 R3 覆盖</div>
+          <div class="d">R3 区间 ⊇ R1 且优先级更高</div></div></div></div>
+      <div class="agrp open"><div class="agh" onclick="tg(this)">🟠 冲突 <span class="cnt">(1)</span><span class="arr">▸</span></div>
+        <div class="aitems"><div class="aitem conf" onclick="hl('R2','R4')"><div class="h">R2 × R4 决策对立</div>
+          <div class="d">输入相交 <code>BLOCK</code> vs <code>PASS</code>，同优先级</div></div></div></div>
+      <div class="agrp"><div class="agh" onclick="tg(this)">🟡 覆盖缺口 <span class="cnt">(1)</span><span class="arr">▸</span></div>
+        <div class="aitems"><div class="aitem gap"><div class="h">ESCALATE 无产出</div>
+          <div class="d">绑定但无规则路径产出</div></div></div></div>
+      <div class="agrp"><div class="agh" onclick="tg(this)">🔵 重叠 <span class="cnt">(2)</span><span class="arr">▸</span></div>
+        <div class="aitems">
+          <div class="aitem ovl" onclick="hl('R2','R3')"><div class="h">R2 与 R3 部分重叠</div><div class="d">同 BLOCK，可合并</div></div>
+          <div class="aitem ovl" onclick="hl('T1')"><div class="h">决策表 行2×行4</div><div class="d">额度×评分区间相交</div></div>
+        </div></div>
+      <div class="agrp"><div class="agh" onclick="tg(this)">⚪ 未分析 <span class="cnt">(1)</span><span class="arr">▸</span></div>
+        <div class="aitems"><div class="aitem na" onclick="hl('R6')"><div class="h">R6 含 OR/正则</div>
+          <div class="d">超 v1 精确推理，灰显非"无问题"</div></div></div></div>
+      <button class="arebtn">重新分析</button>
+    </div>
+  </div>
+</div>
+
+<p class="ref">方案 A：报告内联右栏窄条（~300px），优点常驻不用点开、缺点空间紧 + 和属性面板抢 tab；scene 级内容塞进本是节点级的右栏。对比 b31-rule-analysis-mockup.html（方案 B 抽屉）。</p>
+
+<script>
+  function tg(el){el.parentElement.classList.toggle('open')}
+  function sel(el){document.querySelectorAll('.rule').forEach(r=>r.classList.remove('sel'));el.classList.add('sel')}
+  function rtab(i){
+    document.querySelectorAll('.right .tab').forEach((t,j)=>t.classList.toggle('on',i===j));
+    document.getElementById('p0').classList.toggle('on',i===0);
+    document.getElementById('p1').classList.toggle('on',i===1);
+  }
+  function hl(){
+    document.querySelectorAll('.rule').forEach(r=>r.classList.remove('sel'));
+    for(const code of arguments){const el=document.querySelector('.rule[data-rule="'+code+'"]');if(el){el.classList.add('sel');el.scrollIntoView({block:'nearest'})}}
+  }
+</script>
+</body>
+</html>
+</content>

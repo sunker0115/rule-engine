@@ -4,6 +4,8 @@ import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
 import com.sstlfsj.rule.kernel.api.spi.condition.ConditionEvaluator;
+import com.sstlfsj.rule.kernel.internal.condition.BetweenEvaluator;
+import com.sstlfsj.rule.kernel.internal.condition.NotBetweenEvaluator;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import org.junit.jupiter.api.Test;
 
@@ -158,5 +160,65 @@ class DecisionTableExecutorTest {
 
         assertThat(result.ruleHit()).isFalse();
         assertThat(result.errorCode()).isEqualTo("DECISION_TABLE_AST_TYPE_MISMATCH");
+    }
+
+    // 带 metric 的 EvalContext（端到端验证 BETWEEN 列取数→比较）
+    private EvalContext ctxWith(String metric, Object value) {
+        RuleEvent event = new RuleEvent("t1", "scene", "EVT", "u1",
+                "e1", Instant.now(), Map.of(), Map.of(), com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
+        return new EvalContext("t1", event, null,
+                Map.of(metric, new MetricValue(value, "UNKNOWN", "PROVIDED")),
+                Instant.parse("2026-06-01T00:00:00Z"));
+    }
+
+    @Test
+    void betweenColumn_buildsMinMaxParams() {
+        // 列条件值为二元 List [lo,hi]，合成的 ConditionNode 必须带 min/max（不是 threshold）
+        var col = new DecisionTableNode.Column("amount", "BETWEEN", "LONG");
+        var row = new DecisionTableNode.Row(List.of(List.of(1000, 5000)), "REVIEW");
+        DecisionTableNode ast = table(List.of(col), List.of(row));
+
+        Map<String, Object>[] seen = new Map[1];
+        ConditionEvaluator capturing = (n, c) -> { seen[0] = n.params(); return true; };
+
+        EvalResult result = new DecisionTableExecutor(Map.of("BETWEEN", capturing))
+                .execute(snapshot(ast, "REVIEW"), ctx());
+
+        assertThat(result.ruleHit()).isTrue();
+        assertThat(seen[0]).containsEntry("min", 1000).containsEntry("max", 5000);
+    }
+
+    @Test
+    void betweenColumn_realEvaluator_inRangeHits_outOfRangeMisses() {
+        var col = new DecisionTableNode.Column("amount", "BETWEEN", "LONG");
+        var hitRow  = new DecisionTableNode.Row(List.of(List.of(1000, 5000)), "REVIEW");
+        var missRow = new DecisionTableNode.Row(List.of(List.of(0, 1000)),    "PASS");
+
+        var executor = new DecisionTableExecutor(Map.of("BETWEEN", new BetweenEvaluator()));
+
+        // amount=2000 ∈ [1000,5000] → 命中第一行
+        EvalResult hit = executor.execute(snapshot(table(List.of(col), List.of(hitRow)), "REVIEW"),
+                ctxWith("amount", 2000));
+        assertThat(hit.ruleHit()).isTrue();
+        assertThat(hit.finalDecision().code()).isEqualTo("REVIEW");
+
+        // amount=2000 ∉ [0,1000] → 不命中
+        EvalResult miss = executor.execute(snapshot(table(List.of(col), List.of(missRow)), "PASS"),
+                ctxWith("amount", 2000));
+        assertThat(miss.ruleHit()).isFalse();
+    }
+
+    @Test
+    void notBetweenColumn_realEvaluator_outOfRangeHits() {
+        var col = new DecisionTableNode.Column("amount", "NOT_BETWEEN", "LONG");
+        var row = new DecisionTableNode.Row(List.of(List.of(1000, 5000)), "BLOCK");
+
+        var executor = new DecisionTableExecutor(Map.of("NOT_BETWEEN", new NotBetweenEvaluator()));
+
+        // amount=8000 ∉ [1000,5000] → NOT_BETWEEN 命中
+        EvalResult hit = executor.execute(snapshot(table(List.of(col), List.of(row)), "BLOCK"),
+                ctxWith("amount", 8000));
+        assertThat(hit.ruleHit()).isTrue();
+        assertThat(hit.finalDecision().code()).isEqualTo("BLOCK");
     }
 }

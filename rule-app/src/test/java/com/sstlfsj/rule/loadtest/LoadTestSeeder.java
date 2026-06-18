@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.loadtest;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.service.ConfigService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService.MetricWriteCommand;
@@ -42,7 +43,7 @@ import java.util.Map;
 @Tag("loadtest")
 class LoadTestSeeder {
 
-    static final String TENANT = "9001";          // 专用压测租户内部 id，清理/外键按此
+    static final Long TENANT = 9001L;             // 专用压测租户内部 id，清理/外键按此
     static final String TENANT_CODE = "loadtest";  // 租户业务标识，k6 以此寻址（边界解析为 id 9001）
     static final String SCENE = "loadtest";
     static final String EVENT_TYPE = "login";
@@ -82,13 +83,14 @@ class LoadTestSeeder {
         cleanup();
         sceneService.createScene(TENANT, SCENE, "Load Test Scene", null,
                 "HYBRID", "USER", List.of(EVENT_TYPE), null, null, ACTOR);
-        metricWriteService.create(Long.valueOf(TENANT), METRIC,
+        metricWriteService.create(TENANT, METRIC,
                 new MetricWriteCommand("demo score", "ATTRIBUTE", "LONG", Map.of(), null, true), ACTOR);
         for (int i = 1; i <= ruleCount; i++) {
             DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
-                    "lt-rule-" + i, "lt rule " + i,
-                    conditionAst(), List.of(new DecisionBinding("PASS", 1)),
-                    List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", null, ACTOR);
+                    "lt-rule-" + i,
+                    new RuleContent("lt rule " + i, "AST_BOOLEAN", conditionAst(),
+                            List.of(new DecisionBinding("PASS", 1)), List.of(), List.of(EVENT_TYPE), null),
+                    ACTOR);
             configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
         }
     }
@@ -112,13 +114,14 @@ class LoadTestSeeder {
         cleanup();
         sceneService.createScene(TENANT, SCENE, "Load Test Scene", null,
                 "HYBRID", "USER", List.of(EVENT_TYPE), null, null, ACTOR);
-        metricWriteService.create(Long.valueOf(TENANT), METRIC_AGG,
+        metricWriteService.create(TENANT, METRIC_AGG,
                 new MetricWriteCommand("demo agg", "SQL_AGGREGATE", "LONG",
                         Map.of("datasource", "loadtest_ro", "sql", "SELECT 100"), 60, false), ACTOR);
         DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
-                "lt-fetch-rule", "lt fetch rule",
-                conditionAstAgg(), List.of(new DecisionBinding("PASS", 1)),
-                List.of(), List.of(EVENT_TYPE), "AST_BOOLEAN", null, ACTOR);
+                "lt-fetch-rule",
+                new RuleContent("lt fetch rule", "AST_BOOLEAN", conditionAstAgg(),
+                        List.of(new DecisionBinding("PASS", 1)), List.of(), List.of(EVENT_TYPE), null),
+                ACTOR);
         configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
     }
 

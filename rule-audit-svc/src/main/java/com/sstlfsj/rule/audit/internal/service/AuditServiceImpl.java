@@ -1,6 +1,8 @@
 package com.sstlfsj.rule.audit.internal.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
+import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
 import com.sstlfsj.rule.audit.internal.domain.AuditLogRow;
 import com.sstlfsj.rule.audit.internal.domain.EvalSessionRow;
@@ -24,15 +26,14 @@ class AuditServiceImpl implements AuditService {
     private final AuditLogReadMapper auditLogMapper;
 
     @Override
-    public PageResult<AuditLogEntry> queryAuditLogs(String tenantId, String resourceType,
-                                                     Long resourceId, int page, int size) {
-        // MyBatis-Plus 分页从 1 开始，对外 API 从 0 开始
+    public PageResult<AuditLogEntry> queryAuditLogs(AuditLogQuery q) {
         Page<AuditLogRow> mp = auditLogMapper.selectAuditLogPage(
-                new Page<>(page + 1, size), Long.valueOf(tenantId), resourceType, resourceId);
+                new Page<>(q.page() + 1, q.size()), q.tenantId(), q.resourceType(), q.resourceId(),
+                q.action(), q.actorId(), q.from(), q.to());
         List<AuditLogEntry> items = mp.getRecords().stream()
                 .map(r -> new AuditLogEntry(
                         r.getId(),
-                        tenantId,
+                        q.tenantId(),
                         r.getTargetType(),
                         r.getTargetId() != null ? Long.valueOf(r.getTargetId()) : null,
                         r.getAction(),
@@ -44,34 +45,49 @@ class AuditServiceImpl implements AuditService {
                                 ? r.getOperatedAt().toInstant(ZoneOffset.UTC) : null
                 ))
                 .toList();
-        return new PageResult<>(items, mp.getTotal(), page, size);
+        return new PageResult<>(items, mp.getTotal(), q.page(), q.size());
     }
 
     @Override
-    public PageResult<EvalSessionEntry> queryEvalSessions(String tenantId, String eventId,
-                                                           int page, int size) {
-        // MyBatis-Plus 分页从 1 开始，对外 API 从 0 开始
+    public PageResult<EvalSessionEntry> queryEvalSessions(EvalSessionQuery q) {
         Page<EvalSessionRow> mp = evalSessionMapper.selectEvalSessionPage(
-                new Page<>(page + 1, size), Long.valueOf(tenantId), eventId);
+                new Page<>(q.page() + 1, q.size()), q.tenantId(), q.sceneCode(), q.status(), q.eventId());
         List<EvalSessionEntry> items = mp.getRecords().stream()
                 .map(r -> new EvalSessionEntry(
                         String.valueOf(r.getId()),
-                        tenantId,
+                        q.tenantId(),
                         r.getSceneCode(),
                         r.getEventId(),
                         r.getStatus(),
+                        r.getFinalDecision(),
+                        r.getEvalDurationMs(),
                         r.getStartedAt() != null
-                                ? r.getStartedAt().toInstant(ZoneOffset.UTC) : null
+                                ? r.getStartedAt().toInstant(ZoneOffset.UTC) : null,
+                        r.getFinishedAt() != null
+                                ? r.getFinishedAt().toInstant(ZoneOffset.UTC) : null,
+                        r.getEventType(),
+                        r.getSubjectId(),
+                        r.getSource(),
+                        r.getMode(),
+                        r.getBlockedBy(),
+                        r.getErrorCode(),
+                        r.getCandidateRuleCount(),
+                        r.getHitRuleCount(),
+                        r.getScore(),
+                        r.getCategory(),
+                        r.getOccurredAt() != null
+                                ? r.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
+                        r.getContextSnapshot()
                 ))
                 .toList();
-        return new PageResult<>(items, mp.getTotal(), page, size);
+        return new PageResult<>(items, mp.getTotal(), q.page(), q.size());
     }
 
     @Override
-    public List<TraceNodeEntry> queryTrace(String tenantId, Long sessionId) {
+    public List<TraceNodeEntry> queryTrace(Long tenantId, Long sessionId) {
         // 按 node_path 字典序返回，单次 session 通常 < 200 行，无需分页
         List<NodeTraceRow> rows = nodeTraceMapper.findBySessionAndTenant(
-                sessionId, Long.valueOf(tenantId));
+                sessionId, tenantId);
         return rows.stream()
                 .map(r -> new TraceNodeEntry(
                         r.getNodePath(),
@@ -89,7 +105,7 @@ class AuditServiceImpl implements AuditService {
     }
 
     @Override
-    public List<TraceTreeNode> queryTraceTree(String tenantId, Long sessionId) {
+    public List<TraceTreeNode> queryTraceTree(Long tenantId, Long sessionId) {
         List<TraceNodeEntry> flat = queryTrace(tenantId, sessionId);
         if (flat.isEmpty()) return List.of();
 
@@ -138,8 +154,43 @@ class AuditServiceImpl implements AuditService {
     }
 
     @Override
-    public String getSessionSceneCode(String tenantId, Long sessionId) {
-        return evalSessionMapper.findSceneCode(sessionId, Long.valueOf(tenantId));
+    public String getSessionSceneCode(Long tenantId, Long sessionId) {
+        return evalSessionMapper.findSceneCode(sessionId, tenantId);
+    }
+
+    @Override
+    public EvalSessionEntry getSession(Long tenantId, Long sessionId) {
+        EvalSessionRow row = evalSessionMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EvalSessionRow>()
+                        .eq(EvalSessionRow::getId, sessionId)
+                        .eq(EvalSessionRow::getTenantId, tenantId));
+        if (row == null) return null;
+        return new EvalSessionEntry(
+                String.valueOf(row.getId()),
+                tenantId,
+                row.getSceneCode(),
+                row.getEventId(),
+                row.getStatus(),
+                row.getFinalDecision(),
+                row.getEvalDurationMs(),
+                row.getStartedAt() != null
+                        ? row.getStartedAt().toInstant(ZoneOffset.UTC) : null,
+                row.getFinishedAt() != null
+                        ? row.getFinishedAt().toInstant(ZoneOffset.UTC) : null,
+                row.getEventType(),
+                row.getSubjectId(),
+                row.getSource(),
+                row.getMode(),
+                row.getBlockedBy(),
+                row.getErrorCode(),
+                row.getCandidateRuleCount(),
+                row.getHitRuleCount(),
+                row.getScore(),
+                row.getCategory(),
+                row.getOccurredAt() != null
+                        ? row.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
+                row.getContextSnapshot()
+        );
     }
 
     /** 返回点分路径的父路径；根节点（不含 "."）返回 null。 */

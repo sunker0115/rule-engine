@@ -95,6 +95,26 @@ class RuleEngineClientTest {
     }
 
     @Test
+    void localMode_sdkDefault_collectsNoTrace_soCompactLogIsEmpty() {
+        // SDK 默认 EvalEngine collectTrace=false：命中结果 nodeTrace 为空，evaluate 内单行 trace 日志即 "[]"
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(1L).tenantId("t1").sceneCode("fraud")
+                .conditionAst(alwaysTrue())
+                .addDecisionBinding("BLOCK", 100)
+                .build();
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .localSnapshot(snap)
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION",
+                    "sub1", UUID.randomUUID().toString(),
+                    Instant.now(), Map.of(), Map.of(), EventSource.SDK);
+            EvalResult result = client.evaluate(event);
+            assertThat(result.ruleHit()).isTrue();
+            assertThat(result.nodeTrace()).isEmpty();
+        }
+    }
+
+    @Test
     void localMode_conditionRule_hitWhenMetricMatches() {
         RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
                 .ruleVersionId(2L).tenantId("t1").sceneCode("fraud")
@@ -326,5 +346,25 @@ class RuleEngineClientTest {
             client.evaluate(event);
         }
         assertThat(seen[0]).isEqualTo(EventSource.SDK);
+    }
+
+    @Test
+    void evaluate_listenerThrows_doesNotBreakEvaluate() {
+        // evalResultListener 抛异常时应被吞（log.warn），不中断 evaluate() 返回结果（backup #7/listener 备注）
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(1L).tenantId("t1").sceneCode("fraud")
+                .conditionAst(alwaysTrue())
+                .addDecisionBinding("BLOCK", 100)
+                .build();
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .localSnapshot(snap)
+                .evalResultListener((ev, res) -> { throw new RuntimeException("listener boom"); })
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "fraud", "TRANSACTION",
+                    "sub1", UUID.randomUUID().toString(),
+                    Instant.now(), Map.of(), Map.of(), EventSource.SDK);
+            EvalResult result = client.evaluate(event);
+            assertThat(result.ruleHit()).isTrue();   // listener 抛异常不影响 evaluate 结果
+        }
     }
 }

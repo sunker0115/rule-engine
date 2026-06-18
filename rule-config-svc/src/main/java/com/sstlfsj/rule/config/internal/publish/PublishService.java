@@ -2,6 +2,7 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
+import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.event.DraftCreatedSnapshot;
@@ -24,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -107,6 +110,10 @@ public class PublishService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
+        // DISABLED 规则须先 enable 再发布，否则可通过 publish 路径绕过 transitionStatus 状态机
+        if (rule.getStatus() == RuleDefinitionStatus.DISABLED) {
+            throw new IllegalArgumentException("DISABLED 规则不允许直接发布，需先启用(enable)后再发布");
+        }
         SceneDef scene = sceneMapper.selectById(rule.getSceneId());
         if (scene == null) {
             throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
@@ -136,7 +143,7 @@ public class PublishService {
         ruleDefinitionMapper.updateById(rule);
 
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "PUBLISH", "rule_definition", ruleDefinitionId.toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.PUBLISH, AuditTargetType.RULE_DEFINITION, ruleDefinitionId.toString(),
                 beforeSnap, new RulePublishedSnapshot(draft.getId(), draft.getVersion()), LocalDateTime.now()));
 
         // kind 取被发布的 draft 行（premise A 冻结的权威值），抗"定义级 kind 与版本漂移"
@@ -161,21 +168,21 @@ public class PublishService {
      *
      * @param tenantId         租户 id
      * @param ruleDefinitionId 规则定义 id
-     * @param name             新规则名称，null/空白时不改
-     * @param kind             规则类型，null 时兜底 AST_BOOLEAN
-     * @param conditionAst     新条件 AST，null 兜底为空 AndNode（由 resolveAndValidate 处理）
-     * @param decisionBindings 新决策绑定（仅 decisionCode + 占位 priority），null 视为空
-     * @param preGates         新前置门控，null 视为空
-     * @param triggerEventTypes 新触发事件类型，null 视为空
-     * @param script           EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
+     * @param content          规则内容（name null/空白时不改；kind null 时回退草稿现有 kind 或 AST_BOOLEAN；
+     *                         conditionAst null 兜底为空 AndNode；decisionBindings/preGates/triggerEventTypes null 视为空）
      * @param actorId          操作人
      * @return 被更新草稿的 id 与版本信息（version 不变）
      */
     @Transactional
-    public DraftCreatedResult editDraft(Long tenantId, Long ruleDefinitionId, String name, RuleKind kind,
-            AstNode conditionAst, List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
-            List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes,
-            ScriptSource script, String actorId) {
+    public DraftCreatedResult editDraft(Long tenantId, Long ruleDefinitionId, RuleContent content, String actorId) {
+        String name = content.name();
+        RuleKind kind = parseKind(content.kind());
+        AstNode conditionAst = content.conditionAst();
+        List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
+        List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
+        List<String> triggerEventTypes = content.triggerEventTypes();
+        ScriptSource script = content.script();
+
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
@@ -218,7 +225,7 @@ public class PublishService {
         // 不还原编辑前内容(草稿是可反复改的中间态，内容历史不进审计；线上变更审计在 publish 处)
         DraftCreatedSnapshot snap = new DraftCreatedSnapshot(rule.getId(), draft.getId());
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "UPDATE", "rule_definition", rule.getId().toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.UPDATE, AuditTargetType.RULE_DEFINITION, rule.getId().toString(),
                 snap, snap, LocalDateTime.now()));
         return new DraftCreatedResult(rule.getId(), draft.getId(), draft.getVersion(), RuleDefinitionStatus.DRAFT.name());
     }
@@ -233,22 +240,23 @@ public class PublishService {
      *
      * @param tenantId          租户 id
      * @param ruleDefinitionId  规则定义 id
-     * @param name              新规则名称，null/空白时不改
-     * @param kind              规则类型，null 时兜底规则现有 kind 或 AST_BOOLEAN
-     * @param conditionAst      新条件 AST（fromVersionId 非空时忽略，改用克隆值）
-     * @param decisionBindings  新决策绑定（fromVersionId 非空时忽略），null 视为空
-     * @param preGates          新前置门控（fromVersionId 非空时忽略），null 视为空
-     * @param triggerEventTypes 新触发事件类型（fromVersionId 非空时忽略），null 视为空
+     * @param content           规则内容（name null/空白时不改；kind null 时兜底规则现有 kind 或 AST_BOOLEAN；
+     *                          fromVersionId 非空时 conditionAst/decisionBindings/preGates/triggerEventTypes/script 内容字段忽略，改用克隆值）
      * @param fromVersionId     回退源版本 id，非空时克隆其内容；null 时按入参建新草稿
-     * @param script            EXPRESSION_SCRIPT 脚本载体（fromVersionId 非空时忽略，改用克隆值），其它 kind 传 null
      * @param actorId           操作人
      * @return 新建草稿的 id 与版本信息（version = v_max+1）
      */
     @Transactional
-    public DraftCreatedResult newVersion(Long tenantId, Long ruleDefinitionId, String name, RuleKind kind,
-            AstNode conditionAst, List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
-            List<RuleVersionSnapshot.PreGateConfig> preGates, List<String> triggerEventTypes,
-            Long fromVersionId, ScriptSource script, String actorId) {
+    public DraftCreatedResult newVersion(Long tenantId, Long ruleDefinitionId, RuleContent content,
+            Long fromVersionId, String actorId) {
+        String name = content.name();
+        RuleKind kind = parseKind(content.kind());
+        AstNode conditionAst = content.conditionAst();
+        List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
+        List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
+        List<String> triggerEventTypes = content.triggerEventTypes();
+        ScriptSource script = content.script();
+
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
@@ -299,7 +307,7 @@ public class PublishService {
 
         DraftCreatedSnapshot snap = new DraftCreatedSnapshot(rule.getId(), rv.getId());
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "CREATE", "rule_definition", rule.getId().toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.CREATE, AuditTargetType.RULE_DEFINITION, rule.getId().toString(),
                 snap, snap, LocalDateTime.now()));
         return new DraftCreatedResult(rule.getId(), rv.getId(), version, RuleDefinitionStatus.DRAFT.name());
     }
@@ -328,7 +336,7 @@ public class PublishService {
         ruleVersionMapper.deleteByRuleDefinitionId(ruleDefinitionId);
         ruleDefinitionMapper.deleteById(ruleDefinitionId);
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "DELETE", "rule_definition", ruleDefinitionId.toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.DELETE, AuditTargetType.RULE_DEFINITION, ruleDefinitionId.toString(),
                 snap, snap, LocalDateTime.now()));
     }
 
@@ -356,7 +364,7 @@ public class PublishService {
         ruleVersionMapper.deleteById(versionId);
         DraftCreatedSnapshot snap = new DraftCreatedSnapshot(ruleDefinitionId, versionId);
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "DELETE", "rule_version", versionId.toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.DELETE, AuditTargetType.RULE_VERSION, versionId.toString(),
                 snap, snap, LocalDateTime.now()));
     }
 
@@ -437,7 +445,17 @@ public class PublishService {
         AstNode resolvedAst = (metricCodes.isEmpty() && payloadFields.isEmpty())
                 ? ast : AstDataTypeResolver.resolve(ast, dataTypeMap, payloadTypeMap);
 
-        List<RuleVersionSnapshot.DecisionBinding> frozenBindings = freezeDecisionBindings(tenantId, scene, bindings);
+        // SCORECARD bands 直接回填 name/priority（不走 decisionBindings 搬运）
+        if (RuleKind.SCORECARD.tag().equals(kindTag) && resolvedAst instanceof ScorecardRootNode scRoot
+                && !scRoot.bands().isEmpty()) {
+            List<ScoreBand> enrichedBands = enrichBands(tenantId, scRoot.bands());
+            resolvedAst = new ScorecardRootNode(scRoot.conditions(), scRoot.threshold(), enrichedBands);
+        }
+
+        // SCORECARD 的 band decisionCode 已在 enrichBands 回填进 ScoreBand，不再注入 decisionBindings；
+        // 非 SCORECARD 的 AST 不含 bands，bindings 原样冻结即可
+        List<RuleVersionSnapshot.DecisionBinding> frozenBindings =
+                freezeDecisionBindings(tenantId, scene, bindings);
 
         return new ResolvedDraft(kind, resolvedAst, frozenBindings, gates, triggers, metricDeps, payloadDeps, null);
     }
@@ -499,7 +517,7 @@ public class PublishService {
 
     /** 从点路径集合按前缀（如 "metrics."）过滤并去前缀，去重保序。 */
     private static List<String> stripPrefix(java.util.Set<String> refVars, String prefix) {
-        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        LinkedHashSet<String> out = new LinkedHashSet<>();
         for (String v : refVars) {
             if (v.startsWith(prefix)) out.add(v.substring(prefix.length()));
         }
@@ -540,8 +558,8 @@ public class PublishService {
         dataTypeMap.putAll(activeByCode.values().stream()
                 .collect(Collectors.toMap(MetricDefinition::getMetricCode, MetricDefinition::getDataType)));
         java.util.Set<String> dsNames = metricResourceCatalog != null ? metricResourceCatalog.datasourceNames() : null;
-        java.util.Set<String> epNames = metricResourceCatalog != null ? metricResourceCatalog.endpointNames() : null;
-        new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, epNames);
+        java.util.Set<String> connectorNames = metricResourceCatalog != null ? metricResourceCatalog.connectorNames(tenantId) : null;
+        new MetricSafetyValidator().validate(new ArrayList<>(activeByCode.values()), dsNames, connectorNames);
         return metricDeps;
     }
 
@@ -587,6 +605,25 @@ public class PublishService {
                     throw new IllegalArgumentException("SCORECARD 条件节点 weight 必须 > 0，conditionType=" + leaf.conditionType());
                 }
             }
+            // bands 非空时：每段 min<max；按 minScore 排序后相邻段左闭右开端点相接不算重叠
+            List<ScoreBand> bands = scorecardRoot.bands();
+            if (!bands.isEmpty()) {
+                List<ScoreBand> sorted = bands.stream()
+                        .sorted(Comparator.comparingDouble(ScoreBand::minScore)).toList();
+                for (ScoreBand b : sorted) {
+                    if (b.minScore() >= b.maxScore()) {
+                        throw new IllegalArgumentException(
+                                "SCORECARD band minScore 必须 < maxScore: [" + b.minScore() + "," + b.maxScore() + ")");
+                    }
+                }
+                for (int i = 1; i < sorted.size(); i++) {
+                    if (sorted.get(i).minScore() < sorted.get(i - 1).maxScore()) {
+                        throw new IllegalArgumentException("SCORECARD bands 区间重叠: "
+                                + "[" + sorted.get(i - 1).minScore() + "," + sorted.get(i - 1).maxScore() + ") 与 "
+                                + "[" + sorted.get(i).minScore() + "," + sorted.get(i).maxScore() + ")");
+                    }
+                }
+            }
         }
         if (RuleKind.DECISION_TREE.tag().equals(kindTag)) {
             if (!(ast instanceof IfNode ifRoot)) {
@@ -618,25 +655,24 @@ public class PublishService {
     /**
      * 创建规则草稿：INSERT rule_definition + rule_version（status=DRAFT）+ audit_log。
      *
-     * @param tenantId          租户 id
-     * @param sceneCode         场景编码
-     * @param code              规则编码
-     * @param name              规则名称
-     * @param conditionAst      条件 AST，null 视为空 AND
-     * @param decisionBindings  决策绑定列表，null 视为空
-     * @param preGates          前置门控列表，null 视为空
-     * @param triggerEventTypes 触发事件类型列表，null 视为空
-     * @param kind              规则类型（AST_BOOLEAN / SCORECARD / DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT），null 时默认 AST_BOOLEAN
-     * @param script            EXPRESSION_SCRIPT 脚本载体，其它 kind 传 null
-     * @param actorId           操作人
+     * @param tenantId  租户 id
+     * @param sceneCode 场景编码
+     * @param code      规则编码
+     * @param content   规则内容（name/kind/conditionAst/decisionBindings/preGates/triggerEventTypes/script，kind null 时默认 AST_BOOLEAN）
+     * @param actorId   操作人
      * @return 新建草稿的 id 和版本信息
      */
     @Transactional
     public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
-                                          String code, String name,
-                                          AstNode conditionAst, java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings,
-                                          java.util.List<RuleVersionSnapshot.PreGateConfig> preGates, java.util.List<String> triggerEventTypes,
-                                          String kind, ScriptSource script, String actorId) {
+                                          String code, RuleContent content, String actorId) {
+        String name = content.name();
+        String kind = content.kind();
+        AstNode conditionAst = content.conditionAst();
+        java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
+        java.util.List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
+        java.util.List<String> triggerEventTypes = content.triggerEventTypes();
+        ScriptSource script = content.script();
+
         // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
         SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
         if (scene == null) {
@@ -675,12 +711,24 @@ public class PublishService {
         // CREATE 类 before/after 传同一快照实例，审计行始终 before/after 都有值，避免 null 特殊处理
         DraftCreatedSnapshot draftSnapshot = new DraftCreatedSnapshot(rd.getId(), rv.getId());
         eventPublisher.publishEvent(new OperationAuditedEvent(
-                tenantId, actorId, "USER", "CREATE", "rule_definition", rd.getId().toString(),
+                tenantId, actorId, ActorType.USER, AuditAction.CREATE, AuditTargetType.RULE_DEFINITION, rd.getId().toString(),
                 draftSnapshot,
                 draftSnapshot,
                 LocalDateTime.now()));
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, RuleDefinitionStatus.DRAFT.name());
+    }
+
+    /** 解析 kind 字符串为 RuleKind，null/空返回 null（由下游兜底现有 kind 或 AST_BOOLEAN），非法抛 IllegalArgumentException。 */
+    private static RuleKind parseKind(String kind) {
+        if (kind == null || kind.isBlank()) {
+            return null;
+        }
+        try {
+            return RuleKind.valueOf(kind);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("不支持的规则 kind: " + kind);
+        }
     }
 
     /** 用冻结内容组装 DRAFT 版本行（createDraft/newVersion 共用）。 */
@@ -699,6 +747,28 @@ public class PublishService {
         rv.setStatus(RuleVersionStatus.DRAFT);
         rv.setCreatedAt(LocalDateTime.now());
         return rv;
+    }
+
+    /**
+     * 从 decision_definition 批量回填 band 的 name/priority，返回重建的 ScoreBand 列表（不可变）。
+     * band decisionCode 不存在时抛含 "DECISION_CODE_NOT_FOUND" 的 IllegalArgumentException。
+     */
+    private List<ScoreBand> enrichBands(Long tenantId, List<ScoreBand> bands) {
+        if (bands.isEmpty()) return List.of();
+        List<String> codes = bands.stream().map(ScoreBand::decisionCode).distinct().toList();
+        Map<String, DecisionDefinition> byCode = decisionDefinitionMapper.findByCodes(tenantId, codes)
+                .stream().collect(Collectors.toMap(DecisionDefinition::getCode, d -> d, (a, b) -> a));
+        List<ScoreBand> result = new ArrayList<>(bands.size());
+        for (ScoreBand band : bands) {
+            DecisionDefinition d = byCode.get(band.decisionCode());
+            if (d == null) {
+                throw new IllegalArgumentException("DECISION_CODE_NOT_FOUND: bands 引用的 decision 不存在: " + band.decisionCode());
+            }
+            int priority = d.getPriority() != null ? d.getPriority() : 0;
+            result.add(new ScoreBand(band.minScore(), band.maxScore(), band.decisionCode(),
+                    band.category(), d.getName() != null ? d.getName() : "", priority));
+        }
+        return java.util.Collections.unmodifiableList(result);
     }
 
     /**
@@ -735,12 +805,17 @@ public class PublishService {
     private void validatePreGateParams(List<RuleVersionSnapshot.PreGateConfig> gates) {
         if (gates == null || gates.isEmpty()) return;
         for (RuleVersionSnapshot.PreGateConfig gate : gates) {
-            // pre-gate 收敛:仅 ROLLOUT 是注册的合法 gate;RATE_LIMIT/MUTEX 等已砍,配了即拒绝发布
-            if (!"ROLLOUT".equals(gate.gateType())) {
+            String gateType = gate.gateType();
+            // pre-gate 收敛:仅 ROLLOUT / TIME_WINDOW 是注册的合法 gate;RATE_LIMIT/MUTEX 等已砍,配了即拒绝发布
+            if (!"ROLLOUT".equals(gateType) && !"TIME_WINDOW".equals(gateType)) {
                 throw new IllegalArgumentException(
-                        "不支持的 pre-gate gateType(仅 ROLLOUT 合法): " + gate.gateType());
+                        "不支持的 pre-gate gateType(仅 ROLLOUT/TIME_WINDOW 合法): " + gateType);
             }
             if (gate.params() == null) continue;
+            if ("TIME_WINDOW".equals(gateType)) {
+                validateTimeWindowParams(gate.params());
+                continue;
+            }
             RolloutParams params = RolloutParams.from(gate.params());
 
             if (params.percentage() != null
@@ -766,6 +841,20 @@ public class PublishService {
                 throw new IllegalArgumentException(
                         "ROLLOUT experimentId 不得为空白字符串");
             }
+        }
+    }
+
+    /**
+     * 校验 TIME_WINDOW pre-gate 参数：from/to 均给定时须 from<=to（否则窗口永不命中）；
+     * 单边或皆空合法（皆空即无时段约束 fail-open）。
+     */
+    private void validateTimeWindowParams(Map<String, Object> params) {
+        TimeWindowParams p = TimeWindowParams.from(params);
+        if (p.fromEpochMilli() != null && p.toEpochMilli() != null
+                && p.fromEpochMilli() > p.toEpochMilli()) {
+            throw new IllegalArgumentException(
+                    "TIME_WINDOW fromEpochMilli 必须 <= toEpochMilli，实际: ["
+                            + p.fromEpochMilli() + "," + p.toEpochMilli() + "]");
         }
     }
 

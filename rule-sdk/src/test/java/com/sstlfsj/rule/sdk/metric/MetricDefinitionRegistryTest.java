@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -90,5 +91,36 @@ class MetricDefinitionRegistryTest {
         registry.put("t1", desc("a"));
         registry.replaceAll("t1", List.of());
         assertThat(registry.get("t1", "a", 1)).isNull();
+    }
+
+    /**
+     * 回归 #8：热更窗口内 get() 不得读到"旧删新未写"的中间态。
+     * M1 在每一轮 replaceAll 的新旧列表中都存在 → 并发 get 必须始终命中。
+     * copy-on-write 下读到的永远是完整快照；旧的 removeIf+put 两段写会瞬时缺 M1。
+     */
+    @Test
+    void replaceAll_concurrentGet_neverSeesTornMissingEntry() throws Exception {
+        MetricDefinitionRegistry registry = new MetricDefinitionRegistry();
+        registry.replaceAll("t1", List.of(desc("M1", 1)));
+        AtomicBoolean sawNull = new AtomicBoolean(false);
+        AtomicBoolean running = new AtomicBoolean(true);
+
+        Thread reader = new Thread(() -> {
+            while (running.get()) {
+                if (registry.get("t1", "M1", 1) == null) {
+                    sawNull.set(true);
+                    break;
+                }
+            }
+        });
+        reader.start();
+        // 每轮都用含 M1 的新列表整体替换（外加一个变动项制造写压力）
+        for (int i = 0; i < 5000; i++) {
+            registry.replaceAll("t1", List.of(desc("M1", 1), desc("M" + i, 1)));
+        }
+        running.set(false);
+        reader.join();
+
+        assertThat(sawNull).as("M1 在新旧列表中始终存在，并发 get 不应读到 null").isFalse();
     }
 }
