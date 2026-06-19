@@ -27,6 +27,8 @@ export default defineConfig({
           if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'monaco';
           if (id.includes('codemirror') || id.includes('@codemirror') || id.includes('@lezer')) return 'codemirror';
           if (id.includes('@ant-design/icons')) return 'antd-icons';
+          // plots + 整个 @antv/* G2 生态单独拆出（路由 lazy，只访问 /effectiveness 才加载）
+          if (id.includes('@ant-design/plots') || id.includes('@antv/')) return 'plots';
           if (id.includes('rc-') || id.includes('@rc-component')) return 'antd-rc';
           if (id.includes('antd') || id.includes('@ant-design')) return 'antd';
           if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler')) return 'react';
