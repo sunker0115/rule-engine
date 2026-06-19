@@ -29,32 +29,31 @@
 ### 3.0 后端适配器模块布局(ports-adapters)
 
 ```
-rule-kernel        Scheduler SPI(端口)
-rule-job-svc       框架 + executor + ScheduleManager + ThreadPoolSchedulerAdapter(本地默认)
-                   依赖 = kernel SPI(+ eval-svc);【不依赖任何具体调度器】
+rule-kernel        Scheduler SPI + TaskExecutor SPI + TaskRunContext/TaskRunResult(端口,共享)
+rule-job-svc       框架核:scheduled_task 实体 + TaskExecutorRegistry(DI 收集)+ ScheduleManager
+                   + TriggerExecutor(注入 EvalService)+ ThreadPoolSchedulerAdapter(本地默认)
+                   依赖 = kernel SPI + eval-svc;【不依赖具体调度器、不依赖各 handler 模块】
+rule-eval-svc      OUTCOME_INGESTION executor + config(+ OutcomeSource SPI);依赖 = kernel SPI
+rule-observability RETENTION(trace)/ALARM executor;依赖 = kernel SPI
 rule-job-xxl       XxlJobSchedulerAdapter(@ConditionalOnProperty=xxl-job);依赖 = kernel SPI + xxl-job-core
 rule-job-powerjob  (将来)PowerJobSchedulerAdapter(=power-job);依赖 = kernel SPI + powerjob-worker
-rule-app           组装:恒含 rule-job-svc + 选含一个后端适配器模块
+rule-app           组装:恒含 rule-job-svc + 各 handler 模块 + 选含一个后端适配器模块
 ```
-`rule-job-svc` 与各后端模块**互不依赖,只依赖 kernel SPI**;具体调度器的依赖关在各自适配器模块里,不漏进框架。**切后端 = 换适配器模块 + 改 `engine.rule.job.scheduler`,框架/业务/executor 一行不改。**
+两条解耦:① **后端适配器**与框架互不依赖,只依赖 kernel `Scheduler` SPI;② **各 task handler**(executor + config)落拥有该领域的模块,只依赖 kernel `TaskExecutor` SPI,**job-svc 经 Spring `List<TaskExecutor>` DI 收集而不依赖它们**(XXL `@XxlJob` 扫描式解耦)。**加后端 = 换适配器模块;加 task 类型 = 在领域模块加 executor bean;两者框架核都零改。**
 
 ### 3.0.1 `Scheduler` SPI(可移植契约,禁绕过)
 
-SPI 须覆盖我们依赖的全部调度能力(单跑 + 广播 + on-demand 触发),三后端各自实现,**业务代码只认 SPI,严禁直连 XXL/PowerJob 原生 API**(这是不锁死的唯一纪律):
+**当前(已实装,不变)**:`Scheduler` 仅 `schedule(code, cron, task)` + `unschedule(code)`——cron 单实例派发。本轮去中心化重构**不改 Scheduler**(只动 `TaskExecutor` SPI,见 §4.3)。
 
+**目标契约(将来,deferred 到多实例,现在不加——YAGNI:无调用方)**:
 ```java
-interface Scheduler {
-    void schedule(String code, String cron, Runnable task);   // cron 单实例派发
-    void unschedule(String code);
-    void triggerOnce(String code, String param);              // on-demand 单触发(手动触发任务)
-    void scheduleBroadcast(String code, Runnable onEachNode);  // 注册广播 handler(每实例)
-    void triggerBroadcast(String code, String param);          // 触发广播到所有实例(§6 A 类 config 收敛)
-}
+// 仅当做"多实例广播接线 / on-demand 触发"时才加,届时 SPI + 调用方 + 三适配器实现一起落:
+void triggerOnce(String code, String param);              // on-demand 单触发(现手动触发走本地 runOnce,暂不需)
+void scheduleBroadcast(String code, Runnable onEachNode);  // 注册广播 handler
+void triggerBroadcast(String code, String param);          // 广播到所有实例(§6 A 类 config 收敛)
 ```
-- ThreadPool(本地):`triggerBroadcast`/`scheduleBroadcast` 退化为单机本地直跑(只有一个实例)。
-- XXL:广播 = 分片广播路由;`triggerOnce`/`triggerBroadcast` = admin trigger API(封在适配器内,不外露)。
-- PowerJob:广播 = broadcast 执行模式;触发 = OpenAPI。
-- **PowerJob 切换无能力缺口**:cron 单派发 / 广播 / on-demand 触发三者 XXL、PowerJob 都有(PowerJob 还多 Map/MapReduce/DAG,是升级档)。
+- 实现纪律(届时):ThreadPool 本地退化单机直跑;XXL=分片广播 + admin trigger;PowerJob=broadcast 模式 + OpenAPI。**业务只认 SPI,严禁直连 XXL/PowerJob 原生 API**(不锁死的唯一纪律)。
+- **PowerJob 切换无能力缺口**:cron 单派发 / 广播 / on-demand 三者 XXL、PowerJob 都有(PowerJob 还多 Map/MapReduce/DAG)。
 
 ### 3.1 `scheduled_task`(我们的表) ↔ XXL(`xxl_job_info`)关系
 
@@ -100,49 +99,54 @@ scheduled_task
   UNIQUE(tenant_id, code)
 ```
 
-`TaskType` 封闭集 + `scope` 维度(**所有 cron 定时工作统一进此框架,不在框架外另起裸调度 job**):
+**`task_type` 是开放 string,不是中心枚举(去中心化,对齐 XXL `@XxlJob` name / Airflow operator type)**:每个 executor 自声明类型名,框架核不持有全集枚举。`scope` 区分 TENANT(API/注解配置)/ SYSTEM(启动 seed,cron 取 properties)。
+
+现有/规划类型(各自落**拥有该领域的模块**,见 §4.3):
+
+| task_type | scope | 落点模块 | 说明 |
+|---|---|---|---|
+| `TRIGGER` | TENANT | rule-job-svc | 合成 RuleEvent → 评估(现 `JobRunner` 迁来) |
+| `OUTCOME_INGESTION` | TENANT | **rule-eval-svc** | `OutcomeSource` SPI 增量拉标签 → upsert;watermark 写 `run_cursor`(已实装,去中心化后从 job-svc 迁回 eval-svc) |
+| `RETENTION` | SYSTEM | eval-svc / observability | 清旧 session/trace(收编 `SessionRetentionCleaner`/`TraceRetentionCleaner`) |
+| `ALARM` | SYSTEM | observability | 告警巡检(收编 `ObservabilityAlarmChecker`) |
+
+**为什么开放 string + 去中心化(而非中心 enum)**:task 类型本质是**跨模块开放扩展点**(模块各自加类型),不是封闭集——故用开放 string(数据类型纪律的 enum 规则针对封闭集;此处开放)。中心 `TaskType` enum 会让 job-svc 持有全集 → 又把各模块类型拉回 job-svc。去中心化后:**加新类型 = 在拥有它的模块加一个 executor bean,job-svc 零改、零新依赖**(§4.3 DI 收集)。
+
+**为什么维护型也收进框架(修订早先"@Scheduled+ShedLock 分开")**:XXL-first 后维护型反正要上调度后端拿集群单跑,"留 @Scheduled + 引 ShedLock"没意义;统一成一个调度模型(一表/一 dispatch/一执行记录/一控制台,SYSTEM/TENANT 仅 scope 别),单跑由后端白送,**ShedLock 不再需要**(§5)。
+
+### 4.2 config 去中心化:每 handler 自带 typed record,框架核存 JSON(开源 hybrid)
+
+**不设中心 sealed `TaskConfig` 联合体**(它会把所有 config + 其引用的模块类型锁进 job-svc,正是依赖集中的根因)。改用开源调度器的 hybrid([搜索结论](https://airflow.apache.org/docs/apache-airflow/stable/howto/custom-operator.html):按 name 注册 + 派发时 JSON 反序列化成 typed):
+
+- **`scheduled_task.config` 列存原始 JSON**(框架核视为不透明 payload——generic infra 无法为跨模块全部 task 持单一类型,数据类型纪律的"确实无定义"例外)。
+- **每个 task 类型的 config 是各自模块里的 typed record**(`TriggerConfig` 在 job-svc、`OutcomeIngestionConfig`+`SqlOutcomeSourceConfig` 在 eval-svc、将来 `RetentionConfig` 在 eval-svc/observability),**不实现任何共享 sealed 基类**——各自独立,无中心耦合。
+- **typed 在派发时恢复**:registry 按 executor 的 `configType()` 把 config JSON 反序列化成该 handler 的 typed record(§4.3)。**每个 handler 内仍是 typed record**(数据类型纪律在 handler 边界内满足),只有框架核边界碰 JSON。
+- **run_cursor 仍独立列**(state-not-config,不变)。
+
+代价(已认):放弃中心 sealed 的编译期穷举,换运行期开放(各 handler 自注册 type)——这正是 XXL/Quartz/Airflow 的做法,且是去中心化的前提。
+
+### 4.3 executor SPI(下沉 kernel,去中心化;DI 收集而非 job-svc 依赖各模块)
+
+**`TaskExecutor` SPI + `TaskRunContext`/`TaskRunResult`/`TaskExecutionStatus` 放 `rule-kernel`**(共享端口,各模块已依赖 kernel),使各模块实现 executor **只依赖 kernel、不依赖 job-svc**(避免环 + fan-out):
 
 ```java
-enum TaskType { TRIGGER, OUTCOME_INGESTION, RETENTION, ALARM }
-enum TaskScope { TENANT, SYSTEM }   // scheduled_task.scope 列
-```
-
-- **TENANT 型(API/注解配置)**:
-  - `TRIGGER`:合成 RuleEvent → 评估(现 `JobRunner` 降级为一个 executor)。
-  - `OUTCOME_INGESTION`（B32 已实装）:经 `OutcomeSource` SPI（首个实现 `SqlOutcomeSource`）增量拉标签 → `OutcomeService` upsert,watermark 取本批 max `labeled_at` 写回独立 `scheduled_task.run_cursor` 列(state-not-config,对齐 Kafka Connect offset / Airbyte state)。
-- **SYSTEM 型(启动 seed,tenant_id=null,cron 取 properties)**——收编原散落 `@Scheduled`:
-  - `RETENTION`:清旧 `evaluation_session`/`node_trace`(收编 `SessionRetentionCleaner`/`TraceRetentionCleaner`)。
-  - `ALARM`:可观测告警巡检(收编 `ObservabilityAlarmChecker`)。
-
-**为什么把维护型也收进框架(修订早先决策)**:早先按"@Scheduled + ShedLock"把维护型留在框架外(业界标准:别为单跑上重型调度器)。**前提已变成 XXL-first**——维护型反正要上调度后端拿集群单跑,那"留 @Scheduled + 引 ShedLock"就没意义;不如**统一成一个调度模型**:一个 `scheduled_task` 表 + 一个 dispatch 路径(`Scheduler` SPI)+ 一个执行记录表 + 一个控制台,SYSTEM/TENANT 仅 scope 之别。单跑由后端白送(本地=单机天然单跑;XXL/PowerJob=中心派发),**ShedLock 不再需要**(见 §5)。
-
-### 4.2 config 是 sealed 类型族,不是裸 Map/JSON-String
-
-照 `RuleVersion` typed-JSON 模板（`@TableName(autoResultMap=true)` + typed 字段 + `Jackson3TypeHandler`），守数据类型纪律：
-
-```java
-sealed interface TaskConfig permits TriggerConfig, OutcomeIngestionConfig {}
-record TriggerConfig(String sceneCode, String eventType, SubjectQuery subjectQuery) implements TaskConfig {}
-record OutcomeIngestionConfig(OutcomeSourceConfig source) implements TaskConfig {}
-// OutcomeSourceConfig 亦为 sealed 多态族：SqlOutcomeSourceConfig(String datasource, String sql) 为首个实现（@JsonTypeInfo kind 自描述）
-// 注：增量 watermark 不在 config（不可变静态定义），存于独立 scheduled_task.run_cursor 列（运行态，executor 管理；对齐 Kafka Connect offset / Airbyte state 的 state-not-config 模式）
-```
-
-- 多态自描述：`@JsonTypeInfo(use=NAME, property="kind")` + `@JsonSubTypes`，TypeHandler 按 kind 还原子类型。
-- `task_type` 列**冗余一份仅供查询/分发**（不解析 JSON 即可筛、可路由 executor），写入时从 `config` 的类型派生，单一真相在 config 的多态 tag。
-
-### 4.3 executor SPI（Spring 自动收集，照 `ExpressionEngine`/`MetricSourceHandler` 定式）
-
-```java
+// rule-kernel
 record TaskRunContext(long taskRunId, long taskId, long tenantId) {}
-interface TaskExecutor<C extends TaskConfig> {
-    TaskType type();
-    Class<C> configType();
-    TaskRunResult execute(TaskRunContext ctx, C config);   // ctx 给 taskRunId(eventId 幂等键)+ taskId(有状态 executor 写 run_cursor)
+interface TaskExecutor<C> {                 // C = handler 自己的 config record,无共享 sealed 基类
+    String type();                          // 开放类型名(如 "TRIGGER" / "OUTCOME_INGESTION"),非中心 enum
+    Class<C> configType();                  // 供 registry 把 config JSON 反序列化成 C
+    TaskRunResult execute(TaskRunContext ctx, C config);
 }
 ```
 
-调度器触发 `ScheduledTask` → dispatcher 按 `task_type` 查 `Map<TaskType, TaskExecutor>` → 反序列化 config 到 `executor.configType()` → `execute`。**加新调度工作 = 加一个 enum 值 + 一个 executor + 一个 config record，零主干改动**。executor 实现落各自模块（TRIGGER 在 job-svc，OUTCOME_INGESTION 在 eval-svc 侧），实现 SPI、Spring 收集，不跨 Modulith 边界乱伸。
+派发(`TaskExecutorRegistry` 在 job-svc,但**经 Spring `List<TaskExecutor>` 跨模块收集,不依赖 handler 模块**——这正是 XXL `@XxlJob` bean 扫描的解耦,DI 实现):
+```
+触发 ScheduledTask → registry 按 task_type(String)查 executor
+  → objectMapper.readValue(task.getConfig()/*JSON*/, executor.configType()) 得 typed C
+  → executor.execute(ctx, C) → TaskRunResult → 写 scheduled_task_execution
+```
+
+**加新调度工作 = 在拥有该领域的模块加一个 `TaskExecutor` bean(声明 type + configType + 一个 config record),job-svc 零改、零新依赖**。executor 落点:`TRIGGER` 在 job-svc(注入 EvalService);`OUTCOME_INGESTION` 在 **eval-svc**(注入 OutcomeIngestionService,去中心化后从 job-svc 迁回);`RETENTION`/`ALARM` 在 eval-svc/observability。各只依赖 kernel SPI,Spring 收集进 job-svc 的 registry。
 
 ### 4.4 统一执行记录
 
