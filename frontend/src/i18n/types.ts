@@ -457,8 +457,11 @@ export interface ScheduledTaskTranslation {
       code: string; codeRequired: string; codeExtra: string;
       name: string; nameRequired: string;
       cron: string; cronRequired: string; cronExtra: string;
-      datasource: string; datasourceRequired: string; datasourceExtra: string;
-      sql: string; sqlRequired: string; sqlExtra: string;
+      datasource: string; datasourceRequired: string; datasourceExtra: string; datasourcePlaceholder: string;
+      tableName: string; tableNameRequired: string; tableNameExtra: string;
+      extraFilter: string; extraFilterExtra: string;
+      limitRows: string; limitRowsExtra: string;
+      sqlPreview: string;
     };
   };
   column: {

@@ -15,8 +15,11 @@ const scheduledTask: ScheduledTaskTranslation = {
       code: 'Task Code', codeRequired: 'Please enter task code', codeExtra: 'Unique within tenant, e.g. fraud-ingest-daily',
       name: 'Task Name', nameRequired: 'Please enter task name',
       cron: 'Cron Expression', cronRequired: 'Please enter cron expression', cronExtra: 'Spring 6-field cron, e.g. 0 0 2 * * * (2 AM daily)',
-      datasource: 'Datasource Name', datasourceRequired: 'Please enter datasource name', datasourceExtra: 'A datasource registered in MetricDataSourceRegistry',
-      sql: 'Label Fetch SQL', sqlRequired: 'Please enter SQL', sqlExtra: 'Must include fixed columns: event_id / outcome_label / outcome_value / labeled_at; can bind :tenantId / :watermark',
+      datasource: 'Datasource Name', datasourceRequired: 'Please enter datasource name', datasourceExtra: 'A datasource registered in MetricDataSourceRegistry', datasourcePlaceholder: 'Select a datasource',
+      tableName: 'Label Table', tableNameRequired: 'Please enter label table name', tableNameExtra: 'Must include fixed columns: event_id / outcome_label / outcome_value / labeled_at',
+      extraFilter: 'Extra Filter', extraFilterExtra: 'Optional; appended to the WHERE clause, e.g. status = \'CONFIRMED\'',
+      limitRows: 'Max Rows Per Batch', limitRowsExtra: 'Max rows fetched per run (1-10000, default 1000)',
+      sqlPreview: 'SQL Preview',
     },
   },
   column: {

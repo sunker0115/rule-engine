@@ -15,8 +15,11 @@ const scheduledTask: ScheduledTaskTranslation = {
       code: '任务编码', codeRequired: '请输入任务编码', codeExtra: '租户内唯一，如 fraud-ingest-daily',
       name: '任务名称', nameRequired: '请输入任务名称',
       cron: 'Cron 表达式', cronRequired: '请输入 cron 表达式', cronExtra: 'Spring 6 段 cron，如 0 0 2 * * *（每天凌晨 2 点）',
-      datasource: '数据源名称', datasourceRequired: '请输入数据源名称', datasourceExtra: 'MetricDataSourceRegistry 中已注册的数据源名',
-      sql: '标签拉取 SQL', sqlRequired: '请输入 SQL', sqlExtra: '须含固定列：event_id / outcome_label / outcome_value / labeled_at；可绑定 :tenantId / :watermark',
+      datasource: '数据源名称', datasourceRequired: '请输入数据源名称', datasourceExtra: 'MetricDataSourceRegistry 中已注册的数据源名', datasourcePlaceholder: '请选择数据源',
+      tableName: '标签表名', tableNameRequired: '请输入标签表名', tableNameExtra: '须含固定列：event_id / outcome_label / outcome_value / labeled_at',
+      extraFilter: '附加过滤条件', extraFilterExtra: '可选；追加到 WHERE 子句，如 status = \'CONFIRMED\'',
+      limitRows: '每批行数上限', limitRowsExtra: '单次拉取的最大行数（1–10000，默认 1000）',
+      sqlPreview: '预览 SQL',
     },
   },
   column: {

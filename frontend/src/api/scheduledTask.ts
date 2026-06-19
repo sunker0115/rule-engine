@@ -46,3 +46,8 @@ export async function createIngestionTask(params: CreateIngestionTaskParams): Pr
   );
   return res.data.data;
 }
+
+export async function fetchDatasources(): Promise<string[]> {
+  const res = await apiClient.get<ApiResponse<string[]>>(ENDPOINTS.DATASOURCE_LIST);
+  return res.data.data ?? [];
+}

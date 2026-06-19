@@ -84,6 +84,7 @@ export const ENDPOINTS = {
   SCHEDULED_TASK_ENABLE:     (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/enable`,
   SCHEDULED_TASK_DISABLE:    (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/disable`,
   SCHEDULED_TASK_EXECUTIONS: (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/executions`,
+  DATASOURCE_LIST: `${ADMIN}/datasources`,
 
   // Tenant
   TENANT_LIST: `${ADMIN}/tenants`,

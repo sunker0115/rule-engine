@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Table, Button, Switch, Modal, Alert, message, Space, Form, Input } from 'antd';
+import { Table, Button, Switch, Modal, Alert, message, Space, Form, Input, Select } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listScheduledTasks, triggerScheduledTask, enableScheduledTask, disableScheduledTask, createIngestionTask } from '@/api/scheduledTask';
-import type { CreateIngestionTaskParams } from '@/api/scheduledTask';
+import { listScheduledTasks, triggerScheduledTask, enableScheduledTask, disableScheduledTask, createIngestionTask, fetchDatasources } from '@/api/scheduledTask';
 import { ROUTES, route } from '@/constants/routes';
 import type { ScheduledTaskItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -19,6 +18,7 @@ export default function ScheduledTaskList() {
   const [triggering, setTriggering] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm] = Form.useForm();
+  const [datasources, setDatasources] = useState<string[]>([]);
 
   // 已知任务类型 label，未知类型兜底显示原始串（RETENTION/ALARM 等新类型无需改前端）
   const taskTypeLabels = useMemo<Record<string, string>>(() => ({
@@ -105,7 +105,12 @@ export default function ScheduledTaskList() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>{t('title.list')}</h2>
-        <Button type="primary" onClick={() => { setCreateOpen(true); createForm.resetFields(); }}>
+        <Button type="primary" onClick={async () => {
+          createForm.resetFields();
+          setCreateOpen(true);
+          const names = await fetchDatasources().catch(() => []);
+          setDatasources(names);
+        }}>
           {t('action.createIngestion')}
         </Button>
       </div>
@@ -129,13 +134,34 @@ export default function ScheduledTaskList() {
         <Form
           form={createForm}
           layout="vertical"
-          onFinish={async (values: Omit<CreateIngestionTaskParams, 'tenantId'>) => {
+          onFinish={async (values: {
+            code: string; name: string; cron: string;
+            datasource: string; tableName: string;
+            extraFilter?: string; limitRows?: number | string;
+          }) => {
             if (!currentId) {
               message.error(t('create.selectTenant'));
               return;
             }
+            const limit = Number(values.limitRows) || 1000;
+            const extraWhere = values.extraFilter?.trim()
+              ? `\n  AND (${values.extraFilter.trim()})`
+              : '';
+            const sql =
+              `SELECT event_id, outcome_label, outcome_value, labeled_at\n` +
+              `FROM ${values.tableName}\n` +
+              `WHERE tenant_id = :tenantId\n` +
+              `  AND (:watermark IS NULL OR labeled_at > :watermark)${extraWhere}\n` +
+              `ORDER BY labeled_at ASC LIMIT ${limit}`;
             try {
-              await createIngestionTask({ tenantId: currentId, ...values });
+              await createIngestionTask({
+                tenantId: currentId,
+                code: values.code,
+                name: values.name,
+                cron: values.cron,
+                datasource: values.datasource,
+                sql,
+              });
               message.success(t('create.createSuccess'));
               setCreateOpen(false);
               load();
@@ -145,6 +171,7 @@ export default function ScheduledTaskList() {
             }
           }}
         >
+          {/* 任务编码 */}
           <Form.Item
             label={t('create.field.code')}
             name="code"
@@ -153,6 +180,7 @@ export default function ScheduledTaskList() {
           >
             <Input placeholder="fraud-ingest-daily" />
           </Form.Item>
+          {/* 任务名称 */}
           <Form.Item
             label={t('create.field.name')}
             name="name"
@@ -160,6 +188,7 @@ export default function ScheduledTaskList() {
           >
             <Input />
           </Form.Item>
+          {/* Cron 表达式 */}
           <Form.Item
             label={t('create.field.cron')}
             name="cron"
@@ -168,24 +197,72 @@ export default function ScheduledTaskList() {
           >
             <Input placeholder="0 0 2 * * *" />
           </Form.Item>
+          {/* 数据源 Select */}
           <Form.Item
             label={t('create.field.datasource')}
             name="datasource"
             rules={[{ required: true, message: t('create.field.datasourceRequired') }]}
             extra={t('create.field.datasourceExtra')}
           >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            label={t('create.field.sql')}
-            name="sql"
-            rules={[{ required: true, message: t('create.field.sqlRequired') }]}
-            extra={t('create.field.sqlExtra')}
-          >
-            <Input.TextArea
-              rows={4}
-              placeholder={'SELECT event_id, outcome_label, outcome_value, labeled_at\nFROM biz_label\nWHERE tenant_id = :tenantId\n  AND (:watermark IS NULL OR labeled_at > :watermark)\nORDER BY labeled_at ASC LIMIT 1000'}
+            <Select
+              placeholder={t('create.field.datasourcePlaceholder')}
+              options={datasources.map((n) => ({ value: n, label: n }))}
+              showSearch
+              allowClear
             />
+          </Form.Item>
+          {/* 标签表名 */}
+          <Form.Item
+            label={t('create.field.tableName')}
+            name="tableName"
+            rules={[{ required: true, message: t('create.field.tableNameRequired') }]}
+            extra={t('create.field.tableNameExtra')}
+          >
+            <Input placeholder="biz_fraud_label" />
+          </Form.Item>
+          {/* 附加过滤条件（可选） */}
+          <Form.Item
+            label={t('create.field.extraFilter')}
+            name="extraFilter"
+            extra={t('create.field.extraFilterExtra')}
+          >
+            <Input placeholder="status = 'CONFIRMED'" />
+          </Form.Item>
+          {/* 每批行数上限 */}
+          <Form.Item
+            label={t('create.field.limitRows')}
+            name="limitRows"
+            initialValue={1000}
+            extra={t('create.field.limitRowsExtra')}
+          >
+            <Input type="number" min={1} max={10000} />
+          </Form.Item>
+          {/* 预览 SQL */}
+          <Form.Item noStyle shouldUpdate>
+            {({ getFieldsValue }) => {
+              const { tableName, extraFilter, limitRows } = getFieldsValue();
+              if (!tableName) return null;
+              const limit = Number(limitRows) || 1000;
+              const extraWhere = (extraFilter as string)?.trim()
+                ? `\n  AND (${(extraFilter as string).trim()})`
+                : '';
+              const preview =
+                `SELECT event_id, outcome_label, outcome_value, labeled_at\n` +
+                `FROM ${tableName as string}\n` +
+                `WHERE tenant_id = :tenantId\n` +
+                `  AND (:watermark IS NULL OR labeled_at > :watermark)${extraWhere}\n` +
+                `ORDER BY labeled_at ASC LIMIT ${limit}`;
+              return (
+                <Form.Item label={t('create.field.sqlPreview')}>
+                  <pre style={{
+                    background: '#f5f5f5', padding: 8, borderRadius: 4,
+                    fontSize: 12, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                  }}>
+                    {preview}
+                  </pre>
+                </Form.Item>
+              );
+            }}
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit">{t('create.submit')}</Button>
