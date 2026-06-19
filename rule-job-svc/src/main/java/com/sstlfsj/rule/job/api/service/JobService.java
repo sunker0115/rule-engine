@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * Job 管理：启用 / 禁用 / 查询 / 手动触发 / 执行记录查询（D11 / D48）。
  *
- * <p>Job 定义由 {@code @RuleJob} 注解驱动、启动期自动落库，本接口不含创建入口。
+ * <p>Job 定义由 {@code @TriggerTask} 注解驱动、启动期自动落库，本接口不含创建入口。
  */
 public interface JobService {
 

@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** JobController 单元测试（管理类端点；Job 定义走 @RuleJob 注解，无创建接口）。 */
+/** JobController 单元测试（管理类端点；Job 定义走 @TriggerTask 注解，无创建接口）。 */
 class JobControllerTest {
 
     private MockMvc mockMvc;

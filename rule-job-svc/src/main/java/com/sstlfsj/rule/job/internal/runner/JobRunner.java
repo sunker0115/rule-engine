@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.job.internal.runner;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
-import com.sstlfsj.rule.job.api.JobTarget;
+import com.sstlfsj.rule.job.api.SubjectTarget;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.domain.JobExecution;
 import com.sstlfsj.rule.job.internal.domain.JobExecutionStatus;
@@ -25,7 +25,7 @@ import java.util.List;
  * 成功入队即计入 successCount（= 成功注入评估链路的主体数），不等待评估结果。
  *
  * <p>主体经 {@link SubjectQueryRunner#forEachTarget} 逐个推入处理：小数据量无参返回 List，大数据量
- * 走 JobPage 分页拉取（仿 ElasticJob DataflowJob），每批只占一页内存。PUSH 队列满时按退避重试做背压
+ * 走 SubjectPage 分页拉取（仿 ElasticJob DataflowJob），每批只占一页内存。PUSH 队列满时按退避重试做背压
  * （{@link #injectWithBackpressure}），重试耗尽才计错，避免大批量注入瞬间打满队列被误判失败。
  */
 @Component

@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.job.internal.runner;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
-import com.sstlfsj.rule.job.api.JobTarget;
+import com.sstlfsj.rule.job.api.SubjectTarget;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.domain.JobExecution;
 import com.sstlfsj.rule.job.internal.domain.JobExecutionStatus;
@@ -52,10 +52,10 @@ class JobRunnerTest {
 
     /** mock forEachTarget：把给定目标依次推给 runner 提供的 sink。 */
     @SuppressWarnings("unchecked")
-    private void givenTargets(JobTarget... targets) {
+    private void givenTargets(SubjectTarget... targets) {
         doAnswer(inv -> {
-            Consumer<JobTarget> sink = (Consumer<JobTarget>) inv.getArgument(1);
-            for (JobTarget t : targets) {
+            Consumer<SubjectTarget> sink = (Consumer<SubjectTarget>) inv.getArgument(1);
+            for (SubjectTarget t : targets) {
                 sink.accept(t);
             }
             return null;
@@ -75,7 +75,7 @@ class JobRunnerTest {
 
     @Test
     void allAcceptedResultsInSuccess() {
-        givenTargets(JobTarget.of("u1"), JobTarget.of("u2"));
+        givenTargets(SubjectTarget.of("u1"), SubjectTarget.of("u2"));
         when(evalService.acceptEvent(any())).thenReturn(true);
 
         JobExecution exec = runner.run(def());
@@ -91,7 +91,7 @@ class JobRunnerTest {
     @Test
     void backpressureRetriesThenSucceeds() {
         // 队列瞬时满（前两次拒绝），退避重试后第三次入队成功，应计成功而非错误
-        givenTargets(JobTarget.of("u1"));
+        givenTargets(SubjectTarget.of("u1"));
         when(evalService.acceptEvent(any())).thenReturn(false, false, true);
 
         JobExecution exec = runner.run(def());
@@ -104,7 +104,7 @@ class JobRunnerTest {
 
     @Test
     void persistentlyFullResultsInError() {
-        givenTargets(JobTarget.of("u1"));
+        givenTargets(SubjectTarget.of("u1"));
         when(evalService.acceptEvent(any())).thenReturn(false);
 
         JobExecution exec = runner.run(def());
@@ -116,7 +116,7 @@ class JobRunnerTest {
 
     @Test
     void partialFailWhenOneSubjectPersistentlyFull() {
-        givenTargets(JobTarget.of("u1"), JobTarget.of("u2"));
+        givenTargets(SubjectTarget.of("u1"), SubjectTarget.of("u2"));
         // 第一个主体首次即入队成功；第二个主体此后一直被拒（重试耗尽计错）
         when(evalService.acceptEvent(any())).thenReturn(true, false);
 
@@ -142,7 +142,7 @@ class JobRunnerTest {
     @Test
     void synthesizedRuleEventHasCorrectFieldsAndJobSource() {
         // 目标携带 payload + providedMetrics，应原样透传进合成事件；渠道由 JobRunner 设为 JOB
-        JobTarget target = JobTarget.of("u1", Map.of("k", "v"))
+        SubjectTarget target = SubjectTarget.of("u1", Map.of("k", "v"))
                 .withProvidedMetrics(Map.of("score", 0.9));
         givenTargets(target);
         when(evalService.acceptEvent(any())).thenReturn(true);

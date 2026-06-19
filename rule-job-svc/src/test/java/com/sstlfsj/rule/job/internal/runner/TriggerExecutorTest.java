@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.job.internal.runner;
 
-import com.sstlfsj.rule.job.api.JobTarget;
+import com.sstlfsj.rule.job.api.SubjectTarget;
 import com.sstlfsj.rule.job.api.TaskExecutionStatus;
 import com.sstlfsj.rule.job.api.TaskRunResult;
 import com.sstlfsj.rule.job.api.TriggerConfig;
@@ -29,9 +29,9 @@ class TriggerExecutorTest {
     @Test
     void allSubjectsInjected_success() {
         doAnswer(inv -> {
-            Consumer<JobTarget> sink = inv.getArgument(1);
-            sink.accept(JobTarget.of("u1"));
-            sink.accept(JobTarget.of("u2"));
+            Consumer<SubjectTarget> sink = inv.getArgument(1);
+            sink.accept(SubjectTarget.of("u1"));
+            sink.accept(SubjectTarget.of("u2"));
             return null;
         }).when(subjectRunner).forEachTarget(any(), any());
         when(evalService.acceptEvent(any())).thenReturn(true);
@@ -48,9 +48,9 @@ class TriggerExecutorTest {
     @Test
     void partialInjectFailure_partialFail() {
         doAnswer(inv -> {
-            Consumer<JobTarget> sink = inv.getArgument(1);
-            sink.accept(JobTarget.of("u1"));
-            sink.accept(JobTarget.of("u2"));
+            Consumer<SubjectTarget> sink = inv.getArgument(1);
+            sink.accept(SubjectTarget.of("u1"));
+            sink.accept(SubjectTarget.of("u2"));
             return null;
         }).when(subjectRunner).forEachTarget(any(), any());
         when(evalService.acceptEvent(any())).thenReturn(true).thenReturn(false);
@@ -66,8 +66,8 @@ class TriggerExecutorTest {
     @Test
     void allInjectFailure_failed() {
         doAnswer(inv -> {
-            Consumer<JobTarget> sink = inv.getArgument(1);
-            sink.accept(JobTarget.of("u1"));
+            Consumer<SubjectTarget> sink = inv.getArgument(1);
+            sink.accept(SubjectTarget.of("u1"));
             return null;
         }).when(subjectRunner).forEachTarget(any(), any());
         when(evalService.acceptEvent(any())).thenReturn(false);

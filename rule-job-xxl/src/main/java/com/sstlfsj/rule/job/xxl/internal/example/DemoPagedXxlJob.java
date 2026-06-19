@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * 分页 Job 的 xxl-job 原生写法演示（仅 {@code xxl-demo} profile，需 executor 启用）。
  *
- * <p>对照 rule-job-svc 的 {@code DemoFraudJob#recentLoginUsersPaged}（{@code @RuleJob} 注解式，
+ * <p>对照 rule-job-svc 的 {@code DemoFraudJob#recentLoginUsersPaged}（{@code @TriggerTask} 注解式，
  * 仿 ElasticJob DataflowJob：框架按 page 0、1、2… 反复回调拉到空批为止，分页由框架驱动）——
  * xxl-job 没有 DataflowJob 那种"返回一页、框架再要下一页"的回调模型，分页改由 <b>handler 内部自己循环</b>：
  * 一个 {@code @XxlJob} 方法里 while 翻页、每页处理完再取下一页，拉到空批跳出。

@@ -1,8 +1,8 @@
 package com.sstlfsj.rule.job.internal.example;
 
-import com.sstlfsj.rule.job.api.JobPage;
-import com.sstlfsj.rule.job.api.JobTarget;
-import com.sstlfsj.rule.job.api.annotation.RuleJob;
+import com.sstlfsj.rule.job.api.SubjectPage;
+import com.sstlfsj.rule.job.api.SubjectTarget;
+import com.sstlfsj.rule.job.api.annotation.TriggerTask;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -20,15 +20,15 @@ class DemoFraudJob {
 
     /**
      * 演示主体查询：返回近期登录用户。真实场景替换为查 login 日志表
-     * （如注入 JdbcTemplate 查「10 分钟前登录的用户」），返回 {@link JobTarget} 列表，
-     * 可经 {@code JobTarget.of(id, payload)} / {@code withProvidedMetrics} 携带预提供值。
+     * （如注入 JdbcTemplate 查「10 分钟前登录的用户」），返回 {@link SubjectTarget} 列表，
+     * 可经 {@code SubjectTarget.of(id, payload)} / {@code withProvidedMetrics} 携带预提供值。
      *
      * @return 目标列表
      */
-    @RuleJob(code = "demo-daily", cron = "0 0 3 * * *", tenant = "1",
+    @TriggerTask(code = "demo-daily", cron = "0 0 3 * * *", tenant = "1",
             scene = "fraud_check", eventType = "login", name = "演示每日欺诈扫描")
-    public List<JobTarget> recentLoginUsers() {
-        return List.of(JobTarget.of("user-001"), JobTarget.of("user-002"));
+    public List<SubjectTarget> recentLoginUsers() {
+        return List.of(SubjectTarget.of("user-001"), SubjectTarget.of("user-002"));
     }
 
     /**
@@ -39,15 +39,15 @@ class DemoFraudJob {
      * @param page 分页上下文（框架注入）
      * @return 当前页目标列表，空列表表示已无更多页
      */
-    @RuleJob(code = "demo-paged", cron = "0 30 3 * * *", tenant = "1",
+    @TriggerTask(code = "demo-paged", cron = "0 30 3 * * *", tenant = "1",
             scene = "fraud_check", eventType = "login", name = "演示分页欺诈扫描")
-    public List<JobTarget> recentLoginUsersPaged(JobPage page) {
+    public List<SubjectTarget> recentLoginUsersPaged(SubjectPage page) {
         if (page.pageNumber() >= 3) {
             return List.of();   // 空批 → 框架停止翻页
         }
         // 演示用每页 2 条（真实场景：login 表 SQL LIMIT page.pageSize() OFFSET page.offset()）
         return List.of(
-                JobTarget.of("paged-user-" + page.pageNumber() + "-0"),
-                JobTarget.of("paged-user-" + page.pageNumber() + "-1"));
+                SubjectTarget.of("paged-user-" + page.pageNumber() + "-0"),
+                SubjectTarget.of("paged-user-" + page.pageNumber() + "-1"));
     }
 }

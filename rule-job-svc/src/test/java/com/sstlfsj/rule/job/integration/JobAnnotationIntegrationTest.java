@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.job.integration;
 
-import com.sstlfsj.rule.job.api.JobTarget;
-import com.sstlfsj.rule.job.api.annotation.RuleJob;
+import com.sstlfsj.rule.job.api.SubjectTarget;
+import com.sstlfsj.rule.job.api.annotation.TriggerTask;
 import com.sstlfsj.rule.job.api.dto.JobExecutionVO;
 import com.sstlfsj.rule.job.api.service.JobService;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
@@ -33,7 +33,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 注解式 Job 真实链路端到端测试：{@code @RuleJob} 启动自动落库 + 触发经真实评估产数据。
+ * 注解式 Job 真实链路端到端测试：{@code @TriggerTask} 启动自动落库 + 触发经真实评估产数据。
  *
  * <p>验证 RuleJobScanner 扫描注解方法 → upsert job_definition（BEAN_METHOD 类型）→ 触发时
  * 反射调用业务方法查主体 → 合成 RuleEvent → 真实 acceptEvent 评估 → 产生 evaluation_session。
@@ -68,10 +68,10 @@ class JobAnnotationIntegrationTest {
 
     /** 测试用注解 Job：主体查询方法返回 2 个目标。 */
     static class AnnotatedFraudJob {
-        @RuleJob(code = "test-anno-job", cron = "0 0 0 1 1 *", tenant = "1",
+        @TriggerTask(code = "test-anno-job", cron = "0 0 0 1 1 *", tenant = "1",
                 scene = "fraud_check", eventType = "login", name = "测试注解Job")
-        public List<JobTarget> subjects() {
-            return List.of(JobTarget.of("u1"), JobTarget.of("u2"));
+        public List<SubjectTarget> subjects() {
+            return List.of(SubjectTarget.of("u1"), SubjectTarget.of("u2"));
         }
     }
 

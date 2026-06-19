@@ -6,13 +6,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 注解式定时 Job：标在 Spring Bean 的「主体查询方法」上（D11 / D47）。
+ * 触发任务（TriggerTask）：标在 Spring Bean 的「主体查询方法」上（D11 / D47）。
  *
- * <p>被标注的方法即该 Job 的目标来源，两种签名二选一（{@code JobTarget.subjectId} 为 subjectId，
+ * <p>被标注的方法即该任务的目标来源，两种签名二选一（{@code SubjectTarget.subjectId} 为 subjectId，
  * {@code payload} / {@code providedMetrics} 随合成事件透传）：
  * <ul>
- *   <li>小数据量：无参、返回 {@code List<JobTarget>}；</li>
- *   <li>大数据量：单 {@code JobPage} 参、返回 {@code List<JobTarget>} —— 分页拉取（仿 ElasticJob DataflowJob），
+ *   <li>小数据量：无参、返回 {@code List<SubjectTarget>}；</li>
+ *   <li>大数据量：单 {@code SubjectPage} 参、返回 {@code List<SubjectTarget>} —— 分页拉取（仿 ElasticJob DataflowJob），
  *       框架 page 0、1、2… 反复调用拉到空批为止，每批只占一页内存。方法体用 {@code page.offset()} /
  *       {@code page.pageSize()} 作 SQL {@code LIMIT ... OFFSET ...}。</li>
  * </ul>
@@ -23,7 +23,7 @@ import java.lang.annotation.Target;
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface RuleJob {
+public @interface TriggerTask {
 
     /** Job 编码，租户 + 场景内唯一。 */
     String code();

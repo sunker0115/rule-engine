@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.job.internal.service;
 
-import com.sstlfsj.rule.job.api.annotation.RuleJob;
+import com.sstlfsj.rule.job.api.annotation.TriggerTask;
 import com.sstlfsj.rule.job.internal.domain.JobDefinition;
 import com.sstlfsj.rule.job.internal.domain.JobStatus;
 import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * 扫描 {@code @RuleJob} 注解方法，启动期填充主体查询方法注册表并 upsert 到 {@code job_definition}。
+ * 扫描 {@code @TriggerTask} 注解方法，启动期填充主体查询方法注册表并 upsert 到 {@code job_definition}。
  *
  * <p>在所有单例就绪后（{@link SmartInitializingSingleton}）、{@link JobStartupRegistrar}
  * （ApplicationRunner）之前执行：注解 Job 落库为 BEAN_METHOD 类型后，由 JobStartupRegistrar
@@ -52,7 +52,7 @@ class RuleJobScanner implements SmartInitializingSingleton {
             }
             Class<?> userClass = ClassUtils.getUserClass(type);
             for (Method method : userClass.getMethods()) {
-                RuleJob ann = AnnotationUtils.findAnnotation(method, RuleJob.class);
+                TriggerTask ann = AnnotationUtils.findAnnotation(method, TriggerTask.class);
                 if (ann != null) {
                     registerRuleJob(applicationContext.getBean(beanName), method, ann);
                     count++;
@@ -60,11 +60,11 @@ class RuleJobScanner implements SmartInitializingSingleton {
             }
         }
         if (count > 0) {
-            log.info("[rule-job] @RuleJob 注解扫描完成，注册 {} 个注解 Job", count);
+            log.info("[rule-job] @TriggerTask 注解扫描完成，注册 {} 个注解 Job", count);
         }
     }
 
-    private void registerRuleJob(Object bean, Method method, RuleJob ann) {
+    private void registerRuleJob(Object bean, Method method, TriggerTask ann) {
         String ref = method.getDeclaringClass().getName() + "#" + method.getName();
         registry.register(ref, bean, method);
         upsert(ann, ref);
@@ -72,7 +72,7 @@ class RuleJobScanner implements SmartInitializingSingleton {
                 ann.code(), ann.cron(), ann.scene(), ref);
     }
 
-    private void upsert(RuleJob ann, String ref) {
+    private void upsert(TriggerTask ann, String ref) {
         String subjectQuery = objectMapper.writeValueAsString(
                 Map.of("type", "BEAN_METHOD", "ref", ref));
         Long tenantId = Long.valueOf(ann.tenant());
@@ -89,7 +89,7 @@ class RuleJobScanner implements SmartInitializingSingleton {
             def.setSubjectQuery(subjectQuery);
             def.setEventType(ann.eventType());
             def.setStatus(JobStatus.ACTIVE);
-            def.setCreatedBy("@RuleJob");
+            def.setCreatedBy("@TriggerTask");
             jobMapper.insert(def);
         } else {
             existing.setName(name);
@@ -97,7 +97,7 @@ class RuleJobScanner implements SmartInitializingSingleton {
             existing.setSubjectQuery(subjectQuery);
             existing.setEventType(ann.eventType());
             existing.setStatus(JobStatus.ACTIVE);
-            existing.setUpdatedBy("@RuleJob");
+            existing.setUpdatedBy("@TriggerTask");
             existing.setUpdatedAt(LocalDateTime.now());
             jobMapper.updateById(existing);
         }

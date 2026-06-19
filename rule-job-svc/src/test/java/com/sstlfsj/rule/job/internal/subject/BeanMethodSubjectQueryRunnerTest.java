@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.job.internal.subject;
 
-import com.sstlfsj.rule.job.api.JobPage;
-import com.sstlfsj.rule.job.api.JobTarget;
+import com.sstlfsj.rule.job.api.SubjectPage;
+import com.sstlfsj.rule.job.api.SubjectTarget;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -14,17 +14,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class BeanMethodSubjectQueryRunnerTest {
 
-    /** 真实 @RuleJob 方法样例（用真 registry 反射调用，覆盖无参 / 分页 / 非法 三类）。 */
+    /** 真实 @TriggerTask 方法样例（用真 registry 反射调用，覆盖无参 / 分页 / 非法 三类）。 */
     static class Probe {
-        public List<JobTarget> all() {
-            return List.of(JobTarget.of("u1"), JobTarget.of("u2"));
+        public List<SubjectTarget> all() {
+            return List.of(SubjectTarget.of("u1"), SubjectTarget.of("u2"));
         }
 
-        public List<JobTarget> paged(JobPage page) {
+        public List<SubjectTarget> paged(SubjectPage page) {
             // page0 两条、page1 一条、page2 空 → 框架应在空批处停
             return switch (page.pageNumber()) {
-                case 0 -> List.of(JobTarget.of("p0a"), JobTarget.of("p0b"));
-                case 1 -> List.of(JobTarget.of("p1a"));
+                case 0 -> List.of(SubjectTarget.of("p0a"), SubjectTarget.of("p0b"));
+                case 1 -> List.of(SubjectTarget.of("p1a"));
                 default -> List.of();
             };
         }
@@ -41,7 +41,7 @@ class BeanMethodSubjectQueryRunnerTest {
         BeanMethodRegistry registry = new BeanMethodRegistry();
         Probe probe = new Probe();
         registry.register("p#all", probe, Probe.class.getMethod("all"));
-        registry.register("p#paged", probe, Probe.class.getMethod("paged", JobPage.class));
+        registry.register("p#paged", probe, Probe.class.getMethod("paged", SubjectPage.class));
         registry.register("p#wrong", probe, Probe.class.getMethod("wrongReturn"));
         runner = new BeanMethodSubjectQueryRunner(registry, JsonMapper.builder().build());
     }

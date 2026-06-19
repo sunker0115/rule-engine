@@ -19,7 +19,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** JobService 实现：Job 启用 / 禁用 / 查询 / 手动触发 / 执行记录查询（D48：定义走 @RuleJob 注解）。 */
+/** JobService 实现：Job 启用 / 禁用 / 查询 / 手动触发 / 执行记录查询（D48：定义走 @TriggerTask 注解）。 */
 @Service
 @RequiredArgsConstructor
 class JobServiceImpl implements JobService {

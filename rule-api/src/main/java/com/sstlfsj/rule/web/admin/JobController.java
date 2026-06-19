@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * Job 管理入口：启用 / 禁用 / 查询 / 手动触发 / 运行记录（D11 / D48）。
  *
- * <p>Job 定义由 {@code @RuleJob} 注解驱动、启动期自动落库，故无创建接口；本控制器只做管理。
+ * <p>Job 定义由 {@code @TriggerTask} 注解驱动、启动期自动落库，故无创建接口；本控制器只做管理。
  */
 @RestController
 @RequestMapping("/admin/v1/jobs")
