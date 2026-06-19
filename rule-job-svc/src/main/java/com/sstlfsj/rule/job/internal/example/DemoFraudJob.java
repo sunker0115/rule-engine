@@ -25,7 +25,7 @@ class DemoFraudJob {
      *
      * @return 目标列表
      */
-    @TriggerTask(code = "demo-daily", cron = "0 0 3 * * *", tenant = "1",
+    @TriggerTask(code = "demo-daily", cron = "0 0 3 * * *", tenant = "9100",
             scene = "fraud_check", eventType = "login", name = "演示每日欺诈扫描")
     public List<SubjectTarget> recentLoginUsers() {
         return List.of(SubjectTarget.of("user-001"), SubjectTarget.of("user-002"));
@@ -39,7 +39,7 @@ class DemoFraudJob {
      * @param page 分页上下文（框架注入）
      * @return 当前页目标列表，空列表表示已无更多页
      */
-    @TriggerTask(code = "demo-paged", cron = "0 30 3 * * *", tenant = "1",
+    @TriggerTask(code = "demo-paged", cron = "0 30 3 * * *", tenant = "9100",
             scene = "fraud_check", eventType = "login", name = "演示分页欺诈扫描")
     public List<SubjectTarget> recentLoginUsersPaged(SubjectPage page) {
         if (page.pageNumber() >= 3) {
