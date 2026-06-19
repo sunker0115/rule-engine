@@ -1,15 +1,14 @@
 package com.sstlfsj.rule.job.internal.runner;
 
 import com.sstlfsj.rule.eval.api.service.EvalService;
-import com.sstlfsj.rule.job.api.TaskExecutionStatus;
-import com.sstlfsj.rule.job.api.TaskExecutor;
-import com.sstlfsj.rule.job.api.TaskRunContext;
-import com.sstlfsj.rule.job.api.TaskRunResult;
-import com.sstlfsj.rule.job.api.TaskType;
 import com.sstlfsj.rule.job.api.TriggerConfig;
 import com.sstlfsj.rule.job.internal.subject.SubjectQueryRunner;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskExecutionStatus;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskExecutor;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskRunContext;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskRunResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -68,8 +67,8 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
     }
 
     @Override
-    public TaskType type() {
-        return TaskType.TRIGGER;
+    public String type() {
+        return "TRIGGER";
     }
 
     @Override
@@ -122,7 +121,8 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
             log.warn("TRIGGER 主体查询失败 taskRunId={}", taskRunId, e);
         }
         String summary = errors.isEmpty() ? null : truncate(String.join("; ", errors));
-        return new TaskRunResult(status, counters[0], counters[1], counters[2], summary);
+        // TRIGGER 无增量游标,newCursor 恒为 null
+        return new TaskRunResult(status, counters[0], counters[1], counters[2], summary, null);
     }
 
     /**

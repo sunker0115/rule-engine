@@ -3,7 +3,7 @@ package com.sstlfsj.rule.job.internal.domain;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.sstlfsj.rule.job.api.TaskExecutionStatus;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskExecutionStatus;
 import lombok.Getter;
 import lombok.Setter;
 

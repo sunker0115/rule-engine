@@ -4,17 +4,14 @@ import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.job.api.BeanMethodQuery;
 import com.sstlfsj.rule.job.api.TaskStatus;
-import com.sstlfsj.rule.job.api.TaskType;
 import com.sstlfsj.rule.job.api.TriggerConfig;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskVO;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskExecutionMapper;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskMapper;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -23,24 +20,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class ScheduledTaskServiceImplTest {
 
-    @Mock
-    ScheduledTaskMapper taskMapper;
-    @Mock
-    ScheduledTaskExecutionMapper executionMapper;
-    @Mock
-    SceneService sceneService;
-    @Mock
-    ScheduledTaskScheduleManager scheduleManager;
+    private final ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+    private final ScheduledTaskExecutionMapper executionMapper = mock(ScheduledTaskExecutionMapper.class);
+    private final SceneService sceneService = mock(SceneService.class);
+    private final ScheduledTaskScheduleManager scheduleManager = mock(ScheduledTaskScheduleManager.class);
+    private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
-    @InjectMocks
-    ScheduledTaskServiceImpl service;
+    private final ScheduledTaskServiceImpl service = new ScheduledTaskServiceImpl(
+            taskMapper, executionMapper, sceneService, scheduleManager, objectMapper);
 
     private SceneDetailDto scene(String mode) {
         return new SceneDetailDto(1L, 1L, "s1", "name", null, mode, "USER",
@@ -53,9 +47,10 @@ class ScheduledTaskServiceImplTest {
         t.setTenantId(1L);
         t.setCode("t1");
         t.setName("Task1");
-        t.setTaskType(TaskType.TRIGGER);
+        t.setTaskType("TRIGGER");
         t.setCron("0 0 0 * * *");
-        t.setConfig(new TriggerConfig("s1", "login", new BeanMethodQuery("a#b")));
+        t.setConfig(objectMapper.writeValueAsString(
+                new TriggerConfig("s1", "login", new BeanMethodQuery("a#b"))));
         t.setStatus(status);
         return t;
     }
@@ -113,15 +108,17 @@ class ScheduledTaskServiceImplTest {
     }
 
     @Test
-    void getReturnsTypedConfig() {
+    @SuppressWarnings("unchecked")
+    void getReturnsParsedJsonConfig() {
         ScheduledTask t = task(TaskStatus.ACTIVE);
         when(taskMapper.selectById(5L)).thenReturn(t);
 
         ScheduledTaskVO vo = service.get(1L, 5L);
 
-        assertThat(vo.config()).isInstanceOf(TriggerConfig.class);
-        assertThat(((TriggerConfig) vo.config()).sceneCode()).isEqualTo("s1");
+        // config 以解析后的 JSON 对象(Map)出口,框架核不持 typed 全集
+        assertThat(vo.config()).isInstanceOf(Map.class);
+        assertThat(((Map<String, Object>) vo.config()).get("sceneCode")).isEqualTo("s1");
         assertThat(vo.status()).isEqualTo("ACTIVE");
-        assertThat(vo.taskType()).isEqualTo(TaskType.TRIGGER);
+        assertThat(vo.taskType()).isEqualTo("TRIGGER");
     }
 }

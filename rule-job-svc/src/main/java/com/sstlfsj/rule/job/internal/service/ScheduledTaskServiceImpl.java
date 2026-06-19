@@ -14,6 +14,7 @@ import com.sstlfsj.rule.job.internal.repository.ScheduledTaskMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -28,6 +29,7 @@ class ScheduledTaskServiceImpl implements ScheduledTaskService {
     private final ScheduledTaskExecutionMapper executionMapper;
     private final SceneService sceneService;
     private final ScheduledTaskScheduleManager scheduleManager;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -53,7 +55,7 @@ class ScheduledTaskServiceImpl implements ScheduledTaskService {
     @Override
     public List<ScheduledTaskVO> list(Long tenantId) {
         return taskMapper.findByTenant(tenantId).stream()
-                .map(ScheduledTaskServiceImpl::toVO)
+                .map(this::toVO)
                 .toList();
     }
 
@@ -65,20 +67,21 @@ class ScheduledTaskServiceImpl implements ScheduledTaskService {
     @Override
     public ScheduledTaskExecutionVO triggerOnce(Long tenantId, Long taskId) {
         findTask(tenantId, taskId);
-        return toVO(scheduleManager.runOnce(taskId));
+        return toExecutionVO(scheduleManager.runOnce(taskId));
     }
 
     @Override
     public List<ScheduledTaskExecutionVO> recentExecutions(Long tenantId, Long taskId, int limit) {
         findTask(tenantId, taskId);
         return executionMapper.recentByTask(taskId, limit).stream()
-                .map(ScheduledTaskServiceImpl::toVO)
+                .map(ScheduledTaskServiceImpl::toExecutionVO)
                 .toList();
     }
 
     /** TRIGGER 任务绑定 Scene 为 PULL 时拒绝启用——PULL 是同步业务调用语义，定时触发无意义（§3.10）。 */
     private void rejectIfPullScene(Long tenantId, ScheduledTask task) {
-        if (task.getConfig() instanceof TriggerConfig trigger) {
+        if ("TRIGGER".equals(task.getTaskType()) && task.getConfig() != null) {
+            TriggerConfig trigger = objectMapper.readValue(task.getConfig(), TriggerConfig.class);
             SceneDetailDto scene = sceneService.getScene(tenantId, trigger.sceneCode());
             if ("PULL".equals(scene.dominantMode())) {
                 throw new IllegalArgumentException("PULL Scene 不允许绑定 TRIGGER 任务: " + trigger.sceneCode());
@@ -94,7 +97,9 @@ class ScheduledTaskServiceImpl implements ScheduledTaskService {
         return task;
     }
 
-    private static ScheduledTaskVO toVO(ScheduledTask task) {
+    private ScheduledTaskVO toVO(ScheduledTask task) {
+        // config 以解析后的 JSON 对象出口(框架核不持 typed 全集)
+        Object config = task.getConfig() == null ? null : objectMapper.readValue(task.getConfig(), Object.class);
         return new ScheduledTaskVO(
                 task.getId(),
                 task.getTenantId(),
@@ -102,13 +107,13 @@ class ScheduledTaskServiceImpl implements ScheduledTaskService {
                 task.getName(),
                 task.getTaskType(),
                 task.getCron(),
-                task.getConfig(),
+                config,
                 task.getStatus().name(),
                 task.getCreatedAt() != null ? task.getCreatedAt().toInstant(ZoneOffset.UTC) : null,
                 task.getUpdatedAt() != null ? task.getUpdatedAt().toInstant(ZoneOffset.UTC) : null);
     }
 
-    private static ScheduledTaskExecutionVO toVO(ScheduledTaskExecution exec) {
+    private static ScheduledTaskExecutionVO toExecutionVO(ScheduledTaskExecution exec) {
         return new ScheduledTaskExecutionVO(
                 exec.getId(),
                 exec.getScheduledTaskId(),

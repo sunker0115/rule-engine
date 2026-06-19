@@ -1,26 +1,36 @@
 package com.sstlfsj.rule.job.internal.runner;
 
-import com.sstlfsj.rule.job.api.TaskConfig;
-import com.sstlfsj.rule.job.api.TaskExecutor;
-import com.sstlfsj.rule.job.api.TaskRunContext;
-import com.sstlfsj.rule.job.api.TaskRunResult;
-import com.sstlfsj.rule.job.api.TaskType;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskExecutor;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskRunContext;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskRunResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 按 TaskType 收集 TaskExecutor 并路由。Spring 注入 List<TaskExecutor> 自动收集。 */
+/**
+ * 按开放类型名(String)收集 {@link TaskExecutor} 并路由。Spring 跨模块注入 {@code List<TaskExecutor>} 自动收集
+ * (XXL {@code @XxlJob} bean 扫描式解耦,job-svc 不依赖各 handler 模块)。
+ *
+ * <p>派发时按 task_type 取 executor,用 executor.configType() 把 config 原始 JSON 反序列化成该 handler 的 typed config。
+ */
 @Slf4j
 @Component
 public class TaskExecutorRegistry {
 
-    private final Map<TaskType, TaskExecutor<?>> byType = new EnumMap<>(TaskType.class);
+    private final Map<String, TaskExecutor<?>> byType = new HashMap<>();
+    private final ObjectMapper objectMapper;
 
-    public TaskExecutorRegistry(List<TaskExecutor<?>> executors) {
+    /**
+     * @param executors    Spring 收集到的全部 executor(各模块自声明 type)
+     * @param objectMapper 全局 ObjectMapper,用于 config JSON↔typed 反序列化
+     */
+    public TaskExecutorRegistry(List<TaskExecutor<?>> executors, ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
         for (TaskExecutor<?> e : executors) {
             if (byType.putIfAbsent(e.type(), e) != null) {
                 throw new IllegalStateException("多个 TaskExecutor 声明同一 type=" + e.type());
@@ -29,25 +39,24 @@ public class TaskExecutorRegistry {
     }
 
     /**
-     * 路由执行:校验 config 子类型与 executor.configType() 一致,转型后执行。
+     * 路由执行:按 task_type 取 executor → config JSON 反序列化成 executor.configType() → 执行。
      *
-     * @param task      触发的任务
-     * @param taskRunId 本次运行的执行记录 id（每次运行唯一，透传给 executor 作 eventId 幂等键）
+     * @param task 触发的任务
+     * @param ctx  运行上下文(taskRunId/taskId/tenantId/cursor)
      * @return 执行结果
      */
-    @SuppressWarnings("unchecked")
-    public <C extends TaskConfig> TaskRunResult dispatch(ScheduledTask task, long taskRunId) {
-        TaskExecutor<C> executor = (TaskExecutor<C>) byType.get(task.getTaskType());
-        if (executor == null) {
+    public TaskRunResult dispatch(ScheduledTask task, TaskRunContext ctx) {
+        TaskExecutor<?> ex = byType.get(task.getTaskType());
+        if (ex == null) {
             throw new IllegalStateException("无 TaskExecutor 处理 type=" + task.getTaskType());
         }
-        TaskConfig config = task.getConfig();
-        if (!executor.configType().isInstance(config)) {
-            throw new IllegalStateException("task " + task.getId() + " config 类型 "
-                    + (config == null ? "null" : config.getClass().getSimpleName())
-                    + " 与 executor.configType=" + executor.configType().getSimpleName() + " 不符");
-        }
-        TaskRunContext ctx = new TaskRunContext(taskRunId, task.getId(), task.getTenantId());
-        return executor.execute(ctx, (C) executor.configType().cast(config));
+        Object cfg = task.getConfig() == null ? null
+                : objectMapper.readValue(task.getConfig(), ex.configType());
+        return invoke(ex, ctx, cfg);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <C> TaskRunResult invoke(TaskExecutor<C> ex, TaskRunContext ctx, Object cfg) {
+        return ex.execute(ctx, (C) cfg);
     }
 }

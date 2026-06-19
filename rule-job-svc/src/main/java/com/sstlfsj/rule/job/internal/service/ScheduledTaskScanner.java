@@ -2,7 +2,6 @@ package com.sstlfsj.rule.job.internal.service;
 
 import com.sstlfsj.rule.job.api.BeanMethodQuery;
 import com.sstlfsj.rule.job.api.TaskStatus;
-import com.sstlfsj.rule.job.api.TaskType;
 import com.sstlfsj.rule.job.api.TriggerConfig;
 import com.sstlfsj.rule.job.api.annotation.TriggerTask;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
@@ -15,6 +14,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
+import tools.jackson.databind.ObjectMapper;
 
 import java.lang.reflect.Method;
 
@@ -33,6 +33,7 @@ class ScheduledTaskScanner implements SmartInitializingSingleton {
     private final ApplicationContext applicationContext;
     private final ScheduledTaskMapper taskMapper;
     private final BeanMethodRegistry registry;
+    private final ObjectMapper objectMapper;
 
     @Override
     public void afterSingletonsInstantiated() {
@@ -66,15 +67,16 @@ class ScheduledTaskScanner implements SmartInitializingSingleton {
         Long tenantId = Long.valueOf(ann.tenant());
         String name = ann.name().isBlank() ? ann.code() : ann.name();
         TriggerConfig config = new TriggerConfig(ann.scene(), ann.eventType(), new BeanMethodQuery(ref));
+        String configJson = objectMapper.writeValueAsString(config);
         ScheduledTask existing = taskMapper.findByTenantCode(tenantId, ann.code());
         if (existing == null) {
             ScheduledTask t = new ScheduledTask();
             t.setTenantId(tenantId);
             t.setCode(ann.code());
             t.setName(name);
-            t.setTaskType(TaskType.TRIGGER);
+            t.setTaskType("TRIGGER");
             t.setCron(ann.cron());
-            t.setConfig(config);
+            t.setConfig(configJson);
             t.setStatus(TaskStatus.ACTIVE);
             t.setCreatedBy("@TriggerTask");
             taskMapper.insert(t);
@@ -82,7 +84,7 @@ class ScheduledTaskScanner implements SmartInitializingSingleton {
             // 保留既有 status（启用 / 禁用由管理接口决定），只刷新展示名 / cron / config
             existing.setName(name);
             existing.setCron(ann.cron());
-            existing.setConfig(config);
+            existing.setConfig(configJson);
             existing.setUpdatedBy("@TriggerTask");
             taskMapper.updateById(existing);
         }

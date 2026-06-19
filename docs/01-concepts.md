@@ -440,7 +440,7 @@ EvalContext {
 
 ### 3.10 ScheduledTask（调度任务，不是一等公民）
 
-**是什么**：通用调度任务框架——`ScheduledTask` + `TaskExecutor` SPI，按 `task_type` 路由（`TaskType` 封闭集，首期 `TRIGGER` / `OUTCOME_INGESTION`）。调度层只回答"何时 + 哪个实例跑"，任务层负责"执行什么"，二者解耦：加新调度工作 = 加一个 `TaskType` 值 + 一个 `TaskExecutor` + 一个 `TaskConfig` 子类型，零主干改动。设计见 [scheduling/propagation spec](./superpowers/specs/2026-06-19-distributed-ready-scheduling-and-propagation-design.md) §3–§5。
+**是什么**：通用调度任务框架——`ScheduledTask` + `TaskExecutor` SPI（**SPI 在 kernel**，去中心化），按 `task_type`（**开放 string**，非中心枚举）路由，首期 `TRIGGER` / `OUTCOME_INGESTION`。调度层只回答"何时 + 哪个实例跑"，任务层负责"执行什么"，二者解耦：加新调度工作 = 在拥有该领域的模块加一个 `TaskExecutor` bean（声明开放类型名 + 一个自带 config record），job-svc 经 Spring `List<TaskExecutor>` DI 收集、**零主干改动、零新依赖**。设计见 [scheduling/propagation spec](./superpowers/specs/2026-06-19-distributed-ready-scheduling-and-propagation-design.md) §3–§5。
 
 **`TRIGGER` 类型 = 原"定时类规则"接入引擎的 Trigger 适配器**，**不引入第四个一等概念**。调度器到点后由 `TriggerExecutor`（`TaskExecutor<TriggerConfig>`）：
 
@@ -455,10 +455,10 @@ EvalContext {
 | `id` | 主键（DDL 列名；概念层有时称 `taskId`） |
 | `tenantId` | 归属租户（DDL 列 `tenant_id`） |
 | `code / name` | 租户内唯一标识 + 给运营看的名称（UK `uk_tenant_code`） |
-| `taskType` | 任务类型判别（DDL 列 `task_type`，`TaskType` enum：`TRIGGER` / `OUTCOME_INGESTION`）；冗余一份供查询/分发，单一真相在 `config` 多态 tag |
+| `taskType` | 任务类型判别（DDL 列 `task_type`，**开放 string**，与 `TaskExecutor.type()` 对应：`TRIGGER` / `OUTCOME_INGESTION` / ...）；registry 据此路由到对应 executor 并用其 `configType()` 反序列化 `config` |
 | `cron` | 标准 cron 表达式（DDL 列名 `cron`）；seed 初值，seed 后 XXL admin 运行时权威。时区可选——cron 自带时区时以 cron 为准（如 `CRON_TZ=Asia/Shanghai 0 30 0 * * *`），TRIGGER 未指定时回落 `Scene.defaultParams.timezone`，仍未配回落引擎默认（`UTC`） |
-| `config` | typed `TaskConfig`（DDL 单 JSON 列，sealed 类型族，多态 `kind` 判别，**不可变静态定义**）。`TRIGGER` 为 `TriggerConfig{sceneCode, eventType, subjectQuery}`（`sceneCode` 关联 scene.code、PULL Scene 拒绝绑定；`subjectQuery.type=BEAN_METHOD` 指向 `@TriggerTask` 注解方法）；`OUTCOME_INGESTION`（B32 标签回灌）为 `OutcomeIngestionConfig{source}`——`source` 为多态 `OutcomeSourceConfig`（首个实现 `SqlOutcomeSourceConfig{datasource, sql}`）。增量 watermark 不在 config，存于独立 `run_cursor` 列（见下） |
-| `run_cursor` | 增量任务运行态游标（DDL 列 `run_cursor`，V1_38；state-not-config，对齐 Kafka Connect offset / Airbyte state）。`OUTCOME_INGESTION` 存上次拉取 watermark（每轮取本批 max `labeledAt` 写回，推进增量），由 executor 管理；TRIGGER 等为 null |
+| `config` | **原始 JSON 配置**（DDL 单 JSON 列，**不可变静态定义**；去中心化:框架核视为不透明 payload，无共享 sealed 基类，各 handler 自带 typed record、派发时按 `executor.configType()` 反序列化恢复）。`TRIGGER` 为 `TriggerConfig{sceneCode, eventType, subjectQuery}`（在 job-svc；`sceneCode` 关联 scene.code、PULL Scene 拒绝绑定；`subjectQuery.type=BEAN_METHOD` 指向 `@TriggerTask` 注解方法）；`OUTCOME_INGESTION`（B32 标签回灌）为 `OutcomeIngestionConfig{source}`（在 eval-svc）——`source` 为多态 `OutcomeSourceConfig`（首个实现 `SqlOutcomeSourceConfig{datasource, sql}`）。增量 watermark 不在 config，经 `TaskRunContext.cursor` 入、`TaskRunResult.newCursor` 出，由调度框架写独立 `run_cursor` 列（见下） |
+| `run_cursor` | 增量任务运行态游标（DDL 列 `run_cursor`，V1_38；state-not-config，对齐 Kafka Connect offset / Airbyte state）。`OUTCOME_INGESTION` 存上次拉取 watermark（每轮取本批 max `labeledAt` 推进增量）——游标经 `TaskRunContext.cursor` 流入 executor、经 `TaskRunResult.newCursor` 流出，由调度框架写回（executor 不碰 scheduled_task 表）；TRIGGER 等为 null |
 | `status` | `ACTIVE` / `DISABLED`（VARCHAR；概念层有时写 `PAUSED`，DDL 对应值为 `DISABLED`） |
 
 **TRIGGER 定义方式（@TriggerTask 注解驱动）**：TRIGGER 任务由 `@TriggerTask` 注解定义——开发者在 Spring Bean 方法上标注（`code`/`cron`/`tenant`/`scene`/`eventType`），方法体即自定义主体查询，返回 `List<SubjectTarget>`（每个 `SubjectTarget` 含 `subjectId` + 可选 `payload` + 可选 `providedMetrics`，如「查 10 分钟前登录的用户并带上其评分」）。启动期 `ScheduledTaskScanner` 扫描注解 → upsert 到 `scheduled_task`（`task_type=TRIGGER`，`config` 为 `TriggerConfig`，`subjectQuery.type=BEAN_METHOD`，`ref=<bean>#<method>`）→ 注册调度。触发时 `TriggerExecutor` 经 `RuleEvent.builder` 把每个 `SubjectTarget` 合成事件（`source=JOB`、payload/providedMetrics 透传、`eventId=hash(taskRunId+subjectId)`）注入 `acceptEvent`。运营 API（`/admin/v1/scheduled-tasks`）只做管理（列表 / 详情 / 启用 / 禁用 / 手动触发 / 执行记录），**不含创建**——TRIGGER 的"查哪些主体"是业务代码逻辑，不由运营在 UI 配；规则本身仍由运营事先经 Scene / Rule API 配好，调度任务只定时触发对其评估。

@@ -1,19 +1,21 @@
 package com.sstlfsj.rule.job.internal.service;
 
-import com.sstlfsj.rule.job.api.TaskRunResult;
 import com.sstlfsj.rule.job.api.TaskStatus;
-import com.sstlfsj.rule.job.api.TaskExecutionStatus;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTaskExecution;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskExecutionMapper;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskMapper;
 import com.sstlfsj.rule.job.internal.runner.TaskExecutorRegistry;
 import com.sstlfsj.rule.kernel.api.spi.scheduler.Scheduler;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskExecutionStatus;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskRunContext;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskRunResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /** 任务↔调度器中介 + 执行编排:cron 触发 runById → 重载 → dispatch → 写 scheduled_task_execution。 */
 @Slf4j
@@ -74,12 +76,19 @@ public class ScheduledTaskScheduleManager {
         exec.setErrorCount(0);
         executionMapper.insert(exec);
         try {
-            TaskRunResult r = executorRegistry.dispatch(task, exec.getId());
+            // cursor 经 ctx 流入 executor;executor 经 result.newCursor 回传推进后的游标
+            TaskRunContext ctx = new TaskRunContext(exec.getId(), task.getId(), task.getTenantId(), task.getRunCursor());
+            TaskRunResult r = executorRegistry.dispatch(task, ctx);
             exec.setStatus(r.status());
             exec.setProcessedCount(r.processedCount());
             exec.setSuccessCount(r.successCount());
             exec.setErrorCount(r.errorCount());
             exec.setErrorSummary(r.errorSummary());
+            // 游标前进才写回 run_cursor 列(executor 不碰 scheduled_task 表)
+            if (!Objects.equals(r.newCursor(), task.getRunCursor())) {
+                task.setRunCursor(r.newCursor());
+                taskMapper.updateById(task);
+            }
         } catch (RuntimeException e) {
             exec.setStatus(TaskExecutionStatus.FAILED);
             exec.setErrorSummary("执行异常: " + e.getMessage());

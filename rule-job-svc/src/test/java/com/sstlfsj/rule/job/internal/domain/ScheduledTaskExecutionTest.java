@@ -1,6 +1,6 @@
 package com.sstlfsj.rule.job.internal.domain;
 
-import com.sstlfsj.rule.job.api.TaskExecutionStatus;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskExecutionStatus;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;

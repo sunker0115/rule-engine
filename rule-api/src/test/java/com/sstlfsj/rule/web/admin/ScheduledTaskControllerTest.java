@@ -1,8 +1,5 @@
 package com.sstlfsj.rule.web.admin;
 
-import com.sstlfsj.rule.job.api.BeanMethodQuery;
-import com.sstlfsj.rule.job.api.TaskType;
-import com.sstlfsj.rule.job.api.TriggerConfig;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskExecutionVO;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskVO;
 import com.sstlfsj.rule.job.api.service.ScheduledTaskService;
@@ -14,6 +11,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -37,8 +35,9 @@ class ScheduledTaskControllerTest {
     }
 
     private ScheduledTaskVO taskVO() {
-        return new ScheduledTaskVO(5L, 1L, "t1", "Task1", TaskType.TRIGGER, "0 0 0 * * *",
-                new TriggerConfig("fraud", "login", new BeanMethodQuery("demo#subjects")),
+        // 去中心化:taskType 为开放 string,config 为解析后的 JSON 对象(Map)
+        return new ScheduledTaskVO(5L, 1L, "t1", "Task1", "TRIGGER", "0 0 0 * * *",
+                Map.of("sceneCode", "fraud", "eventType", "login"),
                 "ACTIVE", Instant.now(), Instant.now());
     }
 
@@ -67,8 +66,8 @@ class ScheduledTaskControllerTest {
         mockMvc.perform(get("/admin/v1/scheduled-tasks/5").param("tenantId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.taskType").value("TRIGGER"))
-                .andExpect(jsonPath("$.data.config.kind").value("TRIGGER"))
-                .andExpect(jsonPath("$.data.config.sceneCode").value("fraud"));
+                .andExpect(jsonPath("$.data.config.sceneCode").value("fraud"))
+                .andExpect(jsonPath("$.data.config.eventType").value("login"));
     }
 
     @Test

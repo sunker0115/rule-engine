@@ -1,10 +1,9 @@
 package com.sstlfsj.rule.job.integration;
 
+import com.sstlfsj.rule.eval.api.service.OutcomeIngestionConfig;
 import com.sstlfsj.rule.eval.api.service.SqlOutcomeSourceConfig;
-import com.sstlfsj.rule.job.api.OutcomeIngestionConfig;
 import com.sstlfsj.rule.job.api.SubjectTarget;
 import com.sstlfsj.rule.job.api.TaskStatus;
-import com.sstlfsj.rule.job.api.TaskType;
 import com.sstlfsj.rule.job.api.TriggerConfig;
 import com.sstlfsj.rule.job.api.annotation.TriggerTask;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
@@ -103,6 +102,8 @@ class ScheduledTaskAnnotationIntegrationTest {
     private SceneRuleIndex index;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
@@ -137,14 +138,14 @@ class ScheduledTaskAnnotationIntegrationTest {
     }
 
     @Test
-    void annotationTaskUpsertedToDbAsTriggerWithTypedConfig() {
-        // 从真实 MySQL JSON 列读回 —— 验证 Jackson3TypeHandler 把 config JSON 反序列化回 TriggerConfig 子类型
+    void annotationTaskUpsertedToDbAsTriggerWithRawJsonConfig() {
+        // 从真实 MySQL JSON 列读回 —— 去中心化后 config 是原始 JSON String;手动反序列化回 TriggerConfig 验证内容
         ScheduledTask task = taskMapper.findByTenantCode(1L, "test-anno-job");
         assertThat(task).isNotNull();
         assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
-        assertThat(task.getTaskType()).isEqualTo(TaskType.TRIGGER);
-        assertThat(task.getConfig()).isInstanceOf(TriggerConfig.class);
-        TriggerConfig config = (TriggerConfig) task.getConfig();
+        assertThat(task.getTaskType()).isEqualTo("TRIGGER");
+        assertThat(task.getConfig()).isInstanceOf(String.class);
+        TriggerConfig config = objectMapper.readValue(task.getConfig(), TriggerConfig.class);
         assertThat(config.sceneCode()).isEqualTo("fraud_check");
         assertThat(config.eventType()).isEqualTo("login");
         assertThat(config.subjectQuery()).isNotNull();
@@ -182,40 +183,42 @@ class ScheduledTaskAnnotationIntegrationTest {
 
     @Test
     void outcomeIngestionConfig_roundTripsThroughJsonColumn() {
-        // OUTCOME_INGESTION 配置(静态定义):嵌套 sealed source(SQL 子类型)经真实 MySQL config 列往返;
-        // 运行态游标存于独立 run_cursor 列(state-not-config),不在 config 里
+        // OUTCOME_INGESTION 配置(静态定义):去中心化后 config 以原始 JSON String 存入 MySQL JSON 列;
+        // 嵌套 sealed source(SQL 子类型)由各 handler 在派发时反序列化;运行态游标存于独立 run_cursor 列(state-not-config)
         OutcomeIngestionConfig config = new OutcomeIngestionConfig(
                 new SqlOutcomeSourceConfig("biz",
                         "SELECT event_id, outcome_label, outcome_value, labeled_at FROM biz_label "
                                 + "WHERE tenant_id = :tenantId AND (:watermark IS NULL OR labeled_at > :watermark)"));
+        String configJson = objectMapper.writeValueAsString(config);
 
         ScheduledTask task = new ScheduledTask();
         task.setTenantId(1L);
         task.setCode("ingest-rt-test");
         task.setName("回灌往返测试");
-        task.setTaskType(TaskType.OUTCOME_INGESTION);
+        task.setTaskType("OUTCOME_INGESTION");
         task.setCron("0 0 4 * * *");
-        task.setConfig(config);
+        task.setConfig(configJson);
         task.setRunCursor("2026-06-18T10:00:00Z");
         task.setStatus(TaskStatus.ACTIVE);
         taskMapper.insert(task);
 
-        // 读回:task_type + 多态 config 子类型 + 嵌套 source 子类型还原;run_cursor 列单独持久化
+        // 读回:task_type(开放 string)+ config 原始 JSON String;手动反序列化还原嵌套 source 子类型;run_cursor 列单独持久化
         ScheduledTask read = taskMapper.selectById(task.getId());
-        assertThat(read.getTaskType()).isEqualTo(TaskType.OUTCOME_INGESTION);
-        assertThat(read.getConfig()).isInstanceOf(OutcomeIngestionConfig.class);
-        OutcomeIngestionConfig readConfig = (OutcomeIngestionConfig) read.getConfig();
+        assertThat(read.getTaskType()).isEqualTo("OUTCOME_INGESTION");
+        assertThat(read.getConfig()).isInstanceOf(String.class);
+        OutcomeIngestionConfig readConfig = objectMapper.readValue(read.getConfig(), OutcomeIngestionConfig.class);
         assertThat(readConfig.source()).isInstanceOf(SqlOutcomeSourceConfig.class);
         assertThat(((SqlOutcomeSourceConfig) readConfig.source()).datasource()).isEqualTo("biz");
         assertThat(read.getRunCursor()).isEqualTo("2026-06-18T10:00:00Z");
 
-        // 模拟 executor 写回:推进 run_cursor 列后 updateById,再读回确认新游标真持久化(config 不动)
+        // 模拟调度框架写回:推进 run_cursor 列后 updateById,再读回确认新游标真持久化(config 不动)
         read.setRunCursor("2026-06-19T10:00:00Z");
         taskMapper.updateById(read);
 
         ScheduledTask afterWriteBack = taskMapper.selectById(task.getId());
         assertThat(afterWriteBack.getRunCursor()).isEqualTo("2026-06-19T10:00:00Z");
-        assertThat(afterWriteBack.getConfig()).isInstanceOf(OutcomeIngestionConfig.class);
+        assertThat(objectMapper.readValue(afterWriteBack.getConfig(), OutcomeIngestionConfig.class).source())
+                .isInstanceOf(SqlOutcomeSourceConfig.class);
 
         // 清理本测试新建的行,不污染同类其它用例
         taskMapper.deleteById(task.getId());

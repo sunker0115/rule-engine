@@ -1,15 +1,16 @@
 package com.sstlfsj.rule.job.internal.service;
 
-import com.sstlfsj.rule.job.api.TaskRunResult;
-import com.sstlfsj.rule.job.api.TaskExecutionStatus;
-import com.sstlfsj.rule.job.api.TaskType;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTaskExecution;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskExecutionMapper;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskMapper;
 import com.sstlfsj.rule.job.internal.runner.TaskExecutorRegistry;
 import com.sstlfsj.rule.kernel.api.spi.scheduler.Scheduler;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskExecutionStatus;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskRunContext;
+import com.sstlfsj.rule.kernel.api.spi.task.TaskRunResult;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,12 +29,12 @@ class ScheduledTaskScheduleManagerTest {
     @Test
     void runOnce_writesRunningThenFinalizes() {
         ScheduledTask task = new ScheduledTask();
-        task.setId(5L); task.setTenantId(7L); task.setTaskType(TaskType.TRIGGER);
+        task.setId(5L); task.setTenantId(7L); task.setTaskType("TRIGGER");
         when(taskMapper.selectById(5L)).thenReturn(task);
-        // 模拟 DB 自增主键：insert 时给 execution 赋 id（即 taskRunId），供 dispatch 透传
+        // 模拟 DB 自增主键：insert 时给 execution 赋 id（即 taskRunId），供 ctx 透传
         stubInsertAssignsId(42L);
-        when(registry.dispatch(eq(task), eq(42L)))
-                .thenReturn(new TaskRunResult(TaskExecutionStatus.SUCCESS, 3, 3, 0, null));
+        when(registry.dispatch(eq(task), any(TaskRunContext.class)))
+                .thenReturn(new TaskRunResult(TaskExecutionStatus.SUCCESS, 3, 3, 0, null, null));
 
         ScheduledTaskExecution exec = mgr.runOnce(5L);
 
@@ -45,12 +46,52 @@ class ScheduledTaskScheduleManagerTest {
     }
 
     @Test
-    void dispatchThrows_recordedFailed() {
+    void ctxCarriesCursor_andAdvancedCursorWrittenBack() {
         ScheduledTask task = new ScheduledTask();
-        task.setId(5L); task.setTenantId(7L); task.setTaskType(TaskType.TRIGGER);
+        task.setId(5L); task.setTenantId(7L); task.setTaskType("OUTCOME_INGESTION");
+        task.setRunCursor("2026-06-01T00:00:00Z");
         when(taskMapper.selectById(5L)).thenReturn(task);
         stubInsertAssignsId(42L);
-        when(registry.dispatch(eq(task), eq(42L))).thenThrow(new IllegalStateException("boom"));
+
+        ArgumentCaptor<TaskRunContext> ctxCaptor = ArgumentCaptor.forClass(TaskRunContext.class);
+        when(registry.dispatch(eq(task), ctxCaptor.capture()))
+                .thenReturn(new TaskRunResult(TaskExecutionStatus.SUCCESS, 3, 3, 0, null,
+                        "2026-06-19T00:00:00Z"));
+
+        mgr.runOnce(5L);
+
+        // ctx 带入旧游标
+        assertThat(ctxCaptor.getValue().cursor()).isEqualTo("2026-06-01T00:00:00Z");
+        assertThat(ctxCaptor.getValue().taskRunId()).isEqualTo(42L);
+        // 游标前进 → 写回 run_cursor 列
+        assertThat(task.getRunCursor()).isEqualTo("2026-06-19T00:00:00Z");
+        verify(taskMapper).updateById(task);
+    }
+
+    @Test
+    void cursorUnchanged_noWriteBack() {
+        ScheduledTask task = new ScheduledTask();
+        task.setId(5L); task.setTenantId(7L); task.setTaskType("OUTCOME_INGESTION");
+        task.setRunCursor("2026-06-01T00:00:00Z");
+        when(taskMapper.selectById(5L)).thenReturn(task);
+        stubInsertAssignsId(42L);
+        when(registry.dispatch(eq(task), any(TaskRunContext.class)))
+                .thenReturn(new TaskRunResult(TaskExecutionStatus.SUCCESS, 0, 0, 0, null,
+                        "2026-06-01T00:00:00Z"));
+
+        mgr.runOnce(5L);
+
+        verify(taskMapper, never()).updateById(any(ScheduledTask.class));
+    }
+
+    @Test
+    void dispatchThrows_recordedFailed() {
+        ScheduledTask task = new ScheduledTask();
+        task.setId(5L); task.setTenantId(7L); task.setTaskType("TRIGGER");
+        when(taskMapper.selectById(5L)).thenReturn(task);
+        stubInsertAssignsId(42L);
+        when(registry.dispatch(eq(task), any(TaskRunContext.class)))
+                .thenThrow(new IllegalStateException("boom"));
 
         ScheduledTaskExecution exec = mgr.runOnce(5L);
         assertThat(exec.getStatus()).isEqualTo(TaskExecutionStatus.FAILED);

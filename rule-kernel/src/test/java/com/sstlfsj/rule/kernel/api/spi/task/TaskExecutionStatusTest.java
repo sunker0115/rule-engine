@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.job.api;
+package com.sstlfsj.rule.kernel.api.spi.task;
 
 import org.junit.jupiter.api.Test;
 
