@@ -20,7 +20,7 @@ public class JobAutoConfiguration {
      * <ul>
      *   <li>{@code in-process}（默认 / 未配置）：装配本进程内调度器；</li>
      *   <li>{@code xxl-job}：不装配进程内实现，改由 xxl-job 适配的 {@code Scheduler} Bean 接管
-     *       （需引入对应实现，业务侧 JobDefinition / JobExecution 不变）。</li>
+     *       （需引入对应实现，业务侧 scheduled_task / scheduled_task_execution 不变）。</li>
      * </ul>
      * 同时保留 {@link ConditionalOnMissingBean}：外部显式注册的 Scheduler Bean 始终优先。
      *

@@ -7,7 +7,6 @@ import com.sstlfsj.rule.job.api.TriggerConfig;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.job.internal.subject.SubjectQueryRunner;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.function.Consumer;
 
@@ -21,10 +20,9 @@ class TriggerExecutorTest {
 
     private final SubjectQueryRunner subjectRunner = mock(SubjectQueryRunner.class);
     private final EvalService evalService = mock(EvalService.class);
-    private final ObjectMapper objectMapper = new ObjectMapper();
     // injectMaxRetry=1, backoff=0：partial-failure 用例不 sleep
     private final TriggerExecutor executor =
-            new TriggerExecutor(subjectRunner, evalService, objectMapper, 1, 0);
+            new TriggerExecutor(subjectRunner, evalService, 1, 0);
 
     @Test
     void allSubjectsInjected_success() {

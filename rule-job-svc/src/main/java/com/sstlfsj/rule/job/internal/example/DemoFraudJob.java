@@ -11,8 +11,8 @@ import java.util.List;
 /**
  * 注解式 Job 演示（仅 {@code local} profile）：定时对「近期登录用户」跑欺诈检测。
  *
- * <p>启动期由 RuleJobScanner 自动落库为 BEAN_METHOD 类型 Job 并注册调度；
- * 手动触发：{@code POST /admin/v1/jobs/{id}/trigger?tenantId=1}。
+ * <p>启动期由 ScheduledTaskScanner 自动落库为 TRIGGER 型 scheduled_task 并注册调度；
+ * 手动触发：{@code POST /admin/v1/scheduled-tasks/{id}/trigger?tenantId=1}。
  */
 @Component
 @Profile("local")

@@ -1,12 +1,14 @@
 package com.sstlfsj.rule.job.integration;
 
 import com.sstlfsj.rule.job.api.SubjectTarget;
+import com.sstlfsj.rule.job.api.TaskStatus;
+import com.sstlfsj.rule.job.api.TaskType;
+import com.sstlfsj.rule.job.api.TriggerConfig;
 import com.sstlfsj.rule.job.api.annotation.TriggerTask;
-import com.sstlfsj.rule.job.api.dto.JobExecutionVO;
-import com.sstlfsj.rule.job.api.service.JobService;
-import com.sstlfsj.rule.job.internal.domain.JobDefinition;
-import com.sstlfsj.rule.job.internal.domain.JobStatus;
-import com.sstlfsj.rule.job.internal.repository.JobDefinitionMapper;
+import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
+import com.sstlfsj.rule.job.internal.domain.ScheduledTaskExecution;
+import com.sstlfsj.rule.job.internal.repository.ScheduledTaskMapper;
+import com.sstlfsj.rule.job.internal.service.ScheduledTaskScheduleManager;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.eval.internal.snapshot.SceneSnapshotLoader;
@@ -33,15 +35,16 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 注解式 Job 真实链路端到端测试：{@code @TriggerTask} 启动自动落库 + 触发经真实评估产数据。
+ * 注解式 TRIGGER 任务真实链路端到端测试：{@code @TriggerTask} 启动自动落库 + 触发经真实评估产数据。
  *
- * <p>验证 RuleJobScanner 扫描注解方法 → upsert job_definition（BEAN_METHOD 类型）→ 触发时
- * 反射调用业务方法查主体 → 合成 RuleEvent → 真实 acceptEvent 评估 → 产生 evaluation_session。
+ * <p>验证 ScheduledTaskScanner 扫描注解方法 → upsert scheduled_task（TRIGGER 型、typed TriggerConfig）→
+ * 经真实 MySQL JSON 列 + Jackson3TypeHandler 往返读回 config 子类型 → 触发时反射调用业务方法查主体 →
+ * 合成 RuleEvent → 真实 acceptEvent 评估 → 产生 evaluation_session + scheduled_task_execution。
  */
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
-class JobAnnotationIntegrationTest {
+class ScheduledTaskAnnotationIntegrationTest {
 
     @SpringBootApplication(scanBasePackages = {
             "com.sstlfsj.rule.job.internal",
@@ -66,10 +69,10 @@ class JobAnnotationIntegrationTest {
         }
     }
 
-    /** 测试用注解 Job：主体查询方法返回 2 个目标。 */
+    /** 测试用注解任务：主体查询方法返回 2 个目标。 */
     static class AnnotatedFraudJob {
         @TriggerTask(code = "test-anno-job", cron = "0 0 0 1 1 *", tenant = "1",
-                scene = "fraud_check", eventType = "login", name = "测试注解Job")
+                scene = "fraud_check", eventType = "login", name = "测试注解任务")
         public List<SubjectTarget> subjects() {
             return List.of(SubjectTarget.of("u1"), SubjectTarget.of("u2"));
         }
@@ -89,9 +92,9 @@ class JobAnnotationIntegrationTest {
     }
 
     @Autowired
-    private JobService jobService;
+    private ScheduledTaskScheduleManager scheduleManager;
     @Autowired
-    private JobDefinitionMapper jobMapper;
+    private ScheduledTaskMapper taskMapper;
     @Autowired
     private SceneSnapshotLoader snapshotLoader;
     @Autowired
@@ -101,7 +104,7 @@ class JobAnnotationIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        // 不清 job_definition：保留 RuleJobScanner 启动期 upsert 的注解 Job
+        // 不清 scheduled_task：保留 ScheduledTaskScanner 启动期 upsert 的注解任务
         jdbc.execute("DELETE FROM evaluation_session");
         seedSceneAndRule();
         Map<String, List<RuleVersionSnapshot>> snapshots =
@@ -132,21 +135,31 @@ class JobAnnotationIntegrationTest {
     }
 
     @Test
-    void annotationJobUpsertedToDbAsBeanMethod() {
-        JobDefinition def = jobMapper.findByTenantSceneCode(1L, "fraud_check", "test-anno-job");
-        assertThat(def).isNotNull();
-        assertThat(def.getStatus()).isEqualTo(JobStatus.ACTIVE);
-        assertThat(def.getEventType()).isEqualTo("login");
-        assertThat(def.getSubjectQuery()).contains("BEAN_METHOD").contains("AnnotatedFraudJob#subjects");
+    void annotationTaskUpsertedToDbAsTriggerWithTypedConfig() {
+        // 从真实 MySQL JSON 列读回 —— 验证 Jackson3TypeHandler 把 config JSON 反序列化回 TriggerConfig 子类型
+        ScheduledTask task = taskMapper.findByTenantCode(1L, "test-anno-job");
+        assertThat(task).isNotNull();
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
+        assertThat(task.getTaskType()).isEqualTo(TaskType.TRIGGER);
+        assertThat(task.getConfig()).isInstanceOf(TriggerConfig.class);
+        TriggerConfig config = (TriggerConfig) task.getConfig();
+        assertThat(config.sceneCode()).isEqualTo("fraud_check");
+        assertThat(config.eventType()).isEqualTo("login");
+        assertThat(config.subjectQuery()).isNotNull();
     }
 
     @Test
-    void annotationJobTriggerProducesEvaluationSessions() throws InterruptedException {
-        JobDefinition def = jobMapper.findByTenantSceneCode(1L, "fraud_check", "test-anno-job");
-        JobExecutionVO exec = jobService.triggerOnce(1L, def.getId());
+    void annotationTaskTriggerProducesExecutionAndEvaluationSessions() throws InterruptedException {
+        ScheduledTask task = taskMapper.findByTenantCode(1L, "test-anno-job");
+        ScheduledTaskExecution exec = scheduleManager.runOnce(task.getId());
 
-        assertThat(exec.status()).isEqualTo("SUCCESS");
-        assertThat(exec.successCount()).isEqualTo(2);
+        // 执行记录真落库：状态 SUCCESS、2 主体全注入
+        assertThat(exec.getStatus().name()).isEqualTo("SUCCESS");
+        assertThat(exec.getSuccessCount()).isEqualTo(2);
+        Integer execRows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM scheduled_task_execution WHERE scheduled_task_id = ?",
+                Integer.class, task.getId());
+        assertThat(execRows).isGreaterThanOrEqualTo(1);
 
         Integer count = 0;
         long deadline = System.currentTimeMillis() + 5_000;
@@ -158,7 +171,7 @@ class JobAnnotationIntegrationTest {
         }
         assertThat(count).isEqualTo(2);
 
-        // Job 路径合成的事件渠道应记为 JOB
+        // TRIGGER 路径合成的事件渠道应记为 JOB
         Integer jobSourceCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM evaluation_session WHERE tenant_id = 1 AND source = 'JOB'",
                 Integer.class);

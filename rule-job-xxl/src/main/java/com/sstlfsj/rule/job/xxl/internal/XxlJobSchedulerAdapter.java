@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 /**
  * {@link Scheduler} 的 xxl-job 适配实现：把 task 闭包动态注册成 {@link IJobHandler}（名=jobCode），
  * 并把 job seed 到 admin（"有了不管"，由 {@link XxlJobAdminClient} 保证）。admin 远程触发该 handler →
- * 执行 task → 复用 JobRunner 整套，与内制完全一条路。
+ * 执行 task → 复用 ScheduledTaskScheduleManager 整套，与内制完全一条路。
  *
  * <p>注销语义：xxl-job-core 的 handler registry 是 ConcurrentHashMap，无公开注销 API 且不接受 null value，
  * 故 {@link #unschedule} 以一个 no-op tombstone handler 覆盖原闭包；admin 侧 cron / 启停由控制台权威管理，

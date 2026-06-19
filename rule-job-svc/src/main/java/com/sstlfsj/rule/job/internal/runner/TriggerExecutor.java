@@ -10,8 +10,8 @@ import com.sstlfsj.rule.job.internal.subject.SubjectQueryRunner;
 import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,12 +19,12 @@ import java.util.List;
 /**
  * TRIGGER 任务执行器：取主体 → 合成 RuleEvent → {@link EvalService#acceptEvent} 注入（D11）。
  *
- * <p>逻辑迁自旧 {@code JobRunner.run}：下游 Matcher / AST 对 TRIGGER 任务无感。{@code acceptEvent}
- * 为异步 PUSH，成功入队即计入 successCount，不等待评估结果。PUSH 队列满时按退避重试做背压
- * （{@link #injectWithBackpressure}），重试耗尽才计错。
+ * <p>下游 Matcher / AST 对 TRIGGER 任务无感。{@code acceptEvent} 为异步 PUSH，成功入队即计入
+ * successCount，不等待评估结果。PUSH 队列满时按退避重试做背压（{@link #injectWithBackpressure}），
+ * 重试耗尽才计错。
  *
- * <p>与旧 JobRunner 的差异：读 typed {@link TriggerConfig} 而非 JobDefinition，返回
- * {@link TaskRunResult} 而非写 JobExecution 行（执行记录由 ScheduleManager 落库）。
+ * <p>读 typed {@link TriggerConfig} 取主体查询 / 场景 / 事件类型，返回 {@link TaskRunResult}；
+ * 执行记录由 {@code ScheduledTaskScheduleManager} 落库。
  */
 @Slf4j
 @Component
@@ -38,19 +38,18 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
 
     private final SubjectQueryRunner subjectQueryRunner;
     private final EvalService evalService;
-    private final ObjectMapper objectMapper;
     private final int injectMaxRetry;
     private final long injectBackoffMs;
 
     /**
-     * Spring 主构造：默认背压参数（与旧 JobRunner 等价：20 次 / 50ms）。
+     * Spring 主构造：默认背压参数（20 次 / 50ms）。
      *
      * @param subjectQueryRunner 主体查询执行器
      * @param evalService        评估注入入口
-     * @param objectMapper       全局 ObjectMapper，用于将 typed SubjectQuery 序列化为查询 JSON
      */
-    public TriggerExecutor(SubjectQueryRunner subjectQueryRunner, EvalService evalService, ObjectMapper objectMapper) {
-        this(subjectQueryRunner, evalService, objectMapper, DEFAULT_INJECT_MAX_RETRY, DEFAULT_INJECT_BACKOFF_MS);
+    @Autowired
+    public TriggerExecutor(SubjectQueryRunner subjectQueryRunner, EvalService evalService) {
+        this(subjectQueryRunner, evalService, DEFAULT_INJECT_MAX_RETRY, DEFAULT_INJECT_BACKOFF_MS);
     }
 
     /**
@@ -59,11 +58,10 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
      * @param injectMaxRetry  注入最大重试次数
      * @param injectBackoffMs 每次重试退避毫秒
      */
-    public TriggerExecutor(SubjectQueryRunner subjectQueryRunner, EvalService evalService, ObjectMapper objectMapper,
+    public TriggerExecutor(SubjectQueryRunner subjectQueryRunner, EvalService evalService,
                            int injectMaxRetry, long injectBackoffMs) {
         this.subjectQueryRunner = subjectQueryRunner;
         this.evalService = evalService;
-        this.objectMapper = objectMapper;
         this.injectMaxRetry = injectMaxRetry;
         this.injectBackoffMs = injectBackoffMs;
     }
@@ -86,9 +84,7 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
         String tenant = String.valueOf(tenantId);
         TaskExecutionStatus status;
         try {
-            // forEachTarget 收 JSON 配置（与持久层一致）；typed SubjectQuery 经全局 ObjectMapper 序列化
-            String subjectQueryJson = objectMapper.writeValueAsString(config.subjectQuery());
-            subjectQueryRunner.forEachTarget(subjectQueryJson, target -> {
+            subjectQueryRunner.forEachTarget(config.subjectQuery(), target -> {
                 counters[0]++;
                 String subjectId = target.subjectId();
                 try {

@@ -1,10 +1,11 @@
 package com.sstlfsj.rule.job.internal.subject;
 
+import com.sstlfsj.rule.job.api.BeanMethodQuery;
 import com.sstlfsj.rule.job.api.SubjectPage;
+import com.sstlfsj.rule.job.api.SubjectQuery;
 import com.sstlfsj.rule.job.api.SubjectTarget;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,43 +44,37 @@ class BeanMethodSubjectQueryRunnerTest {
         registry.register("p#all", probe, Probe.class.getMethod("all"));
         registry.register("p#paged", probe, Probe.class.getMethod("paged", SubjectPage.class));
         registry.register("p#wrong", probe, Probe.class.getMethod("wrongReturn"));
-        runner = new BeanMethodSubjectQueryRunner(registry, JsonMapper.builder().build());
+        runner = new BeanMethodSubjectQueryRunner(registry);
     }
 
-    private List<String> collect(String json) {
+    private List<String> collect(SubjectQuery query) {
         List<String> ids = new ArrayList<>();
-        runner.forEachTarget(json, t -> ids.add(t.subjectId()));
+        runner.forEachTarget(query, t -> ids.add(t.subjectId()));
         return ids;
     }
 
     @Test
     void noArgListPushesAllTargets() {
-        assertThat(collect("{\"type\":\"BEAN_METHOD\",\"ref\":\"p#all\"}"))
+        assertThat(collect(new BeanMethodQuery("p#all")))
                 .containsExactly("u1", "u2");
     }
 
     @Test
     void pagedMethodLoopsUntilEmptyBatch() {
         // page0(2) + page1(1) 全推出，page2 空批停止
-        assertThat(collect("{\"type\":\"BEAN_METHOD\",\"ref\":\"p#paged\"}"))
+        assertThat(collect(new BeanMethodQuery("p#paged")))
                 .containsExactly("p0a", "p0b", "p1a");
     }
 
     @Test
-    void rejectsUnknownType() {
-        assertThatThrownBy(() -> runner.forEachTarget("{\"type\":\"SQL\"}", t -> { }))
-                .isInstanceOf(RuntimeException.class);
-    }
-
-    @Test
-    void rejectsBlankConfig() {
-        assertThatThrownBy(() -> runner.forEachTarget("", t -> { }))
+    void rejectsNullConfig() {
+        assertThatThrownBy(() -> runner.forEachTarget(null, t -> { }))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejectsNonListReturnType() {
-        assertThatThrownBy(() -> runner.forEachTarget("{\"type\":\"BEAN_METHOD\",\"ref\":\"p#wrong\"}", t -> { }))
+        assertThatThrownBy(() -> runner.forEachTarget(new BeanMethodQuery("p#wrong"), t -> { }))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

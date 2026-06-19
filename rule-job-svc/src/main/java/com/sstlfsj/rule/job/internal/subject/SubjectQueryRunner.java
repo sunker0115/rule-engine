@@ -1,10 +1,11 @@
 package com.sstlfsj.rule.job.internal.subject;
 
+import com.sstlfsj.rule.job.api.SubjectQuery;
 import com.sstlfsj.rule.job.api.SubjectTarget;
 
 import java.util.function.Consumer;
 
-/** 主体集合查询 SPI：按 JobDefinition.subjectQuery 配置逐个把目标推给 sink。 */
+/** 主体集合查询 SPI：按 typed {@link SubjectQuery} 配置逐个把目标推给 sink。 */
 public interface SubjectQueryRunner {
 
     /**
@@ -16,8 +17,8 @@ public interface SubjectQueryRunner {
      * </ul>
      * 分页循环由实现内部负责，调用方只管处理每个目标。
      *
-     * @param subjectQueryJson 主体查询配置 JSON（含 type 及查询参数）
-     * @param sink             目标消费者（合成事件 + 注入）
+     * @param subjectQuery 主体查询配置（typed，按具体子类型分发）
+     * @param sink         目标消费者（合成事件 + 注入）
      */
-    void forEachTarget(String subjectQueryJson, Consumer<SubjectTarget> sink);
+    void forEachTarget(SubjectQuery subjectQuery, Consumer<SubjectTarget> sink);
 }

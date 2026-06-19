@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * {@code @TriggerTask} 主体查询方法注册表：ref（{@code <bean>#<method>}）→ 目标 bean + 方法。
  *
- * <p>由 RuleJobScanner 启动期填充，{@link BeanMethodSubjectQueryRunner} 触发时按 ref 取方法签名分发、反射调用。
+ * <p>由 ScheduledTaskScanner 启动期填充，{@link BeanMethodSubjectQueryRunner} 触发时按 ref 取方法签名分发、反射调用。
  */
 @Component
 public class BeanMethodRegistry {

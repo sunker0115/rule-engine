@@ -16,7 +16,7 @@ import tools.jackson.databind.ObjectMapper;
  * xxl-job 调度适配装配：仅当 {@code engine.rule.job.scheduler=xxl-job} 时生效。
  *
  * <p>提供 {@link Scheduler} 接管进程内实现（{@link ConditionalOnMissingBean} 保证外部自定义 Scheduler 优先），
- * 内制侧 JobDefinition / JobExecution / JobRunner 不变。
+ * 内制侧 scheduled_task / scheduled_task_execution / TriggerExecutor 不变。
  */
 @AutoConfiguration
 @EnableConfigurationProperties(XxlJobProperties.class)

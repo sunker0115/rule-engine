@@ -6,14 +6,13 @@ import com.sstlfsj.rule.job.api.SubjectTarget;
 import com.sstlfsj.rule.job.api.SubjectQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * 主体查询实现：解析 subjectQuery 配置为 typed {@link SubjectQuery}，按 {@code @TriggerTask} 方法签名分发——
+ * 主体查询实现：收 typed {@link SubjectQuery}，按 {@code @TriggerTask} 方法签名分发——
  * 无参方法一次性取 {@code List<SubjectTarget>}；单 {@link SubjectPage} 参方法分页拉取（仿 ElasticJob DataflowJob，
  * page 0、1、2… 拉到空批为止）。逐个推给 sink。
  *
@@ -27,15 +26,13 @@ class BeanMethodSubjectQueryRunner implements SubjectQueryRunner {
     private static final int PAGE_SIZE = 500;
 
     private final BeanMethodRegistry registry;
-    private final ObjectMapper objectMapper;
 
     @Override
-    public void forEachTarget(String subjectQueryJson, Consumer<SubjectTarget> sink) {
-        if (subjectQueryJson == null || subjectQueryJson.isBlank()) {
+    public void forEachTarget(SubjectQuery subjectQuery, Consumer<SubjectTarget> sink) {
+        if (subjectQuery == null) {
             throw new IllegalArgumentException("subjectQuery 配置不能为空");
         }
-        SubjectQuery query = objectMapper.readValue(subjectQueryJson, SubjectQuery.class);
-        String ref = switch (query) {
+        String ref = switch (subjectQuery) {
             case BeanMethodQuery b -> b.ref();
         };
 

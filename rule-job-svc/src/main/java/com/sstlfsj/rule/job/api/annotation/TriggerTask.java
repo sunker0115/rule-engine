@@ -17,9 +17,9 @@ import java.lang.annotation.Target;
  *       {@code page.pageSize()} 作 SQL {@code LIMIT ... OFFSET ...}。</li>
  * </ul>
  *
- * <p>启动期由 RuleJobScanner 自动 upsert 到 {@code job_definition}
- * （{@code subject_query = {"type":"BEAN_METHOD","ref":"<bean>#<method>"}}）并注册到调度器，
- * 统一经 {@code /admin/v1/jobs} 管理。触发时反射调用本方法查主体 → 合成 RuleEvent → 注入标准评估链路。
+ * <p>启动期由 ScheduledTaskScanner 自动 upsert 到 {@code scheduled_task}（TRIGGER 型，
+ * typed {@code TriggerConfig{sceneCode,eventType,BeanMethodQuery(ref)}}）并注册到调度器，
+ * 统一经 {@code /admin/v1/scheduled-tasks} 管理。触发时反射调用本方法查主体 → 合成 RuleEvent → 注入标准评估链路。
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

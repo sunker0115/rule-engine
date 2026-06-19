@@ -20,7 +20,7 @@ import java.util.List;
  *
  * <p>另一处差异：日志走 {@link XxlJobHelper#log}（落到 xxl-admin 的「调度日志」视图，可在控制台回看），
  * 任务参数走 {@link XxlJobHelper#getJobParam()} 静态取，结果走 {@link XxlJobHelper#handleSuccess}/
- * {@code handleFail}（不写则默认成功）。本例不接 JobRunner/规则评估（那在 rule-job-svc，本模块不依赖），
+ * {@code handleFail}（不写则默认成功）。本例不接 TriggerExecutor/规则评估（那在 rule-job-svc，本模块不依赖），
  * 每个 subject 仅占位处理，真实接入以 {@code XxlJobSchedulerAdapter} 注册的闭包为准。
  */
 @Component
@@ -92,7 +92,7 @@ public class DemoPagedXxlJob {
         return page;
     }
 
-    /** 占位处理单个主体。真实接入：合成 RuleEvent 注入评估链路（经 XxlJobSchedulerAdapter 注册的闭包 → JobRunner）。 */
+    /** 占位处理单个主体。真实接入：合成 RuleEvent 注入评估链路（经 XxlJobSchedulerAdapter 注册的闭包 → TriggerExecutor）。 */
     private void process(String subjectId) {
         log.debug("处理主体 subjectId={}", subjectId);
     }
