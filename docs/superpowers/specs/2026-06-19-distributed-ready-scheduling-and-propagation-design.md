@@ -130,14 +130,17 @@ scheduled_task
 **`TaskExecutor` SPI + `TaskRunContext`/`TaskRunResult`/`TaskExecutionStatus` 放 `rule-kernel`**(共享端口,各模块已依赖 kernel),使各模块实现 executor **只依赖 kernel、不依赖 job-svc**(避免环 + fan-out):
 
 ```java
-// rule-kernel
-record TaskRunContext(long taskRunId, long taskId, long tenantId) {}
+// rule-kernel.api.spi.task
+record TaskRunContext(long taskRunId, long taskId, long tenantId, String cursor) {}   // cursor=当前 run_cursor(入)
+record TaskRunResult(TaskExecutionStatus status, int processedCount, int successCount,
+                     int errorCount, String errorSummary, String newCursor) {}          // newCursor=推进后游标(出);null/不变=不写回
 interface TaskExecutor<C> {                 // C = handler 自己的 config record,无共享 sealed 基类
     String type();                          // 开放类型名(如 "TRIGGER" / "OUTCOME_INGESTION"),非中心 enum
     Class<C> configType();                  // 供 registry 把 config JSON 反序列化成 C
     TaskRunResult execute(TaskRunContext ctx, C config);
 }
 ```
+cursor 经 ctx 入、`newCursor` 经 result 出 —— **executor 不碰 scheduled_task 表**(由 ScheduleManager 读/写 run_cursor);这是去中心化 executor(可落任意模块)的关键解耦。
 
 派发(`TaskExecutorRegistry` 在 job-svc,但**经 Spring `List<TaskExecutor>` 跨模块收集,不依赖 handler 模块**——这正是 XXL `@XxlJob` bean 扫描的解耦,DI 实现):
 ```
