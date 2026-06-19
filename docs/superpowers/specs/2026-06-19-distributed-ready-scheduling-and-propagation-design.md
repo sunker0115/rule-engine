@@ -76,11 +76,11 @@ XXL admin 按 cron 触发（集群内派一个实例）→ handler 跑 runById(t
   → 按 task_type 查 executor → execute → 写 scheduled_task_execution
 ```
 
-关键点（沿用现有 `JobScheduleManager` 模式）：
+关键点：
 1. **载荷只带 taskId，不带 config** —— `runById` 触发时回 DB 重查，config 改了立即生效，XXL 内永无过期业务配置。
-2. **cron 归属**：`scheduled_task.cron` 是 **seed 初值**；seed 后（"有了不管"，`ensureJobSeeded` 不覆盖）**XXL 控制台对 cron/启停运行时权威**，运维可在 console 直调。唯一重叠字段 cron = app seed → admin 运行时权威。
-3. **执行记录互补**：`scheduled_task_execution` = 域级结果（subject/success/error 计数、error_summary）；XXL log = 派发级 infra 日志。看的是不同层。
-4. **后端无关**：`SchedulerAdapter` 抽象使换 `ThreadPoolSchedulerAdapter`（dev）/ 将来 PowerJob 时，`scheduled_task` 与 executor 一字不改。
+2. **运维面统一在我们后端,cron 权威 = `scheduled_task`(我们的库)**:运维经 `/admin/v1/scheduled-tasks`(我们的 UI)管 cron/启停/触发/看执行记录;**不去 XXL/PowerJob console**(那是隐藏触发引擎,只给 SRE 深度排障)。故 `Scheduler.schedule()` 是 **upsert**(不存在则建、cron 变则更新推到后端),**非"seed 后 admin 权威"**。理由:① 可移植(切后端运维面不变);② 单一真相源不漂移;③ console 不懂我们的 typed config;④ 执行记录我们自己有(`scheduled_task_execution`),不依赖 console 看日志。
+3. **执行记录**:`scheduled_task_execution` = 域级结果(我们 UI 展示),无需 XXL log 作运维面。
+4. **后端无关**:`SchedulerAdapter` 抽象使换 `ThreadPoolSchedulerAdapter`(dev)/ 将来 PowerJob 时,`scheduled_task` 与 executor 一字不改,**且运维面(我们的 UI)也不变**。
 
 ## 4. 任务层:`ScheduledTask` + `TaskExecutor` SPI(消除别扭的重写)
 
