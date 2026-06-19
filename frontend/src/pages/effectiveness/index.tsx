@@ -98,15 +98,15 @@ export default function EffectivenessPage() {
     ...(showBucketCol
       ? [{ title: t('table.bucket'), dataIndex: 'bucket', key: 'bucket', width: 130, render: (v: string | null) => v ?? '-' }]
       : []),
-    { title: tip(t('table.dimensionKey'), '规则版本 ID 或 Decision 编码，取决于维度选择'), dataIndex: 'dimensionKey', key: 'dimensionKey', ellipsis: true },
-    { title: tip('TP', '真正例：规则命中 + 标签为 positive（正确拦截）'), dataIndex: 'tp', key: 'tp', width: 70 },
-    { title: tip('FP', '假正例：规则命中 + 标签为 negative（误报）'), dataIndex: 'fp', key: 'fp', width: 70 },
-    { title: tip('FN', '假负例：规则未命中 + 标签为 positive（漏报）'), dataIndex: 'fn', key: 'fn', width: 70 },
-    { title: tip('TN', '真负例：规则未命中 + 标签为 negative（正确放行）'), dataIndex: 'tn', key: 'tn', width: 70 },
-    { title: tip('precision', 'TP / (TP + FP)：命中的里有多少是真 positive，越高误报越少'), dataIndex: 'precision', key: 'precision', width: 110, render: fmtMetric },
-    { title: tip('recall', 'TP / (TP + FN)：所有 positive 里被规则抓到了多少，越高漏报越少'), dataIndex: 'recall', key: 'recall', width: 110, render: fmtMetric },
-    { title: tip('fireRate', '规则命中次数 / 总会话数：规则的触发频率'), dataIndex: 'fireRate', key: 'fireRate', width: 110, render: (v: number) => v.toFixed(4) },
-    { title: tip('firedTotal', '本时间窗内规则命中的总次数（含未标注）'), dataIndex: 'firedTotal', key: 'firedTotal', width: 110 },
+    { title: tip(t('table.dimensionKey'), t('tooltip.dimensionKey')), dataIndex: 'dimensionKey', key: 'dimensionKey', ellipsis: true },
+    { title: tip('TP', t('tooltip.tp')), dataIndex: 'tp', key: 'tp', width: 70 },
+    { title: tip('FP', t('tooltip.fp')), dataIndex: 'fp', key: 'fp', width: 70 },
+    { title: tip('FN', t('tooltip.fn')), dataIndex: 'fn', key: 'fn', width: 70 },
+    { title: tip('TN', t('tooltip.tn')), dataIndex: 'tn', key: 'tn', width: 70 },
+    { title: tip('precision', t('tooltip.precision')), dataIndex: 'precision', key: 'precision', width: 110, render: fmtMetric },
+    { title: tip('recall', t('tooltip.recall')), dataIndex: 'recall', key: 'recall', width: 110, render: fmtMetric },
+    { title: tip('fireRate', t('tooltip.fireRate')), dataIndex: 'fireRate', key: 'fireRate', width: 110, render: (v: number) => v.toFixed(4) },
+    { title: tip('firedTotal', t('tooltip.firedTotal')), dataIndex: 'firedTotal', key: 'firedTotal', width: 110 },
   ];
 
   // 漂移折线数据：仅 bucket≠NONE，跳过所选指标为 null 的点
@@ -210,12 +210,12 @@ export default function EffectivenessPage() {
                 title={showBucketCol ? b.bucket ?? '-' : undefined}
                 style={{ marginBottom: idx < report.buckets.length - 1 ? 12 : 0 }}
               >
-                <Descriptions.Item label={tip(t('banner.totalSessions'), '该时间窗、该场景内的评估会话总数')}>{b.totalSessions}</Descriptions.Item>
-                <Descriptions.Item label={tip(t('banner.labeled'), '已回灌结果标签的会话数')}>{b.labeledCount}</Descriptions.Item>
-                <Descriptions.Item label={tip(t('banner.unlabeled'), '尚未回灌标签的会话，不计入任何指标分母')}>{b.unlabeledCount}</Descriptions.Item>
-                <Descriptions.Item label={tip(t('banner.blocked'), '被 Pre-Gate 拦截的会话，无法知道真实结果（reject-inference 残缺面），不计入指标分母')}>{b.blockedCount}</Descriptions.Item>
-                <Descriptions.Item label={tip(t('banner.positive'), '标签属于 positiveLabels 的会话数（你填的那些标签，如 FRAUD）')}>{b.totalPositive}</Descriptions.Item>
-                <Descriptions.Item label={tip(t('banner.negative'), '有标签但不属于 positiveLabels 的会话数（如 NOT_FRAUD）')}>{b.totalNegative}</Descriptions.Item>
+                <Descriptions.Item label={tip(t('banner.totalSessions'), t('tooltip.totalSessions'))}>{b.totalSessions}</Descriptions.Item>
+                <Descriptions.Item label={tip(t('banner.labeled'), t('tooltip.labeled'))}>{b.labeledCount}</Descriptions.Item>
+                <Descriptions.Item label={tip(t('banner.unlabeled'), t('tooltip.unlabeled'))}>{b.unlabeledCount}</Descriptions.Item>
+                <Descriptions.Item label={tip(t('banner.blocked'), t('tooltip.blocked'))}>{b.blockedCount}</Descriptions.Item>
+                <Descriptions.Item label={tip(t('banner.positive'), t('tooltip.positive'))}>{b.totalPositive}</Descriptions.Item>
+                <Descriptions.Item label={tip(t('banner.negative'), t('tooltip.negative'))}>{b.totalNegative}</Descriptions.Item>
               </Descriptions>
             ))}
             <Alert type="warning" showIcon message={t('banner.note')} style={{ marginTop: 12 }} />

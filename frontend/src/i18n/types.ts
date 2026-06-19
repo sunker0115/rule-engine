@@ -714,6 +714,13 @@ export interface EffectivenessTranslation {
   };
   empty: string;
   validation: { sceneRequired: string; rangeRequired: string };
+  tooltip: {
+    dimensionKey: string;
+    tp: string; fp: string; fn: string; tn: string;
+    precision: string; recall: string; fireRate: string; firedTotal: string;
+    totalSessions: string; labeled: string; unlabeled: string; blocked: string;
+    positive: string; negative: string;
+  };
   modal: {
     title: string;
     tenant: string;
