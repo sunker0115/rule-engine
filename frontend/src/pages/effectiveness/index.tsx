@@ -154,7 +154,14 @@ export default function EffectivenessPage() {
           value={positiveLabels}
           onChange={setPositiveLabels}
           style={{ minWidth: 220 }}
-          tokenSeparators={[',']}
+          tokenSeparators={[',', ' ']}
+          onBlur={(e) => {
+            // 用户点击别处时把输入框里未确认的文字自动转成标签
+            const raw = (e.target as HTMLInputElement).value?.trim();
+            if (raw && !positiveLabels.includes(raw)) {
+              setPositiveLabels([...positiveLabels, raw]);
+            }
+          }}
         />
         <Segmented<EffectivenessDimension>
           value={dimension}
