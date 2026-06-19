@@ -25,6 +25,12 @@ class OutcomeServiceTest {
     }
 
     @Test
+    void hasAvailableLabelsMethod() throws NoSuchMethodException {
+        var method = OutcomeService.class.getMethod("availableLabels", Long.class);
+        assertEquals(List.class, method.getReturnType());
+    }
+
+    @Test
     void outcomeRecord_carriesAllFields() {
         Instant t = Instant.parse("2026-06-18T10:00:00Z");
         OutcomeRecord r = new OutcomeRecord("evt-1", "FRAUD", new BigDecimal("1280.50"), t, "ops", "note");

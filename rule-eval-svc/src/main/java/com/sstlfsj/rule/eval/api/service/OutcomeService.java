@@ -21,6 +21,14 @@ public interface OutcomeService {
                          Instant labeledAt, String source, String note) {}
 
     /**
+     * 查该租户已使用过的全部 outcome_label 去重列表（字母序），供前端 positiveLabels 候选。
+     *
+     * @param tenantId 租户 id
+     * @return 去重后的标签列表；无数据返回空列表
+     */
+    List<String> availableLabels(Long tenantId);
+
+    /**
      * 批量回灌结果标签，按 (tenantId, eventId) 幂等 upsert（重复覆盖）。
      * 不校验对应 evaluation_session 是否已存在（标签可能早于 session 到达或 session best-effort 丢失）。
      *

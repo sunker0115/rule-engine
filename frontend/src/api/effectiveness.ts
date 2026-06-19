@@ -19,6 +19,14 @@ export async function getEffectiveness(params: EffectivenessParams): Promise<Eff
   return res.data.data;
 }
 
+/** 查该租户已使用过的 outcome_label 去重列表（供 positiveLabels Select 候选）。 */
+export async function fetchOutcomeLabels(tenantId: number): Promise<string[]> {
+  const res = await apiClient.get<ApiResponse<string[]>>(ENDPOINTS.OUTCOME_LABELS, {
+    params: { tenantId },
+  });
+  return res.data.data ?? [];
+}
+
 /** 批量回灌结果标签（幂等 upsert）；返回接受条数。 */
 export async function recordOutcomes(body: RecordOutcomesRequest): Promise<{ accepted: number }> {
   const res = await apiClient.post<ApiResponse<{ accepted: number }>>(ENDPOINTS.DECISION_OUTCOMES, body);

@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.repository;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.eval.api.service.OutcomeService.OutcomeRecord;
 import com.sstlfsj.rule.eval.internal.domain.DecisionOutcome;
@@ -50,6 +51,21 @@ public interface DecisionOutcomeMapper extends BaseMapper<DecisionOutcome> {
      * @param list 待回灌的结果标签（非空）
      * @return 影响行数（插入 +1 / 覆盖 +2，仅作 best-effort 日志参考）
      */
+    /**
+     * 查该租户已使用过的全部 outcome_label 去重列表（字母序），供前端 positiveLabels Select 候选。
+     *
+     * @param tenantId 租户 id
+     * @return 去重后的标签列表
+     */
+    default List<String> distinctLabels(Long tenantId) {
+        return selectObjs(new LambdaQueryWrapper<DecisionOutcome>()
+                .select(DecisionOutcome::getOutcomeLabel)
+                .eq(DecisionOutcome::getTenantId, tenantId)
+                .groupBy(DecisionOutcome::getOutcomeLabel)
+                .orderByAsc(DecisionOutcome::getOutcomeLabel))
+                .stream().map(Object::toString).toList();
+    }
+
     @Insert("""
             <script>
             INSERT INTO decision_outcome

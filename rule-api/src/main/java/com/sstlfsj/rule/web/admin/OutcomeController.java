@@ -37,6 +37,14 @@ public class OutcomeController {
         return ApiResponse.ok(Map.of("accepted", accepted));
     }
 
+    /** GET /admin/v1/decision-outcomes/labels — 查该租户已使用过的 outcome_label 去重列表，供前端 positiveLabels 候选。
+     * @param tenantId 租户
+     * @return 标签列表（字母序） */
+    @GetMapping("/labels")
+    public ApiResponse<List<String>> labels(@RequestParam Long tenantId) {
+        return ApiResponse.ok(outcomeService.availableLabels(tenantId));
+    }
+
     /** GET /admin/v1/decision-outcomes/effectiveness — 按需聚合决策效果。
      * @param tenantId 租户 @param sceneCode 场景 @param from 窗口起(ISO-8601) @param to 窗口止(ISO-8601)
      * @param positiveLabels positive 判定口径(逗号分隔) @param dimension RULE_VERSION|DECISION @param bucket NONE|DAY|WEEK

@@ -85,6 +85,14 @@ class DecisionOutcomeMapperTest {
         assertNotNull(row.getLabeledAt());   // Instant → LocalDateTime 已转换
     }
 
+    @Test
+    void distinctLabels_methodExists_returnsListString() throws Exception {
+        // distinctLabels(Long) 存在且返回 List<String>（LambdaQueryWrapper 查询，真实 DB 行为在 e2e 验）
+        var method = DecisionOutcomeMapper.class.getMethod("distinctLabels", Long.class);
+        assertTrue(method.isDefault(), "distinctLabels 须为 default 方法（封装 LambdaQueryWrapper，不在 service 散拼）");
+        assertEquals(List.class, method.getReturnType(), "返回类型须为 List");
+    }
+
     private String upsertSql() throws Exception {
         Insert insert = DecisionOutcomeMapper.class
                 .getMethod("upsertBatch", List.class)

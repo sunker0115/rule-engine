@@ -20,6 +20,13 @@ class OutcomeServiceImplTest {
     private final OutcomeServiceImpl service = new OutcomeServiceImpl(mapper);
 
     @Test
+    void availableLabels_delegatesToMapper() {
+        when(mapper.distinctLabels(9100L)).thenReturn(List.of("FRAUD", "NOT_FRAUD"));
+        assertEquals(List.of("FRAUD", "NOT_FRAUD"), service.availableLabels(9100L));
+        verify(mapper).distinctLabels(9100L);
+    }
+
+    @Test
     void delegatesToMapperUpsertOutcomes() {
         List<OutcomeRecord> outcomes = List.of(
                 new OutcomeRecord("evt-1", "FRAUD", null, Instant.parse("2026-06-18T10:00:00Z"), "ops", null));

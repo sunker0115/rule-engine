@@ -16,6 +16,11 @@ public class OutcomeServiceImpl implements OutcomeService {
     private final DecisionOutcomeMapper mapper;
 
     @Override
+    public List<String> availableLabels(Long tenantId) {
+        return mapper.distinctLabels(tenantId);
+    }
+
+    @Override
     @Transactional
     public int recordOutcomes(Long tenantId, List<OutcomeRecord> outcomes) {
         return mapper.upsertOutcomes(tenantId, outcomes);

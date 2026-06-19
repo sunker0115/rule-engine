@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { Dayjs } from 'dayjs';
 import { useTenantStore } from '@/store/tenantStore';
 import { listScenes } from '@/api/scene';
-import { getEffectiveness } from '@/api/effectiveness';
+import { getEffectiveness, fetchOutcomeLabels } from '@/api/effectiveness';
 import RecordOutcomeModal from './RecordOutcomeModal';
 import type {
   SceneListItem,
@@ -51,6 +51,7 @@ export default function EffectivenessPage() {
   const [sceneCode, setSceneCode] = useState<string | undefined>(undefined);
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [positiveLabels, setPositiveLabels] = useState<string[]>([]);
+  const [labelCandidates, setLabelCandidates] = useState<string[]>([]);
   const [dimension, setDimension] = useState<EffectivenessDimension>('RULE_VERSION');
   const [bucket, setBucket] = useState<EffectivenessBucket>('NONE');
   const [chartMetric, setChartMetric] = useState<ChartMetric>('precision');
@@ -59,10 +60,11 @@ export default function EffectivenessPage() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // 切换租户时重载场景列表并重置场景选择
+  // 切换租户时重载场景列表 + 标签候选，重置场景选择
   useEffect(() => {
     if (!tenantId) return;
     listScenes(tenantId).then((list) => setScenes(list ?? [])).catch(() => setScenes([]));
+    fetchOutcomeLabels(tenantId).then(setLabelCandidates).catch(() => setLabelCandidates([]));
     setSceneCode(undefined);
   }, [tenantId]);
 
@@ -166,6 +168,7 @@ export default function EffectivenessPage() {
           onChange={setPositiveLabels}
           style={{ minWidth: 220 }}
           tokenSeparators={[',', ' ']}
+          options={labelCandidates.map(l => ({ value: l, label: l }))}
           onBlur={(e) => {
             // 用户点击别处时把输入框里未确认的文字自动转成标签
             const raw = (e.target as HTMLInputElement).value?.trim();

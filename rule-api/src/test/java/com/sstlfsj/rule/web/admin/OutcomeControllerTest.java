@@ -43,6 +43,14 @@ class OutcomeControllerTest {
     }
 
     @Test
+    void labels_returnsAvailableLabels() {
+        when(outcomeService.availableLabels(9100L)).thenReturn(List.of("FRAUD", "NOT_FRAUD"));
+        ApiResponse<List<String>> resp = controller.labels(9100L);
+        assertTrue(resp.success());
+        assertEquals(List.of("FRAUD", "NOT_FRAUD"), resp.data());
+    }
+
+    @Test
     void effectiveness_parsesInstantsAndDefaultsEmptyPositiveLabels() {
         when(effectivenessService.aggregate(any())).thenReturn(new EffectivenessReport(List.of()));
 
