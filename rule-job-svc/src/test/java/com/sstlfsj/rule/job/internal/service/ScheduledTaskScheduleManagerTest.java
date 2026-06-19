@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.job.internal.service;
 
+import com.sstlfsj.rule.job.api.TaskStatus;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTaskExecution;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskExecutionMapper;
@@ -96,6 +97,35 @@ class ScheduledTaskScheduleManagerTest {
         ScheduledTaskExecution exec = mgr.runOnce(5L);
         assertThat(exec.getStatus()).isEqualTo(TaskExecutionStatus.FAILED);
         assertThat(exec.getErrorSummary()).contains("boom");
+    }
+
+    @Test
+    void runCallback_activeTask_delegatesToRunById() {
+        ScheduledTask task = new ScheduledTask();
+        task.setId(5L); task.setTenantId(7L); task.setTaskType("TRIGGER");
+        task.setStatus(TaskStatus.ACTIVE);
+        when(taskMapper.selectById(5L)).thenReturn(task);
+        stubInsertAssignsId(42L);
+        when(registry.dispatch(eq(task), any(TaskRunContext.class)))
+                .thenReturn(new TaskRunResult(TaskExecutionStatus.SUCCESS, 1, 1, 0, null, null));
+
+        mgr.run(5L);
+
+        verify(execMapper).insert(any(ScheduledTaskExecution.class));
+        verify(registry).dispatch(eq(task), any(TaskRunContext.class));
+    }
+
+    @Test
+    void runCallback_nonActiveTask_doesNotRun() {
+        ScheduledTask task = new ScheduledTask();
+        task.setId(5L); task.setTenantId(7L); task.setTaskType("TRIGGER");
+        task.setStatus(TaskStatus.DISABLED);
+        when(taskMapper.selectById(5L)).thenReturn(task);
+
+        mgr.run(5L);
+
+        verify(execMapper, never()).insert(any(ScheduledTaskExecution.class));
+        verify(registry, never()).dispatch(any(ScheduledTask.class), any(TaskRunContext.class));
     }
 
     /** 模拟 MyBatis 回填自增主键：insert 时给传入的 execution 赋指定 id。 */

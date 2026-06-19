@@ -7,6 +7,7 @@ import com.sstlfsj.rule.job.internal.repository.ScheduledTaskExecutionMapper;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskMapper;
 import com.sstlfsj.rule.job.internal.runner.TaskExecutorRegistry;
 import com.sstlfsj.rule.kernel.api.spi.scheduler.Scheduler;
+import com.sstlfsj.rule.kernel.api.spi.scheduler.TaskRunCallback;
 import com.sstlfsj.rule.kernel.api.spi.task.TaskExecutionStatus;
 import com.sstlfsj.rule.kernel.api.spi.task.TaskRunContext;
 import com.sstlfsj.rule.kernel.api.spi.task.TaskRunResult;
@@ -21,7 +22,7 @@ import java.util.Objects;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ScheduledTaskScheduleManager {
+public class ScheduledTaskScheduleManager implements TaskRunCallback {
 
     private final Scheduler scheduler;
     private final ScheduledTaskMapper taskMapper;
@@ -57,7 +58,13 @@ public class ScheduledTaskScheduleManager {
         return doRun(taskMapper.selectById(taskId));
     }
 
-    private void runById(Long taskId) {
+    /** TaskRunCallback 实现：供 XXL-JOB 通用 handler 回调，直接委托 runById。 */
+    @Override
+    public void run(long taskId) {
+        runById(taskId);
+    }
+
+    void runById(Long taskId) {
         ScheduledTask latest = taskMapper.selectById(taskId);
         if (latest != null && latest.getStatus() == TaskStatus.ACTIVE) {
             doRun(latest);
