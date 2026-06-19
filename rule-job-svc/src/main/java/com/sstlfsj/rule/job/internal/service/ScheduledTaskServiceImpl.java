@@ -2,8 +2,11 @@ package com.sstlfsj.rule.job.internal.service;
 
 import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
 import com.sstlfsj.rule.config.api.service.SceneService;
+import com.sstlfsj.rule.eval.api.service.OutcomeIngestionConfig;
+import com.sstlfsj.rule.eval.api.service.SqlOutcomeSourceConfig;
 import com.sstlfsj.rule.job.api.TaskStatus;
 import com.sstlfsj.rule.job.api.TriggerConfig;
+import com.sstlfsj.rule.job.api.dto.CreateScheduledTaskRequest;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskExecutionVO;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskVO;
 import com.sstlfsj.rule.job.api.service.ScheduledTaskService;
@@ -76,6 +79,35 @@ class ScheduledTaskServiceImpl implements ScheduledTaskService {
         return executionMapper.recentByTask(taskId, limit).stream()
                 .map(ScheduledTaskServiceImpl::toExecutionVO)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public ScheduledTaskVO create(CreateScheduledTaskRequest req) {
+        if (taskMapper.findByTenantCode(req.tenantId(), req.code()) != null) {
+            throw new IllegalArgumentException(
+                    "调度任务已存在: tenantId=" + req.tenantId() + ", code=" + req.code());
+        }
+        OutcomeIngestionConfig config =
+                new OutcomeIngestionConfig(new SqlOutcomeSourceConfig(req.datasource(), req.sql()));
+        String configJson;
+        try {
+            configJson = objectMapper.writeValueAsString(config);
+        } catch (Exception e) {
+            throw new IllegalStateException("config 序列化失败", e);
+        }
+        ScheduledTask task = new ScheduledTask();
+        task.setTenantId(req.tenantId());
+        task.setCode(req.code());
+        task.setName(req.name());
+        task.setTaskType("OUTCOME_INGESTION");
+        task.setCron(req.cron());
+        task.setConfig(configJson);
+        task.setStatus(TaskStatus.ACTIVE);
+        task.setCreatedBy("api");
+        taskMapper.insert(task);
+        scheduleManager.register(task);
+        return toVO(task);
     }
 
     /** TRIGGER 任务绑定 Scene 为 PULL 时拒绝启用——PULL 是同步业务调用语义，定时触发无意义（§3.10）。 */

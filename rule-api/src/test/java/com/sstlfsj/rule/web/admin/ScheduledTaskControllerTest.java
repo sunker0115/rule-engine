@@ -1,8 +1,10 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.job.api.dto.CreateScheduledTaskRequest;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskExecutionVO;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskVO;
 import com.sstlfsj.rule.job.api.service.ScheduledTaskService;
+import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -110,5 +114,19 @@ class ScheduledTaskControllerTest {
                 .andExpect(jsonPath("$.data[0].status").value("SUCCESS"));
 
         verify(taskService).recentExecutions(1L, 5L, 20);
+    }
+
+    @Test
+    void create_returns201AndVO() {
+        ScheduledTaskVO vo = new ScheduledTaskVO(10L, 1L, "ingest", "测试", "OUTCOME_INGESTION",
+                "0 0 2 * * *", null, "ACTIVE", null, null);
+        when(taskService.create(any())).thenReturn(vo);
+
+        ApiResponse<ScheduledTaskVO> resp = new ScheduledTaskController(taskService).create(
+                new CreateScheduledTaskRequest(1L, "ingest", "测试", "0 0 2 * * *", "biz", "SELECT 1"));
+
+        assertTrue(resp.success());
+        assertEquals("ingest", resp.data().code());
+        assertEquals("OUTCOME_INGESTION", resp.data().taskType());
     }
 }

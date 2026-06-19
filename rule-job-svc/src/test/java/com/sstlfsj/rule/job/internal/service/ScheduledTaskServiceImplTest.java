@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.service.SceneService;
 import com.sstlfsj.rule.job.api.BeanMethodQuery;
 import com.sstlfsj.rule.job.api.TaskStatus;
 import com.sstlfsj.rule.job.api.TriggerConfig;
+import com.sstlfsj.rule.job.api.dto.CreateScheduledTaskRequest;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskVO;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
 import com.sstlfsj.rule.job.internal.repository.ScheduledTaskExecutionMapper;
@@ -133,5 +134,30 @@ class ScheduledTaskServiceImplTest {
         assertThat(((Map<String, Object>) vo.config()).get("sceneCode")).isEqualTo("s1");
         assertThat(vo.status()).isEqualTo("ACTIVE");
         assertThat(vo.taskType()).isEqualTo("TRIGGER");
+    }
+
+    @Test
+    void create_insertsTaskAndRegisters() {
+        when(taskMapper.findByTenantCode(1L, "ingest-test")).thenReturn(null);
+
+        CreateScheduledTaskRequest req = new CreateScheduledTaskRequest(
+                1L, "ingest-test", "测试回灌", "0 0 2 * * *", "biz",
+                "SELECT event_id, outcome_label, outcome_value, labeled_at FROM biz_label WHERE tenant_id = :tenantId");
+        ScheduledTaskVO vo = service.create(req);
+
+        assertThat(vo.code()).isEqualTo("ingest-test");
+        assertThat(vo.taskType()).isEqualTo("OUTCOME_INGESTION");
+        verify(scheduleManager).register(any(ScheduledTask.class));
+    }
+
+    @Test
+    void create_duplicateCode_throws() {
+        ScheduledTask existing = new ScheduledTask();
+        existing.setCode("ingest-dup");
+        when(taskMapper.findByTenantCode(1L, "ingest-dup")).thenReturn(existing);
+
+        CreateScheduledTaskRequest req = new CreateScheduledTaskRequest(
+                1L, "ingest-dup", "重复", "0 0 2 * * *", "biz", "SELECT 1");
+        assertThrows(IllegalArgumentException.class, () -> service.create(req));
     }
 }

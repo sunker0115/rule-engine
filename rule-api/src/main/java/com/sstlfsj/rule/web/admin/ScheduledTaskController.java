@@ -1,10 +1,13 @@
 package com.sstlfsj.rule.web.admin;
 
+import com.sstlfsj.rule.job.api.dto.CreateScheduledTaskRequest;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskExecutionVO;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskVO;
 import com.sstlfsj.rule.job.api.service.ScheduledTaskService;
 import com.sstlfsj.rule.web.common.ApiResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +23,18 @@ import java.util.List;
 public class ScheduledTaskController {
 
     private final ScheduledTaskService scheduledTaskService;
+
+    /**
+     * POST /admin/v1/scheduled-tasks — 创建 OUTCOME_INGESTION 调度任务（SQL-direct 源）。
+     *
+     * @param req 创建请求体
+     * @return 201 Created + 任务 VO
+     */
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<ScheduledTaskVO> create(@Valid @RequestBody CreateScheduledTaskRequest req) {
+        return ApiResponse.ok(scheduledTaskService.create(req));
+    }
 
     /**
      * GET /admin/v1/scheduled-tasks?tenantId=xxx — 查询租户全部任务。

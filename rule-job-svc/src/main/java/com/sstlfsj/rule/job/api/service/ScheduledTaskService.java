@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.job.api.service;
 
+import com.sstlfsj.rule.job.api.dto.CreateScheduledTaskRequest;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskExecutionVO;
 import com.sstlfsj.rule.job.api.dto.ScheduledTaskVO;
 
@@ -59,4 +60,14 @@ public interface ScheduledTaskService {
      * @return 执行记录列表
      */
     List<ScheduledTaskExecutionVO> recentExecutions(Long tenantId, Long taskId, int limit);
+
+    /**
+     * 创建 OUTCOME_INGESTION 调度任务（SQL-direct 源），并立即注册到调度器。
+     * TRIGGER 任务由 {@code @TriggerTask} 注解 seed，不走此接口。
+     *
+     * @param req 创建请求
+     * @return 创建后的任务 VO
+     * @throws IllegalArgumentException 若 code 在该租户下已存在
+     */
+    ScheduledTaskVO create(CreateScheduledTaskRequest req);
 }
