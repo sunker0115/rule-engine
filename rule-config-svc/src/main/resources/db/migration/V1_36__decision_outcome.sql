@@ -12,4 +12,4 @@ CREATE TABLE IF NOT EXISTS decision_outcome (
   updated_at    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_event (tenant_id, event_id),
   KEY idx_tenant_labeled (tenant_id, labeled_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='决策结果标签回灌（B32）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='决策结果标签回灌（B32）';
