@@ -166,16 +166,19 @@ export default function ScheduledTaskList() {
       ),
     },
     {
-      title: t('column.actions'), key: 'actions', width: 220,
+      title: t('column.actions'), key: 'actions', width: 180,
       render: (_: unknown, record: ScheduledTaskItem) => (
-        <Space>
-          <Button size="small" loading={triggering === record.id} onClick={() => handleTrigger(record)}>
+        <Space size={4}>
+          <Button type="link" size="small" style={{ padding: 0 }}
+                  loading={triggering === record.id} onClick={() => handleTrigger(record)}>
             {t('action.trigger')}
           </Button>
-          <Button size="small" onClick={() => navigate(route(ROUTES.SCHEDULED_TASK_DETAIL, { taskId: record.id }))}>
+          <Button type="link" size="small" style={{ padding: 0 }}
+                  onClick={() => navigate(route(ROUTES.SCHEDULED_TASK_DETAIL, { taskId: record.id }))}>
             {t('action.viewDetail')}
           </Button>
-          <Button size="small" danger onClick={() => handleDelete(record)}>
+          <Button type="link" size="small" danger style={{ padding: 0 }}
+                  onClick={() => handleDelete(record)}>
             {t('action.delete')}
           </Button>
         </Space>
