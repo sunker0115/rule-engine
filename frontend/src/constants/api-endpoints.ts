@@ -78,6 +78,7 @@ export const ENDPOINTS = {
 
   // Scheduled Task
   SCHEDULED_TASK_LIST:       `${ADMIN}/scheduled-tasks`,
+  SCHEDULED_TASK_CREATE:     `${ADMIN}/scheduled-tasks`,
   SCHEDULED_TASK_DETAIL:     (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}`,
   SCHEDULED_TASK_TRIGGER:    (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/trigger`,
   SCHEDULED_TASK_ENABLE:     (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/enable`,

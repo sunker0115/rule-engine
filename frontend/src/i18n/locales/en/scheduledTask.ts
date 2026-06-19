@@ -2,9 +2,23 @@ import type { ScheduledTaskTranslation } from '../../types';
 
 const scheduledTask: ScheduledTaskTranslation = {
   title: { list: 'Scheduled Tasks', detail: 'Task Detail' },
-  notice: 'Scheduled tasks are defined via @TriggerTask annotation and auto-registered at startup. This page manages them (enable/disable/trigger/view history). Creating or editing task definitions is not supported here.',
-  action: { trigger: 'Trigger', viewDetail: 'View Detail', enable: 'Enable', disable: 'Disable' },
+  notice: 'Built-in tasks (e.g. rule triggers) are defined via @TriggerTask annotation and auto-registered at startup; outcome-ingestion (OUTCOME_INGESTION) tasks can be created here. All tasks support enable/disable/trigger/view history.',
+  action: { trigger: 'Trigger', viewDetail: 'View Detail', enable: 'Enable', disable: 'Disable', createIngestion: 'Create Ingestion Task' },
   triggerSuccess: 'Task triggered',
+  create: {
+    title: 'Create Ingestion Task (OUTCOME_INGESTION)',
+    createSuccess: 'Task created',
+    createFailed: 'Create failed',
+    selectTenant: 'Please select a tenant first',
+    submit: 'Create',
+    field: {
+      code: 'Task Code', codeRequired: 'Please enter task code', codeExtra: 'Unique within tenant, e.g. fraud-ingest-daily',
+      name: 'Task Name', nameRequired: 'Please enter task name',
+      cron: 'Cron Expression', cronRequired: 'Please enter cron expression', cronExtra: 'Spring 6-field cron, e.g. 0 0 2 * * * (2 AM daily)',
+      datasource: 'Datasource Name', datasourceRequired: 'Please enter datasource name', datasourceExtra: 'A datasource registered in MetricDataSourceRegistry',
+      sql: 'Label Fetch SQL', sqlRequired: 'Please enter SQL', sqlExtra: 'Must include fixed columns: event_id / outcome_label / outcome_value / labeled_at; can bind :tenantId / :watermark',
+    },
+  },
   column: {
     name: 'Name',
     code: 'Code',

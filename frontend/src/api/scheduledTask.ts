@@ -29,3 +29,20 @@ export async function listScheduledTaskExecutions(tenantId: number, taskId: numb
   const res = await apiClient.get<ApiResponse<ScheduledTaskExecutionItem[]>>(ENDPOINTS.SCHEDULED_TASK_EXECUTIONS(taskId), { params: { tenantId, limit } });
   return res.data.data;
 }
+
+export interface CreateIngestionTaskParams {
+  tenantId: number;
+  code: string;
+  name: string;
+  cron: string;
+  datasource: string;
+  sql: string;
+}
+
+export async function createIngestionTask(params: CreateIngestionTaskParams): Promise<ScheduledTaskItem> {
+  const res = await apiClient.post<ApiResponse<ScheduledTaskItem>>(
+    ENDPOINTS.SCHEDULED_TASK_CREATE,
+    params,
+  );
+  return res.data.data;
+}

@@ -445,8 +445,22 @@ export interface AuditTranslation {
 export interface ScheduledTaskTranslation {
   title: { list: string; detail: string };
   notice: string;
-  action: { trigger: string; viewDetail: string; enable: string; disable: string };
+  action: { trigger: string; viewDetail: string; enable: string; disable: string; createIngestion: string };
   triggerSuccess: string;
+  create: {
+    title: string;
+    createSuccess: string;
+    createFailed: string;
+    selectTenant: string;
+    submit: string;
+    field: {
+      code: string; codeRequired: string; codeExtra: string;
+      name: string; nameRequired: string;
+      cron: string; cronRequired: string; cronExtra: string;
+      datasource: string; datasourceRequired: string; datasourceExtra: string;
+      sql: string; sqlRequired: string; sqlExtra: string;
+    };
+  };
   column: {
     name: string; code: string; taskType: string;
     cronExpr: string; status: string; actions: string;

@@ -2,9 +2,23 @@ import type { ScheduledTaskTranslation } from '../../types';
 
 const scheduledTask: ScheduledTaskTranslation = {
   title: { list: '调度任务', detail: '任务详情' },
-  notice: '调度任务由后端 @TriggerTask 注解定义、启动期自动落库，此处仅管理（启用/禁用/手动触发/查看执行记录），不支持创建或编辑任务定义。',
-  action: { trigger: '手动触发', viewDetail: '查看详情', enable: '启用', disable: '禁用' },
+  notice: '内置任务（如规则触发）由后端 @TriggerTask 注解定义、启动期自动落库；结论回流（OUTCOME_INGESTION）任务可在此创建。所有任务均支持启用/禁用/手动触发/查看执行记录。',
+  action: { trigger: '手动触发', viewDetail: '查看详情', enable: '启用', disable: '禁用', createIngestion: '创建回灌任务' },
   triggerSuccess: '任务已触发',
+  create: {
+    title: '创建回灌任务（OUTCOME_INGESTION）',
+    createSuccess: '任务创建成功',
+    createFailed: '创建失败',
+    selectTenant: '请先选择租户',
+    submit: '创建',
+    field: {
+      code: '任务编码', codeRequired: '请输入任务编码', codeExtra: '租户内唯一，如 fraud-ingest-daily',
+      name: '任务名称', nameRequired: '请输入任务名称',
+      cron: 'Cron 表达式', cronRequired: '请输入 cron 表达式', cronExtra: 'Spring 6 段 cron，如 0 0 2 * * *（每天凌晨 2 点）',
+      datasource: '数据源名称', datasourceRequired: '请输入数据源名称', datasourceExtra: 'MetricDataSourceRegistry 中已注册的数据源名',
+      sql: '标签拉取 SQL', sqlRequired: '请输入 SQL', sqlExtra: '须含固定列：event_id / outcome_label / outcome_value / labeled_at；可绑定 :tenantId / :watermark',
+    },
+  },
   column: {
     name: '名称',
     code: '编码',
