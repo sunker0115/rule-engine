@@ -51,3 +51,17 @@ export async function fetchDatasources(): Promise<string[]> {
   const res = await apiClient.get<ApiResponse<string[]>>(ENDPOINTS.DATASOURCE_LIST);
   return res.data.data ?? [];
 }
+
+export async function fetchDatasourceTables(datasourceName: string): Promise<string[]> {
+  const res = await apiClient.get<ApiResponse<string[]>>(
+    `${ENDPOINTS.DATASOURCE_LIST}/${encodeURIComponent(datasourceName)}/tables`,
+  );
+  return res.data.data ?? [];
+}
+
+export async function fetchTableColumns(datasourceName: string, tableName: string): Promise<string[]> {
+  const res = await apiClient.get<ApiResponse<string[]>>(
+    `${ENDPOINTS.DATASOURCE_LIST}/${encodeURIComponent(datasourceName)}/tables/${encodeURIComponent(tableName)}/columns`,
+  );
+  return res.data.data ?? [];
+}

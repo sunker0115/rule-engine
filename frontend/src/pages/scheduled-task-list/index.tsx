@@ -3,7 +3,7 @@ import { Table, Button, Switch, Modal, Alert, message, Space, Form, Input, Selec
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listScheduledTasks, triggerScheduledTask, enableScheduledTask, disableScheduledTask, createIngestionTask, fetchDatasources } from '@/api/scheduledTask';
+import { listScheduledTasks, triggerScheduledTask, enableScheduledTask, disableScheduledTask, createIngestionTask, fetchDatasources, fetchDatasourceTables, fetchTableColumns } from '@/api/scheduledTask';
 import { ROUTES, route } from '@/constants/routes';
 import type { ScheduledTaskItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -47,6 +47,8 @@ export default function ScheduledTaskList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm] = Form.useForm();
   const [datasources, setDatasources] = useState<string[]>([]);
+  const [tables, setTables] = useState<string[]>([]);
+  const [tableColumns, setTableColumns] = useState<string[]>([]);
   const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
 
   const tenantId = tenantFilter ?? currentId ?? 0;
@@ -147,6 +149,8 @@ export default function ScheduledTaskList() {
           />
           <Button type="primary" onClick={async () => {
             createForm.resetFields();
+            setTables([]);
+            setTableColumns([]);
             setCreateOpen(true);
             const names = await fetchDatasources().catch(() => []);
             setDatasources(names);
@@ -249,6 +253,16 @@ export default function ScheduledTaskList() {
               options={datasources.map((n) => ({ value: n, label: n }))}
               showSearch
               allowClear
+              onChange={async (val: string) => {
+                createForm.setFieldValue('datasource', val);
+                createForm.setFieldValue('tableName', undefined);
+                createForm.setFieldValue('conditions', []);
+                setTables([]);
+                setTableColumns([]);
+                if (!val) return;
+                const tbls = await fetchDatasourceTables(val).catch(() => []);
+                setTables(tbls);
+              }}
             />
           </Form.Item>
           {/* 标签表名 */}
@@ -258,7 +272,23 @@ export default function ScheduledTaskList() {
             rules={[{ required: true, message: t('create.field.tableNameRequired') }]}
             extra={t('create.field.tableNameExtra')}
           >
-            <Input placeholder="biz_fraud_label" />
+            <Select
+              placeholder={t('create.field.tableNamePlaceholder')}
+              options={tables.map((n) => ({ value: n, label: n }))}
+              showSearch
+              allowClear
+              loading={tables.length === 0 && createOpen && !!createForm.getFieldValue('datasource')}
+              onChange={async (val: string) => {
+                createForm.setFieldValue('tableName', val);
+                createForm.setFieldValue('conditions', []);
+                setTableColumns([]);
+                if (!val) return;
+                const ds = createForm.getFieldValue('datasource') as string;
+                if (!ds) return;
+                const cols = await fetchTableColumns(ds, val).catch(() => []);
+                setTableColumns(cols);
+              }}
+            />
           </Form.Item>
           {/* 附加过滤条件（可选，动态条件构建器） */}
           <Form.Item label={t('create.field.conditions')} extra={t('create.field.conditionsExtra')}>
@@ -268,7 +298,14 @@ export default function ScheduledTaskList() {
                   {fields.map(({ key, name, ...restField }) => (
                     <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
                       <Form.Item {...restField} name={[name, 'field']} noStyle>
-                        <Input placeholder={t('create.field.conditionFieldPlaceholder')} style={{ width: 140 }} />
+                        <Select
+                          placeholder={t('create.field.conditionFieldPlaceholder')}
+                          options={tableColumns.map((c) => ({ value: c, label: c }))}
+                          showSearch
+                          allowClear
+                          style={{ width: 160 }}
+                          notFoundContent={tableColumns.length === 0 ? t('create.field.conditionFieldNoTable') : undefined}
+                        />
                       </Form.Item>
                       <Form.Item {...restField} name={[name, 'op']} noStyle initialValue="=">
                         <Select options={OPERATORS} style={{ width: 150 }} />

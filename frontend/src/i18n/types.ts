@@ -458,9 +458,9 @@ export interface ScheduledTaskTranslation {
       name: string; nameRequired: string;
       cron: string; cronRequired: string; cronExtra: string;
       datasource: string; datasourceRequired: string; datasourceExtra: string; datasourcePlaceholder: string;
-      tableName: string; tableNameRequired: string; tableNameExtra: string;
+      tableName: string; tableNameRequired: string; tableNameExtra: string; tableNamePlaceholder: string;
       conditions: string; conditionsExtra: string;
-      conditionFieldPlaceholder: string; conditionValuePlaceholder: string; addCondition: string;
+      conditionFieldPlaceholder: string; conditionFieldNoTable: string; conditionValuePlaceholder: string; addCondition: string;
       limitRows: string; limitRowsExtra: string;
       sqlPreview: string;
     };
