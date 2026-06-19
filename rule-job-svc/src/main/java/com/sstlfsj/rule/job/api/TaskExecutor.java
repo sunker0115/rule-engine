@@ -12,10 +12,9 @@ public interface TaskExecutor<C extends TaskConfig> {
     Class<C> configType();
     /**
      * 执行一次任务。
-     * @param taskRunId 本次运行的执行记录 id（scheduled_task_execution.id，每次运行唯一，用于 eventId 幂等键）
-     * @param tenantId 租户 id
-     * @param config   typed 配置
+     * @param ctx    运行上下文（taskRunId / taskId / tenantId）
+     * @param config typed 配置
      * @return 执行结果
      */
-    TaskRunResult execute(long taskRunId, long tenantId, C config);
+    TaskRunResult execute(TaskRunContext ctx, C config);
 }

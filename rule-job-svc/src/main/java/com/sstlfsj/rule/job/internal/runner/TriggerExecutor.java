@@ -3,6 +3,7 @@ package com.sstlfsj.rule.job.internal.runner;
 import com.sstlfsj.rule.eval.api.service.EvalService;
 import com.sstlfsj.rule.job.api.TaskExecutionStatus;
 import com.sstlfsj.rule.job.api.TaskExecutor;
+import com.sstlfsj.rule.job.api.TaskRunContext;
 import com.sstlfsj.rule.job.api.TaskRunResult;
 import com.sstlfsj.rule.job.api.TaskType;
 import com.sstlfsj.rule.job.api.TriggerConfig;
@@ -77,11 +78,12 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
     }
 
     @Override
-    public TaskRunResult execute(long taskRunId, long tenantId, TriggerConfig config) {
+    public TaskRunResult execute(TaskRunContext ctx, TriggerConfig config) {
         // counters[0]=processed, [1]=success, [2]=error；sink 在 lambda 内累加，故用数组持有可变状态
         int[] counters = {0, 0, 0};
         List<String> errors = new ArrayList<>();
-        String tenant = String.valueOf(tenantId);
+        long taskRunId = ctx.taskRunId();
+        String tenant = String.valueOf(ctx.tenantId());
         TaskExecutionStatus status;
         try {
             subjectQueryRunner.forEachTarget(config.subjectQuery(), target -> {

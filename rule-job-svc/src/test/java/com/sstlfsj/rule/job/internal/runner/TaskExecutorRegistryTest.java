@@ -14,7 +14,7 @@ class TaskExecutorRegistryTest {
     private final TaskExecutor<TriggerConfig> triggerExec = new TaskExecutor<>() {
         public TaskType type() { return TaskType.TRIGGER; }
         public Class<TriggerConfig> configType() { return TriggerConfig.class; }
-        public TaskRunResult execute(long taskId, long tenantId, TriggerConfig config) {
+        public TaskRunResult execute(TaskRunContext ctx, TriggerConfig config) {
             return new TaskRunResult(TaskExecutionStatus.SUCCESS, 1, 1, 0, null);
         }
     };

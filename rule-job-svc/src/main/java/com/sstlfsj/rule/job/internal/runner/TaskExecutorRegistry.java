@@ -2,6 +2,7 @@ package com.sstlfsj.rule.job.internal.runner;
 
 import com.sstlfsj.rule.job.api.TaskConfig;
 import com.sstlfsj.rule.job.api.TaskExecutor;
+import com.sstlfsj.rule.job.api.TaskRunContext;
 import com.sstlfsj.rule.job.api.TaskRunResult;
 import com.sstlfsj.rule.job.api.TaskType;
 import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
@@ -46,6 +47,7 @@ public class TaskExecutorRegistry {
                     + (config == null ? "null" : config.getClass().getSimpleName())
                     + " 与 executor.configType=" + executor.configType().getSimpleName() + " 不符");
         }
-        return executor.execute(taskRunId, task.getTenantId(), (C) executor.configType().cast(config));
+        TaskRunContext ctx = new TaskRunContext(taskRunId, task.getId(), task.getTenantId());
+        return executor.execute(ctx, (C) executor.configType().cast(config));
     }
 }

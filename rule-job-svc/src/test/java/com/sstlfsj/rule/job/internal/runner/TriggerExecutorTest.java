@@ -2,6 +2,7 @@ package com.sstlfsj.rule.job.internal.runner;
 
 import com.sstlfsj.rule.job.api.SubjectTarget;
 import com.sstlfsj.rule.job.api.TaskExecutionStatus;
+import com.sstlfsj.rule.job.api.TaskRunContext;
 import com.sstlfsj.rule.job.api.TaskRunResult;
 import com.sstlfsj.rule.job.api.TriggerConfig;
 import com.sstlfsj.rule.eval.api.service.EvalService;
@@ -34,7 +35,7 @@ class TriggerExecutorTest {
         }).when(subjectRunner).forEachTarget(any(), any());
         when(evalService.acceptEvent(any())).thenReturn(true);
 
-        TaskRunResult r = executor.execute(1L, 7L, new TriggerConfig("s", "e", null));
+        TaskRunResult r = executor.execute(new TaskRunContext(1L, 1L, 7L), new TriggerConfig("s", "e", null));
 
         assertThat(r.status()).isEqualTo(TaskExecutionStatus.SUCCESS);
         assertThat(r.processedCount()).isEqualTo(2);
@@ -53,7 +54,7 @@ class TriggerExecutorTest {
         }).when(subjectRunner).forEachTarget(any(), any());
         when(evalService.acceptEvent(any())).thenReturn(true).thenReturn(false);
 
-        TaskRunResult r = executor.execute(1L, 7L, new TriggerConfig("s", "e", null));
+        TaskRunResult r = executor.execute(new TaskRunContext(1L, 1L, 7L), new TriggerConfig("s", "e", null));
 
         assertThat(r.status()).isEqualTo(TaskExecutionStatus.PARTIAL_FAIL);
         assertThat(r.successCount()).isEqualTo(1);
@@ -70,7 +71,7 @@ class TriggerExecutorTest {
         }).when(subjectRunner).forEachTarget(any(), any());
         when(evalService.acceptEvent(any())).thenReturn(false);
 
-        TaskRunResult r = executor.execute(1L, 7L, new TriggerConfig("s", "e", null));
+        TaskRunResult r = executor.execute(new TaskRunContext(1L, 1L, 7L), new TriggerConfig("s", "e", null));
 
         assertThat(r.status()).isEqualTo(TaskExecutionStatus.FAILED);
         assertThat(r.successCount()).isZero();
@@ -83,7 +84,7 @@ class TriggerExecutorTest {
             throw new IllegalStateException("查询炸了");
         }).when(subjectRunner).forEachTarget(any(), any());
 
-        TaskRunResult r = executor.execute(1L, 7L, new TriggerConfig("s", "e", null));
+        TaskRunResult r = executor.execute(new TaskRunContext(1L, 1L, 7L), new TriggerConfig("s", "e", null));
 
         assertThat(r.status()).isEqualTo(TaskExecutionStatus.FAILED);
         assertThat(r.processedCount()).isZero();
