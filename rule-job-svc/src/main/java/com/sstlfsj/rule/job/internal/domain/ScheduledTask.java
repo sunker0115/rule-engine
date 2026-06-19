@@ -27,6 +27,9 @@ public class ScheduledTask {
     private String cron;
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private TaskConfig config;
+    /** 增量任务运行游标(与 config 分离的运行态);非增量任务为 null。cursor 是 MySQL 保留字,列名反引号转义。 */
+    @TableField(value = "`cursor`")
+    private String cursor;
     private TaskStatus status;
     private String createdBy;
     private LocalDateTime createdAt;

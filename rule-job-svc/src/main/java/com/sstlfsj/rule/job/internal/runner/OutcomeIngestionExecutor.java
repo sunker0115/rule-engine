@@ -13,9 +13,10 @@ import com.sstlfsj.rule.job.internal.repository.ScheduledTaskMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.Objects;
 
-/** OUTCOME_INGESTION executor:调 eval-svc ingest 拉标签 upsert,水位前进则写回 scheduled_task.config。 */
+/** OUTCOME_INGESTION executor:调 eval-svc ingest 拉标签 upsert,游标前进则写回 scheduled_task.cursor 列(config 不动)。 */
 @Component
 @RequiredArgsConstructor
 public class OutcomeIngestionExecutor implements TaskExecutor<OutcomeIngestionConfig> {
@@ -28,14 +29,18 @@ public class OutcomeIngestionExecutor implements TaskExecutor<OutcomeIngestionCo
 
     @Override
     public TaskRunResult execute(TaskRunContext ctx, OutcomeIngestionConfig config) {
-        IngestResult r = ingestionService.ingest(ctx.tenantId(), config.source(), config.watermark());
-        // 水位前进才写回(Instant 用 equals 比较)
-        if (!Objects.equals(r.newWatermark(), config.watermark())) {
-            ScheduledTask task = taskMapper.selectById(ctx.taskId());
-            if (task != null) {
-                task.setConfig(new OutcomeIngestionConfig(config.source(), r.newWatermark()));
-                taskMapper.updateById(task);
-            }
+        ScheduledTask task = taskMapper.selectById(ctx.taskId());
+        if (task == null) {
+            return new TaskRunResult(TaskExecutionStatus.FAILED, 0, 0, 0, "任务不存在: " + ctx.taskId());
+        }
+        Instant watermark = task.getCursor() == null ? null : Instant.parse(task.getCursor());
+
+        IngestResult r = ingestionService.ingest(ctx.tenantId(), config.source(), watermark);
+
+        // 游标前进才写回(只更新 cursor 列,config 不动)
+        if (!Objects.equals(r.newWatermark(), watermark)) {
+            task.setCursor(r.newWatermark() == null ? null : r.newWatermark().toString());
+            taskMapper.updateById(task);
         }
         return new TaskRunResult(TaskExecutionStatus.SUCCESS, r.accepted(), r.accepted(), 0, null);
     }

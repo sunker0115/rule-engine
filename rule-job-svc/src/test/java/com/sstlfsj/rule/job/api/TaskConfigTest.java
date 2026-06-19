@@ -5,8 +5,6 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.time.Instant;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TaskConfigTest {
@@ -28,9 +26,8 @@ class TaskConfigTest {
 
     @Test
     void outcomeIngestionConfig_polymorphicRoundTrip() {
-        Instant watermark = Instant.parse("2026-06-19T00:00:00Z");
         TaskConfig cfg = new OutcomeIngestionConfig(
-                new SqlOutcomeSourceConfig("ds", "select event_id from t"), watermark);
+                new SqlOutcomeSourceConfig("ds", "select event_id from t"));
         String json = mapper.writeValueAsString(cfg);
         assertThat(json).contains("\"kind\":\"OUTCOME_INGESTION\"");
 
@@ -41,6 +38,5 @@ class TaskConfigTest {
         // 验证嵌套 sealed 多态:TaskConfig→OutcomeIngestionConfig→OutcomeSourceConfig
         assertThat(ic.source()).isInstanceOf(SqlOutcomeSourceConfig.class);
         assertThat(((SqlOutcomeSourceConfig) ic.source()).datasource()).isEqualTo("ds");
-        assertThat(ic.watermark()).isEqualTo(watermark);
     }
 }

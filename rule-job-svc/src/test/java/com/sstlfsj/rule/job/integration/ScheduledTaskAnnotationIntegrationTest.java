@@ -31,7 +31,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -183,12 +182,12 @@ class ScheduledTaskAnnotationIntegrationTest {
 
     @Test
     void outcomeIngestionConfig_roundTripsThroughJsonColumn() {
-        // OUTCOME_INGESTION 配置:嵌套 sealed source(SQL 子类型)+ Instant watermark 经真实 MySQL config 列往返
+        // OUTCOME_INGESTION 配置(静态定义):嵌套 sealed source(SQL 子类型)经真实 MySQL config 列往返;
+        // 运行态游标存于独立 cursor 列(state-not-config),不在 config 里
         OutcomeIngestionConfig config = new OutcomeIngestionConfig(
                 new SqlOutcomeSourceConfig("biz",
                         "SELECT event_id, outcome_label, outcome_value, labeled_at FROM biz_label "
-                                + "WHERE tenant_id = :tenantId AND (:watermark IS NULL OR labeled_at > :watermark)"),
-                Instant.parse("2026-06-18T10:00:00Z"));
+                                + "WHERE tenant_id = :tenantId AND (:watermark IS NULL OR labeled_at > :watermark)"));
 
         ScheduledTask task = new ScheduledTask();
         task.setTenantId(1L);
@@ -197,25 +196,26 @@ class ScheduledTaskAnnotationIntegrationTest {
         task.setTaskType(TaskType.OUTCOME_INGESTION);
         task.setCron("0 0 4 * * *");
         task.setConfig(config);
+        task.setCursor("2026-06-18T10:00:00Z");
         task.setStatus(TaskStatus.ACTIVE);
         taskMapper.insert(task);
 
-        // 读回:task_type + 多态 config 子类型 + 嵌套 source 子类型 + Instant watermark 全部还原
+        // 读回:task_type + 多态 config 子类型 + 嵌套 source 子类型还原;cursor 列单独持久化
         ScheduledTask read = taskMapper.selectById(task.getId());
         assertThat(read.getTaskType()).isEqualTo(TaskType.OUTCOME_INGESTION);
         assertThat(read.getConfig()).isInstanceOf(OutcomeIngestionConfig.class);
         OutcomeIngestionConfig readConfig = (OutcomeIngestionConfig) read.getConfig();
         assertThat(readConfig.source()).isInstanceOf(SqlOutcomeSourceConfig.class);
         assertThat(((SqlOutcomeSourceConfig) readConfig.source()).datasource()).isEqualTo("biz");
-        assertThat(readConfig.watermark()).isEqualTo(Instant.parse("2026-06-18T10:00:00Z"));
+        assertThat(read.getCursor()).isEqualTo("2026-06-18T10:00:00Z");
 
-        // 模拟 executor 写回:推进 watermark 后 updateById,再读回确认新游标真持久化(executor 的 updateById 路径)
-        Instant advanced = Instant.parse("2026-06-19T10:00:00Z");
-        read.setConfig(new OutcomeIngestionConfig(readConfig.source(), advanced));
+        // 模拟 executor 写回:推进 cursor 列后 updateById,再读回确认新游标真持久化(config 不动)
+        read.setCursor("2026-06-19T10:00:00Z");
         taskMapper.updateById(read);
 
         ScheduledTask afterWriteBack = taskMapper.selectById(task.getId());
-        assertThat(((OutcomeIngestionConfig) afterWriteBack.getConfig()).watermark()).isEqualTo(advanced);
+        assertThat(afterWriteBack.getCursor()).isEqualTo("2026-06-19T10:00:00Z");
+        assertThat(afterWriteBack.getConfig()).isInstanceOf(OutcomeIngestionConfig.class);
 
         // 清理本测试新建的行,不污染同类其它用例
         taskMapper.deleteById(task.getId());
