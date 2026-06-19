@@ -62,7 +62,7 @@ const common: CommonTranslation = {
     decisions: '决策管理',
     sessions: '评估会话',
     auditLogs: '审计日志',
-    jobs: '任务管理',
+    scheduledTasks: '调度任务',
     importExport: '导入导出',
   },
 };

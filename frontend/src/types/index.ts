@@ -8,7 +8,7 @@ export * from './ast';
 export * from './eval';
 export * from './session';
 export * from './audit';
-export * from './job';
+export * from './scheduledTask';
 export * from './import-export';
 export * from './metadata';
 export * from './tenant';

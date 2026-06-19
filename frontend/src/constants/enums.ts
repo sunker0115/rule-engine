@@ -118,8 +118,8 @@ export function getAuditTargetTypeOptions(t: TFunction) {
   ] as const;
 }
 
-/** Job 执行状态 */
-export function getJobExecStatusOptions(t: TFunction) {
+/** 调度任务执行状态 */
+export function getScheduledTaskExecStatusOptions(t: TFunction) {
   return [
     { value: 'RUNNING',      label: t('enum.execStatus.RUNNING'),      color: 'blue'   },
     { value: 'SUCCESS',      label: t('enum.execStatus.SUCCESS'),      color: 'green'  },

@@ -5,7 +5,7 @@ import decision from './decision';
 import rule from './rule';
 import evalLoc from './eval';
 import audit from './audit';
-import job from './job';
+import scheduledTask from './scheduledTask';
 import importExport from './import-export';
 import connector from './connector';
 import analysis from './analysis';
@@ -19,7 +19,7 @@ const en = {
   rule,
   eval: evalLoc,
   audit,
-  job,
+  scheduledTask,
   importExport,
   connector,
   analysis,

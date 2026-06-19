@@ -72,13 +72,13 @@ export const ENDPOINTS = {
   // Audit
   AUDIT_LOG_LIST: `${ADMIN}/audit-logs`,
 
-  // Job
-  JOB_LIST:       `${ADMIN}/jobs`,
-  JOB_DETAIL:     (jobId: number) => `${ADMIN}/jobs/${jobId}`,
-  JOB_TRIGGER:    (jobId: number) => `${ADMIN}/jobs/${jobId}/trigger`,
-  JOB_ENABLE:     (jobId: number) => `${ADMIN}/jobs/${jobId}/enable`,
-  JOB_DISABLE:    (jobId: number) => `${ADMIN}/jobs/${jobId}/disable`,
-  JOB_EXECUTIONS: (jobId: number) => `${ADMIN}/jobs/${jobId}/executions`,
+  // Scheduled Task
+  SCHEDULED_TASK_LIST:       `${ADMIN}/scheduled-tasks`,
+  SCHEDULED_TASK_DETAIL:     (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}`,
+  SCHEDULED_TASK_TRIGGER:    (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/trigger`,
+  SCHEDULED_TASK_ENABLE:     (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/enable`,
+  SCHEDULED_TASK_DISABLE:    (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/disable`,
+  SCHEDULED_TASK_EXECUTIONS: (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}/executions`,
 
   // Tenant
   TENANT_LIST: `${ADMIN}/tenants`,

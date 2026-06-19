@@ -62,7 +62,7 @@ export interface CommonTranslation {
     tenants: string; scenes: string; rules: string;
     metrics: string; decisions: string;
     sessions: string; auditLogs: string;
-    jobs: string; importExport: string;
+    scheduledTasks: string; importExport: string;
     connectors: string;
   };
 }
@@ -441,25 +441,29 @@ export interface AuditTranslation {
   diff: { before: string; after: string; expand: string; noDiff: string; renderError: string; calcError: string; noSnapshot: string };
 }
 
-// ===== job 命名空间 =====
-export interface JobTranslation {
+// ===== scheduledTask 命名空间 =====
+export interface ScheduledTaskTranslation {
   title: { list: string; detail: string };
   notice: string;
   action: { trigger: string; viewDetail: string; enable: string; disable: string };
   triggerSuccess: string;
   column: {
-    name: string; code: string; sceneCode: string; eventType: string;
-    cronExpr: string; status: string; subjectQueryType: string; actions: string;
+    name: string; code: string; taskType: string;
+    cronExpr: string; status: string; actions: string;
   };
+  /** 任务类型 label —— 已知类型给中文/英文名，未知类型由页面兜底显示原始串 */
+  type: { trigger: string; ingestion: string };
   enum: {
+    status: { ACTIVE: string; DISABLED: string };
     execStatus: { RUNNING: string; SUCCESS: string; PARTIAL_FAIL: string; FAILED: string };
   };
+  detail: { basicInfo: string; config: string };
   execution: {
     title: string;
     triggerConfirm: string;
     column: {
       id: string; triggerAt: string; finishedAt: string;
-      subjectCount: string; successCount: string; errorCount: string;
+      processedCount: string; successCount: string; errorCount: string;
       status: string; errorSummary: string;
     };
   };
@@ -658,7 +662,7 @@ export interface TranslationResources {
   rule: RuleTranslation;
   eval: EvalTranslation;
   audit: AuditTranslation;
-  job: JobTranslation;
+  scheduledTask: ScheduledTaskTranslation;
   importExport: ImportExportTranslation;
   connector: ConnectorTranslation;
   analysis: RuleSetAnalysisTranslation;

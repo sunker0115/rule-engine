@@ -59,9 +59,9 @@ export function getMenuItems(t: TFunction): ItemType[] {
     },
     { type: 'divider' },
     {
-      key: ROUTES.JOBS,
+      key: ROUTES.SCHEDULED_TASKS,
       icon: <ClockCircleOutlined />,
-      label: t('menu.jobs'),
+      label: t('menu.scheduledTasks'),
     },
     {
       key: ROUTES.IMPORT_EXPORT,

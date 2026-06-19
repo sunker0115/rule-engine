@@ -17,8 +17,8 @@ export const ROUTES = {
   SESSIONS:       '/sessions',
   SESSION_DETAIL: '/sessions/:sessionId',
   AUDIT_LOGS:     '/audit-logs',
-  JOBS:           '/jobs',
-  JOB_DETAIL:     '/jobs/:jobId',
+  SCHEDULED_TASKS:        '/scheduled-tasks',
+  SCHEDULED_TASK_DETAIL:  '/scheduled-tasks/:taskId',
   IMPORT_EXPORT:  '/import-export',
 } as const;
 
