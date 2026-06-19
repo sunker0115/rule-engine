@@ -32,7 +32,7 @@
 
 > **两类支撑概念**（不是一等公民，但理解整体必须知道）：`ConditionEvaluator` / `MetricSource` —— 它们是上面 Condition / Metric 的"幕后执行者"，详见 §五边界辨析。注：`MetricSource` 是概念层名称；04-extension 中对应的 Java SPI 接口名为 `MetricSourceHandler`（与 `ConditionEvaluator` 命名风格保持一致）。
 >
-> **Job 不是一等公民**：定时类规则通过 `JobDefinition` + `Scheduler` 适配为"到点合成 RuleEvent → 注入标准评估链路"，不引入新概念。详见 §3.10。
+> **调度任务不是一等公民**：定时类规则通过 `ScheduledTask`（`task_type=TRIGGER`）+ `Scheduler` 适配为"到点合成 RuleEvent → 注入标准评估链路"，不引入新概念。TRIGGER 只是调度任务类型之一（另有 OUTCOME_INGESTION 等），详见 §3.10。
 
 **注：运营心智里的"条件分组"**在数据模型上不固化为独立实体，而是由 AST 的 `AndNode` / `OrNode` 携带可选 `displayLabel` 字段表达——前端按 label 渲染成"分组卡片"，后端只看 AST 逻辑结构。这样 90% 的"分组"成本是零（一个字段），剩下 10% 真正需要"独立分组实体 / 跨 Rule 复用 / 分组权限"的高级场景，留到 v2 视情况升级。详见 §五 Q2。
 
@@ -90,7 +90,7 @@ Decision           ┌───────────────────�
 
 > **横切：核心配置表共享审计字段**（D14）
 >
-> 所有可由人编辑的配置对象（`tenant`、`scene`（DDL 落地表名，旧称 `scene_definition`）、`rule_definition`、`metric_definition`、`decision_definition`、`job_definition` 等）的表结构都横切包含以下审计字段，下方各章节字段表**默认不再重复列出**：
+> 所有可由人编辑的配置对象（`tenant`、`scene`（DDL 落地表名，旧称 `scene_definition`）、`rule_definition`、`metric_definition`、`decision_definition`、`scheduled_task` 等）的表结构都横切包含以下审计字段，下方各章节字段表**默认不再重复列出**：
 >
 > | 字段 | 说明 |
 > |------|------|
@@ -153,7 +153,7 @@ Decision           ┌───────────────────�
 | `eventTypes` | 该 Scene 允许的 eventType 白名单数组；事件接入按 (scene + eventType) 二元组校验，规则 trigger 下拉与 Job `eventTypeTemplate` 也按此过滤 |
 | `decisionStrategy` | 多规则命中时的合成策略。v1 固定为 `HIGHEST_PRIORITY`（priority 最小者胜出），DDL 层 NOT NULL DEFAULT，PUSH/HYBRID Scene 强制生效（D29）；PULL Scene 不参与合成，配置了也忽略。v2 预留 `MAJORITY` / `CUSTOM_SPI` 扩展位（届时需 `ALTER TABLE MODIFY COLUMN`，非加列） |
 
-metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）。Scene 与 `JobDefinition` 一对多关联，PULL Scene 不允许配置 Job（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
+metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）。Scene 与 TRIGGER 类 `ScheduledTask`（经 `TriggerConfig.sceneCode` 关联）一对多关联，PULL Scene 不允许配置 TRIGGER 任务（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
 
 **关键边界**：
 
@@ -194,7 +194,7 @@ metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）�
 - `payload` 在线协议层是 schemaless 的 Map，但**实际可消费字段由 `Scene.payloadSchema` 约束**（D13）：事件接入校验 + 规则发布校验 + 前端编辑器变量补全都按它走。schema 之外的字段被静默丢弃（v1）或拒收（v2 严格模式）。
 - `eventType` 必须 ∈ `Scene.eventTypes` 白名单，不在的事件直接拒收（D13）。
 - 不允许在 RuleEvent 里塞"指标"——指标按需在 EvalContext 构建阶段取。
-- **Job Trigger 同样产出标准 `RuleEvent`**：调度器到点经 `@RuleJob` 方法查 `JobTarget` 集合 → 经 `RuleEvent.builder` 批量合成（`source=JOB`、`eventId = hash(jobRunId + subjectId)`，payload/providedMetrics 由 JobTarget 携带）→ 注入标准评估链路；下游 Matcher / Rule 完全无感（详见 §3.10）。
+- **TRIGGER 调度任务同样产出标准 `RuleEvent`**：调度器到点经 `@TriggerTask` 方法查 `SubjectTarget` 集合 → 经 `RuleEvent.builder` 批量合成（`source=JOB`、`eventId = hash(taskRunId + subjectId)`，payload/providedMetrics 由 SubjectTarget 携带）→ 注入标准评估链路；下游 Matcher / Rule 完全无感（详见 §3.10）。
 
 ### 3.4 Rule（规则）
 
@@ -438,64 +438,63 @@ EvalContext {
 - **清单来源 = 发布期快照**：发布时每条规则把引用的 payload 字段（`valueRef=PAYLOAD` 节点）连同从 `Scene.payloadSchema` 取的 `dataType` / `required` 冻结进 `rule_version.payload_dependencies`（与 `metric_dependencies` 同套路、守 D6 不可变 + 评估零额外查询），随 `RuleVersionSnapshot.payloadDependencies` 下发到评估侧。场景级清单 = 该场景 ACTIVE 规则快照清单的并集（同名去重）。
 - **可发现 + 评估期校验**：调用方经 `GET /api/v1/rule/scenes/{sceneCode}/input-manifest`（10-api-contract §3.4）拿到清单；评估期按候选快照清单并集校验请求 payload——必填缺失 → `MISSING_REQUIRED_INPUT`（整体拒绝 400，不降级），类型不符 → `INPUT_TYPE_MISMATCH`（400），多塞的未被引用字段忽略。与发布期 `UNRESOLVED_VARIABLE`（规则别越界引用没声明的字段）正交：一个管授权期"规则别越界"，一个管调用期"调用方别漏传 / 错类型"。
 
-### 3.10 Job（定时触发，不是一等公民）
+### 3.10 ScheduledTask（调度任务，不是一等公民）
 
-**是什么**：把"定时类规则"接入引擎的 Trigger 适配器，**不引入第四个一等概念**。调度器到点后：
+**是什么**：通用调度任务框架——`ScheduledTask` + `TaskExecutor` SPI，按 `task_type` 路由（`TaskType` 封闭集，首期 `TRIGGER` / `OUTCOME_INGESTION`）。调度层只回答"何时 + 哪个实例跑"，任务层负责"执行什么"，二者解耦：加新调度工作 = 加一个 `TaskType` 值 + 一个 `TaskExecutor` + 一个 `TaskConfig` 子类型，零主干改动。设计见 [scheduling/propagation spec](./superpowers/specs/2026-06-19-distributed-ready-scheduling-and-propagation-design.md) §3–§5。
 
-1. 按 `JobDefinition.subjectQuery`（`type=BEAN_METHOD`）反射调用 `@RuleJob` 业务方法，查出本批次 `JobTarget` 集合（每个含 subjectId + 可选 payload + 可选 providedMetrics）；
-2. 经 `RuleEvent.builder` 为每个 `JobTarget` 合成 `RuleEvent`（`source=JOB`、`eventId = hash(jobRunId + subjectId)` 与 `record_no` 模式同构幂等，payload/providedMetrics 由 JobTarget 透传）；
+**`TRIGGER` 类型 = 原"定时类规则"接入引擎的 Trigger 适配器**，**不引入第四个一等概念**。调度器到点后由 `TriggerExecutor`（`TaskExecutor<TriggerConfig>`）：
+
+1. 按 `TriggerConfig.subjectQuery`（`type=BEAN_METHOD`）反射调用 `@TriggerTask` 业务方法，查出本批次 `SubjectTarget` 集合（每个含 subjectId + 可选 payload + 可选 providedMetrics）；
+2. 经 `RuleEvent.builder` 为每个 `SubjectTarget` 合成 `RuleEvent`（`source=JOB`、`eventId = hash(taskRunId + subjectId)` 与 `record_no` 模式同构幂等，payload/providedMetrics 由 SubjectTarget 透传）；
 3. 批量注入标准评估链路（Matcher → Pre-Gate → EvalContext 构建 → AST → Decision），下游完全无感。
 
-**字段（JobDefinition）**：
+**字段（ScheduledTask）**：
 
 | 字段 | 说明 |
 |------|------|
-| `id` | 主键（DDL 列名；概念层有时称 `jobId`） |
-| `tenantId / sceneCode` | 归属（DDL 列 `tenant_id` / `scene_code`，关联 scene.code，与 RuleEvent.sceneCode / SceneService 口径一致；PULL Scene 拒绝绑定） |
-| `name` | 给运营看的名称 |
-| `cronExpression` | 标准 cron 表达式（DDL 列名 `cron_expression`）；时区可选——cron 自带时区时以 cron 为准（如 `CRON_TZ=Asia/Shanghai 0 30 0 * * *`），未指定时回落 `Scene.defaultParams.timezone`，仍未配回落引擎默认（`UTC`） |
-| `subjectQuery` | 主体集合查询配置 JSON（DDL 单列）。`type=BEAN_METHOD`（首期，`@RuleJob` 注解的业务查询方法，`ref=<bean>#<method>`，主体由方法返回）/ `EXTERNAL_HTTP` / `METRIC_RESULT`（后续）。详见下方「Job 定义方式」 |
-| `eventType` | 合成 RuleEvent 时使用的 eventType（DDL 列名 `event_type`；概念层有时称 `eventTypeTemplate`） |
-| `payloadTemplate` | DDL 遗留列，D49 后不再使用——payload 改由 `@RuleJob` 方法返回的 `JobTarget.payload` 直接携带，不再做占位符模板渲染 |
-| `concurrency` | 单次运行并发 fan-out 上限（调度器运行时配置，非 DDL 独立列，存于 `subject_query` JSON 或外部配置） |
-| `rateLimit` | 注入引擎事件速率上限（保护下游；同 `concurrency` 为运行时配置） |
-| `status` | `ACTIVE` / `DISABLED`（DDL ENUM；概念层有时写 `PAUSED`，DDL 对应值为 `DISABLED`） |
+| `id` | 主键（DDL 列名；概念层有时称 `taskId`） |
+| `tenantId` | 归属租户（DDL 列 `tenant_id`） |
+| `code / name` | 租户内唯一标识 + 给运营看的名称（UK `uk_tenant_code`） |
+| `taskType` | 任务类型判别（DDL 列 `task_type`，`TaskType` enum：`TRIGGER` / `OUTCOME_INGESTION`）；冗余一份供查询/分发，单一真相在 `config` 多态 tag |
+| `cron` | 标准 cron 表达式（DDL 列名 `cron`）；seed 初值，seed 后 XXL admin 运行时权威。时区可选——cron 自带时区时以 cron 为准（如 `CRON_TZ=Asia/Shanghai 0 30 0 * * *`），TRIGGER 未指定时回落 `Scene.defaultParams.timezone`，仍未配回落引擎默认（`UTC`） |
+| `config` | typed `TaskConfig`（DDL 单 JSON 列，sealed 类型族，多态 `kind` 判别）。`TRIGGER` 为 `TriggerConfig{sceneCode, eventType, subjectQuery}`（`sceneCode` 关联 scene.code、PULL Scene 拒绝绑定；`subjectQuery.type=BEAN_METHOD` 指向 `@TriggerTask` 注解方法）；`OUTCOME_INGESTION` 为 `OutcomeIngestionConfig{connectorCode, mapping, watermarkField}` |
+| `status` | `ACTIVE` / `DISABLED`（VARCHAR；概念层有时写 `PAUSED`，DDL 对应值为 `DISABLED`） |
 
-**Job 定义方式（D48 / D49）**：Job 由 `@RuleJob` 注解定义——开发者在 Spring Bean 方法上标注（`code`/`cron`/`tenant`/`scene`/`eventType`），方法体即自定义主体查询，返回 `List<JobTarget>`（每个 `JobTarget` 含 `subjectId` + 可选 `payload` + 可选 `providedMetrics`，如「查 10 分钟前登录的用户并带上其评分」）。启动期 `RuleJobScanner` 扫描注解 → upsert 到 `job_definition`（`subjectQuery.type=BEAN_METHOD`，`ref=<bean>#<method>`）→ 注册调度。触发时 `JobRunner` 经 `RuleEvent.builder` 把每个 `JobTarget` 合成事件（`source=JOB`、payload/providedMetrics 透传、`eventId=hash(jobRunId+subjectId)`）注入 `acceptEvent`。运营 API（`/admin/v1/jobs`）只做管理（列表 / 详情 / 启用 / 禁用 / 手动触发 / 执行记录），**不含创建**——"查哪些主体"是业务代码逻辑，不由运营在 UI 配；规则本身仍由运营事先经 Scene / Rule API 配好，Job 只定时触发对其评估。
+**TRIGGER 定义方式（@TriggerTask 注解驱动）**：TRIGGER 任务由 `@TriggerTask` 注解定义——开发者在 Spring Bean 方法上标注（`code`/`cron`/`tenant`/`scene`/`eventType`），方法体即自定义主体查询，返回 `List<SubjectTarget>`（每个 `SubjectTarget` 含 `subjectId` + 可选 `payload` + 可选 `providedMetrics`，如「查 10 分钟前登录的用户并带上其评分」）。启动期 `ScheduledTaskScanner` 扫描注解 → upsert 到 `scheduled_task`（`task_type=TRIGGER`，`config` 为 `TriggerConfig`，`subjectQuery.type=BEAN_METHOD`，`ref=<bean>#<method>`）→ 注册调度。触发时 `TriggerExecutor` 经 `RuleEvent.builder` 把每个 `SubjectTarget` 合成事件（`source=JOB`、payload/providedMetrics 透传、`eventId=hash(taskRunId+subjectId)`）注入 `acceptEvent`。运营 API（`/admin/v1/scheduled-tasks`）只做管理（列表 / 详情 / 启用 / 禁用 / 手动触发 / 执行记录），**不含创建**——TRIGGER 的"查哪些主体"是业务代码逻辑，不由运营在 UI 配；规则本身仍由运营事先经 Scene / Rule API 配好，调度任务只定时触发对其评估。
 
-**字段（JobExecution，每次运行的记录）**：
+**字段（ScheduledTaskExecution，每次运行的记录）**：
 
 | 字段 | 说明 |
 |------|------|
-| `id` | 主键（DDL 列名；概念层有时称 `jobRunId`，指同一字段） |
-| `jobDefinitionId` | 归属 Job（DDL 列名 `job_definition_id`） |
+| `id` | 主键（DDL 列名；概念层有时称 `taskRunId`，指同一字段） |
+| `scheduledTaskId` | 归属任务（DDL 列名 `scheduled_task_id`） |
 | `triggerAt` | 调度器触发时间（DDL 列名 `trigger_at`） |
 | `finishedAt` | 完成时间（DDL 列名 `finished_at`，nullable） |
-| `subjectCount` | 查询到的主体总数 |
-| `successCount` | 成功注入评估链路的主体数（DDL 列名 `success_count`） |
+| `processedCount` | 通用处理计数（DDL 列名 `processed_count`）：TRIGGER=主体数 / OUTCOME_INGESTION=标签行数 |
+| `successCount` | 成功数（DDL 列名 `success_count`） |
 | `errorCount` | 失败数（DDL 列名 `error_count`） |
-| `status` | `RUNNING` / `SUCCESS` / `PARTIAL_FAIL` / `FAILED`（DDL ENUM 值，`PARTIAL_FAIL` 无 ED 后缀） |
+| `status` | `RUNNING` / `SUCCESS` / `PARTIAL_FAIL` / `FAILED`（VARCHAR 值，`PARTIAL_FAIL` 无 ED 后缀） |
 | `errorSummary` | 错误明细摘要（DDL 列名 `error_summary`） |
 
 **调度器接口（`Scheduler` SPI，rule-kernel）**：
 
 ```
 interface Scheduler {
-    void schedule(String jobCode, String cronExpression, Runnable task);  // 注册 cron 周期任务
-    void unschedule(String jobCode);                                       // 撤销
+    void schedule(String taskCode, String cronExpression, Runnable task);  // 注册 cron 周期任务
+    void unschedule(String taskCode);                                      // 撤销
 }
 ```
 
-SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable），不耦合 JobDefinition 业务模型。早期设计草案在 `Scheduler` 上画的 `register/unregister/triggerOnce/status/recentRuns` 等业务方法（D47 落地时）按下表重新落位——能力不丢，只是从 SPI 方法变为 `JobService` 方法或内部机制：
+SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable），不耦合 `ScheduledTask` 业务模型。早期设计草案在 `Scheduler` 上画的 `register/unregister/triggerOnce/status/recentRuns` 等业务方法按下表重新落位——能力不丢，只是从 SPI 方法变为 `ScheduledTaskService` 方法或内部机制：
 
 | 原草案 SPI 方法 | 落位 |
 |------|------|
-| `register(JobDefinition)` / `unregister(jobId)` | 内部 `JobScheduleManager`（启动期 RuleJobScanner / enableJob 注册、disableJob 撤销，自动调 `schedule/unschedule`） |
-| `triggerOnce(jobId)` | `JobService.triggerOnce(tenantId, jobId)`（手动触发一次，不经调度器） |
-| `recentRuns(jobId, limit)` | `JobService.recentExecutions(tenantId, jobId, limit)` |
-| `status(jobId)` | `JobService.getJob()` 返回的 `status`（ACTIVE/DISABLED）；进程内单实例下调度运行态≈配置态，未单独暴露，多实例时再补 |
+| `register(ScheduledTask)` / `unregister(taskId)` | 内部 `ScheduledTaskScheduleManager`（启动期 `ScheduledTaskScanner` / enable 注册、disable 撤销，自动调 `schedule/unschedule`） |
+| `triggerOnce(taskId)` | `ScheduledTaskService.triggerOnce(tenantId, taskId)`（手动触发一次，不经调度器） |
+| `recentRuns(taskId, limit)` | `ScheduledTaskService.recentExecutions(tenantId, taskId, limit)` |
+| `status(taskId)` | `ScheduledTaskService.getTask()` 返回的 `status`（ACTIVE/DISABLED）；进程内单实例下调度运行态≈配置态，未单独暴露，多实例时再补 |
 
-`ThreadPoolSchedulerAdapter`（进程内 `ThreadPoolTaskScheduler` + `CronTrigger`，单实例）是 v1 首个实现；多实例部署会重复触发，属已知限制，需 HA 时替换为选主或外部调度（xxl-job），业务侧 `JobDefinition` / `JobExecution` 不变。
+`ThreadPoolSchedulerAdapter`（进程内 `ThreadPoolTaskScheduler` + `CronTrigger`，单实例）是 dev 单机实现；多实例部署会重复触发，由 `XxlJobSchedulerAdapter`（XXL-JOB 中心调度 + 单实例派发）解决，换 adapter 时业务侧 `ScheduledTask` / `ScheduledTaskExecution` 不变。
 
 **关键边界**：
 
@@ -980,7 +979,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | Rule 版本快照（不可变快照、回滚语义、运行时锁定） | §3.12 RuleVersion |
 | AST 节点类型 / 操作符 / `displayLabel` 渲染 | [03-rule-expression](./03-rule-expression.md) |
 | 加新的 ConditionEvaluator / MetricSource | [04-extension](./04-extension.md) |
-| 定时类规则：`JobDefinition` 字段 / Scheduler 接口 / xxl-job 适配 | §3.10 + [02-runtime §3.1](./02-runtime.md)（Trigger 接入层 JobScheduler 条目） |
+| 调度任务：`ScheduledTask` 字段 / Scheduler 接口 / xxl-job 适配 | §3.10 + [02-runtime §3.1](./02-runtime.md)（Trigger 接入层调度条目） |
 | 一个事件进来到决策产出的代码级时序 | [02-runtime](./02-runtime.md) |
 | 前端怎么把这些概念画成 UI | [06-frontend](./06-frontend.md) |
 | 幂等 / 灰度 / dry-run / 监控的运营细节 | [07-operability](./07-operability.md) |

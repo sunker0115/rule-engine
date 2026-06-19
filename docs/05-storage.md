@@ -37,8 +37,8 @@
 | `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
 | `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级（D26） | 同步事务 | 永久 |
 | `rule_decision_binding` | 规则与 Decision 的绑定关系（支持可选 score 区间，D26 SCORECARD 占位） | 同步事务 | 永久 |
-| `job_definition` | 定时触发规则配置（§3.10），调度器到点合成 RuleEvent | 同步事务 | 永久 |
-| `job_execution` | Job 每次运行记录（§3.10） | 异步 | 永久 |
+| `scheduled_task` | 通用调度任务定义（§3.10）：`task_type` 判别 + typed `config`，TRIGGER 为评估触发类型 | 同步事务 | 永久 |
+| `scheduled_task_execution` | 调度任务每次运行记录（§3.10） | 异步 | 永久 |
 | `audit_log` | 配置变更审计——人的行为（D14，同步事务红线） | 同步事务 | 永久 |
 
 **评估层表（运行面，量大）：**
@@ -229,44 +229,44 @@ CREATE TABLE rule_decision_binding (
 > **scene_metric_binding 已移除（D54，V1_22）**：metric 在 tenant 级对所有 scene 可用，不再有 scene 级 metric 白名单。
 > **scene_action_binding 已移除（D54，V1_23）**：曾用于 scene 级 actionType 白名单；D60 起整个动作子系统移除，引擎纯决策化，已无 action 概念。
 
-**job_definition**（定时触发规则，非一等公民）
+**scheduled_task**（通用调度任务定义，非一等公民）
+
+TRIGGER（评估触发，原 `job_definition` 语义）只是 `task_type` 之一；`scene_code`/`event_type`/`subject_query` 不再是顶层列，已下沉进 typed `config`（`TriggerConfig`）。迁移 V1_37。
 
 ```sql
-CREATE TABLE job_definition (
-  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id       BIGINT       NOT NULL,
-  scene_code      VARCHAR(64)  NOT NULL COMMENT '关联 scene.code，PULL Scene 不允许配置 Job（发布拒绝）',
-  code            VARCHAR(64)  NOT NULL COMMENT 'Job 标识，租户 + 场景内唯一',
-  name            VARCHAR(128) NOT NULL,
-  cron_expression VARCHAR(128) NOT NULL COMMENT 'Spring 6 段 cron（秒 分 时 日 月 周）',
-  subject_query   JSON         NOT NULL COMMENT '主体集合查询配置（D48）：type=BEAN_METHOD，ref=<bean>#<method> 指向 @RuleJob 注解的业务查询方法（EXTERNAL_HTTP / METRIC_RESULT 后续）',
-  event_type      VARCHAR(64)  NOT NULL COMMENT '合成 RuleEvent 时使用的 eventType',
-  payload_template JSON        COMMENT 'D49 遗留列，已不再使用——payload 改由 @RuleJob 方法返回的 JobTarget.payload 直接携带，不做占位符渲染',
-  status          VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED',
-  created_by      VARCHAR(64)  COMMENT '创建人（D14）',
-  created_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  updated_by      VARCHAR(64)  COMMENT '最近修改人（D14）',
-  updated_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  UNIQUE KEY uk_tenant_scene_code (tenant_id, scene_code, code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时触发规则配置（§3.10，迁移 V1_7）；调度器到点合成 RuleEvent 注入标准评估链路';
+CREATE TABLE scheduled_task (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id   BIGINT       NOT NULL,
+  code        VARCHAR(64)  NOT NULL COMMENT '租户内唯一',
+  name        VARCHAR(128) NOT NULL,
+  task_type   VARCHAR(32)  NOT NULL COMMENT 'TaskType: TRIGGER / OUTCOME_INGESTION',
+  cron        VARCHAR(128) NOT NULL COMMENT 'Spring 6 段 cron；seed 初值，XXL admin 运行时权威',
+  config      JSON         NOT NULL COMMENT 'typed TaskConfig（多态 kind 判别）；TRIGGER 为 TriggerConfig{sceneCode, eventType, subjectQuery}',
+  status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED',
+  created_by  VARCHAR(64)  COMMENT '创建人（D14）',
+  created_at  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_by  VARCHAR(64)  COMMENT '最近修改人（D14）',
+  updated_at  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_tenant_code (tenant_id, code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通用调度任务定义（§3.10，迁移 V1_37）';
 ```
 
-**job_execution**（每次 Job 运行记录）
+**scheduled_task_execution**（每次调度任务运行记录）
 
 ```sql
-CREATE TABLE job_execution (
-  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-  job_definition_id BIGINT     NOT NULL COMMENT '关联 job_definition.id',
-  tenant_id       BIGINT       NOT NULL,
-  trigger_at      TIMESTAMP(3)  NOT NULL COMMENT '调度器触发时间',
-  status          VARCHAR(32) NOT NULL DEFAULT 'RUNNING' COMMENT '取值: RUNNING/SUCCESS/PARTIAL_FAIL/FAILED',
-  subject_count   INT          NOT NULL DEFAULT 0 COMMENT '查询到的主体总数',
-  success_count   INT          NOT NULL DEFAULT 0 COMMENT '成功注入评估链路的主体数',
-  error_count     INT          NOT NULL DEFAULT 0 COMMENT '失败数（含主体查询失败 + 事件注入失败）',
-  error_summary   TEXT         COMMENT '失败摘要（抽样错误信息）',
-  finished_at     TIMESTAMP(3),
-  KEY idx_job_trigger (job_definition_id, trigger_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Job 每次运行记录（§3.10）';
+CREATE TABLE scheduled_task_execution (
+  id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+  scheduled_task_id BIGINT      NOT NULL COMMENT '关联 scheduled_task.id',
+  tenant_id        BIGINT       NOT NULL,
+  trigger_at       TIMESTAMP(3) NOT NULL COMMENT '调度器触发时间',
+  status           VARCHAR(16)  NOT NULL DEFAULT 'RUNNING' COMMENT '取值: RUNNING/SUCCESS/PARTIAL_FAIL/FAILED',
+  processed_count  INT          NOT NULL DEFAULT 0 COMMENT '通用处理计数：TRIGGER=主体数 / OUTCOME_INGESTION=标签行数',
+  success_count    INT          NOT NULL DEFAULT 0,
+  error_count      INT          NOT NULL DEFAULT 0,
+  error_summary    TEXT         COMMENT '失败摘要（抽样错误信息）',
+  finished_at      TIMESTAMP(3) NULL,
+  KEY idx_task_trigger (scheduled_task_id, trigger_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='调度任务每次运行记录（§3.10）';
 ```
 
 **audit_log**（D14：人的行为，同步事务，永久保留）
@@ -429,8 +429,8 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)`<br>`idx_operated_at (operated_at)` | 查某个规则/Scene 的所有变更记录<br>按时间范围查审计日志 |
 | `decision_definition` | UK `uk_tenant_code (tenant_id, code)` | Tenant 内 Decision 码唯一性约束 + 发布时查 Decision |
 | `rule_decision_binding` | UK `uk_rule_decision (rule_definition_id, decision_id)` | 规则与 Decision 绑定唯一性 |
-| `job_definition` | UK `uk_tenant_scene_code (tenant_id, scene_code, code)` | 租户 + 场景内 Job 唯一性约束 |
-| `job_execution` | `idx_job_trigger (job_definition_id, trigger_at)` | 按 Job 查运行历史 |
+| `scheduled_task` | UK `uk_tenant_code (tenant_id, code)` | 租户内调度任务唯一性约束 |
+| `scheduled_task_execution` | `idx_task_trigger (scheduled_task_id, trigger_at)` | 按调度任务查运行历史 |
 
 ### 分区建议（v1 不做，v2 演进）
 

@@ -50,9 +50,9 @@
 
 | 流程 | 入口 | 状态 | 验证 | 备注 |
 |---|---|---|---|---|
-| Job 手动触发 → 合成 RuleEvent → 评估 | `JobController.trigger` → `@RuleJob` | ✅ | 2026-06-10 | 触发 `demo-daily`(租户1/fraud_check)→ SUCCESS/subjectCount=2/errorCount=0,`job_execution` 落库;**eval 为 miss 不落 session**(fraud_check 无规则→空候选短路,预期);job→event→eval 提交路径已验 |
-| Job executions 查询 `GET /jobs/{id}/executions` | `JobController` | ✅ | 2026-06-10 | 返回执行记录 |
-| Job enable / disable | `JobController` | ✅ | 2026-06-11 | enable/disable 全验(DISABLED→ACTIVE 往返,enable 校验 scene 存在);Job 定义由 @RuleJob 注解启动期自动落库,无 CRUD 接口 |
+| TRIGGER 任务手动触发 → 合成 RuleEvent → 评估 | `ScheduledTaskController.trigger` → `@TriggerTask` | ✅ | 2026-06-10 | 触发 `demo-daily`(租户1/fraud_check)→ SUCCESS/processedCount=2/errorCount=0,`scheduled_task_execution` 落库;**eval 为 miss 不落 session**(fraud_check 无规则→空候选短路,预期);task→event→eval 提交路径已验 |
+| 调度任务 executions 查询 `GET /admin/v1/scheduled-tasks/{id}/executions` | `ScheduledTaskController` | ✅ | 2026-06-10 | 返回执行记录 |
+| 调度任务 enable / disable | `ScheduledTaskController` | ✅ | 2026-06-11 | enable/disable 全验(DISABLED→ACTIVE 往返,enable 校验 scene 存在);TRIGGER 任务定义由 @TriggerTask 注解启动期自动落库,无 CRUD 接口 |
 | xxl-job 定时调度 | `XxlJobSchedulerAdapter` | 🟡 | — | 需真 xxl-job-admin |
 
 ## 四、Bundle 导出 / 导入

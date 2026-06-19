@@ -36,7 +36,7 @@ v1 阶段 10 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个
 | `rule-kernel-polling` | `DbPollingRuleWatcher` / `DbPollingSceneWatcher` 实现，SDK 使用方按需引入 | 可选库（jar），仅 SDK 模式使用 |
 | `rule-config-svc` | 规则/Scene/元数据 CRUD、发布、快照生成 | Spring 模块，内嵌于主服务 |
 | `rule-eval-svc` | 评估入口（PUSH/PULL/dry-run）、metric 预拉、session 落库 | Spring 模块，内嵌于主服务 |
-| `rule-job-svc` | 定时 Job（D11）：调度注册、JobDefinition CRUD、主体查询合成 RuleEvent 注入、JobExecution 记录 | Spring 模块，内嵌于主服务 |
+| `rule-job-svc` | 通用调度任务框架（D11 / D74）：调度注册、`ScheduledTask` + `TaskExecutor` SPI（TRIGGER 主体查询合成 RuleEvent 注入）、`ScheduledTaskExecution` 记录 | Spring 模块，内嵌于主服务 |
 | `rule-audit-svc` | 审计查询、dry-run 结果存储、日志聚合 | Spring 模块，内嵌于主服务 |
 | `rule-observability` | TraceWriter DB 实现、Prometheus 指标名常量、告警默认配置 | Spring 模块，内嵌于主服务 |
 | `rule-api` | 所有 HTTP controller、鉴权、限流、API 版本前缀（三类受众前缀 `/admin/v1`、`/api/v1`、`/sdk/v1`） | Spring 模块，内嵌于主服务 |
@@ -82,20 +82,24 @@ com.sstlfsj.rule
 │       ├── session                 # evaluation_session 幂等落库
 │       └── dispatcher              # PUSH 评估队列（自研 BlockingQueue，D20；D60 后引擎纯决策，无动作派发）
 │
-├── job                             # rule-job-svc 模块（D11 / D48）
+├── job                             # rule-job-svc 模块（调度任务框架，D11 / D48 / D74）
 │   ├── api
-│   │   ├── service                 # JobService（管理类：enable/disable/get/list/triggerOnce/recentExecutions）
-│   │   ├── dto                     # JobDefinitionDto / JobExecutionVO
-│   │   ├── annotation              # @RuleJob（注解式 Job 定义）
-│   │   └── JobTarget               # @RuleJob 方法返回元素（subjectId + payload + providedMetrics）
+│   │   ├── service                 # ScheduledTaskService（管理类：enable/disable/get/list/triggerOnce/recentExecutions）
+│   │   ├── dto                     # ScheduledTaskVO / ScheduledTaskExecutionVO
+│   │   ├── annotation              # @TriggerTask（注解式 TRIGGER 任务定义）
+│   │   ├── TaskExecutor            # SPI（按 TaskType 路由的工作单元执行器）
+│   │   ├── TaskType / TaskConfig / TriggerConfig  # 类型判别 + sealed config 族（TRIGGER=TriggerConfig{sceneCode,eventType,subjectQuery}）
+│   │   ├── TaskStatus / TaskExecutionStatus / TaskRunResult  # 状态枚举 + 执行结果
+│   │   ├── SubjectQuery / BeanMethodQuery / SubjectPage       # 主体查询配置
+│   │   └── SubjectTarget           # @TriggerTask 方法返回元素（subjectId + payload + providedMetrics）
 │   └── internal
-│       ├── domain                  # JobDefinition / JobExecution
-│       ├── repository              # MyBatis-Plus Mapper（JobDefinition / JobExecution）
-│       ├── scheduler               # ThreadPoolSchedulerAdapter（进程内 Scheduler 实现）
-│       ├── subject                 # SubjectQueryRunner ← BeanMethodSubjectQueryRunner + BeanMethodRegistry（反射 @RuleJob 方法取 JobTarget）
-│       ├── runner                  # JobRunner（builder 合成 RuleEvent，source=JOB + acceptEvent 注入）+ EventIdHasher
-│       ├── example                 # DemoFraudJob（@Profile local 注解式 Job 示例）
-│       └── service                 # JobServiceImpl + JobScheduleManager + JobStartupRegistrar + RuleJobScanner（扫描 @RuleJob upsert）
+│       ├── domain                  # ScheduledTask / ScheduledTaskExecution
+│       ├── repository              # MyBatis-Plus Mapper（ScheduledTask / ScheduledTaskExecution）
+│       ├── scheduler               # ThreadPoolSchedulerAdapter（进程内 Scheduler 实现，dev 单机）
+│       ├── subject                 # SubjectQueryRunner ← BeanMethodSubjectQueryRunner + BeanMethodRegistry（反射 @TriggerTask 方法取 SubjectTarget）
+│       ├── runner                  # TriggerExecutor（TaskExecutor<TriggerConfig>：builder 合成 RuleEvent，source=JOB + acceptEvent 注入）+ TaskExecutorRegistry + EventIdHasher
+│       ├── example                 # DemoFraudJob（@Profile local 注解式 TRIGGER 示例）
+│       └── service                 # ScheduledTaskServiceImpl + ScheduledTaskScheduleManager + ScheduledTaskStartupRegistrar + ScheduledTaskScanner（扫描 @TriggerTask upsert）
 │
 ├── audit                           # rule-audit-svc 模块
 │   ├── api
@@ -168,7 +172,7 @@ com.sstlfsj.rule
 | `TraceWriterDbImpl` | `rule-observability` | 主服务，异步批写 DB |
 | `NoopTraceWriter` | `rule-observability` | SDK 模式 / 测试环境 |
 | `ThreadPoolSchedulerAdapter` | `rule-job-svc` | v1 进程内 Scheduler 实现（`ThreadPoolTaskScheduler` + `CronTrigger`，单实例，D11/D47） |
-| `XxlJobScheduler` | `rule-job-svc` | 预留：多实例 / HA 时替换，对接 xxl-job 执行器集群，业务侧 JobDefinition / JobExecution 不变 |
+| `XxlJobSchedulerAdapter` | `rule-job-xxl` | 多实例 / HA 调度：对接 xxl-job 执行器集群（中心调度 + 单实例派发），业务侧 `ScheduledTask` / `ScheduledTaskExecution` 不变 |
 
 > **单服务模式热加载**：`rule-eval-svc` 内部直接以 `@ApplicationModuleListener` 订阅 `RulePublishedEvent` / `SceneChangedEvent`，不经 `RuleVersionWatcher` / `SceneWatcher` SPI 通道（D17 Modulith 补充段）。这是框架内部机制，不对外暴露为可替换 SPI；替换方向是切到 MQ（加 `@Externalized`），而非换 Watcher 实现。
 
