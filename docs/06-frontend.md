@@ -117,6 +117,25 @@
 
 ---
 
+## 六·B、决策效果报表页（B32）
+
+`pages/effectiveness`（菜单「决策效果」），消费 `GET /admin/v1/decision-outcomes/effectiveness`：
+- 过滤：租户 + 场景 + 时间窗（RangePicker→ISO）+ positiveLabels（tags 自由输入,业务定义 positive 口径）+ 维度（规则版本/Decision）+ 桶（无/按天/按周）。
+- 诚实横幅：totalSessions/labeled/unlabeled/blocked/positive/negative；unlabeled 不入分母、blocked = reject-inference 残缺面。
+- 混淆矩阵表：维度键 × TP/FP/FN/TN/precision/recall/fireRate/firedTotal（precision/recall 0 分母显「—」）；桶模式加 bucket 列。
+- 漂移折线（`@ant-design/plots`，桶≠无时）：指标切换 precision/recall/fireRate，每维度键一条线。
+- 顶部价值门控提示：指标依赖业务真实标签回灌,无标签时为空属正常。
+- **手工回灌 Modal**：`POST /admin/v1/decision-outcomes`（eventId/label/value?/labeledAt/source?/note?,可多行）——运维补录/演示用,机器主路径走 API/ingestion job。
+
+## 六·C、调度任务管理页（原 job,已迁 scheduled-task）
+
+`pages/scheduled-task-{list,detail}`（菜单「调度任务」），消费 `/admin/v1/scheduled-tasks*`（原 `/admin/v1/jobs` 已废）：
+- 列表：code/name/**taskType**/cron/status + 启停（Switch）/手动触发/进详情。`taskType` 用 label map + **未知类型兜底显示原始串**（前向兼容将来 RETENTION/ALARM）。
+- 详情：任务字段 + **config 通用 JSON 渲染**（不绑定具体 TaskConfig 形状）+ 执行记录表（processed/success/error/status/triggerAt/finishedAt）。
+- **只读管理(无创建/编辑 UI)**：TRIGGER 由 `@TriggerTask` 注解 seed,无 create API；OUTCOME_INGESTION 创建 UI 待后端 create API 后补。
+
+---
+
 ## 七、技术栈与工程目录
 
 技术栈决策见 [`00-decisions.md`](./00-decisions.md) D31。前端工程放 `frontend/` 目录，与 `src/` 平级。
