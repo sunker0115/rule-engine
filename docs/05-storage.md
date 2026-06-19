@@ -37,7 +37,7 @@
 | `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
 | `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级（D26） | 同步事务 | 永久 |
 | `rule_decision_binding` | 规则与 Decision 的绑定关系（支持可选 score 区间，D26 SCORECARD 占位） | 同步事务 | 永久 |
-| `scheduled_task` | 通用调度任务定义（§3.10）：`task_type` 判别 + typed 静态 `config` + 运行态 `cursor` 列，TRIGGER 为评估触发类型 | 同步事务 | 永久 |
+| `scheduled_task` | 通用调度任务定义（§3.10）：`task_type` 判别 + typed 静态 `config` + 运行态 `run_cursor` 列，TRIGGER 为评估触发类型 | 同步事务 | 永久 |
 | `scheduled_task_execution` | 调度任务每次运行记录（§3.10） | 异步 | 永久 |
 | `audit_log` | 配置变更审计——人的行为（D14，同步事务红线） | 同步事务 | 永久 |
 
@@ -231,7 +231,7 @@ CREATE TABLE rule_decision_binding (
 
 **scheduled_task**（通用调度任务定义，非一等公民）
 
-TRIGGER（评估触发，原 `job_definition` 语义）只是 `task_type` 之一；`scene_code`/`event_type`/`subject_query` 不再是顶层列，已下沉进 typed `config`（`TriggerConfig`）。迁移 V1_37；`cursor` 列迁移 V1_38。typed `config` 是**不可变静态定义**，多态族两种形状：**TRIGGER** = `TriggerConfig{sceneCode, eventType, subjectQuery}`；**OUTCOME_INGESTION**（B32 标签回灌）= `OutcomeIngestionConfig{source}`，其中 `source` 为多态 `OutcomeSourceConfig`（首个实现 `SqlOutcomeSourceConfig{datasource, sql}`）。增量任务的**运行态游标**（上次拉取 watermark）不在 config，存于独立 `cursor` 列（state-not-config，对齐 Kafka Connect offset / Airbyte state）：OUTCOME_INGESTION 每轮取本批 max `labeled_at` 写回 `cursor` 推进增量，executor 管理。
+TRIGGER（评估触发，原 `job_definition` 语义）只是 `task_type` 之一；`scene_code`/`event_type`/`subject_query` 不再是顶层列，已下沉进 typed `config`（`TriggerConfig`）。迁移 V1_37；`run_cursor` 列迁移 V1_38。typed `config` 是**不可变静态定义**，多态族两种形状：**TRIGGER** = `TriggerConfig{sceneCode, eventType, subjectQuery}`；**OUTCOME_INGESTION**（B32 标签回灌）= `OutcomeIngestionConfig{source}`，其中 `source` 为多态 `OutcomeSourceConfig`（首个实现 `SqlOutcomeSourceConfig{datasource, sql}`）。增量任务的**运行态游标**（上次拉取 watermark）不在 config，存于独立 `run_cursor` 列（state-not-config，对齐 Kafka Connect offset / Airbyte state）：OUTCOME_INGESTION 每轮取本批 max `labeled_at` 写回 `run_cursor` 推进增量，executor 管理。
 
 ```sql
 CREATE TABLE scheduled_task (
@@ -242,7 +242,7 @@ CREATE TABLE scheduled_task (
   task_type   VARCHAR(32)  NOT NULL COMMENT 'TaskType: TRIGGER / OUTCOME_INGESTION',
   cron        VARCHAR(128) NOT NULL COMMENT 'Spring 6 段 cron；seed 初值，XXL admin 运行时权威',
   config      JSON         NOT NULL COMMENT 'typed TaskConfig（多态 kind 判别，静态定义）；TRIGGER=TriggerConfig{sceneCode, eventType, subjectQuery}，OUTCOME_INGESTION=OutcomeIngestionConfig{source(SQL: datasource, sql)}',
-  `cursor`    VARCHAR(64)  NULL COMMENT '增量任务运行游标（state-not-config，V1_38）；OUTCOME_INGESTION 存 ISO-8601 labeled_at watermark，TRIGGER 等为 null。cursor 是 MySQL 保留字，列名反引号转义',
+  run_cursor  VARCHAR(64)  NULL COMMENT '增量任务运行游标（state-not-config，V1_38）；OUTCOME_INGESTION 存 ISO-8601 labeled_at watermark，TRIGGER 等为 null',
   status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED',
   created_by  VARCHAR(64)  COMMENT '创建人（D14）',
   created_at  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

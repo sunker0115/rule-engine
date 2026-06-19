@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.Objects;
 
-/** OUTCOME_INGESTION executor:调 eval-svc ingest 拉标签 upsert,游标前进则写回 scheduled_task.cursor 列(config 不动)。 */
+/** OUTCOME_INGESTION executor:调 eval-svc ingest 拉标签 upsert,游标前进则写回 scheduled_task.run_cursor 列(config 不动)。 */
 @Component
 @RequiredArgsConstructor
 public class OutcomeIngestionExecutor implements TaskExecutor<OutcomeIngestionConfig> {
@@ -33,13 +33,13 @@ public class OutcomeIngestionExecutor implements TaskExecutor<OutcomeIngestionCo
         if (task == null) {
             return new TaskRunResult(TaskExecutionStatus.FAILED, 0, 0, 0, "任务不存在: " + ctx.taskId());
         }
-        Instant watermark = task.getCursor() == null ? null : Instant.parse(task.getCursor());
+        Instant watermark = task.getRunCursor() == null ? null : Instant.parse(task.getRunCursor());
 
         IngestResult r = ingestionService.ingest(ctx.tenantId(), config.source(), watermark);
 
-        // 游标前进才写回(只更新 cursor 列,config 不动)
+        // 游标前进才写回(只更新 run_cursor 列,config 不动)
         if (!Objects.equals(r.newWatermark(), watermark)) {
-            task.setCursor(r.newWatermark() == null ? null : r.newWatermark().toString());
+            task.setRunCursor(r.newWatermark() == null ? null : r.newWatermark().toString());
             taskMapper.updateById(task);
         }
         return new TaskRunResult(TaskExecutionStatus.SUCCESS, r.accepted(), r.accepted(), 0, null);

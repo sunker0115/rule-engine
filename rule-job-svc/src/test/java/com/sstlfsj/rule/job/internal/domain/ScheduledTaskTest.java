@@ -16,11 +16,11 @@ class ScheduledTaskTest {
         t.setTaskType(TaskType.TRIGGER);
         t.setCron("0 0 * * * *");
         t.setConfig(new TriggerConfig("s", "e", null));
-        t.setCursor("2026-06-18T10:00:00Z");
+        t.setRunCursor("2026-06-18T10:00:00Z");
         t.setStatus(TaskStatus.ACTIVE);
         assertEquals(TaskType.TRIGGER, t.getTaskType());
         assertEquals(TaskStatus.ACTIVE, t.getStatus());
         assertEquals("s", ((TriggerConfig) t.getConfig()).sceneCode());
-        assertEquals("2026-06-18T10:00:00Z", t.getCursor());
+        assertEquals("2026-06-18T10:00:00Z", t.getRunCursor());
     }
 }

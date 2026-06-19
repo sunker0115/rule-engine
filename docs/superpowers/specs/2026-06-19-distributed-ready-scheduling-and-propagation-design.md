@@ -62,7 +62,7 @@ scheduled_task
   task_type   VARCHAR  -- TaskType enum(封闭),仅 TRIGGER / OUTCOME_INGESTION
   cron        VARCHAR  -- 交调度器
   config      JSON     -- sealed TaskConfig(typed,静态定义,见 4.2)
-  cursor      VARCHAR  -- 增量任务运行游标(state-not-config;OUTCOME_INGESTION 存 ISO-8601 watermark,其余 null)
+  run_cursor  VARCHAR  -- 增量任务运行游标(state-not-config;OUTCOME_INGESTION 存 ISO-8601 watermark,其余 null)
   status      VARCHAR  -- ACTIVE / DISABLED
   created_by/at, updated_by/at
   UNIQUE(tenant_id, code)
@@ -75,7 +75,7 @@ enum TaskType { TRIGGER, OUTCOME_INGESTION }
 ```
 
 - `TRIGGER`:合成 RuleEvent → 评估(现 `JobRunner` 降级为一个 executor)。
-- `OUTCOME_INGESTION`（B32 已实装）:经 `OutcomeSource` SPI（首个实现 `SqlOutcomeSource`）增量拉标签 → `OutcomeService` upsert，watermark 取本批 max `labeled_at` 写回独立 `scheduled_task.cursor` 列推进游标（state-not-config,对齐 Kafka Connect offset / Airbyte state——运行态游标与不可变 config 分离）。
+- `OUTCOME_INGESTION`（B32 已实装）:经 `OutcomeSource` SPI（首个实现 `SqlOutcomeSource`）增量拉标签 → `OutcomeService` upsert，watermark 取本批 max `labeled_at` 写回独立 `scheduled_task.run_cursor` 列推进游标（state-not-config,对齐 Kafka Connect offset / Airbyte state——运行态游标与不可变 config 分离）。
 
 ### 4.2 config 是 sealed 类型族,不是裸 Map/JSON-String
 
@@ -86,7 +86,7 @@ sealed interface TaskConfig permits TriggerConfig, OutcomeIngestionConfig {}
 record TriggerConfig(String sceneCode, String eventType, SubjectQuery subjectQuery) implements TaskConfig {}
 record OutcomeIngestionConfig(OutcomeSourceConfig source) implements TaskConfig {}
 // OutcomeSourceConfig 亦为 sealed 多态族：SqlOutcomeSourceConfig(String datasource, String sql) 为首个实现（@JsonTypeInfo kind 自描述）
-// 注：增量 watermark 不在 config（不可变静态定义），存于独立 scheduled_task.cursor 列（运行态，executor 管理；对齐 Kafka Connect offset / Airbyte state 的 state-not-config 模式）
+// 注：增量 watermark 不在 config（不可变静态定义），存于独立 scheduled_task.run_cursor 列（运行态，executor 管理；对齐 Kafka Connect offset / Airbyte state 的 state-not-config 模式）
 ```
 
 - 多态自描述：`@JsonTypeInfo(use=NAME, property="kind")` + `@JsonSubTypes`，TypeHandler 按 kind 还原子类型。
