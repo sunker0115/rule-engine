@@ -15,7 +15,8 @@ import java.util.List;
 /**
  * 调度任务管理入口：启用 / 禁用 / 查询 / 手动触发 / 运行记录。
  *
- * <p>任务定义由 {@code @TriggerTask} 注解驱动、启动期自动落库，故无创建接口；本控制器只做管理。
+ * <p>TRIGGER 任务由 {@code @TriggerTask} 注解驱动、启动期自动落库。
+ * OUTCOME_INGESTION 任务可经 {@code POST /admin/v1/scheduled-tasks} 动态创建（SQL-direct 源）。
  */
 @RestController
 @RequestMapping("/admin/v1/scheduled-tasks")

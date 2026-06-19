@@ -132,7 +132,8 @@
 `pages/scheduled-task-{list,detail}`（菜单「调度任务」），消费 `/admin/v1/scheduled-tasks*`（原 `/admin/v1/jobs` 已废）：
 - 列表：code/name/**taskType**/cron/status + 启停（Switch）/手动触发/进详情。`taskType` 用 label map + **未知类型兜底显示原始串**（前向兼容将来 RETENTION/ALARM）。
 - 详情：任务字段 + **config 通用 JSON 渲染**（不绑定具体 TaskConfig 形状）+ 执行记录表（processed/success/error/status/triggerAt/finishedAt）。
-- **只读管理(无创建/编辑 UI)**：TRIGGER 由 `@TriggerTask` 注解 seed,无 create API；OUTCOME_INGESTION 创建 UI 待后端 create API 后补。
+- **TRIGGER 只读管理**：由 `@TriggerTask` 注解 seed,无创建表单。
+- **OUTCOME_INGESTION 可创建**：列表页「创建回灌任务」按钮 → Modal(code/name/cron/datasource/sql 五字段),提交 `POST /admin/v1/scheduled-tasks`,成功后自动注册到调度器。
 
 ---
 

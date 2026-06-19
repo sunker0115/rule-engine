@@ -43,7 +43,10 @@ rule-app           组装:恒含 rule-job-svc + 各 handler 模块 + 选含一�
 
 ### 3.0.1 `Scheduler` SPI(可移植契约,禁绕过)
 
-**当前(已实装,不变)**:`Scheduler` 仅 `schedule(code, cron, task)` + `unschedule(code)`——cron 单实例派发。本轮去中心化重构**不改 Scheduler**(只动 `TaskExecutor` SPI,见 §4.3)。
+**当前(已实装)**:`Scheduler` 仅 `schedule(code, cron, task)` + `unschedule(code)`——cron 单实例派发。XXL 适配层(`XxlJobSchedulerAdapter`)已进一步实装**通用 handler 模式**:
+
+- `UNIVERSAL_HANDLER = "scheduled-task-runner"` 全集群共用一个 handler,`schedule()` 以 `"task-<id>"` 作 jobDesc + executorParam=taskId seed 到 XXL admin;dispatch 时按 param 查本地 runnables,缺失则降级调 `TaskRunCallback`(kernel SPI)——`ScheduledTaskScheduleManager implements TaskRunCallback`,保证 API 新建任务在任意实例立即可调度,无需各实例重启。
+- 此机制同时支撑了 `POST /admin/v1/scheduled-tasks` create API(OUTCOME_INGESTION 动态创建不再需要 SQL 直插)。
 
 **目标契约(将来,deferred 到多实例,现在不加——YAGNI:无调用方)**:
 ```java
@@ -69,7 +72,7 @@ void triggerBroadcast(String code, String param);          // 广播到所有实
 ```
 建/启用 scheduled_task → ScheduledTaskScheduleManager.register
   → Scheduler.schedule(taskCode, cron, () -> runById(taskId))
-  → XxlJobSchedulerAdapter：注册 handler + adminClient.ensureJobSeeded(taskCode, cron)
+  → XxlJobSchedulerAdapter：缓存 runnable + ensureJobSeeded("task-<id>", "scheduled-task-runner", cron, "<id>")
 
 XXL admin 按 cron 触发（集群内派一个实例）→ handler 跑 runById(taskId)
   → 回 DB 重载最新 scheduled_task（config 永远新鲜，XXL 内不存 config）
