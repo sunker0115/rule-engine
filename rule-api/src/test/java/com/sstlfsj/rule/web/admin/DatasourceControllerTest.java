@@ -32,4 +32,28 @@ class DatasourceControllerTest {
         assertTrue(resp.success());
         assertTrue(resp.data().isEmpty());
     }
+
+    @Test
+    void tables_delegatesToService() {
+        when(svc.tables("ds1")).thenReturn(List.of("orders", "users"));
+        ApiResponse<List<String>> resp = controller.tables("ds1");
+        assertTrue(resp.success());
+        assertEquals(List.of("orders", "users"), resp.data());
+    }
+
+    @Test
+    void columns_delegatesToService() {
+        when(svc.columns("ds1", "orders")).thenReturn(List.of("id", "status", "amount"));
+        ApiResponse<List<String>> resp = controller.columns("ds1", "orders");
+        assertTrue(resp.success());
+        assertEquals(List.of("id", "status", "amount"), resp.data());
+    }
+
+    @Test
+    void tables_unknownDatasource_returnsEmptyList() {
+        when(svc.tables("nonexistent")).thenReturn(List.of());
+        ApiResponse<List<String>> resp = controller.tables("nonexistent");
+        assertTrue(resp.success());
+        assertTrue(resp.data().isEmpty());
+    }
 }
