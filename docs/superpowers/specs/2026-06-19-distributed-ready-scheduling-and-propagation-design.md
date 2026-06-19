@@ -25,6 +25,33 @@
 - 调度器**只回答"何时 + 哪个实例跑",不碰评估/回灌语义**。将来切 **PowerJob**(云原生 / broadcast / MapReduce / DAG)只换 adapter 实现,框架不动。
 - 选型依据:中小规模 + 已集成 + 要控制台 → XXL-JOB;PowerJob 留作规模/工作流升级档(对比见 §9)。
 
+### 3.1 `scheduled_task`(我们的表) ↔ XXL(`xxl_job_info`)关系
+
+两者是**不同的东西,不是同一份数据的两套存储**(现有 `job_definition`↔XXL 已是此模型,`scheduled_task` 只是一般化):
+
+| | `scheduled_task` | XXL-JOB（`xxl_job_info`/log） |
+|---|---|---|
+| 存什么 | **应用域真相源**：task 身份 + `task_type` + 富 `config`（connector/mapping/subjectQuery）+ 业务数据 + 初始 cron/status | **触发引擎的薄镜像**：`jobCode→handler` 绑定 + cron，只为"何时触发、派哪个实例" |
+| 懂不懂 config | 是 | **完全不懂**，只认 jobCode + cron |
+
+经 `Scheduler` SPI（`schedule(code, cron, Runnable)` / `unschedule(code)`）解耦：
+
+```
+建/启用 scheduled_task → ScheduledTaskScheduleManager.register
+  → Scheduler.schedule(taskCode, cron, () -> runById(taskId))
+  → XxlJobSchedulerAdapter：注册 handler + adminClient.ensureJobSeeded(taskCode, cron)
+
+XXL admin 按 cron 触发（集群内派一个实例）→ handler 跑 runById(taskId)
+  → 回 DB 重载最新 scheduled_task（config 永远新鲜，XXL 内不存 config）
+  → 按 task_type 查 executor → execute → 写 scheduled_task_execution
+```
+
+关键点（沿用现有 `JobScheduleManager` 模式）：
+1. **载荷只带 taskId，不带 config** —— `runById` 触发时回 DB 重查，config 改了立即生效，XXL 内永无过期业务配置。
+2. **cron 归属**：`scheduled_task.cron` 是 **seed 初值**；seed 后（"有了不管"，`ensureJobSeeded` 不覆盖）**XXL 控制台对 cron/启停运行时权威**，运维可在 console 直调。唯一重叠字段 cron = app seed → admin 运行时权威。
+3. **执行记录互补**：`scheduled_task_execution` = 域级结果（subject/success/error 计数、error_summary）；XXL log = 派发级 infra 日志。看的是不同层。
+4. **后端无关**：`SchedulerAdapter` 抽象使换 `ThreadPoolSchedulerAdapter`（dev）/ 将来 PowerJob 时，`scheduled_task` 与 executor 一字不改。
+
 ## 4. 任务层:`ScheduledTask` + `TaskExecutor` SPI(消除别扭的重写)
 
 ### 4.1 单表 + 类型判别 + 类型化 config
@@ -78,10 +105,22 @@ interface TaskExecutor<C extends TaskConfig> {
 
 `scheduled_task_execution`（收编现有 `job_execution`）：通用形状（task_id / status / 各类计数 / error_summary / trigger_at / finished_at），所有 task 类型同口径落库 + 观测。
 
-### 4.5 既有迁移
+### 4.5 既有迁移 —— 删 / 留 / 迁清单（破坏性，greenfield 无向后兼容）
 
-- `job_definition` → `scheduled_task`（TRIGGER 型，config = `TriggerConfig`）；`JobRunner` → `TriggerExecutor`。
-- `JobController` / `JobService` CRUD → `ScheduledTaskController` / `ScheduledTaskService`（保留 admin CRUD + 执行记录查询）。
+**删除/替换（job-as-评估触发聚合）：**
+- 表：`job_definition`、`job_execution`（V1_7）→ 新建 `scheduled_task`、`scheduled_task_execution`。
+- 实体/Mapper：`JobDefinition`/`JobDefinitionMapper`、`JobExecution`/`JobExecutionMapper`/`JobExecutionStatus`/`JobStatus` → `ScheduledTask*`/`ScheduledTaskExecution*`。
+- 服务/控制器/DTO：`JobService(Impl)`、`JobController`、`JobDefinitionDto`/`JobExecutionVO`/`JobPage` → `ScheduledTask*`。
+- `JobRunner` → `TriggerExecutor`（`TaskExecutor<TriggerConfig>`）。
+- **API 契约**：`/admin/v1/jobs*` → `/admin/v1/scheduled-tasks*`；对外术语统一为「调度任务 / scheduled-task」（去除"job=评估触发"旧语义）。
+- **前端**：`pages/job-list`、`pages/job-detail`、`api/job.ts`、`ROUTES.JOBS/JOB_DETAIL`、`ENDPOINTS.JOB_*`、`menu.jobs`、i18n `job` → 改为调度任务管理（含 `task_type` 维度）。
+
+**保留/复用（调度 infra + 触发机制，无问题不重写）：**
+- `Scheduler` SPI（kernel）、`XxlJobSchedulerAdapter`/`ThreadPoolSchedulerAdapter`、`XxlJobAdminClient`/`HttpXxlJobAdminClient`、XXL autoconfig。
+- `JobScheduleManager`/`JobStartupRegistrar` → 一般化为注册 `ScheduledTask`（重命名 `ScheduledTaskScheduleManager` 等）。
+- `@RuleJob`/`RuleJobScanner`/`SubjectQuery`/`SubjectQueryRunner`/`BeanMethod*`/`JobTarget`/`EventIdHasher` —— TRIGGER 的取主体+合成事件机制，**收编进 `TriggerExecutor` 内部**，不删。
+
+**迁移方式**：greenfield 可重建——新 Flyway 建 `scheduled_task`/`scheduled_task_execution`，drop `job_definition`/`job_execution`（无生产数据需保留）。
 
 ## 5. 系统固定维护：`@Scheduled` + ShedLock（**不进**任务框架）
 
@@ -120,7 +159,7 @@ interface TaskExecutor<C extends TaskConfig> {
 
 | # | track | 内容 | 依赖 | 节奏 |
 |---|---|---|---|---|
-| 1 | `scheduled-task-framework` | §3+§4：`ScheduledTask`/executor SPI + 调度 + 统一执行记录 + 迁移 job_definition/JobRunner | 无 | 地基，先实现 |
+| 1 | `scheduled-task-framework` | §3+§4：`ScheduledTask`/executor SPI + 调度 + 统一执行记录 + 删/迁 job_definition/JobRunner（含前端 job→scheduled-task 页，§4.5） | 无 | 地基，先实现 |
 | 2 | `outcome-ingestion` | §4 的 `OUTCOME_INGESTION` executor + ingestion config + watermark（B32 回灌后端） | #1 | 次之，自有 spec |
 | 3 | `cross-instance-propagation` | §6 实现：Redis 广播 watcher + ShedLock + (Outbox 缝) | 正交 | 真上多实例时 |
 | 4 | `b32-frontend` | 决策效果报表页 + 手工回灌表单 | 仅依赖已落地 API | 独立，可并行 |
