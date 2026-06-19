@@ -18,14 +18,14 @@ class XxlJobSchedulerAdapterTest {
     @Test
     void scheduleRegistersHandlerSeedsAdminAndRunsTask() throws Exception {
         XxlJobAdminClient admin = mock(XxlJobAdminClient.class);
-        when(admin.ensureJobSeeded(eq("job:1"), eq("0 0 * * * ?"))).thenReturn(42L);
+        when(admin.ensureJobSeeded(eq("job:1"), eq("job:1"), eq("0 0 * * * ?"), eq(""))).thenReturn(42L);
         XxlJobSchedulerAdapter adapter = new XxlJobSchedulerAdapter(admin);
 
         AtomicInteger ran = new AtomicInteger();
         adapter.schedule("job:1", "0 0 * * * ?", ran::incrementAndGet);
 
         // seed 被调用
-        verify(admin).ensureJobSeeded("job:1", "0 0 * * * ?");
+        verify(admin).ensureJobSeeded("job:1", "job:1", "0 0 * * * ?", "");
         // handler 注册到全局 registry，名=jobCode
         IJobHandler handler = XxlJobExecutor.loadJobHandler("job:1");
         assertThat(handler).isNotNull();
@@ -37,7 +37,7 @@ class XxlJobSchedulerAdapterTest {
     @Test
     void unscheduleReplacesHandlerWithNoop() throws Exception {
         XxlJobAdminClient admin = mock(XxlJobAdminClient.class);
-        when(admin.ensureJobSeeded(eq("job:2"), eq("0 0 * * * ?"))).thenReturn(7L);
+        when(admin.ensureJobSeeded(eq("job:2"), eq("job:2"), eq("0 0 * * * ?"), eq(""))).thenReturn(7L);
         XxlJobSchedulerAdapter adapter = new XxlJobSchedulerAdapter(admin);
 
         AtomicInteger ran = new AtomicInteger();

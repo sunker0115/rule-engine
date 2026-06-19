@@ -46,14 +46,15 @@ public class HttpXxlJobAdminClient implements XxlJobAdminClient {
     }
 
     @Override
-    public synchronized long ensureJobSeeded(String handlerName, String cron) {
+    public synchronized long ensureJobSeeded(String jobDesc, String executorHandler,
+                                             String cron, String executorParam) {
         int groupId = ensureJobGroup();
-        Long existing = findJobInfoId(groupId, handlerName);
+        Long existing = findJobInfoId(groupId, jobDesc);
         if (existing != null) {
-            log.info("xxl-job admin 已存在 job handler={} id={}，保持不动（有了不管）", handlerName, existing);
+            log.info("xxl-job admin 已存在 job jobDesc={} id={}，保持不动（有了不管）", jobDesc, existing);
             return existing;
         }
-        return insertJobInfo(groupId, handlerName, cron);
+        return insertJobInfo(groupId, jobDesc, executorHandler, cron, executorParam);
     }
 
     /** 确保 appname 对应的 jobgroup 存在，返回其 id（不存在则按 appname 建组）。 */
@@ -73,37 +74,40 @@ public class HttpXxlJobAdminClient implements XxlJobAdminClient {
         return data.asInt();
     }
 
-    /** pageList 查同组下 handler，executorHandler 是模糊匹配，需客户端再精确 equals；命中返回 id，否则 null。 */
-    private Long findJobInfoId(int groupId, String handlerName) {
+    /** pageList 查同组下 jobDesc，jobDesc 是模糊匹配，需客户端再精确 equals；命中返回 id，否则 null。 */
+    private Long findJobInfoId(int groupId, String jobDesc) {
         JsonNode page = post("/jobinfo/pageList", form(
                 "offset", "0", "pagesize", "100",
                 "jobGroup", String.valueOf(groupId), "triggerStatus", "-1",
-                "jobDesc", "", "executorHandler", handlerName, "author", ""), true).path("data");
+                "jobDesc", jobDesc, "executorHandler", "", "author", ""), true).path("data");
         for (JsonNode job : page.path("data")) {
-            if (handlerName.equals(job.path("executorHandler").asString(""))) {
+            if (jobDesc.equals(job.path("jobDesc").asString(""))) {
                 return job.path("id").asLong();
             }
         }
         return null;
     }
 
-    /** 新建 jobinfo（scheduleType=CRON、glueType=BEAN、executorHandler=handlerName、triggerStatus=1 启用）。 */
-    private long insertJobInfo(int groupId, String handlerName, String cron) {
+    /** 新建 jobinfo（scheduleType=CRON、glueType=BEAN、jobDesc 唯一定位、executorParam 路由 dispatch、triggerStatus=1 启用）。 */
+    private long insertJobInfo(int groupId, String jobDesc, String executorHandler,
+                               String cron, String executorParam) {
         JsonNode data = post("/jobinfo/insert", form(
                 "jobGroup", String.valueOf(groupId),
-                "jobDesc", handlerName,
+                "jobDesc", jobDesc,
                 "author", "rule-engine",
                 "scheduleType", "CRON",
                 "scheduleConf", cron,
                 "glueType", "BEAN",
-                "executorHandler", handlerName,
+                "executorHandler", executorHandler,
+                "executorParam", executorParam,
                 "executorRouteStrategy", "FIRST",
                 "misfireStrategy", "DO_NOTHING",
                 "executorBlockStrategy", "SERIAL_EXECUTION",
                 "executorTimeout", "0",
                 "executorFailRetryCount", "0",
                 "triggerStatus", "1"), true).path("data");
-        log.info("xxl-job admin 新建 job handler={} id={} cron={}", handlerName, data.asLong(), cron);
+        log.info("xxl-job admin 新建 job jobDesc={} handler={} param={} id={} cron={}",
+                 jobDesc, executorHandler, executorParam, data.asLong(), cron);
         return data.asLong();
     }
 

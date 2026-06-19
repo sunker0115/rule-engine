@@ -41,7 +41,7 @@ public class XxlJobSchedulerAdapter implements Scheduler {
                 task.run();
             }
         });
-        long adminJobId = adminClient.ensureJobSeeded(jobCode, cronExpression);
+        long adminJobId = adminClient.ensureJobSeeded(jobCode, jobCode, cronExpression, "");
         log.info("xxl-job 注册 handler={} adminJobId={} cron={}", jobCode, adminJobId, cronExpression);
     }
 

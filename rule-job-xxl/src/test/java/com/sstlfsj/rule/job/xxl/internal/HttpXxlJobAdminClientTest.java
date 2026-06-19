@@ -71,13 +71,13 @@ class HttpXxlJobAdminClientTest {
 
     @Test
     void seedLogsInBeforeAdminCall() {
-        // group 已存在 + jobinfo 已存在 → 不应发写请求，但应已登录
+        // group 已存在 + jobinfo 已存在（按 jobDesc 命中）→ 不应发写请求，但应已登录
         responses.put("/xxl-job-admin/jobgroup/pageList",
                 "{\"code\":200,\"data\":{\"data\":[{\"id\":7,\"appname\":\"rule-engine\"}],\"total\":1}}");
         responses.put("/xxl-job-admin/jobinfo/pageList",
-                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"executorHandler\":\"job:1\"}],\"total\":1}}");
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"jobDesc\":\"task-1\"}],\"total\":1}}");
 
-        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "1");
 
         assertThat(id).isEqualTo(42L);
         assertThat(hits).containsKey("/xxl-job-admin/auth/doLogin");
@@ -94,23 +94,30 @@ class HttpXxlJobAdminClientTest {
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"msg\":null,\"data\":99}");
 
-        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "1");
 
         assertThat(id).isEqualTo(99L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isEqualTo(1);
+        // insert 请求体应带通用 handler 与 executorParam（= taskId）
+        String insertBody = capturedBodies.stream()
+                .filter(b -> b.startsWith("/xxl-job-admin/jobinfo/insert?"))
+                .findFirst().orElseThrow();
+        assertThat(insertBody).contains("executorHandler=scheduled-task-runner");
+        assertThat(insertBody).contains("executorParam=1");
+        assertThat(insertBody).contains("jobDesc=task-1");
     }
 
     @Test
     void seedFuzzyMatchIsRefinedByExactEquals() {
-        // pageList 模糊匹配返回了 handler 前缀相近但不相等的行 → 客户端精确 equals 应判为不存在 → insert
+        // pageList 按 jobDesc 模糊匹配返回了前缀相近但不相等的行 → 客户端精确 equals 应判为不存在 → insert
         responses.put("/xxl-job-admin/jobgroup/pageList",
                 "{\"code\":200,\"data\":{\"data\":[{\"id\":7,\"appname\":\"rule-engine\"}],\"total\":1}}");
         responses.put("/xxl-job-admin/jobinfo/pageList",
-                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"executorHandler\":\"job:10\"}],\"total\":1}}");
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"jobDesc\":\"task-10\"}],\"total\":1}}");
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"data\":100}");
 
-        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "1");
 
         assertThat(id).isEqualTo(100L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isEqualTo(1);
@@ -127,7 +134,7 @@ class HttpXxlJobAdminClientTest {
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"data\":101}");
 
-        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "1");
 
         assertThat(id).isEqualTo(101L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobgroup/insert", 0)).isEqualTo(1);
