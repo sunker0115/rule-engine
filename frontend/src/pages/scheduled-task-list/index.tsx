@@ -8,9 +8,37 @@ import { ROUTES, route } from '@/constants/routes';
 import type { ScheduledTaskItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 
+const OPERATORS = [
+  { value: '=', label: '= 等于' },
+  { value: '!=', label: '!= 不等于' },
+  { value: '>', label: '> 大于' },
+  { value: '>=', label: '>= 大于等于' },
+  { value: '<', label: '< 小于' },
+  { value: '<=', label: '<= 小于等于' },
+  { value: 'LIKE', label: 'LIKE 模糊' },
+  { value: 'IS NULL', label: 'IS NULL 为空' },
+  { value: 'IS NOT NULL', label: 'IS NOT NULL 非空' },
+];
+
+// 把动态过滤条件拼成 WHERE 追加片段；纯数字不加引号，其余加单引号
+function buildExtraWhere(conditions: Array<{ field: string; op: string; value?: string }> | undefined): string {
+  if (!conditions?.length) return '';
+  const parts = conditions
+    .filter((c) => c?.field?.trim())
+    .map((c) => {
+      const field = c.field.trim();
+      const op = c.op ?? '=';
+      if (op === 'IS NULL' || op === 'IS NOT NULL') return `${field} ${op}`;
+      const raw = (c.value ?? '').trim();
+      const val = /^-?\d+(\.\d+)?$/.test(raw) ? raw : `'${raw}'`;
+      return `${field} ${op} ${val}`;
+    });
+  return parts.length ? '\n  AND ' + parts.join('\n  AND ') : '';
+}
+
 export default function ScheduledTaskList() {
   const navigate = useNavigate();
-  const { currentId } = useTenantStore();
+  const { currentId, activeList, setCurrentById } = useTenantStore();
   const { t } = useTranslation('scheduledTask');
   const tc = useTranslation('common').t;
   const [tasks, setTasks] = useState<ScheduledTaskItem[]>([]);
@@ -19,6 +47,9 @@ export default function ScheduledTaskList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm] = Form.useForm();
   const [datasources, setDatasources] = useState<string[]>([]);
+  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
+
+  const tenantId = tenantFilter ?? currentId ?? 0;
 
   // 已知任务类型 label，未知类型兜底显示原始串（RETENTION/ALARM 等新类型无需改前端）
   const taskTypeLabels = useMemo<Record<string, string>>(() => ({
@@ -27,27 +58,27 @@ export default function ScheduledTaskList() {
   }), [t]);
 
   const load = async () => {
-    if (!currentId) return;
+    if (!tenantId) return;
     setLoading(true);
     try {
-      const data = await listScheduledTasks(currentId);
+      const data = await listScheduledTasks(tenantId);
       setTasks(data ?? []);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, [currentId]);
+  useEffect(() => { load(); }, [tenantId]);
 
   const handleTrigger = async (task: ScheduledTaskItem) => {
     Modal.confirm({
       title: t('action.trigger'),
       content: t('execution.triggerConfirm', { name: task.name }),
       onOk: async () => {
-        if (!currentId) return;
+        if (!tenantId) return;
         setTriggering(task.id);
         try {
-          await triggerScheduledTask(currentId, task.id);
+          await triggerScheduledTask(tenantId, task.id);
           message.success(t('triggerSuccess'));
           load();
         } finally {
@@ -58,9 +89,9 @@ export default function ScheduledTaskList() {
   };
 
   const handleStatusToggle = async (task: ScheduledTaskItem, checked: boolean) => {
-    if (!currentId) return;
-    if (checked) await enableScheduledTask(currentId, task.id);
-    else await disableScheduledTask(currentId, task.id);
+    if (!tenantId) return;
+    if (checked) await enableScheduledTask(tenantId, task.id);
+    else await disableScheduledTask(tenantId, task.id);
     message.success(checked ? tc('message.enabled') : tc('message.disabled'));
     load();
   };
@@ -105,14 +136,24 @@ export default function ScheduledTaskList() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>{t('title.list')}</h2>
-        <Button type="primary" onClick={async () => {
-          createForm.resetFields();
-          setCreateOpen(true);
-          const names = await fetchDatasources().catch(() => []);
-          setDatasources(names);
-        }}>
-          {t('action.createIngestion')}
-        </Button>
+        <Space>
+          <Select
+            placeholder={tc('label.tenant')}
+            value={tenantFilter ?? currentId ?? undefined}
+            onChange={(v: number) => { setTenantFilter(v); setCurrentById(v); }}
+            allowClear
+            options={activeList.map((ten) => ({ value: ten.id, label: `${ten.name} (${ten.code})` }))}
+            style={{ width: 200 }}
+          />
+          <Button type="primary" onClick={async () => {
+            createForm.resetFields();
+            setCreateOpen(true);
+            const names = await fetchDatasources().catch(() => []);
+            setDatasources(names);
+          }}>
+            {t('action.createIngestion')}
+          </Button>
+        </Space>
       </div>
       <Alert message={t('notice')} type="info" showIcon style={{ marginBottom: 16 }} />
       <Table
@@ -137,16 +178,15 @@ export default function ScheduledTaskList() {
           onFinish={async (values: {
             code: string; name: string; cron: string;
             datasource: string; tableName: string;
-            extraFilter?: string; limitRows?: number | string;
+            conditions?: Array<{ field: string; op: string; value?: string }>;
+            limitRows?: number | string;
           }) => {
-            if (!currentId) {
+            if (!tenantId) {
               message.error(t('create.selectTenant'));
               return;
             }
             const limit = Number(values.limitRows) || 1000;
-            const extraWhere = values.extraFilter?.trim()
-              ? `\n  AND (${values.extraFilter.trim()})`
-              : '';
+            const extraWhere = buildExtraWhere(values.conditions);
             const sql =
               `SELECT event_id, outcome_label, outcome_value, labeled_at\n` +
               `FROM ${values.tableName}\n` +
@@ -155,7 +195,7 @@ export default function ScheduledTaskList() {
               `ORDER BY labeled_at ASC LIMIT ${limit}`;
             try {
               await createIngestionTask({
-                tenantId: currentId,
+                tenantId,
                 code: values.code,
                 name: values.name,
                 cron: values.cron,
@@ -220,13 +260,43 @@ export default function ScheduledTaskList() {
           >
             <Input placeholder="biz_fraud_label" />
           </Form.Item>
-          {/* 附加过滤条件（可选） */}
-          <Form.Item
-            label={t('create.field.extraFilter')}
-            name="extraFilter"
-            extra={t('create.field.extraFilterExtra')}
-          >
-            <Input placeholder="status = 'CONFIRMED'" />
+          {/* 附加过滤条件（可选，动态条件构建器） */}
+          <Form.Item label={t('create.field.conditions')} extra={t('create.field.conditionsExtra')}>
+            <Form.List name="conditions">
+              {(fields, { add, remove }) => (
+                <>
+                  {fields.map(({ key, name, ...restField }) => (
+                    <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                      <Form.Item {...restField} name={[name, 'field']} noStyle>
+                        <Input placeholder={t('create.field.conditionFieldPlaceholder')} style={{ width: 140 }} />
+                      </Form.Item>
+                      <Form.Item {...restField} name={[name, 'op']} noStyle initialValue="=">
+                        <Select options={OPERATORS} style={{ width: 150 }} />
+                      </Form.Item>
+                      <Form.Item noStyle shouldUpdate>
+                        {({ getFieldValue }) => {
+                          const op = getFieldValue(['conditions', name, 'op']);
+                          const noValue = op === 'IS NULL' || op === 'IS NOT NULL';
+                          return (
+                            <Form.Item {...restField} name={[name, 'value']} noStyle>
+                              <Input
+                                placeholder={noValue ? '' : t('create.field.conditionValuePlaceholder')}
+                                disabled={noValue}
+                                style={{ width: 160 }}
+                              />
+                            </Form.Item>
+                          );
+                        }}
+                      </Form.Item>
+                      <Button type="text" danger onClick={() => remove(name)}>✕</Button>
+                    </Space>
+                  ))}
+                  <Button type="dashed" onClick={() => add()} style={{ width: '100%' }}>
+                    + {t('create.field.addCondition')}
+                  </Button>
+                </>
+              )}
+            </Form.List>
           </Form.Item>
           {/* 每批行数上限 */}
           <Form.Item
@@ -240,12 +310,10 @@ export default function ScheduledTaskList() {
           {/* 预览 SQL */}
           <Form.Item noStyle shouldUpdate>
             {({ getFieldsValue }) => {
-              const { tableName, extraFilter, limitRows } = getFieldsValue();
+              const { tableName, conditions, limitRows } = getFieldsValue();
               if (!tableName) return null;
               const limit = Number(limitRows) || 1000;
-              const extraWhere = (extraFilter as string)?.trim()
-                ? `\n  AND (${(extraFilter as string).trim()})`
-                : '';
+              const extraWhere = buildExtraWhere(conditions as Array<{ field: string; op: string; value?: string }>);
               const preview =
                 `SELECT event_id, outcome_label, outcome_value, labeled_at\n` +
                 `FROM ${tableName as string}\n` +
