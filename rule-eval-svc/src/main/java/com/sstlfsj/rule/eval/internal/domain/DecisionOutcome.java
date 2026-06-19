@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.eval.internal.outcome;
+package com.sstlfsj.rule.eval.internal.domain;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;

@@ -1,4 +1,4 @@
-package com.sstlfsj.rule.eval.internal.outcome;
+package com.sstlfsj.rule.eval.internal.domain;
 
 import org.junit.jupiter.api.Test;
 
