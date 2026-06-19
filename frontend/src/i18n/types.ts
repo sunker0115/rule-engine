@@ -464,6 +464,13 @@ export interface ScheduledTaskTranslation {
       limitRows: string; limitRowsExtra: string;
       sqlPreview: string;
     };
+    mapping: {
+      eventId: string; eventIdExtra: string;
+      outcomeLabel: string; labelModeFixed: string; labelModeColumn: string; labelFixedPlaceholder: string;
+      outcomeValue: string; outcomeValueExtra: string;
+      labeledAt: string; labeledAtExtra: string;
+      selectColumn: string; noMapping: string;
+    };
   };
   column: {
     name: string; code: string; taskType: string;

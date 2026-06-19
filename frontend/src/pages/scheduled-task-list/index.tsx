@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Table, Button, Switch, Modal, Alert, message, Space, Form, Input, Select } from 'antd';
+import { Table, Button, Switch, Modal, Alert, message, Space, Form, Input, Select, Segmented } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
@@ -34,6 +34,38 @@ function buildExtraWhere(conditions: Array<{ field: string; op: string; value?: 
       return `${field} ${op} ${val}`;
     });
   return parts.length ? '\n  AND ' + parts.join('\n  AND ') : '';
+}
+
+// 依据字段映射生成回灌 SQL：把业务表实际列名映射成固定的 event_id / outcome_label / outcome_value / labeled_at
+function buildIngestionSql(
+  tableName: string,
+  mapping: {
+    eventIdCol: string;
+    labelMode: 'fixed' | 'column';
+    labelFixed?: string;
+    labelCol?: string;
+    valueCol?: string;
+    labeledAtCol: string;
+  },
+  conditions: Array<{ field: string; op: string; value?: string }> | undefined,
+  limit: number,
+): string {
+  const labelExpr =
+    mapping.labelMode === 'fixed'
+      ? `'${(mapping.labelFixed ?? '').replace(/'/g, "''")}'`
+      : mapping.labelCol ?? 'outcome_label';
+  const valueExpr =
+    mapping.valueCol ? `, ${mapping.valueCol} AS outcome_value` : `, NULL AS outcome_value`;
+  const extraWhere = buildExtraWhere(conditions);
+  return (
+    `SELECT ${mapping.eventIdCol} AS event_id,\n` +
+    `       ${labelExpr} AS outcome_label${valueExpr},\n` +
+    `       ${mapping.labeledAtCol} AS labeled_at\n` +
+    `FROM ${tableName}\n` +
+    `WHERE tenant_id = :tenantId\n` +
+    `  AND (:watermark IS NULL OR ${mapping.labeledAtCol} > :watermark)${extraWhere}\n` +
+    `ORDER BY ${mapping.labeledAtCol} ASC LIMIT ${limit}`
+  );
 }
 
 export default function ScheduledTaskList() {
@@ -182,6 +214,14 @@ export default function ScheduledTaskList() {
           onFinish={async (values: {
             code: string; name: string; cron: string;
             datasource: string; tableName: string;
+            mapping: {
+              eventIdCol: string;
+              labelMode: 'fixed' | 'column';
+              labelFixed?: string;
+              labelCol?: string;
+              valueCol?: string;
+              labeledAtCol: string;
+            };
             conditions?: Array<{ field: string; op: string; value?: string }>;
             limitRows?: number | string;
           }) => {
@@ -190,13 +230,7 @@ export default function ScheduledTaskList() {
               return;
             }
             const limit = Number(values.limitRows) || 1000;
-            const extraWhere = buildExtraWhere(values.conditions);
-            const sql =
-              `SELECT event_id, outcome_label, outcome_value, labeled_at\n` +
-              `FROM ${values.tableName}\n` +
-              `WHERE tenant_id = :tenantId\n` +
-              `  AND (:watermark IS NULL OR labeled_at > :watermark)${extraWhere}\n` +
-              `ORDER BY labeled_at ASC LIMIT ${limit}`;
+            const sql = buildIngestionSql(values.tableName, values.mapping, values.conditions, limit);
             try {
               await createIngestionTask({
                 tenantId,
@@ -281,6 +315,7 @@ export default function ScheduledTaskList() {
               onChange={async (val: string) => {
                 createForm.setFieldValue('tableName', val);
                 createForm.setFieldValue('conditions', []);
+                createForm.setFieldValue('mapping', undefined);
                 setTableColumns([]);
                 if (!val) return;
                 const ds = createForm.getFieldValue('datasource') as string;
@@ -289,6 +324,68 @@ export default function ScheduledTaskList() {
                 setTableColumns(cols);
               }}
             />
+          </Form.Item>
+          {/* 字段映射（选完表名后显示） */}
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.tableName !== cur.tableName}>
+            {({ getFieldValue }) => {
+              const tbl = getFieldValue('tableName');
+              if (!tbl) return null;
+              return (
+                <>
+                  {/* event_id */}
+                  <Form.Item label={t('create.mapping.eventId')} name={['mapping', 'eventIdCol']}
+                             rules={[{ required: true }]} extra={t('create.mapping.eventIdExtra')}>
+                    <Select options={tableColumns.map((c) => ({ value: c, label: c }))}
+                            showSearch allowClear placeholder={t('create.mapping.selectColumn')} />
+                  </Form.Item>
+
+                  {/* outcome_label */}
+                  <Form.Item label={t('create.mapping.outcomeLabel')} required>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Form.Item name={['mapping', 'labelMode']} noStyle initialValue="fixed">
+                        <Segmented options={[
+                          { value: 'fixed', label: t('create.mapping.labelModeFixed') },
+                          { value: 'column', label: t('create.mapping.labelModeColumn') },
+                        ]} />
+                      </Form.Item>
+                      <Form.Item noStyle shouldUpdate={(p, c) => p.mapping?.labelMode !== c.mapping?.labelMode}>
+                        {({ getFieldValue: gfv }) =>
+                          gfv(['mapping', 'labelMode']) === 'column' ? (
+                            <Form.Item name={['mapping', 'labelCol']} noStyle rules={[{ required: true }]}>
+                              <Select options={tableColumns.map((c) => ({ value: c, label: c }))}
+                                      showSearch allowClear placeholder={t('create.mapping.selectColumn')} />
+                            </Form.Item>
+                          ) : (
+                            <Form.Item name={['mapping', 'labelFixed']} noStyle rules={[{ required: true }]}>
+                              <Input placeholder={t('create.mapping.labelFixedPlaceholder')} />
+                            </Form.Item>
+                          )
+                        }
+                      </Form.Item>
+                    </Space>
+                  </Form.Item>
+
+                  {/* outcome_value（可选） */}
+                  <Form.Item label={t('create.mapping.outcomeValue')} name={['mapping', 'valueCol']}
+                             extra={t('create.mapping.outcomeValueExtra')}>
+                    <Select
+                      options={[
+                        { value: '', label: t('create.mapping.noMapping') },
+                        ...tableColumns.map((c) => ({ value: c, label: c })),
+                      ]}
+                      showSearch allowClear placeholder={t('create.mapping.noMapping')}
+                    />
+                  </Form.Item>
+
+                  {/* labeled_at */}
+                  <Form.Item label={t('create.mapping.labeledAt')} name={['mapping', 'labeledAtCol']}
+                             rules={[{ required: true }]} extra={t('create.mapping.labeledAtExtra')}>
+                    <Select options={tableColumns.map((c) => ({ value: c, label: c }))}
+                            showSearch allowClear placeholder={t('create.mapping.selectColumn')} />
+                  </Form.Item>
+                </>
+              );
+            }}
           </Form.Item>
           {/* 附加过滤条件（可选，动态条件构建器） */}
           <Form.Item label={t('create.field.conditions')} extra={t('create.field.conditionsExtra')}>
@@ -347,16 +444,10 @@ export default function ScheduledTaskList() {
           {/* 预览 SQL */}
           <Form.Item noStyle shouldUpdate>
             {({ getFieldsValue }) => {
-              const { tableName, conditions, limitRows } = getFieldsValue();
-              if (!tableName) return null;
+              const { tableName, mapping, conditions, limitRows } = getFieldsValue();
+              if (!tableName || !mapping?.eventIdCol || !mapping?.labeledAtCol) return null;
               const limit = Number(limitRows) || 1000;
-              const extraWhere = buildExtraWhere(conditions as Array<{ field: string; op: string; value?: string }>);
-              const preview =
-                `SELECT event_id, outcome_label, outcome_value, labeled_at\n` +
-                `FROM ${tableName as string}\n` +
-                `WHERE tenant_id = :tenantId\n` +
-                `  AND (:watermark IS NULL OR labeled_at > :watermark)${extraWhere}\n` +
-                `ORDER BY labeled_at ASC LIMIT ${limit}`;
+              const preview = buildIngestionSql(tableName, mapping, conditions, limit);
               return (
                 <Form.Item label={t('create.field.sqlPreview')}>
                   <pre style={{
