@@ -95,7 +95,7 @@ record OutcomeIngestionConfig(String connectorCode, FieldMapping mapping, String
 interface TaskExecutor<C extends TaskConfig> {
     TaskType type();
     Class<C> configType();
-    TaskRunResult execute(ScheduledTask task, C config);
+    TaskRunResult execute(long taskRunId, long tenantId, C config);
 }
 ```
 

@@ -26,7 +26,7 @@ class TaskExecutorRegistryTest {
         task.setId(1L); task.setTenantId(7L);
         task.setTaskType(TaskType.TRIGGER);
         task.setConfig(new TriggerConfig("s", "e", null));
-        assertThat(reg.dispatch(task).status()).isEqualTo(TaskExecutionStatus.SUCCESS);
+        assertThat(reg.dispatch(task, 99L).status()).isEqualTo(TaskExecutionStatus.SUCCESS);
     }
 
     @Test
@@ -40,6 +40,6 @@ class TaskExecutorRegistryTest {
         TaskExecutorRegistry reg = new TaskExecutorRegistry(List.of());
         ScheduledTask task = new ScheduledTask();
         task.setTaskType(TaskType.TRIGGER);
-        assertThatThrownBy(() -> reg.dispatch(task)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> reg.dispatch(task, 99L)).isInstanceOf(IllegalStateException.class);
     }
 }

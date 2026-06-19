@@ -36,7 +36,7 @@ v1 阶段 10 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个
 | `rule-kernel-polling` | `DbPollingRuleWatcher` / `DbPollingSceneWatcher` 实现，SDK 使用方按需引入 | 可选库（jar），仅 SDK 模式使用 |
 | `rule-config-svc` | 规则/Scene/元数据 CRUD、发布、快照生成 | Spring 模块，内嵌于主服务 |
 | `rule-eval-svc` | 评估入口（PUSH/PULL/dry-run）、metric 预拉、session 落库 | Spring 模块，内嵌于主服务 |
-| `rule-job-svc` | 通用调度任务框架（D11 / D74）：调度注册、`ScheduledTask` + `TaskExecutor` SPI（TRIGGER 主体查询合成 RuleEvent 注入）、`ScheduledTaskExecution` 记录 | Spring 模块，内嵌于主服务 |
+| `rule-job-svc` | 通用调度任务框架（D11 / D73）：调度注册、`ScheduledTask` + `TaskExecutor` SPI（TRIGGER 主体查询合成 RuleEvent 注入）、`ScheduledTaskExecution` 记录 | Spring 模块，内嵌于主服务 |
 | `rule-audit-svc` | 审计查询、dry-run 结果存储、日志聚合 | Spring 模块，内嵌于主服务 |
 | `rule-observability` | TraceWriter DB 实现、Prometheus 指标名常量、告警默认配置 | Spring 模块，内嵌于主服务 |
 | `rule-api` | 所有 HTTP controller、鉴权、限流、API 版本前缀（三类受众前缀 `/admin/v1`、`/api/v1`、`/sdk/v1`） | Spring 模块，内嵌于主服务 |
@@ -82,7 +82,7 @@ com.sstlfsj.rule
 │       ├── session                 # evaluation_session 幂等落库
 │       └── dispatcher              # PUSH 评估队列（自研 BlockingQueue，D20；D60 后引擎纯决策，无动作派发）
 │
-├── job                             # rule-job-svc 模块（调度任务框架，D11 / D48 / D74）
+├── job                             # rule-job-svc 模块（调度任务框架，D11 / D48 / D73）
 │   ├── api
 │   │   ├── service                 # ScheduledTaskService（管理类：enable/disable/get/list/triggerOnce/recentExecutions）
 │   │   ├── dto                     # ScheduledTaskVO / ScheduledTaskExecutionVO

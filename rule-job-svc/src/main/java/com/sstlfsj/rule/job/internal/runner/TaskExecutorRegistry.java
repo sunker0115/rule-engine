@@ -30,11 +30,12 @@ public class TaskExecutorRegistry {
     /**
      * 路由执行:校验 config 子类型与 executor.configType() 一致,转型后执行。
      *
-     * @param task 触发的任务
+     * @param task      触发的任务
+     * @param taskRunId 本次运行的执行记录 id（每次运行唯一，透传给 executor 作 eventId 幂等键）
      * @return 执行结果
      */
     @SuppressWarnings("unchecked")
-    public <C extends TaskConfig> TaskRunResult dispatch(ScheduledTask task) {
+    public <C extends TaskConfig> TaskRunResult dispatch(ScheduledTask task, long taskRunId) {
         TaskExecutor<C> executor = (TaskExecutor<C>) byType.get(task.getTaskType());
         if (executor == null) {
             throw new IllegalStateException("无 TaskExecutor 处理 type=" + task.getTaskType());
@@ -45,6 +46,6 @@ public class TaskExecutorRegistry {
                     + (config == null ? "null" : config.getClass().getSimpleName())
                     + " 与 executor.configType=" + executor.configType().getSimpleName() + " 不符");
         }
-        return executor.execute(task.getId(), task.getTenantId(), (C) executor.configType().cast(config));
+        return executor.execute(taskRunId, task.getTenantId(), (C) executor.configType().cast(config));
     }
 }

@@ -74,7 +74,7 @@ public class ScheduledTaskScheduleManager {
         exec.setErrorCount(0);
         executionMapper.insert(exec);
         try {
-            TaskRunResult r = executorRegistry.dispatch(task);
+            TaskRunResult r = executorRegistry.dispatch(task, exec.getId());
             exec.setStatus(r.status());
             exec.setProcessedCount(r.processedCount());
             exec.setSuccessCount(r.successCount());

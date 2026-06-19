@@ -77,7 +77,7 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
     }
 
     @Override
-    public TaskRunResult execute(long taskId, long tenantId, TriggerConfig config) {
+    public TaskRunResult execute(long taskRunId, long tenantId, TriggerConfig config) {
         // counters[0]=processed, [1]=success, [2]=error；sink 在 lambda 内累加，故用数组持有可变状态
         int[] counters = {0, 0, 0};
         List<String> errors = new ArrayList<>();
@@ -88,7 +88,7 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
                 counters[0]++;
                 String subjectId = target.subjectId();
                 try {
-                    String eventId = EventIdHasher.hash(taskId, subjectId);
+                    String eventId = EventIdHasher.hash(taskRunId, subjectId);
                     RuleEvent event = RuleEvent.builder()
                             .tenantId(tenant)
                             .sceneCode(config.sceneCode())
@@ -108,7 +108,7 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
                 } catch (RuntimeException e) {
                     counters[2]++;
                     errors.add("subjectId=" + subjectId + " 异常: " + e.getMessage());
-                    log.warn("TRIGGER 主体注入失败 taskId={} subjectId={}", taskId, subjectId, e);
+                    log.warn("TRIGGER 主体注入失败 taskRunId={} subjectId={}", taskRunId, subjectId, e);
                 }
             });
             status = counters[2] == 0 ? TaskExecutionStatus.SUCCESS
@@ -117,7 +117,7 @@ public class TriggerExecutor implements TaskExecutor<TriggerConfig> {
             // 主体查询阶段失败 → 整体 FAILED
             status = TaskExecutionStatus.FAILED;
             errors.add("主体查询失败: " + e.getMessage());
-            log.warn("TRIGGER 主体查询失败 taskId={}", taskId, e);
+            log.warn("TRIGGER 主体查询失败 taskRunId={}", taskRunId, e);
         }
         String summary = errors.isEmpty() ? null : truncate(String.join("; ", errors));
         return new TaskRunResult(status, counters[0], counters[1], counters[2], summary);
