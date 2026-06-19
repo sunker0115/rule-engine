@@ -3,7 +3,7 @@ import type { ScheduledTaskTranslation } from '../../types';
 const scheduledTask: ScheduledTaskTranslation = {
   title: { list: 'Scheduled Tasks', detail: 'Task Detail' },
   notice: 'Built-in tasks (e.g. rule triggers) are defined via @TriggerTask annotation and auto-registered at startup; outcome-ingestion (OUTCOME_INGESTION) tasks can be created here. All tasks support enable/disable/trigger/view history.',
-  action: { trigger: 'Trigger', viewDetail: 'View Detail', enable: 'Enable', disable: 'Disable', createIngestion: 'Create Ingestion Task' },
+  action: { trigger: 'Trigger', viewDetail: 'View Detail', enable: 'Enable', disable: 'Disable', createIngestion: 'Create Ingestion Task', delete: 'Delete', deleteConfirm: 'Delete task "{{name}}"? TRIGGER tasks are re-seeded by the annotation on next startup; OUTCOME_INGESTION tasks are not restored.' },
   triggerSuccess: 'Task triggered',
   create: {
     title: 'Create Ingestion Task (OUTCOME_INGESTION)',

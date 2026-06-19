@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -159,5 +160,28 @@ class ScheduledTaskServiceImplTest {
         CreateScheduledTaskRequest req = new CreateScheduledTaskRequest(
                 1L, "ingest-dup", "重复", "0 0 2 * * *", "biz", "SELECT 1");
         assertThrows(IllegalArgumentException.class, () -> service.create(req));
+    }
+
+    @Test
+    void delete_unregistersAndDeletes() {
+        ScheduledTask t = task(TaskStatus.ACTIVE);
+        when(taskMapper.selectById(5L)).thenReturn(t);
+
+        service.delete(1L, 5L);
+
+        verify(scheduleManager).unregister(5L);
+        verify(taskMapper).deleteById(5L);
+    }
+
+    @Test
+    void delete_crossTenant_throws() {
+        ScheduledTask t = new ScheduledTask();
+        t.setId(5L);
+        t.setTenantId(999L);
+        when(taskMapper.selectById(5L)).thenReturn(t);
+
+        assertThrows(IllegalArgumentException.class, () -> service.delete(1L, 5L));
+        verify(scheduleManager, never()).unregister(any());
+        verify(taskMapper, never()).deleteById(anyLong());
     }
 }

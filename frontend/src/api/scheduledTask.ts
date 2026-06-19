@@ -20,6 +20,10 @@ export async function disableScheduledTask(tenantId: number, taskId: number) {
   return apiClient.post(ENDPOINTS.SCHEDULED_TASK_DISABLE(taskId), null, { params: { tenantId } });
 }
 
+export async function deleteScheduledTask(tenantId: number, taskId: number) {
+  return apiClient.delete(ENDPOINTS.SCHEDULED_TASK_DETAIL(taskId), { params: { tenantId } });
+}
+
 export async function triggerScheduledTask(tenantId: number, taskId: number) {
   const res = await apiClient.post<ApiResponse<ScheduledTaskExecutionItem>>(ENDPOINTS.SCHEDULED_TASK_TRIGGER(taskId), null, { params: { tenantId } });
   return res.data.data;

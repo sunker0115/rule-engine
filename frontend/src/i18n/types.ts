@@ -445,7 +445,7 @@ export interface AuditTranslation {
 export interface ScheduledTaskTranslation {
   title: { list: string; detail: string };
   notice: string;
-  action: { trigger: string; viewDetail: string; enable: string; disable: string; createIngestion: string };
+  action: { trigger: string; viewDetail: string; enable: string; disable: string; createIngestion: string; delete: string; deleteConfirm: string };
   triggerSuccess: string;
   create: {
     title: string;

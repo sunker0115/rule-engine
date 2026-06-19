@@ -3,7 +3,7 @@ import { Table, Button, Switch, Modal, Alert, message, Space, Form, Input, Selec
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listScheduledTasks, triggerScheduledTask, enableScheduledTask, disableScheduledTask, createIngestionTask, fetchDatasources, fetchDatasourceTables, fetchTableColumns } from '@/api/scheduledTask';
+import { listScheduledTasks, triggerScheduledTask, enableScheduledTask, disableScheduledTask, deleteScheduledTask, createIngestionTask, fetchDatasources, fetchDatasourceTables, fetchTableColumns } from '@/api/scheduledTask';
 import { ROUTES, route } from '@/constants/routes';
 import type { ScheduledTaskItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -122,6 +122,20 @@ export default function ScheduledTaskList() {
     });
   };
 
+  const handleDelete = (task: ScheduledTaskItem) => {
+    Modal.confirm({
+      title: t('action.delete'),
+      content: t('action.deleteConfirm', { name: task.name }),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        if (!tenantId) return;
+        await deleteScheduledTask(tenantId, task.id);
+        message.success(tc('message.deleteSuccess'));
+        load();
+      },
+    });
+  };
+
   const handleStatusToggle = async (task: ScheduledTaskItem, checked: boolean) => {
     if (!tenantId) return;
     if (checked) await enableScheduledTask(tenantId, task.id);
@@ -152,7 +166,7 @@ export default function ScheduledTaskList() {
       ),
     },
     {
-      title: t('column.actions'), key: 'actions', width: 160,
+      title: t('column.actions'), key: 'actions', width: 220,
       render: (_: unknown, record: ScheduledTaskItem) => (
         <Space>
           <Button size="small" loading={triggering === record.id} onClick={() => handleTrigger(record)}>
@@ -160,6 +174,9 @@ export default function ScheduledTaskList() {
           </Button>
           <Button size="small" onClick={() => navigate(route(ROUTES.SCHEDULED_TASK_DETAIL, { taskId: record.id }))}>
             {t('action.viewDetail')}
+          </Button>
+          <Button size="small" danger onClick={() => handleDelete(record)}>
+            {t('action.delete')}
           </Button>
         </Space>
       ),

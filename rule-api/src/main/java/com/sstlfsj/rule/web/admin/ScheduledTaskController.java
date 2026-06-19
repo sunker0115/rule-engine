@@ -114,4 +114,17 @@ public class ScheduledTaskController {
             @RequestParam(defaultValue = "20") int limit) {
         return ApiResponse.ok(scheduledTaskService.recentExecutions(tenantId, id, limit));
     }
+
+    /**
+     * DELETE /admin/v1/scheduled-tasks/{id}?tenantId=xxx — 删除任务（撤销调度 + 删行）。
+     * TRIGGER 任务删后下次启动会被 {@code @TriggerTask} 扫描重新 seed；OUTCOME_INGESTION 删后不恢复。
+     *
+     * @param id       任务主键
+     * @param tenantId 租户 ID
+     */
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable Long id, @RequestParam Long tenantId) {
+        scheduledTaskService.delete(tenantId, id);
+        return ApiResponse.ok(null);
+    }
 }

@@ -110,6 +110,14 @@ class ScheduledTaskServiceImpl implements ScheduledTaskService {
         return toVO(task);
     }
 
+    @Override
+    @Transactional
+    public void delete(Long tenantId, Long taskId) {
+        findTask(tenantId, taskId);  // 校验存在 + 租户归属
+        scheduleManager.unregister(taskId);
+        taskMapper.deleteById(taskId);
+    }
+
     /** TRIGGER 任务绑定 Scene 为 PULL 时拒绝启用——PULL 是同步业务调用语义，定时触发无意义（§3.10）。 */
     private void rejectIfPullScene(Long tenantId, ScheduledTask task) {
         if ("TRIGGER".equals(task.getTaskType()) && task.getConfig() != null) {

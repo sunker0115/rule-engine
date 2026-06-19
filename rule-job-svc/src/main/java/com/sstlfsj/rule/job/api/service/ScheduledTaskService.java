@@ -70,4 +70,13 @@ public interface ScheduledTaskService {
      * @throws IllegalArgumentException 若 code 在该租户下已存在
      */
     ScheduledTaskVO create(CreateScheduledTaskRequest req);
+
+    /**
+     * 删除调度任务：从调度器撤销 + 删除 scheduled_task 行。
+     * TRIGGER 任务删后会在下次启动被 {@code @TriggerTask} 扫描重新 seed；OUTCOME_INGESTION 删后不再恢复。
+     *
+     * @param tenantId 租户 ID
+     * @param taskId   任务主键
+     */
+    void delete(Long tenantId, Long taskId);
 }

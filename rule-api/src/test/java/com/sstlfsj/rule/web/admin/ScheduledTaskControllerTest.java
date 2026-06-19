@@ -18,6 +18,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -114,6 +115,16 @@ class ScheduledTaskControllerTest {
                 .andExpect(jsonPath("$.data[0].status").value("SUCCESS"));
 
         verify(taskService).recentExecutions(1L, 5L, 20);
+    }
+
+    @Test
+    void deleteReturns200() throws Exception {
+        doNothing().when(taskService).delete(1L, 5L);
+
+        mockMvc.perform(delete("/admin/v1/scheduled-tasks/5").param("tenantId", "1"))
+                .andExpect(status().isOk());
+
+        verify(taskService).delete(1L, 5L);
     }
 
     @Test

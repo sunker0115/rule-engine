@@ -3,7 +3,7 @@ import type { ScheduledTaskTranslation } from '../../types';
 const scheduledTask: ScheduledTaskTranslation = {
   title: { list: '调度任务', detail: '任务详情' },
   notice: '内置任务（如规则触发）由后端 @TriggerTask 注解定义、启动期自动落库；结论回流（OUTCOME_INGESTION）任务可在此创建。所有任务均支持启用/禁用/手动触发/查看执行记录。',
-  action: { trigger: '手动触发', viewDetail: '查看详情', enable: '启用', disable: '禁用', createIngestion: '创建回灌任务' },
+  action: { trigger: '手动触发', viewDetail: '查看详情', enable: '启用', disable: '禁用', createIngestion: '创建回灌任务', delete: '删除', deleteConfirm: '确认删除任务「{{name}}」？TRIGGER 任务下次启动会被注解重新创建，OUTCOME_INGESTION 删后不恢复。' },
   triggerSuccess: '任务已触发',
   create: {
     title: '创建回灌任务（OUTCOME_INGESTION）',
