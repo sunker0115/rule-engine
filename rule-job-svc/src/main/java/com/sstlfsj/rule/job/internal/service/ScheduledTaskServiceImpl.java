@@ -82,9 +82,14 @@ class ScheduledTaskServiceImpl implements ScheduledTaskService {
     private void rejectIfPullScene(Long tenantId, ScheduledTask task) {
         if ("TRIGGER".equals(task.getTaskType()) && task.getConfig() != null) {
             TriggerConfig trigger = objectMapper.readValue(task.getConfig(), TriggerConfig.class);
-            // scene 不存在时跳过校验——scene 可能尚未在引擎配置，不应阻止 enable
-            SceneDetailDto scene = sceneService.getScene(tenantId, trigger.sceneCode());
-            if (scene != null && "PULL".equals(scene.dominantMode())) {
+            SceneDetailDto scene;
+            try {
+                scene = sceneService.getScene(tenantId, trigger.sceneCode());
+            } catch (IllegalArgumentException e) {
+                // scene 尚未在引擎配置（如 fraud_check 仅用于业务触发但未建 Scene）→ 跳过 PULL 校验，不阻止 enable
+                return;
+            }
+            if ("PULL".equals(scene.dominantMode())) {
                 throw new IllegalArgumentException("PULL Scene 不允许绑定 TRIGGER 任务: " + trigger.sceneCode());
             }
         }

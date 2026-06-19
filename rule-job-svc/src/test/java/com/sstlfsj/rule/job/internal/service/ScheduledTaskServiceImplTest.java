@@ -80,10 +80,10 @@ class ScheduledTaskServiceImplTest {
 
     @Test
     void enableAllowedWhenSceneNotConfiguredInEngine() {
-        // scene 不存在于引擎(如 fraud_check 未配置)→ 跳过 PULL 校验,enable 成功
+        // scene 不存在于引擎(getScene 抛 IllegalArgumentException)→ 跳过 PULL 校验,enable 成功
         ScheduledTask t = task(TaskStatus.DISABLED);
         when(taskMapper.selectById(5L)).thenReturn(t);
-        when(sceneService.getScene(1L, "s1")).thenReturn(null);
+        when(sceneService.getScene(1L, "s1")).thenThrow(new IllegalArgumentException("Scene 不存在: s1"));
 
         service.enable(1L, 5L);
 
