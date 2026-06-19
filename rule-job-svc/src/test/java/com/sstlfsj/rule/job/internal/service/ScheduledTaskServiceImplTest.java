@@ -79,6 +79,19 @@ class ScheduledTaskServiceImplTest {
     }
 
     @Test
+    void enableAllowedWhenSceneNotConfiguredInEngine() {
+        // scene 不存在于引擎(如 fraud_check 未配置)→ 跳过 PULL 校验,enable 成功
+        ScheduledTask t = task(TaskStatus.DISABLED);
+        when(taskMapper.selectById(5L)).thenReturn(t);
+        when(sceneService.getScene(1L, "s1")).thenReturn(null);
+
+        service.enable(1L, 5L);
+
+        assertEquals(TaskStatus.ACTIVE, t.getStatus());
+        verify(scheduleManager).register(t);
+    }
+
+    @Test
     void disableUnregistersSchedule() {
         ScheduledTask t = task(TaskStatus.ACTIVE);
         when(taskMapper.selectById(5L)).thenReturn(t);
