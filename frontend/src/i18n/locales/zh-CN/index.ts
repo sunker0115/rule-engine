@@ -1,4 +1,5 @@
 import common from './common';
+import effectiveness from './effectiveness';
 import scene from './scene';
 import metric from './metric';
 import decision from './decision';
@@ -13,6 +14,7 @@ import lineage from './lineage';
 
 const zhCN = {
   common,
+  effectiveness,
   scene,
   metric,
   decision,

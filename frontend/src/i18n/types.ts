@@ -63,7 +63,7 @@ export interface CommonTranslation {
     metrics: string; decisions: string;
     sessions: string; auditLogs: string;
     scheduledTasks: string; importExport: string;
-    connectors: string;
+    connectors: string; effectiveness: string;
   };
 }
 
@@ -654,8 +654,67 @@ export interface LineageTranslation {
   disableGuardConfirm: string;
 }
 
+// ===== effectiveness 命名空间（决策效果报表 B32）=====
+export interface EffectivenessTranslation {
+  title: string;
+  valueGate: string;
+  filter: {
+    scene: string;
+    scenePlaceholder: string;
+    timeRange: string;
+    positiveLabels: string;
+    positiveLabelsPlaceholder: string;
+    dimension: string;
+    bucket: string;
+    query: string;
+    backfill: string;
+  };
+  dimension: { RULE_VERSION: string; DECISION: string };
+  bucket: { NONE: string; DAY: string; WEEK: string };
+  banner: {
+    title: string;
+    totalSessions: string;
+    labeled: string;
+    unlabeled: string;
+    blocked: string;
+    positive: string;
+    negative: string;
+    note: string;
+  };
+  table: {
+    title: string;
+    bucket: string;
+    dimensionKey: string;
+    tp: string; fp: string; fn: string; tn: string;
+    precision: string; recall: string; fireRate: string; firedTotal: string;
+  };
+  chart: {
+    title: string;
+    metric: string;
+    precision: string; recall: string; fireRate: string;
+    needBucket: string;
+  };
+  empty: string;
+  validation: { sceneRequired: string; rangeRequired: string };
+  modal: {
+    title: string;
+    tenant: string;
+    eventId: string;
+    outcomeLabel: string;
+    outcomeValue: string;
+    labeledAt: string;
+    source: string;
+    note: string;
+    addRow: string;
+    submit: string;
+    cancel: string;
+    accepted: string;
+  };
+}
+
 export interface TranslationResources {
   common: CommonTranslation;
+  effectiveness: EffectivenessTranslation;
   scene: SceneTranslation;
   metric: MetricTranslation;
   decision: DecisionTranslation;

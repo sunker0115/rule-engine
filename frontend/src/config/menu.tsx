@@ -11,6 +11,7 @@ import {
   AuditOutlined,
   ClockCircleOutlined,
   ImportOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import { ROUTES } from '@/constants/routes';
 
@@ -51,6 +52,11 @@ export function getMenuItems(t: TFunction): ItemType[] {
       key: ROUTES.SESSIONS,
       icon: <HistoryOutlined />,
       label: t('menu.sessions'),
+    },
+    {
+      key: ROUTES.EFFECTIVENESS,
+      icon: <BarChartOutlined />,
+      label: t('menu.effectiveness'),
     },
     {
       key: ROUTES.AUDIT_LOGS,

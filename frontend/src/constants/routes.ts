@@ -16,6 +16,7 @@ export const ROUTES = {
   DECISION_DETAIL: '/decisions/:code',
   SESSIONS:       '/sessions',
   SESSION_DETAIL: '/sessions/:sessionId',
+  EFFECTIVENESS:  '/effectiveness',
   AUDIT_LOGS:     '/audit-logs',
   SCHEDULED_TASKS:        '/scheduled-tasks',
   SCHEDULED_TASK_DETAIL:  '/scheduled-tasks/:taskId',

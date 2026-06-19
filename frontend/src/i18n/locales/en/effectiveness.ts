@@ -1,0 +1,60 @@
+import type { EffectivenessTranslation } from '../../types';
+
+const effectiveness: EffectivenessTranslation = {
+  title: 'Decision Effectiveness',
+  valueGate: 'Effectiveness metrics depend on backfilled real-world outcome labels; an empty or synthetic table when labels are absent is expected.',
+  filter: {
+    scene: 'Scene',
+    scenePlaceholder: 'Select a scene',
+    timeRange: 'Time range',
+    positiveLabels: 'Positive labels',
+    positiveLabelsPlaceholder: 'Type and press enter; empty means all counted as negative',
+    dimension: 'Dimension',
+    bucket: 'Bucket',
+    query: 'Query',
+    backfill: 'Backfill labels',
+  },
+  dimension: { RULE_VERSION: 'Rule version', DECISION: 'Decision' },
+  bucket: { NONE: 'None', DAY: 'Daily', WEEK: 'Weekly' },
+  banner: {
+    title: 'Honest reporting',
+    totalSessions: 'Total sessions',
+    labeled: 'Labeled',
+    unlabeled: 'Unlabeled',
+    blocked: 'Blocked',
+    positive: 'Positive',
+    negative: 'Negative',
+    note: 'Unlabeled sessions are excluded from metric denominators; blocked = reject-inference gap (blocked sessions have no observable outcome).',
+  },
+  table: {
+    title: 'Confusion matrix',
+    bucket: 'Bucket',
+    dimensionKey: 'Dimension key',
+    tp: 'TP', fp: 'FP', fn: 'FN', tn: 'TN',
+    precision: 'precision', recall: 'recall', fireRate: 'fireRate', firedTotal: 'firedTotal',
+  },
+  chart: {
+    title: 'Metric drift',
+    metric: 'Metric',
+    precision: 'precision', recall: 'recall', fireRate: 'fireRate',
+    needBucket: 'Choose daily / weekly bucketing to show the drift line.',
+  },
+  empty: 'No data',
+  validation: { sceneRequired: 'Please select a scene', rangeRequired: 'Please select a time range' },
+  modal: {
+    title: 'Backfill outcome labels',
+    tenant: 'Tenant',
+    eventId: 'Event ID',
+    outcomeLabel: 'Outcome label',
+    outcomeValue: 'Outcome value',
+    labeledAt: 'Labeled at',
+    source: 'Source',
+    note: 'Note',
+    addRow: '+ Add row',
+    submit: 'Submit',
+    cancel: 'Cancel',
+    accepted: 'Backfilled {{count}} record(s)',
+  },
+};
+
+export default effectiveness;

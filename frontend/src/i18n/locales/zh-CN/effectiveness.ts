@@ -1,0 +1,60 @@
+import type { EffectivenessTranslation } from '../../types';
+
+const effectiveness: EffectivenessTranslation = {
+  title: '决策效果',
+  valueGate: '决策效果指标依赖业务真实结果标签回灌；无标签时表格为空 / 为构造数据属正常。',
+  filter: {
+    scene: '场景',
+    scenePlaceholder: '请选择场景',
+    timeRange: '时间窗',
+    positiveLabels: 'positive 标签',
+    positiveLabelsPlaceholder: '输入后回车，留空则全部计为 negative',
+    dimension: '维度',
+    bucket: '分桶',
+    query: '查询',
+    backfill: '回灌标签',
+  },
+  dimension: { RULE_VERSION: '规则版本', DECISION: 'Decision' },
+  bucket: { NONE: '无', DAY: '按天', WEEK: '按周' },
+  banner: {
+    title: '诚实回报口径',
+    totalSessions: '会话总数',
+    labeled: '已标注',
+    unlabeled: '未标注',
+    blocked: '被拦截',
+    positive: 'positive',
+    negative: 'negative',
+    note: 'unlabeled 不计入指标分母；blocked = reject-inference 残缺面（被拦截会话无法观测真实结果）。',
+  },
+  table: {
+    title: '混淆矩阵',
+    bucket: '分桶',
+    dimensionKey: '维度键',
+    tp: 'TP', fp: 'FP', fn: 'FN', tn: 'TN',
+    precision: 'precision', recall: 'recall', fireRate: 'fireRate', firedTotal: 'firedTotal',
+  },
+  chart: {
+    title: '指标漂移',
+    metric: '指标',
+    precision: 'precision', recall: 'recall', fireRate: 'fireRate',
+    needBucket: '选择按天 / 按周分桶后展示漂移折线。',
+  },
+  empty: '无数据',
+  validation: { sceneRequired: '请选择场景', rangeRequired: '请选择时间窗' },
+  modal: {
+    title: '回灌结果标签',
+    tenant: '租户',
+    eventId: '事件编号',
+    outcomeLabel: '结果标签',
+    outcomeValue: '结果值',
+    labeledAt: '标注时间',
+    source: '来源',
+    note: '备注',
+    addRow: '+ 加一行',
+    submit: '提交',
+    cancel: '取消',
+    accepted: '已回灌 {{count}} 条',
+  },
+};
+
+export default effectiveness;

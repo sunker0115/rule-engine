@@ -72,6 +72,10 @@ export const ENDPOINTS = {
   // Audit
   AUDIT_LOG_LIST: `${ADMIN}/audit-logs`,
 
+  // Decision Effectiveness (B32)
+  EFFECTIVENESS:      `${ADMIN}/decision-outcomes/effectiveness`,
+  DECISION_OUTCOMES:  `${ADMIN}/decision-outcomes`,
+
   // Scheduled Task
   SCHEDULED_TASK_LIST:       `${ADMIN}/scheduled-tasks`,
   SCHEDULED_TASK_DETAIL:     (taskId: number) => `${ADMIN}/scheduled-tasks/${taskId}`,

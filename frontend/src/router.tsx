@@ -21,6 +21,7 @@ const DecisionDetail     = lazy(() => import('@/pages/decision-detail'));
 const EvalSession        = lazy(() => import('@/pages/eval-session'));
 const EvalSessionDetail  = lazy(() => import('@/pages/eval-session-detail'));
 const AuditLog           = lazy(() => import('@/pages/audit-log'));
+const Effectiveness      = lazy(() => import('@/pages/effectiveness'));
 const ScheduledTaskList   = lazy(() => import('@/pages/scheduled-task-list'));
 const ScheduledTaskDetail = lazy(() => import('@/pages/scheduled-task-detail'));
 const ImportExport       = lazy(() => import('@/pages/import-export'));
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
       { path: ROUTES.DECISION_DETAIL, element: <LazyPage><DecisionDetail /></LazyPage> },
       { path: ROUTES.SESSIONS,       element: <LazyPage><EvalSession /></LazyPage> },
       { path: ROUTES.SESSION_DETAIL, element: <LazyPage><EvalSessionDetail /></LazyPage> },
+      { path: ROUTES.EFFECTIVENESS,  element: <LazyPage><Effectiveness /></LazyPage> },
       { path: ROUTES.AUDIT_LOGS,     element: <LazyPage><AuditLog /></LazyPage> },
       { path: ROUTES.SCHEDULED_TASKS,       element: <LazyPage><ScheduledTaskList /></LazyPage> },
       { path: ROUTES.SCHEDULED_TASK_DETAIL, element: <LazyPage><ScheduledTaskDetail /></LazyPage> },

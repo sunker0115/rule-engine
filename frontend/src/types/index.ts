@@ -13,3 +13,4 @@ export * from './import-export';
 export * from './metadata';
 export * from './tenant';
 export * from './analysis';
+export * from './effectiveness';
