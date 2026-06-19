@@ -74,7 +74,7 @@ enum TaskType { TRIGGER, OUTCOME_INGESTION }
 ```
 
 - `TRIGGER`:合成 RuleEvent → 评估(现 `JobRunner` 降级为一个 executor)。
-- `OUTCOME_INGESTION`:connector 增量拉标签 → `OutcomeService` upsert（B32，详见 track #2 自有 spec）。
+- `OUTCOME_INGESTION`（B32 已实装）:经 `OutcomeSource` SPI（首个实现 `SqlOutcomeSource`）增量拉标签 → `OutcomeService` upsert，watermark 取本批 max `labeled_at` 写回 config 推进游标。
 
 ### 4.2 config 是 sealed 类型族,不是裸 Map/JSON-String
 
@@ -83,7 +83,8 @@ enum TaskType { TRIGGER, OUTCOME_INGESTION }
 ```java
 sealed interface TaskConfig permits TriggerConfig, OutcomeIngestionConfig {}
 record TriggerConfig(String sceneCode, String eventType, SubjectQuery subjectQuery) implements TaskConfig {}
-record OutcomeIngestionConfig(String connectorCode, FieldMapping mapping, String watermarkField) implements TaskConfig {}
+record OutcomeIngestionConfig(OutcomeSourceConfig source, Instant watermark) implements TaskConfig {}
+// OutcomeSourceConfig 亦为 sealed 多态族：SqlOutcomeSourceConfig(String datasource, String sql) 为首个实现（@JsonTypeInfo kind 自描述）
 ```
 
 - 多态自描述：`@JsonTypeInfo(use=NAME, property="kind")` + `@JsonSubTypes`，TypeHandler 按 kind 还原子类型。

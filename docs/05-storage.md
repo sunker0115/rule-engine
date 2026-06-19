@@ -231,7 +231,7 @@ CREATE TABLE rule_decision_binding (
 
 **scheduled_task**（通用调度任务定义，非一等公民）
 
-TRIGGER（评估触发，原 `job_definition` 语义）只是 `task_type` 之一；`scene_code`/`event_type`/`subject_query` 不再是顶层列，已下沉进 typed `config`（`TriggerConfig`）。迁移 V1_37。
+TRIGGER（评估触发，原 `job_definition` 语义）只是 `task_type` 之一；`scene_code`/`event_type`/`subject_query` 不再是顶层列，已下沉进 typed `config`（`TriggerConfig`）。迁移 V1_37。typed `config` 多态族两种形状：**TRIGGER** = `TriggerConfig{sceneCode, eventType, subjectQuery}`；**OUTCOME_INGESTION**（B32 标签回灌）= `OutcomeIngestionConfig{source, watermark}`，其中 `source` 为多态 `OutcomeSourceConfig`（首个实现 `SqlOutcomeSourceConfig{datasource, sql}`），`watermark` 为上次拉取游标（每轮取本批 max `labeled_at` 写回，推进增量）。
 
 ```sql
 CREATE TABLE scheduled_task (
@@ -241,7 +241,7 @@ CREATE TABLE scheduled_task (
   name        VARCHAR(128) NOT NULL,
   task_type   VARCHAR(32)  NOT NULL COMMENT 'TaskType: TRIGGER / OUTCOME_INGESTION',
   cron        VARCHAR(128) NOT NULL COMMENT 'Spring 6 段 cron；seed 初值，XXL admin 运行时权威',
-  config      JSON         NOT NULL COMMENT 'typed TaskConfig（多态 kind 判别）；TRIGGER 为 TriggerConfig{sceneCode, eventType, subjectQuery}',
+  config      JSON         NOT NULL COMMENT 'typed TaskConfig（多态 kind 判别）；TRIGGER=TriggerConfig{sceneCode, eventType, subjectQuery}，OUTCOME_INGESTION=OutcomeIngestionConfig{source(SQL: datasource, sql), watermark}',
   status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED',
   created_by  VARCHAR(64)  COMMENT '创建人（D14）',
   created_at  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
