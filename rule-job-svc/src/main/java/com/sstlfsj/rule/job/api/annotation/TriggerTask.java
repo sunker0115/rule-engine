@@ -25,7 +25,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface TriggerTask {
 
-    /** Job 编码，租户 + 场景内唯一。 */
+    /** 任务编码，租户 + 场景内唯一。 */
     String code();
 
     /** Spring 6 段 cron（秒 分 时 日 月 周）。 */
@@ -40,6 +40,6 @@ public @interface TriggerTask {
     /** 合成 RuleEvent 使用的 eventType。 */
     String eventType();
 
-    /** Job 展示名称，缺省用 code。 */
+    /** 任务展示名称，缺省用 code。 */
     String name() default "";
 }

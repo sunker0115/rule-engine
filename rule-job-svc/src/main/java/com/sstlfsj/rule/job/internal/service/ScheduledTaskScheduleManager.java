@@ -46,7 +46,7 @@ public class ScheduledTaskScheduleManager {
     }
 
     /**
-     * 手动触发一次(管理能力,不经调度器)。
+     * 手动触发一次(管理能力,不经调度器);DISABLED 任务亦可手动触发(便于禁用态验证)。
      *
      * @param taskId 任务 id
      * @return 执行记录
