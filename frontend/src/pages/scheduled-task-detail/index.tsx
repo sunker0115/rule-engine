@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Button, Tag, Space, Descriptions, message } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,31 @@ import { colorOf, labelOf, getScheduledTaskExecStatusOptions } from '@/constants
 import { formatDateTime } from '@/utils/format';
 import type { ScheduledTaskItem, ScheduledTaskExecutionItem } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
+
+/** 通用 config 渲染：字符串值含换行时用 pre 直接展示（避免 JSON.stringify 把 \n 转义成字面 \\n）。 */
+function renderConfigValue(value: unknown, indent = 0): React.ReactNode {
+  const pad = indent * 16;
+  if (value === null || value === undefined) return <span>-</span>;
+  if (typeof value === 'string') {
+    return value.includes('\n')
+      ? <pre style={{ margin: 0, paddingLeft: pad, whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#f5f5f5', padding: 8, borderRadius: 4, fontSize: 12 }}>{value}</pre>
+      : <span style={{ paddingLeft: pad }}>{value}</span>;
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return <span style={{ paddingLeft: pad }}>{JSON.stringify(value)}</span>;
+  }
+  const obj = value as Record<string, unknown>;
+  return (
+    <div style={{ paddingLeft: pad }}>
+      {Object.entries(obj).map(([k, v]) => (
+        <div key={k} style={{ marginBottom: 4 }}>
+          <strong style={{ color: '#595959' }}>{k}：</strong>
+          {renderConfigValue(v, 0)}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function ScheduledTaskDetail() {
   const { taskId } = useParams<{ taskId: string }>();
@@ -118,10 +143,11 @@ export default function ScheduledTaskDetail() {
 
       {task && (
         <Card title={t('detail.config')} style={{ marginTop: 16 }}>
-          {/* 配置去中心化:通用 JSON 渲染,不绑定具体 config 形状(TRIGGER/OUTCOME_INGESTION/未来类型同一渲染) */}
-          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-            {task.config == null ? '-' : JSON.stringify(task.config, null, 2)}
-          </pre>
+          {/* 配置去中心化:通用 JSON 渲染,不绑定具体 config 形状(TRIGGER/OUTCOME_INGESTION/未来类型同一渲染)。
+              字符串字段若含换行(如 SQL)直接用 pre 渲染原始值,避免 JSON.stringify 把 \n 转义成字面 \\n。 */}
+          {task.config == null
+            ? '-'
+            : renderConfigValue(task.config)}
         </Card>
       )}
 
