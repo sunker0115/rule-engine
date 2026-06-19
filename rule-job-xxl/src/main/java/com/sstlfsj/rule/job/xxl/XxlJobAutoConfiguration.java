@@ -4,6 +4,7 @@ import com.sstlfsj.rule.job.xxl.internal.HttpXxlJobAdminClient;
 import com.sstlfsj.rule.job.xxl.internal.XxlJobAdminClient;
 import com.sstlfsj.rule.job.xxl.internal.XxlJobSchedulerAdapter;
 import com.sstlfsj.rule.kernel.api.spi.scheduler.Scheduler;
+import com.sstlfsj.rule.kernel.api.spi.scheduler.TaskRunCallback;
 import com.xxl.job.core.executor.impl.XxlJobSpringExecutor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -60,12 +61,13 @@ public class XxlJobAutoConfiguration {
     /**
      * Scheduler 的 xxl 实现；外部显式注册的 Scheduler Bean 始终优先。
      *
-     * @param adminClient admin 接入客户端
+     * @param adminClient     admin 接入客户端
+     * @param taskRunCallback 通用 handler 派发缺本地缓存时的降级回调
      * @return XxlJobSchedulerAdapter 实例
      */
     @Bean
     @ConditionalOnMissingBean(Scheduler.class)
-    public Scheduler scheduler(XxlJobAdminClient adminClient) {
-        return new XxlJobSchedulerAdapter(adminClient);
+    public Scheduler scheduler(XxlJobAdminClient adminClient, TaskRunCallback taskRunCallback) {
+        return new XxlJobSchedulerAdapter(adminClient, taskRunCallback);
     }
 }
