@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.sstlfsj.rule.audit.internal.repository.EffectivenessReadMapper">
+
+    <!-- bucket 表达式：NONE 归一桶 'ALL'，DAY/WEEK 按 occurred_at 分桶 -->
+    <sql id="bucketExpr">
+        <choose>
+            <when test="bucketUnit == 'DAY'">DATE_FORMAT(es.occurred_at, '%Y-%m-%d')</when>
+            <when test="bucketUnit == 'WEEK'">DATE_FORMAT(es.occurred_at, '%x-W%v')</when>
+            <otherwise>'ALL'</otherwise>
+        </choose>
+    </sql>
+
+    <!-- positive 判定：标签集非空时 IN，空时恒 false（全部计 negative） -->
+    <sql id="isPositive">
+        <choose>
+            <when test="positiveLabels != null and positiveLabels.size() > 0">
+                o.outcome_label IN
+                <foreach collection="positiveLabels" item="lbl" open="(" separator="," close=")">#{lbl}</foreach>
+            </when>
+            <otherwise>1 = 0</otherwise>
+        </choose>
+    </sql>
+
+    <!-- 按维度键的混淆计数：CROSS JOIN JSON_TABLE 展开 hit_decisions，去重到 session 粒度 -->
+    <select id="confusionByDimension" resultType="com.sstlfsj.rule.audit.internal.domain.ConfusionCountRow">
+        SELECT <include refid="bucketExpr"/> AS bucket,
+               jt.dim_key AS dim_key,
+               COUNT(DISTINCT CASE WHEN o.event_id IS NOT NULL AND (<include refid="isPositive"/>) THEN es.id END) AS tp,
+               COUNT(DISTINCT CASE WHEN o.event_id IS NOT NULL AND NOT (<include refid="isPositive"/>) THEN es.id END) AS fp,
+               COUNT(DISTINCT es.id) AS fired_total
+        FROM evaluation_session es
+        CROSS JOIN JSON_TABLE(es.hit_decisions, '$[*]'
+             COLUMNS (dim_key VARCHAR(128) PATH
+                 <choose>
+                     <when test="dimension == 'DECISION'">'$.code'</when>
+                     <otherwise>'$.ruleVersionId'</otherwise>
+                 </choose>
+             )) jt
+        LEFT JOIN decision_outcome o
+               ON o.tenant_id = es.tenant_id AND o.event_id = es.event_id
+        WHERE es.tenant_id = #{tenantId}
+          AND es.scene_code = #{sceneCode}
+          AND es.occurred_at &gt;= #{from}
+          AND es.occurred_at &lt; #{to}
+          AND jt.dim_key IS NOT NULL
+        GROUP BY bucket, jt.dim_key
+    </select>
+
+    <!-- 按桶窗口总量 -->
+    <select id="windowTotals" resultType="com.sstlfsj.rule.audit.internal.domain.WindowTotalsRow">
+        SELECT <include refid="bucketExpr"/> AS bucket,
+               COUNT(*) AS total_sessions,
+               SUM(CASE WHEN o.event_id IS NOT NULL THEN 1 ELSE 0 END) AS labeled_count,
+               SUM(CASE WHEN o.event_id IS NOT NULL AND (<include refid="isPositive"/>) THEN 1 ELSE 0 END) AS total_positive,
+               SUM(CASE WHEN o.event_id IS NOT NULL AND NOT (<include refid="isPositive"/>) THEN 1 ELSE 0 END) AS total_negative,
+               SUM(CASE WHEN es.status = 'BLOCKED' THEN 1 ELSE 0 END) AS blocked_count
+        FROM evaluation_session es
+        LEFT JOIN decision_outcome o
+               ON o.tenant_id = es.tenant_id AND o.event_id = es.event_id
+        WHERE es.tenant_id = #{tenantId}
+          AND es.scene_code = #{sceneCode}
+          AND es.occurred_at &gt;= #{from}
+          AND es.occurred_at &lt; #{to}
+        GROUP BY bucket
+    </select>
+
+</mapper>
