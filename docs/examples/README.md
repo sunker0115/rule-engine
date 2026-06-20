@@ -5,7 +5,7 @@
 > **案例有效性(2026-06-09)**：
 > - ✅ 对齐当前实现、HTTP API 跑通：[`risk-control/high-risk-login/`](./risk-control/high-risk-login/)（新范式样板，含完整 curl 剧本）
 > - ✅ 对齐当前实现：[`connector-standardization/`](./connector-standardization/)（D72 声明式 HTTP 连接器端到端：建 connector → 引用它的 EXTERNAL_HTTP metric → 发布 → 评估 → 热失效 → `:test` 验 trace → 清理）
-> - 🛑 已过期、归档于 [`archive/`](./archive/)：`new-account-large-transfer`、`ticket-creation`、`user-register`、`time-conditions`——使用了废弃的 `metricBindings`/`decisions`/`PAYLOAD_COMPARE`/`_mockMetrics` 等形态（过期点对照见 high-risk-login README §五），按新范式重写后再移回业务域目录。
+> - 🛑 已过期、归档于 [`archive/`](./archive/)：`new-account-large-transfer`、`ticket-creation`、`user-register`——使用了废弃的 `metricBindings`/`decisions`/`PAYLOAD_COMPARE`/`_mockMetrics` 等形态。
 
 ---
 
@@ -55,7 +55,7 @@ examples/
 
 - **新人首次** → 选 `risk-control/` 或 `marketing/` 下最简单案例 → 对照 [`../01-concepts.md`](../01-concepts.md) 一等概念
 - **接入新场景** → 找业务域最接近的案例 → 复制 → 改 Scene / Rule
-- **学习某个技术模式** → 看 `patterns/`（时间条件 / sourceType 对比 / payload 直接引用 等）
+- **学习某个技术模式** → 看 `patterns/`（sourceType 对比 / payload 直接引用 等）
 - **评审 / 设计参考** → 按相关决策反查案例
 
 ## 五、维护原则

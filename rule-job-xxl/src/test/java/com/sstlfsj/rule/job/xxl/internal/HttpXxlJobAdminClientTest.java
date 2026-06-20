@@ -26,10 +26,12 @@ class HttpXxlJobAdminClientTest {
     private String base;
     /** 记录每个 path 收到的请求次数，供断言"有了不管"是否发了写请求。 */
     private final Map<String, Integer> hits = new ConcurrentHashMap<>();
-    /** 各 path 的预置响应体（JSON）。 */
+    /** 各 path 的预置响应体（JSON）；null → 用动态 handler 返回。 */
     private final Map<String, String> responses = new ConcurrentHashMap<>();
     /** 记录 jobinfo/pageList 请求体，便于断言过滤参数。 */
     private final List<String> capturedBodies = new CopyOnWriteArrayList<>();
+    /** 按 path 计数供动态响应（如 pageList 首次空、第二次有数据）。 */
+    private final Map<String, Integer> countByPath = new ConcurrentHashMap<>();
 
     @BeforeEach
     void setUp() throws IOException {
@@ -49,11 +51,25 @@ class HttpXxlJobAdminClientTest {
     private void handle(HttpExchange ex) throws IOException {
         String path = ex.getRequestURI().getPath();
         hits.merge(path, 1, Integer::sum);
+        countByPath.merge(path, 1, Integer::sum);
         String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         capturedBodies.add(path + "?" + body);
-        String resp = responses.getOrDefault(path, "{\"code\":500,\"msg\":\"no stub\",\"data\":null}");
+        // 动态响应：jobgroup/pageList 首次空 → 第二次返回有数据(不缓存,按调用次数动态算)
+        String resp;
+        if ("/xxl-job-admin/jobgroup/pageList".equals(path) && responses.get(path) == null) {
+            int callN = countByPath.getOrDefault(path, 0);
+            resp = callN == 1
+                    ? "{\"code\":200,\"data\":{\"data\":[],\"total\":0}}"
+                    : "{\"code\":200,\"data\":{\"data\":[{\"id\":15,\"appname\":\"rule-engine\"}],\"total\":1}}";
+        } else {
+            resp = responses.getOrDefault(path, "{\"code\":500,\"msg\":\"no stub\",\"data\":null}");
+        }
         byte[] bytes = resp.getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().add("Content-Type", "application/json");
+        // 3.4.x 登录认证走 cookie:Set-Cookie xxl_job_login_token
+        if ("/xxl-job-admin/auth/doLogin".equals(path)) {
+            ex.getResponseHeaders().add("Set-Cookie", "xxl_job_login_token=tok-123; Path=/; HttpOnly");
+        }
         ex.sendResponseHeaders(200, bytes.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(bytes);
@@ -71,13 +87,13 @@ class HttpXxlJobAdminClientTest {
 
     @Test
     void seedLogsInBeforeAdminCall() {
-        // group 已存在 + jobinfo 已存在 → 不应发写请求，但应已登录
+        // group 已存在 + jobinfo 已存在（按 jobDesc 命中）→ 不应发写请求，但应已登录
         responses.put("/xxl-job-admin/jobgroup/pageList",
                 "{\"code\":200,\"data\":{\"data\":[{\"id\":7,\"appname\":\"rule-engine\"}],\"total\":1}}");
         responses.put("/xxl-job-admin/jobinfo/pageList",
-                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"executorHandler\":\"job:1\"}],\"total\":1}}");
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"jobDesc\":\"task-1\"}],\"total\":1}}");
 
-        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "FIRST", "1");
 
         assertThat(id).isEqualTo(42L);
         assertThat(hits).containsKey("/xxl-job-admin/auth/doLogin");
@@ -94,23 +110,30 @@ class HttpXxlJobAdminClientTest {
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"msg\":null,\"data\":99}");
 
-        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "FIRST", "1");
 
         assertThat(id).isEqualTo(99L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isEqualTo(1);
+        // insert 请求体应带通用 handler 与 executorParam（= taskId）
+        String insertBody = capturedBodies.stream()
+                .filter(b -> b.startsWith("/xxl-job-admin/jobinfo/insert?"))
+                .findFirst().orElseThrow();
+        assertThat(insertBody).contains("executorHandler=scheduled-task-runner");
+        assertThat(insertBody).contains("executorParam=1");
+        assertThat(insertBody).contains("jobDesc=task-1");
     }
 
     @Test
     void seedFuzzyMatchIsRefinedByExactEquals() {
-        // pageList 模糊匹配返回了 handler 前缀相近但不相等的行 → 客户端精确 equals 应判为不存在 → insert
+        // pageList 按 jobDesc 模糊匹配返回了前缀相近但不相等的行 → 客户端精确 equals 应判为不存在 → insert
         responses.put("/xxl-job-admin/jobgroup/pageList",
                 "{\"code\":200,\"data\":{\"data\":[{\"id\":7,\"appname\":\"rule-engine\"}],\"total\":1}}");
         responses.put("/xxl-job-admin/jobinfo/pageList",
-                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"executorHandler\":\"job:10\"}],\"total\":1}}");
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"jobDesc\":\"task-10\"}],\"total\":1}}");
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"data\":100}");
 
-        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "FIRST", "1");
 
         assertThat(id).isEqualTo(100L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isEqualTo(1);
@@ -118,18 +141,49 @@ class HttpXxlJobAdminClientTest {
 
     @Test
     void seedCreatesJobGroupWhenAbsent() {
-        responses.put("/xxl-job-admin/jobgroup/pageList",
-                "{\"code\":200,\"data\":{\"data\":[],\"total\":0}}");
+        // 不预设 jobgroup/pageList(will be dynamic: 首次空 → 第二次有数据)
         responses.put("/xxl-job-admin/jobgroup/insert",
-                "{\"code\":200,\"data\":15}");
+                "{\"code\":200,\"data\":null}");  // 3.4.x insert 返回 null
         responses.put("/xxl-job-admin/jobinfo/pageList",
                 "{\"code\":200,\"data\":{\"data\":[],\"total\":0}}");
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"data\":101}");
 
-        long id = client().ensureJobSeeded("job:1", "0 0 * * * ?");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "FIRST", "1");
 
         assertThat(id).isEqualTo(101L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobgroup/insert", 0)).isEqualTo(1);
+        // 查了两次 pageList:首次空、insert 后重查
+        assertThat(hits.getOrDefault("/xxl-job-admin/jobgroup/pageList", 0)).isEqualTo(2);
+    }
+
+    @Test
+    void insertCarriesGivenRouteStrategy() {
+        responses.put("/xxl-job-admin/jobgroup/pageList",
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":7,\"appname\":\"rule-engine\"}],\"total\":1}}");
+        responses.put("/xxl-job-admin/jobinfo/pageList",
+                "{\"code\":200,\"data\":{\"data\":[],\"total\":0}}");
+        responses.put("/xxl-job-admin/jobinfo/insert", "{\"code\":200,\"data\":77}");
+
+        client().ensureJobSeeded("config-broadcast", "config-broadcast-runner",
+                "0 0 0 1 1 ?", "SHARDING_BROADCAST", "");
+
+        String insertBody = capturedBodies.stream()
+                .filter(b -> b.startsWith("/xxl-job-admin/jobinfo/insert?"))
+                .findFirst().orElseThrow();
+        assertThat(insertBody).contains("executorRouteStrategy=SHARDING_BROADCAST");
+    }
+
+    @Test
+    void triggerJobPostsIdAndParam() {
+        responses.put("/xxl-job-admin/jobinfo/trigger", "{\"code\":200,\"msg\":null}");
+
+        client().triggerJob(77L, "scene:9100:fraud_check:true");
+
+        String body = capturedBodies.stream()
+                .filter(b -> b.startsWith("/xxl-job-admin/jobinfo/trigger?"))
+                .findFirst().orElseThrow();
+        assertThat(body).contains("id=77");
+        assertThat(body).contains("executorParam=scene");  // ':' URL encoding 后变 %3A，前缀匹配
     }
 }

@@ -357,6 +357,8 @@
 
 ### 2.27 决策效果闭环 / 规则有效性度量（来源 对照成熟决策平台分析 — 效果维度，FICO/Sapiens 规则绩效同类能力）
 
+**标签回灌已实装（B32 / 2026-06-19）：`decision_outcome` 表 + 回灌 API + `OUTCOME_INGESTION` 定时拉标签。** 业务真实结局按 `eventId` 回灌（`OutcomeService.recordOutcomes` 按 `(tenant,event)` 幂等 upsert，覆盖修正）；除手工/接口回灌外，新增 `OUTCOME_INGESTION` 调度任务类型经 `OutcomeSource` SPI（首个实现 `SqlOutcomeSource`：复用 metric 只读数据源跑 SQL 拉固定列 `event_id/outcome_label/outcome_value/labeled_at`）增量拉标签 → `OutcomeService` upsert，watermark（max `labeled_at`）写回任务 config 推进游标。**按规则聚合 TP/FP/FN → precision/recall/漂移仍未实装**（标签接入位已就绪，聚合查询为后续）。
+
 - **v1 现状**：每次决策落 `evaluation_session`（D21）；可观测体系（§2.6 / §2.22）度量的是**系统级**指标（QPS / 延迟 / 错误率 / 命中率）。**无业务效果度量**——"判 HIGH 的交易事后是不是真欺诈"答不了，单条规则的查准/查全无从谈起。
 - **触发条件**：风控/营销需要持续评估"规则抓得准不准"以迭代规则；监管/风控团队要求规则绩效可量化（误报率、漏报、随时间漂移）。系统级监控绿不代表业务有效。
 - **演进方向（结果标签回灌 → 按规则聚合）**：

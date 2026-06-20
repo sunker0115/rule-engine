@@ -9,12 +9,13 @@ import org.springframework.scheduling.support.CronTrigger;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
+import java.util.function.Consumer;
 
 /**
  * 进程内 Scheduler 实现：基于 {@link ThreadPoolTaskScheduler} + {@link CronTrigger}。
  *
  * <p>单实例语义——多实例部署会重复触发，这是已知限制（见 docs/01-concepts.md §3.10）；
- * 需要 HA 时替换为选主或外部调度（xxl-job），业务侧 JobDefinition / JobExecution 不变。
+ * 需要 HA 时替换为选主或外部调度（xxl-job），业务侧 scheduled_task / scheduled_task_execution 不变。
  */
 public class ThreadPoolSchedulerAdapter implements Scheduler, AutoCloseable {
 
@@ -29,6 +30,8 @@ public class ThreadPoolSchedulerAdapter implements Scheduler, AutoCloseable {
         this.taskScheduler.setPoolSize(2);
         this.taskScheduler.initialize();
     }
+
+    private final Map<String, Consumer<String>> broadcastHandlers = new ConcurrentHashMap<>();
 
     @Override
     public synchronized void schedule(String jobCode, String cronExpression, Runnable task) {
@@ -45,6 +48,20 @@ public class ThreadPoolSchedulerAdapter implements Scheduler, AutoCloseable {
         if (future != null) {
             future.cancel(false);
             log.info("Job 已撤销调度 jobCode={}", jobCode);
+        }
+    }
+
+    @Override
+    public void scheduleBroadcast(String code, Consumer<String> onEachNode) {
+        broadcastHandlers.put(code, onEachNode);
+        log.info("广播 handler 已注册 code={}", code);
+    }
+
+    @Override
+    public void triggerBroadcast(String code, String param) {
+        Consumer<String> handler = broadcastHandlers.get(code);
+        if (handler != null) {
+            handler.accept(param);
         }
     }
 

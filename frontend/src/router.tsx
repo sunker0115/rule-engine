@@ -21,8 +21,9 @@ const DecisionDetail     = lazy(() => import('@/pages/decision-detail'));
 const EvalSession        = lazy(() => import('@/pages/eval-session'));
 const EvalSessionDetail  = lazy(() => import('@/pages/eval-session-detail'));
 const AuditLog           = lazy(() => import('@/pages/audit-log'));
-const JobList            = lazy(() => import('@/pages/job-list'));
-const JobDetail          = lazy(() => import('@/pages/job-detail'));
+const Effectiveness      = lazy(() => import('@/pages/effectiveness'));
+const ScheduledTaskList   = lazy(() => import('@/pages/scheduled-task-list'));
+const ScheduledTaskDetail = lazy(() => import('@/pages/scheduled-task-detail'));
 const ImportExport       = lazy(() => import('@/pages/import-export'));
 
 const LazyPage = ({ children }: { children: ReactNode }) => (
@@ -53,9 +54,10 @@ export const router = createBrowserRouter([
       { path: ROUTES.DECISION_DETAIL, element: <LazyPage><DecisionDetail /></LazyPage> },
       { path: ROUTES.SESSIONS,       element: <LazyPage><EvalSession /></LazyPage> },
       { path: ROUTES.SESSION_DETAIL, element: <LazyPage><EvalSessionDetail /></LazyPage> },
+      { path: ROUTES.EFFECTIVENESS,  element: <LazyPage><Effectiveness /></LazyPage> },
       { path: ROUTES.AUDIT_LOGS,     element: <LazyPage><AuditLog /></LazyPage> },
-      { path: ROUTES.JOBS,           element: <LazyPage><JobList /></LazyPage> },
-      { path: ROUTES.JOB_DETAIL,     element: <LazyPage><JobDetail /></LazyPage> },
+      { path: ROUTES.SCHEDULED_TASKS,       element: <LazyPage><ScheduledTaskList /></LazyPage> },
+      { path: ROUTES.SCHEDULED_TASK_DETAIL, element: <LazyPage><ScheduledTaskDetail /></LazyPage> },
       { path: ROUTES.IMPORT_EXPORT,  element: <LazyPage><ImportExport /></LazyPage> },
     ],
   },

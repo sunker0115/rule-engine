@@ -11,6 +11,7 @@ import {
   AuditOutlined,
   ClockCircleOutlined,
   ImportOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import { ROUTES } from '@/constants/routes';
 
@@ -53,15 +54,20 @@ export function getMenuItems(t: TFunction): ItemType[] {
       label: t('menu.sessions'),
     },
     {
+      key: ROUTES.EFFECTIVENESS,
+      icon: <BarChartOutlined />,
+      label: t('menu.effectiveness'),
+    },
+    {
       key: ROUTES.AUDIT_LOGS,
       icon: <AuditOutlined />,
       label: t('menu.auditLogs'),
     },
     { type: 'divider' },
     {
-      key: ROUTES.JOBS,
+      key: ROUTES.SCHEDULED_TASKS,
       icon: <ClockCircleOutlined />,
-      label: t('menu.jobs'),
+      label: t('menu.scheduledTasks'),
     },
     {
       key: ROUTES.IMPORT_EXPORT,

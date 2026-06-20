@@ -62,8 +62,8 @@ export interface CommonTranslation {
     tenants: string; scenes: string; rules: string;
     metrics: string; decisions: string;
     sessions: string; auditLogs: string;
-    jobs: string; importExport: string;
-    connectors: string;
+    scheduledTasks: string; importExport: string;
+    connectors: string; effectiveness: string;
   };
 }
 
@@ -441,25 +441,54 @@ export interface AuditTranslation {
   diff: { before: string; after: string; expand: string; noDiff: string; renderError: string; calcError: string; noSnapshot: string };
 }
 
-// ===== job 命名空间 =====
-export interface JobTranslation {
+// ===== scheduledTask 命名空间 =====
+export interface ScheduledTaskTranslation {
   title: { list: string; detail: string };
   notice: string;
-  action: { trigger: string; viewDetail: string; enable: string; disable: string };
+  action: { trigger: string; viewDetail: string; enable: string; disable: string; createIngestion: string; delete: string; deleteConfirm: string };
   triggerSuccess: string;
-  column: {
-    name: string; code: string; sceneCode: string; eventType: string;
-    cronExpr: string; status: string; subjectQueryType: string; actions: string;
+  create: {
+    title: string;
+    createSuccess: string;
+    createFailed: string;
+    selectTenant: string;
+    submit: string;
+    field: {
+      code: string; codeRequired: string; codeExtra: string;
+      name: string; nameRequired: string;
+      cron: string; cronRequired: string; cronExtra: string;
+      datasource: string; datasourceRequired: string; datasourceExtra: string; datasourcePlaceholder: string;
+      tableName: string; tableNameRequired: string; tableNameExtra: string; tableNamePlaceholder: string;
+      conditions: string; conditionsExtra: string;
+      conditionFieldPlaceholder: string; conditionFieldNoTable: string; conditionValuePlaceholder: string; addCondition: string;
+      limitRows: string; limitRowsExtra: string;
+      sqlPreview: string;
+    };
+    mapping: {
+      eventId: string; eventIdExtra: string;
+      outcomeLabel: string; labelModeFixed: string; labelModeColumn: string; labelFixedPlaceholder: string;
+      outcomeValue: string; outcomeValueExtra: string;
+      labeledAt: string; labeledAtExtra: string;
+      selectColumn: string; noMapping: string;
+    };
   };
+  column: {
+    name: string; code: string; taskType: string;
+    cronExpr: string; status: string; actions: string;
+  };
+  /** 任务类型 label —— 已知类型给中文/英文名，未知类型由页面兜底显示原始串 */
+  type: { trigger: string; ingestion: string };
   enum: {
+    status: { ACTIVE: string; DISABLED: string };
     execStatus: { RUNNING: string; SUCCESS: string; PARTIAL_FAIL: string; FAILED: string };
   };
+  detail: { basicInfo: string; config: string };
   execution: {
     title: string;
     triggerConfirm: string;
     column: {
       id: string; triggerAt: string; finishedAt: string;
-      subjectCount: string; successCount: string; errorCount: string;
+      processedCount: string; successCount: string; errorCount: string;
       status: string; errorSummary: string;
     };
   };
@@ -650,15 +679,81 @@ export interface LineageTranslation {
   disableGuardConfirm: string;
 }
 
+// ===== effectiveness 命名空间（决策效果报表 B32）=====
+export interface EffectivenessTranslation {
+  title: string;
+  valueGate: string;
+  filter: {
+    scene: string;
+    scenePlaceholder: string;
+    timeRange: string;
+    positiveLabels: string;
+    positiveLabelsPlaceholder: string;
+    dimension: string;
+    bucket: string;
+    query: string;
+    backfill: string;
+  };
+  dimension: { RULE_VERSION: string; DECISION: string };
+  bucket: { NONE: string; DAY: string; WEEK: string };
+  banner: {
+    title: string;
+    totalSessions: string;
+    labeled: string;
+    unlabeled: string;
+    blocked: string;
+    positive: string;
+    negative: string;
+    note: string;
+  };
+  table: {
+    title: string;
+    bucket: string;
+    dimensionKey: string;
+    tp: string; fp: string; fn: string; tn: string;
+    precision: string; recall: string; fireRate: string; firedTotal: string;
+  };
+  chart: {
+    title: string;
+    metric: string;
+    precision: string; recall: string; fireRate: string;
+    needBucket: string;
+  };
+  empty: string;
+  validation: { sceneRequired: string; rangeRequired: string };
+  tooltip: {
+    dimensionKey: string;
+    tp: string; fp: string; fn: string; tn: string;
+    precision: string; recall: string; fireRate: string; firedTotal: string;
+    totalSessions: string; labeled: string; unlabeled: string; blocked: string;
+    positive: string; negative: string;
+  };
+  modal: {
+    title: string;
+    tenant: string;
+    eventId: string;
+    outcomeLabel: string;
+    outcomeValue: string;
+    labeledAt: string;
+    source: string;
+    note: string;
+    addRow: string;
+    submit: string;
+    cancel: string;
+    accepted: string;
+  };
+}
+
 export interface TranslationResources {
   common: CommonTranslation;
+  effectiveness: EffectivenessTranslation;
   scene: SceneTranslation;
   metric: MetricTranslation;
   decision: DecisionTranslation;
   rule: RuleTranslation;
   eval: EvalTranslation;
   audit: AuditTranslation;
-  job: JobTranslation;
+  scheduledTask: ScheduledTaskTranslation;
   importExport: ImportExportTranslation;
   connector: ConnectorTranslation;
   analysis: RuleSetAnalysisTranslation;

@@ -61,8 +61,9 @@ const common: CommonTranslation = {
     connectors: 'Connectors',
     decisions: 'Decisions',
     sessions: 'Sessions',
+    effectiveness: 'Effectiveness',
     auditLogs: 'Audit Logs',
-    jobs: 'Jobs',
+    scheduledTasks: 'Scheduled Tasks',
     importExport: 'Import/Export',
   },
 };

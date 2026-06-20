@@ -1,0 +1,174 @@
+package com.sstlfsj.rule.job.internal.service;
+
+import com.sstlfsj.rule.config.api.dto.SceneDetailDto;
+import com.sstlfsj.rule.config.api.service.SceneService;
+import com.sstlfsj.rule.eval.api.service.OutcomeIngestionConfig;
+import com.sstlfsj.rule.eval.api.service.SqlOutcomeSourceConfig;
+import com.sstlfsj.rule.job.api.TaskStatus;
+import com.sstlfsj.rule.job.api.TriggerConfig;
+import com.sstlfsj.rule.job.api.dto.CreateScheduledTaskRequest;
+import com.sstlfsj.rule.job.api.dto.ScheduledTaskExecutionVO;
+import com.sstlfsj.rule.job.api.dto.ScheduledTaskVO;
+import com.sstlfsj.rule.job.api.service.ScheduledTaskService;
+import com.sstlfsj.rule.job.internal.domain.ScheduledTask;
+import com.sstlfsj.rule.job.internal.domain.ScheduledTaskExecution;
+import com.sstlfsj.rule.job.internal.repository.ScheduledTaskExecutionMapper;
+import com.sstlfsj.rule.job.internal.repository.ScheduledTaskMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+
+/** ScheduledTaskService 实现：任务启用 / 禁用 / 查询 / 手动触发 / 执行记录查询（定义走 {@code @TriggerTask} 注解）。 */
+@Service
+@RequiredArgsConstructor
+class ScheduledTaskServiceImpl implements ScheduledTaskService {
+
+    private final ScheduledTaskMapper taskMapper;
+    private final ScheduledTaskExecutionMapper executionMapper;
+    private final SceneService sceneService;
+    private final ScheduledTaskScheduleManager scheduleManager;
+    private final ObjectMapper objectMapper;
+
+    @Override
+    @Transactional
+    public void enable(Long tenantId, Long taskId) {
+        ScheduledTask task = findTask(tenantId, taskId);
+        rejectIfPullScene(tenantId, task);
+        task.setStatus(TaskStatus.ACTIVE);
+        task.setUpdatedAt(LocalDateTime.now());
+        taskMapper.updateById(task);
+        scheduleManager.register(task);
+    }
+
+    @Override
+    @Transactional
+    public void disable(Long tenantId, Long taskId) {
+        ScheduledTask task = findTask(tenantId, taskId);
+        task.setStatus(TaskStatus.DISABLED);
+        task.setUpdatedAt(LocalDateTime.now());
+        taskMapper.updateById(task);
+        scheduleManager.unregister(taskId);
+    }
+
+    @Override
+    public List<ScheduledTaskVO> list(Long tenantId) {
+        return taskMapper.findByTenant(tenantId).stream()
+                .map(this::toVO)
+                .toList();
+    }
+
+    @Override
+    public ScheduledTaskVO get(Long tenantId, Long taskId) {
+        return toVO(findTask(tenantId, taskId));
+    }
+
+    @Override
+    public ScheduledTaskExecutionVO triggerOnce(Long tenantId, Long taskId) {
+        findTask(tenantId, taskId);
+        return toExecutionVO(scheduleManager.runOnce(taskId));
+    }
+
+    @Override
+    public List<ScheduledTaskExecutionVO> recentExecutions(Long tenantId, Long taskId, int limit) {
+        findTask(tenantId, taskId);
+        return executionMapper.recentByTask(taskId, limit).stream()
+                .map(ScheduledTaskServiceImpl::toExecutionVO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public ScheduledTaskVO create(CreateScheduledTaskRequest req) {
+        if (taskMapper.findByTenantCode(req.tenantId(), req.code()) != null) {
+            throw new IllegalArgumentException(
+                    "调度任务已存在: tenantId=" + req.tenantId() + ", code=" + req.code());
+        }
+        OutcomeIngestionConfig config =
+                new OutcomeIngestionConfig(new SqlOutcomeSourceConfig(req.datasource(), req.sql()));
+        String configJson;
+        try {
+            configJson = objectMapper.writeValueAsString(config);
+        } catch (Exception e) {
+            throw new IllegalStateException("config 序列化失败", e);
+        }
+        ScheduledTask task = new ScheduledTask();
+        task.setTenantId(req.tenantId());
+        task.setCode(req.code());
+        task.setName(req.name());
+        task.setTaskType("OUTCOME_INGESTION");
+        task.setCron(req.cron());
+        task.setConfig(configJson);
+        task.setStatus(TaskStatus.ACTIVE);
+        task.setCreatedBy("api");
+        taskMapper.insert(task);
+        scheduleManager.register(task);
+        return toVO(task);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long tenantId, Long taskId) {
+        findTask(tenantId, taskId);  // 校验存在 + 租户归属
+        scheduleManager.unregister(taskId);
+        taskMapper.deleteById(taskId);
+    }
+
+    /** TRIGGER 任务绑定 Scene 为 PULL 时拒绝启用——PULL 是同步业务调用语义，定时触发无意义（§3.10）。 */
+    private void rejectIfPullScene(Long tenantId, ScheduledTask task) {
+        if ("TRIGGER".equals(task.getTaskType()) && task.getConfig() != null) {
+            TriggerConfig trigger = objectMapper.readValue(task.getConfig(), TriggerConfig.class);
+            SceneDetailDto scene;
+            try {
+                scene = sceneService.getScene(tenantId, trigger.sceneCode());
+            } catch (IllegalArgumentException e) {
+                // scene 尚未在引擎配置（如 fraud_check 仅用于业务触发但未建 Scene）→ 跳过 PULL 校验，不阻止 enable
+                return;
+            }
+            if ("PULL".equals(scene.dominantMode())) {
+                throw new IllegalArgumentException("PULL Scene 不允许绑定 TRIGGER 任务: " + trigger.sceneCode());
+            }
+        }
+    }
+
+    private ScheduledTask findTask(Long tenantId, Long taskId) {
+        ScheduledTask task = taskMapper.selectById(taskId);
+        if (task == null || !task.getTenantId().equals(tenantId)) {
+            throw new IllegalArgumentException("调度任务不存在: " + taskId);
+        }
+        return task;
+    }
+
+    private ScheduledTaskVO toVO(ScheduledTask task) {
+        // config 以解析后的 JSON 对象出口(框架核不持 typed 全集)
+        Object config = task.getConfig() == null ? null : objectMapper.readValue(task.getConfig(), Object.class);
+        return new ScheduledTaskVO(
+                task.getId(),
+                task.getTenantId(),
+                task.getCode(),
+                task.getName(),
+                task.getTaskType(),
+                task.getCron(),
+                config,
+                task.getStatus().name(),
+                task.getCreatedAt() != null ? task.getCreatedAt().toInstant(ZoneOffset.UTC) : null,
+                task.getUpdatedAt() != null ? task.getUpdatedAt().toInstant(ZoneOffset.UTC) : null);
+    }
+
+    private static ScheduledTaskExecutionVO toExecutionVO(ScheduledTaskExecution exec) {
+        return new ScheduledTaskExecutionVO(
+                exec.getId(),
+                exec.getScheduledTaskId(),
+                exec.getStatus().name(),
+                exec.getProcessedCount(),
+                exec.getSuccessCount(),
+                exec.getErrorCount(),
+                exec.getErrorSummary(),
+                exec.getTriggerAt() != null ? exec.getTriggerAt().toInstant(ZoneOffset.UTC) : null,
+                exec.getFinishedAt() != null ? exec.getFinishedAt().toInstant(ZoneOffset.UTC) : null);
+    }
+}

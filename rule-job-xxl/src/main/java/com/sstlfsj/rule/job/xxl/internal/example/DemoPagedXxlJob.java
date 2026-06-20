@@ -13,14 +13,14 @@ import java.util.List;
 /**
  * 分页 Job 的 xxl-job 原生写法演示（仅 {@code xxl-demo} profile，需 executor 启用）。
  *
- * <p>对照 rule-job-svc 的 {@code DemoFraudJob#recentLoginUsersPaged}（{@code @RuleJob} 注解式，
+ * <p>对照 rule-job-svc 的 {@code DemoFraudJob#recentLoginUsersPaged}（{@code @TriggerTask} 注解式，
  * 仿 ElasticJob DataflowJob：框架按 page 0、1、2… 反复回调拉到空批为止，分页由框架驱动）——
  * xxl-job 没有 DataflowJob 那种"返回一页、框架再要下一页"的回调模型，分页改由 <b>handler 内部自己循环</b>：
  * 一个 {@code @XxlJob} 方法里 while 翻页、每页处理完再取下一页，拉到空批跳出。
  *
  * <p>另一处差异：日志走 {@link XxlJobHelper#log}（落到 xxl-admin 的「调度日志」视图，可在控制台回看），
  * 任务参数走 {@link XxlJobHelper#getJobParam()} 静态取，结果走 {@link XxlJobHelper#handleSuccess}/
- * {@code handleFail}（不写则默认成功）。本例不接 JobRunner/规则评估（那在 rule-job-svc，本模块不依赖），
+ * {@code handleFail}（不写则默认成功）。本例不接 TriggerExecutor/规则评估（那在 rule-job-svc，本模块不依赖），
  * 每个 subject 仅占位处理，真实接入以 {@code XxlJobSchedulerAdapter} 注册的闭包为准。
  */
 @Component
@@ -92,7 +92,7 @@ public class DemoPagedXxlJob {
         return page;
     }
 
-    /** 占位处理单个主体。真实接入：合成 RuleEvent 注入评估链路（经 XxlJobSchedulerAdapter 注册的闭包 → JobRunner）。 */
+    /** 占位处理单个主体。真实接入：合成 RuleEvent 注入评估链路（经 XxlJobSchedulerAdapter 注册的闭包 → TriggerExecutor）。 */
     private void process(String subjectId) {
         log.debug("处理主体 subjectId={}", subjectId);
     }

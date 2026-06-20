@@ -4,7 +4,9 @@ import com.sstlfsj.rule.job.xxl.internal.HttpXxlJobAdminClient;
 import com.sstlfsj.rule.job.xxl.internal.XxlJobAdminClient;
 import com.sstlfsj.rule.job.xxl.internal.XxlJobSchedulerAdapter;
 import com.sstlfsj.rule.kernel.api.spi.scheduler.Scheduler;
+import com.sstlfsj.rule.kernel.api.spi.scheduler.TaskRunCallback;
 import com.xxl.job.core.executor.impl.XxlJobSpringExecutor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -16,7 +18,7 @@ import tools.jackson.databind.ObjectMapper;
  * xxl-job 调度适配装配：仅当 {@code engine.rule.job.scheduler=xxl-job} 时生效。
  *
  * <p>提供 {@link Scheduler} 接管进程内实现（{@link ConditionalOnMissingBean} 保证外部自定义 Scheduler 优先），
- * 内制侧 JobDefinition / JobExecution / JobRunner 不变。
+ * 内制侧 scheduled_task / scheduled_task_execution / TriggerExecutor 不变。
  */
 @AutoConfiguration
 @EnableConfigurationProperties(XxlJobProperties.class)
@@ -60,12 +62,13 @@ public class XxlJobAutoConfiguration {
     /**
      * Scheduler 的 xxl 实现；外部显式注册的 Scheduler Bean 始终优先。
      *
-     * @param adminClient admin 接入客户端
+     * @param adminClient      admin 接入客户端
+     * @param callbackProvider TaskRunCallback 惰性 provider（惰性解析断构造期 bean 循环依赖）
      * @return XxlJobSchedulerAdapter 实例
      */
     @Bean
     @ConditionalOnMissingBean(Scheduler.class)
-    public Scheduler scheduler(XxlJobAdminClient adminClient) {
-        return new XxlJobSchedulerAdapter(adminClient);
+    public Scheduler scheduler(XxlJobAdminClient adminClient, ObjectProvider<TaskRunCallback> callbackProvider) {
+        return new XxlJobSchedulerAdapter(adminClient, callbackProvider);
     }
 }

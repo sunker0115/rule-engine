@@ -1,7 +1,7 @@
 package com.sstlfsj.rule.job.internal.subject;
 
-import com.sstlfsj.rule.job.api.JobPage;
-import com.sstlfsj.rule.job.api.JobTarget;
+import com.sstlfsj.rule.job.api.SubjectPage;
+import com.sstlfsj.rule.job.api.SubjectTarget;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -12,14 +12,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class BeanMethodRegistryTest {
 
-    /** 模拟 @RuleJob 注解的主体查询方法（无参 / 单 JobPage 参）。 */
+    /** 模拟 @TriggerTask 注解的主体查询方法（无参 / 单 SubjectPage 参）。 */
     static class Probe {
-        public List<JobTarget> all() {
-            return List.of(JobTarget.of("u1"));
+        public List<SubjectTarget> all() {
+            return List.of(SubjectTarget.of("u1"));
         }
 
-        public List<JobTarget> paged(JobPage page) {
-            return List.of(JobTarget.of("p" + page.pageNumber()));
+        public List<SubjectTarget> paged(SubjectPage page) {
+            return List.of(SubjectTarget.of("p" + page.pageNumber()));
         }
     }
 
@@ -31,27 +31,27 @@ class BeanMethodRegistryTest {
 
         Object r = reg.invoke("p#all");
         assertThat(r).isInstanceOf(List.class);
-        assertThat((List<JobTarget>) r).hasSize(1);
+        assertThat((List<SubjectTarget>) r).hasSize(1);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void invokeWithJobPageArg() throws Exception {
+    void invokeWithSubjectPageArg() throws Exception {
         BeanMethodRegistry reg = new BeanMethodRegistry();
-        reg.register("p#paged", new Probe(), Probe.class.getMethod("paged", JobPage.class));
+        reg.register("p#paged", new Probe(), Probe.class.getMethod("paged", SubjectPage.class));
 
-        Object r = reg.invoke("p#paged", new JobPage(2, 100));
-        assertThat(((List<JobTarget>) r).get(0).subjectId()).isEqualTo("p2");
+        Object r = reg.invoke("p#paged", new SubjectPage(2, 100));
+        assertThat(((List<SubjectTarget>) r).get(0).subjectId()).isEqualTo("p2");
     }
 
     @Test
     void methodReturnsRegisteredMethodForSignatureInspection() throws Exception {
         BeanMethodRegistry reg = new BeanMethodRegistry();
-        Method m = Probe.class.getMethod("paged", JobPage.class);
+        Method m = Probe.class.getMethod("paged", SubjectPage.class);
         reg.register("p#paged", new Probe(), m);
 
         assertThat(reg.method("p#paged")).isEqualTo(m);
-        assertThat(reg.method("p#paged").getParameterTypes()[0]).isEqualTo(JobPage.class);
+        assertThat(reg.method("p#paged").getParameterTypes()[0]).isEqualTo(SubjectPage.class);
     }
 
     @Test

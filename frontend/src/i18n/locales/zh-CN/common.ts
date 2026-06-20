@@ -61,8 +61,9 @@ const common: CommonTranslation = {
     connectors: '连接器',
     decisions: '决策管理',
     sessions: '评估会话',
+    effectiveness: '决策效果',
     auditLogs: '审计日志',
-    jobs: '任务管理',
+    scheduledTasks: '调度任务',
     importExport: '导入导出',
   },
 };
