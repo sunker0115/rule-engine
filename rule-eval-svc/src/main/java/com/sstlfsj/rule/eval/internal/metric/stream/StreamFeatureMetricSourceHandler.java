@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.eval.internal.metric.stream;
 
+import com.sstlfsj.rule.eval.internal.metric.DataTypeCoercion;
 import com.sstlfsj.rule.kernel.api.annotation.MetricSourceType;
 import com.sstlfsj.rule.kernel.api.model.MetricQuery;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
@@ -43,7 +44,7 @@ public class StreamFeatureMetricSourceHandler implements MetricSourceHandler {
         }
         String redisKey = "rt:feat:" + query.subjectId();
         String field = featureObj.toString();
-        Object raw = null;
+        Object raw;
         try {
             raw = redis.opsForHash().get(redisKey, field);
         } catch (RuntimeException e) {
@@ -63,7 +64,18 @@ public class StreamFeatureMetricSourceHandler implements MetricSourceHandler {
             }
         }
 
-        return new MetricValue(raw, "UNKNOWN", ValueSource.FETCHED.tag());
+        // 按 metric schema 的 dataType 强转：Redis 读回恒为 String，需按 metric_definition.data_type
+        // （resolver 注入 params）coerce 成 long/double/boolean，否则数值条件按字符串比较出错（"10">"8" 为假）。
+        // dataType 真相源在 metric 定义（对齐 Feast ValueType 的 registry-driven），与 SQL/HTTP handler 一致。
+        Object dataTypeObj = query.params().get("dataType");
+        String dataType = dataTypeObj != null ? dataTypeObj.toString() : null;
+        Object coerced = DataTypeCoercion.coerce(raw, dataType);
+        if (coerced == null) {
+            // raw 非空但强转后 null = 类型不匹配（如 dataType=LONG 但值非数字）
+            log.warn("STREAM 特征类型不匹配 key={} field={} dataType={} raw={}", redisKey, field, dataType, raw);
+            return MetricValue.error("STREAM_TYPE_MISMATCH");
+        }
+        return new MetricValue(coerced, dataType, ValueSource.FETCHED.tag());
     }
 
     /**

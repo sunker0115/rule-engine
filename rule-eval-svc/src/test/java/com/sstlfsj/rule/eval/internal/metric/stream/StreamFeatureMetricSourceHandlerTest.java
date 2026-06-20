@@ -133,4 +133,48 @@ class StreamFeatureMetricSourceHandlerTest {
         assertThat(v.isError()).isFalse();
         assertThat(v.value()).isEqualTo("RT_WATCH");
     }
+
+    /** dataType=LONG：Redis 读回 String "9" → 强转 long 9（否则数值比较按字符串出错）。 */
+    @Test
+    void fetch_coercesStringToLongByDataType() {
+        when(hashOps.get("rt:feat:customer-1", "rtm_mwr_1s")).thenReturn("9");
+
+        MetricQuery q = new MetricQuery("rtm_mwr_1s", "9100", "customer-1",
+                Map.of("feature", "rtm_mwr_1s", "dataType", "LONG"), Map.of(), Instant.now(), Map.of());
+
+        MetricValue v = handler.fetch(q);
+
+        assertThat(v.isError()).isFalse();
+        assertThat(v.value()).isEqualTo(9L);          // long，非 String "9"
+        assertThat(v.dataType()).isEqualTo("LONG");
+    }
+
+    /** dataType=DOUBLE：String "0.7" → double 0.7。 */
+    @Test
+    void fetch_coercesStringToDoubleByDataType() {
+        when(hashOps.get("rt:feat:customer-1", "sus_score")).thenReturn("0.7");
+
+        MetricQuery q = new MetricQuery("sus_score", "9100", "customer-1",
+                Map.of("feature", "sus_score", "dataType", "DOUBLE"), Map.of(), Instant.now(), Map.of());
+
+        MetricValue v = handler.fetch(q);
+
+        assertThat(v.isError()).isFalse();
+        assertThat(v.value()).isEqualTo(0.7);
+        assertThat(v.dataType()).isEqualTo("DOUBLE");
+    }
+
+    /** dataType=LONG 但值非数字 → 强转失败 STREAM_TYPE_MISMATCH。 */
+    @Test
+    void fetch_typeMismatch_returnsError() {
+        when(hashOps.get("rt:feat:customer-1", "rtm_mwr_1s")).thenReturn("not-a-number");
+
+        MetricQuery q = new MetricQuery("rtm_mwr_1s", "9100", "customer-1",
+                Map.of("feature", "rtm_mwr_1s", "dataType", "LONG"), Map.of(), Instant.now(), Map.of());
+
+        MetricValue v = handler.fetch(q);
+
+        assertThat(v.isError()).isTrue();
+        assertThat(v.errorCode()).isEqualTo("STREAM_TYPE_MISMATCH");
+    }
 }
