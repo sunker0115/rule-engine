@@ -47,14 +47,23 @@ public class HttpXxlJobAdminClient implements XxlJobAdminClient {
 
     @Override
     public synchronized long ensureJobSeeded(String jobDesc, String executorHandler,
-                                             String cron, String executorParam) {
+                                             String cron, String routeStrategy, String executorParam) {
         int groupId = ensureJobGroup();
         Long existing = findJobInfoId(groupId, jobDesc);
         if (existing != null) {
             log.info("xxl-job admin 已存在 job jobDesc={} id={}，保持不动（有了不管）", jobDesc, existing);
             return existing;
         }
-        return insertJobInfo(groupId, jobDesc, executorHandler, cron, executorParam);
+        return insertJobInfo(groupId, jobDesc, executorHandler, cron, routeStrategy, executorParam);
+    }
+
+    @Override
+    public void triggerJob(long adminJobId, String executorParam) {
+        post("/jobinfo/trigger", form(
+                "id", String.valueOf(adminJobId),
+                "executorParam", executorParam,
+                "addressList", ""), true);
+        log.info("xxl-job admin 触发 job id={} param={}", adminJobId, executorParam);
     }
 
     /** 确保 appname 对应的 jobgroup 存在，返回其 id（不存在则按 appname 建组）。3.4.x insert 返回 data=null，建后重查取 id。 */
@@ -99,7 +108,7 @@ public class HttpXxlJobAdminClient implements XxlJobAdminClient {
 
     /** 新建 jobinfo（scheduleType=CRON、glueType=BEAN、jobDesc 唯一定位、executorParam 路由 dispatch、triggerStatus=1 启用）。 */
     private long insertJobInfo(int groupId, String jobDesc, String executorHandler,
-                               String cron, String executorParam) {
+                               String cron, String routeStrategy, String executorParam) {
         JsonNode data = post("/jobinfo/insert", form(
                 "jobGroup", String.valueOf(groupId),
                 "jobDesc", jobDesc,
@@ -109,14 +118,14 @@ public class HttpXxlJobAdminClient implements XxlJobAdminClient {
                 "glueType", "BEAN",
                 "executorHandler", executorHandler,
                 "executorParam", executorParam,
-                "executorRouteStrategy", "FIRST",
+                "executorRouteStrategy", routeStrategy,
                 "misfireStrategy", "DO_NOTHING",
                 "executorBlockStrategy", "SERIAL_EXECUTION",
                 "executorTimeout", "0",
                 "executorFailRetryCount", "0",
                 "triggerStatus", "1"), true).path("data");
-        log.info("xxl-job admin 新建 job jobDesc={} handler={} param={} id={} cron={}",
-                 jobDesc, executorHandler, executorParam, data.asLong(), cron);
+        log.info("xxl-job admin 新建 job jobDesc={} handler={} route={} param={} id={} cron={}",
+                 jobDesc, executorHandler, routeStrategy, executorParam, data.asLong(), cron);
         return data.asLong();
     }
 

@@ -56,6 +56,7 @@ class XxlJobSchedulerAdapterTest {
                 eq("task-1"),
                 eq(XxlJobSchedulerAdapter.UNIVERSAL_HANDLER),
                 eq("0 0 * * * ?"),
+                eq("FIRST"),
                 eq("1"))).thenReturn(42L);
         XxlJobSchedulerAdapter adapter = new XxlJobSchedulerAdapter(admin, mockProvider(id -> {}));
 
@@ -63,7 +64,7 @@ class XxlJobSchedulerAdapterTest {
 
         // seed admin:jobDesc=task-1、handler=UNIVERSAL_HANDLER、executorParam=taskId
         verify(admin).ensureJobSeeded(
-                "task-1", XxlJobSchedulerAdapter.UNIVERSAL_HANDLER, "0 0 * * * ?", "1");
+                "task-1", XxlJobSchedulerAdapter.UNIVERSAL_HANDLER, "0 0 * * * ?", "FIRST", "1");
     }
 
     @Test

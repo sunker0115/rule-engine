@@ -93,7 +93,7 @@ class HttpXxlJobAdminClientTest {
         responses.put("/xxl-job-admin/jobinfo/pageList",
                 "{\"code\":200,\"data\":{\"data\":[{\"id\":42,\"jobDesc\":\"task-1\"}],\"total\":1}}");
 
-        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "1");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "FIRST", "1");
 
         assertThat(id).isEqualTo(42L);
         assertThat(hits).containsKey("/xxl-job-admin/auth/doLogin");
@@ -110,7 +110,7 @@ class HttpXxlJobAdminClientTest {
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"msg\":null,\"data\":99}");
 
-        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "1");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "FIRST", "1");
 
         assertThat(id).isEqualTo(99L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isEqualTo(1);
@@ -133,7 +133,7 @@ class HttpXxlJobAdminClientTest {
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"data\":100}");
 
-        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "1");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "FIRST", "1");
 
         assertThat(id).isEqualTo(100L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobinfo/insert", 0)).isEqualTo(1);
@@ -149,11 +149,41 @@ class HttpXxlJobAdminClientTest {
         responses.put("/xxl-job-admin/jobinfo/insert",
                 "{\"code\":200,\"data\":101}");
 
-        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "1");
+        long id = client().ensureJobSeeded("task-1", "scheduled-task-runner", "0 0 * * * ?", "FIRST", "1");
 
         assertThat(id).isEqualTo(101L);
         assertThat(hits.getOrDefault("/xxl-job-admin/jobgroup/insert", 0)).isEqualTo(1);
         // 查了两次 pageList:首次空、insert 后重查
         assertThat(hits.getOrDefault("/xxl-job-admin/jobgroup/pageList", 0)).isEqualTo(2);
+    }
+
+    @Test
+    void insertCarriesGivenRouteStrategy() {
+        responses.put("/xxl-job-admin/jobgroup/pageList",
+                "{\"code\":200,\"data\":{\"data\":[{\"id\":7,\"appname\":\"rule-engine\"}],\"total\":1}}");
+        responses.put("/xxl-job-admin/jobinfo/pageList",
+                "{\"code\":200,\"data\":{\"data\":[],\"total\":0}}");
+        responses.put("/xxl-job-admin/jobinfo/insert", "{\"code\":200,\"data\":77}");
+
+        client().ensureJobSeeded("config-broadcast", "config-broadcast-runner",
+                "0 0 0 1 1 ?", "SHARDING_BROADCAST", "");
+
+        String insertBody = capturedBodies.stream()
+                .filter(b -> b.startsWith("/xxl-job-admin/jobinfo/insert?"))
+                .findFirst().orElseThrow();
+        assertThat(insertBody).contains("executorRouteStrategy=SHARDING_BROADCAST");
+    }
+
+    @Test
+    void triggerJobPostsIdAndParam() {
+        responses.put("/xxl-job-admin/jobinfo/trigger", "{\"code\":200,\"msg\":null}");
+
+        client().triggerJob(77L, "scene:9100:fraud_check:true");
+
+        String body = capturedBodies.stream()
+                .filter(b -> b.startsWith("/xxl-job-admin/jobinfo/trigger?"))
+                .findFirst().orElseThrow();
+        assertThat(body).contains("id=77");
+        assertThat(body).contains("executorParam=scene");  // ':' URL encoding 后变 %3A，前缀匹配
     }
 }

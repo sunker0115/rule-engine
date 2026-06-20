@@ -11,6 +11,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * {@link Scheduler} 的 xxl-job 适配实现。
@@ -77,10 +78,11 @@ public class XxlJobSchedulerAdapter implements Scheduler {
         long taskId = parseTaskId(jobCode);
         runnables.put(taskId, task);
         long adminJobId = adminClient.ensureJobSeeded(
-                "task-" + taskId,       // jobDesc：唯一标识
-                UNIVERSAL_HANDLER,      // executorHandler：统一
+                "task-" + taskId,       // jobDesc
+                UNIVERSAL_HANDLER,      // executorHandler
                 cronExpression,
-                String.valueOf(taskId)  // executorParam：taskId
+                "FIRST",                // routeStrategy: cron 单派发
+                String.valueOf(taskId)  // executorParam
         );
         log.info("xxl-job 注册 taskId={} adminJobId={} cron={}", taskId, adminJobId, cronExpression);
     }
@@ -91,6 +93,16 @@ public class XxlJobSchedulerAdapter implements Scheduler {
         runnables.remove(taskId);
         // XXL admin job 保留（运维在控制台管停用），只清本地 runnable 缓存
         log.info("xxl-job 注销 taskId={} (runnable 缓存已移除，admin job 保留)", taskId);
+    }
+
+    @Override
+    public void scheduleBroadcast(String code, Consumer<String> onEachNode) {
+        throw new UnsupportedOperationException("scheduleBroadcast 尚未实现，将在 Task 4 完成");
+    }
+
+    @Override
+    public void triggerBroadcast(String code, String param) {
+        throw new UnsupportedOperationException("triggerBroadcast 尚未实现，将在 Task 4 完成");
     }
 
     /** 从 jobCode("scheduled-task:42") 解析 taskId。 */
