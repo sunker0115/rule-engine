@@ -17,7 +17,9 @@ import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.CompiledExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.RuleVersionCache;
 import com.sstlfsj.rule.eval.internal.CompiledExecutorProperties;
+import com.sstlfsj.rule.eval.internal.metric.stream.StreamFeatureMetricSourceHandler;
 import com.sstlfsj.rule.expression.cel.CelExpressionEngine;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
 import com.sstlfsj.rule.observability.api.metrics.RuleMetrics;
 import com.sstlfsj.rule.eval.internal.EvalInstrumentation;
@@ -204,6 +206,15 @@ class EvalAutoConfigurationTest {
         assertNotNull(instrumentation);
         assertNotNull(registry.find(RuleMetrics.EVAL_ERROR_TOTAL).counter());
         assertNotNull(registry.find(RuleMetrics.EVAL_TOTAL).counter());
+    }
+
+    @Test
+    void evalContextAssembler_streamHandler_passedThrough() {
+        StreamFeatureMetricSourceHandler handler =
+                new StreamFeatureMetricSourceHandler(mock(StringRedisTemplate.class));
+        EvalContextAssembler assembler = config.evalContextAssembler(
+                List.of(), List.of(handler), null, null, EXEC, fetchProps());
+        assertNotNull(assembler);
     }
 
     @Test
