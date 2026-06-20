@@ -69,10 +69,13 @@ engine:
     script:
       precompile:
         mode: LAZY   # EXPRESSION_SCRIPT 脚本编译加热: LAZY=首次评估编译(默认); EAGER=快照加载期(启动/发布热更/场景变更)预编译
-    # 调度后端:in-process(默认,进程内 ThreadPool 单机)| xxl-job(分布式,需起 XXL admin + 配 xxl.* 连接信息)
+    # 调度后端选型，经环境变量 ENGINE_RULE_JOB_SCHEDULER 覆盖：
+    #   in-process — 进程内 ThreadPool 单机调度（适合本地开发/无外部依赖）
+    #   xxl-job    — XXL-JOB 分布式调度（需起 XXL admin + 配下方 xxl.* 连接信息，
+    #                支持集群单派发 + 分片广播；config→eval 跨实例广播依赖此模式）
     job:
       scheduler: ${ENGINE_RULE_JOB_SCHEDULER:xxl-job}
-      # 仅 scheduler=xxl-job 时生效;敏感项(access-token/admin-password)走环境变量,不入库不硬编码
+      # 仅 scheduler=xxl-job 时生效；敏感项走环境变量不入库不硬编码
       xxl:
         admin-addresses: ${XXL_ADMIN_ADDRESSES:http://127.0.0.1:8088}
         appname: ${XXL_APPNAME:rule-engine}
