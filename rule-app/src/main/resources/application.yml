@@ -74,7 +74,7 @@ engine:
     #   xxl-job    — XXL-JOB 分布式调度（需起 XXL admin + 配下方 xxl.* 连接信息，
     #                支持集群单派发 + 分片广播；config→eval 跨实例广播依赖此模式）
     job:
-      scheduler: ${ENGINE_RULE_JOB_SCHEDULER:xxl-job}
+      scheduler: ${ENGINE_RULE_JOB_SCHEDULER:in-process}
       # 仅 scheduler=xxl-job 时生效；敏感项走环境变量不入库不硬编码
       xxl:
         admin-addresses: ${XXL_ADMIN_ADDRESSES:http://127.0.0.1:8088}
