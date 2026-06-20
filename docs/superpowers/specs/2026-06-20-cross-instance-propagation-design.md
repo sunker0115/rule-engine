@@ -38,7 +38,7 @@ void triggerBroadcast(String code, String param);
 **XXL 侧实现细节：**
 
 1. `XxlJobSchedulerAdapter` 构造时注册**第二个 handler** `BROADCAST_HANDLER = "config-broadcast-runner"`（与 cron 单派发的 `UNIVERSAL_HANDLER = "scheduled-task-runner"` 独立，`registryJobHandler` 按 name 存 map，两者互不覆盖）
-2. 构造时 seed 广播 jobinfo：`ensureJobSeeded("config-broadcast", BROADCAST_HANDLER, "0 0 0 1 1 ?", SHARDING_BROADCAST, "")`——cron 设永不自动触发（每年 1/1 零点），**路由策略=`SHARDING_BROADCAST`**，只等手动 trigger
+2. 惰性 seed 广播 jobinfo（首次 `triggerBroadcast` 时 DCL，避免构造期 admin 网络 I/O 拖垮启动，与既有懒登录风格一致）：`ensureJobSeeded("config-broadcast", BROADCAST_HANDLER, "0 0 0 1 1 ?", SHARDING_BROADCAST, "")`——cron 设永不自动触发（每年 1/1 零点），**路由策略=`SHARDING_BROADCAST`**，只等手动 trigger
 3. `triggerBroadcast("config-change", param)` → `adminClient.triggerJob(configBroadcastJobId, param)`——覆盖 executorParam，XXL admin 分片广播到所有在线 executor
 4. `config-broadcast-runner` handler `execute()` 收到 `XxlJobHelper.getJobParam()` → 查 `consumers["config-change"]` → `accept(param)`
 
@@ -228,7 +228,7 @@ eval-svc ConfigChangeBroadcastHandler.onConfigChange(param)
 | rule-job-svc | `ThreadPoolSchedulerAdapterTest.java` | 追加测试 |
 | rule-job-xxl | `XxlJobAdminClient.java` | 修改：`ensureJobSeeded` 加 routeStrategy 形参 + 加 triggerJob |
 | rule-job-xxl | `HttpXxlJobAdminClient.java` | 修改：`insertJobInfo` 透传 routeStrategy（去硬编码 FIRST）+ 实现 triggerJob |
-| rule-job-xxl | `XxlJobSchedulerAdapter.java` | 修改：注册 BROADCAST_HANDLER + 构造器 seed 广播 jobinfo（SHARDING_BROADCAST）+ schedule() 现有调用传 "FIRST" |
+| rule-job-xxl | `XxlJobSchedulerAdapter.java` | 修改：注册 BROADCAST_HANDLER + 惰性 seed 广播 jobinfo（SHARDING_BROADCAST，首次 triggerBroadcast 时 DCL）+ schedule() 现有调用传 "FIRST" |
 | rule-job-xxl | 测试 | 追加广播 handler 测试；现有 seed 测试补 routeStrategy 参数 |
 | rule-config-svc | `ConfigChangeBroadcaster.java` | 新建 |
 | rule-eval-svc | `ConfigChangeBroadcastHandler.java` | 新建 |
