@@ -75,4 +75,62 @@ class StreamFeatureMetricSourceHandlerTest {
         assertThat(v.isError()).isTrue();
         assertThat(v.errorCode()).isEqualTo("STREAM_REDIS_ERROR");
     }
+
+    /** 配了 maxStalenessSeconds 且特征新鲜（age ≤ 阈值）→ 正常返回。 */
+    @Test
+    void fetch_freshWithinStaleness_returnsValue() {
+        Instant now = Instant.parse("2026-06-20T07:00:30Z");          // now = 1781938830s
+        when(hashOps.get("rt:feat:customer-1", "rt_state")).thenReturn("RT_WATCH");
+        when(hashOps.get("rt:feat:customer-1", "updated_at")).thenReturn("1781938820");  // 10s 前
+
+        MetricQuery q = new MetricQuery("rt_state", "9100", "customer-1",
+                Map.of("feature", "rt_state", "maxStalenessSeconds", "30"), Map.of(), now, Map.of());
+
+        MetricValue v = handler.fetch(q);
+
+        assertThat(v.isError()).isFalse();
+        assertThat(v.value()).isEqualTo("RT_WATCH");
+    }
+
+    /** 配了 maxStalenessSeconds 且特征陈旧（age > 阈值）→ STREAM_FEATURE_STALE。 */
+    @Test
+    void fetch_staleBeyondThreshold_returnsStaleError() {
+        Instant now = Instant.parse("2026-06-20T07:10:00Z");
+        when(hashOps.get("rt:feat:customer-1", "rt_state")).thenReturn("RT_WATCH");
+        when(hashOps.get("rt:feat:customer-1", "updated_at")).thenReturn("1781938820");  // 约 580s 前
+
+        MetricQuery q = new MetricQuery("rt_state", "9100", "customer-1",
+                Map.of("feature", "rt_state", "maxStalenessSeconds", "30"), Map.of(), now, Map.of());
+
+        MetricValue v = handler.fetch(q);
+
+        assertThat(v.isError()).isTrue();
+        assertThat(v.errorCode()).isEqualTo("STREAM_FEATURE_STALE");
+    }
+
+    /** 配了 maxStalenessSeconds 但缺 updated_at → 按陈旧降级。 */
+    @Test
+    void fetch_missingUpdatedAt_returnsStaleError() {
+        when(hashOps.get("rt:feat:customer-1", "rt_state")).thenReturn("RT_WATCH");
+        when(hashOps.get("rt:feat:customer-1", "updated_at")).thenReturn(null);
+
+        MetricQuery q = new MetricQuery("rt_state", "9100", "customer-1",
+                Map.of("feature", "rt_state", "maxStalenessSeconds", "30"), Map.of(), Instant.now(), Map.of());
+
+        MetricValue v = handler.fetch(q);
+
+        assertThat(v.isError()).isTrue();
+        assertThat(v.errorCode()).isEqualTo("STREAM_FEATURE_STALE");
+    }
+
+    /** 未配 maxStalenessSeconds → 不校验新鲜度（不读 updated_at），直接返回。 */
+    @Test
+    void fetch_noStalenessConfig_skipsFreshnessCheck() {
+        when(hashOps.get("rt:feat:customer-1", "rt_state")).thenReturn("RT_WATCH");
+
+        MetricValue v = handler.fetch(query("customer-1", "rt_state"));
+
+        assertThat(v.isError()).isFalse();
+        assertThat(v.value()).isEqualTo("RT_WATCH");
+    }
 }
