@@ -38,6 +38,7 @@
         <!-- 辅助/工具：基准 + 样例 -->
         <module>rule-benchmark</module>
         <module>rule-samples</module>
+        <module>rule-stream-rt</module>
     </modules>
 
     <properties>
@@ -73,6 +74,10 @@
         <re2j.version>1.8</re2j.version>
         <!-- protobuf-java:覆盖 Spring Boot 4 BOM 的 4.26.1,dev.cel 0.13.0 gencode 需运行时 ≥ 4.33 -->
         <protobuf.version>4.35.1</protobuf.version>
+        <!-- Flink 2.1.3 流计算 -->
+        <flink.version>2.1.3</flink.version>
+        <flink-kafka-connector.version>5.0.0-2.1</flink-kafka-connector.version>
+        <jedis.version>5.2.0</jedis.version>
     </properties>
 
     <build>
@@ -402,6 +407,41 @@
                 <groupId>com.sstlfsj.rule</groupId>
                 <artifactId>rule-sdk-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+
+            <!-- Flink 流计算核心（rule-stream-rt provided） -->
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-streaming-java</artifactId>
+                <version>${flink.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-clients</artifactId>
+                <version>${flink.version}</version>
+            </dependency>
+            <!-- Flink Kafka connector 5.0.0-2.1（connector 独立版本，非 Flink 版本） -->
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-connector-kafka</artifactId>
+                <version>${flink-kafka-connector.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-connector-base</artifactId>
+                <version>${flink.version}</version>
+            </dependency>
+            <!-- flink-test-utils（rule-stream-rt test scope harness/MiniCluster） -->
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-test-utils</artifactId>
+                <version>${flink.version}</version>
+            </dependency>
+            <!-- Jedis Redis client -->
+            <dependency>
+                <groupId>redis.clients</groupId>
+                <artifactId>jedis</artifactId>
+                <version>${jedis.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
