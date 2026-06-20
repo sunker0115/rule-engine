@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -109,5 +110,43 @@ class XxlJobSchedulerAdapterTest {
         triggerUniversalHandler("5");
         assertThat(ran.get()).isZero();
         assertThat(fallbackCalled.get()).isEqualTo(5L);
+    }
+
+    @Test
+    void scheduleBroadcastRegistersConsumerAndTriggerSeeds() {
+        XxlJobAdminClient admin = mock(XxlJobAdminClient.class);
+        when(admin.ensureJobSeeded(eq("config-broadcast"), eq(XxlJobSchedulerAdapter.BROADCAST_HANDLER),
+                anyString(), eq("SHARDING_BROADCAST"), eq(""))).thenReturn(55L);
+        XxlJobSchedulerAdapter adapter = new XxlJobSchedulerAdapter(admin, mockProvider(id -> {}));
+
+        java.util.List<String> received = new java.util.ArrayList<>();
+        adapter.scheduleBroadcast("config-change", received::add);
+        adapter.triggerBroadcast("config-change", "scene:9100:fraud_check:true");
+
+        verify(admin).ensureJobSeeded(
+                "config-broadcast", XxlJobSchedulerAdapter.BROADCAST_HANDLER,
+                "0 0 0 1 1 ?", "SHARDING_BROADCAST", "");
+        verify(admin).triggerJob(55L, "scene:9100:fraud_check:true");
+    }
+
+    @Test
+    void broadcastHandlerDispatchesToConsumerByParam() throws Exception {
+        XxlJobAdminClient admin = mock(XxlJobAdminClient.class);
+        XxlJobSchedulerAdapter adapter = new XxlJobSchedulerAdapter(admin, mockProvider(id -> {}));
+
+        java.util.List<String> received = new java.util.ArrayList<>();
+        adapter.scheduleBroadcast("config-change", received::add);
+
+        // 模拟 XXL 派发广播 handler（param="scene:9100:fraud_check:true" 非 taskId）
+        XxlJobContext.setXxlJobContext(new XxlJobContext(0L, "scene:9100:fraud_check:true", 0L, 0L, "", 0, 1));
+        try {
+            IJobHandler handler = XxlJobExecutor.loadJobHandler(XxlJobSchedulerAdapter.BROADCAST_HANDLER);
+            assertThat(handler).isNotNull();
+            handler.execute();
+        } finally {
+            XxlJobContext.setXxlJobContext(null);
+        }
+
+        assertThat(received).containsExactly("scene:9100:fraud_check:true");
     }
 }

@@ -28,6 +28,9 @@ public class XxlJobSchedulerAdapter implements Scheduler {
     /** 全集群共用的通用 handler 名——所有实例注册同一名称。 */
     public static final String UNIVERSAL_HANDLER = "scheduled-task-runner";
 
+    /** 广播 handler 名（独立于单派发 UNIVERSAL_HANDLER，param 是业务 payload 非 taskId）。 */
+    public static final String BROADCAST_HANDLER = "config-broadcast-runner";
+
     private static final Logger log = LoggerFactory.getLogger(XxlJobSchedulerAdapter.class);
 
     private final XxlJobAdminClient adminClient;
@@ -35,6 +38,12 @@ public class XxlJobSchedulerAdapter implements Scheduler {
 
     /** taskId → Runnable，用于本实例已注册的任务快速执行。 */
     private final Map<Long, Runnable> runnables = new ConcurrentHashMap<>();
+
+    /** 广播 jobinfo 的 admin id（惰性 seed，首次 triggerBroadcast 时完成，触后复用）。 */
+    private volatile long broadcastJobId = -1;
+
+    /** code → 广播处理器。 */
+    private final Map<String, Consumer<String>> broadcastConsumers = new ConcurrentHashMap<>();
 
     /**
      * @param adminClient      admin 接入客户端
@@ -70,6 +79,23 @@ public class XxlJobSchedulerAdapter implements Scheduler {
                 }
             }
         });
+        // 注册广播 handler（独立 name，param 是业务 payload 非 taskId）
+        XxlJobExecutor.registryJobHandler(BROADCAST_HANDLER, new IJobHandler() {
+            @Override
+            public void execute() {
+                String param = XxlJobHelper.getJobParam();
+                if (param == null || param.isBlank()) {
+                    log.warn("config-broadcast-runner: 缺少 param，跳过");
+                    return;
+                }
+                Consumer<String> consumer = broadcastConsumers.get("config-change");
+                if (consumer != null) {
+                    consumer.accept(param);
+                } else {
+                    log.debug("config-broadcast-runner: 本实例未注册 config-change handler，跳过 param={}", param);
+                }
+            }
+        });
         log.info("xxl-job 通用 handler '{}' 注册完成", UNIVERSAL_HANDLER);
     }
 
@@ -97,12 +123,28 @@ public class XxlJobSchedulerAdapter implements Scheduler {
 
     @Override
     public void scheduleBroadcast(String code, Consumer<String> onEachNode) {
-        throw new UnsupportedOperationException("scheduleBroadcast 尚未实现，将在 Task 4 完成");
+        broadcastConsumers.put(code, onEachNode);
+        log.info("xxl-job 广播 handler 已注册 code={}", code);
     }
 
     @Override
     public void triggerBroadcast(String code, String param) {
-        throw new UnsupportedOperationException("triggerBroadcast 尚未实现，将在 Task 4 完成");
+        adminClient.triggerJob(ensureBroadcastJobSeeded(), param);
+    }
+
+    /** 惰性 seed 广播 jobinfo（首次 triggerBroadcast 时完成，避免构造期网络 I/O）。 */
+    private long ensureBroadcastJobSeeded() {
+        long id = this.broadcastJobId;
+        if (id > 0) return id;
+        synchronized (this) {
+            id = this.broadcastJobId;
+            if (id > 0) return id;
+            id = adminClient.ensureJobSeeded(
+                    "config-broadcast", BROADCAST_HANDLER, "0 0 0 1 1 ?", "SHARDING_BROADCAST", "");
+            this.broadcastJobId = id;
+            log.info("xxl-job 广播 handler '{}' seed 完成 broadcastJobId={}", BROADCAST_HANDLER, id);
+            return id;
+        }
     }
 
     /** 从 jobCode("scheduled-task:42") 解析 taskId。 */
