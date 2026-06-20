@@ -1,13 +1,13 @@
 package com.sstlfsj.rule.bridge;
 
+import com.sstlfsj.rule.bridge.model.RtDecision;
 import com.sstlfsj.rule.bridge.model.SuspectPayload;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,9 +26,14 @@ class SuspectConsumerTest {
         DecisionPublisher publisher = mock(DecisionPublisher.class);
         when(eval.evaluate(any())).thenReturn("HIGH");
 
+        org.mockito.ArgumentCaptor<RtDecision> captor = org.mockito.ArgumentCaptor.forClass(RtDecision.class);
         new SuspectConsumer(eval, publisher).onSuspect(payload());
 
-        verify(publisher).publish(eq("c1"), anyString());
+        verify(publisher).publish(captor.capture());
+        RtDecision sent = captor.getValue();
+        assertThat(sent.customerId()).isEqualTo("c1");
+        assertThat(sent.decision()).isEqualTo("HIGH");
+        assertThat(sent.suspectId()).isEqualTo("c1-100");
     }
 
     @Test
@@ -39,7 +44,7 @@ class SuspectConsumerTest {
 
         new SuspectConsumer(eval, publisher).onSuspect(payload());
 
-        verify(publisher, never()).publish(anyString(), anyString());
+        verify(publisher, never()).publish(any());
     }
 
     @Test
@@ -51,6 +56,6 @@ class SuspectConsumerTest {
         // 不抛出（offset 仍提交），且不发决策
         new SuspectConsumer(eval, publisher).onSuspect(payload());
 
-        verify(publisher, never()).publish(anyString(), anyString());
+        verify(publisher, never()).publish(any());
     }
 }

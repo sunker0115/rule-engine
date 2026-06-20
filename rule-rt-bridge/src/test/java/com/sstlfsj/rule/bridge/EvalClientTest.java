@@ -22,8 +22,14 @@ class EvalClientTest {
         server.expect(requestTo("http://rule-api/api/v1/rule/evaluate"))
                 .andExpect(method(org.springframework.http.HttpMethod.POST))
                 .andExpect(jsonPath("$.tenantCode").value("t1"))
+                .andExpect(jsonPath("$.sceneCode").value("trading.scene_b"))
+                .andExpect(jsonPath("$.eventType").value("trade.suspect"))
                 .andExpect(jsonPath("$.subjectId").value("c1"))
                 .andExpect(jsonPath("$.eventId").value("c1-100"))
+                // RT 特征进 payload（引擎取数的唯一载体）
+                .andExpect(jsonPath("$.payload.susScore").value(0.7))
+                .andExpect(jsonPath("$.payload.rtState").value("SHORT_ALPHA"))
+                .andExpect(jsonPath("$.payload.rtmMwr1s").value(9))
                 .andRespond(withSuccess(
                         "{\"success\":true,\"data\":{\"finalDecision\":{\"code\":\"HIGH\"}}}",
                         MediaType.APPLICATION_JSON));
