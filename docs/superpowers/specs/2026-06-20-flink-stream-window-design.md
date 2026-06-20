@@ -1,6 +1,6 @@
 # P2: Flink 流式计算 — 设计
 
-> 状态：设计稿（2026-06-20，rev2：滚动速率改微桶实现）。配套：`2026-06-17-realtime-streaming-risk-control-design.md` §四（rule-stream-rt）、P0 STREAM handler 已落地、P1 Redis 特征 schema + Scene B 已验证。
+> 状态：设计稿（2026-06-20，rev2：滚动速率改微桶实现）。配套：`2026-06-17-realtime-streaming-risk-control-design.md` §四（rule-rt-stream）、P0 STREAM handler 已落地、P1 Redis 特征 schema + Scene B 已验证。
 
 ## 1. 目标
 
@@ -9,7 +9,7 @@
 ## 2. 项目结构
 
 ```
-rule-stream-rt/                          ← 新 Maven 模块，非 Spring Boot
+rule-rt-stream/                          ← 新 Maven 模块，非 Spring Boot
 ├── pom.xml                             ← Flink 2.1.3 + Kafka connector 5.0.0-2.1 + Jedis + shade(fat jar)
 │                                          Jackson3 由根 pom(Spring Boot 4 BOM)统一管，不自锁版本
 └── src/main/java/com/sstlfsj/rule/stream/
@@ -49,7 +49,7 @@ rule-stream-rt/                          ← 新 Maven 模块，非 Spring Boot
 | jackson-databind | 由 Spring Boot 4 BOM 管理（tools.jackson 3.x） | Kafka JSON 反序列化 |
 
 **依赖原则：**
-- `rule-stream-rt` 只写坐标不写 version：Flink / Kafka connector / Jedis 由根 pom `dependencyManagement` 锁；Jackson3 由 `spring-boot-starter-parent`（4.x）BOM 锁（根 pom 无 jackson 自定义版本）。
+- `rule-rt-stream` 只写坐标不写 version：Flink / Kafka connector / Jedis 由根 pom `dependencyManagement` 锁；Jackson3 由 `spring-boot-starter-parent`（4.x）BOM 锁（根 pom 无 jackson 自定义版本）。
 - **窗口 API 用 `java.time.Duration`**：Flink 2.0 起已删除 `org.apache.flink.streaming.api.windowing.time.Time` 类（FLIP-335），window assigner 工厂方法只接受 `Duration`。
 - **Jackson 3**：`java.time` 支持已并入 `jackson-databind`，无需单独 `jackson-datatype-jsr310`，`Instant` 默认可序列化；`ObjectMapper` 走 `JsonMapper.builder().build()`。
 - 不是 Spring Boot 应用，`main()` 手写 Flink pipeline。
@@ -164,7 +164,7 @@ HSET rt:feat:{customerId} rtm_mwr_1s <value> rtm_mwr_10s <value> ... rt_state <v
 
 | 模块 | 文件 | 操作 |
 |---|---|---|
-| 根 pom | `pom.xml` | 修改：`<modules>` 加 `rule-stream-rt`；加 Flink 2.1.3 + flink-clients + Kafka connector 5.0.0-2.1 + Jedis 到 `dependencyManagement`（Jackson3 已由 Spring Boot 4 BOM 管，不加） |
-| rule-stream-rt | `pom.xml` | 新建：flink provided + flink-clients provided（local profile 提 compile）+ shade plugin；Jackson3/Jedis 只写坐标 |
-| rule-stream-rt | 14 个 Java 文件（§2 结构） | 新建 |
-| rule-stream-rt | `src/test/` 对应测试 | 新建 |
+| 根 pom | `pom.xml` | 修改：`<modules>` 加 `rule-rt-stream`；加 Flink 2.1.3 + flink-clients + Kafka connector 5.0.0-2.1 + Jedis 到 `dependencyManagement`（Jackson3 已由 Spring Boot 4 BOM 管，不加） |
+| rule-rt-stream | `pom.xml` | 新建：flink provided + flink-clients provided（local profile 提 compile）+ shade plugin；Jackson3/Jedis 只写坐标 |
+| rule-rt-stream | 14 个 Java 文件（§2 结构） | 新建 |
+| rule-rt-stream | `src/test/` 对应测试 | 新建 |

@@ -9,7 +9,7 @@
         <artifactId>rule-engine</artifactId>
         <version>${revision}</version>
     </parent>
-    <artifactId>rule-stream-rt</artifactId>
+    <artifactId>rule-rt-stream</artifactId>
 
     <dependencies>
         <!-- Flink 集群自带，provided 不打进 fat jar；本地用 -Plocal 提 compile -->

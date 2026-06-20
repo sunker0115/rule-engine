@@ -38,7 +38,7 @@
         <!-- 辅助/工具：基准 + 样例 -->
         <module>rule-benchmark</module>
         <module>rule-samples</module>
-        <module>rule-stream-rt</module>
+        <module>rule-rt-stream</module>
         <module>rule-rt-bridge</module>
     </modules>
 
@@ -410,7 +410,7 @@
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- Flink 流计算核心（rule-stream-rt provided） -->
+            <!-- Flink 流计算核心（rule-rt-stream provided） -->
             <dependency>
                 <groupId>org.apache.flink</groupId>
                 <artifactId>flink-streaming-java</artifactId>
@@ -432,7 +432,7 @@
                 <artifactId>flink-connector-base</artifactId>
                 <version>${flink.version}</version>
             </dependency>
-            <!-- flink-test-utils（rule-stream-rt test scope harness/MiniCluster） -->
+            <!-- flink-test-utils（rule-rt-stream test scope harness/MiniCluster） -->
             <dependency>
                 <groupId>org.apache.flink</groupId>
                 <artifactId>flink-test-utils</artifactId>

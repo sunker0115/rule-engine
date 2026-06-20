@@ -11,7 +11,7 @@
 ## 2. 新增组件
 
 ```
-rule-stream-rt（P2 已建，P3 改 pipeline）
+rule-rt-stream（P2 已建，P3 改 pipeline）
   ├── 新: feature/EventDedupFn.java       ← MapState<eventId,Boolean> + Duration.ofMinutes(10) TTL
   ├── 新: gate/Stage1GateFn.java          ← KeyedProcessFunction: susScore≥threshold → side output(OutputTag)
   ├── 新: gate/ThresholdConfig.java        ← 阈值常量（P4 改动态），类级常量，不抽接口
@@ -140,13 +140,13 @@ bridge 不依赖 `rule-eval-svc` / `rule-sdk` / `rule-api` 的 jar——纯 HTTP
 
 | 模块 | 文件 | 操作 |
 |---|---|---|
-| rule-stream-rt | `feature/EventDedupFn.java` | 新建 |
-| rule-stream-rt | `gate/Stage1GateFn.java` | 新建 |
-| rule-stream-rt | `gate/ThresholdConfig.java` | 新建 |
-| rule-stream-rt | `model/SuspectEvent.java` | 新建（已建） |
-| rule-stream-rt | `sink/SuspectEventSink.java` | 新建 |
-| rule-stream-rt | `TradeStreamJob.java` | 修改：dedup 前置 + Side Output + suspect sink |
-| rule-stream-rt | `src/test/` 对应测试 | 新建（EventDedupFn harness + Stage1GateFn harness） |
+| rule-rt-stream | `feature/EventDedupFn.java` | 新建 |
+| rule-rt-stream | `gate/Stage1GateFn.java` | 新建 |
+| rule-rt-stream | `gate/ThresholdConfig.java` | 新建 |
+| rule-rt-stream | `model/SuspectEvent.java` | 新建（已建） |
+| rule-rt-stream | `sink/SuspectEventSink.java` | 新建 |
+| rule-rt-stream | `TradeStreamJob.java` | 修改：dedup 前置 + Side Output + suspect sink |
+| rule-rt-stream | `src/test/` 对应测试 | 新建（EventDedupFn harness + Stage1GateFn harness） |
 | 根 pom | `pom.xml` | 修改：`<modules>` 加 `rule-rt-bridge`；spring-kafka 已由 BOM 管 |
 | rule-rt-bridge | `pom.xml` | 新建 |
 | rule-rt-bridge | `RtBridgeApp.java` | 新建 |
