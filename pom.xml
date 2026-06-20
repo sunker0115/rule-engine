@@ -39,6 +39,7 @@
         <module>rule-benchmark</module>
         <module>rule-samples</module>
         <module>rule-stream-rt</module>
+        <module>rule-rt-bridge</module>
     </modules>
 
     <properties>
