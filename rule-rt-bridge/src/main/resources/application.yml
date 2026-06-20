@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: rule-rt-bridge
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    consumer:
+      group-id: rule-rt-bridge
+      auto-offset-reset: earliest
+      # SuspectPayload 用 JSON 反序列化
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.value.default.type: com.sstlfsj.rule.bridge.model.SuspectPayload
+        spring.json.trusted.packages: "com.sstlfsj.rule.bridge.model"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      concurrency: 3
+
+bridge:
+  rule-api-base-url: ${RULE_API_BASE_URL:http://localhost:8080}
+  tenant-code: ${BRIDGE_TENANT_CODE:default}
+  scene-code: ${BRIDGE_SCENE_CODE:trading.scene_b}
+  event-type: trade.suspect
+  suspect-topic: rt.suspect.customer
+  decision-topic: rt.decision
