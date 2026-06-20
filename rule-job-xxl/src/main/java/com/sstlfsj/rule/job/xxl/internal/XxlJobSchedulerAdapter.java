@@ -31,6 +31,14 @@ public class XxlJobSchedulerAdapter implements Scheduler {
     /** 广播 handler 名（独立于单派发 UNIVERSAL_HANDLER，param 是业务 payload 非 taskId）。 */
     public static final String BROADCAST_HANDLER = "config-broadcast-runner";
 
+    /**
+     * XXL 适配器当前仅支持的广播 code。
+     *
+     * <p>XXL 广播经单条 jobinfo + 单 executorParam 槽触发，无处携带 code，故只支持一个广播用途。
+     * 注册/触发其它 code 会 fail-fast（而非静默丢失），将来需多 code 时把 code 编入 executorParam。
+     */
+    public static final String SUPPORTED_BROADCAST_CODE = "config-change";
+
     private static final Logger log = LoggerFactory.getLogger(XxlJobSchedulerAdapter.class);
 
     private final XxlJobAdminClient adminClient;
@@ -88,11 +96,12 @@ public class XxlJobSchedulerAdapter implements Scheduler {
                     log.warn("config-broadcast-runner: 缺少 param，跳过");
                     return;
                 }
-                Consumer<String> consumer = broadcastConsumers.get("config-change");
+                Consumer<String> consumer = broadcastConsumers.get(SUPPORTED_BROADCAST_CODE);
                 if (consumer != null) {
                     consumer.accept(param);
                 } else {
-                    log.debug("config-broadcast-runner: 本实例未注册 config-change handler，跳过 param={}", param);
+                    log.debug("config-broadcast-runner: 本实例未注册 {} handler，跳过 param={}",
+                            SUPPORTED_BROADCAST_CODE, param);
                 }
             }
         });
@@ -123,13 +132,23 @@ public class XxlJobSchedulerAdapter implements Scheduler {
 
     @Override
     public void scheduleBroadcast(String code, Consumer<String> onEachNode) {
+        requireSupportedCode(code);
         broadcastConsumers.put(code, onEachNode);
         log.info("xxl-job 广播 handler 已注册 code={}", code);
     }
 
     @Override
     public void triggerBroadcast(String code, String param) {
+        requireSupportedCode(code);
         adminClient.triggerJob(ensureBroadcastJobSeeded(), param);
+    }
+
+    /** XXL 适配器仅支持单广播 code，其它 code fail-fast（避免静默丢失，见 {@link #SUPPORTED_BROADCAST_CODE}）。 */
+    private static void requireSupportedCode(String code) {
+        if (!SUPPORTED_BROADCAST_CODE.equals(code)) {
+            throw new UnsupportedOperationException(
+                    "XXL adapter 当前仅支持广播 code=" + SUPPORTED_BROADCAST_CODE + "，收到=" + code);
+        }
     }
 
     /** 惰性 seed 广播 jobinfo（首次 triggerBroadcast 时完成，避免构造期网络 I/O）。 */

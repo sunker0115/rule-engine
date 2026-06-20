@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -148,5 +149,18 @@ class XxlJobSchedulerAdapterTest {
         }
 
         assertThat(received).containsExactly("scene:9100:fraud_check:true");
+    }
+
+    @Test
+    void unsupportedBroadcastCode_failsFast() {
+        XxlJobAdminClient admin = mock(XxlJobAdminClient.class);
+        XxlJobSchedulerAdapter adapter = new XxlJobSchedulerAdapter(admin, mockProvider(id -> {}));
+
+        // 非 config-change 的 code 立即报错，而非静默丢失（XXL 单广播 code 约束）
+        assertThatThrownBy(() -> adapter.scheduleBroadcast("cache-evict", p -> {}))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("config-change");
+        assertThatThrownBy(() -> adapter.triggerBroadcast("cache-evict", "x"))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 }
