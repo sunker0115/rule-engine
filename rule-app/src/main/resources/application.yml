@@ -69,6 +69,18 @@ engine:
     script:
       precompile:
         mode: LAZY   # EXPRESSION_SCRIPT 脚本编译加热: LAZY=首次评估编译(默认); EAGER=快照加载期(启动/发布热更/场景变更)预编译
+    # 调度后端:in-process(默认,进程内 ThreadPool 单机)| xxl-job(分布式,需起 XXL admin + 配 xxl.* 连接信息)
+    job:
+      scheduler: ${ENGINE_RULE_JOB_SCHEDULER:in-process}
+      # 仅 scheduler=xxl-job 时生效;敏感项(access-token/admin-password)走环境变量,不入库不硬编码
+      xxl:
+        admin-addresses: ${XXL_ADMIN_ADDRESSES:http://127.0.0.1:8088}
+        appname: ${XXL_APPNAME:rule-engine}
+        port: ${XXL_EXECUTOR_PORT:9999}
+        log-path: ${XXL_LOG_PATH:/tmp/xxl-job-logs}
+        access-token: ${XXL_ACCESS_TOKEN:default_token}
+        admin-username: ${XXL_ADMIN_USERNAME:admin}
+        admin-password: ${XXL_ADMIN_PASSWORD:123456}
     # 数据保留/清理:各模块 @Scheduled 按保留窗删超期运行/历史行(observability 清 trace 两表、eval-svc 清 session 两表)
     retention:
       enabled: true
@@ -76,7 +88,7 @@ engine:
       batch-size: 1000           # 单批删除上限(分批短事务)
       evaluation-session-days: 90
       node-trace-days: 30
-    # 规划中：告警阈值逻辑未实现
+    # 告警阈值:ObservabilityAlarmChecker @Scheduled 读 MeterRegistry,超阈值发 EvalAlarmEvent(打 WARN 日志)
     observability:
       eval-error-rate-threshold: 0.05
       trace-queue-full-threshold: 0.8

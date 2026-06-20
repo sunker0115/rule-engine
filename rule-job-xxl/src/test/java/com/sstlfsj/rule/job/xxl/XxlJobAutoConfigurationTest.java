@@ -2,7 +2,6 @@ package com.sstlfsj.rule.job.xxl;
 
 import com.sstlfsj.rule.job.xxl.internal.XxlJobSchedulerAdapter;
 import com.sstlfsj.rule.kernel.api.spi.scheduler.Scheduler;
-import com.sstlfsj.rule.kernel.api.spi.scheduler.TaskRunCallback;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -16,7 +15,6 @@ class XxlJobAutoConfigurationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withBean(ObjectMapper.class, () -> JsonMapper.builder().build())
-            .withBean(TaskRunCallback.class, () -> taskId -> {})
             .withConfiguration(AutoConfigurations.of(XxlJobAutoConfiguration.class));
 
     @Test

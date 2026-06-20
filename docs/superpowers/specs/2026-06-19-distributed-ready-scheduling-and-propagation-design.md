@@ -5,7 +5,7 @@
 ## 1. 问题
 
 - **job 子系统别扭**:`job_definition` 把"何时调度 / 执行什么 / 评估语义"焊死在一个聚合(`scene_code`/`event_type`/`subject_query` 全 NOT NULL),`JobRunner` 硬绑"合成 RuleEvent → 评估"。塞任何非评估的调度工作(如 B32 回灌)都是打补丁。
-- **散落的定时工作**:`SessionRetentionCleaner` / `TraceRetentionCleaner` / `ObservabilityAlarmChecker` 各自 `@Scheduled`,无统一单跑保障。
+- **维护型定时工作**（`SessionRetentionCleaner` / `TraceRetentionCleaner` / `ObservabilityAlarmChecker`）各自 `@Scheduled`：属基础设施维护，固定 cron、无启停/手动触发/执行记录等平台化管理需求，不入 `scheduled_task` 框架。
 - **分布式未就绪**:进程内 Spring 事件不跨实例;多实例下定时任务会每实例重复触发、配置变更不跨实例收敛(现仅靠 15s/30s 轮询)。
 
 ## 2. 核心判断:拆开纠缠的三层
@@ -34,7 +34,6 @@ rule-job-svc       框架核:scheduled_task 实体 + TaskExecutorRegistry(DI 收
                    + TriggerExecutor(注入 EvalService)+ ThreadPoolSchedulerAdapter(本地默认)
                    依赖 = kernel SPI + eval-svc;【不依赖具体调度器、不依赖各 handler 模块】
 rule-eval-svc      OUTCOME_INGESTION executor + config(+ OutcomeSource SPI);依赖 = kernel SPI
-rule-observability RETENTION(trace)/ALARM executor;依赖 = kernel SPI
 rule-job-xxl       XxlJobSchedulerAdapter(@ConditionalOnProperty=xxl-job);依赖 = kernel SPI + xxl-job-core
 rule-job-powerjob  (将来)PowerJobSchedulerAdapter(=power-job);依赖 = kernel SPI + powerjob-worker
 rule-app           组装:恒含 rule-job-svc + 各 handler 模块 + 选含一个后端适配器模块
@@ -91,9 +90,8 @@ XXL admin 按 cron 触发（集群内派一个实例）→ handler 跑 runById(t
 
 ```
 scheduled_task
-  id, tenant_id, code, name              -- SYSTEM 型 tenant_id 为系统占位
-  task_type   VARCHAR  -- TaskType: TRIGGER / OUTCOME_INGESTION / RETENTION / ALARM
-  scope       VARCHAR  -- TaskScope: TENANT / SYSTEM
+  id, tenant_id, code, name
+  task_type   VARCHAR  -- 开放类型名: TRIGGER / OUTCOME_INGESTION（与 TaskExecutor.type() 对应）
   cron        VARCHAR  -- 交调度器
   config      JSON     -- sealed TaskConfig(typed,静态定义,见 4.2)
   run_cursor  VARCHAR  -- 增量任务运行游标(state-not-config;OUTCOME_INGESTION 存 ISO-8601 watermark,其余 null)
@@ -102,27 +100,21 @@ scheduled_task
   UNIQUE(tenant_id, code)
 ```
 
-**`task_type` 是开放 string,不是中心枚举(去中心化,对齐 XXL `@XxlJob` name / Airflow operator type)**:每个 executor 自声明类型名,框架核不持有全集枚举。`scope` 区分 TENANT(API/注解配置)/ SYSTEM(启动 seed,cron 取 properties)。
+**`task_type` 是开放 string,去中心化**:每个 executor 自声明类型名,框架核不持有全集。
 
-现有/规划类型(各自落**拥有该领域的模块**,见 §4.3):
+现有类型:
 
-| task_type | scope | 落点模块 | 说明 |
-|---|---|---|---|
-| `TRIGGER` | TENANT | rule-job-svc | 合成 RuleEvent → 评估(现 `JobRunner` 迁来) |
-| `OUTCOME_INGESTION` | TENANT | **rule-eval-svc** | `OutcomeSource` SPI 增量拉标签 → upsert;watermark 写 `run_cursor`(已实装,去中心化后从 job-svc 迁回 eval-svc) |
-| `RETENTION` | SYSTEM | eval-svc / observability | 清旧 session/trace(收编 `SessionRetentionCleaner`/`TraceRetentionCleaner`) |
-| `ALARM` | SYSTEM | observability | 告警巡检(收编 `ObservabilityAlarmChecker`) |
-
-**为什么开放 string + 去中心化(而非中心 enum)**:task 类型本质是**跨模块开放扩展点**(模块各自加类型),不是封闭集——故用开放 string(数据类型纪律的 enum 规则针对封闭集;此处开放)。中心 `TaskType` enum 会让 job-svc 持有全集 → 又把各模块类型拉回 job-svc。去中心化后:**加新类型 = 在拥有它的模块加一个 executor bean,job-svc 零改、零新依赖**(§4.3 DI 收集)。
-
-**为什么维护型也收进框架(修订早先"@Scheduled+ShedLock 分开")**:XXL-first 后维护型反正要上调度后端拿集群单跑,"留 @Scheduled + 引 ShedLock"没意义;统一成一个调度模型(一表/一 dispatch/一执行记录/一控制台,SYSTEM/TENANT 仅 scope 别),单跑由后端白送,**ShedLock 不再需要**(§5)。
+| task_type | 落点模块 | 说明 |
+|---|---|---|
+| `TRIGGER` | rule-job-svc | 合成 RuleEvent → 评估 |
+| `OUTCOME_INGESTION` | **rule-eval-svc** | 增量拉标签 → upsert;watermark 写 `run_cursor` |
 
 ### 4.2 config 去中心化:每 handler 自带 typed record,框架核存 JSON(开源 hybrid)
 
 **不设中心 sealed `TaskConfig` 联合体**(它会把所有 config + 其引用的模块类型锁进 job-svc,正是依赖集中的根因)。改用开源调度器的 hybrid([搜索结论](https://airflow.apache.org/docs/apache-airflow/stable/howto/custom-operator.html):按 name 注册 + 派发时 JSON 反序列化成 typed):
 
 - **`scheduled_task.config` 列存原始 JSON**(框架核视为不透明 payload——generic infra 无法为跨模块全部 task 持单一类型,数据类型纪律的"确实无定义"例外)。
-- **每个 task 类型的 config 是各自模块里的 typed record**(`TriggerConfig` 在 job-svc、`OutcomeIngestionConfig`+`SqlOutcomeSourceConfig` 在 eval-svc、将来 `RetentionConfig` 在 eval-svc/observability),**不实现任何共享 sealed 基类**——各自独立,无中心耦合。
+- **每个 task 类型的 config 是各自模块里的 typed record**(`TriggerConfig` 在 job-svc、`OutcomeIngestionConfig`+`SqlOutcomeSourceConfig` 在 eval-svc),**不实现任何共享 sealed 基类**——各自独立,无中心耦合。
 - **typed 在派发时恢复**:registry 按 executor 的 `configType()` 把 config JSON 反序列化成该 handler 的 typed record(§4.3)。**每个 handler 内仍是 typed record**(数据类型纪律在 handler 边界内满足),只有框架核边界碰 JSON。
 - **run_cursor 仍独立列**(state-not-config,不变)。
 
@@ -152,7 +144,7 @@ cursor 经 ctx 入、`newCursor` 经 result 出 —— **executor 不碰 schedul
   → executor.execute(ctx, C) → TaskRunResult → 写 scheduled_task_execution
 ```
 
-**加新调度工作 = 在拥有该领域的模块加一个 `TaskExecutor` bean(声明 type + configType + 一个 config record),job-svc 零改、零新依赖**。executor 落点:`TRIGGER` 在 job-svc(注入 EvalService);`OUTCOME_INGESTION` 在 **eval-svc**(注入 OutcomeIngestionService,去中心化后从 job-svc 迁回);`RETENTION`/`ALARM` 在 eval-svc/observability。各只依赖 kernel SPI,Spring 收集进 job-svc 的 registry。
+**加新调度工作 = 在拥有该领域的模块加一个 `TaskExecutor` bean(声明 type + configType + 一个 config record),job-svc 零改、零新依赖**。executor 落点:`TRIGGER` 在 job-svc(注入 EvalService);`OUTCOME_INGESTION` 在 eval-svc(注入 OutcomeIngestionService)。各只依赖 kernel SPI,Spring 收集进 job-svc 的 registry。
 
 ### 4.4 统一执行记录
 
@@ -175,19 +167,18 @@ cursor 经 ctx 入、`newCursor` 经 result 出 —— **executor 不碰 schedul
 
 **迁移方式**：greenfield 可重建——新 Flyway 建 `scheduled_task`/`scheduled_task_execution`，drop `job_definition`/`job_execution`（无生产数据需保留）。
 
-## 5. 系统固定维护:收进框架(SYSTEM scope),不要 ShedLock
+## 5. 系统固定维护:保留 @Scheduled,不进框架
 
-**决策(已随 XXL-first 修订;取代早先"@Scheduled + ShedLock 分开"方案)**:RETENTION(session/trace 清理)、ALARM(告警巡检)收进 ScheduledTask 框架,作 **SYSTEM scope** task type:
+**最终决策**:RETENTION(session/trace 清理)、ALARM(告警巡检)**维持现状 `@Scheduled`，不进 `scheduled_task` 框架**。
 
-- 启动期 seed 一行 SYSTEM `scheduled_task`(tenant_id=系统占位,cron 取 properties 如 `engine.rule.retention.cron`),经 `Scheduler.schedule` 注册;executor 落各自模块(RETENTION 在 eval-svc/observability、ALARM 在 observability),实现 `TaskExecutor` SPI、Spring 收集。
-- **集群单跑由调度后端白送**:本地 ThreadPool=单机天然单跑;XXL/PowerJob=中心派发单实例。**不再需要 ShedLock**。
-- 收编原散落的 `SessionRetentionCleaner`/`TraceRetentionCleaner`/`ObservabilityAlarmChecker` 三处 `@Scheduled`,统一成框架内 task。
+**理由**:维护型任务与 TRIGGER/OUTCOME_INGESTION 本质不同:
 
-**为什么从"分开"改成"收进"**:早先按业界"别为单跑上重型调度器"留 `@Scheduled`+ShedLock。**但定了 XXL-first 后,维护型反正要上调度后端拿单跑**,ShedLock 的存在理由(只为 @Scheduled 单跑、免上调度器)就没了。此时"框架外再有一摊裸 @Scheduled/裸 XXL job"是两个调度模型并存——不如**统一成一个**(一表/一 dispatch/一执行记录/一控制台,SYSTEM/TENANT 仅 scope 别)。代价:SYSTEM 型多一行启动 seed(轻),换来单一模型 + 统一观测 + 省掉 ShedLock 依赖。
+- 固定 cron、固定逻辑，不随业务变化创建/启停/删除
+- 无需平台化管理（无人需要手动触发"清理过期 session"、前端看执行记录是噪音）
+- 配置经 `engine.rule.retention.*` / `engine.rule.observability.*` 即可，application.yml 是正确编排层
+- 收进框架需 seed 逻辑 + `ScheduledTask` 行 + 按 module 拆分 executor，获得的唯一好处是"统一执行记录"——这对维护型是过度设计
 
-**与传播层不混**:这里收进框架的是 **cron 定时**维护;§6 的 config→eval 广播是**事件驱动广播**(传播层),不是 scheduled_task。
-
-**为什么不统一进框架**：给固定常量套 DB-config + seed/迁移仪式 = 过度设计，divorce 了调度与逻辑；平台的动态 CRUD/控制台价值对固定维护任务是浪费。代价：观测分两处（平台 console 看业务 task / 监控日志看维护任务），可接受。
+**代价（已认）**:观测分两处——业务 task 在平台 console / 维护 task 在监控日志。可接受。
 
 ## 6. 传播层：按语义分 A/B/C，每类一种 transport
 
@@ -211,7 +202,7 @@ cursor 经 ctx 入、`newCursor` 经 result 出 —— **executor 不碰 schedul
 ## 7. 实现节奏
 
 - **已实装(track #1/#2)**：`ScheduledTask` + `TaskExecutor` SPI + 统一执行记录 + 本地 ThreadPool 默认 + XXL opt-in 适配器;TRIGGER/OUTCOME_INGESTION 两个 executor。
-- **现在该做(track #3 近期)**:`Scheduler` SPI 扩 `triggerOnce`/`scheduleBroadcast`/`triggerBroadcast`(三后端实现,本地退化单机)+ 维护型收进框架(SYSTEM scope RETENTION/ALARM,删 ShedLock 计划)。
+- **将来**:`Scheduler` SPI 扩 `triggerOnce`/`scheduleBroadcast`/`triggerBroadcast`(三后端实现,本地退化单机)。
 - **真上多实例再填**:config→eval 广播的 push 触发接线(经 `triggerBroadcast`)+ Outbox(C 类 durable)。抽象立对,填实现不返工。
 
 ## 8. 分解为 track（各自 plan）
@@ -220,7 +211,7 @@ cursor 经 ctx 入、`newCursor` 经 result 出 —— **executor 不碰 schedul
 |---|---|---|---|---|
 | 1 | `scheduled-task-framework` | §3+§4:`ScheduledTask`/executor SPI + 调度 + 本地默认/XXL opt-in + 删/迁 job_definition | 无 | **已实装** |
 | 2 | `outcome-ingestion` | §4 `OUTCOME_INGESTION` executor + OutcomeSource SPI + run_cursor | #1 | **已实装** |
-| 3 | `cross-instance-propagation` | §3.0.1 SPI 扩 broadcast/trigger + §5 维护型收进框架(删 ShedLock)+ §6 广播经调度后端 + (Outbox 缝) | 正交 | 近期 SPI+维护统一;广播/Outbox 多实例时填 |
+| 3 | `cross-instance-propagation` | §3.0.1 SPI 扩 broadcast/trigger + §6 广播经调度后端 + (Outbox 缝) | 正交 | 多实例时填 |
 | 4 | `b32-frontend` | 决策效果报表页 + 手工回灌表单 + job→scheduled-task 管理页 | 仅依赖已落地 API | 独立，可并行 |
 
 ## 9. 开源参照

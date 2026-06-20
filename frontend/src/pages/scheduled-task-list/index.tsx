@@ -85,7 +85,7 @@ export default function ScheduledTaskList() {
 
   const tenantId = tenantFilter ?? currentId ?? 0;
 
-  // 已知任务类型 label，未知类型兜底显示原始串（RETENTION/ALARM 等新类型无需改前端）
+  // 已知任务类型 label，未知类型兜底显示原始串
   const taskTypeLabels = useMemo<Record<string, string>>(() => ({
     TRIGGER: t('type.trigger'),
     OUTCOME_INGESTION: t('type.ingestion'),

@@ -7,6 +7,7 @@ import com.xxl.job.core.executor.XxlJobExecutor;
 import com.xxl.job.core.handler.IJobHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,14 +30,18 @@ public class XxlJobSchedulerAdapter implements Scheduler {
     private static final Logger log = LoggerFactory.getLogger(XxlJobSchedulerAdapter.class);
 
     private final XxlJobAdminClient adminClient;
-    private final TaskRunCallback fallbackCallback;
+    private final ObjectProvider<TaskRunCallback> callbackProvider;
 
     /** taskId → Runnable，用于本实例已注册的任务快速执行。 */
     private final Map<Long, Runnable> runnables = new ConcurrentHashMap<>();
 
-    public XxlJobSchedulerAdapter(XxlJobAdminClient adminClient, TaskRunCallback fallbackCallback) {
+    /**
+     * @param adminClient      admin 接入客户端
+     * @param callbackProvider TaskRunCallback 惰性 provider（惰性解析断构造期 bean 循环依赖）
+     */
+    public XxlJobSchedulerAdapter(XxlJobAdminClient adminClient, ObjectProvider<TaskRunCallback> callbackProvider) {
         this.adminClient = adminClient;
-        this.fallbackCallback = fallbackCallback;
+        this.callbackProvider = callbackProvider;
         // 注册通用 handler（一次即可，各实例相同 name）
         XxlJobExecutor.registryJobHandler(UNIVERSAL_HANDLER, new IJobHandler() {
             @Override
@@ -58,8 +63,9 @@ public class XxlJobSchedulerAdapter implements Scheduler {
                     r.run();
                 } else {
                     // 降级：本实例未缓存该任务（如 API 创建后其他实例尚未 register）
+                    // ObjectProvider 惰性解析，不形成构造期 bean 循环依赖
                     log.debug("scheduled-task-runner: taskId={} 本实例无缓存，降级调 callback", taskId);
-                    fallbackCallback.run(taskId);
+                    callbackProvider.getObject().run(taskId);
                 }
             }
         });
