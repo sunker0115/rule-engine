@@ -3,10 +3,13 @@ package com.sstlfsj.rule.job.internal.scheduler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,5 +48,18 @@ class ThreadPoolSchedulerAdapterTest {
         CountDownLatch secondRan = new CountDownLatch(1);
         adapter.schedule("c3", "* * * * * *", secondRan::countDown);
         assertTrue(secondRan.await(3, TimeUnit.SECONDS), "replacement task should fire");
+    }
+
+    @Test
+    void broadcast_localDirectInvokeWithParam() {
+        List<String> received = new ArrayList<>();
+        adapter.scheduleBroadcast("config-change", received::add);
+        adapter.triggerBroadcast("config-change", "scene:9100:fraud_check:true");
+        assertThat(received).containsExactly("scene:9100:fraud_check:true");
+    }
+
+    @Test
+    void broadcast_triggerUnknownCode_noop() {
+        adapter.triggerBroadcast("never-registered", "x");
     }
 }

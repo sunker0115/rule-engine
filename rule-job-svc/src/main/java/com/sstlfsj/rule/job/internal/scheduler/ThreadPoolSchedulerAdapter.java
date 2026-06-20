@@ -9,6 +9,7 @@ import org.springframework.scheduling.support.CronTrigger;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
+import java.util.function.Consumer;
 
 /**
  * 进程内 Scheduler 实现：基于 {@link ThreadPoolTaskScheduler} + {@link CronTrigger}。
@@ -30,6 +31,8 @@ public class ThreadPoolSchedulerAdapter implements Scheduler, AutoCloseable {
         this.taskScheduler.initialize();
     }
 
+    private final Map<String, Consumer<String>> broadcastHandlers = new ConcurrentHashMap<>();
+
     @Override
     public synchronized void schedule(String jobCode, String cronExpression, Runnable task) {
         // 重复注册同一 jobCode 时先撤销旧触发，保证 cron 变更即时生效
@@ -45,6 +48,20 @@ public class ThreadPoolSchedulerAdapter implements Scheduler, AutoCloseable {
         if (future != null) {
             future.cancel(false);
             log.info("Job 已撤销调度 jobCode={}", jobCode);
+        }
+    }
+
+    @Override
+    public void scheduleBroadcast(String code, Consumer<String> onEachNode) {
+        broadcastHandlers.put(code, onEachNode);
+        log.info("广播 handler 已注册 code={}", code);
+    }
+
+    @Override
+    public void triggerBroadcast(String code, String param) {
+        Consumer<String> handler = broadcastHandlers.get(code);
+        if (handler != null) {
+            handler.accept(param);
         }
     }
 
