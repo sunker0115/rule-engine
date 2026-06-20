@@ -26,9 +26,8 @@ rule-stream-rt/                          ← 新 Maven 模块，非 Spring Boot
     │   ├── PerSecondCountFn.java       ← 1s tumbling 增量计数（AggregateFunction，仅存累加器）
     │   ├── SecondCountTagFn.java       ← ProcessWindowFunction：给每秒计数补 customerId + 窗口结束时间
     │   ├── RollingWindowState.java     ← 纯函数：按秒计数 → 6 个 size 滚动和（无 Flink 依赖，可单测）
-    │   ├── RollingCountFn.java         ← KeyedProcessFunction：环形缓冲(最近300秒)，每秒 emit 6 个 RTM PartialFeature
-    │   ├── AmountSumAggregateFn.java   ← RT-D 日累计金额（AggregateFunction）
-    │   ├── AmountTagFn.java            ← ProcessWindowFunction：补 customerId + 窗口时间 → PartialFeature
+    │   ├── RollingCountFn.java         ← KeyedProcessFunction：环形缓冲(最近300秒) + event-time timer 驱动回落
+    │   ├── DailyAmountFn.java          ← RT-D KeyedProcessFunction：每事件 emit 当日累计，跨日重置
     │   ├── RtbProcessFn.java           ← RT-B 5min 滑动窗口 API 通道占比 → PartialFeature
     │   ├── FeatureSnapshotMerger.java  ← 合并 RT-M/RT-D/RT-B 三流（KeyedProcessFunction + ValueState + event-time timer）
     │   └── SusScoreFn.java             ← sus_score 加权计算（纯函数）
@@ -71,13 +70,17 @@ public record TradeEvent(
 
 ## 5. 窗口定义与实现策略
 
-所有计算基于 `keyBy(customerId)` 的 keyed state，event-time + watermark（`forBoundedOutOfOrderness(Duration.ofSeconds(5))` + `withIdleness(Duration.ofMinutes(1))`）。
+所有计算基于 `keyBy(customerId)` 的 keyed state，event-time + watermark（`forBoundedOutOfOrderness(Duration.ofSeconds(5))` + `withIdleness(Duration.ofSeconds(10))`，本地 e2e 用 10s 让空分区快速让位；prod 可调大）。
 
 | 特征 | 产出字段 | 含义 | 实现 | 滚动粒度 |
 |---|---|---|---|---|
-| RT-M ×6 | `rtm_mwr_1s/10s/30s/1m/2m/5m` | 过去 N 秒笔数（速率） | 1s 微桶 + RollingCountFn 环形缓冲 | 每秒（含回落） |
-| RT-D | `rtd_amount_sum` | 日累计交易额 | `TumblingEventTimeWindows(1d)` + `AmountSumAggregateFn` | 日 |
+| RT-M ×6 | `rtm_mwr_1s/10s/30s/1m/2m/5m` | 过去 N 秒笔数（速率） | 1s 微桶 + RollingCountFn 环形缓冲 + event-time timer | 每秒（含回落） |
+| RT-D | `rtd_amount_sum` | UTC 日累计交易额（日内实时） | `DailyAmountFn`（KeyedProcessFunction，每事件 emit 当日累计） | 每事件 |
 | RT-B | `fast_trade_ratio` | 5min 内 API 通道占比 | `SlidingEventTimeWindows(5m, 30s)` + `RtbProcessFn` | 30s |
+
+> **RT-M 回落由 timer 驱动（关键）**：`RollingCountFn` 收到每秒计数后注册下一秒 event-time timer。即使此后无新交易，watermark 推进也逐秒触发重算——老秒滑出窗口即归零，避免高频后卡在峰值直到 TTL。state 全部滑出后 emit 一次全 0 并停止续约。**仅靠 1s 窗口触发不足以回落**（无交易则窗口不 fire），必须 timer。
+>
+> **RT-D 不用日 tumbling 窗口**：日窗口一天只在窗口结束（次日 00:00）emit 一次，日内 Redis 值全天为 0，且窗口 end 作为 eventTime 会顶掉 merger 去抖 timer。改 `DailyAmountFn` 每笔交易 emit 当前 UTC 日累计（eventTime=事件时刻，与 RT-M 量级一致），跨日重置。
 
 **RT-M 微桶滚动 pipeline**：
 

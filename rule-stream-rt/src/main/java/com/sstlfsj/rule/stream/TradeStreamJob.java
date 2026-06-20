@@ -56,10 +56,8 @@ public class TradeStreamJob {
                 .keyBy((SecondCount sc) -> sc.customerId)
                 .process(new RollingCountFn());
 
-        // RT-D：自然日累计金额
-        DataStream<PartialFeature> rtd = keyed
-                .window(TumblingEventTimeWindows.of(Duration.ofDays(1)))
-                .aggregate(new AmountSumAggregateFn(), new AmountTagFn());
+        // RT-D：UTC 自然日累计金额，每笔交易即 emit 当前累计（日内实时）
+        DataStream<PartialFeature> rtd = keyed.process(new DailyAmountFn());
 
         // RT-B：5min/30s 滑动 API 通道占比
         DataStream<PartialFeature> rtb = keyed
