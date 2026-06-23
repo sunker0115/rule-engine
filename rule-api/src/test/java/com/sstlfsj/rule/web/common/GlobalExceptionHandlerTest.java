@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.web.common;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -17,6 +18,7 @@ import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -98,7 +100,10 @@ class GlobalExceptionHandlerTest {
     @Test
     void noResourceFound_returns404_withErrorCode() {
         NoResourceFoundException ex = new NoResourceFoundException(HttpMethod.GET, "/api/v1/rules", "/api/v1/rules");
-        ApiResponse<Void> resp = new GlobalExceptionHandler().handleNotFound(ex);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getRequestURI()).thenReturn("/api/v1/rules");
+        ApiResponse<Void> resp = new GlobalExceptionHandler().handleNotFound(ex, request);
         assertThat(resp.success()).isFalse();
         assertThat(resp.errorCode()).isEqualTo("NOT_FOUND");
     }

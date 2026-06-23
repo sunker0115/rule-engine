@@ -24,31 +24,37 @@ public class GlobalExceptionHandler {
     /** 参数校验失败（@Valid 触发）→ 400。 */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiResponse<Void> handleValidation(MethodArgumentNotValidException ex) {
+    public ApiResponse<Void> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         String msg = ex.getBindingResult().getFieldErrors().stream()
                 .map(e -> e.getField() + ": " + e.getDefaultMessage())
                 .findFirst().orElse("请求参数无效");
+        log.warn("参数校验失败 [{} {}]: {}", request.getMethod(), request.getRequestURI(), msg);
         return ApiResponse.error("INVALID_ARGUMENT", msg);
     }
 
     /** 缺少必填 @RequestParam → 400。 */
     @ExceptionHandler(MissingServletRequestParameterException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiResponse<Void> handleMissingParam(MissingServletRequestParameterException ex) {
+    public ApiResponse<Void> handleMissingParam(MissingServletRequestParameterException ex, HttpServletRequest request) {
+        log.warn("缺少必填参数 [{} {}]: {}", request.getMethod(), request.getRequestURI(), ex.getParameterName());
         return ApiResponse.error("INVALID_ARGUMENT", ex.getParameterName() + " 参数必填");
     }
 
     /** 路径/查询参数类型转换失败（如 Long tenantId/id 收到非数字）→ 400，而非兜底 500。 */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiResponse<Void> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+    public ApiResponse<Void> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        log.warn("参数类型不匹配 [{} {}]: {}={}", request.getMethod(), request.getRequestURI(),
+                ex.getName(), ex.getValue());
         return ApiResponse.error("INVALID_ARGUMENT",
                 "参数 " + ex.getName() + " 类型不合法: " + ex.getValue());
     }
 
     /** ResponseStatusException → 透传 HTTP 状态码，不进入兜底 500。 */
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ApiResponse<Void>> handleResponseStatus(ResponseStatusException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatus(ResponseStatusException ex, HttpServletRequest request) {
+        log.warn("响应状态异常 [{} {}]: {} {}", request.getMethod(), request.getRequestURI(),
+                ex.getStatusCode().value(), ex.getReason());
         return ResponseEntity.status(ex.getStatusCode())
                 .body(ApiResponse.error(ex.getStatusCode().value() == 404 ? "NOT_FOUND" : "INVALID_ARGUMENT",
                         ex.getReason()));
@@ -57,21 +63,24 @@ public class GlobalExceptionHandler {
     /** 业务层主动抛出的非法参数 → 400。 */
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiResponse<Void> handleIllegalArgument(IllegalArgumentException ex) {
+    public ApiResponse<Void> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+        log.warn("非法参数 [{} {}]: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
         return ApiResponse.error("INVALID_ARGUMENT", ex.getMessage());
     }
 
     /** 无映射路径（含静态资源未命中）→ 404，而非被兜底成 500。 */
     @ExceptionHandler(NoResourceFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ApiResponse<Void> handleNotFound(NoResourceFoundException ex) {
+    public ApiResponse<Void> handleNotFound(NoResourceFoundException ex, HttpServletRequest request) {
+        log.warn("接口不存在 [{} {}]", request.getMethod(), request.getRequestURI());
         return ApiResponse.error("NOT_FOUND", "接口不存在: " + ex.getResourcePath());
     }
 
     /** 请求体反序列化失败（typed 绑定失败：非法 AST type、结构不符等）→ 400。 */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiResponse<Void> handleNotReadable(HttpMessageNotReadableException ex) {
+    public ApiResponse<Void> handleNotReadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        log.warn("请求体不可读 [{} {}]", request.getMethod(), request.getRequestURI());
         return ApiResponse.error("INVALID_ARGUMENT", "请求体格式错误或字段类型不符");
     }
 
