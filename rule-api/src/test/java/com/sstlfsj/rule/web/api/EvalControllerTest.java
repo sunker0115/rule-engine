@@ -196,7 +196,7 @@ class EvalControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(noTenantCode))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
         verifyNoInteractions(evalService);
     }
 }

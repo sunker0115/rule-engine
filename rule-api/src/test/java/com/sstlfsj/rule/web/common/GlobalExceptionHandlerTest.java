@@ -3,7 +3,10 @@ package com.sstlfsj.rule.web.common;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -23,7 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** 验证 GlobalExceptionHandler 对常见异常的 HTTP 响应映射。 */
+/** 验证 GlobalExceptionHandler 对常见异常的 ProblemDetail (RFC 9457) 响应映射。 */
 class GlobalExceptionHandlerTest {
 
     private MockMvc mockMvc;
@@ -42,27 +45,36 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/test/typed-param")
         public String typedParam(@RequestParam Long tenantId) { return String.valueOf(tenantId); }
+
+        @GetMapping("/test/api-exception")
+        public String apiException() {
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "IMPORT_CONFLICT", "import conflict");
+        }
     }
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new StubController())
+                .setMessageConverters(TestMessageConverters.problemDetailConverter())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
 
     @Test
-    void illegalArgument_returns400_withErrorCode() throws Exception {
+    void illegalArgument_returns400_withProblemDetail() throws Exception {
         mockMvc.perform(get("/test/illegal").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("非法参数"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.detail").value("参数非法"))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"))
-                .andExpect(jsonPath("$.message").value("参数非法"));
+                .andExpect(jsonPath("$.instance").value("/test/illegal"));
     }
 
     @Test
-    void runtimeException_returns500_withErrorCode_andLogsRequestPath() throws Exception {
+    void runtimeException_returns500_withProblemDetail_andLogsRequestPath() throws Exception {
         ch.qos.logback.classic.Logger logger =
                 (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -71,10 +83,11 @@ class GlobalExceptionHandlerTest {
 
         mockMvc.perform(get("/test/runtime").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("服务内部错误"))
+                .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.errorCode").value("INTERNAL_ERROR"));
 
-        // 兜底日志应带请求方法与路径，便于定位
         assertThat(appender.list)
                 .anyMatch(e -> e.getFormattedMessage().contains("/test/runtime"));
     }
@@ -83,33 +96,47 @@ class GlobalExceptionHandlerTest {
     void missingRequiredParam_returns400() throws Exception {
         mockMvc.perform(get("/test/required-param").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 
     @Test
     void typeMismatchParam_returns400_notInternalError() throws Exception {
-        // 非数字 tenantId 绑定到 Long 参数失败 → 400 INVALID_ARGUMENT，而非兜底 500
         mockMvc.perform(get("/test/typed-param").param("tenantId", "acme").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"))
-                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("tenantId")));
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("tenantId")));
     }
 
     @Test
-    void noResourceFound_returns404_withErrorCode() {
+    void noResourceFound_returns404_withProblemDetail() {
         NoResourceFoundException ex = new NoResourceFoundException(HttpMethod.GET, "/api/v1/rules", "/api/v1/rules");
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getMethod()).thenReturn("GET");
         when(request.getRequestURI()).thenReturn("/api/v1/rules");
-        ApiResponse<Void> resp = new GlobalExceptionHandler().handleNotFound(ex, request);
-        assertThat(resp.success()).isFalse();
-        assertThat(resp.errorCode()).isEqualTo("NOT_FOUND");
+        ResponseEntity<ProblemDetail> resp = new GlobalExceptionHandler().handleNotFound(ex, request);
+        assertThat(resp.getStatusCode().value()).isEqualTo(404);
+        ProblemDetail pd = resp.getBody();
+        assertThat(pd).isNotNull();
+        assertThat(pd.getProperties().get("errorCode")).isEqualTo("NOT_FOUND");
+        assertThat(pd.getTitle()).isEqualTo("接口不存在");
     }
 
     @Test
-    void malformedBody_returns400_notReadable() throws Exception {
+    void apiException_returnsStatusAndErrorCode_problemDetail() throws Exception {
+        mockMvc.perform(get("/test/api-exception").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("业务错误"))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.detail").value("import conflict"))
+                .andExpect(jsonPath("$.errorCode").value("IMPORT_CONFLICT"))
+                .andExpect(jsonPath("$.instance").value("/test/api-exception"));
+    }
+
+    @Test
+    void malformedBody_returns400_problemDetail() throws Exception {
         MockMvc evalMvc = MockMvcBuilders
                 .standaloneSetup(new EvalController(mock(EvalService.class),
                         mock(com.sstlfsj.rule.config.api.service.TenantQueryService.class),
@@ -121,7 +148,7 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(badJson))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 }

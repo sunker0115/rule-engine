@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
 import com.sstlfsj.rule.config.internal.bundle.RuleImportService.ImportConflictException;
+import com.sstlfsj.rule.web.common.ApiException;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -92,8 +93,8 @@ public class RuleBundleController {
             return ResponseEntity.ok(ApiResponse.ok(report));
         } catch (ImportConflictException e) {
             // ABORT 策略有冲突：422 + conflicts 详情
-            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                    .body(ApiResponse.error("IMPORT_CONFLICT", "Bundle import aborted: conflicts found"));
+            throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT,
+                    "IMPORT_CONFLICT", "Bundle import aborted: conflicts found");
         }
     }
 }
