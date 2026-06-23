@@ -1,5 +1,7 @@
 package com.sstlfsj.rule.web.admin;
 
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.json.ProblemDetailJacksonMixin;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.config.api.service.MetadataService;
 import com.sstlfsj.rule.config.api.service.MetricWriteService;
@@ -36,7 +38,9 @@ class MetricControllerTest {
         service = mock(MetricWriteService.class);
         metadataService = mock(MetadataService.class);
         testService = mock(MetricFetchTestService.class);
-        JsonMapper mapper = JsonMapper.builder().build();
+        JsonMapper mapper = JsonMapper.builder()
+                .addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class)
+                .build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new MetricController(service, metadataService, testService))
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -86,7 +90,7 @@ class MetricControllerTest {
 
         mockMvc.perform(get("/admin/v1/metrics/nope").param("tenantId", "1"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 
     // ── POST /admin/v1/metrics ──────────────────────────────────────────────────
@@ -177,7 +181,7 @@ class MetricControllerTest {
                              "params":{},"cacheTtlSeconds":60,"allowProvided":false}
                             """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 
     // ── GET /admin/v1/metrics/{metricCode}/versions/{version}/impact ────────────

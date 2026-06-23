@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: rule-rt-bridge
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    consumer:
+      group-id: rule-rt-bridge
+      auto-offset-reset: earliest
+      # 失败即丢弃语义的前提：关 client 自动提交，offset 由容器在 listener 正常返回后提交
+      enable-auto-commit: false
+      # SuspectPayload 用 JSON 反序列化
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.value.default.type: com.sstlfsj.rule.bridge.model.SuspectPayload
+        spring.json.trusted.packages: "com.sstlfsj.rule.bridge.model"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      concurrency: 3
+      # 容器管理提交：listener 正常返回提交 offset，抛异常则重投（故 SuspectConsumer 必须吞异常实现"失败丢弃"）
+      ack-mode: BATCH
+
+bridge:
+  rule-api-base-url: ${RULE_API_BASE_URL:http://localhost:8080}
+  tenant-code: ${BRIDGE_TENANT_CODE:default}
+  scene-code: ${BRIDGE_SCENE_CODE:trading.scene_b}
+  event-type: trade.suspect
+  suspect-topic: rt.suspect.customer
+  decision-topic: rt.decision

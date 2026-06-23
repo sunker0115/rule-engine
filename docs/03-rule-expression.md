@@ -299,9 +299,7 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 
 | 不支持的形态 | 原因 | v1 替代方案 | 演进锚点 |
 |------------|------|-----------|---------|
-| 用户自定义 Java 函数调用（urule FunctionLibrary 风格） | 与闭合校验（D20 §3）、禁止副作用（D16）、metric 只读（§3.9）三条决策正面冲突；已否决（见 [`08-evolution.md §四`](./08-evolution.md)） | 封装为 `@ConditionType` SPI（[`04-extension.md`](./04-extension.md)） | — |
-| `EXPRESSION_SCRIPT` 叶子节点（动态脚本表达式） | D12 占位，v1 发布时拒绝 kind=EXPRESSION_SCRIPT | 用 ConditionNode + 现有 conditionType 组合表达 | [`08-evolution.md §2.1`](./08-evolution.md)（kind 多态） |
-| 跨规则引用 / 子规则调用 | D6 评估即版本快照不可变；跨规则引用违背快照语义（被引用规则可能在引用期间发布新版） | 将共享逻辑提取为 Metric（SQL 或 HTTP）或拆分成多条独立规则 | [`08-evolution.md §2`](./08-evolution.md) |
+| 用户自定义 Java 函数调用（urule FunctionLibrary 风格） | 与闭合校验（D20 §3）、禁止副作用（D16）、metric 只读（§3.9）三条决策正面冲突；已否决（见 [`08-evolution.md §四`](./08-evolution.md)） | 封装为 `@ConditionType` SPI（[`04-extension.md`](./04-extension.md)） | — || 跨规则引用 / 子规则调用 | D6 评估即版本快照不可变；跨规则引用违背快照语义（被引用规则可能在引用期间发布新版） | 将共享逻辑提取为 Metric（SQL 或 HTTP）或拆分成多条独立规则 | [`08-evolution.md §2`](./08-evolution.md) |
 | 运行时动态参数绑定（`params` 字段引用 payload 变量） | D20 §3：所有变量类型在发布时已知，不做运行期参数解析 | 设 `valueRef=PAYLOAD` 直接引用 payload 字段（params 仍写死比较值，不在运行期绑定）；动态值走 Metric | — |
 | 结果聚合函数（SUM/AVG/COUNT over 多节点结果） | AST 是布尔树，不产生数值聚合 | SCORECARD kind（D12，v2 演进）；v1 用 metric 预计算聚合值 | [`08-evolution.md §2`](./08-evolution.md)（SCORECARD） |
 

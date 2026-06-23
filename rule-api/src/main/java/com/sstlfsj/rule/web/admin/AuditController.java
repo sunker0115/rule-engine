@@ -3,6 +3,7 @@ package com.sstlfsj.rule.web.admin;
 import com.sstlfsj.rule.audit.api.dto.AuditLogQuery;
 import com.sstlfsj.rule.audit.api.dto.EvalSessionQuery;
 import com.sstlfsj.rule.audit.api.service.AuditService;
+import com.sstlfsj.rule.web.common.ApiException;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.common.PageResponse;
 import com.sstlfsj.rule.web.mask.SensitiveRefsResolver;
@@ -48,9 +49,8 @@ public class AuditController {
             @RequestParam Long tenantId) {
         AuditService.EvalSessionEntry session = auditService.getSession(tenantId, sessionId);
         if (session == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("NOT_FOUND",
-                            "会话不存在: sessionId=" + sessionId + ", tenantId=" + tenantId));
+            throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND",
+                    "会话不存在: sessionId=" + sessionId + ", tenantId=" + tenantId);
         }
         return ResponseEntity.ok(ApiResponse.ok(session));
     }

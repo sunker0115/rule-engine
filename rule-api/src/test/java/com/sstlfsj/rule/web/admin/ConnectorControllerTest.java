@@ -24,7 +24,9 @@ import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.http.converter.json.ProblemDetailJacksonMixin;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -57,7 +59,9 @@ class ConnectorControllerTest {
         service = mock(ConnectorWriteService.class);
         testService = mock(MetricFetchTestService.class);
         ConnectorConvert convert = new ConnectorConvertImpl();
-        JsonMapper mapper = JsonMapper.builder().build();
+        JsonMapper mapper = JsonMapper.builder()
+                .addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class)
+                .build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new ConnectorController(service, convert, testService))
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -143,7 +147,7 @@ class ConnectorControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(DESCRIPTOR_JSON))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 
     // ── GET /admin/v1/connectors/{connectorCode} ────────────────────────────────
@@ -174,7 +178,7 @@ class ConnectorControllerTest {
 
         mockMvc.perform(get("/admin/v1/connectors/risk-svc").param("tenantId", "1"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 
     // ── POST /admin/v1/connectors/{connectorCode}/disable ───────────────────────
@@ -199,7 +203,7 @@ class ConnectorControllerTest {
                         .param("tenantId", "1")
                         .header("X-Actor-Id", "u1"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 
     // ── POST /admin/v1/connectors/{connectorCode}:test ──────────────────────────

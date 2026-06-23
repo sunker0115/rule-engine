@@ -24,11 +24,11 @@
 
 ### 2.1 kind 多态（来源 D12）
 
-- **v1 现状**：`Rule.kind` 字段就位，仅实现 `AST_BOOLEAN`，其他枚举值发布拒绝；`EvalResult` 多态字段（`score / category / decision`）就位但 v1 仅填 `satisfied`。
-- **触发条件**：业务侧出现评分卡 / 决策树 / 决策表 / 表达式脚本类需求。
-- **迁移成本**：低（schema 占位已就绪，只补 evaluator + UI 编辑器）。
+- **现状（全部实装）**：五种 kind 均已落地——`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）/ `EXPRESSION_SCRIPT`（D66）；`EvalResult` 多态字段（`score / category / decision`）各 kind 按需填充。
+- **驱动**：评分卡 / 决策树 / 决策表 / 表达式脚本类业务需求陆续到来，占位逐个填实。
+- **迁移成本**：已完成（五种 kind 的 evaluator 全部落地）。
 
-**设计原则**：D12 引入 `Rule.kind` 是为评分卡 / 决策树 / 决策表 / 脚本类规则演进**预留 schema 占位**，不是 v1 要实现的功能。
+**设计原则**：D12 引入 `Rule.kind` 时是为评分卡 / 决策树 / 决策表 / 脚本类规则**预留 schema 占位**（v1 仅 `AST_BOOLEAN`）；此后占位已全部填实（SCORECARD D12 / DECISION_TREE·DECISION_TABLE D42 / EXPRESSION_SCRIPT D66），同表多态 JSON 列承载，公共能力天然共享。
 
 **各 kind 共享 Rule 的公共属性**：trigger / preGates（含 ROLLOUT 灰度）/ decisionBindings / version / Scene 治理都不变，多态只在"判定主体"内部——（注：actions 已迁移到 Decision，不再是 Rule 的直接字段，D27）
 
@@ -40,7 +40,7 @@
 | `SCORECARD` | JSON 列承载条件列表 + 各自 `weight` + 阈值带 | `EvalResult.score` | 已实装（D12） |
 | `DECISION_TREE` | JSON 列承载嵌套 if/then/else 树 | `EvalResult.category` | 已实装（D42） |
 | `DECISION_TABLE` | JSON 列承载输入列 + 输出列 + 行集合矩阵 | `EvalResult.decision` | 已实装（D42） |
-| `EXPRESSION_SCRIPT` | 文本列承载 CEL / Aviator 脚本 | 按脚本返回值多态填 | 未实装（留 v1.5） |
+| `EXPRESSION_SCRIPT` | 文本列承载脚本（CEL / Aviator / Groovy / JEXL / QLExpress / JsonLogic 六引擎） | 按脚本返回值多态填 | 已实装（D66） |
 
 **`EvalResult` 是稳定多态**：PULL 模式调用方拿到的对象 shape 是 `{satisfied, score?, category?, decision?, trace}`——SCORECARD 多填 `score`（D12），DECISION_TREE 填 `category`（D42），DECISION_TABLE 填 `decision`（D42），PULL API 签名始终不变；节点 trace 跨 kind 统一，运营自助排障的能力 100% 复用。
 
@@ -48,7 +48,7 @@
 
 **为什么不另起表**：评分卡 / 决策树仍需要 Rule 的全部公共属性（触发 / 准入 / 灰度 / 决策绑定 / 版本快照），独立表会复制 80% 的列且数据散布、跨形态报表困难；用 `kind` 字段 + 多态 JSON 列在同一张表里，公共能力天然共享。
 
-**演进路径**：按需逐个实现 evaluator——SCORECARD 启用 `ConditionNode.weight`；DECISION_TREE / DECISION_TABLE / EXPRESSION_SCRIPT 各自的内部 JSON 结构与 evaluator；`Scene.executionStrategy` 配合决策集。
+**演进路径（已完成）**：五种 kind 的 evaluator 均已落地——SCORECARD 启用 `ConditionNode.weight`（D12）；DECISION_TREE / DECISION_TABLE 各自的内部 JSON 结构与 evaluator（D42）；EXPRESSION_SCRIPT 走 `ScriptExecutor` + 按 lang 路由的 `ExpressionEngine` SPI（D66）；`Scene.executionStrategy` 配合决策集（D29/D41）。
 
 ### 2.2 Metric 版本化（来源 #2 占位）
 

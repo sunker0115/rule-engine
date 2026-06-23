@@ -13,8 +13,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.http.converter.json.ProblemDetailJacksonMixin;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.json.JsonMapper;
@@ -54,7 +56,9 @@ class RuleBundleControllerTest {
     @BeforeEach
     void setUp() {
         service = mock(RuleBundleService.class);
-        JsonMapper mapper = JsonMapper.builder().build();
+        JsonMapper mapper = JsonMapper.builder()
+                .addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class)
+                .build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new RuleBundleController(service, mapper))
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -178,7 +182,6 @@ class RuleBundleControllerTest {
                         .param("policy", "ABORT")
                         .header("X-Actor-Id", "u1"))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("IMPORT_CONFLICT"));
     }
 

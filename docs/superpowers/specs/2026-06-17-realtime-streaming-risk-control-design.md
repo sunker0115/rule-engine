@@ -25,7 +25,7 @@
                               │
                               ▼
               ┌──────────────────────────────────────────────┐
-              │  rule-stream-rt  (新项目，Flink Job)            │
+              │  rule-rt-stream  (新项目，Flink Job)            │
               │  ───────────────────────────────────────────  │
               │  ① keyBy(customerId) + 多窗口聚合              │
               │     RT-M(1s/10s/30s/1m/2m/5m) / RT-D / RT-B    │
@@ -63,7 +63,7 @@
 
 | 组件 | 归属 | 职责 | 状态 |
 |---|---|---|---|
-| `rule-stream-rt` | 新项目（Flink） | 有状态窗口计算 + Stage-1 削峰门 | 全新 |
+| `rule-rt-stream` | 新项目（Flink） | 有状态窗口计算 + Stage-1 削峰门 | 全新 |
 | Redis 特征库 | 新基建 | customerId→预计算特征，O(1) 读 | 新接 |
 | `rt-bridge` | 新薄层 | 消费 suspect topic → 调引擎 | 全新（薄） |
 | `rule-engine` | 现有 | Scene B 决策 + STREAM handler | 仅加 1 个 handler |
@@ -146,10 +146,10 @@ public class StreamFeatureMetricSourceHandler implements MetricSourceHandler {
 
 ---
 
-## 四、新项目 rule-stream-rt（Flink）结构
+## 四、新项目 rule-rt-stream（Flink）结构
 
 ```
-rule-stream-rt/
+rule-rt-stream/
 ├── src/main/java/com/sstlfsj/rule/stream/
 │   ├── source/        TradeStreamSource          (Kafka rt.trade.raw 反序列化为 Trade)
 │   ├── feature/
@@ -211,7 +211,7 @@ rule-stream-rt/
 
 1. **P0 引擎侧坑位（最小、可独立验）**：实现 `StreamFeatureMetricSourceHandler`（`@MetricSourceType("STREAM")`）+ Redis 接入 + `metric_definition` STREAM 档 + 单测/集成测（mock Redis 灌特征 → Scene B 评估出 Decision）。**不依赖 Flink，先打通引擎读特征→出决策。**
 2. **P1 特征库 + 离线灌数**：Redis 特征 schema 定稿；先用批/脚本灌一批历史特征，验证 Scene B 规则配置（RT 状态 → Decision 映射）正确。
-3. **P2 Flink 作业**：`rule-stream-rt` 跑通 Kafka source → 多窗口聚合 → 写 Redis；先不接显著性检验，验证特征实时更新。
+3. **P2 Flink 作业**：`rule-rt-stream` 跑通 Kafka source → 多窗口聚合 → 写 Redis；先不接显著性检验，验证特征实时更新。
 4. **P3 完整漏斗**：补显著性检验 + 样本量门 + Stage-1 gate + suspect topic + `rt-bridge` 调引擎，端到端跑通。
 5. **P4 下游闭环**：`rt.decision` → CustomerRiskProfile 状态机迁移服务。
 

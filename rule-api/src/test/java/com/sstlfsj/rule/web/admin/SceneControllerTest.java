@@ -107,7 +107,6 @@ class SceneControllerTest {
                             {"sceneCode":"fraud","name":"欺诈检测"}
                             """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 
@@ -172,6 +171,6 @@ class SceneControllerTest {
         mockMvc.perform(get("/admin/v1/scenes/notexist")
                         .param("tenantId", "1"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.errorCode").value("INVALID_ARGUMENT"));
     }
 }
