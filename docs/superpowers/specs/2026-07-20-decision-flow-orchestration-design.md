@@ -41,6 +41,14 @@
 
 > **三承载互斥**：`conditionAst`（AST 系四形态）/ `scriptSource`（EXPRESSION_SCRIPT）/ `flowGraph`（DECISION_FLOW）按 kind 三选一，同一 `RuleVersion` 只填其一，另两个为 null。01-concepts §3.4 「ast 与其他 kind 结构互斥」需登记 flowGraph 为第三承载。
 
+### Scene 归属与 RuleRef 作用域
+
+DECISION_FLOW 与所有规则一样，属于一个 Scene，走同样的 Matcher（`tenant + scene + eventType`）路由。
+
+`RuleRefNode` 按 `ruleCode` 引用，`ruleCode` 在 tenant 内唯一——所以**技术上 `ruleCode` 不感知 Scene**，RuleRef 天然可以跨 Scene 引用。
+
+**v1 限制同 Scene**：发布期校验 `resolveFlowDraft` 拒绝 RuleRef 引用其他 Scene 的规则。理由：治理简单——被引规则在同一 Scene，血缘图不发散、排障直达。将来放开只需去除此校验，不动协议/字段/存储。
+
 ### FlowGraph / FlowNode 多态模型
 
 仿 `AstNode` 的 sealed + Jackson 多态定式（`@JsonTypeInfo(use=NAME, property="type")` + `@JsonSubTypes`，注解在 `com.fasterxml.jackson.annotation`），另起一个 sealed 家族，放新包 `api/model/flow/`（对齐 `api/model/ast/`）：

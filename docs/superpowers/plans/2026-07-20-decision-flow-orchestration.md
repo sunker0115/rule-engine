@@ -80,7 +80,7 @@
 - Test: `publish/FlowResolveValidateTest.java`
 
 - [ ] **Step 1:** 读 `PublishService.java` 的 `resolveScriptDraft`（:475-516）、`freezeMetricDeps`（:542-564）、`freezeDecisionBindings`（:779-799）确认冻结定式。
-- [ ] **Step 2:** `resolveAndValidate` 加 flow 提前 return（仿 :423）→ `resolveFlowDraft`：结构校验（DAG 合法/Switch caseKey 一致/Output decisionCode 存在）。
+- [ ] **Step 2:** `resolveAndValidate` 加 flow 提前 return（仿 :423）→ `resolveFlowDraft`：结构校验（DAG 合法/Switch caseKey 一致/Output decisionCode 存在/**RuleRef 同 Scene 校验**——被引规则须与 flow 在同一 Scene，跨 Scene 拒绝，v1 治理简化、将来放开只需去此校验）。
 - [ ] **Step 3:** RuleRef 冻结——遍历 RuleRefNode 查被引规则 ACTIVE 版本，冻 `(code,version)` + 完整 snapshot 进 flowGraph；无 ACTIVE 拒绝发布（新错误码或复用现有）。
 - [ ] **Step 4:** metricDeps 并集——全图 RuleRef 引用规则 metricDeps + Switch/Transform 表达式 metric 扫入并集，写本版本 `metricDependencies`。
 - [ ] **Step 5:** `validKinds` 两处 Set（:415-418、:691-694）加 DECISION_FLOW；`validateKindStructure`（:599）加 flow 分支；`ResolvedDraft`（:375）加 `FlowGraph`；`buildDraftVersion`（:736-751）加 `setFlowGraph`。

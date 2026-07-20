@@ -26,7 +26,7 @@
 | # | 功能 | 来源 | 预计改动范围 | 备注 |
 |---|------|------|------------|------|
 | B29 | **特征预计算 / 物化特征层（含 CEP）** | 08-evo §2.24 / §2.1 / D5-C | `metric_definition` 加物化档 `sourceType` + 刷新策略列；`MetricSourceHandler` 增物化实现（读 KV）+ CDC 预计算 writer（独立于热路径）；分层取数；降级语义归 D15 | **第三代「高性能」：营销千级→风控万级 QPS 路上第一道性能墙**。物化 + 服务 + **CEP（频率/序列/聚合，原 B8）** 统一由[《实时流式风控设计》](../specs/2026-06-17-realtime-streaming-risk-control-design.md)承载（Flink→Redis 特征库→`STREAM` handler，引擎零改动按 sourceType 路由；与 B25 Redis `MetricCache` 同一套 Flink+Kafka+Redis infra）。引新 KV/列存需与 D9「全 MySQL」专门决策；CEP 旧 `d5c-cep.md`/`-design.md` 届时归档 |
-| B11 | **跨 Scene 规则复用**（RuleTemplate / RuleFragment） | 08-evo §2.3 | 新表 `rule_template` / `rule_fragment`；发布期展开逻辑；dry-run 兼容；UI | B14 异步化、B15 模板市场的前置依赖 |
+| B11 | **跨 Scene 规则复用**（RuleTemplate / RuleFragment） | 08-evo §2.3 | 新表 `rule_template` / `rule_fragment`；发布期展开逻辑；dry-run 兼容；UI | B14 异步化、B15 模板市场的前置依赖。**注：与 D75 DECISION_FLOW 不同层——B11 是 authoring 复用（一条逻辑骨架实例化成多条独立规则），DECISION_FLOW 是 runtime 编排（一次评估内串联多条已有规则），各不代替** |
 
 ---
 
