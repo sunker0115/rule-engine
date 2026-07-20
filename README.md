@@ -31,6 +31,7 @@
 | **决策树** | 分类分流 | if 条件 A → then 结果 1，else if 条件 B → ... |
 | **决策表** | 规则矩阵 | 输入列 + 输出列 + 行，像 Excel 一样填 |
 | **脚本规则** | 复杂表达式 | 写 `price * quantity > 1000 && userLevel == 'VIP'`，六种引擎可选 |
+| **决策图** | 多步编排 | 决策 A → 按结果分支 → 决策 B → 输出，图只编排、叶子引用上面五种 |
 
 ### 2.2 六种表达式引擎，按需切换
 
@@ -191,21 +192,24 @@ rule-engine/
 
 跟业界常见规则引擎/方案放在一起看，明确这个项目的定位差异。
 
-| 维度 | Rule Engine（本项目） | Drools | EasyRules | 业务自研 if-else |
-|------|----------------------|--------|-----------|-----------------|
-| **定位** | 通用产品，多租户多 Scene | 通用规则引擎 | 轻量规则框架 | 一次性业务代码 |
-| **规则形态** | 5 种（布尔树+评分卡+决策树+决策表+脚本） | 主要为 DRL 文本规则 + 决策表 | 主要为注解/DSL 简单规则 | 无固定形态 |
-| **表达式引擎** | 6 种可插拔（CEL/Aviator/QLExpress/JsonLogic/JEXL/Groovy） | MVEL / FEEL | MVEL / SpEL | 硬编码 |
-| **配置界面** | 内置 REST API + 前端管理台（React） | Business Central Workbench | 无内置 UI | 无 |
-| **多租户** | 原生支持（tenant 隔离贯穿全链路） | 需自行实现 | 不支持 | 需自行实现 |
-| **版本化+灰度** | 内置（快照+回滚+ROLLOUT+AB 桶） | 部分支持 | 不支持 | 无 |
-| **嵌入式 SDK** | 支持（零 Spring，四种规则来源模式） | KIE Server 远程调用 | 原生嵌入 | 直接写代码 |
-| **决策合成** | 3 种策略（最高优先级/全命中/首命中） | Agenda + 冲突消解 | 组合规则 | 手工 |
-| **取数抽象** | 4 种（属性/SQL/HTTP/流式），统一 Metric SPI | 事实对象插入 | 事实对象 | 手工查库 |
-| **血缘+治理** | 内置：静态分析+血缘+审计+重放+效果闭环 | 部分（Drools Verifier） | 无 | 无 |
-| **可观测性** | OTLP + Prometheus + LGTM 开箱即用 | 需自行集成 | 无 | 需自行集成 |
-| **上手成本** | 中等（需理解 Scene/Rule/Metric 模型），有管理台 | 高（DRL 语法+KIE API+复杂部署） | 低（几个注解搞定） | 低（但越写越乱） |
-| **适合规模** | 中大型：多业务线、规则频繁变更、需治理 | 大型：复杂推理、CEP 事件流 | 小型：几十条简单规则 | 临时：3-5 个 if |
+> **关于 GoRules ZEN**：ZEN Engine 是 Rust 写的开源 BRE 库（跨语言嵌入 + JDM 决策图），GoRules 另有一套闭源商业 BRMS（多租户/版本/治理/管理台）。本项目对标的是**商业 BRMS 的产品能力**，在「开源引擎库」这层之上自建了平台层。开源 ZEN 对标的是 `rule-kernel` 一个模块，不是整个平台。
+
+| 维度 | Rule Engine（本项目） | GoRules ZEN / BRMS | Drools | EasyRules | 业务自研 if-else |
+|------|----------------------|---------------------|--------|-----------|-----------------|
+| **定位** | 通用产品，多租户多 Scene | ZEN：可嵌入 BRE 库。BRMS（闭源）：规则管理平台 | 通用规则引擎 | 轻量规则框架 | 一次性业务代码 |
+| **规则建模** | 6 种（布尔树+评分卡+决策树+决策表+脚本+决策图 DECISION_FLOW） | JDM 有向图（Decision Table/Switch/Function/Expression/Decision 5 节点），**全图建模** | 主要为 DRL 文本规则 + 决策表 | 主要为注解/DSL 简单规则 | 无固定形态 |
+| **编排能力** | DECISION_FLOW（两层：图编排 + 5 形态叶子引用） | 原生图编排 + 子决策递归调用（**无叶子/编排分层**） | Ruleflow Group + Agenda | 组合规则 | 手工 |
+| **表达式引擎** | 6 种可插拔（CEL/Aviator/QLExpress/JsonLogic/JEXL/Groovy） | 1 种 ZEN EL（带 intellisense/NL/类型推断） | MVEL / FEEL | MVEL / SpEL | 硬编码 |
+| **配置界面** | 内置 REST API + 前端管理台（React） | ZEN：无。BRMS：Web 管理台 + JDM Editor（画布） | Business Central Workbench | 无内置 UI | 无 |
+| **多租户** | 原生支持（tenant 隔离贯穿全链路） | ZEN：无。BRMS：有 | 需自行实现 | 不支持 | 需自行实现 |
+| **版本化+灰度** | 内置（快照+回滚+ROLLOUT+AB 桶） | ZEN：无。BRMS：有 | 部分支持 | 不支持 | 无 |
+| **嵌入式 SDK** | 支持（零 Spring，四种规则来源模式） | ZEN：**原生跨语言嵌入**（Rust→Node/Py/Go/C，进程内微秒级）。BRMS：远程调用 | KIE Server 远程调用 | 原生嵌入 | 直接写代码 |
+| **取数抽象** | 4 种（属性/SQL/HTTP/流式），统一 Metric SPI，**引擎自取数** | ZEN：无（调用方组装全量 context JSON）。BRMS：有 | 事实对象插入 | 事实对象 | 手工查库 |
+| **血缘+治理** | 内置：静态分析+血缘+审计+重放+效果闭环 | ZEN：无。BRMS：有 | 部分（Drools Verifier） | 无 | 无 |
+| **可观测性** | OTLP + Prometheus + LGTM 开箱即用 | ZEN：无。BRMS：有 | 需自行集成 | 无 | 需自行集成 |
+| **性能** | JVM，服务/SDK 双模，毫秒级 | **Rust+LTO，进程内微秒级**，可塞进 Lambda | JVM，较重 | JVM，轻量 | 原生，但无管理 |
+| **上手成本** | 中等（需理解 Scene/Rule/Metric 模型），有管理台 | ZEN：低（库，几行代码）。BRMS：中等（JDM 模型） | 高（DRL 语法+KIE API+复杂部署） | 低（几个注解搞定） | 低（但越写越乱） |
+| **适合规模** | 中大型：多业务线、规则频繁变更、需治理 | ZEN：小型嵌入。BRMS：中大型 | 大型：复杂推理、CEP 事件流 | 小型：几十条简单规则 | 临时：3-5 个 if |
 
 ### 为什么不用 Drools
 
@@ -220,6 +224,13 @@ rule-engine/
 - 规则一多（>100 条）没有治理手段
 - 取数靠事实对象注入，没有统一的 Metric 抽象
 - 适用场景是「代码里加几条简单规则」，不是「运营管理数百条规则的业务线」
+
+### 为什么不直接用 GoRules ZEN Engine
+
+- ZEN Engine 开源的是**可嵌入 BRE 库**（Rust core + Node/Python/Go 绑定），不是规则管理平台——没有多租户、没有版本灰度、没有取数抽象、没有治理血缘、没有审计、没有管理台
+- 这些能力在 GoRules 是**闭源商业 BRMS**，本项目的目标恰好是把这层做出来并开源
+- ZEN 的 JDM 全图建模对单次决策表达力很强，但本项目需要的「运营自助配规则 + 批量治理 + 取数一等公民」在纯图模型里反而别扭——所以做了 DECISION_FLOW 两层设计（图编排 + 叶子引用），既吸收图编排的优点，又保留表单编辑和 Metric SPI 的运营友好度
+- ZEN 的跨语言嵌入（Rust→Node/Py/Go）是性能甜区，本项目 JVM only；如果你需要进程内嵌入 Python/Node 服务，ZEN 更合适；如果你需要的是一个带管理台的规则**平台**，本项目更合适
 
 ### 什么时候直接用 if-else
 

@@ -76,7 +76,67 @@ OutputNode(String id, String decisionCode)
 - flow 内多个 `OutputNode` 命中 → 按 flow 自身的合成语义收敛（复用规则级 `decisionStrategy` 语义，flow 作为一条规则参与 Scene 级合成）。
 - 短路 / 错误不短路 / trace 收集：沿用现有 executor 契约（`TraceScope.COLLECT.orElse(true)`，sink 为 null 时零分配）。
 
-**EvalResult 契约（不新增字段）**：DECISION_FLOW 复用现有 `EvalResult` 多态（01-concepts §3.4）——`OutputNode` 产出的决策进 `finalDecision` / `hitDecisions`（与普通规则同，flow 作为一条规则参与 Scene 级合成）；`satisfied` 语义 = 图是否产出任一决策（有 Output 命中为 true）。不新增 `score` / `category` / `decision` 之外的字段。
+**EvalResult 契约（不新增字段）**：DECISION_FLOW 复用现有 `EvalResult` record（`rule-kernel/.../api/model/EvalResult.java`，字段：`ruleHit` / `finalDecision` / `hitDecisions` / `nodeTrace` / `errorCode` / `score` / `category` / `decision`）——`OutputNode` 产出的决策进 `finalDecision` / `hitDecisions`（与普通规则同，flow 作为一条规则参与 Scene 级合成）；`ruleHit` 语义 = 图是否产出任一决策（有 Output 命中为 true）。不新增字段。
+
+> 注意：01-concepts §3.4 EvalResult 契约使用字段名 `satisfied`，此为文档与代码的既有命名漂移（代码实际字段为 `ruleHit`），本条按代码实际字段名写。01-concepts 的漂移留后续文档维护收敛。
+
+## 与既有求值管线的接缝（为什么不是打补丁）
+
+DECISION_FLOW 只是 `RuleVersionExecutor` SPI 上的第 6 个实现，不改旧 5 个 executor、不改 EvalEngine 分派、不改 Assembler 取数、不改合成管线。以下逐关节说明输入端/图内传递/输出端的接缝。
+
+### 输入端：flow 如何拿到评估数据
+
+现有链路——`EvalContextAssembler.collectChosenVersions(candidates)` 把所有候选规则的 `metricDependencies` 并集 → 一次并发取全 → 进 `EvalContext`。
+
+DECISION_FLOW 的 `metricDependencies` 在**发布期已冻成全图 RuleRef 引用规则的并集**（见 §发布期解析冻结第 3 点）。例如 flow `RuleRef(A) → Switch → RuleRef(B)`，A 依赖 `metrics.txn_cnt_7d`、B 依赖 `metrics.user_level`，flow 自己的 `metricDependencies` = `{txn_cnt_7d, user_level}`。`EvalContextAssembler` 扫到这条 flow 候选时自动把所需 metric 并进取数集合，**跟普通规则走同一条路，零区别对待**。FlowExecutor 拿到的 `EvalContext` 已是全图所需，不改 Assembler 一行代码。
+
+### 输出端：flow 产出的决策如何参与 Scene 合成
+
+flow 作为**一条规则**，`execute()` 返回 `EvalResult{finalDecision, hitDecisions, ruleHit}`——签名与 `InterpretedExecutor`（AST_BOOLEAN）完全相同。`EvalEngine` 把它的 hitDecisions 和其他规则的 hitDecisions 一起按 `decisionStrategy` 排序合成，flow 不享有任何特殊路径。
+
+flow 内部的 `OutputNode` 产出的 decisionCode 与 `RuleRef` 命中带回的 decisionCode 一并汇入 flow 的 `hitDecisions`，对 EvalEngine 透明。`EvalEngine` 只知道「这条规则命中了这些决策」，不知道这些决策是 AST 算的还是 flow 串出来的。
+
+### 图内部上下文传递：flow 命名空间
+
+这是唯一新增的抽象。既有 `EvalContext` 不可变，图遍历中需要传递中间值（Transfom 产出 → Switch 读）和上游 RuleRef 求值结果（Switch 按结果分支）。
+
+**约束：RuleRef 节点不应看到 flow 内部变量。** RuleRef 引用的是独立编写、独立发布的规则，其 author 不知道也不该知道「我的规则会被某个 flow 调用」。如果 flow 能把变量注入 RuleRef 的评估上下文，被引规则的行为就依赖调用者——可测试性崩了，D6（快照在任何时候求值结果一致）也破了。
+
+**解法**：新增第 5 个表达式命名空间 `flow`，与 `metrics/payload/subject/now` 平级，**仅在 flow 图内的 Switch/Transform 表达式中可见**：
+
+```
+RuleRef(A) → Transform(outputKey="riskScore", expression="metrics.score * 1.5")
+           → Switch(expression="flow.riskScore > 80")
+                ├─ [>80] → RuleRef(B)
+                └─ [≤80] → Output(PASS)
+```
+
+- `Transform` 算完写 `flow.riskScore`，下游 Switch 通过 `flow.riskScore` 读到
+- `RuleRef(B)` 拿到的 ctx 是**原始 EvalContext**（不合并 flow 变量），保持被引规则的行为独立
+- 实现：`ExpressionEngine.compile()` 声明 `flow: map(string, dyn)`，FlowExecutor 在 walker 中维护一个 `Map<String, Object> flowVars`，进入 Switch/Transform 时合并进表达式绑定
+
+**跨规则的数据传递不靠 flow 变量，靠 Switch 读 RuleRef 求值结果。** 如果 B 是否执行取决于 A 命中了什么决策，Switch 读的是 walker 持有的「上一步 RuleRef 返回了什么」，不需要注入被引规则的 context：
+
+```
+RuleRef(A) → Switch(expression="hitDecisions[0].code")   // ← walker 在内部持有 A 的结果
+               ├─ [REJECT] → Output(REJECT)               // A 拒绝，短路
+               └─ [PASS]   → RuleRef(B)                   // A 放行，继续
+```
+
+### 改动影响面（逐关节自检）
+
+| 连接点 | 改动 | 性质 |
+|---|---|---|
+| 输入（metric 取数） | **不改 Assembler**——发布期已冻并集，自动收 | 复用现有 |
+| 输出（Scene 合成） | **不改 EvalEngine 合成**——flow 就是一个 RuleVersionExecutor，返回 EvalResult | 实现既有接口 |
+| 图内上下文 | 加 `flow` 命名空间进 ExpressionEngine（声明一个变量），RuleRef 不合并 flow 变量 | 加性扩展，旧引擎不受影响 |
+| RuleRef 调单规则 | 调现有 `RuleVersionExecutor.execute(snap, ctx)` | 复用现有入口 |
+| EvalEngine 分派 | `Map<kind, executor>` 加一个 entry | 加性，不改 switch/if 链 |
+| 旧 5 形态 executors | **零改动** | 不感知 flow |
+
+整个 DECISION_FLOW **没有改一行现有求值/取数/合成的核心路径**。打补丁的特征是「因为有新需求，所以在旧代码里塞 if-else 分支」——这里不存在。
+
+
 
 ## 存储
 

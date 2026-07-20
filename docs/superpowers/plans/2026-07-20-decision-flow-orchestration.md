@@ -50,10 +50,13 @@
 - Create: `internal/evaluator/FlowExecutor.java`（implements `RuleVersionExecutor`）
 - Test: `evaluator/FlowExecutorTest.java`
 
-- [ ] **Step 1:** 读 `DecisionTreeExecutor.java:42-78`（分支跳转范本）+ `InterpretedExecutor.java:89-106`（sealed switch + 短路 + trace sink 零分配）确认遍历/trace 契约后再写。
-- [ ] **Step 2:** `FlowExecutor.execute(snapshot, ctx)`：从 `snapshot.flowGraph()` 的 `inputNodeId` 顺边遍历。RuleRef 节点持有冻结进快照的被引 snapshot + 按 kind 分派的 `Map<String,RuleVersionExecutor>`（方案 b，零额外查询），调 `leafExecutor.execute(refSnap, ctx)`。Switch 求值选出边，Transform 写 ctx，Output 收决策。
-- [ ] **Step 3:** trace 收集沿用 `TraceScope.COLLECT.orElse(true)`，sink null 时不分配。
-- [ ] **Step 4:** `FlowExecutorTest`：单 RuleRef 直连、Switch 两分支各命中、Transform→Switch 读中间值、多 Output 合成、trace 收集态 vs 零分配态。
+- [ ] **Step 1:** 读 `DecisionTreeExecutor.java:42-78`（分支跳转范本）+ `InterpretedExecutor.java:89-106`（sealed switch + 短路 + trace sink 零分配）+ `EvalResult.java`（确认字段名为 `ruleHit` 非 `satisfied`）后再写。
+- [ ] **Step 2:** `FlowExecutor.execute(snapshot, ctx)`：从 `snapshot.flowGraph()` 的 `inputNodeId` 顺边遍历。
+  - **上下文传递**：FlowExecutor 内部维护 `Map<String,Object> flowVars`。Transform 产出写 `flowVars`；Switch/Transform 表达式求值时把 `flowVars` 以 `"flow"` key 合并进 bindings（CEL 构造器需加 `addVar("flow", map(string,dyn))`，非 CEL 引擎无需改动——bindings 里有就能用）。**RuleRef 调 `leafExecutor.execute(refSnap, ctx)` 时传原始 ctx，不合并 flowVars**——被引规则行为必须独立于调用方（守 D6 不可变）。
+  - **命名空间**：表达式可见变量 = `metrics/payload/subject/now`（既有 4 个）+ `flow`（新增，仅 flow 图内 Switch/Transform 可引用，RuleRef 不可见）。
+  - Switch 求值表达式 → 匹配 caseKey 选出边（default 支持）；Transform 求值表达式 → 写 `flowVars[outputKey]`；Output 收 `decisionCode` 进 hitDecisions。
+- [ ] **Step 3:** trace 收集沿用 `TraceScope.COLLECT.orElse(true)`，sink null 时不分配。`EvalResult.ruleHit` = 图是否产出任一决策（有 Output 命中为 true）。
+- [ ] **Step 4:** `FlowExecutorTest`：单 RuleRef 直连、Switch 两分支各命中、Transform→Switch 读 `flow.xxx` 中间值、**RuleRef 隔离（断言被引规则 ctx 不含 flow 变量）**、多 Output 合成、ruleHit=true/false、trace 收集态 vs 零分配态。
 - [ ] **Verify:** `$MVN -pl rule-kernel -am test`
 
 ## P2 — 存储读取链
