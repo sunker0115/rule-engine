@@ -40,7 +40,7 @@ class CreateRuleRequestTest {
                 java.util.List.of(new DecisionBindingInput("REVIEW")),
                 java.util.List.of(),
                 java.util.List.of("login"),
-                null);
+                null, null);
         String out = mapper.writeValueAsString(req.decisionBindings());
         assertThat(out).isEqualTo("[{\"decisionCode\":\"REVIEW\"}]");
     }

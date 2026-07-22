@@ -9,6 +9,10 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowEdge;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
+import com.sstlfsj.rule.kernel.api.model.flow.OutputNode;
+import com.sstlfsj.rule.kernel.api.model.flow.RuleRefNode;
 import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.sdk.source.DslRuleSource;
@@ -302,6 +306,39 @@ class RuleEngineClientTest {
             EvalResult r = client.evaluate(event);
             assertThat(r.ruleHit()).isFalse();
             assertThat(r.errorCode()).isEqualTo(EvalErrorCode.SCRIPT_NO_ENGINE.name());
+        }
+    }
+
+    @Test
+    void flowRule_embeddedEvaluation_returnsDecision_notAstFallback() {
+        // DECISION_FLOW 显式注册 FlowExecutor:flow 快照(conditionAst=null)命中走图遍历产出决策,
+        // 不被 EvalEngine 错误回退给 AST_BOOLEAN 解释器。RuleRef 叶子(AST_BOOLEAN,alwaysTrue)走内置解释器命中,
+        // Output 节点按 flow 的 decisionBinding 产出 REVIEW。
+        RuleVersionSnapshot leaf = RuleVersionSnapshot.builder()
+                .ruleVersionId(30L).tenantId("t1").sceneCode("flow")
+                .code("bl").kind(RuleKind.AST_BOOLEAN.tag())
+                .conditionAst(alwaysTrue())
+                .build();
+        FlowGraph graph = new FlowGraph(
+                List.of(new RuleRefNode("n1", "bl"), new OutputNode("n2", "REVIEW")),
+                List.of(new FlowEdge("n1", "n2", null)), "n1");
+        RuleVersionSnapshot flow = RuleVersionSnapshot.builder()
+                .ruleVersionId(31L).tenantId("t1").sceneCode("flow")
+                .code("flow.main").kind(RuleKind.DECISION_FLOW.tag())
+                .flowGraph(graph)
+                .addReferencedSnapshot("bl", leaf)
+                .addTriggerEventType("TXN")
+                .addDecisionBinding("REVIEW", "复核", 50)
+                .build();
+
+        try (RuleEngineClient client = RuleEngineClient.builder()
+                .localSnapshot(flow)
+                .build()) {
+            RuleEvent event = new RuleEvent("t1", "flow", "TXN", "sub1",
+                    UUID.randomUUID().toString(), Instant.now(), Map.of(), Map.of(), EventSource.SDK);
+            EvalResult r = client.evaluate(event);
+            assertThat(r.ruleHit()).isTrue();
+            assertThat(r.finalDecision().code()).isEqualTo("REVIEW");
         }
     }
 

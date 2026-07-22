@@ -180,6 +180,7 @@ class EvalAutoConfigurationTest {
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
                 config.scriptExecutor(List.of(new CelExpressionEngine())),
+                flowExecutor(),
                 new TraceProperties());
         assertNotNull(engine);
     }
@@ -195,8 +196,25 @@ class EvalAutoConfigurationTest {
                 config.decisionTreeExecutor(),
                 config.decisionTableExecutor(),
                 config.scriptExecutor(List.of(new CelExpressionEngine())),
+                flowExecutor(),
                 new TraceProperties());
         assertNotNull(engine);
+    }
+
+    @Test
+    void flowExecutor_returnsInstance() {
+        assertNotNull(flowExecutor());
+    }
+
+    /** 组装 FlowExecutor（含五个叶子 executor + CEL 引擎），供 evalEngine 装配用例复用。 */
+    private com.sstlfsj.rule.kernel.internal.evaluator.FlowExecutor flowExecutor() {
+        return config.flowExecutor(
+                config.ruleVersionExecutor(config.ruleVersionCache(), defaultProps(), java.util.List.of()),
+                config.scorecardExecutor(),
+                config.decisionTreeExecutor(),
+                config.decisionTableExecutor(),
+                config.scriptExecutor(List.of(new CelExpressionEngine())),
+                List.of(new CelExpressionEngine()));
     }
 
     @Test
