@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.NodeType;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
@@ -53,7 +54,7 @@ public class InterpretedExecutor implements RuleVersionExecutor {
         boolean collect = TraceScope.COLLECT.orElse(true);
         // 非收集模式 sink 为 null，逐节点跳过 trace 构建
         List<NodeTrace> rawTraces = collect ? new ArrayList<>() : null;
-        boolean satisfied = eval(snapshot.conditionAst(), ctx, rawTraces);
+        boolean satisfied = eval(((AstBody) snapshot.body()).conditionAst(), ctx, rawTraces);
         List<NodeTrace> traces;
         if (collect) {
             // 顶层 trace 打上 ruleVersionId/code/version，供 TraceWriter 写库时使用

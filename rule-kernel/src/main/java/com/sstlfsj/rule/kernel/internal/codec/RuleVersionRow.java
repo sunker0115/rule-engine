@@ -9,7 +9,8 @@ public record RuleVersionRow(
         Long ruleVersionId,
         String sceneCode,
         Long tenantId,
-        String conditionAstJson,
+        /** rule_version.body JSON（多态 RuleBody：AstBody/ScriptBody/FlowBody，含 type 判别）。 */
+        String bodyJson,
         String preGatesJson,
         String decisionBindingsJson,
         String triggerEventTypesJson,
@@ -23,59 +24,7 @@ public record RuleVersionRow(
         String code,
         /** rule_version.version 版本号。 */
         long version,
-        /** rule_version.script_source JSON(ScriptSource {source,lang});非脚本规则为 null。 */
-        String scriptSourceJson,
-        /** rule_version.flow_graph JSON(FlowGraph {nodes,edges,inputNodeId});非 DECISION_FLOW 规则为 null。 */
-        String flowGraphJson,
-        /** rule_version.referenced_snapshots JSON(ruleCode → 冻结 RuleVersionSnapshot);非 DECISION_FLOW 规则为 null。 */
-        String referencedSnapshotsJson,
         /** scene.default_params JSON 字符串(scene 级,供 SceneSnapshotLoader 写 SceneRuleIndex);可能为 null。 */
         String defaultParamsJson
 ) {
-    /**
-     * 兼容旧调用点的便利构造（无 metricDependenciesJson / payloadDependenciesJson，均默认 null）。
-     *
-     * @param ruleVersionId        规则版本 id
-     * @param sceneCode            场景编码
-     * @param tenantId             租户 id
-     * @param conditionAstJson     条件 AST JSON
-     * @param preGatesJson         Pre-Gate JSON
-     * @param decisionBindingsJson Decision 绑定 JSON
-     * @param triggerEventTypesJson 触发事件类型 JSON
-     * @param kind                 规则类型
-     * @param decisionStrategy     场景执行策略
-     */
-    public RuleVersionRow(Long ruleVersionId, String sceneCode, Long tenantId,
-                          String conditionAstJson, String preGatesJson, String decisionBindingsJson,
-                          String triggerEventTypesJson, String kind, String decisionStrategy) {
-        this(ruleVersionId, sceneCode, tenantId, conditionAstJson, preGatesJson, decisionBindingsJson,
-                triggerEventTypesJson, kind, decisionStrategy, null, null, null, 0L, null, null, null, null);
-    }
-
-    /**
-     * 兼容旧 13 参调用点(无 scriptSourceJson,默认 null)。
-     *
-     * @param ruleVersionId         规则版本 id
-     * @param sceneCode             场景编码
-     * @param tenantId              租户 id
-     * @param conditionAstJson      条件 AST JSON
-     * @param preGatesJson          Pre-Gate JSON
-     * @param decisionBindingsJson  Decision 绑定 JSON
-     * @param triggerEventTypesJson 触发事件类型 JSON
-     * @param kind                  规则类型
-     * @param decisionStrategy      场景执行策略
-     * @param metricDependenciesJson metric 依赖 JSON
-     * @param payloadDependenciesJson payload 依赖 JSON
-     * @param code                  逻辑编码
-     * @param version               版本号
-     */
-    public RuleVersionRow(Long ruleVersionId, String sceneCode, Long tenantId,
-                          String conditionAstJson, String preGatesJson, String decisionBindingsJson,
-                          String triggerEventTypesJson, String kind, String decisionStrategy,
-                          String metricDependenciesJson, String payloadDependenciesJson,
-                          String code, long version) {
-        this(ruleVersionId, sceneCode, tenantId, conditionAstJson, preGatesJson, decisionBindingsJson,
-                triggerEventTypesJson, kind, decisionStrategy, metricDependenciesJson, payloadDependenciesJson,
-                code, version, null, null, null, null);
-    }
 }

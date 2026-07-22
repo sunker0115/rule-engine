@@ -7,6 +7,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
@@ -59,6 +60,17 @@ public class AstJsonCodec {
      */
     public AstNode deserializeAst(String json) throws JacksonException {
         return mapper.readValue(json, AstNode.class);
+    }
+
+    /**
+     * 将 JSON 字符串反序列化为多态 RuleBody（rule_version.body）；null/空白返回 null（Assembler 兜底）。
+     *
+     * @param json body JSON，形如 {"type":"AstBody","conditionAst":{...}}；可为 null
+     * @return RuleBody（AstBody/ScriptBody/FlowBody），或 null
+     */
+    public RuleBody deserializeBody(String json) throws JacksonException {
+        if (json == null || json.isBlank()) return null;
+        return mapper.readValue(json, RuleBody.class);
     }
 
     /**

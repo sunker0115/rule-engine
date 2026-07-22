@@ -2,6 +2,7 @@ package com.sstlfsj.rule.kernel.internal.evaluator;
 
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import org.slf4j.Logger;
@@ -65,7 +66,7 @@ public final class CompiledExecutor implements RuleVersionExecutor {
         Predicate<EvalContext> p = cache.get(id);
         if (p != null) return p;
         try {
-            p = compiler.compile(snapshot.conditionAst());
+            p = compiler.compile(((AstBody) snapshot.body()).conditionAst());
         } catch (RuntimeException e) {
             if (onCompileError == CompileErrorPolicy.FAIL) {
                 throw new IllegalStateException(

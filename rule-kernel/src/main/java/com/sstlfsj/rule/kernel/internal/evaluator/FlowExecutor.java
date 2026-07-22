@@ -8,6 +8,7 @@ import com.sstlfsj.rule.kernel.api.model.ExpressionLang;
 import com.sstlfsj.rule.kernel.api.model.FlowNodeType;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.FlowBody;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.flow.FlowEdge;
 import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
@@ -51,7 +52,7 @@ public class FlowExecutor implements RuleVersionExecutor {
 
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
-        FlowGraph graph = snapshot.flowGraph();
+        FlowGraph graph = snapshot.body() instanceof FlowBody fb ? fb.flowGraph() : null;
         if (graph == null || graph.inputNodeId() == null || graph.nodes().isEmpty()) {
             return EvalResult.error(EvalErrorCode.FLOW_GRAPH_MISSING);
         }
@@ -106,7 +107,7 @@ public class FlowExecutor implements RuleVersionExecutor {
         }
 
         private String handleRef(RuleRefNode ref) {
-            RuleVersionSnapshot refSnap = snapshot.referencedSnapshots().get(ref.ruleCode());
+            RuleVersionSnapshot refSnap = ((FlowBody) snapshot.body()).referencedSnapshots().get(ref.ruleCode());
             if (refSnap == null) throw new FlowHalt(EvalErrorCode.FLOW_REF_MISSING.name());
             RuleVersionExecutor exec = leafExecutors.get(refSnap.kind());
             if (exec == null) exec = leafExecutors.get(RuleKind.AST_BOOLEAN.tag());

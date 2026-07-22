@@ -6,78 +6,50 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class RuleVersionRowTest {
 
+    private static final String AST_BODY = "{\"type\":\"AstBody\",\"conditionAst\":{}}";
+
+    private RuleVersionRow row(String kind, String strategy, String metricDeps, String payloadDeps,
+                               String code, long version, String defaultParams) {
+        return new RuleVersionRow(1L, "scene", 2L, AST_BODY, "[]", "[]", "[]",
+                kind, strategy, metricDeps, payloadDeps, code, version, defaultParams);
+    }
+
     @Test
     void record_fieldsAccessible() {
-        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY");
-        assertThat(row.ruleVersionId()).isEqualTo(1L);
-        assertThat(row.sceneCode()).isEqualTo("scene");
-        assertThat(row.tenantId()).isEqualTo(2L);
-        assertThat(row.kind()).isEqualTo("AST_BOOLEAN");
-        assertThat(row.decisionStrategy()).isEqualTo("HIGHEST_PRIORITY");
+        RuleVersionRow r = row("AST_BOOLEAN", "HIGHEST_PRIORITY", null, null, null, 0L, null);
+        assertThat(r.ruleVersionId()).isEqualTo(1L);
+        assertThat(r.sceneCode()).isEqualTo("scene");
+        assertThat(r.tenantId()).isEqualTo(2L);
+        assertThat(r.bodyJson()).isEqualTo(AST_BODY);
+        assertThat(r.kind()).isEqualTo("AST_BOOLEAN");
+        assertThat(r.decisionStrategy()).isEqualTo("HIGHEST_PRIORITY");
     }
 
     @Test
     void record_nullKind_isAllowed() {
-        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                null, null);
-        assertThat(row.kind()).isNull();
-        assertThat(row.decisionStrategy()).isNull();
+        RuleVersionRow r = row(null, null, null, null, null, 0L, null);
+        assertThat(r.kind()).isNull();
+        assertThat(r.decisionStrategy()).isNull();
     }
 
     @Test
-    void record_metricDependenciesJson_retained() {
-        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\"]", "[\"amount\"]", "code", 1L);
-        assertThat(row.metricDependenciesJson()).isEqualTo("[\"balance\"]");
-    }
-
-    @Test
-    void record_payloadDependenciesJson_retained() {
-        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\"]", "[\"amount\"]", "code", 1L);
-        assertThat(row.payloadDependenciesJson()).isEqualTo("[\"amount\"]");
+    void record_metricAndPayloadDependenciesJson_retained() {
+        RuleVersionRow r = row("AST_BOOLEAN", "HIGHEST_PRIORITY", "[\"balance\"]", "[\"amount\"]", "code", 1L, null);
+        assertThat(r.metricDependenciesJson()).isEqualTo("[\"balance\"]");
+        assertThat(r.payloadDependenciesJson()).isEqualTo("[\"amount\"]");
     }
 
     @Test
     void record_codeAndVersion_retained() {
-        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[]", "[]", "large-trade", 3L);
-        assertThat(row.code()).isEqualTo("large-trade");
-        assertThat(row.version()).isEqualTo(3L);
-    }
-
-    @Test
-    void record_legacyConstructor_nullMetricAndPayloadDependenciesJson() {
-        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY");
-        assertThat(row.metricDependenciesJson()).isNull();
-        assertThat(row.payloadDependenciesJson()).isNull();
-    }
-
-    @Test
-    void record_legacyConstructor_nullCodeZeroVersion() {
-        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY");
-        assertThat(row.code()).isNull();
-        assertThat(row.version()).isEqualTo(0L);
+        RuleVersionRow r = row("AST_BOOLEAN", "HIGHEST_PRIORITY", "[]", "[]", "large-trade", 3L, null);
+        assertThat(r.code()).isEqualTo("large-trade");
+        assertThat(r.version()).isEqualTo(3L);
     }
 
     @Test
     void record_defaultParamsJson_retained() {
-        RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[]", "[]", "code", 1L,
-                null, null, null, "{\"timezone\":\"Asia/Shanghai\"}");
-        assertThat(row.defaultParamsJson()).isEqualTo("{\"timezone\":\"Asia/Shanghai\"}");
-    }
-
-    @Test
-    void record_legacyConstructors_nullDefaultParamsJson() {
-        RuleVersionRow nine = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY");
-        RuleVersionRow thirteen = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY", "[]", "[]", "code", 1L);
-        assertThat(nine.defaultParamsJson()).isNull();
-        assertThat(thirteen.defaultParamsJson()).isNull();
+        RuleVersionRow r = row("AST_BOOLEAN", "HIGHEST_PRIORITY", "[]", "[]", "code", 1L,
+                "{\"timezone\":\"Asia/Shanghai\"}");
+        assertThat(r.defaultParamsJson()).isEqualTo("{\"timezone\":\"Asia/Shanghai\"}");
     }
 }

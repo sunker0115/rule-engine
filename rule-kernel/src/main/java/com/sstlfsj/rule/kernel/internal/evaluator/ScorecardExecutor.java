@@ -6,6 +6,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalErrorCode;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.NodeType;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScoreBand;
@@ -34,7 +35,7 @@ public class ScorecardExecutor implements RuleVersionExecutor {
 
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
-        if (!(snapshot.conditionAst() instanceof ScorecardRootNode root)) {
+        if (!(snapshot.body() instanceof AstBody(ScorecardRootNode root))) {
             return EvalResult.error(EvalErrorCode.SCORECARD_AST_TYPE_MISMATCH);
         }
 

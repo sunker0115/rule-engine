@@ -8,9 +8,10 @@ class SnapshotAssemblerCodeTest {
     @Test
     void assembleCarriesCodeAndVersion() throws Exception {
         RuleVersionRow row = new RuleVersionRow(
-                100L, "scene", 1L, "{\"type\":\"AndNode\",\"children\":[]}",
+                100L, "scene", 1L,
+                "{\"type\":\"AstBody\",\"conditionAst\":{\"type\":\"AndNode\",\"children\":[]}}",
                 "[]", "[]", "[\"ev\"]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
-                "[]", "[]", "large-trade", 3L);
+                "[]", "[]", "large-trade", 3L, null);
         RuleVersionSnapshot s = new SnapshotAssembler().assemble(row);
         assertThat(s.code()).isEqualTo("large-trade");
         assertThat(s.version()).isEqualTo(3L);

@@ -59,8 +59,8 @@ class RuleVersionSnapshotBuilderTest {
                 .addDecisionBinding("BLOCK", 100)
                 .build();
 
-        assertThat(snap.conditionAst()).isInstanceOf(AndNode.class);
-        AndNode root = (AndNode) snap.conditionAst();
+        assertThat(((AstBody) snap.body()).conditionAst()).isInstanceOf(AndNode.class);
+        AndNode root = (AndNode) ((AstBody) snap.body()).conditionAst();
         assertThat(root.children()).hasSize(1);
         assertThat(((ConditionNode) root.children().get(0)).conditionType()).isEqualTo("GT");
     }

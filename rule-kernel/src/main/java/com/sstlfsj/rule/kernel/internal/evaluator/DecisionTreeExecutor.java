@@ -27,7 +27,7 @@ public class DecisionTreeExecutor implements RuleVersionExecutor {
 
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
-        if (!(snapshot.conditionAst() instanceof IfNode root)) {
+        if (!(snapshot.body() instanceof AstBody(IfNode root))) {
             return EvalResult.error(EvalErrorCode.DECISION_TREE_AST_TYPE_MISMATCH);
         }
         boolean collect = TraceScope.COLLECT.orElse(true);
