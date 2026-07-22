@@ -199,7 +199,7 @@ export default function FlowNodeInspectorDrawer({
               type="warning"
               showIcon
               style={{ marginBottom: 12 }}
-              message={t('editor.flow.drill.isolationNote', { code: refDetail.name })}
+              message={t('editor.flow.drill.isolationNote', { code: refDetail.code })}
             />
             {refDetail.kind === 'DECISION_FLOW' ? (
               <Alert type="info" showIcon message={t('editor.flow.drill.unsupportedKind', { kind: refDetail.kind })} />

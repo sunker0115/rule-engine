@@ -309,11 +309,10 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
   }, [graph, onChange, selectedId]);
 
   const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
-    const removedIds = changes.filter((c) => c.type === 'remove').map((c) => c.id);
-    if (!removedIds.length) return;
-    const keepEdges = rfEdges.filter((e) => !removedIds.includes(e.id));
-    const keepKeys = new Set(keepEdges.map((e) => `${e.source}->${e.target}->${e.label ?? ''}`));
-    onChange({ ...graph, edges: graph.edges.filter((e) => keepKeys.has(`${e.from}->${e.to}->${e.caseKey ?? ''}`)) });
+    const removedIds = new Set(changes.filter((c) => c.type === 'remove').map((c) => c.id));
+    if (!removedIds.size) return;
+    // rfEdges 与 graph.edges 一一对应同序，按下标 id 过滤，规避同 from/to/caseKey 复合键碰撞（重复连同一对节点时）
+    onChange({ ...graph, edges: graph.edges.filter((_, i) => !removedIds.has(rfEdges[i].id)) });
   }, [graph, onChange, rfEdges]);
 
   const onConnect = useCallback((conn: Connection) => {
