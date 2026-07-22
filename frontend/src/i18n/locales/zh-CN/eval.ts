@@ -86,6 +86,7 @@ const evalLoc: EvalTranslation = {
     nodeUnsatisfied: '不满足',
     nodeSkipped: '短路跳过',
     nodeError: '错误',
+    nodeFlowStep: '编排节点',
     preGateBlocked: '前置门控拦截',
     noData: '无追踪数据',
   },

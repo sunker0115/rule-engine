@@ -68,6 +68,7 @@ export function getRuleKindOptions(t: TFunction) {
     { value: 'DECISION_TREE',      label: t('enum.kind.DECISION_TREE')      },
     { value: 'DECISION_TABLE',     label: t('enum.kind.DECISION_TABLE')     },
     { value: 'EXPRESSION_SCRIPT',  label: t('enum.kind.EXPRESSION_SCRIPT')  },
+    { value: 'DECISION_FLOW',      label: t('enum.kind.DECISION_FLOW')      },
   ];
 }
 

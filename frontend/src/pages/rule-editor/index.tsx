@@ -98,6 +98,7 @@ export default function RuleEditor() {
           detail.triggerEventTypes ?? [],
           detail.kind,
           detail.script ?? null,
+          detail.flowGraph ?? null,
         );
         const [metaRes, sceneRes] = await Promise.all([
           getSceneMetadata(currentId, detail.sceneCode),
@@ -178,7 +179,7 @@ export default function RuleEditor() {
       </Sider>
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <Content style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-          <CenterPanel metadata={metadata} />
+          <CenterPanel metadata={metadata} sceneCode={ruleDetail.sceneCode} ruleCode={ruleDetail.code} tenantId={Number(ruleDetail.tenantId) || currentId || 0} analysisReport={analysisReport} onLeafChanged={reanalyze} />
         </Content>
         <div
           onClick={() => setRightCollapsed(!rightCollapsed)}

@@ -19,11 +19,12 @@ export default function RightPanel({ metadata, ruleDetail }: Props) {
   const { t } = useTranslation('rule');
   const { preGates, decisionBindings, script, setPreGates, setDecisionBindings, setScript } = useRuleStore();
 
-  // 评分卡决策由 bands 内联，不需要单独配置绑定
+  // 评分卡/决策树/决策表决策由自身结构内联，DECISION_FLOW 决策由 Output 节点内联，均不单独配置绑定
   const showBinding =
     ruleDetail.kind !== 'DECISION_TREE' &&
     ruleDetail.kind !== 'DECISION_TABLE' &&
-    ruleDetail.kind !== 'SCORECARD';
+    ruleDetail.kind !== 'SCORECARD' &&
+    ruleDetail.kind !== 'DECISION_FLOW';
 
   const langs = metadata?.expressionLangs ?? ['CEL'];
   const langOptions = langs.map((l) => ({ value: l, label: l }));

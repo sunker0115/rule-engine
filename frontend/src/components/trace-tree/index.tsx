@@ -14,14 +14,31 @@ const RESULT_ICON: Record<string, string> = {
   null: '⏭',
 };
 
-function resultIcon(result: boolean | null): string {
-  return RESULT_ICON[String(result)] ?? '⚠️';
+/** flow 编排节点 tag → antd Tag 颜色（对齐画布配色：RuleRef 蓝 / Switch 紫 / Transform 青 / Output 绿）。 */
+const FLOW_TAG_COLOR: Record<string, string> = {
+  RuleRefNode: 'blue',
+  SwitchNode: 'purple',
+  TransformNode: 'cyan',
+  OutputNode: 'green',
+};
+
+/** 是否为 DECISION_FLOW 图的编排节点（trace 的 nodeType == FlowNodeType.tag）。 */
+function isFlowNode(nodeType: string): boolean {
+  return nodeType in FLOW_TAG_COLOR;
 }
 
-function resultLabel(result: boolean | null, t: (key: string) => string): string {
-  if (result === true) return t('trace.nodeSatisfied');
-  if (result === false) return t('trace.nodeUnsatisfied');
-  if (result === null) return t('trace.nodeSkipped');
+function resultIcon(node: NodeTraceItem): string {
+  // flow 编排节点（Switch/Transform 等）result 恒 null，但语义是「已执行的编排步骤」而非「短路跳过」，
+  // 故不用 ⏭ skip 图标；有明确 true/false 的（如 RuleRef 命中）仍按结果显示。
+  if (node.result === null && isFlowNode(node.nodeType)) return '▸';
+  return RESULT_ICON[String(node.result)] ?? '⚠️';
+}
+
+function resultLabel(node: NodeTraceItem, t: (key: string) => string): string {
+  if (node.result === null && isFlowNode(node.nodeType)) return t('trace.nodeFlowStep');
+  if (node.result === true) return t('trace.nodeSatisfied');
+  if (node.result === false) return t('trace.nodeUnsatisfied');
+  if (node.result === null) return t('trace.nodeSkipped');
   return t('trace.nodeError');
 }
 
@@ -64,8 +81,8 @@ function TraceNode({
           expanded ? <CaretDownOutlined style={{ fontSize: 10 }} /> : <CaretRightOutlined style={{ fontSize: 10 }} />
         )}
         {!hasChildren && <span style={{ width: 10 }} />}
-        <span title={resultLabel(node.result, t)}>{resultIcon(node.result)}</span>
-        <Tag>{node.nodeType}</Tag>
+        <span title={resultLabel(node, t)}>{resultIcon(node)}</span>
+        <Tag color={FLOW_TAG_COLOR[node.nodeType]}>{node.nodeType}</Tag>
         {node.metricCode && <Tag color="blue">{node.metricCode}</Tag>}
         {node.actualValue !== undefined && (
           <span style={{ color: '#666', marginLeft: 8 }}>= {JSON.stringify(node.actualValue)}</span>

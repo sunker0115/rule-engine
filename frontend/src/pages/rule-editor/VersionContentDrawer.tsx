@@ -56,6 +56,9 @@ export default function VersionContentDrawer({ open, onClose, tenantId, ruleId, 
           {content.script && (
             <Descriptions.Item label={t('editor.versionContent.script')}>{json(content.script)}</Descriptions.Item>
           )}
+          {content.flowGraph && (
+            <Descriptions.Item label={t('editor.versionContent.flowGraph')}>{json(content.flowGraph)}</Descriptions.Item>
+          )}
           <Descriptions.Item label={t('editor.versionContent.publishedBy')}>
             {content.publishedBy || '—'}
           </Descriptions.Item>

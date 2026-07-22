@@ -38,7 +38,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
   const { currentId } = useTenantStore();
   // 优先用规则自身的 tenantId（从详情带回），避免依赖全局未选时传 0 导致后端校验失败
   const tenantId = Number(ruleDetail.tenantId) || currentId || 0;
-  const { ast, decisionBindings, preGates, triggerEventTypes, script, dirty } = useRuleStore();
+  const { ast, decisionBindings, preGates, triggerEventTypes, script, flowGraph, dirty } = useRuleStore();
   const [saving, setSaving] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [viewVersionId, setViewVersionId] = useState<number | null>(null);
@@ -64,6 +64,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
         kind: ruleDetail.kind,
         name: ruleDetail.name,
         script,
+        flowGraph,
       });
       message.success(tc('message.saveSuccess'));
       // 草稿存盘后内容变了，规则集分析失效——轻量重算（不走全量 onUpdated，避免冗余请求）

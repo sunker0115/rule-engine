@@ -86,6 +86,7 @@ const evalLoc: EvalTranslation = {
     nodeUnsatisfied: 'Unsatisfied',
     nodeSkipped: 'Skipped',
     nodeError: 'Error',
+    nodeFlowStep: 'Flow step',
     preGateBlocked: 'Pre-Gate Blocked',
     noData: 'No trace data',
   },

@@ -252,12 +252,12 @@ export interface RuleTranslation {
     versionStatus: { DRAFT: string; ACTIVE: string; SUPERSEDED: string };
     kind: {
       AST_BOOLEAN: string; SCORECARD: string;
-      DECISION_TREE: string; DECISION_TABLE: string; EXPRESSION_SCRIPT: string;
+      DECISION_TREE: string; DECISION_TABLE: string; EXPRESSION_SCRIPT: string; DECISION_FLOW: string;
     };
   };
   editor: {
     leftPanel: { ruleInfo: string; versionTimeline: string; executorLabel: string; dividerPublish: string; dividerManage: string; dryRunVersion: string };
-    versionContent: { title: string; version: string; conditionAst: string; decisionBindings: string; preGates: string; triggerEventTypes: string; script: string; publishedBy: string };
+    versionContent: { title: string; version: string; conditionAst: string; decisionBindings: string; preGates: string; triggerEventTypes: string; script: string; flowGraph: string; publishedBy: string };
     versionDiff: { title: string; hint: string };
     versionRestore: { title: string; confirm: string; created: string; blockedByDraft: string };
     centerPanel: { placeholder: string };
@@ -305,6 +305,23 @@ export interface RuleTranslation {
     script: {
       placeholder: string;
       syntaxHints: Record<string, string>;
+    };
+    flow: {
+      palette: { title: string };
+      toolbar: { analysisPass: string; analysisIssues: string };
+      entry: string;
+      emptyGraph: string;
+      node: { selectRule: string; addCase: string };
+      inspector: {
+        title: string; lang: string; expression: string; caseKeys: string;
+        outputKey: string; decisionCode: string; ruleCode: string;
+        nodeId: string; emptyHint: string;
+      };
+      drill: {
+        title: string; isolationNote: string; reuseHint: string;
+        save: string; newLeaf: string; newLeafTitle: string;
+        unsupportedKind: string; ruleRefEmpty: string;
+      };
     };
     createModal: {
       code: string; name: string; kind: string;
@@ -415,6 +432,7 @@ export interface EvalTranslation {
   trace: {
     expandAll: string; collapseAll: string; copyJson: string;
     nodeSatisfied: string; nodeUnsatisfied: string; nodeSkipped: string; nodeError: string;
+    nodeFlowStep: string;
     preGateBlocked: string;
     noData: string;
   };

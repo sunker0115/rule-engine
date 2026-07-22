@@ -25,6 +25,7 @@ function contentForDiff(c: RuleVersionContent): Record<string, unknown> {
     preGates: c.preGates,
     triggerEventTypes: c.triggerEventTypes,
     script: c.script,
+    flowGraph: c.flowGraph,
   };
 }
 

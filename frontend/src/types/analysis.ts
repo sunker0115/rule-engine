@@ -56,6 +56,24 @@ export interface RedundancyFinding {
   severity: Severity;
 }
 
+/** DECISION_FLOW 决策图内的有向环——发布期拒收（严重度恒 ERROR）。 */
+export interface FlowCycleFinding {
+  ruleCode: string;
+  version: number;
+  cycleNodeIds: string[];
+  reason: string;
+  severity: Severity;
+}
+
+/** DECISION_FLOW 决策图内从入口不可达的死节点——仅告警（严重度恒 WARN）。 */
+export interface FlowDeadNodeFinding {
+  ruleCode: string;
+  version: number;
+  deadNodeId: string;
+  reason: string;
+  severity: Severity;
+}
+
 /** 规则集静态分析报告——对齐 GET /admin/v1/scenes/{sceneCode}/analysis 响应。 */
 export interface RuleSetAnalysisReport {
   sceneCode: string;
@@ -66,4 +84,8 @@ export interface RuleSetAnalysisReport {
   coverageGaps: CoverageGap[];
   unanalyzableRules: UnanalyzableRule[];
   redundancies: RedundancyFinding[];
+  /** DECISION_FLOW 决策图内有向环（图内维度，供画布标红成环边）。 */
+  flowCycles: FlowCycleFinding[];
+  /** DECISION_FLOW 决策图内死节点（图内维度，供画布置灰死节点）。 */
+  flowDeadNodes: FlowDeadNodeFinding[];
 }

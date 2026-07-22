@@ -1,6 +1,7 @@
 import type { AstNode } from './ast';
+import type { FlowGraph } from './flow';
 
-export type RuleKind = 'AST_BOOLEAN' | 'SCORECARD' | 'DECISION_TREE' | 'DECISION_TABLE' | 'EXPRESSION_SCRIPT';
+export type RuleKind = 'AST_BOOLEAN' | 'SCORECARD' | 'DECISION_TREE' | 'DECISION_TABLE' | 'EXPRESSION_SCRIPT' | 'DECISION_FLOW';
 export type RuleStatus = 'DRAFT' | 'PUBLISHED' | 'DISABLED';
 export type VersionStatus = 'DRAFT' | 'ACTIVE' | 'SUPERSEDED';
 
@@ -23,6 +24,8 @@ export interface RuleDetail extends RuleListItem {
   sceneCode: string;        // 详情接口返回，列表不返回
   conditionAst?: AstNode | null;
   script?: { source: string; lang: string } | null;
+  /** DECISION_FLOW 规则的决策图；其它 kind 为 null。与 conditionAst/script 平级三选一。 */
+  flowGraph?: FlowGraph | null;
   decisionBindings: DecisionBinding[];
   preGates: PreGate[];
   triggerEventTypes: string[];
@@ -57,6 +60,8 @@ export interface RuleVersionContent {
   preGates: PreGate[];
   triggerEventTypes: string[];
   script?: { source: string; lang: string } | null;
+  /** DECISION_FLOW 规则的决策图；其它 kind 为 null。 */
+  flowGraph?: FlowGraph | null;
   createdAt?: string | null;
   publishedBy?: string | null;
   publishedAt?: string | null;

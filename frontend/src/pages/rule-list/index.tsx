@@ -101,6 +101,9 @@ export default function RuleList() {
       if (values.kind === 'EXPRESSION_SCRIPT') {
         const lang = values.scriptLang || 'CEL';
         body.script = { lang, source: values.scriptSource || defaultTrueFor(lang) };
+      } else if (values.kind === 'DECISION_FLOW') {
+        // 最小合法骨架：单个 Output 入口节点（decisionCode 待填），避免发布期结构校验拒空图；余下在画布编排
+        body.flowGraph = { nodes: [{ type: 'OutputNode', id: 'output_1', decisionCode: '' }], edges: [], inputNodeId: 'output_1' };
       }
       const created = await createRule(currentId!, body);
       message.success(tc('message.createSuccess'));
