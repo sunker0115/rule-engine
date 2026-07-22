@@ -177,6 +177,7 @@ FlowBody fb = (FlowBody) snapshot.body(); fb.flowGraph(); fb.referencedSnapshots
 | rule-api | `RuleContentSource.body()`；3 请求 DTO→`body`；`RuleController.toContent` 透传；（EvalAutoConfiguration executors 注册不变） |
 | rule-sdk / -spring-boot-starter | `RuleEngineClient` 本地建规则走 body |
 | frontend | `types/rule.ts` body 判别联合；`ruleStore` body 状态；`CenterPanel` 按 body.type 分派；两创建弹窗播种 body 骨架；`VersionContentDrawer`/`VersionDiffDrawer` 只读按 body.type |
+| docs/examples | **live** 剧本的规则请求体 JSON（`conditionAst`/`script`/`flowGraph` → `body`）+ 预期结果；`archive/` 下历史样例冻结不动（不再跑） |
 
 ## spec delta（docs 正文登记点）
 
@@ -192,6 +193,17 @@ FlowBody fb = (FlowBody) snapshot.body(); fb.flowGraph(); fb.referencedSnapshots
   - `UNRESOLVED_VARIABLE`:675 措辞（"conditionAst / pre_gates / payload 引用" → "body / pre_gates / payload 引用"）；
   - 错误码清单加 `KIND_BODY_MISMATCH`（若新增）。
 - `README.md`：D12 行 / 核心决策表按需补 D76。
+- `docs/examples/`：live 剧本规则请求体 JSON + 预期响应从平铺三字段改 `body`（archive 冻结不动）。
+
+## 评审记录（自审，GATE 1 —— 用户授权代审）
+
+需求已锁定（L2 / RuleBody 命名 / decisionBindings 留平铺 / kind 保留 + 一致性校验），以评审者身份对抗性自审，结论 **通过**。查实并处理：
+
+- **F1（已补）**：`docs/examples/**/rules/*.json` live 剧本用平铺请求字段，API 改 body 后须同步——已并入改动清单 + spec-delta。
+- **F3（核实非阻塞）**：`contentHash` 不落库（`RuleExportService` 导出算 / `RuleImportService` 导入重算比对），Hasher 改单 body 键**无需 DB 迁移**；仅"改造前 bundle 改造后重导入失幂等"，greenfield 无关。
+- **F2（计划细节）**：`SnapshotAssembler` 遇 body 缺失降级——迁移后 body NOT NULL 理论不现，保守默认空 `AstBody` + 降级日志。
+- **F4（计划细节）**：`RuleVersionSnapshot.Builder` 保留 `.conditionAst()/.script()/.flowGraph()` 便捷方法（内部包成对应变体，非复活 soup）还是仅 `.body()`——writing-plans 定，倾向保留便捷方法（本地 SDK 人机工学）。
+- 无过度设计：三变体 = 三承载，无投机变体；`decisionBindings`/依赖正确留平铺。
 
 ## 命名（待 GATE 确认）
 
