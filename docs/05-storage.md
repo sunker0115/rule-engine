@@ -34,7 +34,7 @@
 | `metric_definition` | 指标元数据（sourceType / params / cacheTtl / allowProvided） | 同步事务 | 永久 |
 | `connector_definition` | 声明式 HTTP 连接器（descriptor：request/response/auth/resilience/errorMapping），`EXTERNAL_HTTP` metric 经 `params.connector` 引用（D72） | 同步事务 | 永久 |
 | `rule_definition` | 规则主记录（code / name / status） | 同步事务 | 永久 |
-| `rule_version` | 规则版本快照（conditionAst / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
+| `rule_version` | 规则版本快照（conditionAst / scriptSource / flowGraph / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
 | `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级（D26） | 同步事务 | 永久 |
 | `rule_decision_binding` | 规则与 Decision 的绑定关系（支持可选 score 区间，D26 SCORECARD 占位） | 同步事务 | 永久 |
 | `scheduled_task` | 通用调度任务定义（§3.10）：`task_type` 判别 + typed 静态 `config` + 运行态 `run_cursor` 列，TRIGGER 为评估触发类型 | 同步事务 | 永久 |
@@ -153,7 +153,7 @@ CREATE TABLE rule_definition (
   name          VARCHAR(255) NOT NULL,
   description   TEXT,
   status          VARCHAR(16) NOT NULL DEFAULT 'DRAFT' COMMENT '取值: DRAFT/PUBLISHED/DISABLED；D19 状态机：DRAFT─单DB原子事务─▶PUBLISHED（失败回滚保持原态、无中间态），PUBLISHED↔DISABLED；DISABLED=关停',
-  kind            VARCHAR(32) NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT '取值: AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE/EXPRESSION_SCRIPT；D12：Rule 形态；五种 kind 均已实装（含 EXPRESSION_SCRIPT，D66）',
+  kind            VARCHAR(32) NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT '取值: AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE/EXPRESSION_SCRIPT/DECISION_FLOW；D12：Rule 形态；六种 kind 均已实装（EXPRESSION_SCRIPT D66 / DECISION_FLOW D75）',
   current_version BIGINT       COMMENT '当前有效 rule_version.id（注意：存的是 rule_version 表的主键 id，而非 rule_version.version 字段）；DRAFT 时为 null',
   published_by    VARCHAR(64)  COMMENT '最后发布人（来自 audit_log.actor）',
   published_at    TIMESTAMP(3)  COMMENT '最后发布时间',
@@ -173,10 +173,13 @@ CREATE TABLE rule_version (
   id                    BIGINT AUTO_INCREMENT PRIMARY KEY,
   rule_definition_id    BIGINT       NOT NULL COMMENT '关联 rule_definition.id',
   version               BIGINT       NOT NULL COMMENT '单调递增，per rule_definition（Long 型，匹配概念层 RuleVersion.version）',
-  condition_ast         JSON         NOT NULL COMMENT '完整 AST 节点树，不可变',
+  condition_ast         JSON         NULL     COMMENT '完整 AST 节点树，不可变；AST 系 kind 承载，EXPRESSION_SCRIPT/DECISION_FLOW 时为 NULL（V1_29/V1_32 放开 NOT NULL）',
+  script_source         JSON         NULL     COMMENT 'EXPRESSION_SCRIPT 脚本载体 {source,lang}（D66，V1_28）；其它 kind 为 NULL',
+  flow_graph            JSON         NULL     COMMENT 'DECISION_FLOW 决策图 {nodes,edges,inputNodeId}（D75，V1_39）；其它 kind 为 NULL。三承载 condition_ast/script_source/flow_graph 按 kind 三选一互斥',
+  referenced_snapshots  JSON         NULL     COMMENT 'DECISION_FLOW 发布期冻结的被引规则快照 ruleCode→RuleVersionSnapshot（D75，V1_39）；评估期直读组装，守零额外查询；其它 kind 为 NULL',
   decision_bindings     JSON         NOT NULL COMMENT 'Decision 绑定快照（含 code/name/priority；D26）',
   pre_gates             JSON         NOT NULL COMMENT 'Pre-Gate 列表（v1 仅 ROLLOUT，D52；RATE_LIMIT/MUTEX 已移除，黑白名单改走 BOOLEAN metric+condition）；灰度由 ROLLOUT 项承载，params 含 percentage / bucketStart / bucketEnd / experimentId（详见 10-api-contract）',
-  kind                  VARCHAR(32) NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT '取值: AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE/EXPRESSION_SCRIPT；D12：规则形态冻结；五种 kind 均已实装（含 EXPRESSION_SCRIPT，D66）',
+  kind                  VARCHAR(32) NOT NULL DEFAULT 'AST_BOOLEAN' COMMENT '取值: AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE/EXPRESSION_SCRIPT/DECISION_FLOW；D12：规则形态冻结；六种 kind 均已实装（EXPRESSION_SCRIPT D66 / DECISION_FLOW D75）',
   trigger_event_types   JSON         NOT NULL COMMENT '触发事件类型列表',
   metric_dependencies   JSON         NOT NULL COMMENT 'B6：AST 引用的 (metricCode, metricVersion) 对象数组（发布期冻结当前 ACTIVE 版本），格式 [{metricCode,metricVersion},...]',
   compiled_predicate_ref VARCHAR(256) NULL     COMMENT 'D20 §5：编译产物引用键，v1 留空，v1.5 预编译优化时启用',
