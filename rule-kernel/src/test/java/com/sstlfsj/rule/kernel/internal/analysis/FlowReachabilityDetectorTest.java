@@ -86,6 +86,17 @@ class FlowReachabilityDetectorTest {
     }
 
     @Test
+    void input_pointing_to_nonexistent_node_makes_all_nodes_dead() {
+        // inputNodeId 指向不存在节点(畸形草稿)→ 可达集为空 → 全部节点判死(:75 刻意行为)
+        FlowGraph flow = graph(
+                List.of(ref("n1"), out("out")),
+                List.of(edge("n1", "out")),
+                "ghost-input");
+
+        assertThat(FlowReachabilityDetector.deadNodes(flow)).containsExactly("n1", "out");
+    }
+
+    @Test
     void non_flow_rule_is_skipped() {
         AnalyzableRule astRule = new AnalyzableRule("R-ast", 1L, null, List.of(),
                 RuleKind.AST_BOOLEAN.tag());

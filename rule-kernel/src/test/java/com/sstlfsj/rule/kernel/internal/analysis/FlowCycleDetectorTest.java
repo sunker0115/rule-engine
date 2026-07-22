@@ -73,6 +73,17 @@ class FlowCycleDetectorTest {
     }
 
     @Test
+    void cycle_excludes_non_cycle_prefix_reachable_before_the_loop() {
+        // a -> b -> c -> b：a 是环前缀(不在环内)，DFS 从 a 出发经 b 才成环 → cycle = [b, c]，须裁掉 a
+        FlowGraph flow = graph(
+                List.of(ref("a"), ref("b"), ref("c")),
+                List.of(edge("a", "b"), edge("b", "c"), edge("c", "b")),
+                "a");
+
+        assertThat(FlowCycleDetector.findCycle(flow)).containsExactly("b", "c");
+    }
+
+    @Test
     void self_loop_is_detected() {
         // n1 -> n1 自环
         FlowGraph flow = graph(
