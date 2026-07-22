@@ -58,6 +58,7 @@ class RuleControllerTest {
                         java.util.List.of(),
                         java.util.List.of(),
                         null,
+                        null,
                         42L,
                         java.util.List.of()));
 
@@ -78,7 +79,7 @@ class RuleControllerTest {
                 new RuleVersionContentVO(20L, 2L, "ACTIVE", "AST_BOOLEAN",
                         new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
                         java.util.List.of(), java.util.List.of(), java.util.List.of("TXN"),
-                        null, "2026-06-16T00:00", "u1", "2026-06-16T01:00"));
+                        null, null, "2026-06-16T00:00", "u1", "2026-06-16T01:00"));
 
         mockMvc.perform(get("/admin/v1/rules/10/versions/20").param("tenantId", "1"))
                 .andExpect(status().isOk())

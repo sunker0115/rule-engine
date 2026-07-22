@@ -120,7 +120,7 @@ class ConfigServiceTest {
     void createDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.createDraft(1L, "SCENE_A", "RULE_001",
-                        new RuleContent("规则名", null, null, null, null, null, null), "actor"));
+                        new RuleContent("规则名", null, null, null, null, null, null, null), "actor"));
     }
 
     @Test
@@ -133,14 +133,14 @@ class ConfigServiceTest {
     void editDraft_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.editDraft(1L, 1L,
-                        new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null), "actor"));
+                        new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null, null), "actor"));
     }
 
     @Test
     void newVersion_stubThrowsUnsupported() {
         assertThrows(UnsupportedOperationException.class,
                 () -> stub.newVersion(1L, 1L,
-                        new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null), null, "actor"));
+                        new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null, null), null, "actor"));
     }
 
     @Test

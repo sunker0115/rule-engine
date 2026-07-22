@@ -5,6 +5,8 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
+import com.sstlfsj.rule.kernel.api.model.flow.OutputNode;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -23,8 +25,8 @@ class RuleContentHasherTest {
         var ast = new AndNode(List.of(new ConditionNode("GT", "amount", null, Map.of("threshold", 100), 0.0)), null, null);
         var bindings = List.of(new DecisionBinding("BLOCK", 100));
 
-        String h1 = RuleContentHasher.ruleHash(ast, bindings, List.of(), "AST_BOOLEAN", List.of("login"), null, om);
-        String h2 = RuleContentHasher.ruleHash(ast, bindings, List.of(), "AST_BOOLEAN", List.of("login"), null, om);
+        String h1 = RuleContentHasher.ruleHash(ast, bindings, List.of(), "AST_BOOLEAN", List.of("login"), null, null, om);
+        String h2 = RuleContentHasher.ruleHash(ast, bindings, List.of(), "AST_BOOLEAN", List.of("login"), null, null, om);
 
         assertThat(h1).isEqualTo(h2);
         assertThat(h1).hasSize(64);  // SHA-256 hex = 64 chars
@@ -35,8 +37,8 @@ class RuleContentHasherTest {
         var ast1 = new AndNode(List.of(), null, null);
         var ast2 = new AndNode(List.of(new ConditionNode("GT", "amount", null, Map.of("threshold", 100), 0.0)), null, null);
 
-        String h1 = RuleContentHasher.ruleHash(ast1, List.of(), List.of(), "AST_BOOLEAN", List.of(), null, om);
-        String h2 = RuleContentHasher.ruleHash(ast2, List.of(), List.of(), "AST_BOOLEAN", List.of(), null, om);
+        String h1 = RuleContentHasher.ruleHash(ast1, List.of(), List.of(), "AST_BOOLEAN", List.of(), null, null, om);
+        String h2 = RuleContentHasher.ruleHash(ast2, List.of(), List.of(), "AST_BOOLEAN", List.of(), null, null, om);
 
         assertThat(h1).isNotEqualTo(h2);
     }
@@ -44,8 +46,8 @@ class RuleContentHasherTest {
     @Test
     void nullParams_treatedAsEmpty_stableHash() {
         // null 与空列表语义等价，hash 应相同（规范化处理）
-        String h1 = RuleContentHasher.ruleHash(null, null, null, null, null, null, om);
-        String h2 = RuleContentHasher.ruleHash(null, List.of(), List.of(), "AST_BOOLEAN", List.of(), null, om);
+        String h1 = RuleContentHasher.ruleHash(null, null, null, null, null, null, null, om);
+        String h2 = RuleContentHasher.ruleHash(null, List.of(), List.of(), "AST_BOOLEAN", List.of(), null, null, om);
 
         assertThat(h1).isEqualTo(h2);
     }
@@ -56,16 +58,30 @@ class RuleContentHasherTest {
         ScriptSource s1 = new ScriptSource("metrics.amount > 1000", "CEL");
         ScriptSource s2 = new ScriptSource("metrics.amount > 2000", "CEL");
 
-        String h1 = RuleContentHasher.ruleHash(null, List.of(), List.of(), "EXPRESSION_SCRIPT", List.of(), s1, om);
-        String h2 = RuleContentHasher.ruleHash(null, List.of(), List.of(), "EXPRESSION_SCRIPT", List.of(), s2, om);
+        String h1 = RuleContentHasher.ruleHash(null, List.of(), List.of(), "EXPRESSION_SCRIPT", List.of(), s1, null, om);
+        String h2 = RuleContentHasher.ruleHash(null, List.of(), List.of(), "EXPRESSION_SCRIPT", List.of(), s2, null, om);
+
+        assertThat(h1).isNotEqualTo(h2);
+    }
+
+    @Test
+    void flowGraphDiffers_differentHash() {
+        // flowGraph 的 nodes 不同 → hash 不同（幂等红线：ast/script 均 null 时靠 flowGraph 区分）
+        FlowGraph f1 = new FlowGraph(
+                List.of(new OutputNode("out", "PASS")), List.of(), "out");
+        FlowGraph f2 = new FlowGraph(
+                List.of(new OutputNode("out", "REVIEW")), List.of(), "out");
+
+        String h1 = RuleContentHasher.ruleHash(null, List.of(), List.of(), "DECISION_FLOW", List.of(), null, f1, om);
+        String h2 = RuleContentHasher.ruleHash(null, List.of(), List.of(), "DECISION_FLOW", List.of(), null, f2, om);
 
         assertThat(h1).isNotEqualTo(h2);
     }
 
     @Test
     void bundleRevision_dependsOnContentHashes() {
-        var entry1 = new RuleBundle.RuleEntry("r1", "n", "AST_BOOLEAN", "s", null, List.of(), List.of(), List.of(), List.of(), List.of(), null, "hash-a");
-        var entry2 = new RuleBundle.RuleEntry("r2", "n", "AST_BOOLEAN", "s", null, List.of(), List.of(), List.of(), List.of(), List.of(), null, "hash-b");
+        var entry1 = new RuleBundle.RuleEntry("r1", "n", "AST_BOOLEAN", "s", null, List.of(), List.of(), List.of(), List.of(), List.of(), null, null, "hash-a");
+        var entry2 = new RuleBundle.RuleEntry("r2", "n", "AST_BOOLEAN", "s", null, List.of(), List.of(), List.of(), List.of(), List.of(), null, null, "hash-b");
 
         RuleBundle b1 = new RuleBundle(2, null, "t", "t1", List.of(entry1, entry2), List.of(), List.of(), List.of());
         RuleBundle b2 = new RuleBundle(2, null, "t", "t1", List.of(entry1), List.of(), List.of(), List.of());

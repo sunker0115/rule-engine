@@ -32,12 +32,12 @@ class RuleBundleTest {
                                 List.of(), List.of("transfer"),
                                 List.of(new MetricDependency("account.age", 1)),
                                 List.of(new PayloadDependency("amount", "NUMBER", true)),
-                                null, "hash-abc"),
+                                null, null, "hash-abc"),
                         new RuleBundle.RuleEntry(
                                 "rule.new.account", "新户拦截", "AST_BOOLEAN", "risk.transfer",
                                 new AndNode(List.of(), null, null),
                                 List.of(), List.of(), List.of(), List.of(), List.of(),
-                                null, null)),
+                                null, null, null)),
                 List.of(new RuleBundle.SceneSnapshot(
                         "risk.transfer", "转账风控", "desc", "USER", "PUSH", "HIGHEST_PRIORITY",
                         List.of("transfer"),
@@ -76,7 +76,7 @@ class RuleBundleTest {
                 List.of(new RuleBundle.RuleEntry(
                         "rule.cel", "CEL规则", "EXPRESSION_SCRIPT", "scene1",
                         null, List.of(), List.of(), List.of(), List.of(), List.of(),
-                        script, "hash-cel")),
+                        script, null, "hash-cel")),
                 List.of(), List.of(), List.of());
 
         String json = mapper.writeValueAsString(bundle);

@@ -7,6 +7,7 @@ import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
@@ -36,12 +37,13 @@ public final class RuleContentHasher {
      * @param kind     规则类型标签（null 视为 AST_BOOLEAN）
      * @param triggers 触发事件类型（null 视为空列表）
      * @param script   EXPRESSION_SCRIPT 脚本载体（其他 kind 为 null）
+     * @param flowGraph DECISION_FLOW 决策图（其他 kind 为 null；须进 hash，否则两条不同 flow 撞同一 hash）
      * @param om       Jackson ObjectMapper（用于 AstNode 等 typed 对象序列化）
      * @return SHA-256 hex 字符串（64 位小写）
      */
     public static String ruleHash(AstNode ast, List<DecisionBinding> bindings, List<PreGateConfig> gates,
                                    String kind, List<String> triggers, ScriptSource script,
-                                   ObjectMapper om) {
+                                   FlowGraph flowGraph, ObjectMapper om) {
         try {
             // 固定字段顺序构建规范化 Map
             Map<String, Object> canonical = new LinkedHashMap<>();
@@ -51,6 +53,7 @@ public final class RuleContentHasher {
             canonical.put("preGates", gates != null ? gates : List.of());
             canonical.put("triggerEventTypes", triggers != null ? triggers : List.of());
             canonical.put("script", script);  // null 时 Jackson 序列化为 null，语义稳定
+            canonical.put("flowGraph", flowGraph);  // 幂等红线：flow 的 ast/script 均 null，不进 hash 则不同 flow 撞同一 hash
 
             String json = om.writeValueAsString(canonical);
             return sha256Hex(json);

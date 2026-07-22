@@ -131,7 +131,7 @@ class RuleAnalysisIT {
         DraftCreatedResult draft = configService.createDraft(TENANT, SCENE, code,
                 new RuleContent(code, "AST_BOOLEAN", ast,
                         List.of(new DecisionBinding(decisionCode, 0)),
-                        List.of(), List.of(EVENT), null),
+                        List.of(), List.of(EVENT), null, null),
                 ACTOR);
         configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
     }

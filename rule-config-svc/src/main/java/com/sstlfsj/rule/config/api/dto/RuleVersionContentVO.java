@@ -4,6 +4,7 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 
 import java.util.List;
 
@@ -13,4 +14,5 @@ public record RuleVersionContentVO(
         AstNode conditionAst, List<DecisionBinding> decisionBindings,
         List<PreGateConfig> preGates, List<String> triggerEventTypes,
         ScriptSource script,
+        FlowGraph flowGraph,
         String createdAt, String publishedBy, String publishedAt) {}

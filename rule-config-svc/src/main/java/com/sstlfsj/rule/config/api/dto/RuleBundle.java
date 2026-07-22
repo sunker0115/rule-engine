@@ -6,6 +6,7 @@ import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 
 import java.util.List;
 import java.util.Map;
@@ -56,7 +57,9 @@ public record RuleBundle(
             List<PayloadDependency> payloadDependencies,
             /** EXPRESSION_SCRIPT 规则的脚本载体；其他 kind 为 null。 */
             ScriptSource script,
-            /** 规则内容 SHA-256（conditionAst/bindings/preGates/kind/triggers/script），import 幂等判断用。 */
+            /** DECISION_FLOW 规则的决策图；其他 kind 为 null。 */
+            FlowGraph flowGraph,
+            /** 规则内容 SHA-256（conditionAst/bindings/preGates/kind/triggers/script/flowGraph），import 幂等判断用。 */
             String contentHash
     ) {}
 

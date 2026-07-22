@@ -28,6 +28,8 @@ public interface RuleVersionReadMapper {
               rd.code            AS code,
               rv.version         AS version,
               rv.script_source   AS scriptSourceJson,
+              rv.flow_graph      AS flowGraphJson,
+              rv.referenced_snapshots AS referencedSnapshotsJson,
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
@@ -54,6 +56,8 @@ public interface RuleVersionReadMapper {
               rd.code            AS code,
               rv.version         AS version,
               rv.script_source   AS scriptSourceJson,
+              rv.flow_graph      AS flowGraphJson,
+              rv.referenced_snapshots AS referencedSnapshotsJson,
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
@@ -83,6 +87,8 @@ public interface RuleVersionReadMapper {
               rd.code            AS code,
               rv.version         AS version,
               rv.script_source   AS scriptSourceJson,
+              rv.flow_graph      AS flowGraphJson,
+              rv.referenced_snapshots AS referencedSnapshotsJson,
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id

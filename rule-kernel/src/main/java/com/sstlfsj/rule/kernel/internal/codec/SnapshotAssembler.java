@@ -7,10 +7,12 @@ import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -53,6 +55,9 @@ public class SnapshotAssembler {
         List<PayloadDependency> payloadDependencies = codec.deserializePayloadDependencies(
                 row.payloadDependenciesJson() == null ? "[]" : row.payloadDependenciesJson());
         ScriptSource script = codec.deserializeScriptSource(row.scriptSourceJson());
+        FlowGraph flowGraph = codec.deserializeFlowGraph(row.flowGraphJson());
+        Map<String, RuleVersionSnapshot> referencedSnapshots =
+                codec.deserializeReferencedSnapshots(row.referencedSnapshotsJson());
 
         return new RuleVersionSnapshot(
                 row.ruleVersionId(),
@@ -67,7 +72,9 @@ public class SnapshotAssembler {
                 row.version(),
                 metricDependencies,
                 payloadDependencies,
-                script
+                script,
+                flowGraph,
+                referencedSnapshots
         );
     }
 

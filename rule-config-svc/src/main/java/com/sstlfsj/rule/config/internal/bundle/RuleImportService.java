@@ -154,6 +154,7 @@ public class RuleImportService {
                         activeVersion.getPreGates(),
                         (activeVersion.getKind() != null ? activeVersion.getKind().name() : "AST_BOOLEAN"),
                         activeVersion.getTriggerEventTypes(), activeVersion.getScriptSource(),
+                        activeVersion.getFlowGraph(),
                         objectMapper);
                 if (rule.contentHash().equals(targetHash)) {
                     skipped.add(new RuleImportItem(rule.code(), rule.sceneCode(), "内容 hash 一致，无需变更"));
@@ -169,7 +170,8 @@ public class RuleImportService {
                 rule.decisionBindings() != null ? rule.decisionBindings() : List.of(),
                 rule.preGates() != null ? rule.preGates() : List.of(),
                 rule.triggerEventTypes() != null ? rule.triggerEventTypes() : List.of(),
-                rule.script());
+                rule.script(),
+                rule.flowGraph());
 
         if (existing == null) {
             // 目标不存在 → 新建规则 + DRAFT

@@ -10,8 +10,10 @@ import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * AST JSON 编解码器：AstNode 多态配置已直接标注在接口上，此处仅封装常用反序列化方法。
@@ -118,6 +120,28 @@ public class AstJsonCodec {
     public ScriptSource deserializeScriptSource(String json) throws JacksonException {
         if (json == null || json.isBlank()) return null;
         return mapper.readValue(json, ScriptSource.class);
+    }
+
+    /**
+     * 将 JSON 字符串反序列化为 FlowGraph(rule_version.flow_graph);null/空白返回 null(非 DECISION_FLOW 规则)。
+     *
+     * @param json 决策图 JSON,形如 {"nodes":[...],"edges":[...],"inputNodeId":"..."};可为 null
+     * @return FlowGraph,或 null
+     */
+    public FlowGraph deserializeFlowGraph(String json) throws JacksonException {
+        if (json == null || json.isBlank()) return null;
+        return mapper.readValue(json, FlowGraph.class);
+    }
+
+    /**
+     * 将 JSON 字符串反序列化为被引规则快照 Map(rule_version.referenced_snapshots);null/空白返回空 map。
+     *
+     * @param json ruleCode → 冻结 RuleVersionSnapshot 的 JSON 对象字符串;可为 null
+     * @return ruleCode → RuleVersionSnapshot 的 Map,非 DECISION_FLOW 规则为空 map
+     */
+    public Map<String, RuleVersionSnapshot> deserializeReferencedSnapshots(String json) throws JacksonException {
+        if (json == null || json.isBlank()) return Map.of();
+        return mapper.readValue(json, new TypeReference<>() {});
     }
 
 }

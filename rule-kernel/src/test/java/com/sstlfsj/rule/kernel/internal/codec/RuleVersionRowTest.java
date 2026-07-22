@@ -67,7 +67,7 @@ class RuleVersionRowTest {
     void record_defaultParamsJson_retained() {
         RuleVersionRow row = new RuleVersionRow(1L, "scene", 2L, "{}", "[]", "[]", "[]",
                 "AST_BOOLEAN", "HIGHEST_PRIORITY", "[]", "[]", "code", 1L,
-                null, "{\"timezone\":\"Asia/Shanghai\"}");
+                null, null, null, "{\"timezone\":\"Asia/Shanghai\"}");
         assertThat(row.defaultParamsJson()).isEqualTo("{\"timezone\":\"Asia/Shanghai\"}");
     }
 

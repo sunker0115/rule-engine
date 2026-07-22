@@ -24,7 +24,7 @@ class RuleContentTest {
         ScriptSource script = new ScriptSource("amount > 100", "cel");
 
         RuleContent content = new RuleContent(
-                "风控规则", "AST_BOOLEAN", ast, bindings, gates, triggers, script);
+                "风控规则", "AST_BOOLEAN", ast, bindings, gates, triggers, script, null);
 
         assertThat(content.name()).isEqualTo("风控规则");
         assertThat(content.kind()).isEqualTo("AST_BOOLEAN");
@@ -37,7 +37,7 @@ class RuleContentTest {
 
     @Test
     void allowsNullContentFields() {
-        RuleContent content = new RuleContent(null, null, null, null, null, null, null);
+        RuleContent content = new RuleContent(null, null, null, null, null, null, null, null);
 
         assertThat(content.conditionAst()).isNull();
         assertThat(content.decisionBindings()).isNull();

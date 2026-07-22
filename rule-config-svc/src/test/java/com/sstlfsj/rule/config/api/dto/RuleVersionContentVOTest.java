@@ -16,7 +16,7 @@ class RuleVersionContentVOTest {
         RuleVersionContentVO vo = new RuleVersionContentVO(
                 20L, 2L, "ACTIVE", "AST_BOOLEAN",
                 ast, List.of(), List.of(), List.of("TXN"),
-                null, "2026-06-16T00:00", "u1", "2026-06-16T01:00");
+                null, null, "2026-06-16T00:00", "u1", "2026-06-16T01:00");
 
         assertThat(vo.ruleVersionId()).isEqualTo(20L);
         assertThat(vo.version()).isEqualTo(2L);

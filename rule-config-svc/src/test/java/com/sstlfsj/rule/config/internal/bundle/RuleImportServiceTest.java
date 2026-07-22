@@ -64,7 +64,7 @@ class RuleImportServiceTest {
     private RuleBundle.RuleEntry entry(String code, String hash) {
         return new RuleBundle.RuleEntry(code, "规则" + code, "AST_BOOLEAN", "risk.transfer",
                 new AndNode(List.of(), null, null), List.of(new DecisionBinding("BLOCK", 100)),
-                List.of(), List.of("transfer"), List.of(), List.of(), null, hash);
+                List.of(), List.of("transfer"), List.of(), List.of(), null, null, hash);
     }
 
     private RuleBundle bundle(String... codes) {
@@ -131,7 +131,7 @@ class RuleImportServiceTest {
         // 算 hash：entry 里 hash-rule.a 要与实时算的相同，才触发幂等跳过
         // 简化：用 null contentHash 让 entry，则 hash 比较跳过（rule.contentHash == null）
         var entryNoHash = new RuleBundle.RuleEntry("rule.a", "n", "AST_BOOLEAN", "risk.transfer",
-                new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), List.of(), List.of(), null, null);
+                new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), List.of(), List.of(), null, null, null);
         var b = new RuleBundle(2, null, "t", "1", List.of(entryNoHash), List.of(), List.of(), List.of());
 
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());

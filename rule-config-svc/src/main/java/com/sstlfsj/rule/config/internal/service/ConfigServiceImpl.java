@@ -176,6 +176,7 @@ class ConfigServiceImpl implements ConfigService {
                 current != null ? current.getPreGates() : null,
                 current != null ? current.getTriggerEventTypes() : null,
                 current != null ? current.getScriptSource() : null,
+                current != null ? current.getFlowGraph() : null,
                 current != null ? current.getId() : null,
                 versions);
     }
@@ -195,6 +196,7 @@ class ConfigServiceImpl implements ConfigService {
                 v.getKind() != null ? v.getKind().name() : null,
                 v.getConditionAst(), v.getDecisionBindings(), v.getPreGates(),
                 v.getTriggerEventTypes(), v.getScriptSource(),
+                v.getFlowGraph(),
                 v.getCreatedAt() != null ? v.getCreatedAt().toString() : null,
                 v.getPublishedBy(), v.getPublishedAt() != null ? v.getPublishedAt().toString() : null);
     }

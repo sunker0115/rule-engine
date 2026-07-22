@@ -113,6 +113,7 @@ public class RuleExportService {
             String contentHash = RuleContentHasher.ruleHash(
                     rv.getConditionAst(), rv.getDecisionBindings(), rv.getPreGates(),
                     kindName, rv.getTriggerEventTypes(), rv.getScriptSource(),
+                    rv.getFlowGraph(),
                     objectMapper);
             rules.add(new RuleBundle.RuleEntry(
                     rd.getCode(), rd.getName(), kindName,
@@ -122,6 +123,7 @@ public class RuleExportService {
                     rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of(),
                     rv.getPayloadDependencies() != null ? rv.getPayloadDependencies() : List.of(),
                     rv.getScriptSource(),   // v2：EXPRESSION_SCRIPT 规则携带脚本
+                    rv.getFlowGraph(),      // DECISION_FLOW 规则携带决策图
                     contentHash));
         }
 

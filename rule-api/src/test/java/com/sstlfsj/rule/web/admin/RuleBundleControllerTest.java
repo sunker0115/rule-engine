@@ -73,7 +73,7 @@ class RuleBundleControllerTest {
                         new com.sstlfsj.rule.kernel.api.model.ast.AndNode(List.of(), null, null),
                         List.of(), List.of(), List.of(),
                         List.of(new MetricDependency("account.age", 1)), List.of(),
-                        null, "hash-a")),
+                        null, null, "hash-a")),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", null, "USER",
                         "PUSH", "HIGHEST_PRIORITY", List.of(), List.of(), java.util.Map.of())),
                 List.of(), List.of());

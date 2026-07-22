@@ -235,7 +235,7 @@ class ConfigServiceImplTest {
         DraftCreatedResult expected = new DraftCreatedResult(1L, 2L, 1L, "DRAFT");
         var ast = new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null);
         RuleContent content = new RuleContent("规则A", "AST_BOOLEAN", ast,
-                java.util.List.of(), java.util.List.of(), java.util.List.of(), null);
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), null, null);
         when(publishService.createDraft(1L, "risk.transfer", "rule.a", content, "actor1"))
                 .thenReturn(expected);
 
@@ -294,7 +294,7 @@ class ConfigServiceImplTest {
         when(publishService.editDraft(any(), any(), any(), any()))
                 .thenReturn(new DraftCreatedResult(10L, 20L, 1L, "DRAFT"));
 
-        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null);
+        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null, null);
         configService.editDraft(1L, 10L, content, "actor");
 
         // tenantId 字符串 "1" 转 Long，content 原样透传 publishService（kind 解析下沉至 publishService）
@@ -306,7 +306,7 @@ class ConfigServiceImplTest {
         when(publishService.newVersion(any(), any(), any(), any(), any()))
                 .thenReturn(new DraftCreatedResult(10L, 30L, 2L, "DRAFT"));
 
-        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null);
+        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null, null);
         configService.newVersion(1L, 10L, content, 50L, "actor");
 
         // content 原样透传 publishService，fromVersionId 原样透传
