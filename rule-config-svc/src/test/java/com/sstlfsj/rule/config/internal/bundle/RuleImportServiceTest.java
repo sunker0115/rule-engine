@@ -18,6 +18,7 @@ import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.Test;
@@ -63,8 +64,8 @@ class RuleImportServiceTest {
 
     private RuleBundle.RuleEntry entry(String code, String hash) {
         return new RuleBundle.RuleEntry(code, "规则" + code, "AST_BOOLEAN", "risk.transfer",
-                new AndNode(List.of(), null, null), List.of(new DecisionBinding("BLOCK", 100)),
-                List.of(), List.of("transfer"), List.of(), List.of(), null, null, hash);
+                new AstBody(new AndNode(List.of(), null, null)), List.of(new DecisionBinding("BLOCK", 100)),
+                List.of(), List.of("transfer"), List.of(), List.of(), hash);
     }
 
     private RuleBundle bundle(String... codes) {
@@ -90,7 +91,7 @@ class RuleImportServiceTest {
         RuleVersion rv = new RuleVersion();
         rv.setId(100L); rv.setVersion(1L); rv.setStatus(RuleVersionStatus.ACTIVE);
         rv.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
-        rv.setConditionAst(new AndNode(List.of(), null, null));
+        rv.setBody(new AstBody(new AndNode(List.of(), null, null)));
         rv.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
         rv.setPreGates(List.of()); rv.setTriggerEventTypes(List.of("transfer"));
         // contentHash 在 activeVersion 不直接存，import 会实时算，这里无需 mock hash
@@ -131,7 +132,7 @@ class RuleImportServiceTest {
         // 算 hash：entry 里 hash-rule.a 要与实时算的相同，才触发幂等跳过
         // 简化：用 null contentHash 让 entry，则 hash 比较跳过（rule.contentHash == null）
         var entryNoHash = new RuleBundle.RuleEntry("rule.a", "n", "AST_BOOLEAN", "risk.transfer",
-                new AndNode(List.of(), null, null), List.of(), List.of(), List.of(), List.of(), List.of(), null, null, null);
+                new AstBody(new AndNode(List.of(), null, null)), List.of(), List.of(), List.of(), List.of(), List.of(), null);
         var b = new RuleBundle(2, null, "t", "1", List.of(entryNoHash), List.of(), List.of(), List.of());
 
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());

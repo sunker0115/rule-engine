@@ -9,6 +9,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.analysis.RuleSetAnalysisReport;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -75,7 +76,7 @@ class RuleAnalysisServiceImplTest {
         v.setVersion(1L);
         v.setStatus(RuleVersionStatus.ACTIVE);
         v.setKind(RuleKind.AST_BOOLEAN);
-        v.setConditionAst(ast);
+        v.setBody(new AstBody(ast));
         v.setDecisionBindings(List.of(new DecisionBinding("D_PASS", 1)));
         return v;
     }
@@ -87,7 +88,7 @@ class RuleAnalysisServiceImplTest {
         v.setVersion(2L);
         v.setStatus(RuleVersionStatus.DRAFT);
         v.setKind(RuleKind.AST_BOOLEAN);
-        v.setConditionAst(ast);
+        v.setBody(new AstBody(ast));
         v.setDecisionBindings(List.of(new DecisionBinding("D_PASS", 1)));
         return v;
     }

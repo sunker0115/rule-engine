@@ -2,11 +2,9 @@ package com.sstlfsj.rule.config.api.dto;
 
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
-import com.sstlfsj.rule.kernel.api.model.ScriptSource;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
-import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
-import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 
 import java.util.List;
 import java.util.Map;
@@ -49,17 +47,14 @@ public record RuleBundle(
             String name,
             String kind,
             String sceneCode,
-            AstNode conditionAst,
+            /** 判定主体多态载体（AstBody/ScriptBody/FlowBody，与 kind 一致）。 */
+            RuleBody body,
             List<DecisionBinding> decisionBindings,
             List<PreGateConfig> preGates,
             List<String> triggerEventTypes,
             List<MetricDependency> metricDependencies,
             List<PayloadDependency> payloadDependencies,
-            /** EXPRESSION_SCRIPT 规则的脚本载体；其他 kind 为 null。 */
-            ScriptSource script,
-            /** DECISION_FLOW 规则的决策图；其他 kind 为 null。 */
-            FlowGraph flowGraph,
-            /** 规则内容 SHA-256（conditionAst/bindings/preGates/kind/triggers/script/flowGraph），import 幂等判断用。 */
+            /** 规则内容 SHA-256（body/bindings/preGates/kind/triggers），import 幂等判断用。 */
             String contentHash
     ) {}
 

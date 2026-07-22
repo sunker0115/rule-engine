@@ -10,11 +10,15 @@ import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.event.RulePublishedSnapshot;
 import com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot;
 import com.sstlfsj.rule.config.internal.repository.*;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.sstlfsj.rule.kernel.api.model.FlowBody;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ScriptBody;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
 import com.sstlfsj.rule.kernel.api.model.flow.FlowEdge;
@@ -161,10 +165,9 @@ public class PublishService {
         RuleKind kind = draft.getKind() != null ? draft.getKind() : RuleKind.AST_BOOLEAN;
         RuleVersionSnapshot snapshot = new RuleVersionSnapshot(
                 draft.getId(), scene.getCode(), String.valueOf(tenantId),
-                draft.getConditionAst(), List.of(), List.of(), List.of(),
+                draft.getBody(), List.of(), List.of(), List.of(),
                 kind.name(), rule.getCode(), draft.getVersion(),
-                draft.getMetricDependencies(), draft.getPayloadDependencies(),
-                draft.getScriptSource());
+                draft.getMetricDependencies(), draft.getPayloadDependencies());
         eventPublisher.publishEvent(new RulePublishedEvent(
                 String.valueOf(tenantId), scene.getCode(), draft.getId()));
         return snapshot;
@@ -188,12 +191,13 @@ public class PublishService {
     public DraftCreatedResult editDraft(Long tenantId, Long ruleDefinitionId, RuleContent content, String actorId) {
         String name = content.name();
         RuleKind kind = parseKind(content.kind());
-        AstNode conditionAst = content.conditionAst();
+        RuleBody body = content.body();
+        AstNode conditionAst = body instanceof AstBody ab ? ab.conditionAst() : null;
         List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
         List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
         List<String> triggerEventTypes = content.triggerEventTypes();
-        ScriptSource script = content.script();
-        FlowGraph flowGraph = content.flowGraph();
+        ScriptSource script = body instanceof ScriptBody sb ? sb.script() : null;
+        FlowGraph flowGraph = body instanceof FlowBody fb ? fb.flowGraph() : null;
 
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
@@ -211,21 +215,19 @@ public class PublishService {
         // kind 省略时回退到草稿现有 kind（原地编辑不应静默把已有 SCORECARD/TREE/TABLE 重置为 AST_BOOLEAN）
         RuleKind effectiveKind = kind != null ? kind
                 : (draft.getKind() != null ? draft.getKind() : RuleKind.AST_BOOLEAN);
+        validateKindBodyConsistent(effectiveKind, body);
         ResolvedDraft resolved = resolveAndValidate(
                 tenantId, scene, effectiveKind, conditionAst, decisionBindings, preGates, triggerEventTypes,
                 script, flowGraph);
 
         // 原地更新 DRAFT 行内容（version 不变）
-        draft.setConditionAst(resolved.resolvedAst());
+        draft.setBody(toBody(resolved));
         draft.setDecisionBindings(resolved.decisionBindings());
         draft.setPreGates(resolved.preGates());
         draft.setKind(effectiveKind);
         draft.setTriggerEventTypes(resolved.triggerEventTypes());
         draft.setMetricDependencies(resolved.metricDeps());
         draft.setPayloadDependencies(resolved.payloadDeps());
-        draft.setScriptSource(resolved.scriptSource());
-        draft.setFlowGraph(resolved.flowGraph());
-        draft.setReferencedSnapshots(resolved.referencedSnapshots());
         ruleVersionMapper.updateById(draft);
 
         if (name != null && !name.isBlank()) {
@@ -266,12 +268,13 @@ public class PublishService {
             Long fromVersionId, String actorId) {
         String name = content.name();
         RuleKind kind = parseKind(content.kind());
-        AstNode conditionAst = content.conditionAst();
+        RuleBody body = content.body();
+        AstNode conditionAst = body instanceof AstBody ab ? ab.conditionAst() : null;
         List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
         List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
         List<String> triggerEventTypes = content.triggerEventTypes();
-        ScriptSource script = content.script();
-        FlowGraph flowGraph = content.flowGraph();
+        ScriptSource script = body instanceof ScriptBody sb ? sb.script() : null;
+        FlowGraph flowGraph = body instanceof FlowBody fb ? fb.flowGraph() : null;
 
         RuleDefinition rule = ruleDefinitionMapper.selectById(ruleDefinitionId);
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
@@ -288,6 +291,7 @@ public class PublishService {
 
         RuleKind effectiveKind = kind != null ? kind
                 : (rule.getKind() != null ? rule.getKind() : RuleKind.AST_BOOLEAN);
+        if (fromVersionId == null) validateKindBodyConsistent(effectiveKind, body);
         AstNode srcAst = conditionAst;
         List<RuleVersionSnapshot.DecisionBinding> srcBindings = decisionBindings;
         List<RuleVersionSnapshot.PreGateConfig> srcGates = preGates;
@@ -300,12 +304,13 @@ public class PublishService {
             if (from == null) {
                 throw new IllegalArgumentException("回退源版本不存在: versionId=" + fromVersionId);
             }
-            srcAst = from.getConditionAst();
+            RuleBody fromBody = from.getBody();
+            srcAst = fromBody instanceof AstBody ab ? ab.conditionAst() : null;
             srcBindings = from.getDecisionBindings();
             srcGates = from.getPreGates();
             srcTriggers = from.getTriggerEventTypes();
-            srcScript = from.getScriptSource();
-            srcFlow = from.getFlowGraph();
+            srcScript = fromBody instanceof ScriptBody sb ? sb.script() : null;
+            srcFlow = fromBody instanceof FlowBody fb ? fb.flowGraph() : null;
             effectiveKind = from.getKind() != null ? from.getKind() : effectiveKind;
         }
 
@@ -652,10 +657,9 @@ public class PublishService {
         // 被引若为 flow，其 referencedSnapshots 在它自己发布时已冻，此处原样携带，不递归重冻
         return new RuleVersionSnapshot(
                 active.getId(), scene.getCode(), String.valueOf(tenantId),
-                active.getConditionAst(), active.getPreGates(), active.getDecisionBindings(),
+                active.getBody(), active.getPreGates(), active.getDecisionBindings(),
                 active.getTriggerEventTypes(), refKind.name(), ref.getCode(), active.getVersion(),
-                active.getMetricDependencies(), active.getPayloadDependencies(),
-                active.getScriptSource(), active.getFlowGraph(), active.getReferencedSnapshots());
+                active.getMetricDependencies(), active.getPayloadDependencies());
     }
 
     /**
@@ -870,12 +874,13 @@ public class PublishService {
                                           String code, RuleContent content, String actorId) {
         String name = content.name();
         String kind = content.kind();
-        AstNode conditionAst = content.conditionAst();
+        RuleBody body = content.body();
+        AstNode conditionAst = body instanceof AstBody ab ? ab.conditionAst() : null;
         java.util.List<RuleVersionSnapshot.DecisionBinding> decisionBindings = content.decisionBindings();
         java.util.List<RuleVersionSnapshot.PreGateConfig> preGates = content.preGates();
         java.util.List<String> triggerEventTypes = content.triggerEventTypes();
-        ScriptSource script = content.script();
-        FlowGraph flowGraph = content.flowGraph();
+        ScriptSource script = body instanceof ScriptBody sb ? sb.script() : null;
+        FlowGraph flowGraph = body instanceof FlowBody fb ? fb.flowGraph() : null;
 
         // 1. 按 tenantId + sceneCode 查询 SceneDef，不存在则报错
         SceneDef scene = sceneMapper.findByCode(tenantId, sceneCode);
@@ -899,6 +904,7 @@ public class PublishService {
             throw new IllegalArgumentException("不支持的规则 kind: " + effectiveKind);
         }
         RuleKind effectiveRuleKind = RuleKind.valueOf(effectiveKind);
+        validateKindBodyConsistent(effectiveRuleKind, body);
 
         // 4. INSERT rule_definition（status=DRAFT）
         RuleDefinition rd = RuleDefinition.draft(tenantId, scene.getId(), code, name, effectiveRuleKind, actorId);
@@ -935,21 +941,39 @@ public class PublishService {
         }
     }
 
+    /** 把发布期解析产物 ResolvedDraft 打包为持久化多态载体 RuleBody（flow&gt;script&gt;ast）。 */
+    private static RuleBody toBody(ResolvedDraft r) {
+        if (r.flowGraph() != null) return new FlowBody(r.flowGraph(), r.referencedSnapshots());
+        if (r.scriptSource() != null) return new ScriptBody(r.scriptSource());
+        return new AstBody(r.resolvedAst());
+    }
+
+    /** 校验 kind 家族与 body 变体一致（不一致抛 KIND_BODY_MISMATCH）；body 为 null 时跳过（下游按 kind 兜底）。 */
+    private static void validateKindBodyConsistent(RuleKind kind, RuleBody body) {
+        if (body == null) return;
+        boolean ok = switch (kind) {
+            case AST_BOOLEAN, SCORECARD, DECISION_TREE, DECISION_TABLE -> body instanceof AstBody;
+            case EXPRESSION_SCRIPT -> body instanceof ScriptBody;
+            case DECISION_FLOW -> body instanceof FlowBody;
+        };
+        if (!ok) {
+            throw new IllegalArgumentException("KIND_BODY_MISMATCH: kind=" + kind
+                    + " 与 body 类型 " + body.getClass().getSimpleName() + " 不一致");
+        }
+    }
+
     /** 用冻结内容组装 DRAFT 版本行（createDraft/newVersion 共用）。 */
     private RuleVersion buildDraftVersion(Long ruleDefinitionId, long version, ResolvedDraft r) {
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(ruleDefinitionId);
         rv.setVersion(version);
-        rv.setConditionAst(r.resolvedAst());
+        rv.setBody(toBody(r));
         rv.setDecisionBindings(r.decisionBindings());
         rv.setPreGates(r.preGates());
         rv.setKind(r.kind());
         rv.setTriggerEventTypes(r.triggerEventTypes());
         rv.setMetricDependencies(r.metricDeps());
         rv.setPayloadDependencies(r.payloadDeps());
-        rv.setScriptSource(r.scriptSource());
-        rv.setFlowGraph(r.flowGraph());
-        rv.setReferencedSnapshots(r.referencedSnapshots());
         rv.setStatus(RuleVersionStatus.DRAFT);
         rv.setCreatedAt(LocalDateTime.now());
         return rv;

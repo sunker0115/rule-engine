@@ -4,6 +4,7 @@ import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.repository.*;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
@@ -64,8 +65,8 @@ class PublishServicePayloadTest {
 
         assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.demo",
                 new RuleContent("测试规则", "AST_BOOLEAN",
-                        new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD),
-                        List.of(), List.of(), List.of(), null, null),
+                        new AstBody(new ConditionNode("GT", "amount", null, Map.of("threshold", 1000), 0.0, null, ValueRef.PAYLOAD)),
+                        List.of(), List.of(), List.of()),
                 "actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 // 消息须带语义前缀 UNRESOLVED_VARIABLE（项目"消息前缀=语义错误码"约定，docs 10-api-contract §七）

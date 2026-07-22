@@ -25,6 +25,7 @@ import com.sstlfsj.rule.kernel.api.model.ConditionParams;
 import com.sstlfsj.rule.kernel.api.model.ConditionTypes;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -129,9 +130,9 @@ class RuleAnalysisIT {
      */
     private void publishRule(String code, AstNode ast, String decisionCode) {
         DraftCreatedResult draft = configService.createDraft(TENANT, SCENE, code,
-                new RuleContent(code, "AST_BOOLEAN", ast,
+                new RuleContent(code, "AST_BOOLEAN", new AstBody(ast),
                         List.of(new DecisionBinding(decisionCode, 0)),
-                        List.of(), List.of(EVENT), null, null),
+                        List.of(), List.of(EVENT)),
                 ACTOR);
         configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
     }
@@ -185,7 +186,7 @@ class RuleAnalysisIT {
         // 真落库自检：5 条规则的 ACTIVE 版本 conditionAst 经 TypeHandler 读回为 typed AstNode（非 String/Map）
         RuleVersion wideActive = ruleVersionMapper.findActiveVersion(
                 ruleDefinitionMapper.findBySceneAndCode(TENANT, sceneMapper.findByCode(TENANT, SCENE).getId(), "R_wide").getId());
-        assertThat(wideActive.getConditionAst()).isInstanceOf(AndNode.class);
+        assertThat(((AstBody) wideActive.getBody()).conditionAst()).isInstanceOf(AndNode.class);
 
         RuleSetAnalysisReport report = ruleAnalysisService.analyze(TENANT, SCENE);
 

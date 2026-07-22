@@ -111,19 +111,15 @@ public class RuleExportService {
             SceneDef scene = sceneById.get(rd.getSceneId());
             String kindName = (rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN).name();
             String contentHash = RuleContentHasher.ruleHash(
-                    rv.getConditionAst(), rv.getDecisionBindings(), rv.getPreGates(),
-                    kindName, rv.getTriggerEventTypes(), rv.getScriptSource(),
-                    rv.getFlowGraph(),
-                    objectMapper);
+                    rv.getBody(), rv.getDecisionBindings(), rv.getPreGates(),
+                    kindName, rv.getTriggerEventTypes(), objectMapper);
             rules.add(new RuleBundle.RuleEntry(
                     rd.getCode(), rd.getName(), kindName,
                     scene != null ? scene.getCode() : null,
-                    rv.getConditionAst(), rv.getDecisionBindings(),
+                    rv.getBody(), rv.getDecisionBindings(),
                     rv.getPreGates(), rv.getTriggerEventTypes(),
                     rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of(),
                     rv.getPayloadDependencies() != null ? rv.getPayloadDependencies() : List.of(),
-                    rv.getScriptSource(),   // v2：EXPRESSION_SCRIPT 规则携带脚本
-                    rv.getFlowGraph(),      // DECISION_FLOW 规则携带决策图
                     contentHash));
         }
 
