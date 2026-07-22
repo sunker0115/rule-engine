@@ -8,6 +8,10 @@ import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import com.sstlfsj.rule.kernel.api.model.ast.DecisionLeafNode;
 import com.sstlfsj.rule.kernel.api.model.ast.DecisionTableNode;
 import com.sstlfsj.rule.kernel.api.model.ast.IfNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowNode;
+import com.sstlfsj.rule.kernel.api.model.flow.OutputNode;
+import com.sstlfsj.rule.kernel.api.model.flow.RuleRefNode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -125,6 +129,46 @@ class CoverageGapDetectorTest {
                 List.of("S1", "S2", "S3"), RuleKind.EXPRESSION_SCRIPT);
 
         assertThat(CoverageGapDetector.detect(List.of(script))).isEmpty();
+    }
+
+    @Test
+    void decision_flow_collects_output_codes_as_producible_so_only_unbound_output_is_gap() {
+        // 图产出 {PASS, REVIEW}(两个 OutputNode)，绑定 {PASS, REVIEW, GHOST} → 仅 GHOST 不可达。
+        // 若 DECISION_FLOW 落空未收集 Output 码，producible 会为空、误报 PASS/REVIEW 也不可达 —— 此断言正是防落空回归。
+        List<FlowNode> nodes = List.of(
+                new RuleRefNode("in", "leaf-rule"),
+                new OutputNode("o1", "PASS"),
+                new OutputNode("o2", "REVIEW"));
+        FlowGraph flow = new FlowGraph(nodes, List.of(), "in");
+        AnalyzableRule rule = new AnalyzableRule("F-flow", 1L, null,
+                List.of(bind("PASS"), bind("REVIEW"), bind("GHOST")),
+                RuleKind.DECISION_FLOW.tag(), flow);
+
+        List<CoverageGapFinding> findings = CoverageGapDetector.detect(List.of(rule));
+
+        assertThat(findings).extracting(CoverageGapFinding::decisionCode).containsExactly("GHOST");
+    }
+
+    @Test
+    void decision_flow_with_all_outputs_bound_yields_no_gap() {
+        // 绑定 == Output 码 → 无缺口
+        List<FlowNode> nodes = List.of(
+                new RuleRefNode("in", "leaf-rule"),
+                new OutputNode("o1", "APPROVE"));
+        FlowGraph flow = new FlowGraph(nodes, List.of(), "in");
+        AnalyzableRule rule = new AnalyzableRule("F-flow", 1L, null,
+                List.of(bind("APPROVE")), RuleKind.DECISION_FLOW.tag(), flow);
+
+        assertThat(CoverageGapDetector.detect(List.of(rule))).isEmpty();
+    }
+
+    @Test
+    void decision_flow_without_graph_falls_back_to_bindings() {
+        // flowGraph 缺失(畸形草稿)→ 保守退回绑定，绑定全视为可产出，零缺口
+        AnalyzableRule rule = new AnalyzableRule("F-flow", 1L, null,
+                List.of(bind("A"), bind("B")), RuleKind.DECISION_FLOW.tag(), null);
+
+        assertThat(CoverageGapDetector.detect(List.of(rule))).isEmpty();
     }
 
     @Test

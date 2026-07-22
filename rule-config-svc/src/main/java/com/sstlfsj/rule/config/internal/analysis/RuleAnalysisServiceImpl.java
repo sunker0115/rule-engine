@@ -56,9 +56,10 @@ public class RuleAnalysisServiceImpl implements RuleAnalysisService {
             RuleVersion version = (draft != null) ? draft : ruleVersionMapper.findActiveVersion(rd.getId());
             if (version == null) continue;
             String kind = (version.getKind() != null ? version.getKind() : RuleKind.AST_BOOLEAN).name();
+            // flowGraph 仅 DECISION_FLOW 非空,供 kernel 环/可达性分析;其余 kind 为 null
             analyzableRules.add(new AnalyzableRule(
                     rd.getCode(), version.getVersion(), version.getConditionAst(),
-                    version.getDecisionBindings(), kind));
+                    version.getDecisionBindings(), kind, version.getFlowGraph()));
         }
 
         return RuleSetAnalyzer.analyze(sceneCode, analyzableRules, strategy);

@@ -26,6 +26,7 @@ import com.sstlfsj.rule.kernel.api.model.flow.SwitchNode;
 import com.sstlfsj.rule.kernel.api.model.flow.TransformNode;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import com.sstlfsj.rule.kernel.api.spi.expression.ScriptTypeEnv;
+import com.sstlfsj.rule.kernel.internal.analysis.FlowCycleDetector;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -568,6 +569,12 @@ public class PublishService {
             throw new IllegalArgumentException("DECISION_FLOW 规则必须提供非空决策图");
         }
         validateFlowStructure(flow);
+        // 环检测前置：成环使发布期无法定序（运行期虽有 visited 兜底，仍属配置错误），拒收
+        List<String> cycle = FlowCycleDetector.findCycle(flow);
+        if (!cycle.isEmpty()) {
+            throw new IllegalArgumentException("DECISION_FLOW 决策图存在环，无法发布: "
+                    + String.join(" -> ", cycle) + " -> " + cycle.getFirst());
+        }
         // 校验顺序对齐 AST/脚本路径：先 trigger/preGate，再冻依赖
         validateTriggerEventTypes(triggers, scene.getEventTypes());
         validatePreGateParams(gates);

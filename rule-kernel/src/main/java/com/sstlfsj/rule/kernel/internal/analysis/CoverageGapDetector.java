@@ -15,6 +15,9 @@ import com.sstlfsj.rule.kernel.api.model.ast.OrNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ScoreBand;
 import com.sstlfsj.rule.kernel.api.model.ast.ScorecardRootNode;
 import com.sstlfsj.rule.kernel.api.model.ast.XorNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowNode;
+import com.sstlfsj.rule.kernel.api.model.flow.OutputNode;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -93,10 +96,25 @@ public final class CoverageGapDetector {
                     addBindings(rule, codes);
                 }
             }
+            // DECISION_FLOW：可产出 = 全图 OutputNode.decisionCode（图定义决策面）；无 flowGraph 时退回绑定
+            case DECISION_FLOW -> collectFlowOutputCodes(rule.flowGraph(), rule, codes);
             // AST_BOOLEAN：命中即产出全部绑定；EXPRESSION_SCRIPT：无法内省脚本输出，保守退回绑定避免误报
             case AST_BOOLEAN, EXPRESSION_SCRIPT -> addBindings(rule, codes);
         }
         return codes;
+    }
+
+    /** 收集 DECISION_FLOW 全图 OutputNode 的 decisionCode；无 flowGraph（畸形/缺失）时保守退回绑定。 */
+    private static void collectFlowOutputCodes(FlowGraph flow, AnalyzableRule rule, Set<String> codes) {
+        if (flow == null) {
+            addBindings(rule, codes);
+            return;
+        }
+        for (FlowNode node : flow.nodes()) {
+            if (node instanceof OutputNode output) {
+                addIfPresent(codes, output.decisionCode());
+            }
+        }
     }
 
     /** 把规则的全部绑定决策码计入可产出集（保守兜底用）。 */

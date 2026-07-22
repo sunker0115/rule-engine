@@ -23,7 +23,8 @@ import java.util.List;
  *       （单 ConditionNode 根无组；含 OR/NOT/嵌套则跳过，不在本 detector 职责内）。</li>
  *   <li>DECISION_TREE：递归遍历 AST，对每个 {@link IfNode}，若其 condition 为「全 ConditionNode 的 AndNode」→ 一个组；
  *       continue 遍历 thenBranch / elseBranch 到达嵌套 IfNode。</li>
- *   <li>其余 kind（DECISION_TABLE / SCORECARD / EXPRESSION_SCRIPT）→ 无组，跳过。</li>
+ *   <li>其余 kind（DECISION_TABLE / SCORECARD / EXPRESSION_SCRIPT / DECISION_FLOW）→ 无 AND-of-condition 组，
+ *       跳过（flow 无扁平条件组，其结构问题由 FlowCycleDetector / FlowReachabilityDetector 处理）。</li>
  * </ul>
  *
  * <p>组内判定（基于 {@link ConditionSpaceFactory} + {@link ConditionSpace#subsumes}，复用同一区间数学，零重复）：
