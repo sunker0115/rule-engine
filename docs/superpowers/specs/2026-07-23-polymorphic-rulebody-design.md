@@ -183,7 +183,14 @@ FlowBody fb = (FlowBody) snapshot.body(); fb.flowGraph(); fb.referencedSnapshots
 - `00-decisions.md`：追一条 **D76 三承载平铺收敛为多态 RuleBody**（append-only，记 L2 决策 + kind↔body 不变量 + 迁移 V1_40）。
 - `01-concepts.md`：§3.4 `ast`:212「三承载互斥」表述 → 改为「判定主体由多态 `RuleBody`（AstBody/ScriptBody/FlowBody 三变体）承载，与 kind 一致」；§一名词表:27 / kind:210 相应措辞。
 - `05-storage.md`：§二表清单 rule_version 行、§三 rule_version DDL（四列 → 单 `body` 列）、相关 COMMENT。
-- `10-api-contract.md`：rule 请求 / 响应体 `conditionAst`/`script`/`flowGraph` → `body`（含 `type` 判别）；错误码清单加 `KIND_BODY_MISMATCH`（若新增）。
+- `10-api-contract.md`（落点穷尽，doc-consistency-review 复扫补齐）：
+  - §4.1 创建请求体字段表（`kind`:234 保留；`conditionAst`:235 / `script`:236 / `flowGraph`:237 三行 → 单 `body` 字段行，含 `type` 判别 + 按 kind 一致说明）+ 请求 JSON 示例:218-219；
+  - §4.2 editDraft「字段同 §4.1」清单:280 措辞（`conditionAst` → `body`）；§4.x newVersion 同；
+  - `RuleDetailVO` 响应:519 与 `RuleVersionContentVO` 的 `conditionAst` → `body`；
+  - 导出/导入 Bundle「所有 JSON 列……无损搬运」:467-480 的列举（`conditionAst` → `body`）；
+  - 评估 / builder JSON 示例:795-822（`conditionAst` → `body`）；
+  - `UNRESOLVED_VARIABLE`:675 措辞（"conditionAst / pre_gates / payload 引用" → "body / pre_gates / payload 引用"）；
+  - 错误码清单加 `KIND_BODY_MISMATCH`（若新增）。
 - `README.md`：D12 行 / 核心决策表按需补 D76。
 
 ## 命名（待 GATE 确认）
