@@ -548,6 +548,10 @@ public class PublishService {
      * metricDependencies = 被引快照 metricDeps 并集(按 code 去重) + Switch/Transform 表达式引用 metric；
      * payloadDependencies = Switch/Transform 表达式引用的 payload.* 字段(仿脚本 kind 校验 scene.payloadSchema 声明并冻结)。
      * conditionAst=null、script=null、flowGraph 原样冻入。
+     * <p>
+     * flow 表达式仅做 compile 语法校验，<b>不做 typeCheck 强类型检查</b>（区别于脚本 kind）：flow 图的类型环需
+     * 按节点顺序逐步构建（Transform 产出的 flow.* 变量类型依赖上游），比脚本单表达式复杂，v1 backlog 不做。
+     * </p>
      *
      * @param tenantId 租户 id
      * @param scene    所属场景
@@ -587,6 +591,7 @@ public class PublishService {
                 unionByCode.putIfAbsent(md.metricCode(), md);
             }
         }
+        // flow v1 不做类型检查，freezeMetricDeps 的 dataType 出参(供 AST 路径类型环)在此不使用，传空 map 丢弃
         List<MetricDependency> exprDeps = freezeMetricDeps(tenantId, exprRefs.metricCodes(), new HashMap<>());
         for (MetricDependency md : exprDeps) {
             unionByCode.putIfAbsent(md.metricCode(), md);
@@ -595,6 +600,7 @@ public class PublishService {
 
         // payload 依赖：Switch/Transform 表达式引用的 payload.* 字段，仿脚本 kind 校验 scene.payloadSchema 声明 + 冻结
         // (undeclared 抛 UNRESOLVED_VARIABLE；被引规则自身的 payloadDeps 在其快照内，不并入 flow)
+        // flow v1 不做类型检查，freezePayloadDeps 的 dataType 出参(供 AST 路径类型环)在此不使用，传空 map 丢弃
         List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, exprRefs.payloadFields(), new HashMap<>());
 
         // Output 决策冻结：收集 OutputNode.decisionCode(去重)，仿 freezeDecisionBindings 校验存在 + 回填 name/priority

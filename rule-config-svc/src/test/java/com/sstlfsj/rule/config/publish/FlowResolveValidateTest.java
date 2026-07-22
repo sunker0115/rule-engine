@@ -25,6 +25,7 @@ import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 import com.sstlfsj.rule.kernel.api.model.flow.OutputNode;
 import com.sstlfsj.rule.kernel.api.model.flow.RuleRefNode;
 import com.sstlfsj.rule.kernel.api.model.flow.SwitchNode;
+import com.sstlfsj.rule.kernel.api.model.flow.TransformNode;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -279,6 +280,42 @@ class FlowResolveValidateTest {
                 1L, scene, RuleKind.DECISION_FLOW,
                 null, List.of(), List.of(), List.of(), null, flow);
 
+        assertThat(resolved.payloadDeps())
+                .extracting(PayloadDependency::name)
+                .containsExactly("amount");
+    }
+
+    /** TransformNode 表达式引用 metric + payload → 与 Switch 对称地冻入 metricDeps/payloadDeps。 */
+    @Test
+    void flowBranch_transformExprRefsMetricAndPayload_frozen() {
+        scene.setPayloadSchema(List.of(
+                new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null)));
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("score_1d");
+        md.setDataType("DOUBLE");
+        md.setVersion(4);
+        md.setStatus(MetricStatus.ACTIVE);
+        when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
+        DecisionDefinition dd = new DecisionDefinition();
+        dd.setCode("REVIEW");
+        dd.setName("人工审核");
+        dd.setPriority(10);
+        when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(dd));
+
+        // Transform 表达式同时引用 metrics.score_1d 与 payload.amount，写入 flow 命名空间的 riskScore
+        FlowGraph flow = new FlowGraph(
+                List.of(
+                        new TransformNode("n1", ExpressionLang.CEL,
+                                "metrics.score_1d * payload.amount", "riskScore"),
+                        new OutputNode("n2", "REVIEW")),
+                List.of(new FlowEdge("n1", "n2", null)),
+                "n1");
+
+        PublishService.ResolvedDraft resolved = publishService.resolveAndValidate(
+                1L, scene, RuleKind.DECISION_FLOW,
+                null, List.of(), List.of(), List.of(), null, flow);
+
+        assertThat(resolved.metricDeps()).containsExactly(new MetricDependency("score_1d", 4));
         assertThat(resolved.payloadDeps())
                 .extracting(PayloadDependency::name)
                 .containsExactly("amount");
