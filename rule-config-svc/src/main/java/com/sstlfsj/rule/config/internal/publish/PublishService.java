@@ -545,7 +545,8 @@ public class PublishService {
      * DECISION_FLOW 分支：图编排层校验+冻结。结构校验（入口/孤儿/Switch caseKey/RuleRef 可解析/Output 存在）→
      * 遍历 RuleRefNode 按 ruleCode 冻被引规则 ACTIVE 快照（同 Scene + 有 ACTIVE，否则拒）→
      * OutputNode.decisionCode 仿 freezeDecisionBindings 校验存在并回填 name/priority 冻进 decisionBindings →
-     * metricDependencies = 被引快照 metricDeps 并集(按 code 去重) + Switch/Transform 表达式引用 metric。
+     * metricDependencies = 被引快照 metricDeps 并集(按 code 去重) + Switch/Transform 表达式引用 metric；
+     * payloadDependencies = Switch/Transform 表达式引用的 payload.* 字段(仿脚本 kind 校验 scene.payloadSchema 声明并冻结)。
      * conditionAst=null、script=null、flowGraph 原样冻入。
      *
      * @param tenantId 租户 id
@@ -575,6 +576,10 @@ public class PublishService {
             }
         }
 
+        // Switch/Transform 表达式引用变量：同一编译分流 metrics.* 与 payload.*（编译兼作语法校验）
+        MetricDependencyCollector.FlowExpressionRefs exprRefs =
+                MetricDependencyCollector.collectFlowExpressionRefs(flow, expressionEngines);
+
         // metricDeps 并集：被引快照冻结 deps(按 code 去重,继承其冻结版本) + Switch/Transform 表达式引用 metric(冻当前 ACTIVE)
         LinkedHashMap<String, MetricDependency> unionByCode = new LinkedHashMap<>();
         for (RuleVersionSnapshot snap : referenced.values()) {
@@ -582,12 +587,15 @@ public class PublishService {
                 unionByCode.putIfAbsent(md.metricCode(), md);
             }
         }
-        List<String> exprMetricCodes = MetricDependencyCollector.collectFlowExpressionMetrics(flow, expressionEngines);
-        List<MetricDependency> exprDeps = freezeMetricDeps(tenantId, exprMetricCodes, new HashMap<>());
+        List<MetricDependency> exprDeps = freezeMetricDeps(tenantId, exprRefs.metricCodes(), new HashMap<>());
         for (MetricDependency md : exprDeps) {
             unionByCode.putIfAbsent(md.metricCode(), md);
         }
         List<MetricDependency> metricDeps = new ArrayList<>(unionByCode.values());
+
+        // payload 依赖：Switch/Transform 表达式引用的 payload.* 字段，仿脚本 kind 校验 scene.payloadSchema 声明 + 冻结
+        // (undeclared 抛 UNRESOLVED_VARIABLE；被引规则自身的 payloadDeps 在其快照内，不并入 flow)
+        List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, exprRefs.payloadFields(), new HashMap<>());
 
         // Output 决策冻结：收集 OutputNode.decisionCode(去重)，仿 freezeDecisionBindings 校验存在 + 回填 name/priority
         List<String> outputCodes = flow.nodes().stream()
@@ -600,7 +608,7 @@ public class PublishService {
 
         // flow 决策面由 OutputNode 定义，入参 bindings 忽略（v1）；resolvedAst/script=null，flow 原样冻入
         return new ResolvedDraft(RuleKind.DECISION_FLOW, null, flowDecisionBindings, gates, triggers,
-                metricDeps, List.of(), null, flow, referenced);
+                metricDeps, payloadDeps, null, flow, referenced);
     }
 
     /**

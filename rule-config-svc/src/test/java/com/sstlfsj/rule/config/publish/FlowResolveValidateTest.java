@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.config.publish;
 
+import com.sstlfsj.rule.config.api.dto.PayloadFieldSpec;
 import com.sstlfsj.rule.config.internal.domain.DecisionDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricStatus;
@@ -15,6 +16,7 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.expression.cel.CelExpressionEngine;
 import com.sstlfsj.rule.kernel.api.model.ExpressionLang;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
@@ -235,5 +237,50 @@ class FlowResolveValidateTest {
                 null, List.of(), List.of(), List.of(), null, flow))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("caseKey");
+    }
+
+    /** Switch 表达式引用未在 scene.payloadSchema 声明的 payload.* 字段 → 拒绝（UNRESOLVED_VARIABLE，与脚本 kind 同款）。 */
+    @Test
+    void flowBranch_switchExprUndeclaredPayload_throws() {
+        // scene 无 payloadSchema，表达式引用 payload.foo → 冻 payload 依赖时拒
+        FlowGraph flow = new FlowGraph(
+                List.of(
+                        new SwitchNode("n1", ExpressionLang.CEL, "payload.foo > 0 ? 'A' : 'B'", List.of("A", "B")),
+                        new OutputNode("n2", "REVIEW")),
+                List.of(new FlowEdge("n1", "n2", null)),
+                "n1");
+
+        assertThatThrownBy(() -> publishService.resolveAndValidate(
+                1L, scene, RuleKind.DECISION_FLOW,
+                null, List.of(), List.of(), List.of(), null, flow))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UNRESOLVED_VARIABLE");
+    }
+
+    /** Switch 表达式引用已在 scene.payloadSchema 声明的 payload.* 字段 → 冻入 flow 的 payloadDependencies。 */
+    @Test
+    void flowBranch_switchExprDeclaredPayload_frozen() {
+        scene.setPayloadSchema(List.of(
+                new PayloadFieldSpec("amount", "NUMBER", true, null, null, null, null, null)));
+        DecisionDefinition dd = new DecisionDefinition();
+        dd.setCode("REVIEW");
+        dd.setName("人工审核");
+        dd.setPriority(10);
+        when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(dd));
+
+        FlowGraph flow = new FlowGraph(
+                List.of(
+                        new SwitchNode("n1", ExpressionLang.CEL, "payload.amount > 100 ? 'A' : 'B'", List.of("A", "B")),
+                        new OutputNode("n2", "REVIEW")),
+                List.of(new FlowEdge("n1", "n2", "A")),
+                "n1");
+
+        PublishService.ResolvedDraft resolved = publishService.resolveAndValidate(
+                1L, scene, RuleKind.DECISION_FLOW,
+                null, List.of(), List.of(), List.of(), null, flow);
+
+        assertThat(resolved.payloadDeps())
+                .extracting(PayloadDependency::name)
+                .containsExactly("amount");
     }
 }
