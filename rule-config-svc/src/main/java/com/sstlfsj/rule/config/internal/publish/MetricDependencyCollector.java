@@ -2,18 +2,72 @@ package com.sstlfsj.rule.config.internal.publish;
 
 import com.sstlfsj.rule.kernel.api.model.ValueRef;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowNode;
+import com.sstlfsj.rule.kernel.api.model.flow.SwitchNode;
+import com.sstlfsj.rule.kernel.api.model.flow.TransformNode;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionCompileException;
+import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** 静态扫描 AST 树，收集所有叶子 ConditionNode 引用的 metricCode（去重，保序）。 */
 class MetricDependencyCollector {
 
+    /** metrics 命名空间前缀：表达式引用形如 metrics.txn_cnt_1d，冻依赖时去前缀取 code。 */
+    private static final String METRIC_PREFIX = "metrics.";
+
     static List<String> collect(AstNode node) {
         Set<String> result = new LinkedHashSet<>();
         walk(node, result);
+        return new ArrayList<>(result);
+    }
+
+    /**
+     * 扫描 DECISION_FLOW 图内 Switch/Transform 节点的表达式，编译取 referencedVariables 并过滤 metrics.* 前缀，
+     * 收集被引用的 metricCode（去重，保序）。编译同时充当表达式语法校验：无对应引擎/语法错抛 IllegalArgumentException。
+     *
+     * @param flow    决策图
+     * @param engines lang → 表达式引擎路由
+     * @return 图内表达式引用的 metricCode（去前缀、去重、保序）
+     */
+    static List<String> collectFlowExpressionMetrics(FlowGraph flow, Map<String, ExpressionEngine> engines) {
+        Set<String> result = new LinkedHashSet<>();
+        for (FlowNode node : flow.nodes()) {
+            String lang;
+            String expression;
+            switch (node) {
+                case SwitchNode sw -> {
+                    lang = sw.lang().tag();
+                    expression = sw.expression();
+                }
+                case TransformNode tf -> {
+                    lang = tf.lang().tag();
+                    expression = tf.expression();
+                }
+                default -> {
+                    continue;
+                }
+            }
+            ExpressionEngine engine = engines.get(lang);
+            if (engine == null) {
+                throw new IllegalArgumentException("DECISION_FLOW 表达式无对应引擎,lang=" + lang + " (node=" + node.id() + ")");
+            }
+            Set<String> refVars;
+            try {
+                refVars = engine.compile(expression).referencedVariables();
+            } catch (ExpressionCompileException e) {
+                throw new IllegalArgumentException(
+                        "DECISION_FLOW 表达式编译失败(node=" + node.id() + "): " + e.getMessage(), e);
+            }
+            for (String v : refVars) {
+                if (v.startsWith(METRIC_PREFIX)) result.add(v.substring(METRIC_PREFIX.length()));
+            }
+        }
         return new ArrayList<>(result);
     }
 
