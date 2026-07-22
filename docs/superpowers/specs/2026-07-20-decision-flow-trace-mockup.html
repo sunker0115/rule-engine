@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DECISION_FLOW 评估 trace · 原型</title>
+<style>
+  :root{
+    --bg:#f1f3f5;--panel:#fff;--border:#e3e6ea;--border-strong:#d0d5dd;
+    --text:#1f2933;--text-2:#5b6672;--text-3:#8a95a1;
+    --ruleref:#2f6bff;--switch:#8b5cf6;--transform:#0ea5e9;--output:#16a34a;
+    --ok:#16a34a;--err:#e5484d;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif;font-size:13px;line-height:1.5}
+  .wrap{max-width:860px;margin:24px auto;background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;
+        box-shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06)}
+  .hd{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .hd .t{font-weight:600;font-size:15px}
+  .pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:11px;font-size:11.5px;font-weight:600}
+  .pill.kind{background:#eef3ff;color:var(--ruleref)}
+  .pill.scene{background:#f2f4f7;color:var(--text-2);font-weight:500}
+
+  /* result summary */
+  .summary{display:flex;gap:0;border-bottom:1px solid var(--border)}
+  .scell{flex:1;padding:12px 20px;border-right:1px solid var(--border)}
+  .scell:last-child{border-right:none}
+  .scell .k{font-size:11px;color:var(--text-3);margin-bottom:4px}
+  .scell .v{font-weight:600;font-size:14px}
+  .decision{color:var(--output)}
+  .hit{color:var(--ok)}
+
+  /* toolbar */
+  .tb{display:flex;gap:8px;padding:12px 20px;border-bottom:1px solid var(--border);align-items:center}
+  .tbtn{height:26px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:#fff;font-size:12px;color:var(--text-2);cursor:pointer}
+  .lg{margin-left:auto;font-size:11px;color:var(--text-3);display:flex;gap:12px;align-items:center}
+  .lg .sw{display:inline-flex;align-items:center;gap:5px}
+  .lg .tag{font-size:10px;padding:1px 7px;border-radius:4px;border:1px solid var(--border-strong)}
+  .lg .tag.flow{border-color:#c9d6ff;background:#eef3ff;color:var(--ruleref)}
+  .lg .tag.leaf{background:#f6f7f9;color:var(--text-2)}
+
+  /* trace tree */
+  .tree{padding:12px 20px 20px}
+  .row{display:flex;align-items:center;gap:7px;padding:5px 0;cursor:default}
+  .row .car{width:11px;color:var(--text-3);font-size:10px;flex:none;text-align:center}
+  .ic{width:16px;text-align:center;flex:none}
+  .tag{font-size:11px;padding:1px 8px;border-radius:5px;border:1px solid var(--border-strong);background:#f6f7f9;color:var(--text-2);font-weight:600;white-space:nowrap}
+  .tag.n-ruleref{border-color:#c9d6ff;background:#eef3ff;color:var(--ruleref)}
+  .tag.n-switch{border-color:#e0d4fb;background:#f4effe;color:var(--switch)}
+  .tag.n-transform{border-color:#c5e9f7;background:#e8f6fd;color:var(--transform)}
+  .tag.n-output{border-color:#bfe3c8;background:#f2fbf4;color:var(--output)}
+  .tag.metric{border-color:#c9d6ff;background:#eef3ff;color:var(--ruleref)}
+  .nm{font-weight:600}
+  .eq{color:var(--text-2);font-family:var(--mono);font-size:12px}
+  .exp{color:var(--text-3);font-size:11.5px}
+  .refnote{color:var(--transform);font-size:11px;font-weight:600;margin-left:2px}
+  .note{margin:0 20px 18px;background:#f7f9fc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--text-2);line-height:1.7}
+  .note b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <span class="t">评估 Trace</span>
+    <span class="pill kind">DECISION_FLOW</span>
+    <span class="pill scene">交易风控 · 主决策流 v1</span>
+  </div>
+
+  <div class="summary">
+    <div class="scell"><div class="k">规则命中 (ruleHit)</div><div class="v hit">✅ 命中</div></div>
+    <div class="scell"><div class="k">最终决策 (finalDecision)</div><div class="v decision">REVIEW · 转人工复核</div></div>
+    <div class="scell"><div class="k">eventType</div><div class="v">txn.submit</div></div>
+    <div class="scell"><div class="k">subject</div><div class="v" style="font-family:var(--mono);font-size:12px">acct_88213</div></div>
+  </div>
+
+  <div class="tb">
+    <button class="tbtn">展开全部</button>
+    <button class="tbtn">折叠全部</button>
+    <button class="tbtn">复制 JSON</button>
+    <div class="lg">
+      <span class="sw"><span class="tag flow">彩色</span>flow 编排节点</span>
+      <span class="sw"><span class="tag leaf">灰色</span>下钻被引规则内部</span>
+    </div>
+  </div>
+
+  <div class="tree">
+    <!-- N1 RuleRef 黑名单：未命中，展开被引规则 AST 子树 -->
+    <div class="row"><span class="car">▾</span><span class="ic">❌</span>
+      <span class="tag n-ruleref">RuleRef</span><span class="nm">黑名单校验</span>
+      <span class="refnote">↳ 引用 blacklist_check v3（发布期冻结）</span>
+    </div>
+    <div class="row" style="margin-left:24px"><span class="car">▾</span><span class="ic">❌</span>
+      <span class="tag">AndNode</span></div>
+    <div class="row" style="margin-left:48px"><span class="car"></span><span class="ic">❌</span>
+      <span class="tag">ConditionNode</span><span class="tag metric">metrics.in_blacklist</span>
+      <span class="eq">= false</span><span class="exp">期望 true</span></div>
+
+    <!-- N2 Switch 命中判定：选中 PASS -->
+    <div class="row"><span class="car"></span><span class="ic">⏭</span>
+      <span class="tag n-switch">Switch</span><span class="nm">命中判定</span>
+      <span class="eq">hitDecisions[0].code = "PASS"</span><span class="exp">→ 选中分支 PASS</span></div>
+
+    <!-- N3 Transform：写 flow.riskScore -->
+    <div class="row"><span class="car"></span><span class="ic">⏭</span>
+      <span class="tag n-transform">Transform</span><span class="nm">flow.riskScore</span>
+      <span class="eq">metrics.score * 1.5 = 90</span><span class="exp">→ 写入 flow.riskScore</span></div>
+
+    <!-- N4 Switch riskScore>80：选中 >80 -->
+    <div class="row"><span class="car"></span><span class="ic">⏭</span>
+      <span class="tag n-switch">Switch</span><span class="nm">风险闸口</span>
+      <span class="eq">flow.riskScore &gt; 80 = true</span><span class="exp">→ 选中分支 &gt;80</span></div>
+
+    <!-- N5 RuleRef 人工审核：命中，展开决策表子树 -->
+    <div class="row"><span class="car">▾</span><span class="ic">✅</span>
+      <span class="tag n-ruleref">RuleRef</span><span class="nm">大额人工审核</span>
+      <span class="refnote">↳ 引用 manual_review v2（发布期冻结）</span>
+    </div>
+    <div class="row" style="margin-left:24px"><span class="car"></span><span class="ic">✅</span>
+      <span class="tag">DecisionTableRow</span><span class="eq">row#2 命中 → REVIEW</span></div>
+
+    <!-- N6 Output -->
+    <div class="row"><span class="car"></span><span class="ic">✅</span>
+      <span class="tag n-output">Output</span><span class="nm">REVIEW</span>
+      <span class="exp">→ 产出决策，进入 flow 结果集</span></div>
+  </div>
+
+  <div class="note">
+    <b>一棵树两层语义</b>：彩色标签（RuleRef / Switch / Transform / Output）是 flow 图遍历的编排节点；
+    RuleRef 节点<b>展开后缩进的灰色子树</b>就是被引规则 <code>leafExecutor.execute()</code> 返回的 AST trace，
+    子树带 <code>ruleCode / version</code>（如 blacklist_check v3）天然标明归属。<br>
+    这棵树<b>复用现有 <code>components/trace-tree</code> 组件</b>（缩进 / ✅❌⏭ 图标 / nodeType 标签 / 展开折叠 / 复制 JSON）零改造渲染；
+    仅新增 <code>FlowNodeType</code> 四个标签值（RuleRef/Switch/Transform/Output）——<code>NodeType</code> 一行不动。
+  </div>
+</div>
+</body>
+</html>

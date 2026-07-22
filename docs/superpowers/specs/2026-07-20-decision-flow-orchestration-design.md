@@ -141,6 +141,9 @@ RuleRef(A) → Switch(expression="hitDecisions[0].code")   // ← walker 在内�
 | RuleRef 调单规则 | 调现有 `RuleVersionExecutor.execute(snap, ctx)` | 复用现有入口 |
 | EvalEngine 分派 | `Map<kind, executor>` 加一个 entry | 加性，不改 switch/if 链 |
 | 旧 5 形态 executors | **零改动** | 不感知 flow |
+| 内容序列化孪生（Hasher/Bundle/详情 VO/Export·Import） | 各加 `flowGraph` 字段/键（照抄 `script` 孪生） | 加性；漏则详情/导出丢 body、两条不同 flow 撞同 hash |
+| SDK 嵌入式评估（`RuleEngineClient`） | executors 注册 FlowExecutor | 加性；漏则命中 AST_BOOLEAN 回退陷阱出错 |
+| trace 记录 | 编排节点复用 `NodeTrace` 树，RuleRef 挂叶子子树；新增平级 `FlowNodeType`，`NodeType` **不动** | 复用载体 + 平级枚举，不污染 AST 词表 |
 
 整个 DECISION_FLOW **没有改一行现有求值/取数/合成的核心路径**。打补丁的特征是「因为有新需求，所以在旧代码里塞 if-else 分支」——这里不存在。
 
@@ -157,6 +160,7 @@ private FlowGraph flowGraph;
 
 - 迁移：`V1_39__rule_version_flow_graph.sql`（当前最高 V1_38），`ALTER TABLE rule_version ADD COLUMN flow_graph JSON NULL COMMENT '...'`。纯 ADD COLUMN，无需 COLLATE。
 - 索引读取链同步（script 的孪生位点逐一改齐）：`RuleVersionRow` 加 `flowGraphJson` + 兼容构造；`RuleVersionReadMapper` 三条 `@Select` 各加 `rv.flow_graph AS flowGraphJson`；`SnapshotAssembler.assemble()` 加反序列化；`AstJsonCodec.deserializeFlowGraph()`（仿 `deserializeScriptSource`）；`RuleVersionSnapshot` record 加 `FlowGraph flowGraph` + builder。
+- config-svc 内容序列化孪生（同 script 一条不落）：`RuleContent` / `RuleDetailVO` / `RuleVersionContentVO` / `RuleBundle` 各加 `flowGraph` 字段（record 改构造器 → `ConfigServiceImpl` 两处 VO 装配点须同步补 `getFlowGraph()`，否则编译断）；`RuleContentHasher.ruleHash` 签名 + canonical 加 `flowGraph`（**幂等红线**：flow 的 ast/script 均 null，不进 hash 则不同 flow 同 hash）；`RuleExportService` / `RuleImportService` 携带/读回 flowGraph。
 
 ## 发布期解析、冻结、校验
 
@@ -167,7 +171,7 @@ private FlowGraph flowGraph;
 3. **metric 依赖并集**：flow 版本的 `metricDependencies` = 全图 `RuleRef` 引用规则的 metricDeps 并集（Switch/Transform 表达式引用的 metric 也扫进来）。这样评估期 `EvalContextAssembler.collectChosenVersions` 自动一次取全，FlowExecutor 拿到的 `EvalContext` 已含全图所需 metric，无需二次取数、无需触碰 index/DB。
 4. **环检测前置**：发布期即拒绝成环的 flow（详见静态分析）。
 
-`ResolvedDraft` 加 `FlowGraph` 字段，`buildDraftVersion()` 加 `rv.setFlowGraph(...)`。
+`ResolvedDraft` 加 `FlowGraph` 字段，`buildDraftVersion()` 加 `rv.setFlowGraph(...)`。`createDraft` / `editDraft` / `newVersion` 三入口现各只读 `content.script()`，三处都补读 `content.flowGraph()` 透传，否则草稿收不到 flowGraph。
 
 ## 静态分析：图环检测 + 死节点可达性
 
@@ -177,6 +181,8 @@ private FlowGraph flowGraph;
 - 新建 `FlowCycleDetector`（RuleRef 引用图成环）、`FlowReachabilityDetector`（从 input 不可达的死节点），仿 `DeadRuleDetector` 静态 detector 结构，各返回 finding list；新增 `FlowCycleFinding` / `FlowDeadNodeFinding` record 到 `api/analysis/`。
 - `RuleSetAnalyzer.analyze()` 挂上两个 detector + 各自 Comparator；`RuleSetAnalysisReport` 扩字段。
 - 环检测只需遍历本 flow 的 FlowNode 邻接，不需 CubeProjector 投影。
+- **现有 detector 的 kind 连带**：`CoverageGapDetector` 的 `switch(kind)` 无 default，需补 `case DECISION_FLOW`（收集全图 `OutputNode.decisionCode`），否则 flow 落空被误判为"不产决策"；`RedundancyDetector` if-else 链 flow 落 else 跳过（正确），仅更新注释。
+- **前端按维度分流**（后端分析引擎统一入口，finding 都进 report）：**图内维度**（环/死节点）在 flow 画布原生可视化（成环边标红、死节点置灰），不入规则集冲突面板；**跨规则维度**（决策码覆盖）flow 纳入既有规则集分析面板。环/死节点是图结构问题，画布是其原生展示位——塞进跨规则冲突面板是维度错配。
 
 ## API 契约
 
@@ -185,16 +191,37 @@ private FlowGraph flowGraph;
 - `RuleContentSource` 接口加 `FlowGraph flowGraph()`（仿 `script()`）。
 - 三个写请求 record（`CreateRuleRequest` / `EditDraftRequest` / `NewVersionRequest`）各加 `FlowGraph flowGraph` 字段。
 - `RuleContent` record 加字段；`RuleController.toContent()` 加透传。
+- 详情/导出 VO（`RuleDetailVO` / `RuleVersionContentVO` / `RuleBundle`）加字段，否则 GET 详情、export bundle 丢 flow body（见存储节孪生清单）。
+- **SDK 嵌入式评估**：`RuleEngineClient`（executors 注册处）显式 `executors.put(RuleKind.DECISION_FLOW.tag(), flowExecutor)`——同 ScriptExecutor 始终注册的理由，避开 EvalEngine 对未知 kind 回退 AST_BOOLEAN（flow 的 conditionAst=null）的陷阱；`RuleEngineClientAutoConfiguration` 补依赖装配。
 - kind 只是请求体字符串字段，`DECISION_FLOW` 同一 POST/PUT 承载。
 
 ## 前端：画布编辑器（新增 reactflow 依赖）
 
 - `getRuleKindOptions`（`constants/enums.ts`）加 `DECISION_FLOW` 选项 + i18n（zh-CN / en 的 `enum.kind`）。
+- 创建规则弹窗 `rule-list` / `rules-all` 的 `handleCreate` 按 kind 播种默认体，须加 `DECISION_FLOW` 分支塞最小合法 FlowGraph 骨架（类比 DECISION_TREE）——否则选了新 kind 但送空 body，被发布期结构校验拒、建不出 flow。
 - `CenterPanel.tsx` `renderEditor()` 加 `if (kind === 'DECISION_FLOW') return <FlowCanvasEditor .../>`（仿 ScriptEditor 分派）。
 - 新建 `FlowCanvasEditor.tsx`，引入 reactflow：拖 4 种节点、连边、RuleRef 节点内嵌「选一条已有规则」下拉。flow 数据**不走 `ast`**（`ast` 类型是 `AstNode` 联合），在 `ruleStore` 加平级 `flowGraph` 状态（仿 script）。
-- `types/flow.ts`（对齐后端 record，判别字段 `type`），与 `types/ast.ts` 平级。
+- `types/flow.ts`（对齐后端 record，判别字段 `type`），与 `types/ast.ts` 平级；`types/rule.ts` 的 `RuleKind` 联合加 `'DECISION_FLOW'`（**硬伤**：不加则 `kind==='DECISION_FLOW'` 比较报错、`npm run build` 直接挂）+ 请求/详情类型加 `flowGraph`。
 - 提交时把 flowGraph 塞进写请求体 `flowGraph` 字段。
-- 叶子规则的 5 个表单编辑器**不动**——图只编排，叶子仍表单填。
+- 只读链（详情/版本查看/diff）：`index.tsx` `loadFromDetail` 回填 flowGraph；`VersionContentDrawer` / `VersionDiffDrawer` 加 flowGraph 展示项 + i18n `versionContent.flowGraph`。只读用 `json(content.flowGraph)` 平铺即可，**不做只读画布**（与现有 script 一致，守以简为先）。
+- 分析展示分两维度：**跨规则**（决策码覆盖）flow 纳入 `ANALYZABLE_KINDS`，进规则集分析面板；**图内**（环/死节点）在 `FlowCanvasEditor` 画布原生可视化（成环边标红、死节点置灰），不塞进规则集冲突面板。
+- flow trace 复用后端 `NodeTrace` 树（RuleRef 挂叶子子树），`fetch-trace-view` / `NodeTraceFormatter` 原样渲染，仅按 `FlowNodeType` 新 tag 加图标。
+- **节点下钻编辑（一个画布搞定）**：RuleRef 双击 → 抽屉内嵌**被引规则的现有编辑器**（4 个受控编辑器直接复用；`ScriptEditor` 从 `useRuleStore` 单例对齐为受控 props 后同样复用，5 个编辑器均不重写），编辑落**被引规则自己的草稿**（走 `editDraft`，非 flowGraph）；画布内还可"新建本场景叶子规则"（`createDraft`）建完自动引用，消除跳出去建规则的断点。抽屉提示**冻结隔离**：改叶子进其草稿、需各自发布，已发布 flow 引用冻结版本不受影响（D6）。
+- 这是 DMN「DRD 图 + 双击下钻决策逻辑」/ ZEN「graph + 节点编辑器」的标准形态——**体验合一在一个画布，存储/发布/冻结仍是引用**（叶子是一等规则，flowGraph 只存图 + ruleCode；把叶子逻辑内联进 flowGraph 才是打补丁：违反数据边界规范、丢复用/版本/血缘、JSON 膨胀）。
+- **三栏适配**：左栏元信息/版本/DryRun 通用不动，flow 纳入分析后显示规则集分析摘要（跨规则维度，图内环/死节点仍在画布）；中栏编辑区换 `FlowCanvasEditor`；右栏 executor(lang) tab 本就只 EXPRESSION_SCRIPT 显示（flow 无规则级 lang，各 Switch/Transform 节点自带），preGate tab 保留，**decisionBinding tab 需把 `DECISION_FLOW` 加进 `showBinding` 排除**——决策由 Output 节点内联产出，不走 decisionBinding（类比评分卡 bands / 决策树叶子内联）。
+
+## Trace 可视化（分层演进，复用既有组件）
+
+flow 是图，评估回放的最优形态也是图——但按 §2 分层落地：首版保底、增强渐进，每层都复用既有能力不新造引擎/组件：
+
+| 层级 | 形态 | 回答的问题 | 复用 | 落地 |
+|---|---|---|---|---|
+| **首版** | Trace 树 | 走了哪些节点 | `components/trace-tree` 零改造，仅加 `FlowNodeType` 四标签图标 | P6 |
+| 增强1 | 画布路径高亮回放 | 为什么走这条 / 没走那条 | 只读 `FlowCanvasEditor` + trace overlay；RuleRef 点开叶子 AST trace 仍用 `trace-tree` | 迭代 |
+| 增强2 | What-if 反事实探针 | 换个输入会走哪、出什么决策 | 现有 DryRun + 画布回放，改输入即时重算 | 迭代 |
+| 增强3 | 路径覆盖率热力图 | 生产上每条分支多久走一次、哪条从没走 | 评估审计聚合；与静态死节点分析形成「静态不可达 + 动态没走过」闭环 | 迭代 |
+
+原则：**图归图**（flow 编排走画布回放）、**树归树**（叶子规则 AST 走 trace-tree）。首版只做 Trace 树，增强项不阻塞主线。四层原型见同目录 `2026-07-20-decision-flow-{trace,trace-canvas,whatif}-mockup.html`，编辑器原型见 `2026-07-20-decision-flow-mockup.html`。
 
 ## 边界纪律
 
@@ -207,11 +234,12 @@ private FlowGraph flowGraph;
 
 | 模块 | 新增/改动 |
 |---|---|
-| rule-kernel | `RuleKind`+值、`api/model/flow/*`（FlowGraph/FlowNode/4 子节点）、`internal/evaluator/FlowExecutor`、`analysis/FlowCycleDetector`+`FlowReachabilityDetector`+2 finding、`MetricDependencyCollector` flow 分支、`AnalyzableRule`+字段 |
-| rule-config-svc | `PublishService.resolveFlowDraft`+冻结+校验、`ResolvedDraft`+字段、`RuleContent`+字段、`RuleAnalysisServiceImpl` 拆入、迁移 V1_39 |
+| rule-kernel | `RuleKind`+值、`api/model/flow/*`（FlowGraph/FlowNode/4 子节点）、`FlowNodeType`、`internal/evaluator/FlowExecutor`、`analysis/FlowCycleDetector`+`FlowReachabilityDetector`+2 finding、`CoverageGapDetector` 补 case、`AnalyzableRule`+字段 |
+| rule-config-svc | `PublishService.resolveFlowDraft`+冻结+校验+三入口读 `content.flowGraph()`、`MetricDependencyCollector` flow 分支、`ResolvedDraft`+字段、`RuleContent`/`RuleDetailVO`/`RuleVersionContentVO`/`RuleBundle`+字段、`ConfigServiceImpl` 两处 VO 装配、`RuleContentHasher`+flowGraph 键、`RuleExportService`/`RuleImportService` 携带、`RuleAnalysisServiceImpl` 拆入、迁移 V1_39 |
 | rule-eval-svc | `RuleVersionRow`/`RuleVersionReadMapper`/`SnapshotAssembler`/`AstJsonCodec`/`RuleVersionSnapshot`（flowGraph 读取链） |
 | rule-api | `RuleContentSource`+方法、3 请求 DTO+字段、`RuleController.toContent` 透传、`EvalAutoConfiguration` 注册 flowExecutor |
-| frontend | `enums.ts`+i18n、`CenterPanel` 分派、`FlowCanvasEditor.tsx`、`types/flow.ts`、`ruleStore` flowGraph 状态、reactflow 依赖 |
+| rule-sdk / -spring-boot-starter | `RuleEngineClient` executors 注册 FlowExecutor、`RuleEngineClientAutoConfiguration` 依赖装配 |
+| frontend | `enums.ts`+i18n、`CenterPanel` 分派、`FlowCanvasEditor.tsx`、`types/flow.ts`、`types/rule.ts` 联合+字段、`ruleStore` flowGraph 状态、`index.tsx` 回填、`VersionContentDrawer`/`VersionDiffDrawer` 只读展示、reactflow 依赖 |
 
 ## 待实现前置
 

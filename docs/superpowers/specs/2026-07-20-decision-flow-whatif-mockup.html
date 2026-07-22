@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DECISION_FLOW What-if 探针 · 原型</title>
+<style>
+  :root{
+    --bg:#f1f3f5;--panel:#fff;--border:#e3e6ea;--border-strong:#d0d5dd;
+    --text:#1f2933;--text-2:#5b6672;--text-3:#8a95a1;
+    --ruleref:#2f6bff;--switch:#8b5cf6;--transform:#0ea5e9;--output:#16a34a;
+    --ok:#16a34a;--err:#e5484d;--warn:#f59e0b;--mute:#c2c8d0;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --canvas:#f7f8fa;--dot:#dfe3e8;--shadow:0 1px 2px rgba(16,24,40,.06),0 4px 12px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+  .app{display:flex;flex-direction:column;height:100vh}
+  header{height:52px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 16px;flex:none}
+  .title{font-weight:600;font-size:14px}
+  .pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:11px;font-size:11.5px;font-weight:600}
+  .pill.kind{background:#eef3ff;color:var(--ruleref)}
+  .grow{flex:1}
+  .live{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2)}
+  .live .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(22,163,74,.18)}
+  .res-pill{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:13px;font-weight:700;font-size:13px;background:#f2fbf4;color:var(--output)}
+
+  .body{flex:1;display:flex;min-height:0}
+  .left{width:270px;background:var(--panel);border-right:1px solid var(--border);flex:none;display:flex;flex-direction:column}
+  .center{flex:1;min-width:0;background:var(--canvas);position:relative;overflow:auto}
+
+  .sec-h{font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.5px;text-transform:uppercase;padding:13px 16px 8px}
+  .fld{padding:4px 16px 12px}
+  .fld .lbl{font-size:12px;font-weight:600;margin-bottom:6px;display:flex;justify-content:space-between}
+  .fld .lbl .now{font-family:var(--mono);color:var(--transform)}
+  input[type=range]{width:100%;accent-color:var(--ruleref)}
+  .scale{display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:2px}
+  .toggle{display:inline-flex;border:1px solid var(--border-strong);border-radius:7px;overflow:hidden}
+  .toggle button{height:28px;padding:0 12px;border:none;background:#fff;font-size:12px;cursor:pointer;color:var(--text-2)}
+  .toggle button.on{background:var(--ruleref);color:#fff;font-weight:600}
+  .toggle button.on.no{background:var(--err)}
+  .txt{border:1px solid var(--border-strong);border-radius:7px;padding:7px 10px;font-family:var(--mono);font-size:12.5px;width:100%}
+  .runbar{padding:12px 16px;border-top:1px solid var(--border);margin-top:auto}
+  .btn{width:100%;height:34px;border-radius:8px;border:1px solid var(--ruleref);background:var(--ruleref);color:#fff;font-weight:600;font-size:13px;cursor:pointer}
+  .auto{font-size:11px;color:var(--text-3);text-align:center;margin-top:8px}
+
+  /* canvas */
+  .canvas{position:relative;width:1240px;height:600px;background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:18px 18px}
+  svg.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+  .node{position:absolute;width:172px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);z-index:2;overflow:hidden}
+  .node .bar{height:4px}
+  .node .hd{padding:8px 11px 3px}
+  .node .tp{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+  .node .bd{padding:2px 11px 11px}
+  .node .main{font-weight:600;font-size:13px}
+  .node .sub{font-size:11px;color:var(--text-2);margin-top:2px;font-family:var(--mono)}
+  .n-ruleref .bar{background:var(--ruleref)} .n-ruleref .tp{color:var(--ruleref)}
+  .n-switch .bar{background:var(--switch)} .n-switch .tp{color:var(--switch)}
+  .n-transform .bar{background:var(--transform)} .n-transform .tp{color:var(--transform)}
+  .n-output .bar{background:var(--output)} .n-output .tp{color:var(--output)}
+  .node.traced{box-shadow:0 0 0 2px rgba(22,163,74,.30),var(--shadow)}
+  .node.muted{opacity:.38;filter:grayscale(.6)}
+  .rescorner{position:absolute;top:-9px;right:-9px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:800;z-index:3;border:2px solid #fff}
+  .rescorner.ok{background:var(--ok)} .rescorner.no{background:var(--err)} .rescorner.step{background:var(--transform)}
+  .valchip{margin-top:7px;font-size:11px;font-family:var(--mono);border-radius:5px;padding:2px 7px;display:inline-block}
+  .valchip.pick{background:#f4effe;color:var(--switch);border:1px solid #e0d4fb}
+  .valchip.num{background:#e8f6fd;color:var(--transform);border:1px solid #c5e9f7}
+  .entry{position:absolute;z-index:2;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3);font-weight:600}
+  .entry .rd{width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--ok)}
+  .elabel{position:absolute;z-index:2;transform:translate(-50%,-50%);border-radius:10px;font-size:10.5px;font-weight:600;padding:1px 8px;background:#fff;border:1px solid var(--border-strong);color:var(--text-2)}
+  .elabel.on{color:var(--ok);border-color:#bfe3c8;background:#f2fbf4}
+  .elabel.off{color:var(--text-3);border-style:dashed}
+  .elabel.rej{color:var(--err);border-color:#f5c2c0;background:#fef3f2;border-style:dashed}
+
+  /* counterfactual card */
+  .cf{position:absolute;right:18px;top:16px;width:250px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);z-index:5;overflow:hidden}
+  .cf-h{padding:10px 13px;border-bottom:1px solid var(--border);font-weight:700;font-size:12px;display:flex;align-items:center;gap:7px}
+  .cf-b{padding:6px 13px 12px}
+  .cf-row{display:flex;gap:8px;align-items:flex-start;padding:7px 0;font-size:12px;border-bottom:1px dashed var(--border)}
+  .cf-row:last-child{border-bottom:none}
+  .cf-row .cond{font-family:var(--mono);font-size:11px;color:var(--text-2);flex:1}
+  .cf-row .to{font-weight:700;white-space:nowrap}
+  .to.rev{color:var(--output)} .to.pass{color:var(--ruleref)} .to.rej{color:var(--err)}
+  .legend{position:absolute;left:16px;bottom:14px;z-index:4;background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text-2);box-shadow:var(--shadow)}
+  .legend div{display:flex;align-items:center;gap:7px;padding:2px 0}
+  .lz{width:22px;border-top:3px solid var(--ok)} .lz.off{border-top:2px dashed var(--mute)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="title">What-if 探针 · 交易风控 主决策流</span>
+    <span class="pill kind">DECISION_FLOW</span>
+    <span class="grow"></span>
+    <span class="live"><span class="dot"></span>改输入即时重算（复用 DryRun）</span>
+    <span class="res-pill" style="margin-left:12px">当前决策：REVIEW</span>
+  </header>
+
+  <div class="body">
+    <!-- 输入探针 -->
+    <div class="left">
+      <div class="sec-h">输入探针（模拟评估上下文）</div>
+
+      <div class="fld">
+        <div class="lbl"><span>metrics.score</span><span class="now">60</span></div>
+        <input type="range" min="0" max="100" value="60">
+        <div class="scale"><span>0</span><span>阈值 riskScore=90 &gt; 80</span><span>100</span></div>
+      </div>
+
+      <div class="fld">
+        <div class="lbl"><span>metrics.in_blacklist</span></div>
+        <div class="toggle"><button>true</button><button class="on">false</button></div>
+      </div>
+
+      <div class="fld">
+        <div class="lbl"><span>payload.amount</span></div>
+        <input class="txt" value="120000">
+      </div>
+
+      <div class="fld">
+        <div class="lbl"><span>payload.acctStatus</span></div>
+        <input class="txt" value="ACTIVE">
+      </div>
+
+      <div class="runbar">
+        <button class="btn">重跑评估</button>
+        <div class="auto">或滑动/切换输入 → 300ms 自动重算</div>
+      </div>
+    </div>
+
+    <!-- 画布：当前输入下的走向 + 反事实卡 -->
+    <div class="center">
+      <div class="canvas">
+        <svg class="edges" viewBox="0 0 1240 600" preserveAspectRatio="none">
+          <defs>
+            <marker id="on" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#16a34a"/></marker>
+            <marker id="off" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="#c2c8d0"/></marker>
+          </defs>
+          <path d="M52,300 L74,300" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#on)"/>
+          <path d="M246,300 L300,300" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#on)"/>
+          <path d="M472,300 L526,300" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#on)"/>
+          <path d="M698,300 L752,300" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#on)"/>
+          <path d="M924,292 C952,292 954,214 978,214" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#on)"/>
+          <path d="M1064,252 L1064,300" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#on)"/>
+          <path d="M386,278 L386,182" stroke="#c2c8d0" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#off)"/>
+          <path d="M838,338 C880,392 940,430 978,430" stroke="#c2c8d0" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#off)"/>
+        </svg>
+
+        <div class="elabel rej" style="left:386px;top:232px">REJECT</div>
+        <div class="elabel on"  style="left:499px;top:290px">PASS ✓</div>
+        <div class="elabel on"  style="left:952px;top:250px">&gt;80 ✓</div>
+        <div class="elabel off" style="left:900px;top:392px">≤80</div>
+        <div class="entry" style="left:8px;top:293px"><span class="rd"></span>入口</div>
+
+        <div class="node n-ruleref traced" style="left:74px;top:262px">
+          <div class="rescorner no">✕</div><div class="bar"></div>
+          <div class="hd"><span class="tp">RuleRef</span></div>
+          <div class="bd"><div class="main">黑名单校验</div><div class="sub">未命中</div></div>
+        </div>
+        <div class="node n-switch traced" style="left:300px;top:262px">
+          <div class="rescorner step">⏭</div><div class="bar"></div>
+          <div class="hd"><span class="tp">Switch</span></div>
+          <div class="bd"><div class="sub">hitDecisions[0].code</div><span class="valchip pick">选中 = PASS</span></div>
+        </div>
+        <div class="node n-output muted" style="left:300px;top:104px">
+          <div class="bar"></div><div class="hd"><span class="tp">Output</span></div>
+          <div class="bd"><div class="main">REJECT</div><div class="sub">未走</div></div>
+        </div>
+        <div class="node n-transform traced" style="left:526px;top:262px">
+          <div class="rescorner step">ƒ</div><div class="bar"></div>
+          <div class="hd"><span class="tp">Transform</span></div>
+          <div class="bd"><div class="main">flow.riskScore</div><span class="valchip num">= 90</span></div>
+        </div>
+        <div class="node n-switch traced" style="left:752px;top:262px">
+          <div class="rescorner step">⏭</div><div class="bar"></div>
+          <div class="hd"><span class="tp">Switch</span></div>
+          <div class="bd"><div class="sub">flow.riskScore &gt; 80</div><span class="valchip pick">选中 = &gt;80</span></div>
+        </div>
+        <div class="node n-ruleref traced" style="left:978px;top:176px">
+          <div class="rescorner ok">✓</div><div class="bar"></div>
+          <div class="hd"><span class="tp">RuleRef</span></div>
+          <div class="bd"><div class="main">大额人工审核</div><div class="sub">命中</div></div>
+        </div>
+        <div class="node n-output traced" style="left:978px;top:300px">
+          <div class="rescorner ok">✓</div><div class="bar"></div>
+          <div class="hd"><span class="tp">Output</span></div>
+          <div class="bd"><div class="main">REVIEW</div><div class="sub">产出决策</div></div>
+        </div>
+        <div class="node n-output muted" style="left:978px;top:392px">
+          <div class="bar"></div><div class="hd"><span class="tp">Output</span></div>
+          <div class="bd"><div class="main">PASS</div><div class="sub">未走</div></div>
+        </div>
+
+        <!-- 反事实卡：本次输入的边界与替代走向 -->
+        <div class="cf">
+          <div class="cf-h">反事实 · 改哪个值会变</div>
+          <div class="cf-b">
+            <div class="cf-row"><span class="cond">score ≤ 53<br>(riskScore ≤ 80)</span><span class="to pass">→ PASS</span></div>
+            <div class="cf-row"><span class="cond">in_blacklist = true</span><span class="to rej">→ REJECT（短路）</span></div>
+            <div class="cf-row"><span class="cond">当前 score=60</span><span class="to rev">→ REVIEW</span></div>
+          </div>
+        </div>
+
+        <div class="legend">
+          <div><span class="lz"></span>当前输入走过的路径</div>
+          <div><span class="lz off"></span>其他分支（可反事实探索）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DECISION_FLOW 画布编辑器 · 原型</title>
+<style>
+  :root{
+    --bg:#f1f3f5; --panel:#ffffff; --border:#e3e6ea; --border-strong:#d0d5dd;
+    --text:#1f2933; --text-2:#5b6672; --text-3:#8a95a1;
+    --ruleref:#2f6bff; --switch:#8b5cf6; --transform:#0ea5e9; --output:#16a34a;
+    --accent:#2f6bff; --ok:#16a34a; --warn:#f59e0b; --err:#e5484d;
+    --canvas:#f7f8fa; --dot:#dfe3e8;
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 12px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif;
+       background:var(--bg);color:var(--text);font-size:13px;line-height:1.5}
+  .app{display:flex;flex-direction:column;height:100vh}
+
+  /* ---- header ---- */
+  header{height:52px;background:var(--panel);border-bottom:1px solid var(--border);
+         display:flex;align-items:center;gap:14px;padding:0 16px;flex:none;z-index:5}
+  .title{font-weight:600;font-size:14px}
+  .pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:11px;
+        font-size:11.5px;font-weight:600;letter-spacing:.2px}
+  .pill.kind{background:#eef3ff;color:var(--ruleref)}
+  .pill.scene{background:#f2f4f7;color:var(--text-2);font-weight:500}
+  .pill.draft{background:#fff7e6;color:#b7791f}
+  .grow{flex:1}
+  .btn{height:30px;padding:0 14px;border-radius:7px;border:1px solid var(--border-strong);
+       background:#fff;color:var(--text);font-size:12.5px;cursor:pointer;font-weight:500}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn+.btn{margin-left:8px}
+
+  /* ---- body 3 columns ---- */
+  .body{flex:1;display:flex;min-height:0}
+  .col{background:var(--panel);display:flex;flex-direction:column;min-height:0}
+  .left{width:230px;border-right:1px solid var(--border);flex:none}
+  .right{width:312px;border-left:1px solid var(--border);flex:none}
+  .center{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--canvas)}
+  .sec{padding:12px 14px;border-bottom:1px solid var(--border)}
+  .sec-h{font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:9px}
+
+  /* palette node cards */
+  .palette{display:flex;flex-direction:column;gap:8px}
+  .pnode{border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;gap:9px;align-items:center;
+         cursor:grab;background:#fff;transition:.12s}
+  .pnode:hover{border-color:var(--border-strong);box-shadow:var(--shadow)}
+  .swatch{width:8px;height:30px;border-radius:3px;flex:none}
+  .pnode .nm{font-weight:600;font-size:12.5px}
+  .pnode .ds{color:var(--text-3);font-size:11px}
+
+  /* scene rules list */
+  .rrow{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px}
+  .rrow:hover{background:#f7f8fa}
+  .kdot{width:7px;height:7px;border-radius:2px;flex:none}
+  .rrow .rc{font-weight:500}
+  .rrow .rk{margin-left:auto;color:var(--text-3);font-size:10.5px;background:#f2f4f7;padding:1px 6px;border-radius:4px}
+  .hint{color:var(--text-3);font-size:11px;margin-top:8px;line-height:1.6}
+
+  /* canvas toolbar */
+  .ctools{height:40px;border-bottom:1px solid var(--border);background:var(--panel);
+          display:flex;align-items:center;gap:6px;padding:0 12px;flex:none}
+  .tbtn{height:26px;padding:0 10px;border:1px solid var(--border);border-radius:6px;background:#fff;
+        font-size:12px;color:var(--text-2);cursor:pointer}
+  .tbtn.on{border-color:var(--accent);color:var(--accent);background:#f5f8ff}
+  .analysis-chip{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);font-weight:600}
+  .analysis-chip .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+
+  /* canvas */
+  .canvas-wrap{flex:1;overflow:auto;position:relative}
+  .canvas{position:relative;width:1280px;height:600px;
+          background-image:radial-gradient(var(--dot) 1px,transparent 1px);
+          background-size:18px 18px;background-position:-1px -1px}
+  svg.edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+
+  .node{position:absolute;width:172px;background:#fff;border:1px solid var(--border);border-radius:10px;
+        box-shadow:var(--shadow);z-index:2;overflow:hidden}
+  .node.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,107,255,.15),var(--shadow)}
+  .node .bar{height:4px}
+  .node .hd{display:flex;align-items:center;gap:7px;padding:8px 11px 3px}
+  .node .tp{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+  .node .bd{padding:2px 11px 11px}
+  .node .main{font-weight:600;font-size:13px;color:var(--text)}
+  .node .sub{font-size:11px;color:var(--text-2);margin-top:2px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .node .sel-inline{margin-top:7px;border:1px solid var(--border-strong);border-radius:6px;padding:5px 8px;
+        font-size:11.5px;display:flex;align-items:center;justify-content:space-between;color:var(--text-2);background:#fbfcfd}
+  .node .caret{color:var(--text-3)}
+  .cases{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+  .case{font-size:10.5px;padding:1px 7px;border-radius:10px;background:#f3effe;color:var(--switch);font-weight:600}
+  .badge-ns{font-size:10px;color:var(--transform);background:#e8f6fd;border-radius:4px;padding:1px 5px;font-weight:600}
+
+  /* node type accents */
+  .n-ruleref .bar{background:var(--ruleref)} .n-ruleref .tp{color:var(--ruleref)}
+  .n-switch  .bar{background:var(--switch)}  .n-switch  .tp{color:var(--switch)}
+  .n-transform .bar{background:var(--transform)} .n-transform .tp{color:var(--transform)}
+  .n-output  .bar{background:var(--output)}  .n-output  .tp{color:var(--output)}
+
+  /* dead / cycle demo states */
+  .node.dead{opacity:.45;border-style:dashed}
+  .node.dead .bar{background:var(--text-3)!important}
+
+  .entry{position:absolute;z-index:2;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3);font-weight:600}
+  .entry .rd{width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--ruleref)}
+
+  .edge-label{position:absolute;z-index:2;transform:translate(-50%,-50%);
+        background:#fff;border:1px solid var(--border-strong);border-radius:10px;
+        font-size:10.5px;font-weight:600;color:var(--text-2);padding:1px 8px}
+  .edge-label.reject{color:var(--err);border-color:#f5c2c0;background:#fef3f2}
+  .edge-label.pass{color:var(--ok);border-color:#bfe3c8;background:#f2fbf4}
+
+  /* right panel prop editor */
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11.5px;color:var(--text-2);margin-bottom:5px;font-weight:600}
+  .field .val{border:1px solid var(--border-strong);border-radius:7px;padding:7px 10px;background:#fbfcfd;font-size:12.5px}
+  .field .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  .select .val{display:flex;align-items:center;justify-content:space-between}
+  .vars{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .var{font-size:10.5px;padding:2px 8px;border-radius:11px;background:#f2f4f7;color:var(--text-2);font-family:ui-monospace,monospace}
+  .var.flow{background:#e8f6fd;color:var(--transform);font-weight:600}
+  .analysis-card{border:1px solid var(--border);border-radius:9px;padding:11px 12px;background:#fbfcfd}
+  .arow{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px}
+  .arow .ic{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+        font-size:11px;font-weight:800;color:#fff;flex:none}
+  .arow .ic.ok{background:var(--ok)} .arow .ic.warn{background:var(--warn)}
+  .legend{margin-top:10px;font-size:11px;color:var(--text-3);line-height:1.9}
+  .legend .lg{display:inline-flex;align-items:center;gap:6px;margin-right:4px}
+  .legend .box{width:22px;height:12px;border-radius:3px;border:1px solid var(--border-strong);vertical-align:middle}
+  .legend .box.dead{border-style:dashed;opacity:.5;background:#eef1f4}
+  .legend .box.cycle{border-color:var(--err);background:#fef3f2}
+
+  /* drilldown drawer */
+  .scrim{position:fixed;inset:0;background:rgba(16,24,40,.28);z-index:20}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:500px;background:#fff;z-index:21;
+          box-shadow:-8px 0 28px rgba(16,24,40,.14);display:flex;flex-direction:column}
+  .dh{height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;padding:0 16px;flex:none}
+  .dh .t{font-weight:600;font-size:14px}
+  .dh .x{margin-left:auto;cursor:pointer;color:var(--text-3);font-size:20px;line-height:1}
+  .dnote{margin:12px 16px 0;background:#fff7e6;border:1px solid #ffe0a3;color:#8a5a00;
+         border-radius:8px;padding:9px 11px;font-size:11.5px;line-height:1.65}
+  .reuse{margin:9px 16px 0;font-size:11px;color:var(--text-3)}
+  .reuse b{color:var(--ruleref)}
+  .dbody{flex:1;overflow:auto;padding:14px 16px}
+  .ct-h{font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px}
+  .grp{border:1px solid var(--border);border-left:3px solid var(--ruleref);border-radius:8px;padding:10px 12px;background:#fbfcfd}
+  .grp-t{font-size:11px;font-weight:700;color:var(--ruleref);margin-bottom:8px}
+  .cond{display:flex;gap:7px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:7px;padding:7px 9px;margin-bottom:7px;flex-wrap:wrap}
+  .cond .seg{border:1px solid var(--border-strong);border-radius:6px;padding:4px 8px;font-size:11.5px;background:#fbfcfd}
+  .cond .seg.code{font-family:ui-monospace,monospace}
+  .addc{font-size:12px;color:var(--ruleref);cursor:pointer;font-weight:600;margin-top:2px}
+  .df{height:58px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0 16px;flex:none}
+  .dblbadge{position:absolute;z-index:3;transform:translate(-50%,-100%);background:var(--text);color:#fff;
+        font-size:10.5px;padding:3px 8px;border-radius:6px;font-weight:600;white-space:nowrap}
+  .dblbadge:after{content:'';position:absolute;left:50%;bottom:-4px;transform:translateX(-50%);
+        border:4px solid transparent;border-top-color:var(--text)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <span class="title">交易风控 · 主决策流</span>
+    <span class="pill kind">DECISION_FLOW</span>
+    <span class="pill scene">场景：交易风控 (txn_risk)</span>
+    <span class="pill draft">草稿 v1</span>
+    <span class="grow"></span>
+    <button class="btn">保存草稿</button>
+    <button class="btn primary">发布</button>
+  </header>
+
+  <div class="body">
+
+    <!-- ===== LeftPanel ===== -->
+    <div class="col left">
+      <div class="sec">
+        <div class="sec-h">节点类型 · 拖入画布</div>
+        <div class="palette">
+          <div class="pnode"><span class="swatch" style="background:var(--ruleref)"></span>
+            <div><div class="nm">RuleRef</div><div class="ds">引用一条本场景规则</div></div></div>
+          <div class="pnode"><span class="swatch" style="background:var(--switch)"></span>
+            <div><div class="nm">Switch</div><div class="ds">按表达式结果分支</div></div></div>
+          <div class="pnode"><span class="swatch" style="background:var(--transform)"></span>
+            <div><div class="nm">Transform</div><div class="ds">算中间值写 flow.*</div></div></div>
+          <div class="pnode"><span class="swatch" style="background:var(--output)"></span>
+            <div><div class="nm">Output</div><div class="ds">产出决策，终点</div></div></div>
+        </div>
+      </div>
+      <div class="sec" style="flex:1;overflow:auto">
+        <div class="sec-h">本场景规则 · RuleRef 可引</div>
+        <div class="rrow"><span class="kdot" style="background:var(--ruleref)"></span><span class="rc">黑名单校验</span><span class="rk">AST_BOOLEAN</span></div>
+        <div class="rrow"><span class="kdot" style="background:var(--switch)"></span><span class="rc">风险评分卡</span><span class="rk">SCORECARD</span></div>
+        <div class="rrow"><span class="kdot" style="background:var(--output)"></span><span class="rc">大额人工审核</span><span class="rk">DECISION_TABLE</span></div>
+        <div class="hint">仅列出「交易风控」场景内的规则。<br>v1：RuleRef 只能引同场景规则，跨场景发布期拒绝。</div>
+      </div>
+    </div>
+
+    <!-- ===== CenterPanel : Canvas ===== -->
+    <div class="col center">
+      <div class="ctools">
+        <button class="tbtn on">选择</button>
+        <button class="tbtn">连线</button>
+        <button class="tbtn">自动布局</button>
+        <button class="tbtn">适应画布</button>
+        <span class="analysis-chip"><span class="dot"></span>图分析通过 · 无环 · 无死节点</span>
+      </div>
+      <div class="canvas-wrap">
+        <div class="canvas">
+
+          <!-- edges -->
+          <svg class="edges" viewBox="0 0 1280 600" preserveAspectRatio="none">
+            <defs>
+              <marker id="ar'" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/>
+              </marker>
+              <marker id="ar" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto">
+                <path d="M0,0 L6.5,3 L0,6 Z" fill="#94a3b8"/>
+              </marker>
+            </defs>
+            <!-- entry -> N1 -->
+            <path d="M52,300 L74,300" stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+            <!-- N1 right(246,300) -> N2 left(300,300) -->
+            <path d="M246,300 C275,300 271,300 300,300" stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+            <!-- N2 top(386,278) -> N3 bottom(386,180)  REJECT -->
+            <path d="M386,278 L386,182" stroke="#e5484d" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+            <!-- N2 right(472,300) -> N4 left(526,300)  PASS -->
+            <path d="M472,300 C500,300 498,300 526,300" stroke="#16a34a" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+            <!-- N4 right(698,300) -> N5 left(752,300) -->
+            <path d="M698,300 C726,300 724,300 752,300" stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+            <!-- N5 top/right -> N6  (>80) : N5 right(924,300)-> N6 left(978,214) -->
+            <path d="M924,292 C952,292 954,214 978,214" stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+            <!-- N6 right(1150,214)-> N8 left(1096,... ) actually N8 below N6 -->
+            <!-- N5 bottom(838,338) -> N7 left(978,430) (<=80) -->
+            <path d="M838,338 C880,392 940,430 978,430" stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+            <!-- N6 right(1150,214) -> N8 (Output REVIEW) left(1096,300)?? place N8 right of N6 -->
+            <path d="M1150,214 C1176,214 1176,214 1200,214" stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#ar)" style="display:none"/>
+          </svg>
+
+          <!-- edge labels -->
+          <div class="edge-label reject" style="left:386px;top:232px">REJECT</div>
+          <div class="edge-label pass"   style="left:499px;top:290px">PASS</div>
+          <div class="edge-label"        style="left:952px;top:250px">flow.riskScore &gt; 80</div>
+          <div class="edge-label"        style="left:900px;top:392px">≤ 80</div>
+
+          <!-- entry -->
+          <div class="entry" style="left:8px;top:293px"><span class="rd"></span>入口</div>
+
+          <div class="dblbadge" style="left:160px;top:256px">双击 → 下钻编辑被引规则</div>
+          <!-- N1 RuleRef 黑名单 -->
+          <div class="node n-ruleref" style="left:74px;top:262px">
+            <div class="bar"></div>
+            <div class="hd"><span class="tp">RuleRef</span></div>
+            <div class="bd">
+              <div class="main">黑名单校验</div>
+              <div class="sel-inline">引用：黑名单校验 <span class="caret">▾</span></div>
+            </div>
+          </div>
+
+          <!-- N2 Switch 命中判定 -->
+          <div class="node n-switch" style="left:300px;top:262px">
+            <div class="bar"></div>
+            <div class="hd"><span class="tp">Switch</span></div>
+            <div class="bd">
+              <div class="sub">hitDecisions[0].code</div>
+              <div class="cases"><span class="case">REJECT</span><span class="case">PASS</span></div>
+            </div>
+          </div>
+
+          <!-- N3 Output REJECT (上分支) -->
+          <div class="node n-output" style="left:300px;top:104px">
+            <div class="bar"></div>
+            <div class="hd"><span class="tp">Output</span></div>
+            <div class="bd"><div class="main">REJECT</div><div class="sub">命中即拒绝，短路</div></div>
+          </div>
+
+          <!-- N4 Transform -->
+          <div class="node n-transform" style="left:526px;top:262px">
+            <div class="bar"></div>
+            <div class="hd"><span class="tp">Transform</span></div>
+            <div class="bd">
+              <div class="main"><span class="badge-ns">flow.riskScore</span></div>
+              <div class="sub">= metrics.score * 1.5</div>
+            </div>
+          </div>
+
+          <!-- N5 Switch risk>80 (selected) -->
+          <div class="node n-switch sel" style="left:752px;top:262px">
+            <div class="bar"></div>
+            <div class="hd"><span class="tp">Switch</span></div>
+            <div class="bd">
+              <div class="sub">flow.riskScore &gt; 80</div>
+              <div class="cases"><span class="case">&gt;80</span><span class="case">≤80</span><span class="case">default</span></div>
+            </div>
+          </div>
+
+          <!-- N6 RuleRef 人工审核 (>80) -->
+          <div class="node n-ruleref" style="left:978px;top:176px">
+            <div class="bar"></div>
+            <div class="hd"><span class="tp">RuleRef</span></div>
+            <div class="bd">
+              <div class="main">大额人工审核</div>
+              <div class="sel-inline">引用：大额人工审核 <span class="caret">▾</span></div>
+            </div>
+          </div>
+
+          <!-- N8 Output REVIEW (after N6) -->
+          <div class="node n-output" style="left:978px;top:300px">
+            <div class="bar"></div>
+            <div class="hd"><span class="tp">Output</span></div>
+            <div class="bd"><div class="main">REVIEW</div><div class="sub">转人工复核</div></div>
+          </div>
+
+          <!-- N7 Output PASS (<=80) -->
+          <div class="node n-output" style="left:978px;top:392px">
+            <div class="bar"></div>
+            <div class="hd"><span class="tp">Output</span></div>
+            <div class="bd"><div class="main">PASS</div><div class="sub">放行</div></div>
+          </div>
+
+          <!-- extra edge: N6 -> N8 -->
+          <svg class="edges" viewBox="0 0 1280 600" preserveAspectRatio="none" style="z-index:1">
+            <path d="M1064,252 L1064,300" stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+          </svg>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== RightPanel : props + analysis ===== -->
+    <div class="col right">
+      <div class="sec">
+        <div class="sec-h">节点属性 · Switch</div>
+        <div class="field select">
+          <label>表达式引擎 (lang)</label>
+          <div class="val">CEL <span class="caret">▾</span></div>
+        </div>
+        <div class="field">
+          <label>分支表达式 (expression)</label>
+          <div class="val code">flow.riskScore &gt; 80</div>
+        </div>
+        <div class="field">
+          <label>分支出口 (caseKeys)</label>
+          <div class="val">&gt;80&nbsp;·&nbsp;≤80&nbsp;·&nbsp;default</div>
+        </div>
+        <div class="field">
+          <label>可见变量（RuleRef 内不可见 flow.*）</label>
+          <div class="vars">
+            <span class="var">metrics</span><span class="var">payload</span>
+            <span class="var">subject</span><span class="var">now</span>
+            <span class="var flow">flow</span>
+          </div>
+        </div>
+      </div>
+      <div class="sec" style="flex:1">
+        <div class="sec-h">图内分析（本 flow 结构）</div>
+        <div class="analysis-card">
+          <div class="arow"><span class="ic ok">✓</span>环检测：无环（RuleRef 引用图无回路）</div>
+          <div class="arow"><span class="ic ok">✓</span>可达性：8/8 节点从入口可达，无死节点</div>
+          <div class="arow"><span class="ic ok">✓</span>出口：每条路径均以 Output 收敛</div>
+        </div>
+        <div class="legend">
+          <div style="margin-bottom:4px;font-weight:600;color:var(--text-2)">异常态画布标记</div>
+          <span class="lg"><span class="box cycle"></span>成环边标红</span>
+          <span class="lg"><span class="box dead"></span>死节点置灰虚线</span>
+          <div style="margin-top:8px">跨规则维度（决策码覆盖）走「规则集分析」面板，此处只呈现单 flow 图内结构。</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== 下钻抽屉：双击 RuleRef「黑名单校验」打开 ===== -->
+<div class="scrim"></div>
+<aside class="drawer">
+  <div class="dh">
+    <span class="pill kind" style="height:20px">下钻编辑</span>
+    <span class="t">黑名单校验</span>
+    <span class="pill" style="background:#eef3ff;color:var(--ruleref);height:20px">AST_BOOLEAN</span>
+    <span class="pill draft" style="height:20px">独立规则 · 草稿</span>
+    <span class="x">×</span>
+  </div>
+  <div class="dnote">你正在编辑独立规则「黑名单校验」。保存后它进入自己的草稿、需各自发布；已发布 flow 引用的是<b>冻结版本</b>，不受此次编辑影响（D6 快照隔离）。</div>
+  <div class="reuse">画布内直接编辑，复用现有 <b>ConditionTreeEditor</b> 组件（受控 props，零改造）</div>
+  <div class="dbody">
+    <div class="ct-h">条件组合树</div>
+    <div class="grp">
+      <div class="grp-t">AND · 全部满足</div>
+      <div class="cond"><span class="seg">命中黑名单</span><span class="seg">=</span><span class="seg code">metrics.in_blacklist</span><span class="seg code">true</span></div>
+      <div class="cond"><span class="seg">账户状态</span><span class="seg">≠</span><span class="seg code">payload.acctStatus</span><span class="seg code">"FROZEN"</span></div>
+      <div class="addc">+ 添加条件</div>
+    </div>
+  </div>
+  <div class="df">
+    <button class="btn">取消</button>
+    <button class="btn primary">保存到该规则草稿</button>
+  </div>
+</aside>
+</body>
+</html>
