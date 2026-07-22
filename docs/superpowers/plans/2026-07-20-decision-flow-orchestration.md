@@ -70,8 +70,8 @@
 - Test: `SnapshotAssemblerFlowTest`、`RuleVersionRowTest`
 
 - [ ] **Step 1:** grep `scriptSource` / `ScriptSource` / `deserializeScriptSource` 定位全部孪生位点，照抄一遍换成 flow。
-- [ ] **Step 2:** `RuleVersion.flowGraph` 加 `@TableField(typeHandler=Jackson3TypeHandler.class)`；迁移纯 ADD COLUMN JSON NULL（无需 COLLATE）。
-- [ ] **Step 3:** `RuleVersionRow` 加字段 + 兼容构造；`RuleVersionReadMapper` 三条 SQL 各加列；`SnapshotAssembler.assemble()` 加反序列化；`AstJsonCodec.deserializeFlowGraph`；`RuleVersionSnapshot` 加字段 + builder。
+- [ ] **Step 2:** `RuleVersion` 加两个 typed JSON 列 `flowGraph`（`FlowGraph`）+ `referencedSnapshots`（`Map<String, RuleVersionSnapshot>`，发布期冻结的被引规则快照，评估期直读守零查询），均 `@TableField(typeHandler=Jackson3TypeHandler.class)`；迁移 `V1_39` 纯 ADD COLUMN `flow_graph JSON NULL` + `referenced_snapshots JSON NULL`（无需 COLLATE）。
+- [ ] **Step 3:** `RuleVersionRow` 加 `flowGraphJson` + `referencedSnapshotsJson` + 兼容构造；`RuleVersionReadMapper` 三条 SQL 各加 `rv.flow_graph`/`rv.referenced_snapshots`；`SnapshotAssembler.assemble()` 填 `flowGraph` + `referencedSnapshots`；`AstJsonCodec` 加 `deserializeFlowGraph` + `deserializeReferencedSnapshots`。**注：`RuleVersionSnapshot` 的 `flowGraph`+`referencedSnapshots` 字段+builder 已在 P1 完成，勿重复添加。**
 - [ ] **Step 4:** `SnapshotAssemblerFlowTest`——DB row（flowGraphJson）→ snapshot.flowGraph 往返。
 - [ ] **Verify:** `$MVN -pl rule-eval-svc -am test`（跨模块，带 `-am`）
 

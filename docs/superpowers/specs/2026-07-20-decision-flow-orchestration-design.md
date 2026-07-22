@@ -158,7 +158,8 @@ RuleRef(A) → Switch(expression="hitDecisions[0].code")   // ← walker 在内�
 private FlowGraph flowGraph;
 ```
 
-- 迁移：`V1_39__rule_version_flow_graph.sql`（当前最高 V1_38），`ALTER TABLE rule_version ADD COLUMN flow_graph JSON NULL COMMENT '...'`。纯 ADD COLUMN，无需 COLLATE。
+- 另加 `referenced_snapshots` JSON 列：发布期冻结的被引规则完整快照（`Map<ruleCode, RuleVersionSnapshot>`），评估期直读组装进 `RuleVersionSnapshot.referencedSnapshots`，FlowExecutor 的 RuleRef 直接取用，守零额外查询。
+- 迁移：`V1_39__rule_version_flow_graph.sql`（当前最高 V1_38），`ALTER TABLE rule_version ADD COLUMN flow_graph JSON NULL` + `ADD COLUMN referenced_snapshots JSON NULL`。纯 ADD COLUMN，无需 COLLATE。
 - 索引读取链同步（script 的孪生位点逐一改齐）：`RuleVersionRow` 加 `flowGraphJson` + 兼容构造；`RuleVersionReadMapper` 三条 `@Select` 各加 `rv.flow_graph AS flowGraphJson`；`SnapshotAssembler.assemble()` 加反序列化；`AstJsonCodec.deserializeFlowGraph()`（仿 `deserializeScriptSource`）；`RuleVersionSnapshot` record 加 `FlowGraph flowGraph` + builder。
 - config-svc 内容序列化孪生（同 script 一条不落）：`RuleContent` / `RuleDetailVO` / `RuleVersionContentVO` / `RuleBundle` 各加 `flowGraph` 字段（record 改构造器 → `ConfigServiceImpl` 两处 VO 装配点须同步补 `getFlowGraph()`，否则编译断）；`RuleContentHasher.ruleHash` 签名 + canonical 加 `flowGraph`（**幂等红线**：flow 的 ast/script 均 null，不进 hash 则不同 flow 同 hash）；`RuleExportService` / `RuleImportService` 携带/读回 flowGraph。
 
@@ -169,6 +170,8 @@ private FlowGraph flowGraph;
 1. **结构校验**：DAG 合法（有 input、无孤儿、Switch 出边 caseKey 与 `caseKeys` 一致、Output 的 decisionCode 存在），加进 `validKinds` 两处 Set + `validateKindStructure`。
 2. **RuleRef 版本冻结**（复用 `freezeMetricDeps` / `freezeDecisionBindings` 同款模式）：遍历 `RuleRefNode`，按 code 查被引规则的 **ACTIVE 版本**，冻结 `(code, version)`；被引规则无 ACTIVE 版本 → 拒绝发布（仿 metric `:555` 拒绝）。把被引规则的完整 snapshot（含其 conditionAst/script/bindings/metricDeps）冻进 flow 快照。
 3. **metric 依赖并集**：flow 版本的 `metricDependencies` = 全图 `RuleRef` 引用规则的 metricDeps 并集（Switch/Transform 表达式引用的 metric 也扫进来）。这样评估期 `EvalContextAssembler.collectChosenVersions` 自动一次取全，FlowExecutor 拿到的 `EvalContext` 已含全图所需 metric，无需二次取数、无需触碰 index/DB。
+   - **payload 依赖同理并入**：全图 Switch/Transform 表达式引用的 `payload.*` 字段扫入，调 `freezePayloadDeps` 冻结并校验字段已在 `scene.payloadSchema` 声明（undeclared 拒 `UNRESOLVED_VARIABLE`），与 EXPRESSION_SCRIPT 的 payload 处理对称——否则 flow 表达式引用未声明 payload 会发布期静默通过、运行期静默 null。
+   - **typeCheck 为 v1 非目标**：flow 的 Switch/Transform 表达式发布期只做 `compile` 语法校验，不做脚本 kind 的 `engine.typeCheck` 强类型检查（图 type env 需按节点构建，较脚本单表达式复杂，留 backlog）。
 4. **环检测前置**：发布期即拒绝成环的 flow（详见静态分析）。
 
 `ResolvedDraft` 加 `FlowGraph` 字段，`buildDraftVersion()` 加 `rv.setFlowGraph(...)`。`createDraft` / `editDraft` / `newVersion` 三入口现各只读 `content.script()`，三处都补读 `content.flowGraph()` 透传，否则草稿收不到 flowGraph。
