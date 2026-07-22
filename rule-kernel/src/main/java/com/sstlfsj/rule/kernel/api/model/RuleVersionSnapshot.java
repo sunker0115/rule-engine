@@ -1,8 +1,10 @@
 package com.sstlfsj.rule.kernel.api.model;
 
 import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,7 +29,11 @@ public record RuleVersionSnapshot(
         /** AST 引用的 payload 字段依赖，发布期从 scene.payloadSchema 冻结。 */
         List<PayloadDependency> payloadDependencies,
         /** EXPRESSION_SCRIPT 规则的脚本载体;其它 kind 为 null。 */
-        ScriptSource script
+        ScriptSource script,
+        /** DECISION_FLOW 规则的决策图;其它 kind 为 null。与 conditionAst/script 三选一。 */
+        FlowGraph flowGraph,
+        /** DECISION_FLOW 发布期冻结的被引规则快照(ruleCode → 冻结 snapshot);其它 kind 为空 map。 */
+        Map<String, RuleVersionSnapshot> referencedSnapshots
 ) {
     public RuleVersionSnapshot {
         preGates = preGates == null ? List.of() : List.copyOf(preGates);
@@ -36,6 +42,34 @@ public record RuleVersionSnapshot(
         kind = kind == null ? RuleKind.AST_BOOLEAN.tag() : kind;
         metricDependencies = metricDependencies == null ? List.of() : List.copyOf(metricDependencies);
         payloadDependencies = payloadDependencies == null ? List.of() : List.copyOf(payloadDependencies);
+        referencedSnapshots = referencedSnapshots == null ? Map.of() : Map.copyOf(referencedSnapshots);
+    }
+
+    /**
+     * 兼容 13 参调用点(无 flowGraph/referencedSnapshots,默认 null/空 map)。
+     *
+     * @param ruleVersionId       规则版本 id
+     * @param sceneCode           场景编码
+     * @param tenantId            租户 id
+     * @param conditionAst        条件 AST 根节点
+     * @param preGates            Pre-Gate 配置列表
+     * @param decisionBindings    Decision 绑定列表
+     * @param triggerEventTypes   监听事件类型列表
+     * @param kind                规则类型
+     * @param code                逻辑规则编码
+     * @param version             版本号
+     * @param metricDependencies  metric 依赖
+     * @param payloadDependencies payload 依赖
+     * @param script              脚本载体
+     */
+    public RuleVersionSnapshot(Long ruleVersionId, String sceneCode, String tenantId, AstNode conditionAst,
+                               List<PreGateConfig> preGates, List<DecisionBinding> decisionBindings,
+                               List<String> triggerEventTypes, String kind, String code, long version,
+                               List<MetricDependency> metricDependencies, List<PayloadDependency> payloadDependencies,
+                               ScriptSource script) {
+        this(ruleVersionId, sceneCode, tenantId, conditionAst, preGates, decisionBindings,
+                triggerEventTypes, kind, code, version, metricDependencies, payloadDependencies, script,
+                null, Map.of());
     }
 
     /**
@@ -112,6 +146,7 @@ public record RuleVersionSnapshot(
         private String tenantId;
         private AstNode conditionAst;
         private ScriptSource script;
+        private FlowGraph flowGraph;
         private String kind = RuleKind.AST_BOOLEAN.tag();
         private String code;
         private long version;
@@ -120,6 +155,7 @@ public record RuleVersionSnapshot(
         private final List<String> triggerEventTypes = new ArrayList<>();
         private final List<MetricDependency> metricDependencies = new ArrayList<>();
         private final List<PayloadDependency> payloadDependencies = new ArrayList<>();
+        private final Map<String, RuleVersionSnapshot> referencedSnapshots = new HashMap<>();
 
         /** 规则版本 ID（本地模式可传任意 Long）。 */
         public Builder ruleVersionId(Long v)  { this.ruleVersionId = v; return this; }
@@ -131,6 +167,8 @@ public record RuleVersionSnapshot(
         public Builder conditionAst(AstNode v){ this.conditionAst = v; return this; }
         /** EXPRESSION_SCRIPT 脚本载体。 */
         public Builder script(ScriptSource v) { this.script = v; return this; }
+        /** DECISION_FLOW 决策图。 */
+        public Builder flowGraph(FlowGraph v) { this.flowGraph = v; return this; }
         /** 规则类型，默认 AST_BOOLEAN。 */
         public Builder kind(String v)         { this.kind = v; return this; }
         /** 逻辑规则编码。 */
@@ -142,6 +180,10 @@ public record RuleVersionSnapshot(
         /** 追加一个 Decision 绑定。 */
         public Builder addDecisionBinding(String decisionCode, int priority) {
             decisionBindings.add(new DecisionBinding(decisionCode, priority)); return this;
+        }
+        /** 追加一个带 name 的 Decision 绑定。 */
+        public Builder addDecisionBinding(String decisionCode, String name, int priority) {
+            decisionBindings.add(new DecisionBinding(decisionCode, name, priority)); return this;
         }
         /** 追加一个 Pre-Gate 配置。 */
         public Builder addPreGate(String gateType, Map<String, Object> params) {
@@ -156,12 +198,17 @@ public record RuleVersionSnapshot(
             this.payloadDependencies.add(new PayloadDependency(name, dataType, required));
             return this;
         }
+        /** 追加一条 DECISION_FLOW 冻结的被引规则快照。 */
+        public Builder addReferencedSnapshot(String ruleCode, RuleVersionSnapshot snapshot) {
+            this.referencedSnapshots.put(ruleCode, snapshot);
+            return this;
+        }
 
         /** 构建 RuleVersionSnapshot。 */
         public RuleVersionSnapshot build() {
             return new RuleVersionSnapshot(ruleVersionId, sceneCode, tenantId, conditionAst,
                     preGates, decisionBindings, triggerEventTypes, kind, code, version,
-                    metricDependencies, payloadDependencies, script);
+                    metricDependencies, payloadDependencies, script, flowGraph, referencedSnapshots);
         }
     }
 }

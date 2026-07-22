@@ -14,5 +14,6 @@ class RuleKindTest {
         assertEquals("DECISION_TREE", RuleKind.DECISION_TREE.tag());
         assertEquals("DECISION_TABLE", RuleKind.DECISION_TABLE.tag());
         assertEquals("EXPRESSION_SCRIPT", RuleKind.EXPRESSION_SCRIPT.tag());
+        assertEquals("DECISION_FLOW", RuleKind.DECISION_FLOW.tag());
     }
 }
