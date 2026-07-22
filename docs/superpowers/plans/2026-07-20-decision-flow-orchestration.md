@@ -40,11 +40,11 @@
 - Create: `api/model/FlowNodeType.java`（与 `NodeType` 平级的枚举 `RULEREF`/`SWITCH`/`TRANSFORM`/`OUTPUT`；**不往 `NodeType` 加值**——`NodeType` 是 AST 专属词表，flow 平级承载对应平级枚举，`NodeTrace.nodeType` 是 String 可原样承载其 tag）
 - Test: `RuleKindTest`（加 tag 断言）、`FlowGraphSerdeTest`（Jackson 多态往返）
 
-- [ ] **Step 1:** `RuleKind` 加 `DECISION_FLOW`，`RuleKindTest.java:11-17` 加 `DECISION_FLOW.tag()=="DECISION_FLOW"` 断言。
-- [ ] **Step 2:** 建 `flow/` 包，`FlowNode` sealed interface + `@JsonTypeInfo(use=NAME, property="type")` + `@JsonSubTypes` 4 子类型，各为 record（判别值 == 简单类名）。primitive 字段加 `@JsonSetter(nulls=AS_EMPTY)`。
-- [ ] **Step 3:** `FlowGraph` record（`List<FlowNode> nodes` + `List<FlowEdge> edges` + `String inputNodeId`）；`FlowEdge` record（`from` / `to` / nullable `caseKey`）。
-- [ ] **Step 4:** `FlowGraphSerdeTest`——含 4 种节点 + 分支边的图 JSON 往返，断言多态判别正确、缺键不报错。
-- [ ] **Verify:** `$MVN -pl rule-kernel -am test`
+- [x] **Step 1:** `RuleKind` 加 `DECISION_FLOW`，`RuleKindTest.java:11-17` 加 `DECISION_FLOW.tag()=="DECISION_FLOW"` 断言。
+- [x] **Step 2:** 建 `flow/` 包，`FlowNode` sealed interface + `@JsonTypeInfo(use=NAME, property="type")` + `@JsonSubTypes` 4 子类型，各为 record（判别值 == 简单类名）。primitive 字段加 `@JsonSetter(nulls=AS_EMPTY)`。
+- [x] **Step 3:** `FlowGraph` record（`List<FlowNode> nodes` + `List<FlowEdge> edges` + `String inputNodeId`）；`FlowEdge` record（`from` / `to` / nullable `caseKey`）。
+- [x] **Step 4:** `FlowGraphSerdeTest`——含 4 种节点 + 分支边的图 JSON 往返，断言多态判别正确、缺键不报错。
+- [x] **Verify:** `$MVN -pl rule-kernel -am test`
 
 ## P1 — kernel 求值 FlowExecutor
 
@@ -52,14 +52,14 @@
 - Create: `internal/evaluator/FlowExecutor.java`（implements `RuleVersionExecutor`）
 - Test: `evaluator/FlowExecutorTest.java`
 
-- [ ] **Step 1:** 读 `DecisionTreeExecutor.java:42-78`（分支跳转范本）+ `InterpretedExecutor.java:89-106`（sealed switch + 短路 + trace sink 零分配）+ `EvalResult.java`（确认字段名为 `ruleHit` 非 `satisfied`）后再写。
-- [ ] **Step 2:** `FlowExecutor.execute(snapshot, ctx)`：从 `snapshot.flowGraph()` 的 `inputNodeId` 顺边遍历。
+- [x] **Step 1:** 读 `DecisionTreeExecutor.java:42-78`（分支跳转范本）+ `InterpretedExecutor.java:89-106`（sealed switch + 短路 + trace sink 零分配）+ `EvalResult.java`（确认字段名为 `ruleHit` 非 `satisfied`）后再写。
+- [x] **Step 2:** `FlowExecutor.execute(snapshot, ctx)`：从 `snapshot.flowGraph()` 的 `inputNodeId` 顺边遍历。
   - **上下文传递**：FlowExecutor 内部维护 `Map<String,Object> flowVars`。Transform 产出写 `flowVars`；Switch/Transform 表达式求值时把 `flowVars` 以 `"flow"` key 合并进 bindings（CEL 构造器需加 `addVar("flow", map(string,dyn))`，非 CEL 引擎无需改动——bindings 里有就能用）。**RuleRef 调 `leafExecutor.execute(refSnap, ctx)` 时传原始 ctx，不合并 flowVars**——被引规则行为必须独立于调用方（守 D6 不可变）。
   - **命名空间**：表达式可见变量 = `metrics/payload/subject/now`（既有 4 个）+ `flow`（新增，仅 flow 图内 Switch/Transform 可引用，RuleRef 不可见）。
   - Switch 求值表达式 → 匹配 caseKey 选出边（default 支持）；Transform 求值表达式 → 写 `flowVars[outputKey]`；Output 收 `decisionCode` 进 hitDecisions。
-- [ ] **Step 3:** trace **复用 `NodeTrace` 树，不造新载体**：每个编排节点产一个 `NodeTrace`，`nodeType` = `FlowNodeType.xxx.tag()`；**RuleRef 节点的 `children` 直接挂被引规则 `leafExecutor.execute()` 返回的 `nodeTrace` 子树**（叶子 trace 自带 `ruleCode/ruleVersion`，天然标明归属，组合语义免费得）。Switch 用 `actualValue` 记选中 caseKey、Transform 记输出值。trace 收集沿用 `TraceScope.COLLECT.orElse(true)`，sink null 时不分配。`EvalResult.ruleHit` = 图是否产出任一决策（有 Output 命中为 true）。前端 `fetch-trace-view` / `NodeTraceFormatter` 原样渲染，仅需按新 tag 加图标。
-- [ ] **Step 4:** `FlowExecutorTest`：单 RuleRef 直连、Switch 两分支各命中、Transform→Switch 读 `flow.xxx` 中间值、**RuleRef 隔离（断言被引规则 ctx 不含 flow 变量）**、多 Output 合成、ruleHit=true/false、trace 收集态 vs 零分配态。
-- [ ] **Verify:** `$MVN -pl rule-kernel -am test`
+- [x] **Step 3:** trace **复用 `NodeTrace` 树，不造新载体**：每个编排节点产一个 `NodeTrace`，`nodeType` = `FlowNodeType.xxx.tag()`；**RuleRef 节点的 `children` 直接挂被引规则 `leafExecutor.execute()` 返回的 `nodeTrace` 子树**（叶子 trace 自带 `ruleCode/ruleVersion`，天然标明归属，组合语义免费得）。Switch 用 `actualValue` 记选中 caseKey、Transform 记输出值。trace 收集沿用 `TraceScope.COLLECT.orElse(true)`，sink null 时不分配。`EvalResult.ruleHit` = 图是否产出任一决策（有 Output 命中为 true）。前端 `fetch-trace-view` / `NodeTraceFormatter` 原样渲染，仅需按新 tag 加图标。
+- [x] **Step 4:** `FlowExecutorTest`：单 RuleRef 直连、Switch 两分支各命中、Transform→Switch 读 `flow.xxx` 中间值、**RuleRef 隔离（断言被引规则 ctx 不含 flow 变量）**、多 Output 合成、ruleHit=true/false、trace 收集态 vs 零分配态。
+- [x] **Verify:** `$MVN -pl rule-kernel -am test`
 
 ## P2 — 存储读取链
 
@@ -69,11 +69,11 @@
 - Modify (rule-kernel): `RuleVersionSnapshot.java`（加 `FlowGraph flowGraph` + builder）
 - Test: `SnapshotAssemblerFlowTest`、`RuleVersionRowTest`
 
-- [ ] **Step 1:** grep `scriptSource` / `ScriptSource` / `deserializeScriptSource` 定位全部孪生位点，照抄一遍换成 flow。
-- [ ] **Step 2:** `RuleVersion` 加两个 typed JSON 列 `flowGraph`（`FlowGraph`）+ `referencedSnapshots`（`Map<String, RuleVersionSnapshot>`，发布期冻结的被引规则快照，评估期直读守零查询），均 `@TableField(typeHandler=Jackson3TypeHandler.class)`；迁移 `V1_39` 纯 ADD COLUMN `flow_graph JSON NULL` + `referenced_snapshots JSON NULL`（无需 COLLATE）。
-- [ ] **Step 3:** `RuleVersionRow` 加 `flowGraphJson` + `referencedSnapshotsJson` + 兼容构造；`RuleVersionReadMapper` 三条 SQL 各加 `rv.flow_graph`/`rv.referenced_snapshots`；`SnapshotAssembler.assemble()` 填 `flowGraph` + `referencedSnapshots`；`AstJsonCodec` 加 `deserializeFlowGraph` + `deserializeReferencedSnapshots`。**注：`RuleVersionSnapshot` 的 `flowGraph`+`referencedSnapshots` 字段+builder 已在 P1 完成，勿重复添加。**
-- [ ] **Step 4:** `SnapshotAssemblerFlowTest`——DB row（flowGraphJson）→ snapshot.flowGraph 往返。
-- [ ] **Verify:** `$MVN -pl rule-eval-svc -am test`（跨模块，带 `-am`）
+- [x] **Step 1:** grep `scriptSource` / `ScriptSource` / `deserializeScriptSource` 定位全部孪生位点，照抄一遍换成 flow。
+- [x] **Step 2:** `RuleVersion` 加两个 typed JSON 列 `flowGraph`（`FlowGraph`）+ `referencedSnapshots`（`Map<String, RuleVersionSnapshot>`，发布期冻结的被引规则快照，评估期直读守零查询），均 `@TableField(typeHandler=Jackson3TypeHandler.class)`；迁移 `V1_39` 纯 ADD COLUMN `flow_graph JSON NULL` + `referenced_snapshots JSON NULL`（无需 COLLATE）。
+- [x] **Step 3:** `RuleVersionRow` 加 `flowGraphJson` + `referencedSnapshotsJson` + 兼容构造；`RuleVersionReadMapper` 三条 SQL 各加 `rv.flow_graph`/`rv.referenced_snapshots`；`SnapshotAssembler.assemble()` 填 `flowGraph` + `referencedSnapshots`；`AstJsonCodec` 加 `deserializeFlowGraph` + `deserializeReferencedSnapshots`。**注：`RuleVersionSnapshot` 的 `flowGraph`+`referencedSnapshots` 字段+builder 已在 P1 完成，勿重复添加。**
+- [x] **Step 4:** `SnapshotAssemblerFlowTest`——DB row（flowGraphJson）→ snapshot.flowGraph 往返。
+- [x] **Verify:** `$MVN -pl rule-eval-svc -am test`（跨模块，带 `-am`）
 
 ## P2b — config-svc DTO / Bundle / Hasher 孪生位点
 
@@ -86,11 +86,11 @@
 - Modify: `internal/bundle/RuleExportService.java`（:115/:124 导出携带 `rv.getFlowGraph()`）、`internal/bundle/RuleImportService.java`（:156/:168 导入读回 flowGraph）
 - Test: `RuleContentHasherTest`（两条 nodes 不同的 flow → hash 不同）、`RuleExportServiceTest` / import 往返
 
-- [ ] **Step 1:** 4 个 DTO 各加 `FlowGraph flowGraph` 字段（record 规范构造，位置紧邻 `script`）。
-- [ ] **Step 2:** `RuleContentHasher.ruleHash` 签名加 `FlowGraph flowGraph`，`canonical.put("flowGraph", flowGraph)`；全部调用点补传（grep `ruleHash(`）。**这是幂等红线**——DECISION_FLOW 的 ast/script 均为 null，不进 hash 则不同 flow 同 hash。
-- [ ] **Step 3:** Export/Import 两处照抄 script 携带/读回 flowGraph。
-- [ ] **Step 4:** Hasher 区分测试 + import/export 往返测试。
-- [ ] **Verify:** `$MVN -pl rule-config-svc -am test`
+- [x] **Step 1:** 4 个 DTO 各加 `FlowGraph flowGraph` 字段（record 规范构造，位置紧邻 `script`）。
+- [x] **Step 2:** `RuleContentHasher.ruleHash` 签名加 `FlowGraph flowGraph`，`canonical.put("flowGraph", flowGraph)`；全部调用点补传（grep `ruleHash(`）。**这是幂等红线**——DECISION_FLOW 的 ast/script 均为 null，不进 hash 则不同 flow 同 hash。
+- [x] **Step 3:** Export/Import 两处照抄 script 携带/读回 flowGraph。
+- [x] **Step 4:** Hasher 区分测试 + import/export 往返测试。
+- [x] **Verify:** `$MVN -pl rule-config-svc -am test`
 
 ## P3 — config 发布期解析/冻结/校验
 
@@ -98,14 +98,14 @@
 - Modify: `publish/PublishService.java`（加 `resolveFlowDraft` + `resolveAndValidate` 分支 + `validKinds` 两处 + `validateKindStructure` + `ResolvedDraft` 字段 + `buildDraftVersion`）
 - Test: `publish/FlowResolveValidateTest.java`
 
-- [ ] **Step 1:** 读 `PublishService.java` 的 `resolveScriptDraft`（:475-516）、`freezeMetricDeps`（:542-564）、`freezeDecisionBindings`（:779-799）确认冻结定式。
-- [ ] **Step 2:** `resolveAndValidate` 加 flow 提前 return（仿 :423）→ `resolveFlowDraft`：结构校验（DAG 合法/Switch caseKey 一致/Output decisionCode 存在/**RuleRef 同 Scene 校验**——被引规则须与 flow 在同一 Scene，跨 Scene 拒绝，v1 治理简化、将来放开只需去此校验）。
-- [ ] **Step 2b:** `editDraft`（:184）/`newVersion`（:258）/`createDraft`（:675）三入口各只读了 `content.script()`——三处都补读 `content.flowGraph()` 并透传进 `resolveAndValidate`/`ResolvedDraft`，否则草稿永远收不到 flowGraph。
-- [ ] **Step 3:** RuleRef 冻结——遍历 RuleRefNode 查被引规则 ACTIVE 版本，冻 `(code,version)` + 完整 snapshot 进 flowGraph；无 ACTIVE 拒绝发布（新错误码或复用现有）。
-- [ ] **Step 4:** metricDeps 并集——全图 RuleRef 引用规则 metricDeps + Switch/Transform 表达式 metric 扫入并集，写本版本 `metricDependencies`。表达式取 metric 的落点是 `rule-config-svc/.../internal/publish/MetricDependencyCollector`（**在 config-svc，非 kernel**），加 flow 分支扫 Switch/Transform expression。
-- [ ] **Step 5:** `validKinds` 两处 Set（:415-418、:691-694）加 DECISION_FLOW；`validateKindStructure`（:599）加 flow 分支；`ResolvedDraft`（:375）加 `FlowGraph`；`buildDraftVersion`（:736-751）加 `setFlowGraph`。
-- [ ] **Step 6:** `FlowResolveValidateTest`（仿 `ScriptResolveValidateTest`）：正常冻结 + 无 ACTIVE 被引规则拒绝 + metricDeps 并集正确 + 结构非法拒绝。
-- [ ] **Verify:** `$MVN -pl rule-config-svc -am test`
+- [x] **Step 1:** 读 `PublishService.java` 的 `resolveScriptDraft`（:475-516）、`freezeMetricDeps`（:542-564）、`freezeDecisionBindings`（:779-799）确认冻结定式。
+- [x] **Step 2:** `resolveAndValidate` 加 flow 提前 return（仿 :423）→ `resolveFlowDraft`：结构校验（DAG 合法/Switch caseKey 一致/Output decisionCode 存在/**RuleRef 同 Scene 校验**——被引规则须与 flow 在同一 Scene，跨 Scene 拒绝，v1 治理简化、将来放开只需去此校验）。
+- [x] **Step 2b:** `editDraft`（:184）/`newVersion`（:258）/`createDraft`（:675）三入口各只读了 `content.script()`——三处都补读 `content.flowGraph()` 并透传进 `resolveAndValidate`/`ResolvedDraft`，否则草稿永远收不到 flowGraph。
+- [x] **Step 3:** RuleRef 冻结——遍历 RuleRefNode 查被引规则 ACTIVE 版本，冻 `(code,version)` + 完整 snapshot 进 flowGraph；无 ACTIVE 拒绝发布（新错误码或复用现有）。
+- [x] **Step 4:** metricDeps 并集——全图 RuleRef 引用规则 metricDeps + Switch/Transform 表达式 metric 扫入并集，写本版本 `metricDependencies`。表达式取 metric 的落点是 `rule-config-svc/.../internal/publish/MetricDependencyCollector`（**在 config-svc，非 kernel**），加 flow 分支扫 Switch/Transform expression。
+- [x] **Step 5:** `validKinds` 两处 Set（:415-418、:691-694）加 DECISION_FLOW；`validateKindStructure`（:599）加 flow 分支；`ResolvedDraft`（:375）加 `FlowGraph`；`buildDraftVersion`（:736-751）加 `setFlowGraph`。
+- [x] **Step 6:** `FlowResolveValidateTest`（仿 `ScriptResolveValidateTest`）：正常冻结 + 无 ACTIVE 被引规则拒绝 + metricDeps 并集正确 + 结构非法拒绝。
+- [x] **Verify:** `$MVN -pl rule-config-svc -am test`
 
 ## P4 — 静态分析环检测 + 死节点
 
@@ -115,14 +115,14 @@
 - Modify (rule-config-svc): `RuleAnalysisServiceImpl.java`（:59-61 拆入 flowGraph）
 - Test: `analysis/FlowCycleDetectorTest`、`analysis/FlowReachabilityDetectorTest`
 
-- [ ] **Step 1:** 读 `DeadRuleDetector.java:33-58` 确认 detector 结构。
-- [ ] **Step 2:** `AnalyzableRule` 加 `FlowGraph flowGraph`；`RuleAnalysisServiceImpl` 拆入。
-- [ ] **Step 3:** `FlowCycleDetector.detect`（RuleRef 引用图 DFS 找环）、`FlowReachabilityDetector.detect`（input BFS 找不可达节点），仿静态 detector；新增 2 finding record。
-- [ ] **Step 3c:** 现有 `CoverageGapDetector.java:75` 的 `switch(kind)` 无 default——加 `DECISION_FLOW` 后会**静默落空**返回空决策码集（switch statement 非穷尽不报错，但覆盖分析把 flow 当"不产决策"误判）。补 `case DECISION_FLOW ->` 收集全图 `OutputNode.decisionCode`（或保守 `addBindings`）。`RedundancyDetector`（if-else 链）DECISION_FLOW 落 else 跳过，行为正确，仅更新 :26 注释 kind 列表。
-- [ ] **Step 4:** `RuleSetAnalyzer.analyze()`（:65-93）挂两 detector + Comparator；`RuleSetAnalysisReport` 扩字段。
-- [ ] **Step 5:** 发布期环检测前置——`resolveFlowDraft` 调环检测，成环拒绝发布。
-- [ ] **Step 6:** 两 detector 测试（有环/无环、可达/死节点）。
-- [ ] **Verify:** `$MVN -pl rule-config-svc -am test`
+- [x] **Step 1:** 读 `DeadRuleDetector.java:33-58` 确认 detector 结构。
+- [x] **Step 2:** `AnalyzableRule` 加 `FlowGraph flowGraph`；`RuleAnalysisServiceImpl` 拆入。
+- [x] **Step 3:** `FlowCycleDetector.detect`（RuleRef 引用图 DFS 找环）、`FlowReachabilityDetector.detect`（input BFS 找不可达节点），仿静态 detector；新增 2 finding record。
+- [x] **Step 3c:** 现有 `CoverageGapDetector.java:75` 的 `switch(kind)` 无 default——加 `DECISION_FLOW` 后会**静默落空**返回空决策码集（switch statement 非穷尽不报错，但覆盖分析把 flow 当"不产决策"误判）。补 `case DECISION_FLOW ->` 收集全图 `OutputNode.decisionCode`（或保守 `addBindings`）。`RedundancyDetector`（if-else 链）DECISION_FLOW 落 else 跳过，行为正确，仅更新 :26 注释 kind 列表。
+- [x] **Step 4:** `RuleSetAnalyzer.analyze()`（:65-93）挂两 detector + Comparator；`RuleSetAnalysisReport` 扩字段。
+- [x] **Step 5:** 发布期环检测前置——`resolveFlowDraft` 调环检测，成环拒绝发布。
+- [x] **Step 6:** 两 detector 测试（有环/无环、可达/死节点）。
+- [x] **Verify:** `$MVN -pl rule-config-svc -am test`
 
 ## P5 — API 契约
 
@@ -131,12 +131,12 @@
 - Modify (rule-sdk / rule-sdk-spring-boot-starter): `RuleEngineClient.java`（executors 注册 FlowExecutor）、`RuleEngineClientAutoConfiguration.java`（装配 flow 所需依赖）
 - Test: RuleController flow 建/发布集成测试；`RuleEngineClientTest` 嵌入式评估 flow
 
-- [ ] **Step 1:** `RuleContentSource` 加 `flowGraph()`（仿 `script()`），3 请求 record 加 `FlowGraph flowGraph` 字段（primitive 注意 `@JsonSetter`）。
-- [ ] **Step 2:** `RuleContent` 加字段；`toContent()`（:91）透传。
-- [ ] **Step 3:** `EvalAutoConfiguration` 加 `@Bean flowExecutor()`（仿 scriptExecutor :178-188）+ 塞进 `evalEngine()` 的 map（:285-290）。
-- [ ] **Step 3b:** SDK 嵌入式评估同源：`RuleEngineClient`（:99-101 附近）`executors.put(RuleKind.DECISION_FLOW.tag(), flowExecutor)`——**必须显式注册**，否则命中 EvalEngine 对未知 kind 回退 AST_BOOLEAN 的陷阱（flow 的 conditionAst=null），返回错误结果；`RuleEngineClientAutoConfiguration` 补 flow 所需依赖装配。
-- [ ] **Step 4:** 集成测试：POST 建 DECISION_FLOW 草稿 → 发布 → 评估返回决策。
-- [ ] **Verify:** `$MVN -pl rule-api -am test`
+- [x] **Step 1:** `RuleContentSource` 加 `flowGraph()`（仿 `script()`），3 请求 record 加 `FlowGraph flowGraph` 字段（primitive 注意 `@JsonSetter`）。
+- [x] **Step 2:** `RuleContent` 加字段；`toContent()`（:91）透传。
+- [x] **Step 3:** `EvalAutoConfiguration` 加 `@Bean flowExecutor()`（仿 scriptExecutor :178-188）+ 塞进 `evalEngine()` 的 map（:285-290）。
+- [x] **Step 3b:** SDK 嵌入式评估同源：`RuleEngineClient`（:99-101 附近）`executors.put(RuleKind.DECISION_FLOW.tag(), flowExecutor)`——**必须显式注册**，否则命中 EvalEngine 对未知 kind 回退 AST_BOOLEAN 的陷阱（flow 的 conditionAst=null），返回错误结果；`RuleEngineClientAutoConfiguration` 补 flow 所需依赖装配。
+- [x] **Step 4:** 集成测试：POST 建 DECISION_FLOW 草稿 → 发布 → 评估返回决策。
+- [x] **Verify:** `$MVN -pl rule-api -am test`
 
 ## P6 — 前端画布编辑器
 
@@ -147,20 +147,20 @@
 - Modify: `pages/rule-editor/ScriptEditor.tsx`（`useRuleStore` 单例 → 受控 `props: script + onChange`，与其余 4 个受控编辑器拉齐；`CenterPanel` EXPRESSION_SCRIPT 分支同步传 `script`/`onChange`）——下钻复用脚本叶子的前置，兼消除它作为唯一单例耦合编辑器的不一致
 - Create: `pages/rule-editor/FlowCanvasEditor.tsx`、`pages/rule-editor/FlowNodeInspectorDrawer.tsx`（节点下钻抽屉）、`types/flow.ts`
 
-- [ ] **Step 0:** `types/rule.ts` `RuleKind` 联合加 `'DECISION_FLOW'`（**硬伤：不加则 `kind==='DECISION_FLOW'` 比较 TS 报错、`npm run build` 直接挂**）+ 请求/详情类型平级加 `flowGraph?`。
-- [ ] **Step 1:** `types/flow.ts` 对齐后端 record（判别字段 `type`）。
-- [ ] **Step 2:** `enums.ts` 加 DECISION_FLOW 选项 + i18n。
-- [ ] **Step 3:** `ruleStore` 加平级 `flowGraph` 状态（仿 script，不进 `ast`）。
-- [ ] **Step 4:** `FlowCanvasEditor`：reactflow 画布、4 种节点拖放、连边、RuleRef 内嵌选规则下拉；`onChange` 回写 `flowGraph`。
-- [ ] **Step 5:** `CenterPanel.renderEditor()` 加 `DECISION_FLOW` 分派（仿 ScriptEditor）。
-- [ ] **Step 6:** 写路径补 flowGraph（**位点是 `LeftPanel.handleSaveDraft` @:59-67 的 editDraft body，不是 index.tsx**——index.tsx 只做 loadFromDetail 回填）。两个创建弹窗 `rule-list/index.tsx` handleCreate @:88-108 与 `rules-all/index.tsx` @:78-92 各加 `DECISION_FLOW` 分支播种最小合法 FlowGraph 骨架（类比 DECISION_TREE 骨架）——否则弹窗选 DECISION_FLOW 后 createRule body 无 flowGraph、被 `resolveFlowDraft` 结构校验（需 input/无孤儿）拒，根本建不出 flow。
-- [ ] **Step 7:** 只读链：`index.tsx` `loadFromDetail` 回填 `detail.flowGraph`；`VersionContentDrawer`/`VersionDiffDrawer` 加 flowGraph 展示项 + i18n `versionContent.flowGraph` label。**只读用 `json(content.flowGraph)` 平铺即可，不做只读画布**（与现有 script 一致，守以简为先）。
-- [ ] **Step 8:** 分析展示分两维度（不混一个面板）：**跨规则维度**——`ANALYZABLE_KINDS` 纳入 `DECISION_FLOW`（flow 的 Output 决策码参与规则集覆盖分析，进既有分析面板）；**图内维度**——`FlowCanvasEditor` 消费 `FlowCycleFinding`/`FlowDeadNodeFinding`，成环边标红、死节点置灰（reactflow 样式），**不塞进规则集冲突面板**；`analysisSummary` 按维度分流。
-- [ ] **Step 9:** `ScriptEditor` 去 `useRuleStore()`，改受控 `props: script + onChange`（对齐其余 4 个受控编辑器）；`CenterPanel` EXPRESSION_SCRIPT 分支改传 `script={script} onChange={setScript}`。这是下钻复用脚本叶子的前置，也顺手消除既有单例耦合不一致（§3 被需求驱动的必要小改，非无端重构）。
-- [ ] **Step 10:** 节点下钻（一个画布搞定，复用现有编辑器不重写）：`FlowNodeInspectorDrawer` —— RuleRef 双击 → 抽屉按被引规则 kind 分派内嵌**现有 5 个受控编辑器**，编辑落**被引规则自己的草稿**（`editDraft` API，非 flowGraph）；抽屉顶部提示**冻结隔离**（改叶子进其草稿、需各自发布，已发布 flow 引用冻结版本不受影响，D6）；画布内"新建本场景叶子规则"（`createDraft`）建完自动 RuleRef 引用。Switch/Transform/Output 双击 → 抽屉轻量编辑表达式/decisionCode。
-- [ ] **Step 11a:** 三栏适配。**左栏** LeftPanel：展示部分（元信息/版本/DryRun）无需改，但 **editDraft 写体 `handleSaveDraft` @:59-67 需补 flowGraph**（见 Step 6）；`script.lang` 行本就是 EXPRESSION_SCRIPT 专属天然跳过。**右栏** RightPanel：executor(lang) tab 本就只 EXPRESSION_SCRIPT 显示（flow 的 lang 在各 Switch/Transform 节点/下钻里选，无规则级 lang）；preGate tab 保留；**`showBinding` 加 `DECISION_FLOW` 排除**——否则多出无用 decisionBinding tab（决策由 Output 内联，类比评分卡/决策树叶子）。
-- [ ] **Step 11:** flow 评估 trace 首版**复用 `components/trace-tree` 零改造**（flow 产的 `NodeTrace` 森林直接渲染），仅为 `FlowNodeType` 四标签加图标/文案（Switch/Transform 别用 ⏭ skip 语义，用「选中 case」/「= 输出值」）。画布回放 / What-if 探针 / 覆盖率热力图为**增强项**（见 spec「Trace 可视化」分层，不做进首版）。
-- [ ] **Verify:** `npm run build` + 手动 UI 建一条 flow 规则（含双击下钻编辑被引规则）；**回归 EXPRESSION_SCRIPT 编辑**（ScriptEditor 受控化后建/编/发布脚本规则不退化）+ 抽验其余 4 形态编辑器打开正常。
+- [x] **Step 0:** `types/rule.ts` `RuleKind` 联合加 `'DECISION_FLOW'`（**硬伤：不加则 `kind==='DECISION_FLOW'` 比较 TS 报错、`npm run build` 直接挂**）+ 请求/详情类型平级加 `flowGraph?`。
+- [x] **Step 1:** `types/flow.ts` 对齐后端 record（判别字段 `type`）。
+- [x] **Step 2:** `enums.ts` 加 DECISION_FLOW 选项 + i18n。
+- [x] **Step 3:** `ruleStore` 加平级 `flowGraph` 状态（仿 script，不进 `ast`）。
+- [x] **Step 4:** `FlowCanvasEditor`：reactflow 画布、4 种节点拖放、连边、RuleRef 内嵌选规则下拉；`onChange` 回写 `flowGraph`。
+- [x] **Step 5:** `CenterPanel.renderEditor()` 加 `DECISION_FLOW` 分派（仿 ScriptEditor）。
+- [x] **Step 6:** 写路径补 flowGraph（**位点是 `LeftPanel.handleSaveDraft` @:59-67 的 editDraft body，不是 index.tsx**——index.tsx 只做 loadFromDetail 回填）。两个创建弹窗 `rule-list/index.tsx` handleCreate @:88-108 与 `rules-all/index.tsx` @:78-92 各加 `DECISION_FLOW` 分支播种最小合法 FlowGraph 骨架（类比 DECISION_TREE 骨架）——否则弹窗选 DECISION_FLOW 后 createRule body 无 flowGraph、被 `resolveFlowDraft` 结构校验（需 input/无孤儿）拒，根本建不出 flow。
+- [x] **Step 7:** 只读链：`index.tsx` `loadFromDetail` 回填 `detail.flowGraph`；`VersionContentDrawer`/`VersionDiffDrawer` 加 flowGraph 展示项 + i18n `versionContent.flowGraph` label。**只读用 `json(content.flowGraph)` 平铺即可，不做只读画布**（与现有 script 一致，守以简为先）。
+- [x] **Step 8:** 分析展示分两维度（不混一个面板）：**跨规则维度**——`ANALYZABLE_KINDS` 纳入 `DECISION_FLOW`（flow 的 Output 决策码参与规则集覆盖分析，进既有分析面板）；**图内维度**——`FlowCanvasEditor` 消费 `FlowCycleFinding`/`FlowDeadNodeFinding`，成环边标红、死节点置灰（reactflow 样式），**不塞进规则集冲突面板**；`analysisSummary` 按维度分流。
+- [x] **Step 9:** `ScriptEditor` 去 `useRuleStore()`，改受控 `props: script + onChange`（对齐其余 4 个受控编辑器）；`CenterPanel` EXPRESSION_SCRIPT 分支改传 `script={script} onChange={setScript}`。这是下钻复用脚本叶子的前置，也顺手消除既有单例耦合不一致（§3 被需求驱动的必要小改，非无端重构）。
+- [x] **Step 10:** 节点下钻（一个画布搞定，复用现有编辑器不重写）：`FlowNodeInspectorDrawer` —— RuleRef 双击 → 抽屉按被引规则 kind 分派内嵌**现有 5 个受控编辑器**，编辑落**被引规则自己的草稿**（`editDraft` API，非 flowGraph）；抽屉顶部提示**冻结隔离**（改叶子进其草稿、需各自发布，已发布 flow 引用冻结版本不受影响，D6）；画布内"新建本场景叶子规则"（`createDraft`）建完自动 RuleRef 引用。Switch/Transform/Output 双击 → 抽屉轻量编辑表达式/decisionCode。
+- [x] **Step 11a:** 三栏适配。**左栏** LeftPanel：展示部分（元信息/版本/DryRun）无需改，但 **editDraft 写体 `handleSaveDraft` @:59-67 需补 flowGraph**（见 Step 6）；`script.lang` 行本就是 EXPRESSION_SCRIPT 专属天然跳过。**右栏** RightPanel：executor(lang) tab 本就只 EXPRESSION_SCRIPT 显示（flow 的 lang 在各 Switch/Transform 节点/下钻里选，无规则级 lang）；preGate tab 保留；**`showBinding` 加 `DECISION_FLOW` 排除**——否则多出无用 decisionBinding tab（决策由 Output 内联，类比评分卡/决策树叶子）。
+- [x] **Step 11:** flow 评估 trace 首版**复用 `components/trace-tree` 零改造**（flow 产的 `NodeTrace` 森林直接渲染），仅为 `FlowNodeType` 四标签加图标/文案（Switch/Transform 别用 ⏭ skip 语义，用「选中 case」/「= 输出值」）。画布回放 / What-if 探针 / 覆盖率热力图为**增强项**（见 spec「Trace 可视化」分层，不做进首版）。
+- [x] **Verify:** `npm run build` + 手动 UI 建一条 flow 规则（含双击下钻编辑被引规则）；**回归 EXPRESSION_SCRIPT 编辑**（ScriptEditor 受控化后建/编/发布脚本规则不退化）+ 抽验其余 4 形态编辑器打开正常。
 
 ## P7 — 端到端功能测试
 
@@ -180,6 +180,6 @@
 
 - [ ] `$MVN clean test` 全量兜底（跨模块改实体类型）——**现有 5 形态的单测/集成测试全绿 = 未退化**，任一现有测试变红即为回归，必须查而非改测试就绿。
 - [ ] **防退化回归**：e2e 抽验现有 5 形态各建/发布/评估一条不受影响（尤其 EXPRESSION_SCRIPT，ScriptEditor 改造 + RuleContentHasher 加键后）；确认现有规则 API 响应新增 `flowGraph:null` 不影响既有前端/SDK 消费。
-- [ ] 更新 01-concepts（新 kind）、03-rule-expression 或新章（flow 节点语义）、05-storage（flow_graph 列）、10-api-contract（DECISION_FLOW 请求体）；改前跑 `doc-consistency-review`。
+- [x] 更新 01-concepts（新 kind）、03-rule-expression 或新章（flow 节点语义）、05-storage（flow_graph 列）、10-api-contract（DECISION_FLOW 请求体）；改前跑 `doc-consistency-review`。
 - [ ] 派 `rule-engine-reviewer` 审代码 ↔ 文档对齐。
 - [ ] 本计划归档进 `plans/archive/`，设计并入 docs 正文。
