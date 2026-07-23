@@ -18,9 +18,9 @@
 | **gengine（bilibili）** | Go 嵌入式规则引擎（AST DSL + 执行内核） | 基因不同宗（命令式可副作用 DSL）；可吸收面小，唯一候选=并行求值 | 候选记入 `08-evolution.md` §2.29（不实现） | [§3.2.4](#324-genginebilibili) |
 | **RuleGo**（rulego.dev） | Go 组件编排规则引擎（规则链，类 node-red） | 类别不同（编排+动作 vs 纯决策）；D60 边界反例佐证 | 分层已定 D60 / D75 / Flowable | [§3.2.5](#325-rulego) |
 | **Drools**（Apache KIE） | Java RETE 推理 + CEP + DMN 一体化 | 刻意非 RETE（不可变快照 + 无状态）；Verifier/决策表已吸收 | §2.26 B31 静态分析 | [§3.2.6](#326-droolsapache-kie) |
-| **Kogito**（Apache KIE） | Drools + jBPM + DMN 决策流程捆绑、cloud-native | 决策+编排捆绑反例，佐证 D60/D75 分层 | D60 / D75 | [§3.2.7](#327-kogitoapache-kie) |
-| **Evrete** | 轻量 RETE + JSR-94 + 注解 Java 规则 | 刻意非 RETE（轻量立面对立面）；D61 已有 easyrules 注解 | D6/D17/D61 | [§3.2.8](#328-evrete) |
-| **OpenL Tablets**（LGPL） | Excel 规则 → JVM 字节码 → REST API | Excel 业务用户 authoring 参照；留 D74 待触发 | D74 | [§3.2.9](#329-openl-tabletslgpl) |
+| **Kogito**（Java，Apache KIE） | Drools + jBPM + DMN 决策流程捆绑、cloud-native | 决策+编排捆绑反例，佐证 D60/D75 分层 | D60 / D75 | [§3.2.7](#327-kogitoapache-kie) |
+| **Evrete**（Java） | 轻量 RETE + JSR-94 + 注解 Java 规则 | 刻意非 RETE（轻量立面对立面）；D61 已有 easyrules 注解 | D6/D17/D61 | [§3.2.8](#328-evrete) |
+| **OpenL Tablets**（Java，LGPL） | Excel 规则 → JVM 字节码 → REST API | Excel 业务用户 authoring 参照；留 D74 待触发 | D74 | [§3.2.9](#329-openl-tabletslgpl) |
 
 ---
 
@@ -30,23 +30,23 @@
 
 | 对标对象 | 对标点 | 落点 | 结论 |
 |---|---|---|---|
-| **OPA**（Open Policy Agent） | 策略引擎出决策 + PEP 执行，决策/执行分层 | D60 | 吸收（定位对齐：引擎纯决策，编排外置） |
-| **Camunda**（DMN + BPMN） | DMN 出决策、BPMN 做编排，决策与编排分层 | D60（编排接 Flowable）；D75 判据 | 吸收（定位对齐） |
-| **Camunda DMN**（itemDefinition + typeRef） | 类型定义驱动校验 | D69 | 吸收（typed 契约 + 分层校验参照） |
-| **Apache Calcite**（SqlOperatorTable + OperandTypeChecker） | 算子表 + 操作数类型检查 | D69 | 吸收（`OperatorSpec` + 发布期类型检查参照） |
-| **JSON Schema** | 声明式约束 | D69（typed 契约 + payload 约束） | 吸收 |
-| **Drools Verifier** | 规则集完备性/冲突校验 | §2.26（规则集静态分析，已落地 B31） | 吸收（命名/语义对齐 Verifier） |
-| **Easy Rules** | `@Condition`/`@Fact` 注解规则 | D61（SDK 注解规则，仅嵌入式 SDK） | 吸收（加糖，严守 D60） |
-| **urule** | FunctionLibrary（全局函数注册）/ ConstantLibrary | 08-evolution §四 | **已否决**（与闭合校验/禁副作用/metric 只读冲突） |
-| **CEL / Aviator / ice**（市场吞吐对比） | 表达式引擎 / 高吞吐评估形态 | D20；D66（六引擎 EXPRESSION_SCRIPT） | 吸收（CEL/Aviator 为六引擎之二；ice 作吞吐参照） |
-| **OpenFeature** | provider SPI + spec + conformance suite | D72（连接器标准化） | 吸收（声明式连接器 + conformance 套件） |
-| **OTel** | exporter SPI + OTLP 信封 + semantic conventions | D72；§2.22（OTLP + LGTM 可观测性） | 吸收 |
-| **Confluent Schema Registry / K8s / Camunda** | 代理主键 + 反范式冗余自然键 | rule identity（code + version） | 吸收（保留代理 PK + 冗余自然键） |
-| **DB 动态数据脱敏 / Apache Ranger** | 声明在字段定义、读时按策略遮蔽 | D71（Trace PII 读时脱敏） | 吸收 |
-| **FICO / Sapiens** | 规则绩效 / 有效性度量 | §2.27（决策效果闭环，演进位） | 记录待触发 |
-| **Grule**（Hyperjump，本地同级目录 `../grule-rule-engine`） | Drools 式 GRL DSL + salience + when/then + 可变 facts + 推理 | 同 gengine（§3.2.4）；Drools 已在本表 | **不吸收**（命令式 + 副作用 + 可变 facts，D60/D16 拒） |
-| **Gval**（本地同级目录 `../gval`） | Go 可组合表达式语言 + parse-once 复用 | D66 `ExpressionEngine` SPI（六引擎 + 编译缓存） | **不吸收**（Go 库、本项目 Java；思路 D66 已具备） |
-| **CEL-Go**（Google CEL 官方 Go 实现，本地同级目录 `../cel-go`） | CEL 语言的 Go 宿主实现 | D66（本项目用 CEL 的 Java 实现 dev.cel） | **已覆盖**（CEL 已是六引擎之一；Go 宿主不用） |
+| **OPA**（Go）| 策略引擎出决策 + PEP 执行，决策/执行分层 | D60 | 吸收（定位对齐：引擎纯决策，编排外置） |
+| **Camunda**（Java，DMN + BPMN）| DMN 出决策、BPMN 做编排，决策与编排分层 | D60（编排接 Flowable）；D75 判据 | 吸收（定位对齐） |
+| **Camunda DMN**（Java，itemDefinition + typeRef）| 类型定义驱动校验 | D69 | 吸收（typed 契约 + 分层校验参照） |
+| **Apache Calcite**（Java）| 算子表 + 操作数类型检查 | D69 | 吸收（`OperatorSpec` + 发布期类型检查参照） |
+| **JSON Schema**（语言无关）| 声明式约束 | D69（typed 契约 + payload 约束） | 吸收 |
+| **Drools Verifier**（Java，Apache KIE）| 规则集完备性/冲突校验 | §2.26（规则集静态分析，已落地 B31） | 吸收（命名/语义对齐 Verifier） |
+| **Easy Rules**（Java）| `@Condition`/`@Fact` 注解规则 | D61（SDK 注解规则，仅嵌入式 SDK） | 吸收（加糖，严守 D60） |
+| **urule**（Java）| FunctionLibrary（全局函数注册）/ ConstantLibrary | 08-evolution §四 | **已否决**（与闭合校验/禁副作用/metric 只读冲突） |
+| **CEL / Aviator / ice**（Go/Java/Go）| 表达式引擎 / 高吞吐评估形态 | D20；D66（六引擎 EXPRESSION_SCRIPT） | 吸收（CEL/Aviator 为六引擎之二；ice 作吞吐参照） |
+| **OpenFeature**（语言无关）| provider SPI + spec + conformance suite | D72（连接器标准化） | 吸收（声明式连接器 + conformance 套件） |
+| **OTel**（语言无关）| exporter SPI + OTLP 信封 + semantic conventions | D72；§2.22（OTLP + LGTM 可观测性） | 吸收 |
+| **Confluent Schema Registry / K8s**（语言无关 + Go）| 代理主键 + 反范式冗余自然键 | rule identity（code + version） | 吸收（保留代理 PK + 冗余自然键） |
+| **Apache Ranger**（Java）| 声明在字段定义、读时按策略遮蔽 | D71（Trace PII 读时脱敏） | 吸收 |
+| **FICO / Sapiens**（闭源商用）| 规则绩效 / 有效性度量 | §2.27（决策效果闭环，演进位） | 记录待触发 |
+| **Grule**（Go，Hyperjump，本地 `../grule-rule-engine`）| Drools 式 GRL DSL + salience + when/then + 可变 facts + 推理 | 同 gengine（§3.2.4） | **不吸收**（命令式 + 副作用 + 可变 facts，D60/D16 拒） |
+| **Gval**（Go，本地 `../gval`）| 可组合表达式语言 + parse-once 复用 | D66 `ExpressionEngine` SPI | **不吸收**（Go 库、本项目 Java；思路 D66 已具备） |
+| **CEL-Go**（Go，Google，本地 `../cel-go`）| CEL 语言的 Go 宿主实现 | D66（本项目用 CEL 的 Java 实现 dev.cel） | **已覆盖**（CEL 已是六引擎之一；Go 宿主不用） |
 
 ---
 
