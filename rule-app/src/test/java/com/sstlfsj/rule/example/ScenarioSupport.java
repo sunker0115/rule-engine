@@ -173,6 +173,12 @@ public abstract class ScenarioSupport {
         return ((Number) resp.get("data")).longValue();
     }
 
+    /** 注册声明式 HTTP 连接器（B10）：EXTERNAL_HTTP metric 经 params.connector 引用其 connectorCode。 */
+    protected void createConnector(String connectorCode, String name, Map<String, Object> descriptor) {
+        adminPost("/connectors?tenantId=" + TENANT_ID + "&connectorCode=" + connectorCode,
+                Map.of("name", name, "descriptor", descriptor));
+    }
+
     @SuppressWarnings("unchecked")
     protected Map<String, Object> createRule(String sceneCode, String code, String name,
                      Object conditionAst, List<Map<String, String>> decisionBindings,
