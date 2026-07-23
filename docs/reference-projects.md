@@ -78,6 +78,7 @@
 | 已吸收 | ZEN L1 | 表达式编辑器变量补全（**六引擎通用**） | `expressionCompletions.ts` + ScriptEditor + ExpressionInput（Flow Switch/Transform），零后端 |
 | 已吸收 | FICO / Sapiens | 决策效果闭环 | §2.27 B32：`decision_outcome` 回灌 + `OUTCOME_INGESTION` 自动取标签 + `EffectivenessService` TP/FP/FN→precision/recall（RULE_VERSION/DECISION×DAY/WEEK 漂移）+ 前端 `EffectivenessPage` |
 | 已吸收 | ZEN L2 | CEL 实时类型诊断（CEL 专属） | `ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput debounced lint（弱类型引擎 no-op 自动通过） |
+| 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH 压测：纯 AST_BOOLEAN 负优化 13-42x，仅含重脚本/决策图场景建议开启） |
 | 不需要 | trae | 6 级 Context / 内部事件总线 / 自研验证框架 / 引擎耦合 JPA / `DecisionCode` 硬编码 / Rule 层组合策略 | 分别被 不可变 POJO / Modulith / Spring Validation / kernel 零 Spring / Decision 业务配置 / AST 组合 顶替 |
 | 不需要 | trae R4 | 自研有状态 Flow 编排 | 架构已定：同步图归 D75 `DECISION_FLOW`，有状态编排接 Flowable（D60/D75），不自研 |
 | 不需要 | gengine | 命令式副作用 DSL / DataContext 任意函数 / 规则池 / salience·StopTag / DAG 执行模型 | 分别被 D60 / urule 否决 / 快照+预编译 / hit policy / D75 覆盖 |
@@ -92,9 +93,7 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 不需要 | ice | 树形编排+Leaf 副作用执行+多语言 SDK+零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK/文件存储非本项目方向；节点复用(D75 RuleRef)/并行(§2.29)已有等价物 |
-| 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH 压测：纯 AST_BOOLEAN 负优化 13-42x，仅含重脚本/决策图场景建议开启） |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
-| 已吸收 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 B32 `EffectivenessService`（TP/FP/FN→precision/recall，RULE_VERSION/DECISION 维度 + DAY/WEEK 分桶漂移）+ 前端 `EffectivenessPage` |
 
 ### 3.2 分项目（细对比·融合版）
 
