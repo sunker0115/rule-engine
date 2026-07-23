@@ -60,7 +60,8 @@ class SceneSnapshotLoaderTest {
                 42L, "fraud_check", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"GT\",\"metricCode\":\"score\",\"params\":{}}",
                 "[]", "[{\"decisionCode\":\"REJECT\",\"priority\":10}]", "[]",
-                "AST_BOOLEAN", "HIGHEST_PRIORITY"
+                "AST_BOOLEAN", "HIGHEST_PRIORITY",
+                null, null, null, 0L, null
         );
         RuleVersionSnapshot snap = new RuleVersionSnapshot(42L, "fraud_check", "1", null, List.of(),
                 List.of(new RuleVersionSnapshot.DecisionBinding("REJECT", 10)), List.of(), null);
@@ -142,7 +143,8 @@ class SceneSnapshotLoaderTest {
         RuleVersionRow row = new RuleVersionRow(
                 7L, "s1", 1L,
                 "{\"type\":\"ConditionNode\",\"conditionType\":\"EQ\",\"metricCode\":null,\"params\":{}}",
-                "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY"
+                "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
+                null, null, null, 0L, null
         );
         RuleVersionSnapshot snap = new RuleVersionSnapshot(7L, "s1", "1", null, List.of(), List.of(), null, null);
 
@@ -203,7 +205,8 @@ class SceneSnapshotLoaderTest {
     @Test
     void loadAllWithStrategy_writesStrategyToIndex() {
         RuleVersionRow row = new RuleVersionRow(
-                1L, "fraud", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "FIRST_HIT");
+                1L, "fraud", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "FIRST_HIT",
+                null, null, null, 0L, null);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 1L, "fraud", "1", null, List.of(), List.of(), List.of(), null);
 
@@ -220,7 +223,8 @@ class SceneSnapshotLoaderTest {
     @Test
     void loadBySceneWithStrategy_writesStrategyToIndex() {
         RuleVersionRow row = new RuleVersionRow(
-                2L, "payment", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "ALL_HITS");
+                2L, "payment", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "ALL_HITS",
+                null, null, null, 0L, null);
         RuleVersionSnapshot snap = new RuleVersionSnapshot(
                 2L, "payment", "1", null, List.of(), List.of(), List.of(), null);
 
@@ -237,7 +241,8 @@ class SceneSnapshotLoaderTest {
     @Test
     void loadAllWithStrategy_unknownStrategy_fallsBackToDefault() {
         RuleVersionRow row = new RuleVersionRow(
-                3L, "scene", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "UNKNOWN_STRATEGY");
+                3L, "scene", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "UNKNOWN_STRATEGY",
+                null, null, null, 0L, null);
         when(mapper.loadAllActive()).thenReturn(List.of(row));
         when(assembler.assembleAll(anyList())).thenReturn(List.of());
 
