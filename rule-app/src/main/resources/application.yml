@@ -96,3 +96,10 @@ engine:
       eval-error-rate-threshold: 0.05
       trace-queue-full-threshold: 0.8
 
+    # 取数管道数据源注册（供 metric.params.datasource 引用）；与 @SpringBootTest properties 保持对称
+    fetch:
+      datasources:
+        - name: loadtest_ro
+          url: jdbc:mysql://localhost:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+          username: root
+          password: 123456
