@@ -38,6 +38,7 @@ interface RuleState {
   /** 同场景已发布规则列表（供 RuleRef 下拉选择，由父组件加载） */
   flowSceneRules: SceneRuleItem[];
   setFlowSceneRules: (rules: SceneRuleItem[]) => void;
+  addFlowRuleRef: (ruleCode: string) => void;
   loadFromDetail: (
     ast: AstNode | null,
     bindings: DecisionBinding[],
@@ -66,7 +67,7 @@ const initialState = {
   flowSceneRules: [] as SceneRuleItem[],
 };
 
-export const useRuleStore = create<RuleState>((set) => ({
+export const useRuleStore = create<RuleState>((set, get) => ({
   ...initialState,
 
   setAst: (ast) => set({ ast, dirty: true }),
@@ -81,6 +82,23 @@ export const useRuleStore = create<RuleState>((set) => ({
   setSelectedFlowEdgeIndex: (index) => set({ selectedFlowEdgeIndex: index }),
   setDrillFlowNodeId: (id) => set({ drillFlowNodeId: id }),
   setFlowSceneRules: (rules) => set({ flowSceneRules: rules }),
+  /** 从场景规则列表点击创建 RuleRefNode */
+  addFlowRuleRef: (ruleCode: string) => {
+    const state = get();
+    const graph = state.flowGraph ?? { nodes: [], edges: [], inputNodeId: '' };
+    const existing = new Set(graph.nodes.map((n) => n.id));
+    let id = 'ref_1';
+    for (let i = 1; existing.has(`ref_${i}`); i += 1) id = `ref_${i}`;
+    set({
+      flowGraph: {
+        ...graph,
+        nodes: [...graph.nodes, { type: 'RuleRefNode', id, ruleCode }],
+        inputNodeId: graph.inputNodeId || id,
+      },
+      selectedFlowNodeId: id,
+      dirty: true,
+    });
+  },
 
   loadFromDetail: (ast, bindings, gates, types, kind, script, flowGraph) =>
     set({ ast, decisionBindings: bindings, preGates: gates, triggerEventTypes: types, kind, script, flowGraph, dirty: false }),

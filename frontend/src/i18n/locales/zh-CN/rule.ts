@@ -148,6 +148,7 @@ const rule: RuleTranslation = {
       toolbar: {
         analysisPass: '图分析通过 · 无环 · 无死节点',
         analysisIssues: '图分析发现问题',
+        clearTrace: '清除执行路径',
       },
       entry: '入口',
       emptyGraph: '空图——从上方拖入节点开始编排',

@@ -39,7 +39,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
   const { currentId } = useTenantStore();
   // 优先用规则自身的 tenantId（从详情带回），避免依赖全局未选时传 0 导致后端校验失败
   const tenantId = Number(ruleDetail.tenantId) || currentId || 0;
-  const { ast, decisionBindings, preGates, triggerEventTypes, script, flowGraph, dirty } = useRuleStore();
+  const { ast, decisionBindings, preGates, triggerEventTypes, script, flowGraph, dirty, flowSceneRules, addFlowRuleRef } = useRuleStore();
   const [saving, setSaving] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [viewVersionId, setViewVersionId] = useState<number | null>(null);
@@ -237,6 +237,29 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
           <Button block onClick={handleEnable}>{t('action.enable')}</Button>
         )}
       </div>
+
+      {ruleDetail.kind === 'DECISION_FLOW' && (
+        <div style={{ marginBottom: 12 }}>
+          <h4>{t('editor.flow.leftPanel.sceneRules')}</h4>
+          {flowSceneRules.length === 0 ? (
+            <p style={{ fontSize: 11, color: '#8a95a1', margin: '4px 0' }}>{t('editor.flow.leftPanel.sceneRulesHint')}</p>
+          ) : (
+            <div style={{ maxHeight: 160, overflow: 'auto' }}>
+              {flowSceneRules.map((r) => (
+                <div key={r.code}
+                  onClick={() => addFlowRuleRef(r.code)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f3f6'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 2, background: '#2f6bff', flex: 'none' }} />
+                  <span>{r.name}</span>
+                  <Tag style={{ marginLeft: 'auto', fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>{r.kind}</Tag>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <h4>{t('editor.leftPanel.versionTimeline')}</h4>
       <Timeline

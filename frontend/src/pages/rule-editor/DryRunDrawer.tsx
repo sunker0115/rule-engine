@@ -4,6 +4,7 @@ import { PlusOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useDryRunStore } from '@/store/dryRunStore';
+import { useFlowTraceStore } from '@/store/flowTraceStore';
 import { dryRun } from '@/api/eval';
 import type { NodeTraceItem } from '@/types';
 
@@ -33,6 +34,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
   const { result, loading, setResult, setLoading, reset } = useDryRunStore();
+  const setTraceResult = useFlowTraceStore((s) => s.setTraceResult);
   const [form] = Form.useForm();
   const [internalLoading, setInternalLoading] = useState(false);
   const [pairs, setPairs] = useState<PayloadPair[]>([]);
@@ -119,6 +121,8 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
         { ruleVersionId, ruleId },    // query param，不在 body
       );
       setResult(data);
+      // 同步写入 trace store，画布可高亮执行路径
+      if (data) setTraceResult(data.nodeTrace ?? [], (data.hitDecisions ?? []).map((d: any) => d.code));
     } catch {
       message.error(tc('message.loadError'));
     } finally {

@@ -148,6 +148,7 @@ const rule: RuleTranslation = {
       toolbar: {
         analysisPass: 'Graph analysis passed · acyclic · no dead nodes',
         analysisIssues: 'Graph analysis found issues',
+        clearTrace: 'Clear execution path',
       },
       entry: 'Entry',
       emptyGraph: 'Empty graph — drag a node from above to start',

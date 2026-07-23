@@ -7,6 +7,7 @@ import '@xyflow/react/dist/style.css';
 import { Select, Tag, Empty } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
+import { useFlowTraceStore } from '@/store/flowTraceStore';
 import { flowCyclesForRule, flowDeadNodesForRule } from './analysisSummary';
 import FlowNodeInspectorDrawer, { type SceneRuleItem } from './FlowNodeInspectorDrawer';
 import type {
@@ -39,6 +40,9 @@ interface FlowNodeData extends Record<string, unknown> {
   flowNode: FlowNode;
   isInput: boolean;
   dead: boolean;
+  traced: boolean;
+  muted: boolean;
+  traceResult: { hit: boolean | null; value: string | null } | null;
   sceneRules: SceneRuleItem[];
   onSelectRule: (id: string, ruleCode: string) => void;
 }
@@ -135,23 +139,42 @@ const handleHover = (color: string) => ({
   transform: 'scale(1.4)',
 });
 
-function NodeShell({ type, isInput, dead, selected, children }: {
-  type: FlowNodeType; isInput: boolean; dead: boolean; selected: boolean; children: React.ReactNode;
+function NodeShell({ type, isInput, dead, selected, traced, muted, traceResult, warning, children }: {
+  type: FlowNodeType; isInput: boolean; dead: boolean; selected: boolean; traced?: boolean; muted?: boolean; traceResult?: { hit: boolean | null; value: string | null } | null; warning?: string; children: React.ReactNode;
 }) {
-  const accent = ACCENT[type];
+  const accent = warning ? '#f59e0b' : ACCENT[type];
+  const borderColor = traced ? '#16a34a' : (selected ? accent : '#e3e6ea');
+  const shadow = traced ? '0 0 0 2px rgba(22,163,74,.28), 0 1px 4px rgba(16,24,40,.08)' :
+    selected ? `0 0 0 3px ${accent}26` : '0 1px 4px rgba(16,24,40,.08)';
+  const nodeOpacity = muted ? 0.38 : (dead ? 0.45 : 1);
   return (
-    <div style={{
-      width: 180, background: '#fff', borderRadius: 10, overflow: 'hidden',
-      border: `1px solid ${selected ? accent : '#e3e6ea'}`,
-      boxShadow: selected ? `0 0 0 3px ${accent}26` : '0 1px 4px rgba(16,24,40,.08)',
-      opacity: dead ? 0.45 : 1, borderStyle: dead ? 'dashed' : 'solid',
+    <div style={{ position: 'relative', width: 180, background: '#fff', borderRadius: 10, overflow: 'hidden',
+      border: `1px solid ${borderColor}`, boxShadow: shadow, opacity: nodeOpacity, filter: muted ? 'grayscale(0.6)' : undefined,
+      borderStyle: dead ? 'dashed' : 'solid',
     }}>
       <div style={{ height: 4, background: dead ? '#8a95a1' : accent }} />
       <div style={{ padding: '6px 10px 3px', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: accent }}>{type.replace('Node', '')}</span>
-        {isInput && <Tag color="blue" style={{ marginInlineEnd: 0, fontSize: 10, lineHeight: '16px', padding: '0 5px' }}>入口</Tag>}
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: warning ? '#b7791f' : accent }}>{type.replace('Node', '')}</span>
+        {warning && <Tag color="orange" style={{ marginInlineEnd: 0, fontSize: 9, lineHeight: '16px', padding: '0 4px' }}>{warning}</Tag>}
+        {isInput && !warning && <Tag color="blue" style={{ marginInlineEnd: 0, fontSize: 10, lineHeight: '16px', padding: '0 5px' }}>入口</Tag>}
       </div>
       <div style={{ padding: '2px 10px 10px' }}>{children}</div>
+      {/* trace result badge */}
+      {traced && traceResult && (
+        <div style={{ position: 'absolute', top: -8, right: -8, width: 20, height: 20, borderRadius: '50%',
+          background: traceResult.hit === true ? '#16a34a' : traceResult.hit === false ? '#e5484d' : '#0ea5e9',
+          color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: '2px solid #fff', zIndex: 3 }}>
+          {traceResult.hit === true ? '✓' : traceResult.hit === false ? '✕' : '→'}
+        </div>
+      )}
+      {traced && traceResult?.value && (
+        <div style={{ position: 'absolute', bottom: -10, left: '50%', transform: 'translateX(-50%)',
+          background: '#f2fbf4', color: '#16a34a', border: '1px solid #bfe3c8', borderRadius: 5,
+          fontSize: 10, padding: '1px 7px', fontWeight: 600, whiteSpace: 'nowrap', zIndex: 3 }}>
+          {traceResult.value}
+        </div>
+      )}
     </div>
   );
 }
@@ -160,7 +183,7 @@ function RuleRefNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const { t } = useTranslation('rule');
   const node = data.flowNode as RuleRefNode;
   return (
-    <NodeShell type="RuleRefNode" isInput={data.isInput} dead={data.dead} selected={!!selected}>
+    <NodeShell type="RuleRefNode" isInput={data.isInput} dead={data.dead} selected={!!selected} traced={data.traced} muted={data.muted} traceResult={data.traceResult} warning={!node.ruleCode ? t('editor.flow.node.selectRule') : undefined}>
       <Handle type="target" position={Position.Left} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.RuleRefNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
       <div className="nodrag">
         <Select
@@ -182,7 +205,7 @@ function RuleRefNodeView({ data, selected }: NodeProps<CanvasNode>) {
 function SwitchNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.flowNode as SwitchNode;
   return (
-    <NodeShell type="SwitchNode" isInput={data.isInput} dead={data.dead} selected={!!selected}>
+    <NodeShell type="SwitchNode" isInput={data.isInput} dead={data.dead} selected={!!selected} traced={data.traced} muted={data.muted} traceResult={data.traceResult} warning={!node.expression ? '未填表达式' : undefined}>
       <Handle type="target" position={Position.Left} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.SwitchNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
       <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: '#5b6672', wordBreak: 'break-all' }}>
         {node.expression || '—'}
@@ -202,7 +225,7 @@ function SwitchNodeView({ data, selected }: NodeProps<CanvasNode>) {
 function TransformNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.flowNode as TransformNode;
   return (
-    <NodeShell type="TransformNode" isInput={data.isInput} dead={data.dead} selected={!!selected}>
+    <NodeShell type="TransformNode" isInput={data.isInput} dead={data.dead} selected={!!selected} traced={data.traced} muted={data.muted} traceResult={data.traceResult} warning={(!node.expression || !node.outputKey) ? '未填完整' : undefined}>
       <Handle type="target" position={Position.Left} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.TransformNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
       <div style={{ fontSize: 11.5 }}>
         <span style={{ fontSize: 10, color: '#0ea5e9', background: '#e8f6fd', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>
@@ -220,7 +243,7 @@ function TransformNodeView({ data, selected }: NodeProps<CanvasNode>) {
 function OutputNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.flowNode as OutputNode;
   return (
-    <NodeShell type="OutputNode" isInput={data.isInput} dead={data.dead} selected={!!selected}>
+    <NodeShell type="OutputNode" isInput={data.isInput} dead={data.dead} selected={!!selected} traced={data.traced} muted={data.muted} traceResult={data.traceResult} warning={!node.decisionCode ? '未选决策码' : undefined}>
       <Handle type="target" position={Position.Left} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.OutputNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
       <div style={{ fontWeight: 600, fontSize: 13 }}>{node.decisionCode || '—'}</div>
     </NodeShell>
@@ -238,6 +261,7 @@ const PALETTE: FlowNodeType[] = ['RuleRefNode', 'SwitchNode', 'TransformNode', '
 
 function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metadata, decisions, analysisReport, onLeafChanged, onSelectedNodeChange, onSelectedEdgeChange, onOpenRightPanel, onCloseRightPanel }: Props) {
   const { drillFlowNodeId, setDrillFlowNodeId, flowSceneRules: sceneRules } = useRuleStore();
+  const { showTrace, traces, clearTrace } = useFlowTraceStore();
   const { t } = useTranslation('rule');
   const { screenToFlowPosition, fitView } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -273,9 +297,49 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
     }
   }, [graph.nodes.length, fitView]);
 
-  // 图内 finding → 成环边集 / 死节点集
-  const cyclicEdges = useMemo(() => {
+  // 客户端实时检测：不可达节点
+  const unreachableNodes = useMemo(() => {
+    const set = new Set(graph.nodes.map((n) => n.id));
+    if (!graph.inputNodeId || !set.has(graph.inputNodeId)) return set;
+    const visited = new Set<string>();
+    const queue = [graph.inputNodeId];
+    visited.add(graph.inputNodeId);
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const e of graph.edges) {
+        if (e.from === cur && !visited.has(e.to)) { visited.add(e.to); queue.push(e.to); }
+      }
+    }
+    for (const id of visited) set.delete(id);
+    return set;
+  }, [graph]);
+
+  // 客户端实时检测：成环边（DFS 找 back edge）
+  const localCyclicEdges = useMemo(() => {
     const set = new Set<string>();
+    if (graph.nodes.length === 0) return set;
+    const WHITE = 0, GRAY = 1, BLACK = 2;
+    const color = new Map<string, number>();
+    graph.nodes.forEach((n) => color.set(n.id, WHITE));
+    const dfs = (u: string): boolean => {
+      color.set(u, GRAY);
+      for (const e of graph.edges) {
+        if (e.from !== u) continue;
+        const v = e.to;
+        const cv = color.get(v) ?? WHITE;
+        if (cv === GRAY) { set.add(edgeKey(u, v)); return true; }
+        if (cv === WHITE && dfs(v)) { set.add(edgeKey(u, v)); return true; }
+      }
+      color.set(u, BLACK);
+      return false;
+    };
+    for (const n of graph.nodes) { if (color.get(n.id) === WHITE) dfs(n.id); }
+    return set;
+  }, [graph]);
+
+  // 合并后端分析 + 前端实时检测
+  const allCyclicEdges = useMemo(() => {
+    const set = new Set(localCyclicEdges);
     if (analysisReport) {
       for (const f of flowCyclesForRule(analysisReport, ruleCode)) {
         const ids = f.cycleNodeIds;
@@ -283,13 +347,42 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
       }
     }
     return set;
-  }, [analysisReport, ruleCode]);
+  }, [localCyclicEdges, analysisReport, ruleCode]);
 
   const deadNodes = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set(unreachableNodes);
     if (analysisReport) for (const f of flowDeadNodesForRule(analysisReport, ruleCode)) set.add(f.deadNodeId);
     return set;
-  }, [analysisReport, ruleCode]);
+  }, [unreachableNodes, analysisReport, ruleCode]);
+
+  // 试算 trace → 执行路径（visited node IDs + edge keys + results）
+  const traceInfo = useMemo(() => {
+    if (!showTrace || !traces || traces.length === 0) return null;
+    const visitedNodes = new Set<string>();
+    const visitedEdges = new Set<string>();
+    const nodeResults = new Map<string, { hit: boolean | null; value: string | null }>();
+    const flowTraces = traces.filter((t) =>
+      t.nodeType === 'SwitchNode' || t.nodeType === 'RuleRefNode' || t.nodeType === 'TransformNode' || t.nodeType === 'OutputNode');
+    let curId: string | null = graph.inputNodeId;
+    for (const ft of flowTraces) {
+      if (!curId) break;
+      const node = graph.nodes.find((n) => n.id === curId);
+      if (!node) break;
+      visitedNodes.add(curId);
+      nodeResults.set(curId, { hit: ft.result, value: ft.actualValue != null ? String(ft.actualValue) : null });
+      const edges = graph.edges.filter((e) => e.from === curId);
+      if (ft.nodeType === 'SwitchNode' && ft.actualValue != null) {
+        const matched = edges.find((e) => e.caseKey === String(ft.actualValue)) ?? edges.find((e) => e.caseKey == null);
+        if (matched) { visitedEdges.add(edgeKey(matched.from, matched.to)); curId = matched.to; }
+        else curId = null;
+      } else {
+        const next = edges[0];
+        if (next) { visitedEdges.add(edgeKey(next.from, next.to)); curId = next.to; }
+        else curId = null;
+      }
+    }
+    return { visitedNodes, visitedEdges, nodeResults };
+  }, [showTrace, traces, graph]);
 
   const onSelectRule = useCallback((id: string, code: string) => {
     onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === id && n.type === 'RuleRefNode' ? { ...n, ruleCode: code } : n)) });
@@ -304,22 +397,30 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
       position: internal?.position ?? XY.EMPTY,
       measured: internal?.measured,
       selected: n.id === selectedId,
-      data: { flowNode: n, isInput: n.id === graph.inputNodeId, dead: deadNodes.has(n.id), sceneRules, onSelectRule },
+      data: { flowNode: n, isInput: n.id === graph.inputNodeId, dead: deadNodes.has(n.id), sceneRules, onSelectRule,
+        traced: traceInfo?.visitedNodes.has(n.id) ?? false,
+        muted: traceInfo ? !traceInfo.visitedNodes.has(n.id) : false,
+        traceResult: traceInfo?.nodeResults.get(n.id) ?? null,
+      },
     };
-  }), [graph, nodeInternals, selectedId, deadNodes, sceneRules, onSelectRule]);
+  }), [graph, nodeInternals, selectedId, deadNodes, sceneRules, onSelectRule, traceInfo]);
 
   const rfEdges: Edge[] = useMemo(() => graph.edges.map((e, i) => {
-    const cyclic = cyclicEdges.has(edgeKey(e.from, e.to));
+    const cyclic = allCyclicEdges.has(edgeKey(e.from, e.to));
+    const traced = traceInfo?.visitedEdges.has(edgeKey(e.from, e.to)) ?? false;
+    const notTraced = traceInfo && !traced;
     return {
       id: `e_${i}_${e.from}_${e.to}_${e.caseKey ?? ''}`,
       source: e.from,
       target: e.to,
       label: e.caseKey ?? undefined,
       animated: cyclic,
-      style: cyclic ? { stroke: '#e5484d', strokeWidth: 2 } : { stroke: '#94a3b8', strokeWidth: 1.6 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: cyclic ? '#e5484d' : '#94a3b8' },
+      style: traced ? { stroke: '#16a34a', strokeWidth: 2.5 } :
+        notTraced ? { stroke: '#c2c8d0', strokeWidth: 1.2, strokeDasharray: '5 4' } :
+        cyclic ? { stroke: '#e5484d', strokeWidth: 2 } : { stroke: '#94a3b8', strokeWidth: 1.6 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: traced ? '#16a34a' : notTraced ? '#c2c8d0' : cyclic ? '#e5484d' : '#94a3b8' },
     };
-  }), [graph.edges, cyclicEdges]);
+  }), [graph.edges, allCyclicEdges, traceInfo]);
 
   // 受控模式核心：完整处理 RF 上报的所有 change type，把 position / dimensions 写回 nodeInternals
   const onNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
@@ -406,7 +507,7 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
 
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
 
-  const hasIssues = cyclicEdges.size > 0 || deadNodes.size > 0;
+  const hasIssues = allCyclicEdges.size > 0 || unreachableNodes.size > 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -423,9 +524,16 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
             {type.replace('Node', '')}
           </div>
         ))}
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: hasIssues ? '#e5484d' : '#16a34a' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: hasIssues ? '#e5484d' : '#16a34a' }} />
-          {hasIssues ? t('editor.flow.toolbar.analysisIssues') : t('editor.flow.toolbar.analysisPass')}
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {showTrace && (
+            <span onClick={clearTrace} style={{ cursor: 'pointer', fontSize: 11, color: '#2f6bff', fontWeight: 600 }}>
+              ✕ {t('editor.flow.toolbar.clearTrace')}
+            </span>
+          )}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: hasIssues ? '#e5484d' : '#16a34a' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: hasIssues ? '#e5484d' : '#16a34a' }} />
+            {hasIssues ? t('editor.flow.toolbar.analysisIssues') : t('editor.flow.toolbar.analysisPass')}
+          </span>
         </span>
       </div>
 

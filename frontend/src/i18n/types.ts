@@ -308,7 +308,7 @@ export interface RuleTranslation {
     };
     flow: {
       palette: { title: string };
-      toolbar: { analysisPass: string; analysisIssues: string };
+      toolbar: { analysisPass: string; analysisIssues: string; clearTrace: string };
       entry: string;
       emptyGraph: string;
       node: { selectRule: string; addCase: string };
