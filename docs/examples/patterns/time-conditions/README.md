@@ -1,6 +1,6 @@
 # 时间条件三种写法（time-conditions）
 
-> **状态**：✅ 对齐当前实现（D55 公开评估只收 payload / D76 多态 body / D54 decision 独立写）。按 [`../risk-control/high-risk-login/`](../risk-control/high-risk-login/) 范式从旧案例重写。
+> **状态**：✅ 对齐当前实现（D55 公开评估只收 payload / D76 多态 body / D54 decision 独立写）。按 [`../../risk-control/high-risk-login/`](../../risk-control/high-risk-login/) 范式从旧案例重写。
 
 ## 一、场景与业务目标
 
@@ -77,5 +77,5 @@ curl -s -H Content-Type:application/json -X POST "$BASE/api/v1/rule/evaluate" \
 
 ## 五、相关契约
 
-- 时间条件参数契约见 [`../../03-rule-expression.md`](../../03-rule-expression.md) §七。
-- API 字段以 [`../../10-api-contract.md`](../../10-api-contract.md) 为准。
+- 时间条件参数契约见 [`03-rule-expression.md`](../../../03-rule-expression.md) §七。
+- API 字段以 [`10-api-contract.md`](../../../10-api-contract.md) 为准。
