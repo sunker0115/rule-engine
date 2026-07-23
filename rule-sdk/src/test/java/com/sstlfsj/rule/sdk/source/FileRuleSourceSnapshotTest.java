@@ -10,16 +10,16 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 验证导出 API ?format=snapshot 产出的 JSON 可被 FileRuleSource 正确加载。
+ * 验证导出 API ?format=snapshot 产出的 JSON 可被 FileRuleSource 正确加载并索引匹配。
+ * 端到端评估需 CEL 引擎（不在 SDK 模块依赖范围），在集成测试中覆盖。
  */
 class FileRuleSourceSnapshotTest {
 
     @Test
-    void exportedDecisionFlowSnapshot_loadsIntoIndex() {
+    void loadsAndMatchesBySceneAndEvent() {
         SceneRuleIndex index = new SceneRuleIndex();
         FileRuleSource.classpath("rules/demo-flow-exported.json").loadInto(index);
 
-        // 场景+事件类型匹配
         List<RuleVersionSnapshot> snaps = index.match("9100", "stub.test", "test");
         assertThat(snaps).hasSize(1);
         assertThat(snaps.get(0).code()).isEqualTo("demo_flow_001");
@@ -27,26 +27,34 @@ class FileRuleSourceSnapshotTest {
         assertThat(snaps.get(0).sceneCode()).isEqualTo("stub.test");
         assertThat(snaps.get(0).tenantId()).isEqualTo("9100");
         assertThat(snaps.get(0).version()).isGreaterThan(0);
-
-        // FlowBody 完整
-        assertThat(snaps.get(0).body()).isInstanceOf(FlowBody.class);
-        FlowBody fb = (FlowBody) snaps.get(0).body();
-        assertThat(fb.flowGraph().nodes()).isNotEmpty();
-        assertThat(fb.flowGraph().inputNodeId()).isEqualTo("switch_1");
     }
 
     @Test
-    void wireAllEvents_matches() {
-        // 快照 triggerEventTypes 为空 → 匹配任意 eventType
+    void bodyContainsCompleteFlowGraph() {
         SceneRuleIndex index = new SceneRuleIndex();
         FileRuleSource.classpath("rules/demo-flow-exported.json").loadInto(index);
 
-        assertThat(index.match("9100", "stub.test", "any_event")).hasSize(1);
+        RuleVersionSnapshot snap = index.match("9100", "stub.test", "test").get(0);
+        assertThat(snap.body()).isInstanceOf(FlowBody.class);
+        FlowBody fb = (FlowBody) snap.body();
+        assertThat(fb.flowGraph().nodes()).hasSize(9);
+        assertThat(fb.flowGraph().edges()).hasSize(8);
+        assertThat(fb.flowGraph().inputNodeId()).isEqualTo("switch_1");
+        assertThat(fb.referencedSnapshots()).containsKey("bool.test");
+    }
+
+    @Test
+    void wireAllEventsMatches() {
+        SceneRuleIndex index = new SceneRuleIndex();
+        FileRuleSource.classpath("rules/demo-flow-exported.json").loadInto(index);
+
+        // triggerEventTypes 为空 → 通配所有 eventType
+        assertThat(index.match("9100", "stub.test", "any")).hasSize(1);
         assertThat(index.match("9100", "stub.test", "txn.submit")).hasSize(1);
     }
 
     @Test
-    void sceneMismatch_doesNotMatch() {
+    void sceneMismatchDoesNotMatch() {
         SceneRuleIndex index = new SceneRuleIndex();
         FileRuleSource.classpath("rules/demo-flow-exported.json").loadInto(index);
 
