@@ -8,6 +8,7 @@ import type {
   FlowNode, RuleRefNode, SwitchNode, TransformNode, OutputNode,
   SceneMetadata, DecisionItem, RuleDetail, AstNode,
 } from '@/types';
+import { bodyToCarriers, carriersToBody } from '@/types';
 
 /** 场景内可被 RuleRef 引用的规则精简项。 */
 export interface SceneRuleItem {
@@ -68,8 +69,9 @@ export default function FlowNodeInspectorDrawer({
     getRule(tenantId, refDefId)
       .then((d) => {
         setRefDetail(d ?? null);
-        setRefAst(d?.conditionAst ?? null);
-        setRefScript(d?.script ?? null);
+        const c = bodyToCarriers(d?.body);
+        setRefAst(c.conditionAst);
+        setRefScript(c.script);
       })
       .finally(() => setLoadingRef(false));
   }, [open, isRuleRef, refDefId, tenantId]);
@@ -79,8 +81,7 @@ export default function FlowNodeInspectorDrawer({
     setSavingRef(true);
     try {
       await editDraft(tenantId, refDefId, {
-        conditionAst: refAst,
-        script: refScript,
+        body: carriersToBody(refDetail.kind, { conditionAst: refAst, script: refScript }),
         kind: refDetail.kind,
         name: refDetail.name,
         decisionBindings: refDetail.decisionBindings,
@@ -98,7 +99,8 @@ export default function FlowNodeInspectorDrawer({
     setCreating(true);
     try {
       // 最小叶子：AST_BOOLEAN 空规则，建完自动被当前 RuleRef 引用，用户再下钻编辑其条件
-      await createRule(tenantId, { sceneCode, code: values.code, name: values.name, kind: 'AST_BOOLEAN' });
+      await createRule(tenantId, { sceneCode, code: values.code, name: values.name, kind: 'AST_BOOLEAN',
+        body: { type: 'AstBody', conditionAst: { type: 'AndNode', children: [] } } });
       message.success(tc('message.createSuccess'));
       setNewLeafOpen(false);
       newLeafForm.resetFields();

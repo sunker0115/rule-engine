@@ -12,6 +12,7 @@ import { getScene, getAnalysis } from '@/api/scene';
 import { getMetricUsageCounts, getMetricSources } from '@/api/metric';
 import { getDecisionUsageCounts, getDecisionSources } from '@/api/decision';
 import type { RuleDetail as RuleDetailType, SceneMetadata as SceneMetadataType, RuleVersionItem, RuleSetAnalysisReport } from '@/types';
+import { bodyToCarriers } from '@/types';
 import LeftPanel from './LeftPanel';
 import CenterPanel from './CenterPanel';
 import RightPanel from './RightPanel';
@@ -91,14 +92,15 @@ export default function RuleEditor() {
       const detail = detailRes;
       if (detail) {
         setRuleDetail(detail);
+        const carriers = bodyToCarriers(detail.body);
         loadFromDetail(
-          detail.conditionAst ?? null,
+          carriers.conditionAst,
           detail.decisionBindings ?? [],
           detail.preGates ?? [],
           detail.triggerEventTypes ?? [],
           detail.kind,
-          detail.script ?? null,
-          detail.flowGraph ?? null,
+          carriers.script,
+          carriers.flowGraph,
         );
         const [metaRes, sceneRes] = await Promise.all([
           getSceneMetadata(currentId, detail.sceneCode),

@@ -76,23 +76,25 @@ export default function RulesAll() {
     const values = await createForm.validateFields();
     setCreateLoading(true);
     try {
-      const body: Record<string, unknown> = { ...values, tenantId: values.tenantId ?? currentId! };
+      const req: Record<string, unknown> = { ...values, tenantId: values.tenantId ?? currentId! };
+      // 三承载收敛：按 kind 播种多态 body（AstBody/ScriptBody/FlowBody，含 type 判别）
       if (values.kind === 'SCORECARD') {
-        body.conditionAst = { type: 'ScorecardRootNode', conditions: [], threshold: 0 };
+        req.body = { type: 'AstBody', conditionAst: { type: 'ScorecardRootNode', conditions: [], threshold: 0 } };
       } else if (values.kind === 'DECISION_TREE') {
-        body.conditionAst = { type: 'IfNode', condition: { type: 'AndNode', children: [] }, thenBranch: { type: 'DecisionLeafNode', decisionCode: '', category: null }, elseBranch: null };
+        req.body = { type: 'AstBody', conditionAst: { type: 'IfNode', condition: { type: 'AndNode', children: [] }, thenBranch: { type: 'DecisionLeafNode', decisionCode: '', category: null }, elseBranch: null } };
       } else if (values.kind === 'DECISION_TABLE') {
         const defaultMetric = await fetchDefaultMetric(values.tenantId ?? currentId!, values.sceneCode);
-        body.conditionAst = { type: 'DecisionTableNode', columns: [{ metricCode: defaultMetric, operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] };
-      }
-      if (values.kind === 'EXPRESSION_SCRIPT') {
+        req.body = { type: 'AstBody', conditionAst: { type: 'DecisionTableNode', columns: [{ metricCode: defaultMetric, operator: 'EQ', dataType: null }], rows: [{ conditions: [null], decisionCode: '' }] } };
+      } else if (values.kind === 'EXPRESSION_SCRIPT') {
         const lang = values.scriptLang || 'CEL';
-        body.script = { lang, source: values.scriptSource || defaultTrueFor(lang) };
+        req.body = { type: 'ScriptBody', script: { lang, source: values.scriptSource || defaultTrueFor(lang) } };
       } else if (values.kind === 'DECISION_FLOW') {
         // 最小合法骨架：单个 Output 入口节点（decisionCode 待填），避免发布期结构校验拒空图；余下在画布编排
-        body.flowGraph = { nodes: [{ type: 'OutputNode', id: 'output_1', decisionCode: '' }], edges: [], inputNodeId: 'output_1' };
+        req.body = { type: 'FlowBody', flowGraph: { nodes: [{ type: 'OutputNode', id: 'output_1', decisionCode: '' }], edges: [], inputNodeId: 'output_1' }, referencedSnapshots: {} };
+      } else {
+        req.body = { type: 'AstBody', conditionAst: { type: 'AndNode', children: [] } };
       }
-      const created = await createRule(values.tenantId ?? currentId!, body);
+      const created = await createRule(values.tenantId ?? currentId!, req);
       message.success(tc('message.createSuccess'));
       setCreateOpen(false);
       createForm.resetFields();

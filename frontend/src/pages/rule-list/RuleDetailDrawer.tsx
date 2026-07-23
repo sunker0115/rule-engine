@@ -6,6 +6,7 @@ import { getRule } from '@/api/rule';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
 import type { RuleDetail as RuleDetailType, IfNode } from '@/types';
+import { bodyToCarriers } from '@/types';
 
 /** 从 AST 递归提取所有 DecisionLeafNode 的 decisionCode */
 function extractDecisionCodes(node: unknown): string[] {
@@ -62,7 +63,7 @@ export default function RuleDetailDrawer({ open, ruleDefinitionId, onClose }: Pr
 
   // 决策码：优先 decisionBindings，AST_BOOLEAN/SCORECARD 绑在右面板；DECISION_TREE/TABLE 从 AST 提取
   const boundCodes = (detail.decisionBindings ?? []).map((b) => b.decisionCode);
-  const astCodes = extractDecisionCodes(detail.conditionAst);
+  const astCodes = extractDecisionCodes(bodyToCarriers(detail.body).conditionAst);
   const decisionCodes = boundCodes.length > 0 ? boundCodes : [...new Set(astCodes)];
 
   // 找当前生效版本

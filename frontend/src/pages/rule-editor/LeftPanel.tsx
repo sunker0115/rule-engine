@@ -14,6 +14,7 @@ import VersionContentDrawer from './VersionContentDrawer';
 import VersionDiffDrawer from './VersionDiffDrawer';
 import { summarize, worstSeverityForRule, isAnalyzableKind } from './analysisSummary';
 import type { RuleDetail as RuleDetailType, RuleVersionItem, RuleSetAnalysisReport } from '@/types';
+import { carriersToBody } from '@/types';
 
 interface Props {
   ruleDetail: RuleDetailType;
@@ -57,14 +58,12 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
     setSaving(true);
     try {
       await editDraft(tenantId, ruleDetail.ruleDefinitionId, {
-        conditionAst: ast,
+        body: carriersToBody(ruleDetail.kind, { conditionAst: ast, script, flowGraph }),
         decisionBindings,
         preGates,
         triggerEventTypes,
         kind: ruleDetail.kind,
         name: ruleDetail.name,
-        script,
-        flowGraph,
       });
       message.success(tc('message.saveSuccess'));
       // 草稿存盘后内容变了，规则集分析失效——轻量重算（不走全量 onUpdated，避免冗余请求）
@@ -172,8 +171,8 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
         </Descriptions.Item>
         <Descriptions.Item label={tc('label.name')}>{ruleDetail.name}</Descriptions.Item>
         <Descriptions.Item label={t('column.kind')}><Tag>{ruleDetail.kind}</Tag></Descriptions.Item>
-        {ruleDetail.kind === 'EXPRESSION_SCRIPT' && ruleDetail.script && (
-          <Descriptions.Item label={t('editor.leftPanel.executorLabel')}><Tag color="blue">{ruleDetail.script.lang}</Tag></Descriptions.Item>
+        {ruleDetail.kind === 'EXPRESSION_SCRIPT' && ruleDetail.body?.type === 'ScriptBody' && (
+          <Descriptions.Item label={t('editor.leftPanel.executorLabel')}><Tag color="blue">{ruleDetail.body.script.lang}</Tag></Descriptions.Item>
         )}
         <Descriptions.Item label={t('column.status')}>
           <Tag color={colorOf(ruleStatusOpts, ruleDetail.status as never)}>{ruleDetail.status}</Tag>
