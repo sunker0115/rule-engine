@@ -182,7 +182,14 @@ public abstract class ScenarioSupport {
         body.put("sceneCode", sceneCode);
         body.put("code", code);
         body.put("name", name);
-        body.put("conditionAst", conditionAst);
+        // 三承载收敛：请求体走多态 body（AstBody/ScriptBody/FlowBody，含 type 判别），按 kind 包装
+        Object bodyContent = switch (kind) {
+            case "EXPRESSION_SCRIPT" -> Map.of("type", "ScriptBody", "script", conditionAst);
+            case "DECISION_FLOW" -> Map.of("type", "FlowBody", "flowGraph", conditionAst,
+                    "referencedSnapshots", Map.of());
+            default -> Map.of("type", "AstBody", "conditionAst", conditionAst);
+        };
+        body.put("body", bodyContent);
         body.put("decisionBindings", decisionBindings != null ? decisionBindings : List.of());
         body.put("preGates", List.of());
         body.put("triggerEventTypes", triggerEventTypes != null ? triggerEventTypes : List.of());
