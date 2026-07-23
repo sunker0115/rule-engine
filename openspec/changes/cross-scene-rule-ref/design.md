@@ -1,63 +1,86 @@
-# Design: 开放 DECISION_FLOW 的 RuleRefNode 跨 Scene 引用规则
+# Design: rule_definition 去 scene_id + RuleRef 跨 Scene 引用
 
 ## 架构决策
 
-### D1. ruleCode 在 tenant 内唯一（不改 DDL）
+### D1. rule_definition.scene_id → scene_code，消灭代理键翻译层
 
-`rule_definition` 表已有 `UNIQUE KEY uk_tenant_code (tenant_id, code)`（`V1_0__init_schema.sql:17`），约束早就到位，历史代码未执行这个语义。**零 DDL 变更**。
+`scene.code` 已是运行时第一公民（`RuleEvent.sceneCode`、`SceneRuleIndex` key `"tenantId:sceneCode"`、eval-svc SQL `s.code AS sceneCode`）。`scene_id` 是唯一一个在内部逻辑（非 API 边界）被当业务键用的数值代理键，造成服务层到处翻译。
 
-`rule_definition.scene_id` 保留为"主归属 Scene"外键（用于列表展示/默认 payloadSchema 校验），不参与跨 Scene 引用查找。
+改法：`rule_definition` DROP `scene_id`，ADD `scene_code VARCHAR(64) NOT NULL`。其他有 `scene_id` 的表（`scene_metric_binding`/`scene_action_binding`/`scene_payload_schema_history`）均已 DROP（V1_22/V1_23/V1_30），无需处理。
 
-### D2. 查询键从 (tenant, scene, code) 改为 (tenant, code)
+### D2. tenant_id 保留 BIGINT，不改
 
-新增 `RuleDefinitionMapper.findByTenantAndCode(tenantId, code)` Mapper default 方法（🟢 `RuleDefinitionMapper.java`，仿 `findBySceneAndCode` 签名）。
+`tenant_id` 出现在每张表，是全局高频 join 键，数值型性能优先。`tenantCode` 只在外部 API 边界翻译一次，这个边界是正确的，不动。
 
-原 `findBySceneAndCode` 只保留 `RuleImportService`（按场景导入的正确语义），其余调用点全换。
+### D3. ruleCode 在 tenant 内唯一（DDL 已就位）
 
-### D3. 被引规则快照 sceneCode 用被引规则的归属 scene
+`rule_definition` 已有 `UNIQUE KEY uk_tenant_code (tenant_id, code)`（`V1_0__init_schema.sql`），约束早就到位，只是代码未执行这个语义。**零新增约束**。
 
-`PublishService.freezeReferencedRule` L659 当前写 `scene.getCode()`（flow 所属 scene）——**错误**，改为：
+### D4. eval-svc SQL JOIN 改写
 
-```java
-SceneDef refScene = sceneMapper.selectById(ref.getSceneId());  // 被引规则的归属 scene
-return new RuleVersionSnapshot(
-    active.getId(), refScene.getCode(), ...);  // 用 refScene.getCode()
-```
+原：`INNER JOIN scene s ON rd.scene_id = s.id`  
+改：`INNER JOIN scene s ON rd.tenant_id = s.tenant_id AND rd.scene_code = s.code`
 
-评估期 FlowExecutor 从冻结快照直接执行（不走倒排索引路由），所以此修正不影响评估语义，只让快照语义更准确。
+三处（`loadAllActive` / `loadActiveByScene` / `loadById`），`RuleVersionReadMapper.java`。
 
-### D4. 对外 API sceneId 泄漏修复
+### D5. 被引规则快照 sceneCode 用被引规则自己的 scene_code
 
-`RuleBundleController` 的 `?sceneId=Long` 是内部代理键泄漏，改为 `?sceneCode=String`，内部由 controller 调 `sceneMapper.findByCode(tenantId, sceneCode)` 转换。
+原 `PublishService.freezeReferencedRule` L659 写 `scene.getCode()`（flow 的 scene）——错误，改为 `ref.getSceneCode()`（被引规则的 scene_code 字段直接读）。
 
-### D5. 反向血缘：rule→flow 查询策略
+### D6. 反向血缘遍历策略
 
-遍历 tenant 下全部 ACTIVE `DECISION_FLOW` 规则快照，从 `FlowBody.referencedSnapshots` 的 key 集合匹配 `ruleCode`。不建专用索引表（v1 规模下在线扫描可接受，按需查而非常驻）。
+遍历 tenant 下全部 ACTIVE `DECISION_FLOW` 规则版本的 `FlowBody.referencedSnapshots` key 集合，匹配 ruleCode。不建专用索引表（在线按需扫描，v1 规模可接受）。
 
-### D6. 前端 RuleRef 下拉：tenant 全量 + sceneCode 分组
-
-- API 调用：`listRules(tenantId, undefined, { page: 1, size: 500, excludeKind: 'DECISION_FLOW' })`（排除 DECISION_FLOW 防递归引用配置）
-- UI：Select 用 `optionGroupLabel` 按 sceneCode 分组，选项格式 `规则名称 (code)`
-- `flowSceneRules` store 字段语义从"场景内规则"升级为"租户内可引用规则"
+---
 
 ## 完整改动清单
 
-| 文件 | 动作 | 说明 |
-|---|---|---|
-| `config/repository/RuleDefinitionMapper.java` | 新增方法 | `findByTenantAndCode(tenantId, code)` |
-| `config/publish/PublishService.java` | 修改 3 处 | L646 查询改 / L659 sceneCode 修正 / L892 code 唯一性校验改 |
-| `config/bundle/RuleImportService.java` | 修改 1 处 | L145 导入查重改为 tenant 级 |
-| `config/lineage/RuleLineageService.java` *(新增接口)* | 新增 | `findFlowsReferencingRule(tenantId, ruleCode)` |
-| `config/lineage/RuleLineageServiceImpl.java` *(新增实现)* | 新增 | 遍历 ACTIVE DECISION_FLOW 快照 |
-| `web/admin/RuleBundleController.java` | 修改 | `?sceneId=Long` → `?sceneCode=String` |
-| `web/admin/RuleController.java` 或新增 endpoint | 修改/新增 | `GET /admin/v1/rules/{code}/referencedBy` 返回引用此规则的 flow 列表 |
-| `frontend/CenterPanel.tsx` | 修改 | flowSceneRules 改为 tenant 全量 |
-| `frontend/FlowNodeInspectorDrawer.tsx` | 修改 | RuleRef 下拉 + sceneCode 分组 |
-| `frontend/FlowCanvasEditor.tsx` | 修改 | 新建叶子规则 scene 弹选（默认当前 scene） |
+### DDL（1 个迁移文件）
 
-## 不改的
+| 文件 | 内容 |
+|---|---|
+| `V1_41__rule_definition_scene_code.sql` | DROP COLUMN `scene_id`；ADD COLUMN `scene_code VARCHAR(64) NOT NULL`；DROP KEY `idx_scene_id`；ADD KEY `idx_tenant_scene` |
 
-- kernel / FlowExecutor / SceneRuleIndex / eval-svc 评估链路（全部零改动）
-- `rule_definition.scene_id` 外键（保留为主归属 scene）
-- `rule_definition` / `scene` 表结构（DDL 零变更）
-- `RuleVersionReadMapper` SQL 里的 `INNER JOIN scene s ON rd.scene_id = s.id`（内部实现保持）
+### config-svc
+
+| 文件 | 改动 |
+|---|---|
+| `RuleDefinition.java` | `sceneId Long` → `sceneCode String` |
+| `RuleDefinitionMapper.java` | 新增 `findByTenantAndCode`；`findBySceneAndCode` 签名改为 `findByTenantAndCode`（`sceneId` 参数删除）；`findByTenantAndSceneIds` → `findByTenantAndSceneCode(tenantId, sceneCode)` |
+| `PublishService.java` | `createDraft`：去掉 `scene.getId()` 翻译，`RuleDefinition.draft` 改传 `sceneCode`；`freezeReferencedRule`：查询改 `findByTenantAndCode`，快照 sceneCode 改 `ref.getSceneCode()`；code 唯一性校验改 tenant 级 |
+| `RuleDefinition.draft()` 静态工厂 | 参数 `sceneId Long` → `sceneCode String` |
+| `ConfigServiceImpl.java` | `listRules`：`sceneCode→sceneId` 翻译删除，直接传 `sceneCode` |
+| `RuleImportService.java` | 查重改 `findByTenantAndCode` |
+| `RuleAnalysisServiceImpl.java` | `findByTenantAndSceneIds` → `findByTenantAndSceneCode` |
+| `MetadataServiceImpl.java` | 同上 |
+| `RuleExportService.java` | `rd.getSceneId()` → `rd.getSceneCode()`；去掉 `sceneById` map 查询 |
+| `RuleLineageService.java`（新增接口） | `findFlowsReferencingRule(tenantId, ruleCode)` |
+| `RuleLineageServiceImpl.java`（新增实现） | 遍历 ACTIVE DECISION_FLOW 快照的 referencedSnapshots |
+
+### eval-svc
+
+| 文件 | 改动 |
+|---|---|
+| `RuleVersionReadMapper.java` | 3 处 SQL：`JOIN scene s ON rd.scene_id = s.id` → `JOIN scene s ON rd.tenant_id = s.tenant_id AND rd.scene_code = s.code` |
+
+### rule-api
+
+| 文件 | 改动 |
+|---|---|
+| `RuleBundleController.java` | `?sceneId=Long` → `?sceneCode=String` |
+| `RuleController.java` / 新增 endpoint | `GET /admin/v1/rules/{code}/referencedBy?tenantId=` |
+
+### 前端
+
+| 文件 | 改动 |
+|---|---|
+| `CenterPanel.tsx` | `listRules(tenantId, sceneCode)` → `listRules(tenantId, undefined)` + tenant 全量 |
+| `FlowNodeInspectorDrawer.tsx` | RuleRef 下拉 tenant 全量 + sceneCode 分组 |
+| `FlowCanvasEditor.tsx` | 新建叶子规则 scene 归属弹选 |
+
+### 不改的
+
+- kernel / FlowExecutor / SceneRuleIndex / eval-svc 评估链路
+- `scene` 表本身
+- `tenant_id`（所有表保留 BIGINT）
+- `rule_definition.uk_tenant_code` 约束（已就位）
