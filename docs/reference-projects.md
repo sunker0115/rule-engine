@@ -140,7 +140,7 @@
 
 > JDM 对标见 [`00-decisions.md`](./00-decisions.md) D75；表达式 intellisense 对标见 [`specs/2026-07-20-expression-intellisense-analysis.md`](./superpowers/specs/2026-07-20-expression-intellisense-analysis.md)。
 
-JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排）+ 表达式内核 `intellisense/`（补全/诊断/类型推断/nl）。JDM 与 D75 `DECISION_FLOW` 同宗——同步无状态决策图。本项目更严：typed sealed 节点 + 发布期冻结被引规则快照 + 环/死节点检测；`Transform` 只允许既有 6 引擎、禁任意副作用脚本（ZEN 有 QuickJS，D60 不跟）。表达式智能上引擎算得出但编辑期没用上——`referencedVariables` / CEL `typeCheck` 已就位，缺喂给前端。
+JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排）+ 表达式内核 `intellisense/`（补全/诊断/类型推断/nl）。JDM 与 D75 `DECISION_FLOW` 同宗——同步无状态决策图。本项目更严：typed sealed 节点 + 发布期冻结被引规则快照 + 环/死节点检测；`Transform` 只允许既有 6 引擎、禁任意副作用脚本（ZEN 有 QuickJS，D60 不跟）。表达式智能上 L1 变量补全 + L2 CEL 实时类型诊断**均已实现**——`referencedVariables` / `typeCheck` 经 `expressionCompletions.ts` + `ExpressionValidationService` 已喂给前端编辑器（仅 L3 LSP/自然语言仍待定）。
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
