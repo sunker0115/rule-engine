@@ -136,11 +136,11 @@ class EvalIntegrationTest {
                 VALUES (1, 1, 'REJECT', '拒绝', 100, 'ACTIVE')
                 """);
 
-        // 规则主记录（关联 scene_id=1，current_version=1，status=PUBLISHED）
+        // 规则主记录（关联 scene_code='fraud_check'，current_version=1，status=PUBLISHED）
         jdbc.execute("""
-                INSERT IGNORE INTO rule_definition (id, tenant_id, scene_id, code, name,
+                INSERT IGNORE INTO rule_definition (id, tenant_id, scene_code, code, name,
                     status, kind, current_version)
-                VALUES (1, 1, 1, 'fraud-rule-001', '欺诈检测规则',
+                VALUES (1, 1, 'fraud_check', 'fraud-rule-001', '欺诈检测规则',
                     'PUBLISHED', 'AST_BOOLEAN', 1)
                 """);
 
