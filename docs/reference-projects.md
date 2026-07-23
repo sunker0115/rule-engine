@@ -75,6 +75,7 @@
 | 已吸收 | CEL / Aviator | 表达式引擎 | D66 六引擎之二 |
 | 已吸收 | ZEN L1 | 表达式编辑器变量补全（**六引擎通用**） | `expressionCompletions.ts` + ScriptEditor + ExpressionInput（Flow Switch/Transform），零后端 |
 | 已吸收 | FICO / Sapiens（效果·一半） | 业务结局标签回灌 | §2.27 B32 `decision_outcome` |
+| 已吸收 | ZEN L2 | CEL 实时类型诊断（CEL 专属） | `ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput debounced lint（弱类型引擎 no-op 自动通过） |
 | 不需要 | trae | 6 级 Context / 内部事件总线 / 自研验证框架 / 引擎耦合 JPA / `DecisionCode` 硬编码 / Rule 层组合策略 | 分别被 不可变 POJO / Modulith / Spring Validation / kernel 零 Spring / Decision 业务配置 / AST 组合 顶替 |
 | 不需要 | trae R4 | 自研有状态 Flow 编排 | 架构已定：同步图归 D75 `DECISION_FLOW`，有状态编排接 Flowable（D60/D75），不自研 |
 | 不需要 | gengine | 命令式副作用 DSL / DataContext 任意函数 / 规则池 / salience·StopTag / DAG 执行模型 | 分别被 D60 / urule 否决 / 快照+预编译 / hit policy / D75 覆盖 |
@@ -89,7 +90,6 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 待定 | gengine | 场景内独立规则并行求值 | §2.29（待实测吞吐瓶颈） |
-| 已吸收 | ZEN L2 | CEL 实时类型诊断（CEL 专属） | `ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput debounced lint（弱类型引擎 no-op 自动通过） |
 | 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
 | 待定 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 后续（标签位已就绪，聚合未做） |
@@ -165,7 +165,6 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
-| 已吸收 | （无） | 逐条映射后本项目均已有更优抽象或架构已否决 | — |
 | 不需要 | 命令式副作用 DSL | 规则体直接改状态 / 调任意方法 | D60 纯决策、禁副作用 |
 | 不需要 | DataContext 注入任意函数 | 等价 urule FunctionLibrary（全局函数注册） | 08-evolution §四已否决 |
 | 不需要 | 规则池 GenginePool | 扛 Go build AST 成本 | D6/D17 不可变快照 + D67 预编译 + Caffeine 已有等价物 |
@@ -187,7 +186,6 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
-| 已吸收 | （无） | 类别不同（编排+动作引擎）；逐条后本项目已有对应层或架构已推出 | — |
 | 不需要 | 动作组件 / endpoint 动作 | 发邮件/HTTP/DB/MQTT 等副作用节点 | D60 归消费方 / Flowable |
 | 不需要 | 组件化规则链流编排 | 同步图已由 D75 覆盖（且只编排决策、不含动作）；有状态接 Flowable | D75 / Flowable |
 | 不需要 | 规则链热替换 / AOP / 子链嵌套 | 热更=D17 Watcher+快照、复用=RuleRef 已有；AOP 无意义（纯函数无副作用可织入） | — |
@@ -206,7 +204,6 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
-| 已吸收 | （无） | 决策+流程打包一体，与本项目分层架构相反 | — |
 | 不需要 | Drools + jBPM + DMN 捆绑 | 本品已拆：纯决策 / 同步图 / Flowable；Kogito 是反面 | D60/D75 |
 | 不需要 | cloud-native（Quarkus） | 本项目 Spring Boot 4 / GraalVM 已拆除 (D62)；Quarkus 生态不对齐 | — |
 
@@ -214,7 +211,6 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
-| 已吸收 | （无） | 轻量 RETE + JSR-94，与本项目架构从根上不同 | — |
 | 不需要 | RETE 算法 | 刻意非 RETE（同 Drools 理由） | — |
 | 不需要 | JSR-94 合规 | JSR-94 已停更（2004 年最终版），现代规则引擎不再以此为目标 | — |
 | 不需要 | 注解 Java 规则（`@RuleSet`/`@Where`/`@Action`） | D61 已有 easyrules 风格注解规则（`@Condition`/`@Fact`），同层不重复引入 | — |
@@ -223,7 +219,6 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
-| 已吸收 | （无） | Excel 驱动 authoring，与本品录入模型不同；LGPL 许可 | — |
 | 不需要 | Excel → JVM 字节码编译链 | 本项目规则体是 typed JSON（AST/Script/FlowGraph），不走 Excel 路径；编译思路 D67 已覆盖 | — |
 | 不需要 | 业务用户 Excel 维护规则 | 这正是 D74（参数化模板）暂缓等场景——当前是技术作者配规则 | D74 暂缓 |
 | 不需要 | MCP AI 集成、自动 REST 暴露 | 附加功能，非核心对照点 | — |
