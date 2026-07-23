@@ -51,6 +51,9 @@ export const ENDPOINTS = {
   DECISION_USAGE_COUNTS:  `${ADMIN}/decisions/usage-counts`,
   METRIC_USAGE_COUNTS:    `${ADMIN}/metrics/usage-counts`,
 
+  // Expression
+  EXPRESSION_VALIDATE: `${ADMIN}/expressions/validate`,
+
   // Metadata
   SCENE_METADATA: (sceneCode: string) => `${ADMIN}/scenes/${sceneCode}/metadata`,
 

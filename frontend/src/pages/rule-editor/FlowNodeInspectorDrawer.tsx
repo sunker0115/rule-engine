@@ -129,6 +129,8 @@ export default function FlowNodeInspectorDrawer({
               availableMetrics={metadata?.availableMetrics ?? []}
               payloadFieldNames={metadata?.payloadFieldNames ?? []}
               payloadFieldTypes={metadata?.payloadFieldTypes}
+              tenantId={tenantId}
+              sceneCode={sceneCode}
             />
           </div>
           <div>
@@ -158,6 +160,8 @@ export default function FlowNodeInspectorDrawer({
               availableMetrics={metadata?.availableMetrics ?? []}
               payloadFieldNames={metadata?.payloadFieldNames ?? []}
               payloadFieldTypes={metadata?.payloadFieldTypes}
+              tenantId={tenantId}
+              sceneCode={sceneCode}
             />
           </div>
         </>
@@ -234,6 +238,8 @@ export default function FlowNodeInspectorDrawer({
                   payloadFieldNames={metadata?.payloadFieldNames ?? []}
                   payloadFieldTypes={metadata?.payloadFieldTypes}
                   decisions={decisions}
+                  tenantId={tenantId}
+                  sceneCode={sceneCode}
                 />
                 <div style={{ marginTop: 12, textAlign: 'right' }}>
                   <Button type="primary" loading={savingRef} onClick={saveRef}>{t('editor.flow.drill.save')}</Button>

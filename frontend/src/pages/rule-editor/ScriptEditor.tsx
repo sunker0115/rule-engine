@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useCallback } from 'react';
 import { Tag } from 'antd';
 import { EditorView, basicSetup } from 'codemirror';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -6,17 +6,20 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
+import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint';
 import type { MetricDescriptor } from '@/types';
 import { expressionCompletions } from './expressionCompletions';
+import { validateExpression } from '@/api/expression';
 
 interface Props {
-  /** 受控脚本载体（source + lang）；null 视为空脚本、默认 CEL。 */
   script: { source: string; lang: string } | null;
   onChange: (script: { source: string; lang: string }) => void;
   availableMetrics: MetricDescriptor[];
   payloadFieldNames: string[];
-  /** 字段名 → dataType，用于补全提示（如 payload.amount (LONG)） */
   payloadFieldTypes?: Record<string, string>;
+  /** 非空时启用实时类型诊断（debounced 300ms 调 /admin/v1/expressions/validate） */
+  tenantId?: number;
+  sceneCode?: string;
 }
 
 function langExtension(lang: string) {
@@ -24,10 +27,40 @@ function langExtension(lang: string) {
   return javascript();
 }
 
+/**
+ * 解析 CEL ExpressionCompileException 消息，提取行/列/消息。
+ * CEL 格式: “CEL 类型检查失败: ERROR: <input>:<line>:<col>: <message>”
+ * 解析失败降级为全文单行提示。
+ */
+function parseCelErrors(errorText: string): Diagnostic[] {
+  // CEL 标准格式: file:line:col: message
+  const re = /:(\d+):(\d+):(.+)/g;
+  const diagnostics: Diagnostic[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(errorText)) !== null) {
+    // line/col 提取后暂不挂到精确位置（CodeMirror Diagnostic.from 需字节 offset），
+    // 后续可用 state.doc.line() 映射实现精确标记
+    diagnostics.push({
+      from: 0, to: 0, // 降级：不精确到字符位，只标行
+      severity: 'error',
+      message: m[3].trim(),
+      renderMessage: () => {
+        const el = document.createElement('span');
+        el.textContent = m![3].trim();
+        return el;
+      },
+    });
+  }
+  if (diagnostics.length === 0) {
+    diagnostics.push({ from: 0, to: 0, severity: 'error', message: errorText });
+  }
+  return diagnostics;
+}
+
 const languageCompartment = new Compartment();
 const autocompleteCompartment = new Compartment();
 
-export default function ScriptEditor({ script, onChange, availableMetrics, payloadFieldNames, payloadFieldTypes }: Props) {
+export default function ScriptEditor({ script, onChange, availableMetrics, payloadFieldNames, payloadFieldTypes, tenantId, sceneCode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const langRef = useRef(script?.lang ?? 'CEL');
@@ -41,6 +74,26 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
     [availableMetrics, payloadFieldNames, types],
   );
 
+  const validateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** 300ms debounced 调后端 typeCheck，结果转为 CodeMirror diagnostics。 */
+  const runValidate = useCallback((view: EditorView, source: string, l: string) => {
+    if (validateTimer.current) clearTimeout(validateTimer.current);
+    if (!tenantId || !sceneCode) return;
+    validateTimer.current = setTimeout(async () => {
+      try {
+        const result = await validateExpression(tenantId, sceneCode, l, source);
+        if (result.valid) {
+          view.dispatch(setDiagnostics(view.state, []));
+        } else if (result.error) {
+          view.dispatch(setDiagnostics(view.state, parseCelErrors(result.error)));
+        }
+      } catch {
+        // 网络/服务端异常静默（不阻塞编辑）
+      }
+    }, 300);
+  }, [tenantId, sceneCode]);
+
   // 初始化只执行一次
   useEffect(() => {
     if (!containerRef.current || viewRef.current) return;
@@ -50,6 +103,7 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
       extensions: [
         basicSetup,
         oneDark,
+        lintGutter(),
         languageCompartment.of(langExtension(lang)),
         autocompleteCompartment.of(autocompletion({ override: [completeFn] })),
         EditorView.theme({
@@ -59,6 +113,7 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !updatingFromOutside.current) {
             onChange({ lang: langRef.current, source: update.state.doc.toString() });
+            runValidate(update.view, update.state.doc.toString(), langRef.current);
           }
         }),
       ],
@@ -68,7 +123,6 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
     return () => { viewRef.current?.destroy(); viewRef.current = null; };
   }, []);
 
-  // 语言切换时只换语法扩展
   useEffect(() => {
     langRef.current = lang;
     viewRef.current?.dispatch({
@@ -76,14 +130,12 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
     });
   }, [lang]);
 
-  // 可用变量变化时更新补全
   useEffect(() => {
     viewRef.current?.dispatch({
       effects: autocompleteCompartment.reconfigure(autocompletion({ override: [completeFn] })),
     });
   }, [completeFn]);
 
-  // 外部来源变更时同步
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;

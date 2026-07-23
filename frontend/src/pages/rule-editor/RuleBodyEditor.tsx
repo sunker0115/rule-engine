@@ -22,6 +22,8 @@ interface Props {
   /** 字段名 → dataType，透传给表达式编辑器做补全类型提示 */
   payloadFieldTypes?: Record<string, string>;
   decisions: DecisionItem[];
+  tenantId?: number;
+  sceneCode?: string;
 }
 
 /**
@@ -31,6 +33,7 @@ interface Props {
 export default function RuleBodyEditor({
   kind, ast, script, onAstChange, onScriptChange,
   conditionTypes, availableMetrics, payloadFieldNames, payloadFieldTypes, decisions,
+  tenantId, sceneCode,
 }: Props) {
   const { t } = useTranslation('rule');
   const shared = { conditionTypes, availableMetrics, payloadFieldNames };
@@ -68,6 +71,8 @@ export default function RuleBodyEditor({
         availableMetrics={availableMetrics}
         payloadFieldNames={payloadFieldNames}
         payloadFieldTypes={payloadFieldTypes}
+        tenantId={tenantId}
+        sceneCode={sceneCode}
       />
     );
   }
