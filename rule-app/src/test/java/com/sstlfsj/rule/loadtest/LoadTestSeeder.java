@@ -56,10 +56,10 @@ class LoadTestSeeder {
     @Autowired ConfigService configService;
     @Autowired DataSource dataSource;
 
-    /** AST：demo.score GTE 0（provided 100 恒命中）。 */
+    /** AST：demo.score GTE 0（SQL_AGGREGATE SELECT 100 恒命中，隔离取数往返成本；D55后 public API 无 providedMetrics）。 */
     static AstNode conditionAst() {
         return new ConditionNode("GTE", METRIC, "score>=0",
-                Map.<String, Object>of("threshold", 0), null, "LONG");
+                Map.<String, Object>of("threshold", 0), null, null);
     }
 
     /** 按租户清理压测数据（FK 序：rule_version→rule_definition→metric_definition→scene），可重跑。 */

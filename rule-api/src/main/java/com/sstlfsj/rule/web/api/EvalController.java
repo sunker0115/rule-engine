@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /** 规则评估 HTTP 入口，支持 PUSH 异步和 PULL 同步两种模式（D14）。 */
 @RestController
@@ -86,6 +87,7 @@ public class EvalController {
                 .eventId(r.eventId())
                 .occurredAt(r.occurredAt())
                 .payload(r.payload())
+                .providedMetrics(r.providedMetrics() != null ? r.providedMetrics() : Map.of())
                 .source(EventSource.HTTP)
                 .build();
     }
