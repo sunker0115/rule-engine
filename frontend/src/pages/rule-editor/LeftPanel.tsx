@@ -9,6 +9,7 @@ import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, enableRule, newVersion, deleteDraftVersion, deleteRule } from '@/api/rule';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
+import { useEditorShortcuts } from '@/hooks/useEditorShortcuts';
 import RuleSessionsDrawer from './RuleSessionsDrawer';
 import VersionContentDrawer from './VersionContentDrawer';
 import VersionDiffDrawer from './VersionDiffDrawer';
@@ -39,7 +40,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
   const { currentId } = useTenantStore();
   // 优先用规则自身的 tenantId（从详情带回），避免依赖全局未选时传 0 导致后端校验失败
   const tenantId = Number(ruleDetail.tenantId) || currentId || 0;
-  const { ast, decisionBindings, preGates, triggerEventTypes, script, flowGraph, dirty, flowSceneRules, addFlowRuleRef } = useRuleStore();
+  const { ast, decisionBindings, preGates, triggerEventTypes, script, flowGraph, dirty, flowSceneRules, addFlowRuleRef, undo, redo } = useRuleStore();
   const [saving, setSaving] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [viewVersionId, setViewVersionId] = useState<number | null>(null);
@@ -116,6 +117,10 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
   const isDraft = ruleDetail.status === 'DRAFT';
   const isPublished = ruleDetail.status === 'PUBLISHED';
   const isDisabled = ruleDetail.status === 'DISABLED';
+
+  // 全局快捷键
+  useEditorShortcuts({ canSave: isDraft && dirty, onSave: handleSaveDraft, onUndo: undo, onRedo: redo });
+
   // 待发布的即草稿版本，发布确认框展示其真实版本号
   const draftVersion = (ruleDetail.versions ?? []).find(v => v.status === 'DRAFT');
   const hasDraft = draftVersion !== undefined;
