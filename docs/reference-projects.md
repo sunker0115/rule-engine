@@ -89,7 +89,7 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 待定 | gengine | 场景内独立规则并行求值 | §2.29（待实测吞吐瓶颈） |
-| 待定 | ZEN | CEL 实时类型诊断（Level 2，CEL 专属） | **已实现**（`ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput 300ms debounced lint，弱类型引擎 no-op 自动通过） |
+| 已吸收 | ZEN L2 | CEL 实时类型诊断（CEL 专属） | `ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput debounced lint（弱类型引擎 no-op 自动通过） |
 | 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
 | 待定 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 后续（标签位已就绪，聚合未做） |
