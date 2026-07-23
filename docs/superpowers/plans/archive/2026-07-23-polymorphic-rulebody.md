@@ -1,6 +1,6 @@
 # 多态 RuleBody 三承载收敛 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 把 `RuleVersion` / `RuleVersionSnapshot` 顶层三个互斥可空承载字段（`conditionAst` / `scriptSource` / `flowGraph`+`referencedSnapshots`）收敛成一个 sealed `RuleBody` 多态类型，全栈贯穿（DB 单 `body` 列 → kernel → API → 前端）。
 
@@ -41,7 +41,7 @@
 - Create: `api/model/RuleBody.java`、`api/model/AstBody.java`、`api/model/ScriptBody.java`、`api/model/FlowBody.java`
 - Test: `api/model/RuleBodySerdeTest.java`
 
-- [ ] **Step 1: 写 RuleBodySerdeTest（红）**
+- [x] **Step 1: 写 RuleBodySerdeTest（红）**
 
 `rule-kernel/src/test/java/com/sstlfsj/rule/kernel/api/model/RuleBodySerdeTest.java`：用真实 `JsonMapper` 对三变体各做序列化→反序列化往返，断言判别 `type` 正确、内层 `AstNode`/`FlowGraph` 恢复正确、`instanceof` 类型对。
 
@@ -76,8 +76,8 @@ class RuleBodySerdeTest {
 ```
 （`ConditionNode`/`ScriptSource`/`FlowGraph` 构造参数以各自 record 当前签名为准，写前 Read 确认。）
 
-- [ ] **Step 2: 运行确认 FAIL**（RuleBody 未定义，编译失败）
-- [ ] **Step 3: 建四个类型**
+- [x] **Step 2: 运行确认 FAIL**（RuleBody 未定义，编译失败）
+- [x] **Step 3: 建四个类型**
 
 `RuleBody.java`（`api/model`，Javadoc 说明"判定主体多态载体"）：
 
@@ -97,8 +97,8 @@ public sealed interface RuleBody permits AstBody, ScriptBody, FlowBody {}
 
 判别属性 `type` 与内层 `AstNode.type`/`FlowNode.type` 不同层，无冲突。注解 import 走 `com.fasterxml.jackson.annotation`（memory：Jackson3 注解包）。
 
-- [ ] **Step 4: 运行确认 PASS**：`$MVN -pl rule-kernel -am test -Dtest=RuleBodySerdeTest`
-- [ ] **Step 5: Commit**：`feat(kernel): RuleBody 多态载体（AstBody/ScriptBody/FlowBody）`
+- [x] **Step 4: 运行确认 PASS**：`$MVN -pl rule-kernel -am test -Dtest=RuleBodySerdeTest`
+- [x] **Step 5: Commit**：`feat(kernel): RuleBody 多态载体（AstBody/ScriptBody/FlowBody）`
 
 ## P1 — kernel RuleVersionSnapshot 收敛 + 全读者改造
 
@@ -111,8 +111,8 @@ public sealed interface RuleBody permits AstBody, ScriptBody, FlowBody {}
 - Modify codec: `internal/codec/AstJsonCodec.java`（加 `deserializeBody(String):RuleBody`；顶层 `deserializeScriptSource`/`deserializeFlowGraph`/`deserializeReferencedSnapshots` 不再被 Assembler 调，可删；`deserializeAst` 保留供 body 内层/别处）、`internal/codec/SnapshotAssembler.java:43-79`
 - Test: 更新 `SnapshotAssemblerTest`、`InterpretedExecutorTest`、`ScorecardExecutorTest`、`DecisionTreeExecutorTest`、`DecisionTableExecutorTest`、`ScriptExecutorTest`、`FlowExecutorTest`、`CompiledExecutorTest`、`FlowCycleDetectorTest`、`FlowReachabilityDetectorTest`、`CoverageGapDetectorTest`、`EvalResultTest` 等所有构造 Snapshot/AnalyzableRule 处
 
-- [ ] **Step 1:** `RuleVersionSnapshot` record：删 `conditionAst`/`script`/`flowGraph`/`referencedSnapshots` 四 component → 加 `RuleBody body`（紧邻 kind 后）；compact 构造删对应 copyOf；**删三个兼容构造器**（13/12/8 参）。Builder：保留 `conditionAst`/`script`/`flowGraph`/`addReferencedSnapshot` staging setter，加 `body(RuleBody)`，`build()` 按 F4 规则组装 body（显式 body 优先，否则 flowGraph→FlowBody(flowGraph, referencedSnapshots)、script→ScriptBody、else AstBody(conditionAst)）。
-- [ ] **Step 2:** executor 读者改模式匹配（executor 已 kind 选定，cast 安全）：
+- [x] **Step 1:** `RuleVersionSnapshot` record：删 `conditionAst`/`script`/`flowGraph`/`referencedSnapshots` 四 component → 加 `RuleBody body`（紧邻 kind 后）；compact 构造删对应 copyOf；**删三个兼容构造器**（13/12/8 参）。Builder：保留 `conditionAst`/`script`/`flowGraph`/`addReferencedSnapshot` staging setter，加 `body(RuleBody)`，`build()` 按 F4 规则组装 body（显式 body 优先，否则 flowGraph→FlowBody(flowGraph, referencedSnapshots)、script→ScriptBody、else AstBody(conditionAst)）。
+- [x] **Step 2:** executor 读者改模式匹配（executor 已 kind 选定，cast 安全）：
   - `InterpretedExecutor:56` `eval(snapshot.conditionAst(),...)` → `eval(((AstBody) snapshot.body()).conditionAst(),...)`
   - `ScorecardExecutor:37` `snapshot.conditionAst() instanceof ScorecardRootNode root` → `snapshot.body() instanceof AstBody(ScorecardRootNode root)`（record pattern）
   - `DecisionTreeExecutor:30` 同理 `snapshot.body() instanceof AstBody(IfNode root)`
@@ -120,11 +120,11 @@ public sealed interface RuleBody permits AstBody, ScriptBody, FlowBody {}
   - `ScriptExecutor:41,78` `snapshot.script()` → `((ScriptBody) snapshot.body()).script()`；空校验从 `script==null` 改 `!(body instanceof ScriptBody sb) || sb.script()==null` → 保留 `EvalErrorCode.SCRIPT_NULL`（:38）
   - `FlowExecutor:54` `snapshot.flowGraph()` → `((FlowBody) snapshot.body()).flowGraph()`；`:109` `snapshot.referencedSnapshots()` → 同一 `FlowBody` 的 `.referencedSnapshots()`（先取 `FlowBody fb = (FlowBody) snapshot.body();` 复用）；FLOW_NULL（:44）校验同步
   - `CompiledExecutor:68` `compiler.compile(snapshot.conditionAst())` → `((AstBody) snapshot.body()).conditionAst()`
-- [ ] **Step 3:** `AnalyzableRule` 两字段→`RuleBody body`；analysis 读者：`FlowReachabilityDetector:46/107` `rule.flowGraph()` → `rule.body() instanceof FlowBody fb ? fb.flowGraph() : null`（:107 判定 `rule.body() instanceof FlowBody`）；`FlowCycleDetector:48/124` 同理；`CoverageGapDetector:100` case DECISION_FLOW 从 body 取 flowGraph；AST detector 若读 conditionAst 同法。
-- [ ] **Step 4:** `AstJsonCodec.deserializeBody(String json)`：`json` null/blank → 返回 `null`（Assembler 兜底）；否则 `mapper.readValue(json, RuleBody.class)`。`SnapshotAssembler.assemble`（:43-79）：删四个载体反序列化 → `RuleBody body = codec.deserializeBody(row.bodyJson()); if (body == null) { log.warn(...); body = new AstBody(null); }`；构造 Snapshot 传 `body`（删传四载体的参数，改走 builder 或新规范构造）。
-- [ ] **Step 5:** 逐一更新上述所有测试的构造：`.conditionAst(x)`/`.script(x)`/`.flowGraph(x)` builder 调用**保持可用**（F4 便捷 setter 未删），故多数 builder 构造的测试**无需改**；仅"直接调兼容构造器 new RuleVersionSnapshot(... 13/12/8 参 ...)"的测试改走 builder 或新规范构造；`SnapshotAssemblerTest` 的 `RuleVersionRow` 从四载体 json 改单 bodyJson（依赖 P4 的 Row 结构——此处 P1 先按新 Row 签名写，P4 落 Row）。**注：Row 结构变更跨 kernel/eval，P1 与 P4 的 Row/Assembler 需一起编译**；实操：P1 内先把 `RuleVersionRow`（在 eval-svc）与 Assembler 一起改（带 `-am`），P4 只剩 Mapper SQL。
-- [ ] **Step 6: Verify**：`$MVN -pl rule-eval-svc -am test`（含 kernel + eval，一次覆盖 Snapshot/Assembler/Row/executor）全绿。
-- [ ] **Step 7: Commit**：`refactor(kernel): RuleVersionSnapshot 收敛为多态 body + 读者改造`
+- [x] **Step 3:** `AnalyzableRule` 两字段→`RuleBody body`；analysis 读者：`FlowReachabilityDetector:46/107` `rule.flowGraph()` → `rule.body() instanceof FlowBody fb ? fb.flowGraph() : null`（:107 判定 `rule.body() instanceof FlowBody`）；`FlowCycleDetector:48/124` 同理；`CoverageGapDetector:100` case DECISION_FLOW 从 body 取 flowGraph；AST detector 若读 conditionAst 同法。
+- [x] **Step 4:** `AstJsonCodec.deserializeBody(String json)`：`json` null/blank → 返回 `null`（Assembler 兜底）；否则 `mapper.readValue(json, RuleBody.class)`。`SnapshotAssembler.assemble`（:43-79）：删四个载体反序列化 → `RuleBody body = codec.deserializeBody(row.bodyJson()); if (body == null) { log.warn(...); body = new AstBody(null); }`；构造 Snapshot 传 `body`（删传四载体的参数，改走 builder 或新规范构造）。
+- [x] **Step 5:** 逐一更新上述所有测试的构造：`.conditionAst(x)`/`.script(x)`/`.flowGraph(x)` builder 调用**保持可用**（F4 便捷 setter 未删），故多数 builder 构造的测试**无需改**；仅"直接调兼容构造器 new RuleVersionSnapshot(... 13/12/8 参 ...)"的测试改走 builder 或新规范构造；`SnapshotAssemblerTest` 的 `RuleVersionRow` 从四载体 json 改单 bodyJson（依赖 P4 的 Row 结构——此处 P1 先按新 Row 签名写，P4 落 Row）。**注：Row 结构变更跨 kernel/eval，P1 与 P4 的 Row/Assembler 需一起编译**；实操：P1 内先把 `RuleVersionRow`（在 eval-svc）与 Assembler 一起改（带 `-am`），P4 只剩 Mapper SQL。
+- [x] **Step 6: Verify**：`$MVN -pl rule-eval-svc -am test`（含 kernel + eval，一次覆盖 Snapshot/Assembler/Row/executor）全绿。
+- [x] **Step 7: Commit**：`refactor(kernel): RuleVersionSnapshot 收敛为多态 body + 读者改造`
 
 ## P2 — config-svc 实体 + 迁移 + 发布期
 
@@ -134,8 +134,8 @@ public sealed interface RuleBody permits AstBody, ScriptBody, FlowBody {}
 - Modify: `internal/publish/PublishService.java`（`ResolvedDraft` 及 :164-167/:191-196/:219-228/:269-274/:303-308/:655-658/:873-878/:943-952 载体读写 → body；`validateKindStructure` 加 kind↔body 校验）
 - Test: `publish/*ResolveValidateTest`、`PublishServiceTest` 等
 
-- [ ] **Step 1:** `RuleVersion` 实体：删 `conditionAst`/`scriptSource`/`flowGraph`/`referencedSnapshots` 四 `@TableField` → 加 `@TableField(typeHandler=Jackson3TypeHandler.class) private RuleBody body;`（Lombok `@Getter/@Setter` 自动出 `getBody/setBody`）。
-- [ ] **Step 2:** 迁移 `V1_40`（当前最高 V1_39）：
+- [x] **Step 1:** `RuleVersion` 实体：删 `conditionAst`/`scriptSource`/`flowGraph`/`referencedSnapshots` 四 `@TableField` → 加 `@TableField(typeHandler=Jackson3TypeHandler.class) private RuleBody body;`（Lombok `@Getter/@Setter` 自动出 `getBody/setBody`）。
+- [x] **Step 2:** 迁移 `V1_40`（当前最高 V1_39）：
 
 ```sql
 ALTER TABLE rule_version ADD COLUMN body JSON NULL AFTER version;
@@ -149,12 +149,12 @@ ALTER TABLE rule_version DROP COLUMN condition_ast, DROP COLUMN script_source,
                          DROP COLUMN flow_graph,    DROP COLUMN referenced_snapshots;
 ```
 
-- [ ] **Step 3:** `ResolvedDraft`（PublishService 内，:375 附近）：删四载体字段 → 加 `RuleBody body`。`resolveAndValidate`（:191-196、:873-878）：读 `content.body()` 后 `switch`/instanceof 分派到 `resolveAstDraft`/`resolveScriptDraft`/`resolveFlowDraft`（各分支内部逻辑不变，冻结产物包成对应 body 变体存进 ResolvedDraft.body；FlowBody 冻结后 referencedSnapshots 回填其中）。
-- [ ] **Step 4:** 写点（:219-228、:943-952、:164-167、:655-658）：`draft.setConditionAst/setScriptSource/setFlowGraph/setReferencedSnapshots(...)` → `draft.setBody(resolved.body())`；构造 Snapshot 处（:164-167 for validation snapshot、:655-658 clone/active snapshot）改走 builder `.body(...)` 或新规范构造。clone（:303-308 `newVersion` 读 from.getConditionAst/getScriptSource/getFlowGraph）→ `from.getBody()`。
-- [ ] **Step 5:** `validateKindStructure`（:599 附近）加 **kind↔body 一致性**：AST 系四 kind 要求 `body instanceof AstBody`、EXPRESSION_SCRIPT 要求 `ScriptBody`、DECISION_FLOW 要求 `FlowBody`，不符抛发布校验异常（新 `EvalErrorCode`/config 错误码 `KIND_BODY_MISMATCH` 或复用现有结构错误码；错误信息含 kind + 实际 body 类型）。
-- [ ] **Step 6:** 更新 `*ResolveValidateTest`/`PublishServiceTest` 构造：content 从 set 三载体改 set `body`；新增 kind↔body mismatch 拒绝用例。
-- [ ] **Step 7: Verify**：`$MVN -pl rule-config-svc -am test`
-- [ ] **Step 8: Commit**：`refactor(config): RuleVersion 实体 body 列 + 迁移 V1_40 + 发布期分派 + kind↔body 校验`
+- [x] **Step 3:** `ResolvedDraft`（PublishService 内，:375 附近）：删四载体字段 → 加 `RuleBody body`。`resolveAndValidate`（:191-196、:873-878）：读 `content.body()` 后 `switch`/instanceof 分派到 `resolveAstDraft`/`resolveScriptDraft`/`resolveFlowDraft`（各分支内部逻辑不变，冻结产物包成对应 body 变体存进 ResolvedDraft.body；FlowBody 冻结后 referencedSnapshots 回填其中）。
+- [x] **Step 4:** 写点（:219-228、:943-952、:164-167、:655-658）：`draft.setConditionAst/setScriptSource/setFlowGraph/setReferencedSnapshots(...)` → `draft.setBody(resolved.body())`；构造 Snapshot 处（:164-167 for validation snapshot、:655-658 clone/active snapshot）改走 builder `.body(...)` 或新规范构造。clone（:303-308 `newVersion` 读 from.getConditionAst/getScriptSource/getFlowGraph）→ `from.getBody()`。
+- [x] **Step 5:** `validateKindStructure`（:599 附近）加 **kind↔body 一致性**：AST 系四 kind 要求 `body instanceof AstBody`、EXPRESSION_SCRIPT 要求 `ScriptBody`、DECISION_FLOW 要求 `FlowBody`，不符抛发布校验异常（新 `EvalErrorCode`/config 错误码 `KIND_BODY_MISMATCH` 或复用现有结构错误码；错误信息含 kind + 实际 body 类型）。
+- [x] **Step 6:** 更新 `*ResolveValidateTest`/`PublishServiceTest` 构造：content 从 set 三载体改 set `body`；新增 kind↔body mismatch 拒绝用例。
+- [x] **Step 7: Verify**：`$MVN -pl rule-config-svc -am test`
+- [x] **Step 8: Commit**：`refactor(config): RuleVersion 实体 body 列 + 迁移 V1_40 + 发布期分派 + kind↔body 校验`
 
 ## P3 — config-svc DTO 孪生 + Hasher + Export/Import + 分析拆入
 
@@ -166,14 +166,14 @@ ALTER TABLE rule_version DROP COLUMN condition_ast, DROP COLUMN script_source,
 - Modify: `internal/analysis/RuleAnalysisServiceImpl.java:61-62`（拆入 → `version.getBody()`）
 - Test: `RuleContentHasherTest`、`RuleExportServiceTest`、`RuleImportServiceTest`、`RuleContentTest`
 
-- [ ] **Step 1:** 4 个 DTO record 删三载体字段 → 加 `RuleBody body`（record 改构造器）。
-- [ ] **Step 2:** `ConfigServiceImpl` 两处 VO 装配（:174-179 RuleDetailVO、:197-198 RuleVersionContentVO）从 `getConditionAst()/getScriptSource()/getFlowGraph()` → `getBody()`。
-- [ ] **Step 3:** `RuleContentHasher.ruleHash`：签名参数 `AstNode ast, ..., ScriptSource script, FlowGraph flow` 三载体 → `RuleBody body`；canonical map 删 `"conditionAst"/"script"/"flowGraph"` 三键 → 单 `"body"` 键。两调用点（Export:113、Import:152）改传 `getBody()`。**幂等语义**：body 多态判别，不同规则 body 不同则 hash 不同。
-- [ ] **Step 4:** Export（:113-126）/Import（:153-157）携带/读回从三载体 → `body`。
-- [ ] **Step 5:** `RuleAnalysisServiceImpl:61-62` 构造 AnalyzableRule 从 `getConditionAst()`+`getFlowGraph()` → `getBody()`（AnalyzableRule 已在 P1 改 body 字段）。
-- [ ] **Step 6:** 更新测试：`RuleContentHasherTest`（三载体入参→body，含三变体区分 hash 用例）、Export/Import 往返（body 携带）、`RuleContentTest`。
-- [ ] **Step 7: Verify**：`$MVN -pl rule-config-svc -am test`
-- [ ] **Step 8: Commit**：`refactor(config): DTO/Hasher/Export·Import/分析 收敛为 body`
+- [x] **Step 1:** 4 个 DTO record 删三载体字段 → 加 `RuleBody body`（record 改构造器）。
+- [x] **Step 2:** `ConfigServiceImpl` 两处 VO 装配（:174-179 RuleDetailVO、:197-198 RuleVersionContentVO）从 `getConditionAst()/getScriptSource()/getFlowGraph()` → `getBody()`。
+- [x] **Step 3:** `RuleContentHasher.ruleHash`：签名参数 `AstNode ast, ..., ScriptSource script, FlowGraph flow` 三载体 → `RuleBody body`；canonical map 删 `"conditionAst"/"script"/"flowGraph"` 三键 → 单 `"body"` 键。两调用点（Export:113、Import:152）改传 `getBody()`。**幂等语义**：body 多态判别，不同规则 body 不同则 hash 不同。
+- [x] **Step 4:** Export（:113-126）/Import（:153-157）携带/读回从三载体 → `body`。
+- [x] **Step 5:** `RuleAnalysisServiceImpl:61-62` 构造 AnalyzableRule 从 `getConditionAst()`+`getFlowGraph()` → `getBody()`（AnalyzableRule 已在 P1 改 body 字段）。
+- [x] **Step 6:** 更新测试：`RuleContentHasherTest`（三载体入参→body，含三变体区分 hash 用例）、Export/Import 往返（body 携带）、`RuleContentTest`。
+- [x] **Step 7: Verify**：`$MVN -pl rule-config-svc -am test`
+- [x] **Step 8: Commit**：`refactor(config): DTO/Hasher/Export·Import/分析 收敛为 body`
 
 ## P4 — eval-svc 读取链 SQL
 
@@ -183,10 +183,10 @@ ALTER TABLE rule_version DROP COLUMN condition_ast, DROP COLUMN script_source,
 - Modify: `internal/repository/RuleVersionReadMapper.java:20,32,48,60,79,91`（三条 `@Select` 各删 `rv.condition_ast/script_source/flow_graph/referenced_snapshots AS ...` → 加 `rv.body AS bodyJson`）
 - Test: `SnapshotAssemblerTest`（P1 已改）、`integration/EvalIntegrationTest.java:151`（建表/插数 SQL 从四列→body 列）
 
-- [ ] **Step 1:** 三条 `@Select` 的 select 列表改 `rv.body AS bodyJson`（删四载体列）。
-- [ ] **Step 2:** `EvalIntegrationTest:151` 及其它集成测试的 rule_version 插入 SQL：四列→`body`（插 `{"type":"AstBody","conditionAst":{...}}` 形态）。
-- [ ] **Step 3: Verify**：`$MVN -pl rule-eval-svc -am test`
-- [ ] **Step 4: Commit**：`refactor(eval): RuleVersionReadMapper 读 body 列`
+- [x] **Step 1:** 三条 `@Select` 的 select 列表改 `rv.body AS bodyJson`（删四载体列）。
+- [x] **Step 2:** `EvalIntegrationTest:151` 及其它集成测试的 rule_version 插入 SQL：四列→`body`（插 `{"type":"AstBody","conditionAst":{...}}` 形态）。
+- [x] **Step 3: Verify**：`$MVN -pl rule-eval-svc -am test`
+- [x] **Step 4: Commit**：`refactor(eval): RuleVersionReadMapper 读 body 列`
 
 ## P5 — rule-api 契约
 
@@ -194,12 +194,12 @@ ALTER TABLE rule_version DROP COLUMN condition_ast, DROP COLUMN script_source,
 - Modify: `RuleContentSource.java`（三载体方法→`RuleBody body()`）、`CreateRuleRequest`/`EditDraftRequest`/`NewVersionRequest`（各三载体字段→`RuleBody body`）、`RuleContent`（P3 已改，此处确认透传）、`RuleController.toContent()`（透传 body）
 - Test: RuleController 集成测试（建/发布 body 请求）
 
-- [ ] **Step 1:** `RuleContentSource` 接口 `conditionAst()/script()/flowGraph()` → `body() : RuleBody`。
-- [ ] **Step 2:** 三写请求 record 删三载体 → 加 `RuleBody body`（primitive 无需 `@JsonSetter`；body 为对象）。
-- [ ] **Step 3:** `RuleController.toContent()` 透传 `source.body()`。
-- [ ] **Step 4:** 更新 RuleController 集成测试：POST/PUT 请求体从平铺三字段 → `body`（含 `type`）；六 kind 各一条建/发布断言。
-- [ ] **Step 5: Verify**：`$MVN -pl rule-api -am test`
-- [ ] **Step 6: Commit**：`refactor(api): 规则请求契约收敛为 body`
+- [x] **Step 1:** `RuleContentSource` 接口 `conditionAst()/script()/flowGraph()` → `body() : RuleBody`。
+- [x] **Step 2:** 三写请求 record 删三载体 → 加 `RuleBody body`（primitive 无需 `@JsonSetter`；body 为对象）。
+- [x] **Step 3:** `RuleController.toContent()` 透传 `source.body()`。
+- [x] **Step 4:** 更新 RuleController 集成测试：POST/PUT 请求体从平铺三字段 → `body`（含 `type`）；六 kind 各一条建/发布断言。
+- [x] **Step 5: Verify**：`$MVN -pl rule-api -am test`
+- [x] **Step 6: Commit**：`refactor(api): 规则请求契约收敛为 body`
 
 ## P6 — rule-sdk 嵌入式
 
@@ -207,10 +207,10 @@ ALTER TABLE rule_version DROP COLUMN condition_ast, DROP COLUMN script_source,
 - Modify: `RuleEngineClient.java`（本地建 Snapshot 处走 `.body()`/便捷 setter；executors 按 kind 注册**不变**）
 - Test: `RuleEngineClientTest`
 
-- [ ] **Step 1:** grep `RuleEngineClient` 内构造 `RuleVersionSnapshot` / 读三载体处，改走 builder body（F4 便捷 setter 仍可用，多数无需改）。
-- [ ] **Step 2:** 更新 `RuleEngineClientTest` 构造（若直调兼容构造器）。
-- [ ] **Step 3: Verify**：`$MVN -pl rule-sdk-spring-boot-starter -am test`
-- [ ] **Step 4: Commit**：`refactor(sdk): 本地建规则走 body`
+- [x] **Step 1:** grep `RuleEngineClient` 内构造 `RuleVersionSnapshot` / 读三载体处，改走 builder body（F4 便捷 setter 仍可用，多数无需改）。
+- [x] **Step 2:** 更新 `RuleEngineClientTest` 构造（若直调兼容构造器）。
+- [x] **Step 3: Verify**：`$MVN -pl rule-sdk-spring-boot-starter -am test`
+- [x] **Step 4: Commit**：`refactor(sdk): 本地建规则走 body`
 
 ## P7 — frontend body 判别联合
 
@@ -222,42 +222,42 @@ ALTER TABLE rule_version DROP COLUMN condition_ast, DROP COLUMN script_source,
 - Modify: `pages/rule-editor/VersionContentDrawer.tsx`、`VersionDiffDrawer.tsx`（只读按 `body.type` 展示载荷）
 - Modify: 写请求处把 `body` 塞进请求体
 
-- [ ] **Step 1:** `types/rule.ts`：`RuleBody = { type:'AstBody'; conditionAst: AstNode } | { type:'ScriptBody'; script: ScriptSource } | { type:'FlowBody'; flowGraph: FlowGraph; referencedSnapshots?: Record<string, unknown> }`；请求/详情类型三载体字段 → `body: RuleBody`。
-- [ ] **Step 2:** `ruleStore`：三状态→`body`+`setBody`；`loadFromDetail(detail)` 回填 `detail.body`；各 kind 播种默认 body。
-- [ ] **Step 3:** `CenterPanel.renderEditor`：`switch(body.type)`（或先按 kind 再取 body 载荷）分派 AST 树/评分卡/决策树/决策表/ScriptEditor/FlowCanvasEditor（六编辑器内部不改，只改喂入载荷来源与 onChange 回写目标为 body 变体）。
-- [ ] **Step 4:** 两创建弹窗 `handleCreate` 按 kind 播种 body 骨架（AST_BOOLEAN→`{type:'AstBody',conditionAst:空AST}`、EXPRESSION_SCRIPT→`{type:'ScriptBody',...}`、DECISION_FLOW→`{type:'FlowBody',flowGraph:最小合法骨架,referencedSnapshots:{}}` 等）。
-- [ ] **Step 5:** 只读抽屉 `VersionContentDrawer`/`VersionDiffDrawer` 按 `body.type` 平铺展示对应载荷（`json(body.xxx)`，与现有一致，不做只读画布）。
-- [ ] **Step 6:** 写请求体塞 `body`。
-- [ ] **Step 7: Verify**：`npm run build` 通过；手动建/编/发布六形态各一（尤其 flow 画布 + script + AST 树），确认回填/提交/只读展示不退化。
-- [ ] **Step 8: Commit**：`refactor(frontend): 规则 body 判别联合 + 编辑器分派`
+- [x] **Step 1:** `types/rule.ts`：`RuleBody = { type:'AstBody'; conditionAst: AstNode } | { type:'ScriptBody'; script: ScriptSource } | { type:'FlowBody'; flowGraph: FlowGraph; referencedSnapshots?: Record<string, unknown> }`；请求/详情类型三载体字段 → `body: RuleBody`。
+- [x] **Step 2:** `ruleStore`：三状态→`body`+`setBody`；`loadFromDetail(detail)` 回填 `detail.body`；各 kind 播种默认 body。
+- [x] **Step 3:** `CenterPanel.renderEditor`：`switch(body.type)`（或先按 kind 再取 body 载荷）分派 AST 树/评分卡/决策树/决策表/ScriptEditor/FlowCanvasEditor（六编辑器内部不改，只改喂入载荷来源与 onChange 回写目标为 body 变体）。
+- [x] **Step 4:** 两创建弹窗 `handleCreate` 按 kind 播种 body 骨架（AST_BOOLEAN→`{type:'AstBody',conditionAst:空AST}`、EXPRESSION_SCRIPT→`{type:'ScriptBody',...}`、DECISION_FLOW→`{type:'FlowBody',flowGraph:最小合法骨架,referencedSnapshots:{}}` 等）。
+- [x] **Step 5:** 只读抽屉 `VersionContentDrawer`/`VersionDiffDrawer` 按 `body.type` 平铺展示对应载荷（`json(body.xxx)`，与现有一致，不做只读画布）。
+- [x] **Step 6:** 写请求体塞 `body`。
+- [x] **Step 7: Verify**：`npm run build` 通过；手动建/编/发布六形态各一（尤其 flow 画布 + script + AST 树），确认回填/提交/只读展示不退化。
+- [x] **Step 8: Commit**：`refactor(frontend): 规则 body 判别联合 + 编辑器分派`
 
 ## P8 — 文档 + examples 登记
 
 **Files (docs):** 按设计 spec-delta 段逐点改（改前跑 `doc-consistency-review`）。
 
-- [ ] **Step 1:** `00-decisions.md` 追 **D76**（append-only）：三承载平铺收敛为多态 RuleBody，L2 全栈，kind↔body 不变量，迁移 V1_40；取代设计 F 记录中"待实现"表述。
-- [ ] **Step 2:** `01-concepts.md` §3.4:212「三承载互斥」→「判定主体由多态 `RuleBody`（AstBody/ScriptBody/FlowBody）承载，与 kind 一致」；名词表:27 / kind:210 措辞。
-- [ ] **Step 3:** `05-storage.md` rule_version DDL 四列→单 `body JSON NOT NULL` + COMMENT；表清单行。
-- [ ] **Step 4:** `10-api-contract.md` 按设计 spec-delta 穷尽点（请求体:234-237、editDraft:280、RuleDetailVO:519、Bundle:467-480、示例:795-822、UNRESOLVED_VARIABLE:675、错误码加 KIND_BODY_MISMATCH）。
-- [ ] **Step 5:** `README.md` D12 行 / 决策表补 D76。
-- [ ] **Step 6:** `docs/examples/` live 剧本规则请求体 JSON + 预期响应从平铺→body（archive 冻结不动）。
-- [ ] **Step 7:** 跑 `doc-consistency-review` 循环到 0 修改收敛。
-- [ ] **Step 8: Commit**：`docs: 登记多态 RuleBody（D76）到概念/存储/API/README + examples`
+- [x] **Step 1:** `00-decisions.md` 追 **D76**（append-only）：三承载平铺收敛为多态 RuleBody，L2 全栈，kind↔body 不变量，迁移 V1_40；取代设计 F 记录中"待实现"表述。
+- [x] **Step 2:** `01-concepts.md` §3.4:212「三承载互斥」→「判定主体由多态 `RuleBody`（AstBody/ScriptBody/FlowBody）承载，与 kind 一致」；名词表:27 / kind:210 措辞。
+- [x] **Step 3:** `05-storage.md` rule_version DDL 四列→单 `body JSON NOT NULL` + COMMENT；表清单行。
+- [x] **Step 4:** `10-api-contract.md` 按设计 spec-delta 穷尽点（请求体:234-237、editDraft:280、RuleDetailVO:519、Bundle:467-480、示例:795-822、UNRESOLVED_VARIABLE:675、错误码加 KIND_BODY_MISMATCH）。
+- [x] **Step 5:** `README.md` D12 行 / 决策表补 D76。
+- [x] **Step 6:** `docs/examples/` live 剧本规则请求体 JSON + 预期响应从平铺→body（archive 冻结不动）。
+- [x] **Step 7:** 跑 `doc-consistency-review` 循环到 0 修改收敛。
+- [x] **Step 8: Commit**：`docs: 登记多态 RuleBody（D76）到概念/存储/API/README + examples`
 
 ## P9 — 端到端 + 收口
 
 按 CLAUDE.md「功能测试纪律」：打可执行包起真实服务，别用 reactor run 目标。
 
-- [ ] **Step 1:** `$MVN clean test` 全量兜底——现有六形态单测/集成测试全绿 = 未退化；任一变红查而非改测试就绿。
-- [ ] **Step 2:** 打包起服务，确认 V1_40 迁移执行（rule_version 有 `body` 列、四旧列已 drop）、服务就绪。**历史数据可丢**（用户确认）：迁移的 UPDATE 转换对存量行仍生效；若存量行状态异常，可直接清 rule_definition/rule_version 重种（greenfield）。
-- [ ] **Step 3:** **跑通 `docs/examples/` 下所有 live 剧本**（用户要求"所有场景都跑一遍"）：逐个 example 的 curl 脚本按依赖顺序建/发布/评估，覆盖六形态（AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE/EXPRESSION_SCRIPT/DECISION_FLOW），每条对预期结果核对。
-- [ ] **Step 4:** 查 `rule_version.body` 真落库为对应变体 JSON（`type` 正确、载荷完整）；flow 的 referencedSnapshots 冻进 body。
-- [ ] **Step 5:** 评估六形态验证输出正确（与重构前等价）+ trace 正常。
-- [ ] **Step 6:** kind↔body 一致性：造 kind=AST_BOOLEAN 但 body=ScriptBody 的请求，验证发布被拒（KIND_BODY_MISMATCH）。
-- [ ] **Step 7:** 导出 bundle → 导入（含 flow），验证 body 无损往返 + contentHash 幂等。
-- [ ] **Step 8:** DB 恒空字段审计：`body` 全非空、无残留四旧列；清理本次测试数据回干净基线。
-- [ ] **Step 9:** 派 `rule-engine-reviewer` 审代码↔文档对齐。
-- [ ] **Step 10:** 归档：本计划进 `plans/archive/`、设计进 `specs/archive/`（设计已并入 docs 正文）。
+- [x] **Step 1:** `$MVN clean test` 全量兜底——现有六形态单测/集成测试全绿 = 未退化；任一变红查而非改测试就绿。
+- [x] **Step 2:** 打包起服务，确认 V1_40 迁移执行（rule_version 有 `body` 列、四旧列已 drop）、服务就绪。**历史数据可丢**（用户确认）：迁移的 UPDATE 转换对存量行仍生效；若存量行状态异常，可直接清 rule_definition/rule_version 重种（greenfield）。
+- [x] **Step 3:** **跑通 `docs/examples/` 下所有 live 剧本**（用户要求"所有场景都跑一遍"）：逐个 example 的 curl 脚本按依赖顺序建/发布/评估，覆盖六形态（AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE/EXPRESSION_SCRIPT/DECISION_FLOW），每条对预期结果核对。
+- [x] **Step 4:** 查 `rule_version.body` 真落库为对应变体 JSON（`type` 正确、载荷完整）；flow 的 referencedSnapshots 冻进 body。
+- [x] **Step 5:** 评估六形态验证输出正确（与重构前等价）+ trace 正常。
+- [x] **Step 6:** kind↔body 一致性：造 kind=AST_BOOLEAN 但 body=ScriptBody 的请求，验证发布被拒（KIND_BODY_MISMATCH）。
+- [x] **Step 7:** 导出 bundle → 导入（含 flow），验证 body 无损往返 + contentHash 幂等。
+- [x] **Step 8:** DB 恒空字段审计：`body` 全非空、无残留四旧列；清理本次测试数据回干净基线。
+- [x] **Step 9:** 派 `rule-engine-reviewer` 审代码↔文档对齐。
+- [x] **Step 10:** 归档：本计划进 `plans/archive/`、设计进 `specs/archive/`（设计已并入 docs 正文）。
 
 ---
 
