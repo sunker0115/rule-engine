@@ -165,7 +165,16 @@ export default function RightPanel({ metadata, ruleDetail }: Props) {
                 value={ref.ruleCode || undefined}
                 showSearch optionFilterProp="label"
                 placeholder={t('editor.flow.node.selectRule')}
-                options={flowSceneRules.map((r) => ({ value: r.code, label: `${r.name} (${r.code})` }))}
+                options={Object.entries(
+                  flowSceneRules.reduce((acc, r) => {
+                    const sc = r.sceneCode ?? '';
+                    (acc[sc] = acc[sc] ?? []).push(r);
+                    return acc;
+                  }, {} as Record<string, typeof flowSceneRules>),
+                ).map(([sc, items]) => ({
+                  label: sc || '—',
+                  options: items.map((r) => ({ value: r.code, label: `${r.name} (${r.code})` })),
+                }))}
                 onChange={(v) => updateNode({ ...ref, ruleCode: v })} />
               <Button size="small" type="link" disabled={!ref.ruleCode} onClick={() => setDrillFlowNodeId(selectedNode.id)}>
                 {t('editor.flow.drill.title')} ›

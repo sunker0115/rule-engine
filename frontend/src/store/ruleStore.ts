@@ -17,6 +17,8 @@ export interface SceneRuleItem {
   name: string;
   ruleDefinitionId: number;
   kind: string;
+  /** 规则所属场景编码，供跨 Scene 引用下拉分组展示 */
+  sceneCode?: string;
 }
 
 const MAX_UNDO = 50;

@@ -322,7 +322,7 @@ export interface RuleTranslation {
       rightPanel: { emptyHint: string };
       drill: {
         title: string; isolationNote: string; reuseHint: string;
-        save: string; newLeaf: string; newLeafTitle: string;
+        save: string; newLeaf: string; newLeafTitle: string; leafScene: string;
         unsupportedKind: string; ruleRefEmpty: string;
       };
     };
