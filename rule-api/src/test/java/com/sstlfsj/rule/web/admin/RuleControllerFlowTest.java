@@ -57,14 +57,14 @@ class RuleControllerFlowTest {
                               "code": "rule.flow",
                               "name": "决策图规则",
                               "kind": "DECISION_FLOW",
-                              "flowGraph": {
+                              "body": {"type":"FlowBody","referencedSnapshots":{},"flowGraph": {
                                 "inputNodeId": "n1",
                                 "nodes": [
                                   {"type":"RuleRefNode","id":"n1","ruleCode":"blacklist"},
                                   {"type":"OutputNode","id":"n2","decisionCode":"REVIEW"}
                                 ],
                                 "edges": [{"from":"n1","to":"n2","caseKey":null}]
-                              }
+                              }}
                             }
                             """))
                 .andExpect(status().isCreated())
@@ -77,12 +77,13 @@ class RuleControllerFlowTest {
                 contentCap.capture(), eq("user1"));
         RuleContent content = contentCap.getValue();
         assertThat(content.kind()).isEqualTo("DECISION_FLOW");
-        assertThat(content.conditionAst()).isNull();
-        assertThat(content.flowGraph()).isNotNull();
-        assertThat(content.flowGraph().inputNodeId()).isEqualTo("n1");
-        assertThat(content.flowGraph().nodes()).hasSize(2);
-        assertThat(content.flowGraph().nodes().get(0)).isInstanceOf(RuleRefNode.class);
-        assertThat(content.flowGraph().nodes().get(1)).isInstanceOf(OutputNode.class);
-        assertThat(content.flowGraph().edges()).hasSize(1);
+        assertThat(content.body()).isInstanceOf(com.sstlfsj.rule.kernel.api.model.FlowBody.class);
+        var fb = (com.sstlfsj.rule.kernel.api.model.FlowBody) content.body();
+        assertThat(fb.flowGraph()).isNotNull();
+        assertThat(fb.flowGraph().inputNodeId()).isEqualTo("n1");
+        assertThat(fb.flowGraph().nodes()).hasSize(2);
+        assertThat(fb.flowGraph().nodes().get(0)).isInstanceOf(RuleRefNode.class);
+        assertThat(fb.flowGraph().nodes().get(1)).isInstanceOf(OutputNode.class);
+        assertThat(fb.flowGraph().edges()).hasSize(1);
     }
 }

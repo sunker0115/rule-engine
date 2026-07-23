@@ -53,12 +53,11 @@ class RuleControllerTest {
         when(configService.getRuleDetail(1L, 10L)).thenReturn(
                 new RuleDetailVO(1L, 10L, "rule.a", "规则A", "PUBLISHED", "AST_BOOLEAN",
                         "risk.transfer",
-                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
+                        new com.sstlfsj.rule.kernel.api.model.AstBody(
+                                new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null)),
                         java.util.List.of(),
                         java.util.List.of(),
                         java.util.List.of(),
-                        null,
-                        null,
                         42L,
                         java.util.List.of()));
 
@@ -67,7 +66,7 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.ruleDefinitionId").value(10))
                 .andExpect(jsonPath("$.data.sceneCode").value("risk.transfer"))
-                .andExpect(jsonPath("$.data.conditionAst.type").value("AndNode"))
+                .andExpect(jsonPath("$.data.body.conditionAst.type").value("AndNode"))
                 .andExpect(jsonPath("$.data.currentVersionId").value(42));
 
         verify(configService).getRuleDetail(1L, 10L);
@@ -77,9 +76,10 @@ class RuleControllerTest {
     void getVersion_returns200_withTypedVersionContent() throws Exception {
         when(configService.getRuleVersion(1L, 10L, 20L)).thenReturn(
                 new RuleVersionContentVO(20L, 2L, "ACTIVE", "AST_BOOLEAN",
-                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null),
+                        new com.sstlfsj.rule.kernel.api.model.AstBody(
+                                new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null)),
                         java.util.List.of(), java.util.List.of(), java.util.List.of("TXN"),
-                        null, null, "2026-06-16T00:00", "u1", "2026-06-16T01:00"));
+                        "2026-06-16T00:00", "u1", "2026-06-16T01:00"));
 
         mockMvc.perform(get("/admin/v1/rules/10/versions/20").param("tenantId", "1"))
                 .andExpect(status().isOk())
@@ -87,7 +87,7 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.version").value(2))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.kind").value("AST_BOOLEAN"))
-                .andExpect(jsonPath("$.data.conditionAst.type").value("AndNode"))
+                .andExpect(jsonPath("$.data.body.conditionAst.type").value("AndNode"))
                 .andExpect(jsonPath("$.data.triggerEventTypes[0]").value("TXN"));
 
         verify(configService).getRuleVersion(1L, 10L, 20L);
@@ -98,7 +98,7 @@ class RuleControllerTest {
         // conditionAst 多态 type 不存在 → typed 绑定反序列化失败 → 400（本期新失败模式）
         String badBody = """
                 {"tenantId":1,"sceneCode":"s","code":"c","name":"n",
-                 "conditionAst":{"type":"NoSuchNode"}}
+                 "body":{"type":"AstBody","conditionAst":{"type":"NoSuchNode"}}}
                 """;
         mockMvc.perform(post("/admin/v1/rules")
                         .header("X-Actor-Id", "u1")
@@ -135,7 +135,7 @@ class RuleControllerTest {
                               "tenantId": 1,
                               "name": "改名后",
                               "kind": "AST_BOOLEAN",
-                              "conditionAst": {"type":"AndNode","children":[]},
+                              "body": {"type":"AstBody","conditionAst":{"type":"AndNode","children":[]}},
                               "decisionBindings": [],
                               "preGates": [],
                               "triggerEventTypes": []
@@ -274,7 +274,7 @@ class RuleControllerTest {
                               "code": "rule.a",
                               "name": "规则A",
                               "kind": "SCORECARD",
-                              "conditionAst": {"type":"AndNode","children":[]},
+                              "body": {"type":"AstBody","conditionAst":{"type":"AndNode","children":[]}},
                               "decisionBindings": [],
                               "preGates": [],
                               "triggerEventTypes": []
@@ -315,11 +315,10 @@ class RuleControllerTest {
                 contentCaptor.capture(), eq("user1"));
         assertThat(contentCaptor.getValue().name()).isEqualTo("规则A");
         assertThat(contentCaptor.getValue().kind()).isNull();
-        assertThat(contentCaptor.getValue().conditionAst()).isNull();
+        assertThat(contentCaptor.getValue().body()).isNull();
         assertThat(contentCaptor.getValue().decisionBindings()).isNull();
         assertThat(contentCaptor.getValue().preGates()).isNull();
         assertThat(contentCaptor.getValue().triggerEventTypes()).isNull();
-        assertThat(contentCaptor.getValue().script()).isNull();
     }
 
     @Test
