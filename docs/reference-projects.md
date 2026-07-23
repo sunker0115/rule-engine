@@ -18,6 +18,7 @@
 | **skyhackvip/risk_engine（天网）** | Java 决策引擎（开源） | 二维决策矩阵是**录入便利**、非引擎能力；本项目 `DECISION_TABLE` 表达力已覆盖 | 决策矩阵录入 demo（引擎 0 改动）+ 顺带修 `BETWEEN` bug | [§2.2](#22-skyhackviprisk_engine天网) |
 | **GoRules ZEN Engine** | Rust 决策引擎（JDM 决策图 + 表达式内核） | JDM 决策图=本项目 `DECISION_FLOW` 直接对标；其表达式 intellisense 是编辑期体验缺口的参照 | D75 `DECISION_FLOW`；表达式编辑器补全/诊断分级方案 | [§2.3](#23-gorules-zen-engine) |
 | **gengine（bilibili）** | Go 嵌入式规则引擎（AST DSL + 执行内核） | 基因不同宗（命令式可副作用 DSL / 进程内库）；可吸收面小，唯一候选=场景内独立规则并行求值 | 候选记入 `08-evolution.md` §2.29（不实现） | [§2.4](#24-genginebilibili) |
+| **RuleGo**（rulego.dev） | Go 组件编排规则引擎（规则链/流编排，类 node-red） | 类别不同（编排+动作 vs 纯决策）；是 D60「引擎不含动作/编排」边界的反例佐证，可吸收面小 | 分层已定 D60 / D75 / Flowable | [§2.5](#25-rulego) |
 
 ---
 
@@ -115,6 +116,34 @@
 
 ---
 
+### 2.5 RuleGo
+
+> 本轮调研（2026-07-23）。仓库：`github.com/rulego/rulego`（同级目录 `../rulego`，rulego.dev）。
+
+| 维度 | RuleGo | rule-engine |
+|---|---|---|
+| 定位 | Go 组件编排规则引擎（规则链/流编排，类 node-red，偏 IoT/边缘/数据集成） | 服务化纯决策平台 |
+| 形态 | 嵌入式 + 独立部署双模；规则链 = 组件 DAG（JSON 配置、可动态编排） | 服务化，评估出 Decision |
+| 边界 | 编排 + **动作执行一体**（组件含 发邮件/gRPC/HTTP/DB/MQTT/脚本转换 等副作用节点） | D60 引擎纯决策、不执行动作 |
+
+**核心能力**：组件化（一切业务逻辑=组件）+ 规则链（组件 DAG 编排、不重启动态替换/新增）+ 子规则链嵌套 + AOP（不改链给执行织入行为）+ Endpoint 多协议数据集成（HTTP/MQTT/TCP/Kafka/Schedule 入口）+ Go plugin 动态加载 + 协程池/对象池 + 上下文隔离。
+
+**与本项目差异（类别不同）**：RuleGo 是**编排 + 动作执行一体**的引擎（node-red 血统），其价值主张（动作组件、发邮件/HTTP/DB 副作用、endpoint 集成）正是本项目 **D60 明确推出引擎**、交给消费方/流程引擎的部分。本项目分层：纯决策（D60）→ 同步决策图（D75 DECISION_FLOW）→ 有状态动作编排（接 Flowable）。
+
+**吸收结论**：
+
+| RuleGo 能力 | 本项目对应 | 结论 |
+|---|---|---|
+| 组件化规则链 DAG 编排 | D75 DECISION_FLOW（同步、纯决策、typed 节点 + 发布期冻结） | 同步图已覆盖，但本项目图只编排决策、不含动作节点 |
+| 动作组件（发邮件/HTTP/DB/MQTT） | D60 推出引擎 | 不吸收（归消费方 / Flowable） |
+| 规则链热替换 / 动态加载 | D17 RuleVersionWatcher 热更 + 不可变快照 | 已有等价物 |
+| Endpoint 多协议入口 | Trigger Sources 适配（HTTP/MQ/JOB/SDK）+ D72 声明式连接器（取数侧） | 已有对应层 |
+| AOP / 子链嵌套 | DECISION_FLOW RuleRef 复用；求值纯函数无 AOP | 部分覆盖；AOP 不需要（纯决策无副作用可织入） |
+
+整体：**类别不同（编排+动作 vs 纯决策），架构已分层，可吸收面小**——是 D60「引擎不含动作/编排」边界的又一佐证。
+
+---
+
 ## 三、业界对标速览（决策级引用索引）
 
 只在决策/演进里点到、未逐模块拆的业界项目，索引到具体落点。
@@ -137,6 +166,9 @@
 | **Confluent Schema Registry / K8s / Camunda** | 代理主键 + 反范式冗余自然键 | rule identity（code + version） | 吸收（保留代理 PK + 冗余自然键） |
 | **DB 动态数据脱敏 / Apache Ranger** | 声明在字段定义、读时按策略遮蔽 | D71（Trace PII 读时脱敏） | 吸收 |
 | **FICO / Sapiens** | 规则绩效 / 有效性度量 | §2.27（决策效果闭环，演进位） | 记录待触发 |
+| **Grule**（Hyperjump，本地同级目录 `../grule-rule-engine`） | Drools 式 GRL DSL + salience + when/then + 可变 facts + 推理 | 同 gengine（§2.4）；Drools 已在本表 | **不吸收**（命令式 + 副作用 + 可变 facts，D60/D16 拒；Drools-in-Go 无新意） |
+| **Gval**（本地同级目录 `../gval`） | Go 可组合表达式语言 + parse-once 复用 | D66 `ExpressionEngine` SPI（六引擎 + 编译缓存） | **不吸收**（Go 库、本项目 Java；可组合 + 编译复用思路 D66 已具备） |
+| **CEL-Go**（Google CEL 官方 Go 实现，本地同级目录 `../cel-go`） | CEL 语言的 Go 宿主实现 | D66（本项目用 CEL 的 Java 实现 dev.cel） | **已覆盖**（CEL 已是六引擎之一；Go 宿主不用；conformance 可作参照） |
 
 ---
 
@@ -170,6 +202,10 @@
 | 不需要 | urule | FunctionLibrary + ConstantLibrary（全局函数注册） | 08-evolution §四已否决（冲突闭合校验/禁副作用/metric 只读） |
 | 不需要 | ZEN | QuickJS Function 节点 / LSP / 自然语言转表达式 | D60 纯决策不跟 / 投产比低 / 中文准确度风险 |
 | 不需要 | 天网 | matrix 作为独立引擎 kind | 录入糖非引擎能力，不进 kind |
+| 不需要 | RuleGo | 组件化动作编排 / 动作节点 / endpoint 集成 | 类别不同（编排+动作 vs D60 纯决策）；同步图 D75 覆盖、有状态编排接 Flowable |
+| 不需要 | Grule | Drools 式 GRL / 可变 facts / 推理 | 同 gengine（命令式 + 副作用，D60/D16 拒） |
+| 不需要 | Gval | Go 可组合表达式库 | 本项目 Java；D66 六引擎 + 编译缓存已具备，不引入 |
+| 不需要 | CEL-Go | CEL 的 Go 宿主实现 | CEL 已是六引擎之一（cel-java），Go 宿主不用 |
 | 待定 | gengine | 场景内独立规则并行求值 | §2.29（待实测吞吐瓶颈） |
 | 待定 | ZEN | 表达式编辑器变量补全（Level 1） | 纯前端零后端，未立项 |
 | 待定 | ZEN | CEL 实时类型诊断（Level 2） | `POST /expressions/validate`，未立项 |
@@ -227,6 +263,15 @@
 | 不需要 | salience / StopTag | 优先级排序 + 协作式提前退出；本项目 priority + hit policy（FIRST_HIT/HIGHEST_PRIORITY），声明式更适配配置化产品 | — |
 | 不需要 | DAG 执行模型 `[][]string` | 分层调度、层内并行；本项目 D75 typed 节点 + 发布期冻结更结构化 | — |
 | 待定 | 场景内独立规则并行求值 | Concurrent / DAG 层内并行；本项目评估同步串行，含多重 `EXTERNAL_HTTP` 取数 / `EXPRESSION_SCRIPT` 重算的场景或有吞吐收益 | §2.29（待实测瓶颈触发） |
+
+#### 4.2.5 RuleGo（rulego.dev）
+
+| 桶 | 点 | 细节 / 为什么 | 落点 |
+|---|---|---|---|
+| 已吸收 | （无） | 类别不同（编排+动作引擎）；逐条映射后本项目已有对应层或架构已推出 | — |
+| 不需要 | 动作组件 / endpoint 动作 | 发邮件/HTTP/DB/MQTT 等副作用节点；本项目 D60 纯决策、不执行动作 | 归消费方 / Flowable |
+| 不需要 | 组件化规则链流编排 | 同步图已由 D75 DECISION_FLOW 覆盖（且只编排决策、不含动作节点）；有状态编排接 Flowable | D75 / Flowable |
+| 不需要 | 规则链热替换 / AOP / 子链嵌套 | 热更=D17 Watcher+快照、复用=RuleRef 已有；AOP 无意义（纯函数无副作用可织入） | — |
 
 ---
 
