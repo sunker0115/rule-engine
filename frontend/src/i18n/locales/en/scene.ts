@@ -26,7 +26,7 @@ const scene: SceneTranslation = {
     eventTypes: 'Event Type Whitelist',
     eventTypesPlaceholder: 'Type and press Enter',
     defaultParams: 'Default Params (JSON)',
-    defaultParamsExtra: 'Scene-level default parameters (e.g. timezone: Asia/Shanghai, executionMode: PARALLEL for parallel evaluation)',
+    defaultParamsExtra: 'Scene-level default parameters (e.g. timezone: Asia/Shanghai, executionMode: PARALLEL — only beneficial for heavy script/flow rules; 30x slower for pure AST)',
     decisionStrategy: 'Decision Strategy',
     status: 'Status',
   },

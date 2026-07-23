@@ -26,7 +26,7 @@ const scene: SceneTranslation = {
     eventTypes: '事件类型白名单',
     eventTypesPlaceholder: '输入后回车添加',
     defaultParams: '默认参数 (JSON)',
-    defaultParamsExtra: '场景级缺省参数（如 timezone: Asia/Shanghai、executionMode: PARALLEL 开启并行评估）',
+    defaultParamsExtra: '场景级缺省参数。executionMode: PARALLEL 开启并行评估（仅含重脚本/决策图时建议开启，纯 AST 规则负优化 ~30 倍）',
     decisionStrategy: '决策策略',
     status: '状态',
   },

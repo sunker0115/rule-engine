@@ -20,6 +20,8 @@ import java.util.concurrent.TimeUnit;
  * 评估全路径基准（provided metrics、无 SQL/HTTP I/O）：match → pre-gate → assemble → execute。
  * 每个候选依赖 3 个共享 metric（触发 collectChosenVersions 合并），全部由 providedMetrics 命中。
  * resolver 返回预建 descriptor 模拟 Caffeine 命中，隔离 DB 成本，只量引擎 CPU。
+ *
+ * PARALLEL 模式经 SceneRuleIndex.defaultParams.executionMode 驱动，与生产路径一致。
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -30,9 +32,13 @@ import java.util.concurrent.TimeUnit;
 public class EvalEngineBenchmark {
 
     private static final List<String> METRIC_CODES = List.of("m0", "m1", "m2");
+    private static final AndNode EMPTY_AST = new AndNode(List.of(), null, null);
 
-    @Param({"1", "5", "20", "50"})
+    @Param({"5", "20", "50"})
     public int n;
+
+    @Param({"SEQUENTIAL", "PARALLEL"})
+    public String mode;
 
     @Param({"HIGHEST_PRIORITY", "FIRST_HIT"})
     public String strategy;
@@ -48,12 +54,14 @@ public class EvalEngineBenchmark {
                 .map(c -> new MetricDependency(c, 1)).toList();
         for (int i = 0; i < n; i++) {
             snaps.add(new RuleVersionSnapshot((long) i, "scene", "1",
-                    new AndNode(List.of(), null, null), List.of(),
+                    EMPTY_AST, List.of(),
                     List.of(new RuleVersionSnapshot.DecisionBinding("D" + i, i)),
                     List.of(), "AST_BOOLEAN", null, 0L, deps, List.of()));
         }
         index.update("1", "scene", "ORDER", snaps);
         index.setStrategy("1", "scene", SceneExecutionStrategy.valueOf(strategy));
+        // 注入 executionMode 到 defaultParams（与生产路径一致：default_params.executionMode）
+        index.setDefaultParams("1", "scene", Map.of("executionMode", mode));
 
         Map<String, MetricDescriptor> descriptors = new HashMap<>();
         for (String c : METRIC_CODES) {
@@ -64,7 +72,6 @@ public class EvalEngineBenchmark {
         EvalContextAssembler asm = new EvalContextAssembler(
                 List.of(), Map.of(), resolver, null, null, 0L);
 
-        // 总是命中的 executor：取 decisionBindings 最高优先级
         RuleVersionExecutor exec = (snap, ctx) -> {
             RuleVersionSnapshot.DecisionBinding b = snap.decisionBindings().get(0);
             Decision d = new Decision(b.decisionCode(), "", b.priority(), snap.ruleVersionId());
@@ -75,7 +82,7 @@ public class EvalEngineBenchmark {
         Map<String, Object> provided = new HashMap<>();
         for (String c : METRIC_CODES) provided.put(c, 1L);
         event = new RuleEvent("1", "scene", "ORDER", "sub1", "evt-1",
-                Instant.now(), Map.of(), provided, com.sstlfsj.rule.kernel.api.model.EventSource.HTTP);
+                Instant.now(), Map.of(), provided, EventSource.HTTP);
     }
 
     @Benchmark
