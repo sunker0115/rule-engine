@@ -9,7 +9,7 @@
 2. 启动 app（带臂参数，见 `runbook.md`）→ `k6 run k6/evaluate.js` → `scripts/capture-prometheus.sh` 抓 Hikari 帧
 3. 每 run 记一行下表
 
-## 结果（2026-06-08，本机 JVM zulu-25 + 本机 MySQL，候选=50，k6 阶梯至 400 VU）
+## 结果（2026-07-23，候选=50，payload.amount GTE 0，D55后0指标依赖）
 
 | run | 候选 | POOL | TRACE | 吞吐(req/s) | p50/p95(ms) | err% | Hikari active/pending |
 |---|---|---|---|---|---|---|---|
@@ -273,3 +273,7 @@ backlog #1（数值类型分派，LONG/DOUBLE 走原始比较，去 BigDecimal�
 - **直接证据（profile）**：BigDecimal 从引擎侧最大单一分配（7.4%）降到 **0**；EvalEngine 的 stream 帧从 ~10% 的组成项降到 0.08% 残留。两处可减分配按预期清除。
 - **EvalResult(7.01%) + Decision(4.69%)** 现成为引擎侧最大分配——这是每候选必产的结果对象（50/req，固有，README 已标低 ROI），噪声被清掉后自然冒头。
 - GC 频率持平而吞吐 ↑ → 归一化看每请求分配下降；系统仍非 GC-bound（FGC=0），符合摸排"瓶颈在 HTTP/框架"定性。引擎侧降分配天花板（~25%）的两块大头（BigDecimal + stream）已兑现。
+
+| run | 候选 | POOL | TRACE | 吞吐(req/s) | p50/p95(ms) | err% | 备注 |
+|---|---|---|---|---|---|---|---|
+| 2026-07-23 | 50 | Hikari(10) | on | ~19,000 | 2.6/19.9 | 0% | D55 payload-only，0指标依赖 |
