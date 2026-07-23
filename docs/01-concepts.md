@@ -549,7 +549,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 | `status` | 版本行状态：`DRAFT`（草稿，可 editDraft / deleteDraftVersion）/ `ACTIVE`（当前生效）/ `SUPERSEDED`（被新版本取代）。publish 把最新 DRAFT 翻 ACTIVE 并 supersede 旧 ACTIVE（D56） |
 | `rule_definition_id` | 归属规则（FK → `rule_definition.id`）；按 Scene 查所有候选版本通过 JOIN rule_definition 实现，不冗余 scene_id |
 | `trigger_event_types` | 冻结：草稿自己声明的 eventType 数组（写入草稿时已校验 ⊆ `Scene.eventTypes`；不再于 publish 时覆盖成 scene 全集，保「dry-run 预览 == 发布」，D56） |
-| `condition_ast` | 冻结：完整 `resolvedAst` JSON（含解析出的 dataType）（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
+| `body` | 冻结：判定主体多态载体 `RuleBody`（D76，DDL 单列）——`AstBody` 内含完整 `resolvedAst` JSON（含解析出的 dataType）/ `ScriptBody` 含 script / `FlowBody` 含 flowGraph+referencedSnapshots，按 kind 择一 |
 | `pre_gates` | 冻结：preGates 列表（含 ROLLOUT 灰度配置；无独立 `rollout` 列，D43）（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
 | `decision_bindings` | 冻结：Rule 绑定的 Decision 列表（含 `code` / `name` / `priority`，及 SCORECARD 的 score 区间）；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |

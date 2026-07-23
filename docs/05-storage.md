@@ -140,7 +140,7 @@ CREATE TABLE connector_definition (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='连接器定义（D72，声明式 HTTP 连接器）';
 ```
 
-> **descriptor 内字段不单列 DDL**：descriptor 是 typed `ConnectorDescriptor` record 整体序列化进单 JSON 列（与 `rule_version.condition_ast` 同款），字段语义见 [`04-extension.md`](./04-extension.md) §4.5 连接器契约（C1–C5）。endpoint baseUrl / 凭证不落本表——`descriptor.endpointRef` 指向 infra 注册的命名端点（`engine.rule.fetch.endpoints`），密钥经 `*Ref` 引用 `engine.rule.fetch.credentials`（来自 env/secrets）。
+> **descriptor 内字段不单列 DDL**：descriptor 是 typed `ConnectorDescriptor` record 整体序列化进单 JSON 列（与 `rule_version.body` 同款），字段语义见 [`04-extension.md`](./04-extension.md) §4.5 连接器契约（C1–C5）。endpoint baseUrl / 凭证不落本表——`descriptor.endpointRef` 指向 infra 注册的命名端点（`engine.rule.fetch.endpoints`），密钥经 `*Ref` 引用 `engine.rule.fetch.credentials`（来自 env/secrets）。
 
 **rule_definition**
 
@@ -448,7 +448,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 - 修改规则 = 创建新 version（version 单调递增，per rule_definition）
 - 旧 version `status` 改为 `SUPERSEDED`（仍可被 `node_trace.rule_version_id` 引用，历史评估节点 trace 可追溯至对应版本）
 - 新 version INSERT，Matcher 倒排索引热更指向新 version（≤15s 全实例收敛，D17）
-- 回滚 = 用旧 version 的 `condition_ast` / `decision_bindings` 内容新建草稿 → 走标准发布流程产出新 version 号，不是直接切回旧 version（避免 current_version 倒退造成审计断层）
+- 回滚 = 用旧 version 的 `body` / `decision_bindings` 内容新建草稿 → 走标准发布流程产出新 version 号，不是直接切回旧 version（避免 current_version 倒退造成审计断层）
 
 ### 数据保留策略（D9：v1 全 MySQL；各模块 `@Scheduled` 定时清理）
 
