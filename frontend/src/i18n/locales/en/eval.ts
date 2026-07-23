@@ -19,6 +19,7 @@ const evalLoc: EvalTranslation = {
     addField: 'Add Field',
     copyJson: 'Copy JSON',
     copiedJson: 'JSON copied',
+    autoRerun: 'Auto-rerun on input change',
     field: 'Field',
     key: 'Key',
     value: 'Value',

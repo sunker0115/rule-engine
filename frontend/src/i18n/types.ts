@@ -396,6 +396,7 @@ export interface EvalTranslation {
     addField: string;
     copyJson: string;
     copiedJson: string;
+    autoRerun: string;
     field: string;
     key: string;
     value: string;

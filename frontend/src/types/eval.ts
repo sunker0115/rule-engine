@@ -27,6 +27,8 @@ export interface NodeTraceItem {
   valueSource: ValueSource | null;
   errorCode: string | null;
   errorMessage?: string;
+  displayLabel?: string | null;
+  expectedValue?: unknown;
   children: NodeTraceItem[];
 }
 

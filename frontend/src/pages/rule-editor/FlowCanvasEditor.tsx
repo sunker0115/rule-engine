@@ -4,10 +4,10 @@ import {
   useReactFlow, type Node, type Edge, type NodeProps, type NodeChange, type EdgeChange, type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Select, Tag, Empty } from 'antd';
+import { Select, Tag, Empty, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
-import { useFlowTraceStore } from '@/store/flowTraceStore';
+import { useDryRunStore } from '@/store/dryRunStore';
 import { flowCyclesForRule, flowDeadNodesForRule } from './analysisSummary';
 import FlowNodeInspectorDrawer, { type SceneRuleItem } from './FlowNodeInspectorDrawer';
 import type {
@@ -36,13 +36,20 @@ interface Props {
 }
 
 /** 画布节点 data 载荷（RF 要求 data extends Record）。 */
+interface TraceNodeResult {
+  hit: boolean | null;
+  value: string | null;
+  displayLabel: string | null;
+  expectedValue: unknown;
+}
+
 interface FlowNodeData extends Record<string, unknown> {
   flowNode: FlowNode;
   isInput: boolean;
   dead: boolean;
   traced: boolean;
   muted: boolean;
-  traceResult: { hit: boolean | null; value: string | null } | null;
+  traceResult: TraceNodeResult | null;
   sceneRules: SceneRuleItem[];
   onSelectRule: (id: string, ruleCode: string) => void;
 }
@@ -140,14 +147,24 @@ const handleHover = (color: string) => ({
 });
 
 function NodeShell({ type, isInput, dead, selected, traced, muted, traceResult, warning, children }: {
-  type: FlowNodeType; isInput: boolean; dead: boolean; selected: boolean; traced?: boolean; muted?: boolean; traceResult?: { hit: boolean | null; value: string | null } | null; warning?: string; children: React.ReactNode;
+  type: FlowNodeType; isInput: boolean; dead: boolean; selected: boolean; traced?: boolean; muted?: boolean; traceResult?: TraceNodeResult | null; warning?: string; children: React.ReactNode;
 }) {
   const accent = warning ? '#f59e0b' : ACCENT[type];
   const borderColor = traced ? '#16a34a' : (selected ? accent : '#e3e6ea');
   const shadow = traced ? '0 0 0 2px rgba(22,163,74,.28), 0 1px 4px rgba(16,24,40,.08)' :
     selected ? `0 0 0 3px ${accent}26` : '0 1px 4px rgba(16,24,40,.08)';
   const nodeOpacity = muted ? 0.38 : (dead ? 0.45 : 1);
-  return (
+
+  // trace tooltip: 表达式 → 求值结果
+  const traceTooltip = traced && traceResult ? (() => {
+    const parts: string[] = [];
+    if (traceResult.displayLabel) parts.push(traceResult.displayLabel);
+    if (traceResult.value != null) parts.push(`→ ${traceResult.value}`);
+    if (traceResult.expectedValue != null) parts.push(`(对比: ${JSON.stringify(traceResult.expectedValue)})`);
+    return parts.join(' ');
+  })() : null;
+
+  const nodeDiv = (
     <div style={{ position: 'relative', width: 180, background: '#fff', borderRadius: 10, overflow: 'hidden',
       border: `1px solid ${borderColor}`, boxShadow: shadow, opacity: nodeOpacity, filter: muted ? 'grayscale(0.6)' : undefined,
       borderStyle: dead ? 'dashed' : 'solid',
@@ -177,6 +194,8 @@ function NodeShell({ type, isInput, dead, selected, traced, muted, traceResult, 
       )}
     </div>
   );
+
+  return traceTooltip ? <Tooltip title={traceTooltip} placement="top">{nodeDiv}</Tooltip> : nodeDiv;
 }
 
 function RuleRefNodeView({ data, selected }: NodeProps<CanvasNode>) {
@@ -261,7 +280,7 @@ const PALETTE: FlowNodeType[] = ['RuleRefNode', 'SwitchNode', 'TransformNode', '
 
 function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metadata, decisions, analysisReport, onLeafChanged, onSelectedNodeChange, onSelectedEdgeChange, onOpenRightPanel, onCloseRightPanel }: Props) {
   const { drillFlowNodeId, setDrillFlowNodeId, flowSceneRules: sceneRules } = useRuleStore();
-  const { showTrace, traces, clearTrace } = useFlowTraceStore();
+  const { showTrace, result, clearTrace } = useDryRunStore();
   const { t } = useTranslation('rule');
   const { screenToFlowPosition, fitView } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -357,10 +376,11 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
 
   // 试算 trace → 执行路径（visited node IDs + edge keys + results）
   const traceInfo = useMemo(() => {
-    if (!showTrace || !traces || traces.length === 0) return null;
+    if (!showTrace || !result?.nodeTrace || result.nodeTrace.length === 0) return null;
+    const traces = result.nodeTrace;
     const visitedNodes = new Set<string>();
     const visitedEdges = new Set<string>();
-    const nodeResults = new Map<string, { hit: boolean | null; value: string | null }>();
+    const nodeResults = new Map<string, TraceNodeResult>();
     const flowTraces = traces.filter((t) =>
       t.nodeType === 'SwitchNode' || t.nodeType === 'RuleRefNode' || t.nodeType === 'TransformNode' || t.nodeType === 'OutputNode');
     let curId: string | null = graph.inputNodeId;
@@ -369,7 +389,11 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
       const node = graph.nodes.find((n) => n.id === curId);
       if (!node) break;
       visitedNodes.add(curId);
-      nodeResults.set(curId, { hit: ft.result, value: ft.actualValue != null ? String(ft.actualValue) : null });
+      nodeResults.set(curId, {
+        hit: ft.result, value: ft.actualValue != null ? String(ft.actualValue) : null,
+        displayLabel: ft.displayLabel ?? null,
+        expectedValue: ft.expectedValue ?? null,
+      });
       const edges = graph.edges.filter((e) => e.from === curId);
       if (ft.nodeType === 'SwitchNode' && ft.actualValue != null) {
         const matched = edges.find((e) => e.caseKey === String(ft.actualValue)) ?? edges.find((e) => e.caseKey == null);
@@ -382,7 +406,7 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
       }
     }
     return { visitedNodes, visitedEdges, nodeResults };
-  }, [showTrace, traces, graph]);
+  }, [showTrace, result, graph]);
 
   const onSelectRule = useCallback((id: string, code: string) => {
     onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === id && n.type === 'RuleRefNode' ? { ...n, ruleCode: code } : n)) });

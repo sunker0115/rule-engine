@@ -19,6 +19,7 @@ const evalLoc: EvalTranslation = {
     addField: '添加字段',
     copyJson: '复制 JSON',
     copiedJson: '已复制请求 JSON',
+    autoRerun: '自动重算（改输入即重跑）',
     field: '字段',
     key: '键',
     value: '值',

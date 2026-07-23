@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Drawer, Form, Input, Select, Button, Typography, message, Tag, Row, Col } from 'antd';
+import { useState, useEffect, useRef } from 'react';
+import { Drawer, Form, Input, Select, Button, Switch, Typography, message, Tag, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useDryRunStore } from '@/store/dryRunStore';
-import { useFlowTraceStore } from '@/store/flowTraceStore';
 import { dryRun } from '@/api/eval';
 import type { NodeTraceItem } from '@/types';
 
@@ -33,20 +32,29 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
-  const { result, loading, setResult, setLoading, reset } = useDryRunStore();
-  const setTraceResult = useFlowTraceStore((s) => s.setTraceResult);
+  const { result, loading, autoRerun, setResult, setLoading, setAutoRerun } = useDryRunStore();
   const [form] = Form.useForm();
   const [internalLoading, setInternalLoading] = useState(false);
   const [pairs, setPairs] = useState<PayloadPair[]>([]);
 
   const isLoading = loading || internalLoading;
+  const rerunTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  // 打开时不清空，保留上次输入；仅关闭时清理结果
+  // 关闭时关自动重算和 loading（不清 showTrace，画布高亮保留）
   useEffect(() => {
-    if (!open) {
-      reset();
-    }
-  }, [open, reset]);
+    if (!open) { setAutoRerun(false); setLoading(false); }
+  }, [open, setAutoRerun, setLoading]);
+
+  // What-if 自动重算：监听输入变化 → 300ms 防抖调 API
+  const [formValues, setFormValues] = useState<Record<string, unknown>>({});
+  useEffect(() => {
+    if (!autoRerun || !open) return;
+    clearTimeout(rerunTimer.current);
+    rerunTimer.current = setTimeout(() => {
+      form.validateFields().then(() => handleExecute()).catch(() => {});
+    }, 400);
+    return () => clearTimeout(rerunTimer.current);
+  }, [autoRerun, formValues, pairs, open]);
 
   const addPair = () => {
     setPairs(p => [...p, { id: nextPairId++, key: '', value: '' }]);
@@ -121,8 +129,6 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
         { ruleVersionId, ruleId },    // query param，不在 body
       );
       setResult(data);
-      // 同步写入 trace store，画布可高亮执行路径
-      if (data) setTraceResult(data.nodeTrace ?? [], (data.hitDecisions ?? []).map((d: any) => d.code));
     } catch {
       message.error(tc('message.loadError'));
     } finally {
@@ -161,7 +167,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
           <Tag color="blue">v{versionLabel}</Tag>
         </div>
       )}
-      <Form form={form} layout="vertical">
+      <Form form={form} layout="vertical" onValuesChange={(_, all) => setFormValues(all)}>
         <Form.Item name="eventType" label={te('dryRun.eventType')} rules={[{ required: eventTypes.length > 0 }]}>
           {eventTypes.length > 0
             ? <Select options={eventTypes.map((e) => ({ value: e, label: e }))} />
@@ -214,10 +220,16 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
           </Button>
         </Form.Item>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button type="primary" onClick={handleExecute} loading={isLoading} style={{ flex: 1 }}>
-            {te('dryRun.execute')}
-          </Button>
-          <Button icon={<CopyOutlined />} onClick={handleCopyJson}>{te('dryRun.copyJson')}</Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 12, color: '#5b6672' }}>
+            <Switch size="small" checked={autoRerun} onChange={setAutoRerun} />
+            <span>{te('dryRun.autoRerun')}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button type="primary" onClick={handleExecute} loading={isLoading} style={{ flex: 1 }}>
+              {te('dryRun.execute')}
+            </Button>
+            <Button icon={<CopyOutlined />} onClick={handleCopyJson}>{te('dryRun.copyJson')}</Button>
+          </div>
         </div>
       </Form>
 
