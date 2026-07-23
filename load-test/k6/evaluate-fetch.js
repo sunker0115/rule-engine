@@ -40,7 +40,6 @@ export default function () {
     subjectId: subjectId,
     eventId: `${__VU}-${__ITER}-${Date.now()}`,
     payload: {},
-    providedMetrics: {},
   });
   const res = http.post(url, body, { headers: { 'Content-Type': 'application/json' } });
   const ok = check(res, {

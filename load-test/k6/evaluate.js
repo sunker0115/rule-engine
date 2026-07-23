@@ -37,8 +37,7 @@ export default function () {
     eventType: 'login',
     subjectId: `s-${__VU}`,
     eventId: eventId,
-    payload: {},
-    providedMetrics: { 'demo.score': 100 },
+    payload: { amount: 100 },
   });
   const res = http.post(url, body, { headers: { 'Content-Type': 'application/json' } });
   const ok = check(res, {

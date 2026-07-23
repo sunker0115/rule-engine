@@ -47,7 +47,6 @@ class LoadTestSeeder {
     static final String TENANT_CODE = "loadtest";  // 租户业务标识，k6 以此寻址（边界解析为 id 9001）
     static final String SCENE = "loadtest";
     static final String EVENT_TYPE = "login";
-    static final String METRIC = "demo.score";
     static final String METRIC_AGG = "demo.agg";  // SQL_AGGREGATE 取数指标（seedFetch 用）
     static final String ACTOR = "loadtest";
 
@@ -56,10 +55,11 @@ class LoadTestSeeder {
     @Autowired ConfigService configService;
     @Autowired DataSource dataSource;
 
-    /** AST：demo.score GTE 0（SQL_AGGREGATE SELECT 100 恒命中，隔离取数往返成本；D55后 public API 无 providedMetrics）。 */
+    /** D55 后公开 API 无 providedMetrics——条件走 payload 字段，0 依赖 metric。payload.amount GTE 0 恒命中。 */
     static AstNode conditionAst() {
-        return new ConditionNode("GTE", METRIC, "score>=0",
-                Map.<String, Object>of("threshold", 0), null, null);
+        return new ConditionNode("GTE", "amount", "amount>=0",
+                Map.<String, Object>of("threshold", 0), null, null,
+                com.sstlfsj.rule.kernel.api.model.ValueRef.PAYLOAD);
     }
 
     /** 按租户清理压测数据（FK 序：rule_version→rule_definition→metric_definition→scene），可重跑。 */
@@ -78,13 +78,15 @@ class LoadTestSeeder {
         }
     }
 
-    /** 生成 ruleCount 条全命中规则（同 scene/eventType，均 publish 为 ACTIVE）。 */
+    /** 生成 ruleCount 条全命中规则（同 scene/eventType，均 publish 为 ACTIVE）。0 指标依赖——条件用 payload。 */
     void seedRules(int ruleCount) {
         cleanup();
+        // payloadSchema 声明 amount 为 LONG 字段（发布期校验需该字段存在）
         sceneService.createScene(TENANT, SCENE, "Load Test Scene", null,
-                "HYBRID", "USER", List.of(EVENT_TYPE), null, null, ACTOR);
-        metricWriteService.create(TENANT, METRIC,
-                new MetricWriteCommand("demo score", "ATTRIBUTE", "LONG", Map.of(), null, true), ACTOR);
+                "HYBRID", "USER", List.of(EVENT_TYPE),
+                List.of(new com.sstlfsj.rule.config.api.dto.PayloadFieldSpec(
+                        "amount", "INTEGER", false, null, null, null, null, "金额")),
+                null, ACTOR);
         for (int i = 1; i <= ruleCount; i++) {
             DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
                     "lt-rule-" + i,
