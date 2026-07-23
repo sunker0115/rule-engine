@@ -9,6 +9,7 @@ import com.sstlfsj.rule.config.api.dto.RuleListItemVO;
 import com.sstlfsj.rule.config.api.dto.RuleListQuery;
 import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.service.ConfigService;
+import com.sstlfsj.rule.config.api.service.RuleLineageService;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import com.sstlfsj.rule.web.common.PageResponse;
@@ -23,9 +24,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /** 规则版本生命周期管理入口：发布、禁用、查询。 */
 @RestController
@@ -34,6 +32,7 @@ import java.util.stream.Collectors;
 public class RuleController {
 
     private final ConfigService configService;
+    private final RuleLineageService ruleLineageService;
 
     /**
      * POST /admin/v1/rules — 创建规则草稿。
@@ -202,20 +201,31 @@ public class RuleController {
         Page<RuleDefinition> rdPage = configService.listRules(
                 new RuleListQuery(tenantId, sceneCode, status, from, to, page, size));
 
-        Map<Long, String> sceneCodeMap = configService.getSceneCodeMap(
-                rdPage.getRecords().stream().map(RuleDefinition::getSceneId).collect(Collectors.toSet()));
-
         List<RuleListItemVO> vos = rdPage.getRecords().stream()
                 .map(rd -> new RuleListItemVO(
                         rd.getTenantId(),
                         rd.getId(), rd.getCode(), rd.getName(),
                         rd.getKind() != null ? rd.getKind().name() : null,
-                        sceneCodeMap.getOrDefault(rd.getSceneId(), null),
+                        rd.getSceneCode(),
                         rd.getStatus().name(), rd.getCurrentVersion(), rd.getPublishedAt(),
                         rd.getCreatedAt()))
                 .toList();
 
         return ApiResponse.ok(PageResponse.of(vos, rdPage.getTotal(), page, size));
+    }
+
+    /**
+     * GET /admin/v1/rules/{code}/referencedBy — 反向血缘：查 tenant 下引用了该规则的 DECISION_FLOW。
+     *
+     * @param code     被引规则逻辑编码
+     * @param tenantId 租户 ID
+     * @return 引用该规则的 flow 列表（ruleDefinitionId / ruleCode / sceneCode）
+     */
+    @GetMapping("/{code}/referencedBy")
+    public ApiResponse<List<RuleLineageService.ReferencingFlowItem>> referencedBy(
+            @PathVariable String code,
+            @RequestParam Long tenantId) {
+        return ApiResponse.ok(ruleLineageService.findFlowsReferencingRule(tenantId, code));
     }
 
     /**

@@ -126,8 +126,8 @@ class ScheduledTaskAnnotationIntegrationTest {
                 + "'USER', JSON_ARRAY('login'), 'ACTIVE')");
         jdbc.execute("INSERT IGNORE INTO decision_definition (id, tenant_id, code, name, priority, "
                 + "status) VALUES (1, 1, 'REJECT', '拒绝', 100, 'ACTIVE')");
-        jdbc.execute("INSERT IGNORE INTO rule_definition (id, tenant_id, scene_id, code, name, "
-                + "status, kind, current_version) VALUES (1, 1, 1, 'fraud-rule-001', '欺诈检测规则', "
+        jdbc.execute("INSERT IGNORE INTO rule_definition (id, tenant_id, scene_code, code, name, "
+                + "status, kind, current_version) VALUES (1, 1, 'fraud_check', 'fraud-rule-001', '欺诈检测规则', "
                 + "'PUBLISHED', 'AST_BOOLEAN', 1)");
         jdbc.execute("INSERT IGNORE INTO rule_version (id, rule_definition_id, version, "
                 + "body, decision_bindings, pre_gates, kind, trigger_event_types, "

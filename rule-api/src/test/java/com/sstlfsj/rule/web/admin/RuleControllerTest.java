@@ -34,15 +34,17 @@ class RuleControllerTest {
 
     private MockMvc mockMvc;
     private ConfigService configService;
+    private com.sstlfsj.rule.config.api.service.RuleLineageService ruleLineageService;
 
     @BeforeEach
     void setUp() {
         configService = mock(ConfigService.class);
+        ruleLineageService = mock(com.sstlfsj.rule.config.api.service.RuleLineageService.class);
         JsonMapper mapper = JsonMapper.builder()
                 .addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class)
                 .build();
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new RuleController(configService))
+                .standaloneSetup(new RuleController(configService, ruleLineageService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .build();
@@ -70,6 +72,22 @@ class RuleControllerTest {
                 .andExpect(jsonPath("$.data.currentVersionId").value(42));
 
         verify(configService).getRuleDetail(1L, 10L);
+    }
+
+    @Test
+    void referencedBy_returns200_withReferencingFlows() throws Exception {
+        when(ruleLineageService.findFlowsReferencingRule(1L, "base-check")).thenReturn(
+                java.util.List.of(new com.sstlfsj.rule.config.api.service.RuleLineageService
+                        .ReferencingFlowItem(9L, "flow.transfer", "risk.transfer")));
+
+        mockMvc.perform(get("/admin/v1/rules/base-check/referencedBy").param("tenantId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].ruleDefinitionId").value(9))
+                .andExpect(jsonPath("$.data[0].ruleCode").value("flow.transfer"))
+                .andExpect(jsonPath("$.data[0].sceneCode").value("risk.transfer"));
+
+        verify(ruleLineageService).findFlowsReferencingRule(1L, "base-check");
     }
 
     @Test
@@ -339,7 +357,7 @@ class RuleControllerTest {
         RuleDefinition rd = new RuleDefinition();
         rd.setId(10L);
         rd.setTenantId(1L);
-        rd.setSceneId(5L);
+        rd.setSceneCode("risk.transfer");
         rd.setCode("rule.a");
         rd.setName("规则A");
         rd.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
@@ -347,7 +365,6 @@ class RuleControllerTest {
         rd.setCurrentVersion(42L);
         page.setRecords(java.util.List.of(rd));
         when(configService.listRules(new RuleListQuery(1L, "risk.transfer", "PUBLISHED", null, null, 1, 20))).thenReturn(page);
-        when(configService.getSceneCodeMap(java.util.Set.of(5L))).thenReturn(java.util.Map.of(5L, "risk.transfer"));
 
         mockMvc.perform(get("/admin/v1/rules")
                         .param("tenantId", "1")
