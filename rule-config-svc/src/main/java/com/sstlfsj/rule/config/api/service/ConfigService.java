@@ -12,8 +12,6 @@ import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /** 规则定义生命周期管理：发布、禁用、查询。 */
 public interface ConfigService {
@@ -141,9 +139,4 @@ public interface ConfigService {
 
     /** 启/禁租户。 */
     void toggleTenantStatus(Long tenantId, boolean enable);
-
-    /**
-     * 批量查 sceneId → sceneCode 映射，供 controller 层回填 RuleListItemVO。
-     */
-    Map<Long, String> getSceneCodeMap(Set<Long> sceneIds);
 }

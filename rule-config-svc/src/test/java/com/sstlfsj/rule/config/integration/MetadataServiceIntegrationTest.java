@@ -94,9 +94,9 @@ class MetadataServiceIntegrationTest {
         metricDefinitionMapper.insert(metric("user.age", "ATTRIBUTE", "LONG"));
 
         // 两条规则：fraud 引用 risk.score，payment 引用 account.balance（用回填的 scene/ruleDef id 关联）
-        RuleDefinition rdFraud = ruleDef(fraud.getId(), "r-fraud");
+        RuleDefinition rdFraud = ruleDef(fraud.getCode(), "r-fraud");
         ruleDefinitionMapper.insert(rdFraud);
-        RuleDefinition rdPay = ruleDef(payment.getId(), "r-pay");
+        RuleDefinition rdPay = ruleDef(payment.getCode(), "r-pay");
         ruleDefinitionMapper.insert(rdPay);
 
         ruleVersionMapper.insert(ruleVersion(rdFraud.getId(),
@@ -132,10 +132,10 @@ class MetadataServiceIntegrationTest {
         return m;
     }
 
-    private RuleDefinition ruleDef(Long sceneId, String code) {
+    private RuleDefinition ruleDef(String sceneCode, String code) {
         RuleDefinition r = new RuleDefinition();
         r.setTenantId(TENANT);
-        r.setSceneId(sceneId);
+        r.setSceneCode(sceneCode);
         r.setCode(code);
         r.setName(code);
         r.setStatus(RuleDefinitionStatus.PUBLISHED);
@@ -199,12 +199,12 @@ class MetadataServiceIntegrationTest {
         // fraud 场景已 seed 一条无 payload 依赖的规则；再补两条带 payload 依赖的规则
         SceneDef fraud = sceneMapper.findByCode(TENANT, "fraud");
 
-        RuleDefinition rd1 = ruleDef(fraud.getId(), "r-pay-amount");
+        RuleDefinition rd1 = ruleDef(fraud.getCode(), "r-pay-amount");
         ruleDefinitionMapper.insert(rd1);
         ruleVersionMapper.insert(ruleVersion(rd1.getId(), List.of(),
                 List.of(new PayloadDependency("amount", "DECIMAL", true))));
 
-        RuleDefinition rd2 = ruleDef(fraud.getId(), "r-pay-amount-country");
+        RuleDefinition rd2 = ruleDef(fraud.getCode(), "r-pay-amount-country");
         ruleDefinitionMapper.insert(rd2);
         ruleVersionMapper.insert(ruleVersion(rd2.getId(), List.of(),
                 List.of(new PayloadDependency("amount", "DECIMAL", true),

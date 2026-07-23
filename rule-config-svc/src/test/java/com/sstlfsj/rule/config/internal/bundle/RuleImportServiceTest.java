@@ -82,7 +82,7 @@ class RuleImportServiceTest {
 
     private RuleDefinition existingRuleDef(String code) {
         RuleDefinition rd = new RuleDefinition();
-        rd.setId(10L); rd.setTenantId(1L); rd.setSceneId(5L);
+        rd.setId(10L); rd.setTenantId(1L); rd.setSceneCode("risk.transfer");
         rd.setCode(code); rd.setStatus(RuleDefinitionStatus.PUBLISHED);
         return rd;
     }
@@ -103,7 +103,7 @@ class RuleImportServiceTest {
     @Test
     void apply_skip_newRule_callsCreateDraft() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
         when(metricDefinitionMapper.findAnyByCode(any(), any())).thenReturn(null);
         when(decisionDefinitionMapper.findByCode(any(), any())).thenReturn(null);
 
@@ -116,7 +116,7 @@ class RuleImportServiceTest {
     @Test
     void apply_skip_existingRule_skipsWithoutCreateDraft() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any()))
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any()))
                 .thenReturn(existingRuleDef("rule.a"));
         // no active version → no hash comparison → goes to SKIP branch
         when(ruleVersionMapper.findActiveVersion(any())).thenReturn(null);
@@ -136,7 +136,7 @@ class RuleImportServiceTest {
         var b = new RuleBundle(2, null, "t", "1", List.of(entryNoHash), List.of(), List.of(), List.of());
 
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any()))
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any()))
                 .thenReturn(existingRuleDef("rule.a"));
         // contentHash=null in entry → hash comparison skipped → falls to SKIP branch
         when(ruleVersionMapper.findActiveVersion(any())).thenReturn(activeVersion("h"));
@@ -151,7 +151,7 @@ class RuleImportServiceTest {
     @Test
     void apply_overwrite_existingDraft_editsDraftInPlace() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any()))
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any()))
                 .thenReturn(existingRuleDef("rule.a"));
         when(ruleVersionMapper.findActiveVersion(any())).thenReturn(null);
         RuleVersion draft = new RuleVersion(); draft.setId(50L);
@@ -168,7 +168,7 @@ class RuleImportServiceTest {
     @Test
     void apply_overwrite_noDraft_createsNewVersion() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any()))
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any()))
                 .thenReturn(existingRuleDef("rule.a"));
         when(ruleVersionMapper.findActiveVersion(any())).thenReturn(null);
         when(ruleVersionMapper.findLatestDraft(any())).thenReturn(null); // 无旧 DRAFT
@@ -187,7 +187,7 @@ class RuleImportServiceTest {
     void apply_abort_collectsAllConflictsAndThrows() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
         // 两条规则都已存在 → 两条冲突
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any()))
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any()))
                 .thenReturn(existingRuleDef("rule.a"));
         when(ruleVersionMapper.findActiveVersion(any())).thenReturn(null);
 
@@ -207,7 +207,7 @@ class RuleImportServiceTest {
     @Test
     void dryRun_returnsReport_andMarksTransactionRollbackOnly() {
         when(sceneMapper.findByCode(any(), any())).thenReturn(existingScene());
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
         // TransactionTemplate 需要 txManager.getTransaction 返回 status；验证 dryRun 强制 setRollbackOnly
         org.springframework.transaction.TransactionStatus status =
                 mock(org.springframework.transaction.TransactionStatus.class);

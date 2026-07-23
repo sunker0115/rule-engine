@@ -142,8 +142,7 @@ public class RuleImportService {
             return;
         }
 
-        RuleDefinition existing = ruleDefinitionMapper.findBySceneAndCode(
-                tenantId, scene.getId(), rule.code());
+        RuleDefinition existing = ruleDefinitionMapper.findByTenantAndCode(tenantId, rule.code());
 
         // 幂等：比较 contentHash
         if (existing != null && rule.contentHash() != null) {

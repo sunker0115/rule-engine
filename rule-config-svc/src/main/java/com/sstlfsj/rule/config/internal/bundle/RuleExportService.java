@@ -32,7 +32,7 @@ import java.util.Set;
 /**
  * 规则批量导出：按条件查规则集合，组装多规则自包含 Bundle v2。
  *
- * <p>选取优先级 ruleIds → sceneId → 整租户；每条仅导当前 ACTIVE rule_version（无则跳过）。
+ * <p>选取优先级 ruleIds → sceneCode → 整租户；每条仅导当前 ACTIVE rule_version（无则跳过）。
  * scenes / metrics / decisions 跨规则去重。
  * v2 新增：{@link RuleBundle.RuleEntry#script} 携带脚本源码；
  * {@link RuleBundle.RuleEntry#contentHash} 用于 import 幂等判断；
@@ -51,13 +51,13 @@ public class RuleExportService {
 
     /** 按条件批量导出规则当前 ACTIVE 版本为 Bundle v2。 */
     @Transactional(readOnly = true)
-    public RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId) {
-        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.selectForExport(tenantId, ruleIds, sceneId);
+    public RuleBundle export(Long tenantId, List<Long> ruleIds, String sceneCode) {
+        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.selectForExport(tenantId, ruleIds, sceneCode);
 
-        // 1. 逐条取 ACTIVE rule_version，无则跳过；同时收集 sceneId / metricDep / decisionCode
+        // 1. 逐条取 ACTIVE rule_version，无则跳过；同时收集 sceneCode / metricDep / decisionCode
         List<RuleVersion> activeVersions = new ArrayList<>();
         List<RuleDefinition> exportable = new ArrayList<>();
-        Set<Long> sceneIds = new LinkedHashSet<>();
+        Set<String> sceneCodes = new LinkedHashSet<>();
         Set<MetricDependency> metricDeps = new LinkedHashSet<>();
         Set<String> decisionCodes = new LinkedHashSet<>();
         for (RuleDefinition rd : ruleDefs) {
@@ -65,7 +65,7 @@ public class RuleExportService {
             if (active == null) continue;
             exportable.add(rd);
             activeVersions.add(active);
-            if (rd.getSceneId() != null) sceneIds.add(rd.getSceneId());
+            if (rd.getSceneCode() != null && !rd.getSceneCode().isBlank()) sceneCodes.add(rd.getSceneCode());
             metricDeps.addAll(active.getMetricDependencies() != null ? active.getMetricDependencies() : List.of());
             decisionCodes.addAll(parseDecisionCodes(active.getDecisionBindings()));
         }
@@ -73,12 +73,12 @@ public class RuleExportService {
             throw new IllegalArgumentException("无可导出的 ACTIVE 规则");
         }
 
-        // 2. scenes（去重）+ sceneId → code 映射
-        Map<Long, SceneDef> sceneById = new LinkedHashMap<>();
-        for (SceneDef s : sceneMapper.findByIds(sceneIds)) {
-            sceneById.put(s.getId(), s);
+        // 2. scenes（去重）+ sceneCode → SceneDef 映射
+        Map<String, SceneDef> sceneByCode = new LinkedHashMap<>();
+        for (SceneDef s : sceneMapper.findByCodes(tenantId, sceneCodes)) {
+            sceneByCode.put(s.getCode(), s);
         }
-        List<RuleBundle.SceneSnapshot> scenes = sceneById.values().stream()
+        List<RuleBundle.SceneSnapshot> scenes = sceneByCode.values().stream()
                 .map(s -> new RuleBundle.SceneSnapshot(
                         s.getCode(), s.getName(), s.getDescription(),
                         s.getSubjectType().name(), s.getDominantMode().name(), s.getDecisionStrategy().name(),
@@ -110,14 +110,13 @@ public class RuleExportService {
         for (int i = 0; i < exportable.size(); i++) {
             RuleDefinition rd = exportable.get(i);
             RuleVersion rv = activeVersions.get(i);
-            SceneDef scene = sceneById.get(rd.getSceneId());
             String kindName = (rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN).name();
             String contentHash = RuleContentHasher.ruleHash(
                     rv.getBody(), rv.getDecisionBindings(), rv.getPreGates(),
                     kindName, rv.getTriggerEventTypes(), objectMapper);
             rules.add(new RuleBundle.RuleEntry(
                     rd.getCode(), rd.getName(), kindName,
-                    scene != null ? scene.getCode() : null,
+                    rd.getSceneCode(),
                     rv.getBody(), rv.getDecisionBindings(),
                     rv.getPreGates(), rv.getTriggerEventTypes(),
                     rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of(),
@@ -137,16 +136,15 @@ public class RuleExportService {
 
     /** 按条件导出规则当前 ACTIVE 版本为 RuleVersionSnapshot 列表（SDK 本地调用用）。 */
     @Transactional(readOnly = true)
-    public List<RuleVersionSnapshot> exportSnapshots(Long tenantId, List<Long> ruleIds, Long sceneId) {
-        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.selectForExport(tenantId, ruleIds, sceneId);
+    public List<RuleVersionSnapshot> exportSnapshots(Long tenantId, List<Long> ruleIds, String sceneCode) {
+        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.selectForExport(tenantId, ruleIds, sceneCode);
         List<RuleVersionSnapshot> snapshots = new ArrayList<>();
         for (RuleDefinition rd : ruleDefs) {
             RuleVersion active = ruleVersionMapper.findActiveVersion(rd.getId());
             if (active == null) continue;
-            SceneDef scene = sceneMapper.findByIds(Set.of(rd.getSceneId())).stream().findFirst().orElse(null);
             snapshots.add(new RuleVersionSnapshot(
                     active.getId(),
-                    scene != null ? scene.getCode() : null,
+                    rd.getSceneCode(),
                     String.valueOf(rd.getTenantId()),
                     active.getBody(),
                     active.getPreGates() != null ? active.getPreGates() : List.of(),

@@ -83,8 +83,8 @@ class RuleBundleIntegrationTest {
         sceneMapper.delete(new LambdaQueryWrapper<SceneDef>().isNotNull(SceneDef::getId));
     }
 
-    /** seed 一个 scene + metric + decision + 两条已发布规则，返回 sceneId。 */
-    private Long seedTwoPublishedRules() {
+    /** seed 一个 scene + metric + decision + 两条已发布规则，返回 sceneCode。 */
+    private String seedTwoPublishedRules() {
         SceneDef scene = new SceneDef();
         scene.setTenantId(SRC_TENANT); scene.setCode("risk.transfer"); scene.setName("转账风控");
         scene.setSubjectType(com.sstlfsj.rule.kernel.api.model.SubjectType.USER);
@@ -109,14 +109,14 @@ class RuleBundleIntegrationTest {
         decision.setStatus(com.sstlfsj.rule.config.internal.domain.DecisionStatus.ACTIVE); decision.setCreatedBy("seed"); decision.setCreatedAt(LocalDateTime.now());
         decisionDefinitionMapper.insert(decision);
 
-        seedRule(scene.getId(), "rule.night.transfer", "夜间大额转账");
-        seedRule(scene.getId(), "rule.new.account", "新户拦截");
-        return scene.getId();
+        seedRule(scene.getCode(), "rule.night.transfer", "夜间大额转账");
+        seedRule(scene.getCode(), "rule.new.account", "新户拦截");
+        return scene.getCode();
     }
 
-    private void seedRule(Long sceneId, String code, String name) {
+    private void seedRule(String sceneCode, String code, String name) {
         RuleDefinition rd = new RuleDefinition();
-        rd.setTenantId(SRC_TENANT); rd.setSceneId(sceneId); rd.setCode(code);
+        rd.setTenantId(SRC_TENANT); rd.setSceneCode(sceneCode); rd.setCode(code);
         rd.setName(name); rd.setStatus(RuleDefinitionStatus.PUBLISHED); rd.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         rd.setCreatedBy("seed"); rd.setCreatedAt(LocalDateTime.now());
         ruleDefinitionMapper.insert(rd);
@@ -139,9 +139,9 @@ class RuleBundleIntegrationTest {
 
     @Test
     void exportSceneThenImportToAnotherTenant_reconstructsBothRulesAsDraft() {
-        Long sceneId = seedTwoPublishedRules();
+        String sceneCode = seedTwoPublishedRules();
 
-        RuleBundle bundle = ruleBundleService.export(SRC_TENANT, null, sceneId);
+        RuleBundle bundle = ruleBundleService.export(SRC_TENANT, null, sceneCode);
         assertThat(bundle.rules()).hasSize(2);
         assertThat(bundle.scenes()).hasSize(1);
         assertThat(bundle.metricDefinitions()).hasSize(1);    // 去重
@@ -172,8 +172,8 @@ class RuleBundleIntegrationTest {
     @Test
     void reimportSameBundle_withSkipPolicy_isIdempotent() {
         // v2 SKIP 策略：相同 contentHash → 跳过，不再无限追加 DRAFT
-        Long sceneId = seedTwoPublishedRules();
-        RuleBundle bundle = ruleBundleService.export(SRC_TENANT, null, sceneId);
+        String sceneCode = seedTwoPublishedRules();
+        RuleBundle bundle = ruleBundleService.export(SRC_TENANT, null, sceneCode);
 
         ImportDiffReport first = ruleBundleService.importBundle(DST_TENANT, bundle,
                 ImportPolicy.SKIP, false, "dev");

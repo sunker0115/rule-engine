@@ -12,8 +12,6 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -82,7 +80,6 @@ class ConfigServiceTest {
         public List<TenantItemVO> listTenants(String keyword, String status) {
             throw new UnsupportedOperationException("stub");
         }
-        @Override public Map<Long, String> getSceneCodeMap(Set<Long> sceneIds) { throw new UnsupportedOperationException("stub"); }
         @Override public void toggleTenantStatus(Long tenantId, boolean enable) { throw new UnsupportedOperationException("stub"); }
     };
 

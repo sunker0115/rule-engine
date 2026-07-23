@@ -129,9 +129,9 @@ public class PublishService {
         if (rule.getStatus() == RuleDefinitionStatus.DISABLED) {
             throw new IllegalArgumentException("DISABLED 规则不允许直接发布，需先启用(enable)后再发布");
         }
-        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        SceneDef scene = sceneMapper.findByCode(rule.getTenantId(), rule.getSceneCode());
         if (scene == null) {
-            throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
+            throw new IllegalStateException("Scene 不存在: code=" + rule.getSceneCode());
         }
         // 加载最新 DRAFT（已是冻结快照，premise A）；无待发布草稿则拒
         RuleVersion draft = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
@@ -203,9 +203,9 @@ public class PublishService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        SceneDef scene = sceneMapper.findByCode(rule.getTenantId(), rule.getSceneCode());
         if (scene == null) {
-            throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
+            throw new IllegalStateException("Scene 不存在: code=" + rule.getSceneCode());
         }
         RuleVersion draft = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
         if (draft == null) {
@@ -280,9 +280,9 @@ public class PublishService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        SceneDef scene = sceneMapper.findByCode(rule.getTenantId(), rule.getSceneCode());
         if (scene == null) {
-            throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
+            throw new IllegalStateException("Scene 不存在: code=" + rule.getSceneCode());
         }
         // 一条规则同时只允许一条待发布 DRAFT：有未发布草稿则拒绝出新版本
         if (ruleVersionMapper.findLatestDraft(ruleDefinitionId) != null) {
@@ -588,7 +588,7 @@ public class PublishService {
         Map<String, RuleVersionSnapshot> referenced = new LinkedHashMap<>();
         for (FlowNode node : flow.nodes()) {
             if (node instanceof RuleRefNode ref) {
-                referenced.computeIfAbsent(ref.ruleCode(), code -> freezeReferencedRule(tenantId, scene, code));
+                referenced.computeIfAbsent(ref.ruleCode(), code -> freezeReferencedRule(tenantId, code));
             }
         }
 
@@ -630,23 +630,22 @@ public class PublishService {
     }
 
     /**
-     * 冻结一条被 DECISION_FLOW RuleRefNode 引用的规则：查同 Scene 下 ruleCode 对应规则的 ACTIVE 版本，
-     * 用其 typed 字段组装完整 {@link RuleVersionSnapshot}（发布期定格）。规则不存在/不同 Scene/无 ACTIVE 版本均拒绝发布。
+     * 冻结一条被 DECISION_FLOW RuleRefNode 引用的规则：按 tenant 级 ruleCode 查对应规则的 ACTIVE 版本
+     * （允许跨 Scene 引用），用其 typed 字段组装完整 {@link RuleVersionSnapshot}（发布期定格）。
+     * 规则不存在/无 ACTIVE 版本均拒绝发布。快照 sceneCode 取被引规则自身的 sceneCode。
      *
      * @param tenantId 租户 id
-     * @param scene    本 flow 所属场景（被引规则须同 Scene，v1 治理简化）
-     * @param ruleCode 被引规则逻辑编码
+     * @param ruleCode 被引规则逻辑编码（tenant 内唯一，可属任意 Scene）
      * @return 冻结的被引规则完整快照
      */
-    private RuleVersionSnapshot freezeReferencedRule(Long tenantId, SceneDef scene, String ruleCode) {
+    private RuleVersionSnapshot freezeReferencedRule(Long tenantId, String ruleCode) {
         if (ruleCode == null || ruleCode.isBlank()) {
             throw new IllegalArgumentException("DECISION_FLOW RuleRefNode.ruleCode 不得为空");
         }
-        // 按 (tenant, sceneId, code) 查：跨 Scene 引用查不到 → null → 拒绝（v1 限同 Scene）
-        RuleDefinition ref = ruleDefinitionMapper.findBySceneAndCode(tenantId, scene.getId(), ruleCode);
+        // 按 (tenant, code) 查：ruleCode 为 tenant 级业务标识，允许跨 Scene 引用
+        RuleDefinition ref = ruleDefinitionMapper.findByTenantAndCode(tenantId, ruleCode);
         if (ref == null) {
-            throw new IllegalArgumentException(
-                    "DECISION_FLOW 引用的规则不存在或不属于同一 Scene(v1 限同 Scene): " + ruleCode);
+            throw new IllegalArgumentException("DECISION_FLOW 引用的规则不存在: " + ruleCode);
         }
         RuleVersion active = ruleVersionMapper.findActiveVersion(ref.getId());
         if (active == null) {
@@ -656,7 +655,7 @@ public class PublishService {
         // 直接由 typed 实体字段组装完整快照（同 SnapshotAssembler 的形状，但源为实体而非 JSON，保全 payloadDeps 等全字段）；
         // 被引若为 flow，其 referencedSnapshots 在它自己发布时已冻，此处原样携带，不递归重冻
         return new RuleVersionSnapshot(
-                active.getId(), scene.getCode(), String.valueOf(tenantId),
+                active.getId(), ref.getSceneCode(), String.valueOf(tenantId),
                 active.getBody(), active.getPreGates(), active.getDecisionBindings(),
                 active.getTriggerEventTypes(), refKind.name(), ref.getCode(), active.getVersion(),
                 active.getMetricDependencies(), active.getPayloadDependencies());
@@ -888,8 +887,8 @@ public class PublishService {
             throw new IllegalArgumentException("Scene 不存在: code=" + sceneCode);
         }
 
-        // 2. 校验 code 在同 tenant+scene 下唯一，提前给出友好错误
-        boolean codeExists = ruleDefinitionMapper.findBySceneAndCode(tenantId, scene.getId(), code) != null;
+        // 2. 校验 code 在同 tenant 下唯一（ruleCode 为 tenant 级业务标识），提前给出友好错误
+        boolean codeExists = ruleDefinitionMapper.findByTenantAndCode(tenantId, code) != null;
         if (codeExists) {
             throw new IllegalArgumentException("规则编码已存在: code=" + code);
         }
@@ -907,7 +906,7 @@ public class PublishService {
         validateKindBodyConsistent(effectiveRuleKind, body);
 
         // 4. INSERT rule_definition（status=DRAFT）
-        RuleDefinition rd = RuleDefinition.draft(tenantId, scene.getId(), code, name, effectiveRuleKind, actorId);
+        RuleDefinition rd = RuleDefinition.draft(tenantId, sceneCode, code, name, effectiveRuleKind, actorId);
         ruleDefinitionMapper.insert(rd);
 
         // 5. resolveAndValidate（premise A）：建草稿即冻结快照

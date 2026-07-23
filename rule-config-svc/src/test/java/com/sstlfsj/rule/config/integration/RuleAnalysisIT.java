@@ -148,8 +148,7 @@ class RuleAnalysisIT {
         decisionService.create(TENANT, "BLOCK", "拦截", 100, null, ACTOR);
         publishRule("R_block", flatAnd(cmp(ConditionTypes.GT, "amount", 1000)), "BLOCK");
 
-        Long ruleDefId = ruleDefinitionMapper.findBySceneAndCode(
-                TENANT, sceneMapper.findByCode(TENANT, SCENE).getId(), "R_block").getId();
+        Long ruleDefId = ruleDefinitionMapper.findByTenantAndCode(TENANT, "R_block").getId();
         List<RuleVersion> active = ruleVersionMapper.findActiveWithDecisionByRuleDefIds(List.of(ruleDefId));
 
         assertThat(active).hasSize(1);
@@ -185,7 +184,7 @@ class RuleAnalysisIT {
 
         // 真落库自检：5 条规则的 ACTIVE 版本 conditionAst 经 TypeHandler 读回为 typed AstNode（非 String/Map）
         RuleVersion wideActive = ruleVersionMapper.findActiveVersion(
-                ruleDefinitionMapper.findBySceneAndCode(TENANT, sceneMapper.findByCode(TENANT, SCENE).getId(), "R_wide").getId());
+                ruleDefinitionMapper.findByTenantAndCode(TENANT, "R_wide").getId());
         assertThat(((AstBody) wideActive.getBody()).conditionAst()).isInstanceOf(AndNode.class);
 
         RuleSetAnalysisReport report = ruleAnalysisService.analyze(TENANT, SCENE);

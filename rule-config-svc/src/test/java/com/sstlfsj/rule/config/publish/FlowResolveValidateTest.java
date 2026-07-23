@@ -44,7 +44,8 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 resolveAndValidate 的 DECISION_FLOW 分支（图编排层）：
  * ① RuleRefNode 冻被引规则 ACTIVE 快照、Switch 表达式 metric + 被引 metric 并集、OutputNode 决策冻结；
- * ② 无 ACTIVE 被引规则 / 跨 Scene RuleRef 拒绝发布；③ 结构非法（缺 input / 孤儿节点 / Output 决策不存在）拒绝。
+ * ② 无 ACTIVE 被引规则拒绝发布，跨 Scene RuleRef 允许冻结（快照 sceneCode 取被引规则自身）；
+ * ③ 结构非法（缺 input / 孤儿节点 / Output 决策不存在）拒绝。
  * 用真实 {@link CelExpressionEngine} 注入 PublishService，mapper 用 mock。
  */
 @ExtendWith(MockitoExtension.class)
@@ -79,7 +80,8 @@ class FlowResolveValidateTest {
         RuleDefinition ref = new RuleDefinition();
         ref.setId(100L);
         ref.setCode("sub_rule");
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(ref);
+        ref.setSceneCode("PAYMENT");
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(ref);
         RuleVersion active = new RuleVersion();
         active.setId(200L);
         active.setVersion(3L);
@@ -141,7 +143,7 @@ class FlowResolveValidateTest {
         RuleDefinition ref = new RuleDefinition();
         ref.setId(100L);
         ref.setCode("sub_rule");
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(ref);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(ref);
         when(ruleVersionMapper.findActiveVersion(any())).thenReturn(null);
 
         FlowGraph flow = new FlowGraph(
@@ -156,22 +158,40 @@ class FlowResolveValidateTest {
                 .hasMessageContaining("无 ACTIVE 版本");
     }
 
-    /** RuleRef 引用的规则不在本 Scene（findBySceneAndCode 查不到）→ 跨 Scene 拒绝发布（v1 限同 Scene）。 */
+    /** RuleRef 引用别的 Scene 的规则（tenant 级 findByTenantAndCode 查得到）→ 允许跨 Scene 冻结，快照 sceneCode 取被引规则自身。 */
     @Test
-    void flowBranch_crossSceneRuleRef_throws() {
-        // 同 Scene 下查不到该 code（规则属于别的 Scene）
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+    void flowBranch_freezesReferencedRuleFromOtherScene() {
+        // 被引规则属于别的 Scene(other.scene)，tenant 级查得到 + 有 ACTIVE 版本
+        RuleDefinition ref = new RuleDefinition();
+        ref.setId(100L);
+        ref.setCode("other_scene_rule");
+        ref.setSceneCode("other.scene");
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(ref);
+        RuleVersion active = new RuleVersion();
+        active.setId(300L);
+        active.setVersion(1L);
+        active.setKind(RuleKind.AST_BOOLEAN);
+        active.setMetricDependencies(List.of());
+        when(ruleVersionMapper.findActiveVersion(any())).thenReturn(active);
+        // OutputNode 决策 REVIEW 须存在
+        DecisionDefinition dd = new DecisionDefinition();
+        dd.setCode("REVIEW");
+        dd.setName("人工审核");
+        dd.setPriority(10);
+        when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(dd));
 
         FlowGraph flow = new FlowGraph(
                 List.of(new RuleRefNode("n1", "other_scene_rule"), new OutputNode("n2", "REVIEW")),
                 List.of(new FlowEdge("n1", "n2", null)),
                 "n1");
 
-        assertThatThrownBy(() -> publishService.resolveAndValidate(
+        PublishService.ResolvedDraft resolved = publishService.resolveAndValidate(
                 1L, scene, RuleKind.DECISION_FLOW,
-                null, List.of(), List.of(), List.of(), null, flow))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("同一 Scene");
+                null, List.of(), List.of(), List.of(), null, flow);
+
+        // 跨 Scene 冻结成功：快照 sceneCode 取被引规则自身的 sceneCode
+        RuleVersionSnapshot refSnap = resolved.referencedSnapshots().get("other_scene_rule");
+        assertThat(refSnap.sceneCode()).isEqualTo("other.scene");
     }
 
     /** 缺 inputNodeId → 结构校验拒绝。 */

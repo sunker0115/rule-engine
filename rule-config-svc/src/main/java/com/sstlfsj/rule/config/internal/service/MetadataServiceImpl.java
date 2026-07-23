@@ -130,7 +130,7 @@ class MetadataServiceImpl implements MetadataService {
             return new InputManifestResponse(List.of());
         }
 
-        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneIds(tid, List.of(scene.getId()))
+        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneCode(tid, sceneCode)
                 .stream().map(RuleDefinition::getId).toList();
         if (defIds.isEmpty()) {
             return new InputManifestResponse(List.of());
@@ -163,12 +163,9 @@ class MetadataServiceImpl implements MetadataService {
      * 与 collectRequiredMetricCodes 不同：保留 version，以便 DECLARED 分支按版本精确查询。
      */
     private Set<MetricDependency> collectRequiredDeps(Long tenantId, List<String> scenes) {
-        List<Long> sceneIds = sceneMapper.findByCodes(tenantId, scenes)
-                .stream().map(SceneDef::getId).toList();
-        if (sceneIds.isEmpty()) return Set.of();
-
-        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneIds(tenantId, sceneIds)
-                .stream().map(RuleDefinition::getId).toList();
+        List<Long> defIds = scenes.stream()
+                .flatMap(sc -> ruleDefinitionMapper.findByTenantAndSceneCode(tenantId, sc).stream())
+                .map(RuleDefinition::getId).distinct().toList();
         if (defIds.isEmpty()) return Set.of();
 
         Set<MetricDependency> deps = new HashSet<>();

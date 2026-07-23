@@ -10,12 +10,10 @@ import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
-import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.DecisionDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
-import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -44,14 +42,12 @@ class DecisionServiceImplTest {
         TableInfoHelper.initTableInfo(assistant, DecisionDefinition.class);
         TableInfoHelper.initTableInfo(assistant, RuleDefinition.class);
         TableInfoHelper.initTableInfo(assistant, RuleVersion.class);
-        TableInfoHelper.initTableInfo(assistant, SceneDef.class);
     }
 
     @Mock DecisionDefinitionMapper mapper;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
-    @Mock SceneMapper sceneMapper;
     @InjectMocks DecisionServiceImpl sut;
 
     private static final Long TENANT = 1L;
@@ -117,8 +113,8 @@ class DecisionServiceImplTest {
 
     @Test
     void findRulesProducingDecision_returnsOnlyProducingRules() {
-        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
-        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", 11L, "DISABLED");
+        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", "risk.transfer", "PUBLISHED");
+        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", "risk.login", "DISABLED");
         RuleVersion rv1 = ruleVersion(1001L, 101L, List.of(new DecisionBinding("REJECT", 10)));
         RuleVersion rv2 = ruleVersion(1002L, 101L, List.of(new DecisionBinding("PASS", 5)));
         RuleVersion rv3 = ruleVersion(1003L, 102L, List.of(new DecisionBinding("REJECT", 8)));
@@ -126,7 +122,6 @@ class DecisionServiceImplTest {
 
         when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd1, rd2));
         when(ruleVersionMapper.findActiveWithDecisionByRuleDefIds(any())).thenReturn(List.of(rv1, rv2, rv3, rv4));
-        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene(10L, "risk.transfer"), scene(11L, "risk.login")));
 
         List<RuleRef> result = sut.findRulesProducingDecision(TENANT, "REJECT");
 
@@ -149,7 +144,7 @@ class DecisionServiceImplTest {
 
     @Test
     void countRuleUsages_aggregatesPerDecisionCode_dedupPerRule() {
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账", 10L, "PUBLISHED");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账", "risk.transfer", "PUBLISHED");
         RuleVersion rv1 = ruleVersion(1001L, 101L, List.of(new DecisionBinding("REJECT", 10)));
         RuleVersion rv2 = ruleVersion(1002L, 101L, List.of(new DecisionBinding("REJECT", 9), new DecisionBinding("REVIEW", 3)));
         RuleVersion rv3 = ruleVersion(1003L, 101L, List.of(new DecisionBinding("REJECT", 8), new DecisionBinding("REJECT", 7)));
@@ -165,7 +160,7 @@ class DecisionServiceImplTest {
 
     @Test
     void countRuleUsages_skipsNullDecisionCode() {
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账", 10L, "PUBLISHED");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账", "risk.transfer", "PUBLISHED");
         // decisionCode 为 null 的绑定（异常数据）须被过滤，不得触发 merge NPE
         RuleVersion rv = ruleVersion(1001L, 101L, List.of(
                 new DecisionBinding(null, 1), new DecisionBinding("REJECT", 2)));
@@ -189,13 +184,12 @@ class DecisionServiceImplTest {
         assertThatThrownBy(() -> sut.get(TENANT, "NOPE")).isInstanceOf(IllegalArgumentException.class);
     }
 
-    private RuleDefinition ruleDefinition(Long id, String code, String name, Long sceneId, String status) {
+    private RuleDefinition ruleDefinition(Long id, String code, String name, String sceneCode, String status) {
         RuleDefinition rd = new RuleDefinition();
         rd.setId(id); rd.setTenantId(TENANT); rd.setCode(code); rd.setName(name);
-        rd.setSceneId(sceneId); rd.setStatus(RuleDefinitionStatus.valueOf(status));
+        rd.setSceneCode(sceneCode); rd.setStatus(RuleDefinitionStatus.valueOf(status));
         return rd;
     }
-    private SceneDef scene(Long id, String code) { SceneDef s = new SceneDef(); s.setId(id); s.setCode(code); return s; }
     private RuleVersion ruleVersion(Long id, Long ruleDefinitionId, List<DecisionBinding> bindings) {
         RuleVersion rv = new RuleVersion();
         rv.setId(id); rv.setRuleDefinitionId(ruleDefinitionId);

@@ -10,12 +10,10 @@ import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
-import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
-import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.repository.TenantMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
@@ -41,7 +39,6 @@ class ConfigServiceImplTest {
 
     @Mock PublishService publishService;
     @Mock RuleDefinitionMapper ruleDefinitionMapper;
-    @Mock SceneMapper sceneMapper;
     @Mock RuleVersionMapper ruleVersionMapper;
     @Mock TenantMapper tenantMapper;
     @Mock ApplicationEventPublisher eventPublisher;
@@ -67,14 +64,11 @@ class ConfigServiceImplTest {
         RuleDefinition rule = new RuleDefinition();
         rule.setId(10L);
         rule.setTenantId(1L);
-        rule.setSceneId(5L);
+        rule.setSceneCode("PAYMENT");
         rule.setCurrentVersion(100L);
         rule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        com.sstlfsj.rule.config.internal.domain.SceneDef scene = new com.sstlfsj.rule.config.internal.domain.SceneDef();
-        scene.setId(5L); scene.setCode("PAYMENT");
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
 
         configService.disable(1L, 10L, "actor1");
 
@@ -107,14 +101,11 @@ class ConfigServiceImplTest {
         RuleDefinition rule = new RuleDefinition();
         rule.setId(10L);
         rule.setTenantId(1L);
-        rule.setSceneId(5L);
+        rule.setSceneCode("PAYMENT");
         rule.setCurrentVersion(100L);
         rule.setStatus(RuleDefinitionStatus.DISABLED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
-        com.sstlfsj.rule.config.internal.domain.SceneDef scene = new com.sstlfsj.rule.config.internal.domain.SceneDef();
-        scene.setId(5L); scene.setCode("PAYMENT");
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
 
         configService.enable(1L, 10L, "actor1");
 
@@ -171,15 +162,9 @@ class ConfigServiceImplTest {
 
     @Test
     void listRules_withSceneCodeAndStatus_filtersAndReturnsPage() {
-        SceneDef scene = new SceneDef();
-        scene.setId(5L);
-        scene.setTenantId(1L);
-        scene.setCode("risk.transfer");
-        when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
-
         RuleDefinition rd = new RuleDefinition();
         rd.setId(10L);
-        rd.setSceneId(5L);
+        rd.setSceneCode("risk.transfer");
         rd.setCode("rule.a");
         rd.setName("规则A");
         rd.setStatus(RuleDefinitionStatus.PUBLISHED);
@@ -202,19 +187,24 @@ class ConfigServiceImplTest {
         assertThat(item.getKind()).isEqualTo(RuleKind.AST_BOOLEAN);
         assertThat(item.getStatus()).isEqualTo(RuleDefinitionStatus.PUBLISHED);
         assertThat(item.getCurrentVersion()).isEqualTo(42L);
-        verify(sceneMapper).findByCode(any(), any());
-        verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any(), any(), any());
+        // 翻译层已消灭：sceneCode 直传 selectRulePage，不再经 sceneMapper 转 sceneId
+        verify(ruleDefinitionMapper).selectRulePage(
+                any(), eq(1L), eq("risk.transfer"), eq("PUBLISHED"), any(), any());
     }
 
     @Test
-    void listRules_sceneNotFound_returnsEmptyPage() {
-        when(sceneMapper.findByCode(any(), any())).thenReturn(null);
+    void listRules_sceneCodeWithNoRules_returnsEmptyPage() {
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<RuleDefinition> emptyPage =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20, 0);
+        emptyPage.setRecords(java.util.List.of());
+        when(ruleDefinitionMapper.selectRulePage(any(), any(), any(), any(), any(), any())).thenReturn(emptyPage);
 
         var result = configService.listRules(new RuleListQuery(1L, "nonexistent.scene", null, null, null, 1, 20));
 
         assertThat(result.getRecords()).isEmpty();
         assertThat(result.getTotal()).isEqualTo(0);
-        verifyNoInteractions(ruleDefinitionMapper);
+        verify(ruleDefinitionMapper).selectRulePage(
+                any(), eq(1L), eq("nonexistent.scene"), any(), any(), any());
     }
 
     @Test
@@ -228,7 +218,6 @@ class ConfigServiceImplTest {
 
         assertThat(result.getRecords()).isEmpty();
         verify(ruleDefinitionMapper).selectRulePage(any(), any(), any(), any(), any(), any());
-        verifyNoInteractions(sceneMapper);
     }
 
     @Test
@@ -252,17 +241,12 @@ class ConfigServiceImplTest {
         RuleDefinition rule = new RuleDefinition();
         rule.setId(10L);
         rule.setTenantId(1L);
-        rule.setSceneId(5L);
+        rule.setSceneCode("risk.transfer");
         rule.setCode("rule.a");
         rule.setName("规则A");
         rule.setStatus(RuleDefinitionStatus.PUBLISHED);
         rule.setKind(RuleKind.AST_BOOLEAN);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(rule);
-
-        SceneDef scene = new SceneDef();
-        scene.setId(5L);
-        scene.setCode("risk.transfer");
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
 
         RuleVersion active = new RuleVersion();
         active.setId(42L);
