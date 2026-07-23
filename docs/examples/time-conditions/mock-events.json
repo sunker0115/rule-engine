@@ -1,0 +1,51 @@
+[
+  {
+    "_comment": "E1: rule-time-window 命中 — 工作日 10:00（asOf=周三 10:00，在 09:00–22:00 窗口内）",
+    "tenantCode": "loadtest", "sceneCode": "ops.promotion", "eventType": "user.action.login",
+    "subjectId": "user-001", "eventId": "evt-tw-001",
+    "occurredAt": "2026-06-10T10:00:00+08:00", "asOf": "2026-06-10T10:00:00+08:00",
+    "payload": { "action_type": "login" }
+  },
+  {
+    "_comment": "E2: rule-time-window 不命中 — 凌晨 02:00（asOf 不在 09:00–22:00 窗口内）",
+    "tenantCode": "loadtest", "sceneCode": "ops.promotion", "eventType": "user.action.login",
+    "subjectId": "user-002", "eventId": "evt-tw-002",
+    "occurredAt": "2026-06-10T02:00:00+08:00", "asOf": "2026-06-10T02:00:00+08:00",
+    "payload": { "action_type": "login" }
+  },
+  {
+    "_comment": "E3: rule-time-window 不命中 — 周六 11:00（2026-06-13 是周六，daysOfWeek 排除周末）",
+    "tenantCode": "loadtest", "sceneCode": "ops.promotion", "eventType": "user.action.login",
+    "subjectId": "user-003", "eventId": "evt-tw-003",
+    "occurredAt": "2026-06-13T11:00:00+08:00", "asOf": "2026-06-13T11:00:00+08:00",
+    "payload": { "action_type": "login" }
+  },
+  {
+    "_comment": "E4: rule-occurred-at 命中 — occurredAt=2026-06-15 在活动期内（asOf 已超期也命中：补录场景按业务时间判断）",
+    "tenantCode": "loadtest", "sceneCode": "ops.promotion", "eventType": "user.action.purchase",
+    "subjectId": "user-004", "eventId": "evt-oat-001",
+    "occurredAt": "2026-06-15T14:30:00+08:00", "asOf": "2026-07-05T10:00:00+08:00",
+    "payload": { "action_type": "purchase" }
+  },
+  {
+    "_comment": "E5: rule-occurred-at 不命中 — occurredAt=2026-05-31 活动开始前一天",
+    "tenantCode": "loadtest", "sceneCode": "ops.promotion", "eventType": "user.action.purchase",
+    "subjectId": "user-005", "eventId": "evt-oat-002",
+    "occurredAt": "2026-05-31T23:59:59+08:00", "asOf": "2026-06-10T10:00:00+08:00",
+    "payload": { "action_type": "purchase" }
+  },
+  {
+    "_comment": "E6: rule-occurred-at 不命中 — occurredAt=2026-07-01 活动结束后",
+    "tenantCode": "loadtest", "sceneCode": "ops.promotion", "eventType": "user.action.purchase",
+    "subjectId": "user-006", "eventId": "evt-oat-003",
+    "occurredAt": "2026-07-01T00:00:00+08:00", "asOf": "2026-07-01T10:00:00+08:00",
+    "payload": { "action_type": "purchase" }
+  },
+  {
+    "_comment": "E7-9: rule-metric-window 由 user.login.count.7d（SQL_AGGREGATE 引擎自取）判定，命中与否取决于 loadtest_ro 库 user_login_log 里 subjectId 近 7 天登录行数（≥3 命中）。需先在库中准备对应数据，不再由请求携带指标值（D55）。",
+    "tenantCode": "loadtest", "sceneCode": "ops.promotion", "eventType": "user.action.login",
+    "subjectId": "user-007", "eventId": "evt-mw-001",
+    "occurredAt": "2026-06-10T09:00:00+08:00",
+    "payload": { "action_type": "login" }
+  }
+]

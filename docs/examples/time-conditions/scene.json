@@ -1,0 +1,13 @@
+{
+  "tenantId": "9001",
+  "sceneCode": "ops.promotion",
+  "name": "营销-促活规则",
+  "description": "时间条件三种写法演示（time.window / time.occurred_at / Metric 内嵌窗口），PULL 同步评估",
+  "dominantMode": "PULL",
+  "subjectType": "USER",
+  "eventTypes": ["user.action.login", "user.action.purchase"],
+  "payloadSchema": [
+    { "name": "action_type", "type": "string", "required": true }
+  ],
+  "defaultParams": { "timezone": "Asia/Shanghai" }
+}

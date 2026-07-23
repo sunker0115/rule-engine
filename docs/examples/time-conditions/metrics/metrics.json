@@ -1,15 +1,14 @@
 [
   {
     "metricCode": "user.login.count.7d",
-    "tenantId": "demo-tenant",
     "name": "近 7 天登录次数",
     "sourceType": "SQL_AGGREGATE",
     "dataType": "LONG",
     "params": {
+      "datasource": "loadtest_ro",
       "sql": "SELECT COUNT(*) FROM user_login_log WHERE user_id = :subjectId AND created_at >= NOW() - INTERVAL 7 DAY"
     },
-    "cachePolicyDefault": { "ttl": 60 },
-    "allowProvided": true,
-    "_note": "SQL_AGGREGATE 默认 false，此处显式覆盖为 true：营销场景允许业务方上报预计算的登录次数（如来自外部行为平台），引擎跳过 SQL 查询"
+    "cacheTtlSeconds": 60,
+    "allowProvided": false
   }
 ]

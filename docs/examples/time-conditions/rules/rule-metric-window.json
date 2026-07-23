@@ -1,0 +1,20 @@
+{
+  "tenantId": "9001",
+  "sceneCode": "ops.promotion",
+  "code": "rule-metric-window",
+  "name": "近 7 天活跃用户规则",
+  "kind": "AST_BOOLEAN",
+  "body": {
+    "type": "AstBody",
+    "conditionAst": {
+      "type": "ConditionNode",
+      "conditionType": "GTE",
+      "displayLabel": "近 7 天登录 ≥ 3 次",
+      "metricCode": "user.login.count.7d",
+      "params": { "threshold": 3 }
+    }
+  },
+  "decisionBindings": [{ "decisionCode": "REWARD" }],
+  "preGates": [{ "gateType": "ROLLOUT", "params": { "percentage": 100 } }],
+  "triggerEventTypes": ["user.action.login"]
+}

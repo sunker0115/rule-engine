@@ -1,0 +1,38 @@
+{
+  "tenantId": "9001",
+  "sceneCode": "ops.promotion",
+  "code": "rule-time-window",
+  "name": "工作时段促活规则",
+  "kind": "AST_BOOLEAN",
+  "body": {
+    "type": "AstBody",
+    "conditionAst": {
+      "type": "AndNode",
+      "displayLabel": "工作时段内的登录行为",
+      "children": [
+        {
+          "type": "ConditionNode",
+          "conditionType": "time.window",
+          "displayLabel": "工作日 09:00–22:00",
+          "params": {
+            "start": "09:00",
+            "end": "22:00",
+            "timezone": "Asia/Shanghai",
+            "daysOfWeek": ["MON", "TUE", "WED", "THU", "FRI"]
+          }
+        },
+        {
+          "type": "ConditionNode",
+          "conditionType": "EQ",
+          "displayLabel": "事件类型为登录",
+          "metricCode": "action_type",
+          "valueRef": "PAYLOAD",
+          "params": { "value": "login" }
+        }
+      ]
+    }
+  },
+  "decisionBindings": [{ "decisionCode": "REWARD" }],
+  "preGates": [{ "gateType": "ROLLOUT", "params": { "percentage": 100 } }],
+  "triggerEventTypes": ["user.action.login", "user.action.purchase"]
+}
