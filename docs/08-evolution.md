@@ -180,7 +180,7 @@
 - **trace 兼容**：trace 永远走解释器（编译版只服务非 trace 快路径），故每条 RuleVersion 的 NodeTrace 仍逐行展开，切换前后 trace 逐行一致（D7 不变）天然成立。
 - **灰度**：`engine.rule.eval.compiled-executor.*`（`enabled` / `rule-code-whitelist` / `on-compile-error`=FALLBACK\|FAIL），默认 `enabled=false` 逐字节等同解释器，`EvalEngine` 零改动；`CompiledPredicateEvictor` 监听 `RulePublishedEvent`/`SceneChangedEvent` 调 `evictAll`（键不可变免脏，纯内存卫生）。
 - **实测收益（替代原预测）**：Phase 0（冻结 LONG）AST 求值亚微秒（50 条件 865ns），JIT 逃逸分析已使解释器非 trace 路径近零分配（72–120 B/op）——故原"5–10μs→0.3–1μs"预测与"零分配"目标均不成立。A/B 实测编译版速度收益温和（20–50 条件 ~10–17%，5 条件持平）、分配≤解释器（50 条件 72B vs 120B）。默认关，作为架构层可切换能力落地，待生产 profiling（高 QPS + 高条件数 + 巨态分派）达标再灰度开。
-- **后续轮（未做）**：alpha/CSE 跨规则条件去重（同 `(sceneCode,eventType)` 下 ConditionNode hash 去重，同 `EvalContext` 内同条件只算一次）独立评估。`rule_version.compiled_predicate_ref` 列保持预留留空（lazy 编译，无需持久化编译产物引用）。
+- **后续轮（不做）**：alpha/CSE 跨规则条件去重——本项目不可变独立快照(D6)无对象级 Condition 共享引用，AST_BOOLEAN 已预编译到纳秒级(D67)，建缓存键+HashMap 查找开销>重新求值，是负优化。与 trae 架构差异（对方 Rule 层组合共享引用）导致其合理在本项目不成立。
 
 ### 2.14 嵌入式 SDK 模式（来源 D20 v1 不做的"嵌入式 SDK"）
 

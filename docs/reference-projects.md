@@ -93,7 +93,6 @@
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 不需要 | ice | 树形编排+Leaf 副作用执行+多语言 SDK+零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK/文件存储非本项目方向；节点复用(D75 RuleRef)/并行(§2.29)已有等价物 |
 | 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH 压测：纯 AST_BOOLEAN 负优化 13-42x，仅含重脚本/决策图场景建议开启） |
-| 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
 | 已吸收 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 B32 `EffectivenessService`（TP/FP/FN→precision/recall，RULE_VERSION/DECISION 维度 + DAY/WEEK 分桶漂移）+ 前端 `EffectivenessPage` |
 
@@ -125,7 +124,7 @@
 | 不需要 | `DecisionCode` 硬编码枚举 | 本项目 Decision 是业务配置，灵活性更高 | — |
 | 不需要 | Rule 实体层组合策略 | 本项目组合语义在 AST 表达，职责更清晰 | — |
 | 不需要 | R4 自研有状态 Flow | 同步图已由 D75 覆盖；有状态编排 D60/D75 已定接 Flowable | — |
-| 待定 | R5 Decorator 三级缓存键 | `ConditionEvaluationKey=(conditionId, ctxHash)` 与"同 ctx 条件只算一次"一致 | §2.13 alpha 节点共享 |
+| 不需要 | R5 Decorator 三级缓存键 | trae 规则层 Condition 共享引用缓存有意义；本项目不可变独立快照(D6)+预编译纳秒级(D67)，建缓存键开销>重新求值，负优化 | — |
 
 #### 3.2.2 skyhackvip/risk_engine（天网）
 
