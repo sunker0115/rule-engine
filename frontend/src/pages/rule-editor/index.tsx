@@ -58,7 +58,8 @@ export default function RuleEditor() {
   const [dryRunOpen, setDryRunOpen] = useState(false);
   // 当前要试算的目标版本；null 表示走默认（最新 DRAFT/ACTIVE 版本）
   const [dryRunTarget, setDryRunTarget] = useState<RuleVersionItem | null>(null);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(true); // 默认关闭
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [analysisReport, setAnalysisReport] = useState<RuleSetAnalysisReport | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -169,7 +170,7 @@ export default function RuleEditor() {
 
   return (
     <Layout style={{ background: '#fff', height: 'calc(100vh - 64px - 48px)' }}>
-      <Sider width={260} style={{ background: '#fafafa', borderRight: '1px solid #f0f0f0', overflow: 'auto' }}>
+      <Sider width={leftCollapsed ? 0 : 260} style={{ background: '#fafafa', borderRight: '1px solid #f0f0f0', overflow: leftCollapsed ? 'hidden' : 'auto', transition: 'width 0.2s', minWidth: 0 }}>
         <LeftPanel
           ruleDetail={ruleDetail}
           onOpenDryRun={openDryRun}
@@ -179,9 +180,14 @@ export default function RuleEditor() {
           onOpenAnalysis={() => setAnalysisOpen(true)}
         />
       </Sider>
+      {/* 左栏折叠手柄 */}
+      <div onClick={() => setLeftCollapsed(!leftCollapsed)}
+        style={{ width: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: leftCollapsed ? '#fff' : '#fafafa', borderRight: leftCollapsed ? '1px solid #f0f0f0' : 'none', flex: 'none' }}>
+        <MenuFoldOutlined style={{ fontSize: 10, color: '#999', transform: leftCollapsed ? 'rotate(180deg)' : undefined }} />
+      </div>
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <Content style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-          <CenterPanel metadata={metadata} sceneCode={ruleDetail.sceneCode} ruleCode={ruleDetail.code} tenantId={Number(ruleDetail.tenantId) || currentId || 0} analysisReport={analysisReport} onLeafChanged={reanalyze} />
+        <Content style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 }}>
+          <CenterPanel metadata={metadata} sceneCode={ruleDetail.sceneCode} ruleCode={ruleDetail.code} tenantId={Number(ruleDetail.tenantId) || currentId || 0} analysisReport={analysisReport} onLeafChanged={reanalyze} onOpenRightPanel={() => setRightCollapsed(false)} onCloseRightPanel={() => { setRightCollapsed(true); }} />
         </Content>
         <div
           onClick={() => setRightCollapsed(!rightCollapsed)}

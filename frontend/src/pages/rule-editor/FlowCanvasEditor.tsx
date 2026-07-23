@@ -4,9 +4,9 @@ import {
   useReactFlow, type Node, type Edge, type NodeProps, type NodeChange, type EdgeChange, type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Select, Tag, Typography, Empty } from 'antd';
+import { Select, Tag, Empty } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { listRules } from '@/api/rule';
+import { useRuleStore } from '@/store/ruleStore';
 import { flowCyclesForRule, flowDeadNodesForRule } from './analysisSummary';
 import FlowNodeInspectorDrawer, { type SceneRuleItem } from './FlowNodeInspectorDrawer';
 import type {
@@ -24,6 +24,14 @@ interface Props {
   decisions: DecisionItem[];
   analysisReport?: RuleSetAnalysisReport | null;
   onLeafChanged?: () => void;
+  /** 画布上选中节点的 id 变化时回调（null = 取消选中） */
+  onSelectedNodeChange?: (nodeId: string | null) => void;
+  /** 画布上选中边（在 graph.edges 中的 index）变化时回调（null = 取消选中） */
+  onSelectedEdgeChange?: (edgeIndex: number | null) => void;
+  /** 双击节点/边时打开右栏 */
+  onOpenRightPanel?: () => void;
+  /** 点空白处关闭右栏 */
+  onCloseRightPanel?: () => void;
 }
 
 /** 画布节点 data 载荷（RF 要求 data extends Record）。 */
@@ -228,34 +236,19 @@ const nodeTypes = {
 
 const PALETTE: FlowNodeType[] = ['RuleRefNode', 'SwitchNode', 'TransformNode', 'OutputNode'];
 
-function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metadata, decisions, analysisReport, onLeafChanged }: Props) {
+function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metadata, decisions, analysisReport, onLeafChanged, onSelectedNodeChange, onSelectedEdgeChange, onOpenRightPanel, onCloseRightPanel }: Props) {
+  const { drillFlowNodeId, setDrillFlowNodeId, flowSceneRules: sceneRules } = useRuleStore();
   const { t } = useTranslation('rule');
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // ---- ReactFlow 受控模式内部状态 ----
-  // position + dimensions 是 RF 内部属性，不持久化到 FlowGraph；
-  // 汇聚在此统一管理，onNodesChange 完整处理所有 change 类型写回。
   const [nodeInternals, setNodeInternals] = useState<Record<string, NodeInternal>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [inspectId, setInspectId] = useState<string | null>(null);
-  const [sceneRules, setSceneRules] = useState<SceneRuleItem[]>([]);
-  // 边双击编辑：记录边在 graph.edges 中的下标 + 屏幕坐标
-  const [edgeEdit, setEdgeEdit] = useState<{ index: number; x: number; y: number } | null>(null);
+  // RuleRef 下钻编辑抽屉（由 store 驱动，RightPanel 按钮触发）
 
   const graph: FlowGraph = value ?? { nodes: [], edges: [], inputNodeId: '' };
   const defaultLang = metadata?.expressionLangs?.[0] ?? 'CEL';
-
-  // 拉取同场景规则供 RuleRef 引用（排除自身）
-  const reloadSceneRules = useCallback(async () => {
-    if (!tenantId || !sceneCode) return;
-    const data = await listRules(tenantId, sceneCode, { page: 1, size: 500 });
-    setSceneRules((data.items ?? [])
-      .filter((r) => r.code !== ruleCode)
-      .map((r) => ({ code: r.code, name: r.name, ruleDefinitionId: r.ruleDefinitionId, kind: r.kind })));
-  }, [tenantId, sceneCode, ruleCode]);
-
-  useEffect(() => { reloadSceneRules(); }, [reloadSceneRules]);
 
   // 为新节点补自动布局位置（新增 / 首次加载）；已有位置的节点不覆盖（保留用户拖拽结果）
   useEffect(() => {
@@ -271,6 +264,14 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
       });
     }
   }, [graph.nodes]);
+
+  // fitView 在 flex 容器尺寸稳定后重新适配（首屏偏小再撑大时避免节点显示不全）
+  useEffect(() => {
+    if (graph.nodes.length > 0) {
+      const t = setTimeout(() => fitView?.({ padding: 0.2, duration: 200 }), 300);
+      return () => clearTimeout(t);
+    }
+  }, [graph.nodes.length, fitView]);
 
   // 图内 finding → 成环边集 / 死节点集
   const cyclicEdges = useMemo(() => {
@@ -405,67 +406,30 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
 
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
 
-  // 边双击 → 弹出 caseKey 编辑（Switch 出边选 caseKey；RuleRef 出边选 true/false）
-  const handleEdgeDoubleClick = useCallback((_: React.MouseEvent, edge: Edge) => {
-    const idx = graph.edges.findIndex((_e, i) => rfEdges[i]?.id === edge.id);
-    if (idx < 0) return;
-    const src = graph.nodes.find((n) => n.id === edge.source);
-    if (src?.type !== 'SwitchNode' && src?.type !== 'RuleRefNode') return;
-    setEdgeEdit({ index: idx, x: _.clientX, y: _.clientY });
-  }, [graph, rfEdges]);
-
-  const commitEdgeCaseKey = useCallback((val: string | null) => {
-    if (!edgeEdit) return;
-    // null/空串 表示清空 caseKey（变为无条件边）
-    const next = graph.edges.map((e, i) => i === edgeEdit.index ? { ...e, caseKey: val || null } : e);
-    onChange({ ...graph, edges: next });
-    setEdgeEdit(null);
-  }, [graph, onChange, edgeEdit]);
-
-  const editingEdge = edgeEdit ? graph.edges[edgeEdit.index] : null;
-  const editingEdgeSrc = editingEdge ? graph.nodes.find((n) => n.id === editingEdge.from) ?? null : null;
-  const editingEdgeOptions: { value: string; label: string }[] = (() => {
-    if (!editingEdgeSrc) return [];
-    if (editingEdgeSrc.type === 'SwitchNode') return (editingEdgeSrc as SwitchNode).caseKeys.map((k) => ({ value: k, label: k }));
-    if (editingEdgeSrc.type === 'RuleRefNode') return [{ value: 'true', label: 'true — 规则命中' }, { value: 'false', label: 'false — 规则未命中' }];
-    return [];
-  })();
-
-  const updateNode = useCallback((updated: FlowNode) => {
-    onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === updated.id ? updated : n)) });
-  }, [graph, onChange]);
-
-  const setAsInput = useCallback((id: string) => { onChange({ ...graph, inputNodeId: id }); }, [graph, onChange]);
-
-  const inspectNode = inspectId ? graph.nodes.find((n) => n.id === inspectId) ?? null : null;
   const hasIssues = cyclicEdges.size > 0 || deadNodes.size > 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 220px)', minHeight: 480 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {/* palette + 分析状态 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px 10px', flexWrap: 'wrap' }}>
-        <Typography.Text type="secondary" style={{ fontSize: 11 }}>{t('editor.flow.palette.title')}：</Typography.Text>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px', background: '#fff', borderBottom: '1px solid #f0f0f0', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: '#8a95a1', letterSpacing: 0.4, textTransform: 'uppercase' }}>{t('editor.flow.palette.title')}</span>
         {PALETTE.map((type) => (
-          <div
-            key={type}
-            draggable
+          <div key={type} draggable
             onDragStart={(e) => { e.dataTransfer.setData('application/rf-flownode', type); e.dataTransfer.effectAllowed = 'move'; }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, cursor: 'grab',
-              border: '1px solid #e3e6ea', borderRadius: 7, padding: '4px 9px', background: '#fff', fontSize: 12.5, fontWeight: 600,
-            }}
-          >
-            <span style={{ width: 8, height: 16, borderRadius: 3, background: ACCENT[type] }} />
+            style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'grab', border: '1px solid #e3e6ea', borderRadius: 5, padding: '2px 8px', background: '#fff', fontSize: 11.5, fontWeight: 600, transition: 'border-color 0.12s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#bcc4d0'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e3e6ea'; }}>
+            <span style={{ width: 6, height: 14, borderRadius: 2, background: ACCENT[type] }} />
             {type.replace('Node', '')}
           </div>
         ))}
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: hasIssues ? '#e5484d' : '#16a34a' }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: hasIssues ? '#e5484d' : '#16a34a' }} />
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: hasIssues ? '#e5484d' : '#16a34a' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: hasIssues ? '#e5484d' : '#16a34a' }} />
           {hasIssues ? t('editor.flow.toolbar.analysisIssues') : t('editor.flow.toolbar.analysisPass')}
         </span>
       </div>
 
-      <div ref={wrapperRef} style={{ flex: 1, border: '1px solid #e3e6ea', borderRadius: 8, overflow: 'hidden' }} onDrop={onDrop} onDragOver={onDragOver}>
+      <div ref={wrapperRef} style={{ flex: 1, overflow: 'hidden' }} onDrop={onDrop} onDragOver={onDragOver}>
         {graph.nodes.length === 0 ? (
           <Empty description={t('editor.flow.emptyGraph')} style={{ marginTop: 120 }} />
         ) : (
@@ -476,10 +440,14 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onNodeDoubleClick={(_, n) => { setInspectId(n.id); setEdgeEdit(null); }}
-            onEdgeDoubleClick={handleEdgeDoubleClick}
-            onPaneClick={() => setEdgeEdit(null)}
+            onNodeClick={(_, n) => { onSelectedNodeChange?.(n.id); onOpenRightPanel?.(); }}
+            onEdgeClick={(_, edge) => {
+              const idx = graph.edges.findIndex((_e, i) => rfEdges[i]?.id === edge.id);
+              if (idx >= 0) { onSelectedEdgeChange?.(idx); onOpenRightPanel?.(); }
+            }}
+            onPaneClick={() => { onSelectedNodeChange?.(null); onSelectedEdgeChange?.(null); onCloseRightPanel?.(); }}
             fitView
+            fitViewOptions={{ padding: 0.2 }}
             proOptions={{ hideAttribution: true }}
           >
             <Background gap={18} />
@@ -489,50 +457,20 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
       </div>
 
       <FlowNodeInspectorDrawer
-        open={inspectNode !== null}
-        node={inspectNode}
-        isInput={inspectNode?.id === graph.inputNodeId}
-        onClose={() => setInspectId(null)}
-        onChangeNode={updateNode}
-        onSetInput={setAsInput}
+        open={drillFlowNodeId !== null}
+        node={drillFlowNodeId ? graph.nodes.find((n) => n.id === drillFlowNodeId) ?? null : null}
+        isInput={drillFlowNodeId === graph.inputNodeId}
+        onClose={() => setDrillFlowNodeId(null)}
+        onChangeNode={(updated: FlowNode) => onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === updated.id ? updated : n)) })}
+        onSetInput={(id: string) => onChange({ ...graph, inputNodeId: id })}
         sceneRules={sceneRules}
         tenantId={tenantId}
         sceneCode={sceneCode}
         metadata={metadata}
         decisions={decisions}
-        onLeafCreated={async (code) => { await reloadSceneRules(); if (inspectNode?.type === 'RuleRefNode') onSelectRule(inspectNode.id, code); onLeafChanged?.(); }}
+        onLeafCreated={async (_code: string) => { onLeafChanged?.(); }}
         onLeafSaved={onLeafChanged}
       />
-
-      {/* 边双击 → caseKey 编辑浮层（仅 Switch 出边，其余边无 caseKey 不弹） */}
-      {edgeEdit && editingEdge && (
-        <div
-          style={{
-            position: 'fixed', zIndex: 9999, left: edgeEdit.x, top: edgeEdit.y - 8,
-            background: '#fff', border: '1px solid #d0d7de', borderRadius: 8,
-            boxShadow: '0 8px 24px rgba(16,24,40,.14)', padding: 10, minWidth: 160,
-          }}
-        >
-          <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 6, fontWeight: 600 }}>
-            {editingEdgeSrc?.type === 'RuleRefNode' ? t('editor.flow.inspector.ruleResult') : t('editor.flow.inspector.caseKeys')}
-          </div>
-          <Select
-            size="small"
-            style={{ width: '100%', marginBottom: 8 }}
-            value={editingEdge.caseKey ?? '__none__'}
-            options={[
-              { value: '__none__', label: '— 无条件（默认出边）' },
-              ...editingEdgeOptions,
-            ]}
-            onChange={(v) => commitEdgeCaseKey(v === '__none__' ? null : v)}
-            defaultOpen
-            onBlur={() => setEdgeEdit(null)}
-          />
-          <div style={{ fontSize: 10, color: '#8c959f' }}>
-            {editingEdge.from} → {editingEdge.to}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

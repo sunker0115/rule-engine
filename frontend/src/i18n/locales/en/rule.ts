@@ -159,6 +159,13 @@ const rule: RuleTranslation = {
         nodeId: 'Node ID', emptyHint: 'Select a canvas node to view/edit properties',
         ruleResult: 'Rule result',
       },
+      leftPanel: {
+        sceneRules: 'Scene Rules',
+        sceneRulesHint: 'No published rules in this scene, RuleRef nodes cannot be created',
+      },
+      rightPanel: {
+        emptyHint: 'Click a canvas node to view/edit properties',
+      },
       drill: {
         title: 'Drill-down Edit',
         isolationNote: 'You are editing the standalone rule "{{code}}". Saving writes to its own draft and it must be published separately; a published flow references the frozen version and is unaffected by this edit (D6 snapshot isolation).',

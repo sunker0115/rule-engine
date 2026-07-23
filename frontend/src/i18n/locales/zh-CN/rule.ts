@@ -159,6 +159,13 @@ const rule: RuleTranslation = {
         nodeId: '节点 ID', emptyHint: '选择画布节点查看/编辑属性',
         ruleResult: '规则执行结果',
       },
+      leftPanel: {
+        sceneRules: '本场景规则',
+        sceneRulesHint: '暂无该场景的已发布规则，无法创建 RuleRef 节点',
+      },
+      rightPanel: {
+        emptyHint: '点击画布节点查看/编辑属性',
+      },
       drill: {
         title: '下钻编辑',
         isolationNote: '你正在编辑独立规则「{{code}}」。保存后进入其自己的草稿、需各自发布；已发布 flow 引用的是冻结版本，不受此次编辑影响（D6 快照隔离）。',

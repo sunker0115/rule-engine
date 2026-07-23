@@ -317,6 +317,8 @@ export interface RuleTranslation {
         outputKey: string; decisionCode: string; ruleCode: string;
         nodeId: string; emptyHint: string; ruleResult: string;
       };
+      leftPanel: { sceneRules: string; sceneRulesHint: string };
+      rightPanel: { emptyHint: string };
       drill: {
         title: string; isolationNote: string; reuseHint: string;
         save: string; newLeaf: string; newLeafTitle: string;

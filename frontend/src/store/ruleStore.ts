@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import type { AstNode, DecisionBinding, PreGate, RuleKind, FlowGraph } from '@/types';
 
+/** 场景规则精简项（供 RuleRef 下拉选择） */
+export interface SceneRuleItem {
+  code: string;
+  name: string;
+  ruleDefinitionId: number;
+  kind: string;
+}
+
 interface RuleState {
   ast: AstNode | null;
   decisionBindings: DecisionBinding[];
@@ -20,6 +28,16 @@ interface RuleState {
   setDisplayLabel: (label: string) => void;
   setScript: (script: { source: string; lang: string } | null) => void;
   setFlowGraph: (flowGraph: FlowGraph | null) => void;
+  // flow 画布选中状态（供 RightPanel 等外部组件读取）
+  selectedFlowNodeId: string | null;
+  selectedFlowEdgeIndex: number | null;
+  setSelectedFlowNodeId: (id: string | null) => void;
+  setSelectedFlowEdgeIndex: (index: number | null) => void;
+  drillFlowNodeId: string | null;
+  setDrillFlowNodeId: (id: string | null) => void;
+  /** 同场景已发布规则列表（供 RuleRef 下拉选择，由父组件加载） */
+  flowSceneRules: SceneRuleItem[];
+  setFlowSceneRules: (rules: SceneRuleItem[]) => void;
   loadFromDetail: (
     ast: AstNode | null,
     bindings: DecisionBinding[],
@@ -42,6 +60,10 @@ const initialState = {
   dirty: false,
   script: null as { source: string; lang: string } | null,
   flowGraph: null as FlowGraph | null,
+  selectedFlowNodeId: null as string | null,
+  selectedFlowEdgeIndex: null as number | null,
+  drillFlowNodeId: null as string | null,
+  flowSceneRules: [] as SceneRuleItem[],
 };
 
 export const useRuleStore = create<RuleState>((set) => ({
@@ -55,6 +77,10 @@ export const useRuleStore = create<RuleState>((set) => ({
   setDisplayLabel: (label) => set({ displayLabel: label, dirty: true }),
   setScript: (script) => set({ script, dirty: true }),
   setFlowGraph: (flowGraph) => set({ flowGraph, dirty: true }),
+  setSelectedFlowNodeId: (id) => set({ selectedFlowNodeId: id }),
+  setSelectedFlowEdgeIndex: (index) => set({ selectedFlowEdgeIndex: index }),
+  setDrillFlowNodeId: (id) => set({ drillFlowNodeId: id }),
+  setFlowSceneRules: (rules) => set({ flowSceneRules: rules }),
 
   loadFromDetail: (ast, bindings, gates, types, kind, script, flowGraph) =>
     set({ ast, decisionBindings: bindings, preGates: gates, triggerEventTypes: types, kind, script, flowGraph, dirty: false }),
