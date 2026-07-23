@@ -4,7 +4,8 @@ import {
   useReactFlow, type Node, type Edge, type NodeProps, type NodeChange, type EdgeChange, type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Select, Tag, Empty, Tooltip } from 'antd';
+import { Select, Tag, Empty, Tooltip, Button, message } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useRuleStore } from '@/store/ruleStore';
 import { useDryRunStore } from '@/store/dryRunStore';
@@ -282,6 +283,7 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
   const { drillFlowNodeId, setDrillFlowNodeId, flowSceneRules: sceneRules } = useRuleStore();
   const { showTrace, result, clearTrace } = useDryRunStore();
   const { t } = useTranslation('rule');
+  const tc = useTranslation('common').t;
   const { screenToFlowPosition, fitView } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -531,6 +533,22 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
 
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
 
+  // 导出画布为 PNG
+  const handleExportPng = useCallback(async () => {
+    if (!wrapperRef.current) return;
+    try {
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(wrapperRef.current.querySelector('.react-flow') as HTMLElement, { backgroundColor: '#f7f8fa' });
+      const link = document.createElement('a');
+      link.download = `flow-${ruleCode}-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+      message.success(tc('message.exportSuccess'));
+    } catch {
+      message.error(tc('message.loadError'));
+    }
+  }, [ruleCode]);
+
   const hasIssues = allCyclicEdges.size > 0 || unreachableNodes.size > 0;
 
   return (
@@ -548,6 +566,7 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
             {type.replace('Node', '')}
           </div>
         ))}
+        <Button type="text" size="small" icon={<DownloadOutlined />} onClick={handleExportPng} style={{ fontSize: 11 }} />
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {showTrace && (
             <span onClick={clearTrace} style={{ cursor: 'pointer', fontSize: 11, color: '#2f6bff', fontWeight: 600 }}>

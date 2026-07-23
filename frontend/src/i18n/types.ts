@@ -46,6 +46,7 @@ export interface CommonTranslation {
     updateSuccess: string;
     deleteSuccess: string;
     saveSuccess: string;
+    exportSuccess: string;
     loadError: string;
     confirmDelete: string;
     enabled: string;

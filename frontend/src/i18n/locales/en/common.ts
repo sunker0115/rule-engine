@@ -41,6 +41,7 @@ const common: CommonTranslation = {
     updateSuccess: 'Updated',
     deleteSuccess: 'Deleted',
     saveSuccess: 'Saved',
+    exportSuccess: 'Exported',
     loadError: 'Load failed',
     confirmDelete: 'Confirm delete? This cannot be undone',
     enabled: 'Enabled',
