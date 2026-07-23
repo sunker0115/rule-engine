@@ -236,7 +236,7 @@ export interface RuleTranslation {
   title: { list: string; editor: string };
   action: {
     create: string; saveDraft: string; publish: string; dryRun: string;
-    sessions: string;
+    sessions: string; export: string; exportBundle: string; exportSnapshot: string;
     newVersion: string; rollback: string; disable: string; enable: string;
     deleteDraft: string; deleteRule: string;
   };

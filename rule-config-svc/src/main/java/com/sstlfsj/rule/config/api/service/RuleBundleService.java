@@ -4,6 +4,8 @@ import com.sstlfsj.rule.config.api.dto.ImportDiffReport;
 import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+
 import java.util.List;
 
 /**
@@ -24,6 +26,9 @@ public interface RuleBundleService {
      * @throws IllegalArgumentException 无可导出的 ACTIVE 规则
      */
     RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId);
+
+    /** 按条件导出规则当前 ACTIVE 版本为快照列表（SDK 本地调用用）。 */
+    List<RuleVersionSnapshot> exportSnapshots(Long tenantId, List<Long> ruleIds, Long sceneId);
 
     /**
      * 导入 Bundle 到目标租户。

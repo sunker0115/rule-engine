@@ -1,12 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip } from 'antd';
+import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip, Dropdown } from 'antd';
+import { ExportOutlined } from '@ant-design/icons';
 import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from '@/constants/routes';
+import { ENDPOINTS } from '@/constants/api-endpoints';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, enableRule, newVersion, deleteDraftVersion, deleteRule } from '@/api/rule';
+import apiClient from '@/api/client';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
 import { useEditorShortcuts } from '@/hooks/useEditorShortcuts';
@@ -42,6 +45,7 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
   const tenantId = Number(ruleDetail.tenantId) || currentId || 0;
   const { ast, decisionBindings, preGates, triggerEventTypes, script, flowGraph, dirty, flowSceneRules, addFlowRuleRef, undo, redo } = useRuleStore();
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [viewVersionId, setViewVersionId] = useState<number | null>(null);
   const [diffVersionId, setDiffVersionId] = useState<number | null>(null);
@@ -112,6 +116,27 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
     await deleteRule(tenantId, ruleDetail.ruleDefinitionId);
     message.success(tc('message.deleteSuccess'));
     navigate(ROUTES.RULES);
+  };
+
+  const handleExportRule = async (format: 'bundle' | 'snapshot' = 'bundle') => {
+    if (!tenantId) return;
+    setExporting(true);
+    try {
+      const res = await apiClient.get(ENDPOINTS.RULE_EXPORT, {
+        params: { tenantId, ruleIds: String(ruleDetail.ruleDefinitionId), format },
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const suffix = format === 'snapshot' ? '-snapshot' : '';
+      a.download = `rule-${ruleDetail.code}${suffix}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.href = url;
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success(tc('message.exportSuccess'));
+    } catch { message.error(tc('message.loadError')); }
+    finally { setExporting(false); }
   };
 
   const isDraft = ruleDetail.status === 'DRAFT';
@@ -196,6 +221,12 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
         )}
         <Button block onClick={() => onOpenDryRun()} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
         <Button block onClick={() => setSessionsOpen(true)} style={{ marginBottom: 8 }}>{t('action.sessions')}</Button>
+        <Dropdown menu={{ items: [
+          { key: 'bundle', label: t('action.exportBundle') },
+          { key: 'snapshot', label: t('action.exportSnapshot') },
+        ], onClick: ({ key }) => handleExportRule(key as 'bundle' | 'snapshot') }} trigger={['click']}>
+          <Button block icon={<ExportOutlined />} loading={exporting} style={{ marginBottom: 8 }}>{t('action.export')}</Button>
+        </Dropdown>
 
         <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerPublish')}</Divider>
         {hasDraft && (
