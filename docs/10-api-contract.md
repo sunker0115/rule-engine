@@ -670,8 +670,9 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 
 | errorCode | 含义 |
 |-----------|------|
-| `UNRESOLVED_VARIABLE` | conditionAst / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内）。含 `valueRef=PAYLOAD` 的 ConditionNode 其 `metricCode`（payload 字段名）未在 `Scene.payloadSchema` 声明的情形——发布拒绝，message 指明该未声明字段 |
+| `UNRESOLVED_VARIABLE` | body / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内）。含 `valueRef=PAYLOAD` 的 ConditionNode 其 `metricCode`（payload 字段名）未在 `Scene.payloadSchema` 声明的情形——发布拒绝，message 指明该未声明字段 |
 | `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了该 Rule 所属 Tenant 未定义的 Decision（Decision 是 Tenant 级实体，D26/D54） |
+| `KIND_BODY_MISMATCH` | `kind` 家族与请求体 `body` 变体不一致（AST 系四 kind→AstBody / EXPRESSION_SCRIPT→ScriptBody / DECISION_FLOW→FlowBody），D76——发布/建草稿拒绝，message 含 kind 与实际 body 类型 |
 | `HANDLER_EXCEPTION` | 发布事务内未分类异常，message 含异常摘要 |
 
 ---

@@ -181,5 +181,5 @@
 - [x] `$MVN clean test` 全量兜底（跨模块改实体类型）——**现有 5 形态的单测/集成测试全绿 = 未退化**，任一现有测试变红即为回归，必须查而非改测试就绿。
 - [x] **防退化回归**：e2e 抽验现有 5 形态各建/发布/评估一条不受影响（尤其 EXPRESSION_SCRIPT，ScriptEditor 改造 + RuleContentHasher 加键后）；确认现有规则 API 响应新增 `flowGraph:null` 不影响既有前端/SDK 消费。
 - [x] 更新 01-concepts（新 kind）、03-rule-expression 或新章（flow 节点语义）、05-storage（flow_graph 列）、10-api-contract（DECISION_FLOW 请求体）；改前跑 `doc-consistency-review`。
-- [ ] 派 `rule-engine-reviewer` 审代码 ↔ 文档对齐。
+- [x] 派 `rule-engine-reviewer` 审代码 ↔ 文档对齐。
 - [x] 本计划归档进 `plans/archive/`，设计并入 docs 正文。

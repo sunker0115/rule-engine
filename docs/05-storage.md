@@ -34,7 +34,7 @@
 | `metric_definition` | 指标元数据（sourceType / params / cacheTtl / allowProvided） | 同步事务 | 永久 |
 | `connector_definition` | 声明式 HTTP 连接器（descriptor：request/response/auth/resilience/errorMapping），`EXTERNAL_HTTP` metric 经 `params.connector` 引用（D72） | 同步事务 | 永久 |
 | `rule_definition` | 规则主记录（code / name / status） | 同步事务 | 永久 |
-| `rule_version` | 规则版本快照（conditionAst / scriptSource / flowGraph / decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
+| `rule_version` | 规则版本快照（判定主体多态载体 `body`（RuleBody，D76）/ decisionBindings / preGates），不可变（D19） | 同步事务（发布时） | 永久（不可删） |
 | `decision_definition` | Decision 实体（Tenant 级）— 决策码 / 名称 / 优先级（D26） | 同步事务 | 永久 |
 | `rule_decision_binding` | 规则与 Decision 的绑定关系（支持可选 score 区间，D26 SCORECARD 占位） | 同步事务 | 永久 |
 | `scheduled_task` | 通用调度任务定义（§3.10）：`task_type` 判别 + typed 静态 `config` + 运行态 `run_cursor` 列，TRIGGER 为评估触发类型 | 同步事务 | 永久 |
