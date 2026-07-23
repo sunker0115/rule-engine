@@ -79,6 +79,7 @@ export default function CenterPanel({ metadata, sceneCode, ruleCode, tenantId, a
         conditionTypes={metadata?.conditionTypes ?? []}
         availableMetrics={metadata?.availableMetrics ?? []}
         payloadFieldNames={metadata?.payloadFieldNames ?? []}
+        payloadFieldTypes={metadata?.payloadFieldTypes}
         decisions={decisions}
       />
     );

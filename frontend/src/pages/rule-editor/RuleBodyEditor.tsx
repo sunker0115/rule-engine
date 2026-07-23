@@ -19,6 +19,8 @@ interface Props {
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
   payloadFieldNames: string[];
+  /** 字段名 → dataType，透传给表达式编辑器做补全类型提示 */
+  payloadFieldTypes?: Record<string, string>;
   decisions: DecisionItem[];
 }
 
@@ -28,7 +30,7 @@ interface Props {
  */
 export default function RuleBodyEditor({
   kind, ast, script, onAstChange, onScriptChange,
-  conditionTypes, availableMetrics, payloadFieldNames, decisions,
+  conditionTypes, availableMetrics, payloadFieldNames, payloadFieldTypes, decisions,
 }: Props) {
   const { t } = useTranslation('rule');
   const shared = { conditionTypes, availableMetrics, payloadFieldNames };
@@ -65,6 +67,7 @@ export default function RuleBodyEditor({
         onChange={onScriptChange}
         availableMetrics={availableMetrics}
         payloadFieldNames={payloadFieldNames}
+        payloadFieldTypes={payloadFieldTypes}
       />
     );
   }
