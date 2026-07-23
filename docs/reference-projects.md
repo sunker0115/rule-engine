@@ -158,6 +158,10 @@
 | **GoRules ZEN JDM** | 决策图 DAG（图只编排、叶子原子） | D75；见 [§2.3](#23-gorules-zen-engine) | 吸收（`DECISION_FLOW`） |
 | **Drools** | guided rule template / decision table | D74（参数化模板，**暂缓不实现**） | 记录待触发 |
 | **Drools Verifier** | 规则集完备性/冲突校验 | §2.26（规则集静态分析，已落地 B31） | 吸收（命名/语义对齐 Verifier） |
+| **Drools**（Apache KIE，本地同级目录 `../incubator-kie-drools`） | RETE 前向/后向推理 + CEP + DMN + DRL 决策表一体 | D6/D17（本项目刻意非 RETE：不可变快照 + 倒排索引 + 每事件无状态求值） | RETE 侧记（架构对立面）；决策表/Verifier 已另列 |
+| **Kogito**（Apache KIE，`../incubator-kie-drools` 同生态） | Drools + jBPM + DMN 决策与流程打包一体、cloud-native（Quarkus） | D60/D75（本项目分层：纯决策 / 同步图 / Flowable） | 决策+编排捆绑反例，佐证 D60 分层 |
+| **Evrete**（本地同级目录 `../evrete`） | 轻量 RETE + JSR-94 + 注解 Java 规则（零 XML/DRL） | D6/D17（刻意非 RETE）；D61（已有 easyrules 注解，同层不重复引入） | RETE 侧记（轻量立面对立面） |
+| **OpenL Tablets**（本地同级目录 `../openl-tablets`，LGPL） | Excel 规则 → 编译 JVM 字节码 → REST API（业务用户 authoring） | D74（参数化模板暂缓）；D56（resolveAndValidate 填槽 → 普通 DRAFT） | authoring 维度参照；Excel 录入模型留待触发 |
 | **Easy Rules** | `@Condition`/`@Fact` 注解规则 | D61（SDK 注解规则，仅嵌入式 SDK） | 吸收（加糖，严守 D60） |
 | **urule** | FunctionLibrary（全局函数注册）/ ConstantLibrary | 08-evolution §四 | **已否决**（与闭合校验/禁副作用/metric 只读冲突） |
 | **CEL / Aviator / ice**（市场吞吐对比） | 表达式引擎 / 高吞吐评估形态 | D20；D66（六引擎 EXPRESSION_SCRIPT） | 吸收（CEL/Aviator 为六引擎之二；ice 作吞吐参照） |
@@ -206,6 +210,9 @@
 | 不需要 | Grule | Drools 式 GRL / 可变 facts / 推理 | 同 gengine（命令式 + 副作用，D60/D16 拒） |
 | 不需要 | Gval | Go 可组合表达式库 | 本项目 Java；D66 六引擎 + 编译缓存已具备，不引入 |
 | 不需要 | CEL-Go | CEL 的 Go 宿主实现 | CEL 已是六引擎之一（cel-java），Go 宿主不用 |
+| 不需要 | Drools/Kogito | RETE 推理 + DMN/CEP 决策流程捆绑 | 刻意非 RETE（不可变快照+无状态）；决策流程捆绑反例佐证 D60/D75 分层 |
+| 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
+| 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 待定 | gengine | 场景内独立规则并行求值 | §2.29（待实测吞吐瓶颈） |
 | 待定 | ZEN | 表达式编辑器变量补全（Level 1） | 纯前端零后端，未立项 |
 | 待定 | ZEN | CEL 实时类型诊断（Level 2） | `POST /expressions/validate`，未立项 |
