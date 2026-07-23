@@ -35,6 +35,14 @@ interface FlowNodeData extends Record<string, unknown> {
   onSelectRule: (id: string, ruleCode: string) => void;
 }
 
+/** ReactFlow 内部状态（不持久化到 FlowGraph，仅 UI 层需要）。 */
+interface NodeInternal {
+  /** 用户拖拽后的位置；未拖拽时由 autoLayout 初始播种 */
+  position: { x: number; y: number };
+  /** ReactFlow 测量上报的节点像素尺寸；受控模式下必须写回 nodes prop，否则 hit-test 失效 */
+  measured?: { width?: number; height?: number };
+}
+
 type CanvasNode = Node<FlowNodeData>;
 
 /** 节点类型 → 配色（与 mockup / trace-tree 对齐）。 */
@@ -84,7 +92,6 @@ function autoLayout(graph: FlowGraph): Record<string, { x: number; y: number }> 
       if (!layer.has(to)) { layer.set(to, d + 1); queue.push(to); }
     }
   }
-  // 不可达节点堆到最后一层之下
   let maxLayer = 0;
   layer.forEach((v) => { maxLayer = Math.max(maxLayer, v); });
   graph.nodes.forEach((n) => { if (!layer.has(n.id)) layer.set(n.id, maxLayer + 1); });
@@ -106,6 +113,19 @@ function edgeKey(from: string, to: string): string {
 }
 
 // ---- 自定义节点视图 ----
+
+/** 连线手柄统一样式：放大 + hover 高亮，用户一眼能看到"可以拖线"。 */
+const handleStyle: React.CSSProperties = {
+  width: 12, height: 12,
+  background: '#fff',
+  border: '2px solid #94a3b8',
+  borderRadius: '50%',
+  transition: 'border-color 0.15s, transform 0.15s',
+};
+const handleHover = (color: string) => ({
+  borderColor: color,
+  transform: 'scale(1.4)',
+});
 
 function NodeShell({ type, isInput, dead, selected, children }: {
   type: FlowNodeType; isInput: boolean; dead: boolean; selected: boolean; children: React.ReactNode;
@@ -133,7 +153,7 @@ function RuleRefNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.flowNode as RuleRefNode;
   return (
     <NodeShell type="RuleRefNode" isInput={data.isInput} dead={data.dead} selected={!!selected}>
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.RuleRefNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
       <div className="nodrag">
         <Select
           size="small"
@@ -146,7 +166,7 @@ function RuleRefNodeView({ data, selected }: NodeProps<CanvasNode>) {
           optionFilterProp="label"
         />
       </div>
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Right} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.RuleRefNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
     </NodeShell>
   );
 }
@@ -155,7 +175,7 @@ function SwitchNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.flowNode as SwitchNode;
   return (
     <NodeShell type="SwitchNode" isInput={data.isInput} dead={data.dead} selected={!!selected}>
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.SwitchNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
       <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: '#5b6672', wordBreak: 'break-all' }}>
         {node.expression || '—'}
       </div>
@@ -166,7 +186,7 @@ function SwitchNodeView({ data, selected }: NodeProps<CanvasNode>) {
           ))}
         </div>
       )}
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Right} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.SwitchNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
     </NodeShell>
   );
 }
@@ -175,7 +195,7 @@ function TransformNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.flowNode as TransformNode;
   return (
     <NodeShell type="TransformNode" isInput={data.isInput} dead={data.dead} selected={!!selected}>
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.TransformNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
       <div style={{ fontSize: 11.5 }}>
         <span style={{ fontSize: 10, color: '#0ea5e9', background: '#e8f6fd', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>
           flow.{node.outputKey || '?'}
@@ -184,7 +204,7 @@ function TransformNodeView({ data, selected }: NodeProps<CanvasNode>) {
       <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: '#5b6672', marginTop: 2, wordBreak: 'break-all' }}>
         = {node.expression || '—'}
       </div>
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Right} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.TransformNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
     </NodeShell>
   );
 }
@@ -193,7 +213,7 @@ function OutputNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.flowNode as OutputNode;
   return (
     <NodeShell type="OutputNode" isInput={data.isInput} dead={data.dead} selected={!!selected}>
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} style={handleStyle} onMouseEnter={(e) => Object.assign((e.target as HTMLElement).style, handleHover(ACCENT.OutputNode))} onMouseLeave={(e) => Object.assign((e.target as HTMLElement).style, handleStyle)} />
       <div style={{ fontWeight: 600, fontSize: 13 }}>{node.decisionCode || '—'}</div>
     </NodeShell>
   );
@@ -212,10 +232,16 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
   const { t } = useTranslation('rule');
   const { screenToFlowPosition } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+
+  // ---- ReactFlow 受控模式内部状态 ----
+  // position + dimensions 是 RF 内部属性，不持久化到 FlowGraph；
+  // 汇聚在此统一管理，onNodesChange 完整处理所有 change 类型写回。
+  const [nodeInternals, setNodeInternals] = useState<Record<string, NodeInternal>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inspectId, setInspectId] = useState<string | null>(null);
   const [sceneRules, setSceneRules] = useState<SceneRuleItem[]>([]);
+  // 边双击编辑：记录边在 graph.edges 中的下标 + 屏幕坐标
+  const [edgeEdit, setEdgeEdit] = useState<{ index: number; x: number; y: number } | null>(null);
 
   const graph: FlowGraph = value ?? { nodes: [], edges: [], inputNodeId: '' };
   const defaultLang = metadata?.expressionLangs?.[0] ?? 'CEL';
@@ -231,18 +257,20 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
 
   useEffect(() => { reloadSceneRules(); }, [reloadSceneRules]);
 
-  // 为缺失位置的节点补自动布局（新增节点 / 首次加载）
+  // 为新节点补自动布局位置（新增 / 首次加载）；已有位置的节点不覆盖（保留用户拖拽结果）
   useEffect(() => {
-    const missing = graph.nodes.some((n) => !positions[n.id]);
+    const missing = graph.nodes.some((n) => !nodeInternals[n.id]);
     if (missing) {
-      setPositions((prev) => {
-        const laid = autoLayout(graph);
+      const laid = autoLayout(graph);
+      setNodeInternals((prev) => {
         const next = { ...prev };
-        for (const n of graph.nodes) if (!next[n.id]) next[n.id] = laid[n.id] ?? XY.EMPTY;
+        for (const n of graph.nodes) {
+          if (!next[n.id]) next[n.id] = { position: laid[n.id] ?? XY.EMPTY };
+        }
         return next;
       });
     }
-  }, [graph.nodes, positions]);
+  }, [graph.nodes]);
 
   // 图内 finding → 成环边集 / 死节点集
   const cyclicEdges = useMemo(() => {
@@ -266,14 +294,18 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
     onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === id && n.type === 'RuleRefNode' ? { ...n, ruleCode: code } : n)) });
   }, [graph, onChange]);
 
-  // FlowGraph → RF 节点/边
-  const rfNodes: CanvasNode[] = useMemo(() => graph.nodes.map((n) => ({
-    id: n.id,
-    type: n.type,
-    position: positions[n.id] ?? XY.EMPTY,
-    selected: n.id === selectedId,
-    data: { flowNode: n, isInput: n.id === graph.inputNodeId, dead: deadNodes.has(n.id), sceneRules, onSelectRule },
-  })), [graph, positions, selectedId, deadNodes, sceneRules, onSelectRule]);
+  // FlowGraph → RF 节点（合并 position + measured 到受控 nodes，满足受控模式契约）
+  const rfNodes: CanvasNode[] = useMemo(() => graph.nodes.map((n) => {
+    const internal = nodeInternals[n.id];
+    return {
+      id: n.id,
+      type: n.type,
+      position: internal?.position ?? XY.EMPTY,
+      measured: internal?.measured,
+      selected: n.id === selectedId,
+      data: { flowNode: n, isInput: n.id === graph.inputNodeId, dead: deadNodes.has(n.id), sceneRules, onSelectRule },
+    };
+  }), [graph, nodeInternals, selectedId, deadNodes, sceneRules, onSelectRule]);
 
   const rfEdges: Edge[] = useMemo(() => graph.edges.map((e, i) => {
     const cyclic = cyclicEdges.has(edgeKey(e.from, e.to));
@@ -288,17 +320,46 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
     };
   }), [graph.edges, cyclicEdges]);
 
+  // 受控模式核心：完整处理 RF 上报的所有 change type，把 position / dimensions 写回 nodeInternals
   const onNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
     const removed: string[] = [];
-    setPositions((prev) => {
+
+    setNodeInternals((prev) => {
       const next = { ...prev };
-      for (const c of changes) if (c.type === 'position' && c.position) next[c.id] = c.position;
+      for (const c of changes) {
+        switch (c.type) {
+          case 'position':
+            if (c.position) {
+              const prevInternal = next[c.id];
+              next[c.id] = { ...prevInternal, position: c.position, measured: prevInternal?.measured };
+            }
+            break;
+          case 'dimensions':
+            if (c.dimensions) {
+              const prevInternal = next[c.id];
+              next[c.id] = { ...prevInternal, position: prevInternal?.position ?? XY.EMPTY, measured: c.dimensions };
+            }
+            break;
+          case 'remove':
+            removed.push(c.id);
+            break;
+          // select / reset 等不改变 nodeInternals，由 selectedId 单独管理
+        }
+      }
+      // 清理被删除节点
+      if (removed.length) for (const id of removed) delete next[id];
       return next;
     });
+
+    // selection 独立于 nodeInternals 管理（RF 通过 select change 告知选中变化）
     for (const c of changes) {
-      if (c.type === 'select') { if (c.selected) setSelectedId(c.id); else if (selectedId === c.id) setSelectedId(null); }
-      if (c.type === 'remove') removed.push(c.id);
+      if (c.type === 'select') {
+        if (c.selected) setSelectedId(c.id);
+        else setSelectedId((prev) => prev === c.id ? null : prev);
+      }
     }
+
+    // remove → 同步回 FlowGraph
     if (removed.length) {
       const remainSet = new Set(graph.nodes.map((n) => n.id).filter((id) => !removed.includes(id)));
       const nextNodes = graph.nodes.filter((n) => remainSet.has(n.id));
@@ -306,23 +367,26 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
       const nextInput = remainSet.has(graph.inputNodeId) ? graph.inputNodeId : (nextNodes[0]?.id ?? '');
       onChange({ nodes: nextNodes, edges: nextEdges, inputNodeId: nextInput });
     }
-  }, [graph, onChange, selectedId]);
+  }, [graph, onChange]);
 
   const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
     const removedIds = new Set(changes.filter((c) => c.type === 'remove').map((c) => c.id));
     if (!removedIds.size) return;
-    // rfEdges 与 graph.edges 一一对应同序，按下标 id 过滤，规避同 from/to/caseKey 复合键碰撞（重复连同一对节点时）
     onChange({ ...graph, edges: graph.edges.filter((_, i) => !removedIds.has(rfEdges[i].id)) });
   }, [graph, onChange, rfEdges]);
 
   const onConnect = useCallback((conn: Connection) => {
     if (!conn.source || !conn.target) return;
     const src = graph.nodes.find((n) => n.id === conn.source);
-    // Switch 出边默认取第一个未占用的 caseKey；其余为无条件边（null）
     let caseKey: string | null = null;
     if (src?.type === 'SwitchNode') {
       const used = new Set(graph.edges.filter((e) => e.from === src.id).map((e) => e.caseKey));
       caseKey = src.caseKeys.find((k) => !used.has(k)) ?? null;
+    } else if (src?.type === 'RuleRefNode') {
+      // 首条边默认 "true"，第二条默认 "false"，后续走默认（null）
+      const used = new Set(graph.edges.filter((e) => e.from === src.id).map((e) => e.caseKey));
+      if (!used.has('true')) caseKey = 'true';
+      else if (!used.has('false')) caseKey = 'false';
     }
     onChange({ ...graph, edges: [...graph.edges, { from: conn.source, to: conn.target, caseKey }] });
   }, [graph, onChange]);
@@ -334,12 +398,38 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
     const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
     const id = nextNodeId(type, new Set(graph.nodes.map((n) => n.id)));
     const node = makeNode(type, id, defaultLang);
-    setPositions((prev) => ({ ...prev, [id]: pos }));
-    // 图为空时首个节点即入口
+    // 拖放位置写入 nodeInternals
+    setNodeInternals((prev) => ({ ...prev, [id]: { position: pos } }));
     onChange({ ...graph, nodes: [...graph.nodes, node], inputNodeId: graph.inputNodeId || id });
   }, [graph, onChange, screenToFlowPosition, defaultLang]);
 
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
+
+  // 边双击 → 弹出 caseKey 编辑（Switch 出边选 caseKey；RuleRef 出边选 true/false）
+  const handleEdgeDoubleClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+    const idx = graph.edges.findIndex((_e, i) => rfEdges[i]?.id === edge.id);
+    if (idx < 0) return;
+    const src = graph.nodes.find((n) => n.id === edge.source);
+    if (src?.type !== 'SwitchNode' && src?.type !== 'RuleRefNode') return;
+    setEdgeEdit({ index: idx, x: _.clientX, y: _.clientY });
+  }, [graph, rfEdges]);
+
+  const commitEdgeCaseKey = useCallback((val: string | null) => {
+    if (!edgeEdit) return;
+    // null/空串 表示清空 caseKey（变为无条件边）
+    const next = graph.edges.map((e, i) => i === edgeEdit.index ? { ...e, caseKey: val || null } : e);
+    onChange({ ...graph, edges: next });
+    setEdgeEdit(null);
+  }, [graph, onChange, edgeEdit]);
+
+  const editingEdge = edgeEdit ? graph.edges[edgeEdit.index] : null;
+  const editingEdgeSrc = editingEdge ? graph.nodes.find((n) => n.id === editingEdge.from) ?? null : null;
+  const editingEdgeOptions: { value: string; label: string }[] = (() => {
+    if (!editingEdgeSrc) return [];
+    if (editingEdgeSrc.type === 'SwitchNode') return (editingEdgeSrc as SwitchNode).caseKeys.map((k) => ({ value: k, label: k }));
+    if (editingEdgeSrc.type === 'RuleRefNode') return [{ value: 'true', label: 'true — 规则命中' }, { value: 'false', label: 'false — 规则未命中' }];
+    return [];
+  })();
 
   const updateNode = useCallback((updated: FlowNode) => {
     onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === updated.id ? updated : n)) });
@@ -386,7 +476,9 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onNodeDoubleClick={(_, n) => setInspectId(n.id)}
+            onNodeDoubleClick={(_, n) => { setInspectId(n.id); setEdgeEdit(null); }}
+            onEdgeDoubleClick={handleEdgeDoubleClick}
+            onPaneClick={() => setEdgeEdit(null)}
             fitView
             proOptions={{ hideAttribution: true }}
           >
@@ -411,6 +503,36 @@ function FlowCanvasInner({ value, onChange, sceneCode, ruleCode, tenantId, metad
         onLeafCreated={async (code) => { await reloadSceneRules(); if (inspectNode?.type === 'RuleRefNode') onSelectRule(inspectNode.id, code); onLeafChanged?.(); }}
         onLeafSaved={onLeafChanged}
       />
+
+      {/* 边双击 → caseKey 编辑浮层（仅 Switch 出边，其余边无 caseKey 不弹） */}
+      {edgeEdit && editingEdge && (
+        <div
+          style={{
+            position: 'fixed', zIndex: 9999, left: edgeEdit.x, top: edgeEdit.y - 8,
+            background: '#fff', border: '1px solid #d0d7de', borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(16,24,40,.14)', padding: 10, minWidth: 160,
+          }}
+        >
+          <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 6, fontWeight: 600 }}>
+            {editingEdgeSrc?.type === 'RuleRefNode' ? t('editor.flow.inspector.ruleResult') : t('editor.flow.inspector.caseKeys')}
+          </div>
+          <Select
+            size="small"
+            style={{ width: '100%', marginBottom: 8 }}
+            value={editingEdge.caseKey ?? '__none__'}
+            options={[
+              { value: '__none__', label: '— 无条件（默认出边）' },
+              ...editingEdgeOptions,
+            ]}
+            onChange={(v) => commitEdgeCaseKey(v === '__none__' ? null : v)}
+            defaultOpen
+            onBlur={() => setEdgeEdit(null)}
+          />
+          <div style={{ fontSize: 10, color: '#8c959f' }}>
+            {editingEdge.from} → {editingEdge.to}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

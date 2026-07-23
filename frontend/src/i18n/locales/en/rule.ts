@@ -157,6 +157,7 @@ const rule: RuleTranslation = {
         caseKeys: 'Branch keys (caseKeys)', outputKey: 'Output key (outputKey)',
         decisionCode: 'Decision code (decisionCode)', ruleCode: 'Referenced rule (ruleCode)',
         nodeId: 'Node ID', emptyHint: 'Select a canvas node to view/edit properties',
+        ruleResult: 'Rule result',
       },
       drill: {
         title: 'Drill-down Edit',

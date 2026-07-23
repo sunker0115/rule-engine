@@ -157,6 +157,7 @@ const rule: RuleTranslation = {
         caseKeys: '分支出口 (caseKeys)', outputKey: '输出键 (outputKey)',
         decisionCode: '决策码 (decisionCode)', ruleCode: '引用规则 (ruleCode)',
         nodeId: '节点 ID', emptyHint: '选择画布节点查看/编辑属性',
+        ruleResult: '规则执行结果',
       },
       drill: {
         title: '下钻编辑',

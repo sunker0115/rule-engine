@@ -20,6 +20,9 @@ import com.sstlfsj.rule.kernel.api.model.flow.TransformNode;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.expression.ExpressionEngine;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +38,8 @@ import java.util.Set;
  * trace 复用 {@link NodeTrace} 树：编排节点用 {@link FlowNodeType} 标签，RuleRef 的 children 挂被引规则 trace 子树。
  */
 public class FlowExecutor implements RuleVersionExecutor {
+
+    private static final Logger log = LoggerFactory.getLogger(FlowExecutor.class);
 
     /** kind → executor，用于 RuleRef 按被引规则 kind 分派；含 FlowExecutor 自身（装配期后置 put，故不 copyOf）。 */
     private final Map<String, RuleVersionExecutor> leafExecutors;
@@ -117,7 +122,8 @@ public class FlowExecutor implements RuleVersionExecutor {
             if (collect) traces.add(refTrace(ref, r));
             if (r.errorCode() != null) throw new FlowHalt(r.errorCode());
             if (r.ruleHit()) hitDecisions.addAll(resolveRefDecisions(refSnap, r));
-            return singleNext(ref.id());
+            // 按命中结果走对应出边：true 边 / false 边 / 默认边（null）
+            return switchNext(ref.id(), String.valueOf(r.ruleHit()));
         }
 
         private String handleSwitch(SwitchNode sw) {
@@ -158,6 +164,7 @@ public class FlowExecutor implements RuleVersionExecutor {
             } catch (FlowHalt h) {
                 throw h;
             } catch (Exception e) {
+                log.error("Flow 表达式求值失败 lang={} expr={}", lang, expression, e);
                 throw new FlowHalt(EvalErrorCode.FLOW_EVAL_ERROR.name());
             }
         }

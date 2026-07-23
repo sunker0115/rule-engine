@@ -315,7 +315,7 @@ export interface RuleTranslation {
       inspector: {
         title: string; lang: string; expression: string; caseKeys: string;
         outputKey: string; decisionCode: string; ruleCode: string;
-        nodeId: string; emptyHint: string;
+        nodeId: string; emptyHint: string; ruleResult: string;
       };
       drill: {
         title: string; isolationNote: string; reuseHint: string;
