@@ -44,7 +44,7 @@
 | R1 XOR 逻辑节点（"恰好一个满足"） | 高·低成本 | `08-evolution.md` §2.21（AST 扩展期） |
 | R2 脚本执行器 JSR-223 对象池（Groovy 秒级初始化 → commons-pool2 池化） | 中 | 已由 D66 六引擎装配吸收其思路（各引擎 `compile` 缓存） |
 | R3 类型化比较策略工厂（按 dataType 路由，避免 if-else） | 中 | 已落地（`ComparisonStrategyFactory`，B19，kernel `internal/condition/strategy`） |
-| R4 Flow 引擎（JSON 节点图 + Context 分层）| 低-中·v2 | 与 D75 `DECISION_FLOW` 同类，本项目走 typed 节点 + 发布期冻结，更结构化 |
+| R4 Flow 引擎（JSON 节点图 + Context 分层）| — | 同步图已由 D75 `DECISION_FLOW` 吸收（typed 节点 + 发布期冻结）；**有状态编排不自研**，D60/D75 已定接 Flowable |
 | R5 Decorator 三级缓存键（Rule/Condition/Flow ExecutionKey） | 低·备忘 | 条件去重演进（§2.13 alpha 节点共享）参照 |
 
 **不吸收**：6 级作用域 Context（v1 EvalContext 不可变 POJO 够用）、内部事件总线（用 Spring Modulith）、自研验证框架（用 Spring Validation）、引擎核心耦合 JPA 实体（kernel 零 Spring/DB）、`DecisionCode` 硬编码枚举（本项目 Decision 是业务配置）、Rule 实体层组合策略（本项目组合语义在 AST 表达）。
@@ -165,6 +165,7 @@
 | 已吸收 | CEL / Aviator | 表达式引擎 | D66 六引擎之二 |
 | 已吸收 | FICO / Sapiens（效果·一半） | 业务结局标签回灌 | §2.27 B32 `decision_outcome` |
 | 不需要 | trae | 6 级 Context / 内部事件总线 / 自研验证框架 / 引擎耦合 JPA / `DecisionCode` 硬编码 / Rule 层组合策略 | 分别被 不可变 POJO / Modulith / Spring Validation / kernel 零 Spring / Decision 业务配置 / AST 组合 顶替 |
+| 不需要 | trae R4 | 自研有状态 Flow 编排 | 架构已定：同步图归 D75 `DECISION_FLOW`，有状态编排接 Flowable（D60/D75），不自研 |
 | 不需要 | gengine | 命令式副作用 DSL / DataContext 任意函数 / 规则池 / salience·StopTag / DAG 执行模型 | 分别被 D60 / urule 否决 / 快照+预编译 / hit policy / D75 覆盖 |
 | 不需要 | urule | FunctionLibrary + ConstantLibrary（全局函数注册） | 08-evolution §四已否决（冲突闭合校验/禁副作用/metric 只读） |
 | 不需要 | ZEN | QuickJS Function 节点 / LSP / 自然语言转表达式 | D60 纯决策不跟 / 投产比低 / 中文准确度风险 |
@@ -172,7 +173,6 @@
 | 待定 | gengine | 场景内独立规则并行求值 | §2.29（待实测吞吐瓶颈） |
 | 待定 | ZEN | 表达式编辑器变量补全（Level 1） | 纯前端零后端，未立项 |
 | 待定 | ZEN | CEL 实时类型诊断（Level 2） | `POST /expressions/validate`，未立项 |
-| 待定 | trae R4 | 自研轻量 Flow vs Camunda（**有状态**编排） | v2 决策输入（同步图已由 D75 覆盖） |
 | 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
 | 待定 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 后续（标签位已就绪，聚合未做） |
@@ -194,7 +194,7 @@
 | 不需要 | 引擎核心耦合 JPA 实体 | 违 kernel 零 Spring / 零 DB 硬约束（09-skeleton §五） | — |
 | 不需要 | `DecisionCode` 硬编码枚举 | 本项目 Decision 是业务配置，灵活性更高 | — |
 | 不需要 | Rule 实体层组合策略（CompositeRule 7 种） | 本项目组合语义在 AST 表达，职责更清晰 | — |
-| 待定 | R4 自研轻量 Flow vs Camunda | trae Flow 引擎 ~2000 行；本项目**同步图**已由 D75 覆盖，剩**有状态编排**待 v2 权衡自研 vs Flowable | §2.4 规则间依赖与编排 |
+| 不需要 | R4 自研有状态 Flow | 同步图已由 D75 覆盖；有状态编排 D60/D75 已定接 Flowable，不自研（trae Flow ~2000 行不引入） | — |
 | 待定 | R5 Decorator 三级缓存键 | `ConditionEvaluationKey=(conditionId, ctxHash)` 与"同 ctx 内条件只算一次"思路一致 | §2.13 alpha 节点共享 |
 
 #### 4.2.2 skyhackvip/risk_engine（天网）
