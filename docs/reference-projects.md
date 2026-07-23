@@ -280,6 +280,42 @@
 | 不需要 | 组件化规则链流编排 | 同步图已由 D75 DECISION_FLOW 覆盖（且只编排决策、不含动作节点）；有状态编排接 Flowable | D75 / Flowable |
 | 不需要 | 规则链热替换 / AOP / 子链嵌套 | 热更=D17 Watcher+快照、复用=RuleRef 已有；AOP 无意义（纯函数无副作用可织入） | — |
 
+#### 4.2.6 Drools（Apache KIE，本地同级目录 `../incubator-kie-drools`）
+
+| 桶 | 点 | 细节 / 为什么 | 落点 |
+|---|---|---|---|
+| 已吸收 | 规则集完备性/冲突校验 | Drools Verifier 思路已吸收进 B31 静态分析（命名/语义对齐）；决策表 + guided template 入 D42/D74 | §2.26 B31 |
+| 不需要 | RETE 前向/后向推理引擎 | 本项目**刻意非 RETE**：不可变快照 (D6) + 倒排索引 (D17) + 每事件无状态求值——架构从根上不同 | — |
+| 不需要 | CEP 复杂事件处理 | 事件流处理留 Flink/CEP 扩展，不内嵌引擎 | §2.24 |
+| 不需要 | DRL 命令式规则 DSL | 同 gengine·grule：命令式 + 副作用，D60 纯决策拒绝 | — |
+| 不需要 | KIE 生态捆绑（决策+流程+规则）| 本品分层：纯决策 (D60) → 同步图 (D75) → 有状态编排 (Flowable) | — |
+
+#### 4.2.7 Kogito（Apache KIE，Drools 同生态）
+
+| 桶 | 点 | 细节 / 为什么 | 落点 |
+|---|---|---|---|
+| 已吸收 | （无） | 决策+流程打包一体，与本项目分层架构相反 | — |
+| 不需要 | Drools + jBPM + DMN 捆绑 | 本品已拆：纯决策 / 同步图 / Flowable；Kogito 是反面——决策和编排不拆、一个制品包到底 | D60/D75 |
+| 不需要 | cloud-native（Quarkus） | 本项目 Spring Boot 4 / GraalVM 已拆除 (D62)；Quarkus 生态不对齐 | — |
+
+#### 4.2.8 Evrete（本地同级目录 `../evrete`）
+
+| 桶 | 点 | 细节 / 为什么 | 落点 |
+|---|---|---|---|
+| 已吸收 | （无） | 轻量 RETE + JSR-94，与本项目架构从根上不同 | — |
+| 不需要 | RETE 算法 | 刻意非 RETE（同 Drools 理由） | — |
+| 不需要 | JSR-94 合规 | JSR-94 已停更（2004 年最终版），现代规则引擎不再以此为目标 | — |
+| 不需要 | 注解 Java 规则（`@RuleSet`/`@Where`/`@Action`） | D61 已有 easyrules 风格注解规则（`@Condition`/`@Fact`），同层不重复引入 | — |
+
+#### 4.2.9 OpenL Tablets（本地同级目录 `../openl-tablets`，LGPL）
+
+| 桶 | 点 | 细节 / 为什么 | 落点 |
+|---|---|---|---|
+| 已吸收 | （无） | Excel 驱动 authoring，与本品录入模型不同；LGPL 许可 | — |
+| 不需要 | Excel → JVM 字节码编译链 | 本项目规则体是 typed JSON（AST/Script/FlowGraph），不走 Excel 路径；编译思路 D67 预编译已覆盖 | — |
+| 不需要 | 业务用户 Excel 维护规则 | 这正是 D74（参数化模板）暂缓等场景——当前是技术作者配规则，不需要 Excel 录入层 | D74 暂缓 |
+| 不需要 | MCP AI 集成、自动 REST 暴露 | 附加功能，非核心对照点 | — |
+
 ---
 
 ## 五、追加新项目模板
