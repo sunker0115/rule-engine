@@ -88,8 +88,8 @@ public class RuleController {
     private static RuleContent toContent(RuleContentSource src) {
         List<DecisionBinding> bindings = src.decisionBindings() == null ? null
                 : src.decisionBindings().stream().map(i -> new DecisionBinding(i.decisionCode(), 0)).toList();
-        return new RuleContent(src.name(), src.kind(), src.conditionAst(), bindings,
-                src.preGates(), src.triggerEventTypes(), src.script());
+        return new RuleContent(src.name(), src.kind(), src.body(), bindings,
+                src.preGates(), src.triggerEventTypes());
     }
 
     /**

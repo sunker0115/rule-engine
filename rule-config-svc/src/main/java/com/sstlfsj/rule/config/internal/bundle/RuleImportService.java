@@ -150,11 +150,10 @@ public class RuleImportService {
             RuleVersion activeVersion = ruleVersionMapper.findActiveVersion(existing.getId());
             if (activeVersion != null) {
                 String targetHash = RuleContentHasher.ruleHash(
-                        activeVersion.getConditionAst(), activeVersion.getDecisionBindings(),
+                        activeVersion.getBody(), activeVersion.getDecisionBindings(),
                         activeVersion.getPreGates(),
                         (activeVersion.getKind() != null ? activeVersion.getKind().name() : "AST_BOOLEAN"),
-                        activeVersion.getTriggerEventTypes(), activeVersion.getScriptSource(),
-                        objectMapper);
+                        activeVersion.getTriggerEventTypes(), objectMapper);
                 if (rule.contentHash().equals(targetHash)) {
                     skipped.add(new RuleImportItem(rule.code(), rule.sceneCode(), "内容 hash 一致，无需变更"));
                     return;
@@ -165,11 +164,10 @@ public class RuleImportService {
         // 走完整 service 链（createDraft/editDraft/newVersion 均内含 resolveAndValidate）
         RuleContent content = new RuleContent(
                 rule.name(), rule.kind(),
-                rule.conditionAst(),
+                rule.body(),
                 rule.decisionBindings() != null ? rule.decisionBindings() : List.of(),
                 rule.preGates() != null ? rule.preGates() : List.of(),
-                rule.triggerEventTypes() != null ? rule.triggerEventTypes() : List.of(),
-                rule.script());
+                rule.triggerEventTypes() != null ? rule.triggerEventTypes() : List.of());
 
         if (existing == null) {
             // 目标不存在 → 新建规则 + DRAFT

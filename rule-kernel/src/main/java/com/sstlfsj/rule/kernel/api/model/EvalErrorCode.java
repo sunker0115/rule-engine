@@ -40,5 +40,13 @@ public enum EvalErrorCode {
     /** EXPRESSION_SCRIPT:script.lang 无对应已注册 ExpressionEngine。 */
     SCRIPT_NO_ENGINE,
     /** EXPRESSION_SCRIPT:运行期求值抛错。 */
-    SCRIPT_EVAL_ERROR
+    SCRIPT_EVAL_ERROR,
+    /** DECISION_FLOW:kind 为 flow 但 snapshot.flowGraph() 为 null 或无 input 节点。 */
+    FLOW_GRAPH_MISSING,
+    /** DECISION_FLOW:RuleRef 引用的被引规则冻结快照缺失(referencedSnapshots 无该 ruleCode)。 */
+    FLOW_REF_MISSING,
+    /** DECISION_FLOW:Switch/Transform 表达式 lang 无对应已注册 ExpressionEngine。 */
+    FLOW_NO_ENGINE,
+    /** DECISION_FLOW:Switch/Transform 表达式运行期求值抛错。 */
+    FLOW_EVAL_ERROR
 }

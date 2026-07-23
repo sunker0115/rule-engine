@@ -8,6 +8,9 @@ const rule: RuleTranslation = {
     publish: '发布',
     dryRun: '试算',
     sessions: '评估记录',
+    export: '导出',
+    exportBundle: '导出规则包（导入/迁移用）',
+    exportSnapshot: '导出规则快照（SDK本地调用）',
     newVersion: '新版本',
     rollback: '回退到此版本',
     disable: '停用',
@@ -39,6 +42,7 @@ const rule: RuleTranslation = {
       DECISION_TREE: '决策树',
       DECISION_TABLE: '决策表',
       EXPRESSION_SCRIPT: '表达式脚本',
+      DECISION_FLOW: '决策流',
     },
   },
   editor: {
@@ -50,7 +54,7 @@ const rule: RuleTranslation = {
     versionContent: {
       title: '版本内容', version: '版本', conditionAst: '条件 AST',
       decisionBindings: '决策绑定', preGates: '前置门控', triggerEventTypes: '触发事件',
-      script: '脚本', publishedBy: '发布人',
+      script: '脚本', flowGraph: '决策图', publishedBy: '发布人',
     },
     versionDiff: {
       title: '与当前版本对比',
@@ -140,6 +144,40 @@ const rule: RuleTranslation = {
         JSONLOGIC: 'JSON 规则格式：\n{ "and": [\n  { ">": [{ "var": "metrics.amount" }, 1000] },\n  { "==": [{ "var": "payload.country" }, "CN"] }\n] }',
         JEXL: '类 Java 表达式：\nmetrics.amount > 1000 && payload.country == "CN"\n支持：方法调用、集合操作',
         GROOVY: 'Groovy 脚本：\nif (metrics.amount > 1000) { return true }\nreturn false',
+      },
+    },
+    flow: {
+      palette: { title: '节点类型 · 拖入画布' },
+      toolbar: {
+        analysisPass: '图分析通过 · 无环 · 无死节点',
+        analysisIssues: '图分析发现问题',
+        clearTrace: '清除执行路径',
+      },
+      entry: '入口',
+      emptyGraph: '空图——从上方拖入节点开始编排',
+      node: { selectRule: '选择规则', addCase: '加分支' },
+      inspector: {
+        title: '节点属性', lang: '表达式引擎 (lang)', expression: '表达式 (expression)',
+        caseKeys: '分支出口 (caseKeys)', outputKey: '输出键 (outputKey)',
+        decisionCode: '决策码 (decisionCode)', ruleCode: '引用规则 (ruleCode)',
+        nodeId: '节点 ID', emptyHint: '选择画布节点查看/编辑属性',
+        ruleResult: '规则执行结果',
+      },
+      leftPanel: {
+        sceneRules: '本场景规则',
+        sceneRulesHint: '暂无该场景的已发布规则，无法创建 RuleRef 节点',
+      },
+      rightPanel: {
+        emptyHint: '点击画布节点查看/编辑属性',
+      },
+      drill: {
+        title: '下钻编辑',
+        isolationNote: '你正在编辑独立规则「{{code}}」。保存后进入其自己的草稿、需各自发布；已发布 flow 引用的是冻结版本，不受此次编辑影响（D6 快照隔离）。',
+        reuseHint: '画布内直接编辑，复用被引规则现有编辑器（受控 props）',
+        save: '保存到该规则草稿',
+        newLeaf: '新建叶子规则', newLeafTitle: '新建本场景叶子规则',
+        unsupportedKind: '该规则类型（{{kind}}）暂不支持画布内下钻编辑，请到规则编辑器打开',
+        ruleRefEmpty: '该 RuleRef 尚未选择规则，请先选择引用规则或新建叶子规则',
       },
     },
     createModal: {

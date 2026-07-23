@@ -21,6 +21,7 @@ import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -122,7 +123,7 @@ class RuleBundleIntegrationTest {
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(rd.getId()); rv.setVersion(1L);
-        rv.setConditionAst(new AndNode(java.util.List.of(), null, null));
+        rv.setBody(new AstBody(new AndNode(java.util.List.of(), null, null)));
         rv.setDecisionBindings(java.util.List.of(new DecisionBinding("BLOCK", 100)));
         rv.setPreGates(java.util.List.of()); rv.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         rv.setTriggerEventTypes(java.util.List.of("transfer"));
@@ -164,8 +165,8 @@ class RuleBundleIntegrationTest {
         RuleVersion anyDraft = ruleVersionMapper.selectOne(new LambdaQueryWrapper<RuleVersion>()
                 .eq(RuleVersion::getStatus, RuleVersionStatus.DRAFT)
                 .last("LIMIT 1"));
-        assertThat(anyDraft.getConditionAst()).isInstanceOf(AndNode.class);
-        assertThat(((AndNode) anyDraft.getConditionAst()).children()).isEmpty();
+        assertThat(((AstBody) anyDraft.getBody()).conditionAst()).isInstanceOf(AndNode.class);
+        assertThat(((AndNode) ((AstBody) anyDraft.getBody()).conditionAst()).children()).isEmpty();
     }
 
     @Test

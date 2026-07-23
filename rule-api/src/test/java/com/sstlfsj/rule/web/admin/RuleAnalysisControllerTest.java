@@ -37,6 +37,8 @@ class RuleAnalysisControllerTest {
                 List.of(),
                 List.of(),
                 List.of(),
+                List.of(),
+                List.of(),
                 List.of());
         when(ruleAnalysisService.analyze(1L, "PAYMENT")).thenReturn(report);
 

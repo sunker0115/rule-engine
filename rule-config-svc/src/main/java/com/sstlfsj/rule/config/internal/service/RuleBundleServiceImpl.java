@@ -4,6 +4,7 @@ import com.sstlfsj.rule.config.api.dto.ImportDiffReport;
 import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.config.internal.bundle.RuleExportService;
 import com.sstlfsj.rule.config.internal.bundle.RuleImportService;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,11 @@ class RuleBundleServiceImpl implements RuleBundleService {
     @Override
     public RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId) {
         return ruleExportService.export(tenantId, ruleIds, sceneId);
+    }
+
+    @Override
+    public List<RuleVersionSnapshot> exportSnapshots(Long tenantId, List<Long> ruleIds, Long sceneId) {
+        return ruleExportService.exportSnapshots(tenantId, ruleIds, sceneId);
     }
 
     @Override

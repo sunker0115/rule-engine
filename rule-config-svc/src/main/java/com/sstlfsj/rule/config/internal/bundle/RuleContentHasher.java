@@ -1,12 +1,9 @@
 package com.sstlfsj.rule.config.internal.bundle;
 
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
-import com.sstlfsj.rule.kernel.api.model.ScriptSource;
-import com.sstlfsj.rule.kernel.api.model.MetricDependency;
-import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
-import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
@@ -19,8 +16,9 @@ import java.util.Map;
 /**
  * 规则内容 SHA-256 哈希工具。
  *
- * <p>hash 以固定字段顺序序列化规则内容（conditionAst / bindings / preGates / kind /
- * triggerEventTypes / script），保证字段顺序与 null/空集合语义稳定——相同内容的两份规则总得到相同 hash。
+ * <p>hash 以固定字段顺序序列化规则内容（body / bindings / preGates / kind /
+ * triggerEventTypes），保证字段顺序与 null/空集合语义稳定——相同内容的两份规则总得到相同 hash。
+ * body 为多态载体（AstBody/ScriptBody/FlowBody，含 type 判别），不同规则 body 不同则 hash 不同。
  * 用于 import 幂等判断（hash 相同 → 内容等价 → 无需建新版本）。</p>
  */
 public final class RuleContentHasher {
@@ -30,27 +28,24 @@ public final class RuleContentHasher {
     /**
      * 计算单条规则内容的 SHA-256 hex。
      *
-     * @param ast      条件 AST（null 视为空 AndNode）
+     * @param body     判定主体多态载体（AstBody/ScriptBody/FlowBody；含 type 判别，进 hash 保证不同载体不撞）
      * @param bindings 决策绑定列表（null 视为空列表）
      * @param gates    Pre-Gate 列表（null 视为空列表）
      * @param kind     规则类型标签（null 视为 AST_BOOLEAN）
      * @param triggers 触发事件类型（null 视为空列表）
-     * @param script   EXPRESSION_SCRIPT 脚本载体（其他 kind 为 null）
-     * @param om       Jackson ObjectMapper（用于 AstNode 等 typed 对象序列化）
+     * @param om       Jackson ObjectMapper（用于 typed 对象序列化）
      * @return SHA-256 hex 字符串（64 位小写）
      */
-    public static String ruleHash(AstNode ast, List<DecisionBinding> bindings, List<PreGateConfig> gates,
-                                   String kind, List<String> triggers, ScriptSource script,
-                                   ObjectMapper om) {
+    public static String ruleHash(RuleBody body, List<DecisionBinding> bindings, List<PreGateConfig> gates,
+                                   String kind, List<String> triggers, ObjectMapper om) {
         try {
             // 固定字段顺序构建规范化 Map
             Map<String, Object> canonical = new LinkedHashMap<>();
             canonical.put("kind", kind != null ? kind : "AST_BOOLEAN");
-            canonical.put("conditionAst", ast);
+            canonical.put("body", body);  // 多态载体含 type 判别，null 时序列化为 null，语义稳定
             canonical.put("decisionBindings", bindings != null ? bindings : List.of());
             canonical.put("preGates", gates != null ? gates : List.of());
             canonical.put("triggerEventTypes", triggers != null ? triggers : List.of());
-            canonical.put("script", script);  // null 时 Jackson 序列化为 null，语义稳定
 
             String json = om.writeValueAsString(canonical);
             return sha256Hex(json);

@@ -9,8 +9,13 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.analysis.RuleSetAnalysisReport;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
+import com.sstlfsj.rule.kernel.api.model.FlowBody;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.SceneExecutionStrategy;
+import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
+import com.sstlfsj.rule.kernel.api.model.flow.FlowGraph;
 import com.sstlfsj.rule.kernel.internal.analysis.AnalyzableRule;
 import com.sstlfsj.rule.kernel.internal.analysis.RuleSetAnalyzer;
 import lombok.RequiredArgsConstructor;
@@ -56,9 +61,13 @@ public class RuleAnalysisServiceImpl implements RuleAnalysisService {
             RuleVersion version = (draft != null) ? draft : ruleVersionMapper.findActiveVersion(rd.getId());
             if (version == null) continue;
             String kind = (version.getKind() != null ? version.getKind() : RuleKind.AST_BOOLEAN).name();
+            // 从多态 body 解包 detector 所需 typed 视图：AST 系取 conditionAst，DECISION_FLOW 取 flowGraph
+            RuleBody b = version.getBody();
+            AstNode ast = b instanceof AstBody ab ? ab.conditionAst() : null;
+            FlowGraph flow = b instanceof FlowBody fb ? fb.flowGraph() : null;
             analyzableRules.add(new AnalyzableRule(
-                    rd.getCode(), version.getVersion(), version.getConditionAst(),
-                    version.getDecisionBindings(), kind));
+                    rd.getCode(), version.getVersion(), ast,
+                    version.getDecisionBindings(), kind, flow));
         }
 
         return RuleSetAnalyzer.analyze(sceneCode, analyzableRules, strategy);

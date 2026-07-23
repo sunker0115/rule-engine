@@ -12,7 +12,9 @@ import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
+import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -111,17 +113,15 @@ public class RuleExportService {
             SceneDef scene = sceneById.get(rd.getSceneId());
             String kindName = (rv.getKind() != null ? rv.getKind() : RuleKind.AST_BOOLEAN).name();
             String contentHash = RuleContentHasher.ruleHash(
-                    rv.getConditionAst(), rv.getDecisionBindings(), rv.getPreGates(),
-                    kindName, rv.getTriggerEventTypes(), rv.getScriptSource(),
-                    objectMapper);
+                    rv.getBody(), rv.getDecisionBindings(), rv.getPreGates(),
+                    kindName, rv.getTriggerEventTypes(), objectMapper);
             rules.add(new RuleBundle.RuleEntry(
                     rd.getCode(), rd.getName(), kindName,
                     scene != null ? scene.getCode() : null,
-                    rv.getConditionAst(), rv.getDecisionBindings(),
+                    rv.getBody(), rv.getDecisionBindings(),
                     rv.getPreGates(), rv.getTriggerEventTypes(),
                     rv.getMetricDependencies() != null ? rv.getMetricDependencies() : List.of(),
                     rv.getPayloadDependencies() != null ? rv.getPayloadDependencies() : List.of(),
-                    rv.getScriptSource(),   // v2：EXPRESSION_SCRIPT 规则携带脚本
                     contentHash));
         }
 
@@ -133,6 +133,33 @@ public class RuleExportService {
         return new RuleBundle(
                 2, revision, bundleWithoutRevision.exportedAt(), bundleWithoutRevision.sourceTenant(),
                 rules, scenes, metricEntries, decisionEntries);
+    }
+
+    /** 按条件导出规则当前 ACTIVE 版本为 RuleVersionSnapshot 列表（SDK 本地调用用）。 */
+    @Transactional(readOnly = true)
+    public List<RuleVersionSnapshot> exportSnapshots(Long tenantId, List<Long> ruleIds, Long sceneId) {
+        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.selectForExport(tenantId, ruleIds, sceneId);
+        List<RuleVersionSnapshot> snapshots = new ArrayList<>();
+        for (RuleDefinition rd : ruleDefs) {
+            RuleVersion active = ruleVersionMapper.findActiveVersion(rd.getId());
+            if (active == null) continue;
+            SceneDef scene = sceneMapper.findByIds(Set.of(rd.getSceneId())).stream().findFirst().orElse(null);
+            snapshots.add(new RuleVersionSnapshot(
+                    active.getId(),
+                    scene != null ? scene.getCode() : null,
+                    String.valueOf(rd.getTenantId()),
+                    active.getBody(),
+                    active.getPreGates() != null ? active.getPreGates() : List.of(),
+                    active.getDecisionBindings() != null ? active.getDecisionBindings() : List.of(),
+                    active.getTriggerEventTypes() != null ? active.getTriggerEventTypes() : List.of(),
+                    active.getKind() != null ? active.getKind().name() : RuleKind.AST_BOOLEAN.name(),
+                    rd.getCode(),
+                    active.getVersion() != null ? active.getVersion().longValue() : 0L,
+                    active.getMetricDependencies() != null ? active.getMetricDependencies() : List.of(),
+                    active.getPayloadDependencies() != null ? active.getPayloadDependencies() : List.of()));
+        }
+        if (snapshots.isEmpty()) throw new IllegalArgumentException("无可导出的 ACTIVE 规则");
+        return snapshots;
     }
 
     private List<String> parseDecisionCodes(List<DecisionBinding> bindings) {

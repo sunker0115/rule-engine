@@ -17,6 +17,7 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -152,7 +153,7 @@ class MetadataServiceIntegrationTest {
         RuleVersion v = new RuleVersion();
         v.setRuleDefinitionId(ruleDefinitionId);
         v.setVersion(1L);
-        v.setConditionAst(AND_NODE);
+        v.setBody(new AstBody(AND_NODE));
         v.setDecisionBindings(List.of());
         v.setPreGates(List.of());
         v.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);

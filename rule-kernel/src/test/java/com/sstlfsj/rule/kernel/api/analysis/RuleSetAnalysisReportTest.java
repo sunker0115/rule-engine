@@ -19,6 +19,10 @@ class RuleSetAnalysisReportTest {
         var unanalyzable = new UnanalyzableRule("R6", "contains OR/regex");
         var redundancy = new RedundancyFinding("R7", "amount LTE 10", "amount EQ 10",
                 "amount LTE 10 被同组 amount EQ 10 蕴含，可删除", Severity.INFO);
+        var flowCycle = new FlowCycleFinding("R8", 3L, List.of("n1", "n2"),
+                "DECISION_FLOW 决策图存在环: n1 -> n2 -> n1", Severity.ERROR);
+        var flowDeadNode = new FlowDeadNodeFinding("R9", 2L, "orphan",
+                "DECISION_FLOW 决策图节点 orphan 从入口 in 不可达（死节点）", Severity.WARN);
 
         var report = new RuleSetAnalysisReport(
                 "scene-1",
@@ -28,7 +32,9 @@ class RuleSetAnalysisReportTest {
                 List.of(overlap),
                 List.of(coverageGap),
                 List.of(unanalyzable),
-                List.of(redundancy)
+                List.of(redundancy),
+                List.of(flowCycle),
+                List.of(flowDeadNode)
         );
 
         assertThat(report.sceneCode()).isEqualTo("scene-1");
@@ -81,6 +87,21 @@ class RuleSetAnalysisReportTest {
             assertThat(f.redundantCondition()).isEqualTo("amount LTE 10");
             assertThat(f.impliedByCondition()).isEqualTo("amount EQ 10");
             assertThat(f.severity()).isEqualTo(Severity.INFO);
+        });
+
+        // 决策图环：ERROR，携成环节点序列
+        assertThat(report.flowCycles()).singleElement().satisfies(f -> {
+            assertThat(f.ruleCode()).isEqualTo("R8");
+            assertThat(f.version()).isEqualTo(3L);
+            assertThat(f.cycleNodeIds()).containsExactly("n1", "n2");
+            assertThat(f.severity()).isEqualTo(Severity.ERROR);
+        });
+
+        // 决策图死节点：WARN
+        assertThat(report.flowDeadNodes()).singleElement().satisfies(f -> {
+            assertThat(f.ruleCode()).isEqualTo("R9");
+            assertThat(f.deadNodeId()).isEqualTo("orphan");
+            assertThat(f.severity()).isEqualTo(Severity.WARN);
         });
     }
 }

@@ -216,7 +216,7 @@ POST /admin/v1/rules
   "code": "rule-transfer-review",
   "name": "转账人工审核触发",
   "kind": "AST_BOOLEAN",
-  "conditionAst": { "type": "AndNode", "children": [] },
+  "body": { "type": "AstBody", "conditionAst": { "type": "AndNode", "children": [] } },
   "decisionBindings": [{ "decisionCode": "REVIEW" }],
   "preGates": [{ "gateType": "ROLLOUT", "params": { "percentage": 100 } }],
   "triggerEventTypes": ["transfer.initiated"]
@@ -231,9 +231,8 @@ POST /admin/v1/rules
 | `sceneCode`     | String | 是   | 规则所属场景编码 |
 | `code`          | String | 是   | 规则业务编码，同 tenantId + sceneCode 下唯一 |
 | `name`          | String | 是   | 规则显示名称 |
-| `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT` |
-| `conditionAst`  | Object | 否   | 条件 AST 根节点，缺省存空 AST。ConditionNode 字段语义见 [`03-rule-expression.md`](./03-rule-expression.md) §2.4；其中 `valueRef`（枚举 `METRIC` \| `PAYLOAD`，缺省 `METRIC`）选值来源：`PAYLOAD` 时 `metricCode` 为 payload 字段名（须在 `Scene.payloadSchema` 声明），不注册 metric，详见 §2.6。`kind=EXPRESSION_SCRIPT` 时该字段为 `null`（条件逻辑走 `script`，二者互斥） |
-| `script`        | Object | 否   | **仅 `kind=EXPRESSION_SCRIPT` 必填**，与 `conditionAst` 互斥。脚本载体 `{ "source": "<表达式>", "lang": "CEL" }`。发布期校验：①语法编译；②引用的 `metrics.<code>` 须 ACTIVE、`payload.<field>` 须在 `Scene.payloadSchema` 声明（`subject.*` 开放不校验），据此冻 metric/payload 依赖；③typed 类型检查（string 字段参与数值比较等类型不符发布期即拒）。返回值按运行时类型派发：Boolean→命中、String→决策码（须 ∈ `decisionBindings`）、Number→评分。详见 [`03-rule-expression.md`](./03-rule-expression.md) |
+| `kind`          | String | 否   | 规则类型，默认 `AST_BOOLEAN`；可选值：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT` / `DECISION_FLOW` |
+| `body`          | Object | 否   | 判定主体多态载体 `RuleBody`（三承载收敛，D76），`type` 判别按 kind 择一：<br>• **`AstBody`**（AST 系四 kind）`{ "type":"AstBody", "conditionAst": {…} }`——`conditionAst` 缺省存空 AST；ConditionNode 字段语义见 [`03-rule-expression.md`](./03-rule-expression.md) §2.4，`valueRef`（`METRIC`\|`PAYLOAD`，缺省 `METRIC`）：`PAYLOAD` 时 `metricCode` 为 payload 字段名（须在 `Scene.payloadSchema` 声明），详见 §2.6。<br>• **`ScriptBody`**（`EXPRESSION_SCRIPT`）`{ "type":"ScriptBody", "script": { "source":"<表达式>", "lang":"CEL" } }`——发布期：①语法编译；②`metrics.<code>` 须 ACTIVE、`payload.<field>` 须声明，据此冻依赖；③typed 类型检查。返回值派发：Boolean→命中、String→决策码（∈ `decisionBindings`）、Number→评分。详见 [`03-rule-expression.md`](./03-rule-expression.md)。<br>• **`FlowBody`**（`DECISION_FLOW`）`{ "type":"FlowBody", "flowGraph": { nodes, edges, inputNodeId }, "referencedSnapshots": {} }`——节点四种 `RuleRef`/`Switch`/`Transform`/`Output`（`type` 判别）；发布期：①图结构合法（有 input、无孤儿、Switch caseKey 一致、Output.decisionCode 存在）；②`RuleRef` 引用规则 ACTIVE 版本冻进 `referencedSnapshots`（无 ACTIVE 拒绝），metric/payload 依赖全图并集冻结；③环/死节点静态检测。详见 [`00-decisions.md`](./00-decisions.md) D75。<br>**发布期校验 `kind` 与 body 变体一致**（不符 `KIND_BODY_MISMATCH`，D76）。 |
 | `decisionBindings` | Array | 否 | 命中决策绑定列表，缺省空数组 |
 | `preGates`      | Array  | 否   | 前置门列表，缺省空数组；每项 `{ gateType, params }`。ROLLOUT 灰度门的 params 见下 |
 | `triggerEventTypes` | Array | 否 | 触发事件类型白名单，缺省空数组 |
@@ -276,7 +275,7 @@ POST /admin/v1/rules
 PUT /admin/v1/rules/{ruleDefinitionId}/draft
 ```
 
-**Request：** 字段同 §4.1（`conditionAst` / `decisionBindings` / `preGates` / `triggerEventTypes` / `kind` / `name`），整组覆盖当前 DRAFT 内容；`tenantId` / `sceneCode` / `code` 不可改。
+**Request：** 字段同 §4.1（`body` / `decisionBindings` / `preGates` / `triggerEventTypes` / `kind` / `name`），整组覆盖当前 DRAFT 内容；`tenantId` / `sceneCode` / `code` 不可改。
 
 - 同 §4.1 跑全套 `resolveAndValidate`（premise A），校验不过返回 400。
 - 规则当前**无 DRAFT 版本**（仅有已发布版本）时返回 400 `INVALID_ARGUMENT`（须先 §4.1.2 出新版本再编辑）。
@@ -465,7 +464,7 @@ GET /admin/v1/rules/export?tenantId={tenantId}&ruleIds={id,id}&sceneId={sceneId}
     {
       "code": "rule.night.transfer", "name": "夜间大额转账", "kind": "AST_BOOLEAN",
       "sceneCode": "risk.transfer",
-      "conditionAst": "{...}", "decisionBindings": "[...]", "preGates": "[]",
+      "body": "{...}", "decisionBindings": "[...]", "preGates": "[]",
       "triggerEventTypes": "[\"transfer\"]",
       "metricDependencies": [{"metricCode": "account.age", "metricVersion": 1}]
     }
@@ -476,7 +475,7 @@ GET /admin/v1/rules/export?tenantId={tenantId}&ruleIds={id,id}&sceneId={sceneId}
 }
 ```
 
-> 所有 JSON 列（conditionAst / decisionBindings / preGates / triggerEventTypes / payloadSchema / eventTypes / defaultParams）以**原始 JSON 字符串**无损搬运。`decisionDefinitions[]` 承载 `decisionBindings` 引用的 tenant 级 decision（D26）。
+> 所有 JSON 列（body / decisionBindings / preGates / triggerEventTypes / payloadSchema / eventTypes / defaultParams）以**原始 JSON 字符串**无损搬运（`body` 为多态 RuleBody，含 type 判别，D76）。`decisionDefinitions[]` 承载 `decisionBindings` 引用的 tenant 级 decision（D26）。
 
 ### 4.9 批量导入规则 Bundle（B7）
 
@@ -515,7 +514,7 @@ header `X-Actor-Id`；**`multipart/form-data` 上传 Bundle JSON 文件（字段
 GET /admin/v1/rules/{ruleDefinitionId}?tenantId=demo-tenant
 ```
 
-**Response 200：** `RuleDetailVO`，含 `ruleDefinitionId / code / name / status / kind / sceneCode / conditionAst / decisionBindings / currentVersionId`。`conditionAst`（对象）与 `decisionBindings`（数组）取自当前 ACTIVE 版本并反序列化为结构化 JSON，供前端编辑回填；无 ACTIVE 版本时两者为 null。
+**Response 200：** `RuleDetailVO`，含 `ruleDefinitionId / code / name / status / kind / sceneCode / body / decisionBindings / currentVersionId`。`body`（多态 RuleBody，含 type 判别，D76）与 `decisionBindings`（数组）取自当前 ACTIVE 版本并反序列化为结构化 JSON，供前端编辑回填；无 ACTIVE 版本时两者为 null。
 
 ### 4.11 查询 Metric 定义列表
 
@@ -671,8 +670,9 @@ GET /admin/v1/rules/{ruleDefinitionId}/sessions?tenantId=demo-tenant&status=HIT&
 
 | errorCode | 含义 |
 |-----------|------|
-| `UNRESOLVED_VARIABLE` | conditionAst / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内）。含 `valueRef=PAYLOAD` 的 ConditionNode 其 `metricCode`（payload 字段名）未在 `Scene.payloadSchema` 声明的情形——发布拒绝，message 指明该未声明字段 |
+| `UNRESOLVED_VARIABLE` | body / pre_gates / payload 引用了未绑定的变量（metricCode、payload 字段、EvalContext 标准字段均在校验范围内）。含 `valueRef=PAYLOAD` 的 ConditionNode 其 `metricCode`（payload 字段名）未在 `Scene.payloadSchema` 声明的情形——发布拒绝，message 指明该未声明字段 |
 | `DECISION_CODE_NOT_FOUND` | decisionBindings 引用了该 Rule 所属 Tenant 未定义的 Decision（Decision 是 Tenant 级实体，D26/D54） |
+| `KIND_BODY_MISMATCH` | `kind` 家族与请求体 `body` 变体不一致（AST 系四 kind→AstBody / EXPRESSION_SCRIPT→ScriptBody / DECISION_FLOW→FlowBody），D76——发布/建草稿拒绝，message 含 kind 与实际 body 类型 |
 | `HANDLER_EXCEPTION` | 发布事务内未分类异常，message 含异常摘要 |
 
 ---
@@ -795,12 +795,15 @@ try (RuleEngineClient client = RuleEngineClient.builder()
     "triggerEventTypes": ["TRANSACTION"],
     "decisionBindings": [{"decisionCode": "BLOCK", "priority": 100}],
     "preGates": [],
-    "conditionAst": {
-      "type": "AndNode",
-      "children": [
-        { "type": "ConditionNode", "conditionType": "GT", "metricCode": "amount",
-          "params": {"threshold": 1000}, "weight": 0.0 }
-      ]
+    "body": {
+      "type": "AstBody",
+      "conditionAst": {
+        "type": "AndNode",
+        "children": [
+          { "type": "ConditionNode", "conditionType": "GT", "metricCode": "amount",
+            "params": {"threshold": 1000}, "weight": 0.0 }
+        ]
+      }
     }
   }
 ]

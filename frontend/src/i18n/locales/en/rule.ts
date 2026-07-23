@@ -8,6 +8,9 @@ const rule: RuleTranslation = {
     publish: 'Publish',
     dryRun: 'Dry Run',
     sessions: 'Sessions',
+    export: 'Export',
+    exportBundle: 'Export Bundle (import/migrate)',
+    exportSnapshot: 'Export Snapshots (SDK local call)',
     newVersion: 'New Version',
     rollback: 'Rollback',
     disable: 'Disable',
@@ -39,6 +42,7 @@ const rule: RuleTranslation = {
       DECISION_TREE: 'Decision Tree',
       DECISION_TABLE: 'Decision Table',
       EXPRESSION_SCRIPT: 'Expression Script',
+      DECISION_FLOW: 'Decision Flow',
     },
   },
   editor: {
@@ -50,7 +54,7 @@ const rule: RuleTranslation = {
     versionContent: {
       title: 'Version Content', version: 'Version', conditionAst: 'Condition AST',
       decisionBindings: 'Decision Bindings', preGates: 'Pre-gates', triggerEventTypes: 'Trigger Events',
-      script: 'Script', publishedBy: 'Published By',
+      script: 'Script', flowGraph: 'Flow Graph', publishedBy: 'Published By',
     },
     versionDiff: {
       title: 'Compare with Current',
@@ -140,6 +144,40 @@ const rule: RuleTranslation = {
         JSONLOGIC: 'JSON rule format:\n{ "and": [\n  { ">": [{ "var": "metrics.amount" }, 1000] },\n  { "==": [{ "var": "payload.country" }, "CN"] }\n] }',
         JEXL: 'Java-like expressions:\nmetrics.amount > 1000 && payload.country == "CN"\nSupports: method calls, collections',
         GROOVY: 'Groovy script:\nif (metrics.amount > 1000) { return true }\nreturn false',
+      },
+    },
+    flow: {
+      palette: { title: 'Node Types · Drag to Canvas' },
+      toolbar: {
+        analysisPass: 'Graph analysis passed · acyclic · no dead nodes',
+        analysisIssues: 'Graph analysis found issues',
+        clearTrace: 'Clear execution path',
+      },
+      entry: 'Entry',
+      emptyGraph: 'Empty graph — drag a node from above to start',
+      node: { selectRule: 'Select rule', addCase: 'Add case' },
+      inspector: {
+        title: 'Node Properties', lang: 'Expression Engine (lang)', expression: 'Expression',
+        caseKeys: 'Branch keys (caseKeys)', outputKey: 'Output key (outputKey)',
+        decisionCode: 'Decision code (decisionCode)', ruleCode: 'Referenced rule (ruleCode)',
+        nodeId: 'Node ID', emptyHint: 'Select a canvas node to view/edit properties',
+        ruleResult: 'Rule result',
+      },
+      leftPanel: {
+        sceneRules: 'Scene Rules',
+        sceneRulesHint: 'No published rules in this scene, RuleRef nodes cannot be created',
+      },
+      rightPanel: {
+        emptyHint: 'Click a canvas node to view/edit properties',
+      },
+      drill: {
+        title: 'Drill-down Edit',
+        isolationNote: 'You are editing the standalone rule "{{code}}". Saving writes to its own draft and it must be published separately; a published flow references the frozen version and is unaffected by this edit (D6 snapshot isolation).',
+        reuseHint: 'Edit in place, reusing the referenced rule\'s existing editor (controlled props)',
+        save: 'Save to rule draft',
+        newLeaf: 'New leaf rule', newLeafTitle: 'New Leaf Rule in Scene',
+        unsupportedKind: 'This rule kind ({{kind}}) does not support in-canvas drill-down editing; open it in the rule editor',
+        ruleRefEmpty: 'This RuleRef has no rule selected yet; pick a referenced rule or create a leaf rule',
       },
     },
     createModal: {

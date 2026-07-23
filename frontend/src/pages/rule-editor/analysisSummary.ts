@@ -1,7 +1,11 @@
-import type { RuleKind, RuleSetAnalysisReport, Severity } from '@/types';
+import type { RuleKind, RuleSetAnalysisReport, Severity, FlowCycleFinding, FlowDeadNodeFinding } from '@/types';
 
-/** 仅合取语义（conjunction）的规则种类可做静态分析；SCORECARD / EXPRESSION_SCRIPT 不可静态分析。 */
-export const ANALYZABLE_KINDS: readonly RuleKind[] = ['AST_BOOLEAN', 'DECISION_TREE', 'DECISION_TABLE'];
+/**
+ * 可触发规则集分析拉取的种类。合取语义（AST_BOOLEAN / DECISION_TREE / DECISION_TABLE）走跨规则推理；
+ * DECISION_FLOW 走图内分析（环 / 死节点），结果分流给画布可视化，不进跨规则面板。
+ * SCORECARD / EXPRESSION_SCRIPT 不可静态分析。
+ */
+export const ANALYZABLE_KINDS: readonly RuleKind[] = ['AST_BOOLEAN', 'DECISION_TREE', 'DECISION_TABLE', 'DECISION_FLOW'];
 
 /** 当前规则种类是否支持规则集静态分析。 */
 export function isAnalyzableKind(kind: RuleKind): boolean {
@@ -64,4 +68,14 @@ export function worstSeverityForRule(report: RuleSetAnalysisReport, ruleCode: st
   if (worst) return worst;
   if (report.unanalyzableRules.some((x) => x.ruleCode === ruleCode)) return 'NA';
   return null;
+}
+
+/** 某 DECISION_FLOW 规则图内的环 finding（供画布把成环边标红）。跨规则维度不含此项。 */
+export function flowCyclesForRule(report: RuleSetAnalysisReport, ruleCode: string): FlowCycleFinding[] {
+  return (report.flowCycles ?? []).filter((x) => x.ruleCode === ruleCode);
+}
+
+/** 某 DECISION_FLOW 规则图内的死节点 finding（供画布把死节点置灰）。跨规则维度不含此项。 */
+export function flowDeadNodesForRule(report: RuleSetAnalysisReport, ruleCode: string): FlowDeadNodeFinding[] {
+  return (report.flowDeadNodes ?? []).filter((x) => x.ruleCode === ruleCode);
 }

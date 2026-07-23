@@ -24,7 +24,7 @@
 | **Tenant** | 数据与权限的最外层隔离单元（一个公司 / 一条业务线 / 一个 SaaS 租户） | 平台运维 |
 | **Scene** | Tenant 内的业务域命名空间（如 `marketing.signup` / `risk.transfer`），兼任 **Matcher 路由键 + 数据源初始化锚点 + 使用模式声明（PUSH / PULL / HYBRID） + 元数据 schema 承载者（`payloadSchema` / `eventTypes` / `subjectType` / `defaultParams`，D13）**（D54 起 metric 治理白名单已移除：metric tenant 级可用） | 平台运维 |
 | **RuleEvent** | 触发评估的"一次发生"：谁、在哪、做了什么（不可变 POJO） | 上游业务方推 |
-| **Rule** | 一条规则定义：在什么条件下、对谁、满足后输出哪个 Decision；带版本、灰度、Pre-Gate；条件用 **AST 树**表达（五种 kind 均已实装：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT`） | 业务运营 / 风控配置 |
+| **Rule** | 一条规则定义：在什么条件下、对谁、满足后输出哪个 Decision；带版本、灰度、Pre-Gate；判定主体按 kind 多态承载（六种 kind 均已实装：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` 走 AST 树、`EXPRESSION_SCRIPT` 走脚本、`DECISION_FLOW` 走决策图 flowGraph） | 业务运营 / 风控配置 |
 | **Condition** | AST 叶子节点：一条原子判断（`age >= 18` / `近 7 天交易额 > 1000`），由 `conditionType` 路由到具体评估器 | 业务运营选类型 + 配参数 |
 | **Metric** | 取数原子（按 `metricCode` 注册），同一指标可被多 Rule 共享、可缓存；**在 tenant 级对所有 scene 可用**（D54，无 scene 白名单） | 平台 + 业务方共同治理 |
 | **EvalContext** | 一次评估的运行时上下文：指标快照 + 用户画像 + 业务身份（不可变 POJO） | 引擎在评估前现场构建 |
@@ -207,9 +207,9 @@ metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）�
 | `ruleId` | 规则 ID |
 | `tenantId / scene` | 归属 |
 | `name / description` | 给运营看 |
-| `kind` | 规则形态枚举：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT`（均已实装）。发布校验按 kind 校验 AST schema（详见下方 **kind 多态边界**） |
+| `kind` | 规则形态枚举：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT` / `DECISION_FLOW`（均已实装）。发布校验按 kind 校验各自结构 schema（AST 系校验 AST，EXPRESSION_SCRIPT 校验脚本，DECISION_FLOW 校验决策图 flowGraph；详见下方 **kind 多态边界**） |
 | `triggerEventTypes` | 数组：哪些 eventType 触发本规则（如 `["trade.completed"]`） |
-| `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 kind 用各自的 JSON 内部结构，与 ast 互斥） |
+| `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 AST 系 kind 用各自的 JSON 内部结构，与 ast 互斥）。**判定主体多态载体（D76）**：三承载收敛为单一 sealed `RuleBody`，三变体 `AstBody(conditionAst)`（AST 系四形态）/ `ScriptBody(script)`（`EXPRESSION_SCRIPT`）/ `FlowBody(flowGraph, referencedSnapshots)`（`DECISION_FLOW`）按 kind 择一，`type` 判别；持久化为 `rule_version.body` 单列，发布期校验 kind↔body 一致 |
 | `preGates` | 准入闸门列表（v1 仅灰度命中 ROLLOUT，D52） |
 | `status` | `rule_definition` 状态机：`DRAFT` → `PUBLISHED`；`PUBLISHED ↔ DISABLED` 独立分支。版本行（`rule_version`）有自己的状态 `DRAFT` / `ACTIVE` / `SUPERSEDED`（D56）：createDraft/newVersion 产 DRAFT 行，publish 把最新 DRAFT 行**原地翻 ACTIVE**（不增版本）并 supersede 旧 ACTIVE，无需 INSERT 新行（D19/D56） |
 | `current_version` | 指向当前生效 `rule_version` 行的**主键 id**（`BIGINT`，即 `rule_version.id`，而非业务版本序号 `rule_version.version`）。`PUBLISHED` / `DISABLED` 状态下有值；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本。`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
@@ -250,6 +250,8 @@ DecisionRef {
 }
 ```
 
+> **DECISION_FLOW 复用本契约（不新增字段）**：`OutputNode` 产出的决策进 `finalDecision` / `hitDecisions`（flow 作为一条规则参与 Scene 级合成，与普通规则同）；`satisfied`（API 层序列化为 `ruleHit`）语义 = 图是否产出任一决策（有 Output 命中为 true）。
+
 **kind 多态边界**：详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态。
 
 **关键边界**：
@@ -258,7 +260,7 @@ DecisionRef {
 - **Rule 不直接含 Condition**：Condition 是 AST 的叶子节点（`ConditionNode`），不能脱离 AST 存在。
 - **Rule 内表达任意复杂逻辑**全靠 AST：`AndNode` / `OrNode` / `NotNode` 任意嵌套，没有"层数"限制。
 - **AST 节点上的 `displayLabel`** 是给运营 UI 看的分组标题，后端评估时忽略它，只看逻辑结构。
-- **已实装 `kind`**：`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）/ `EXPRESSION_SCRIPT`（D66，六表达式引擎）。发布校验按 kind 校验 AST schema；演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态。
+- **已实装 `kind`**：`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）/ `EXPRESSION_SCRIPT`（D66，六表达式引擎）/ `DECISION_FLOW`（D75，决策图编排层，图只编排、叶子经 RuleRef 复用现有 5 形态）。发布校验按 kind 校验各自结构 schema（AST 系校验 AST，EXPRESSION_SCRIPT 校验脚本，DECISION_FLOW 校验决策图结构 + RuleRef 引用发布期冻结 + 环 / 死节点静态检测）；演进说明详见 [`08-evolution.md`](./08-evolution.md) §2.1 kind 多态。
 - **评估失败单节点降级，整树继续短路求值**（D15）：单个 `ConditionNode` 失败 → 该节点 satisfied=false，其他节点正常评估；整树评估完毕后若有失败节点，`EvalResult.errorCode` 非空。规则间隔离：单条 Rule 失败不影响同 (scene + eventType) 下其他 Rule。PUSH 默认安静失败；PULL 返回 `{satisfied, errorCode}`，调用方按 fail-secure / fail-open 决策。对账四态：`HIT / MISS / BLOCKED / ERROR`（D22）。
 - **运行时锁定快照版本**（D17 派生）：evaluation_session 开始时拍当前候选规则版本快照，整 session 用同一快照——即使中途发生 publish 切版本，本次评估不受影响。索引热更：单服务模式由 Modulith `RulePublishedEvent` 触发（毫秒级）；嵌入式 SDK 模式由 `DbPollingRuleWatcher`（默认 15s 轮询）触发（15s 最终一致）。
 - **草稿即冻结快照，校验前移到草稿写入期**（premise A，D56）：createDraft / editDraft / newVersion 时即跑全套 `resolveAndValidate`（metric 须 ACTIVE、payload 字段须在 `Scene.payloadSchema` 声明、decision 须存在、kind 结构 + 算子×dataType 校验），不过即拒（400），不落库非法草稿。落库的 DRAFT 行已是完整冻结快照（`resolvedAst` 含 dataType、`metric_dependencies`/`payload_dependencies` 已冻、`decision_bindings` 含 `name`、`trigger_event_types` 是草稿自己声明的值）。**publish 退化为激活**：把最新 DRAFT 行原地翻 ACTIVE（不增版本、不重解析），supersede 旧 ACTIVE，单事务内迁状态 + 写 audit_log + 发 `RulePublishedEvent`；保证"dry-run 预览 == 发布"。版本号只在 createDraft（v1）/ newVersion（v_max+1）产生，editDraft 原地、publish 激活都不增。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。
@@ -547,7 +549,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 | `status` | 版本行状态：`DRAFT`（草稿，可 editDraft / deleteDraftVersion）/ `ACTIVE`（当前生效）/ `SUPERSEDED`（被新版本取代）。publish 把最新 DRAFT 翻 ACTIVE 并 supersede 旧 ACTIVE（D56） |
 | `rule_definition_id` | 归属规则（FK → `rule_definition.id`）；按 Scene 查所有候选版本通过 JOIN rule_definition 实现，不冗余 scene_id |
 | `trigger_event_types` | 冻结：草稿自己声明的 eventType 数组（写入草稿时已校验 ⊆ `Scene.eventTypes`；不再于 publish 时覆盖成 scene 全集，保「dry-run 预览 == 发布」，D56） |
-| `condition_ast` | 冻结：完整 `resolvedAst` JSON（含解析出的 dataType）（DDL 列名；文档中有时以 `ast_snapshot` 称呼，指同一物理列） |
+| `body` | 冻结：判定主体多态载体 `RuleBody`（D76，DDL 单列）——`AstBody` 内含完整 `resolvedAst` JSON（含解析出的 dataType）/ `ScriptBody` 含 script / `FlowBody` 含 flowGraph+referencedSnapshots，按 kind 择一 |
 | `pre_gates` | 冻结：preGates 列表（含 ROLLOUT 灰度配置；无独立 `rollout` 列，D43）（DDL 列名；文档中有时以 `pre_gates_snapshot` 称呼） |
 | `decision_bindings` | 冻结：Rule 绑定的 Decision 列表（含 `code` / `name` / `priority`，及 SCORECARD 的 score 区间）；DDL 列名；文档中有时以 `decision_bindings_snapshot` 称呼 |
 | `kind` | 冻结：规则形态（v1 必为 `AST_BOOLEAN`） |

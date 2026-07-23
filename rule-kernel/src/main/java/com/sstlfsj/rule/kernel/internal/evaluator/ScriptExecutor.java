@@ -7,6 +7,7 @@ import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.NodeTrace;
 import com.sstlfsj.rule.kernel.api.model.NodeType;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
+import com.sstlfsj.rule.kernel.api.model.ScriptBody;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.spi.executor.RuleVersionExecutor;
 import com.sstlfsj.rule.kernel.api.spi.expression.CompiledExpression;
@@ -38,7 +39,7 @@ public class ScriptExecutor implements RuleVersionExecutor {
 
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
-        ScriptSource script = snapshot.script();
+        ScriptSource script = snapshot.body() instanceof ScriptBody sb ? sb.script() : null;
         if (script == null) {
             return EvalResult.error(EvalErrorCode.SCRIPT_SOURCE_MISSING);
         }
@@ -75,7 +76,7 @@ public class ScriptExecutor implements RuleVersionExecutor {
      */
     public void warmUp(Collection<RuleVersionSnapshot> snapshots) {
         for (RuleVersionSnapshot snapshot : snapshots) {
-            ScriptSource script = snapshot.script();
+            ScriptSource script = snapshot.body() instanceof ScriptBody sb ? sb.script() : null;
             if (script == null) {
                 continue;
             }

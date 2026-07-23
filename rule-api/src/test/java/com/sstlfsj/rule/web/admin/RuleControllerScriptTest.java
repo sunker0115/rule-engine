@@ -55,7 +55,7 @@ class RuleControllerScriptTest {
                               "code": "rule.script",
                               "name": "脚本规则",
                               "kind": "EXPRESSION_SCRIPT",
-                              "script": {"source":"payload.amount > 0 ? 'REVIEW' : 'PASS'","lang":"CEL"}
+                              "body": {"type":"ScriptBody","script":{"source":"payload.amount > 0 ? 'REVIEW' : 'PASS'","lang":"CEL"}}
                             }
                             """))
                 .andExpect(status().isCreated())
@@ -69,10 +69,10 @@ class RuleControllerScriptTest {
         RuleContent content = contentCap.getValue();
         assertThat(content.name()).isEqualTo("脚本规则");
         assertThat(content.kind()).isEqualTo("EXPRESSION_SCRIPT");
-        // script 非空且原样透传，脚本规则不带 conditionAst
-        assertThat(content.script()).isNotNull();
-        assertThat(content.script().source()).isEqualTo("payload.amount > 0 ? 'REVIEW' : 'PASS'");
-        assertThat(content.script().lang()).isEqualTo("CEL");
-        assertThat(content.conditionAst()).isNull();
+        // body 为 ScriptBody，原样透传
+        assertThat(content.body()).isInstanceOf(com.sstlfsj.rule.kernel.api.model.ScriptBody.class);
+        var sb = (com.sstlfsj.rule.kernel.api.model.ScriptBody) content.body();
+        assertThat(sb.script().source()).isEqualTo("payload.amount > 0 ? 'REVIEW' : 'PASS'");
+        assertThat(sb.script().lang()).isEqualTo("CEL");
     }
 }

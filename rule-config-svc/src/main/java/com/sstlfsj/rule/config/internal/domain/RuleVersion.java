@@ -7,11 +7,10 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.Jackson3TypeHandler;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
-import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.PreGateConfig;
-import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -26,8 +25,9 @@ public class RuleVersion {
     private Long id;
     private Long ruleDefinitionId;
     private Long version;
+    /** 判定主体多态载体（三承载收敛）：AstBody / ScriptBody / FlowBody 之一，与 kind 家族一致。 */
     @TableField(typeHandler = Jackson3TypeHandler.class)
-    private AstNode conditionAst;
+    private RuleBody body;
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<DecisionBinding> decisionBindings;
     @TableField(typeHandler = Jackson3TypeHandler.class)
@@ -39,9 +39,6 @@ public class RuleVersion {
     private List<MetricDependency> metricDependencies;
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<PayloadDependency> payloadDependencies;
-    /** EXPRESSION_SCRIPT 规则的脚本载体;其它 kind 为 null。 */
-    @TableField(typeHandler = Jackson3TypeHandler.class)
-    private ScriptSource scriptSource;
     private RuleVersionStatus status;
     private String publishedBy;
     private java.time.LocalDateTime publishedAt;

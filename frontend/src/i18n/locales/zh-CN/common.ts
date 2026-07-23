@@ -41,6 +41,7 @@ const common: CommonTranslation = {
     updateSuccess: '更新成功',
     deleteSuccess: '删除成功',
     saveSuccess: '保存成功',
+    exportSuccess: '导出成功',
     loadError: '加载失败',
     confirmDelete: '确认删除？此操作不可撤销',
     enabled: '已启用',

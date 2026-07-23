@@ -173,6 +173,12 @@ public abstract class ScenarioSupport {
         return ((Number) resp.get("data")).longValue();
     }
 
+    /** 注册声明式 HTTP 连接器（B10）：EXTERNAL_HTTP metric 经 params.connector 引用其 connectorCode。 */
+    protected void createConnector(String connectorCode, String name, Map<String, Object> descriptor) {
+        adminPost("/connectors?tenantId=" + TENANT_ID + "&connectorCode=" + connectorCode,
+                Map.of("name", name, "descriptor", descriptor));
+    }
+
     @SuppressWarnings("unchecked")
     protected Map<String, Object> createRule(String sceneCode, String code, String name,
                      Object conditionAst, List<Map<String, String>> decisionBindings,
@@ -182,7 +188,14 @@ public abstract class ScenarioSupport {
         body.put("sceneCode", sceneCode);
         body.put("code", code);
         body.put("name", name);
-        body.put("conditionAst", conditionAst);
+        // 三承载收敛：请求体走多态 body（AstBody/ScriptBody/FlowBody，含 type 判别），按 kind 包装
+        Object bodyContent = switch (kind) {
+            case "EXPRESSION_SCRIPT" -> Map.of("type", "ScriptBody", "script", conditionAst);
+            case "DECISION_FLOW" -> Map.of("type", "FlowBody", "flowGraph", conditionAst,
+                    "referencedSnapshots", Map.of());
+            default -> Map.of("type", "AstBody", "conditionAst", conditionAst);
+        };
+        body.put("body", bodyContent);
         body.put("decisionBindings", decisionBindings != null ? decisionBindings : List.of());
         body.put("preGates", List.of());
         body.put("triggerEventTypes", triggerEventTypes != null ? triggerEventTypes : List.of());

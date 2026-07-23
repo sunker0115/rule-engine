@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { getRuleVersion } from '@/api/rule';
 import JsonDiffViewer from '@/components/json-diff-viewer';
 import type { RuleVersionContent } from '@/types';
+import { bodyToCarriers } from '@/types';
 
 interface Props {
   open: boolean;
@@ -18,13 +19,15 @@ interface Props {
 
 /** 提取参与 diff 的内容字段（去掉时间/发布人等元信息，只比配置内容） */
 function contentForDiff(c: RuleVersionContent): Record<string, unknown> {
+  const carriers = bodyToCarriers(c.body);
   return {
     kind: c.kind,
-    conditionAst: c.conditionAst,
+    conditionAst: carriers.conditionAst,
     decisionBindings: c.decisionBindings,
     preGates: c.preGates,
     triggerEventTypes: c.triggerEventTypes,
-    script: c.script,
+    script: carriers.script,
+    flowGraph: carriers.flowGraph,
   };
 }
 

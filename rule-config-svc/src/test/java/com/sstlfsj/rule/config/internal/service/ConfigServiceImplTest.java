@@ -19,6 +19,7 @@ import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.repository.TenantMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
 import org.junit.jupiter.api.Test;
@@ -234,8 +235,8 @@ class ConfigServiceImplTest {
     void createDraft_delegatesToPublishService() {
         DraftCreatedResult expected = new DraftCreatedResult(1L, 2L, 1L, "DRAFT");
         var ast = new com.sstlfsj.rule.kernel.api.model.ast.AndNode(java.util.List.of(), null, null);
-        RuleContent content = new RuleContent("规则A", "AST_BOOLEAN", ast,
-                java.util.List.of(), java.util.List.of(), java.util.List.of(), null);
+        RuleContent content = new RuleContent("规则A", "AST_BOOLEAN", new AstBody(ast),
+                java.util.List.of(), java.util.List.of(), java.util.List.of());
         when(publishService.createDraft(1L, "risk.transfer", "rule.a", content, "actor1"))
                 .thenReturn(expected);
 
@@ -265,7 +266,7 @@ class ConfigServiceImplTest {
 
         RuleVersion active = new RuleVersion();
         active.setId(42L);
-        active.setConditionAst(new AndNode(List.of(), null, null));
+        active.setBody(new AstBody(new AndNode(List.of(), null, null)));
         active.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(active);
 
@@ -275,7 +276,7 @@ class ConfigServiceImplTest {
         assertThat(vo.code()).isEqualTo("rule.a");
         assertThat(vo.sceneCode()).isEqualTo("risk.transfer");
         assertThat(vo.currentVersionId()).isEqualTo(42L);
-        assertThat(vo.conditionAst()).isInstanceOf(AndNode.class);
+        assertThat(((AstBody) vo.body()).conditionAst()).isInstanceOf(AndNode.class);
         assertThat(vo.decisionBindings()).hasSize(1);
         assertThat(vo.decisionBindings().get(0).decisionCode()).isEqualTo("BLOCK");
         assertThat(vo.decisionBindings().get(0).priority()).isEqualTo(100);
@@ -294,7 +295,7 @@ class ConfigServiceImplTest {
         when(publishService.editDraft(any(), any(), any(), any()))
                 .thenReturn(new DraftCreatedResult(10L, 20L, 1L, "DRAFT"));
 
-        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null);
+        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null);
         configService.editDraft(1L, 10L, content, "actor");
 
         // tenantId 字符串 "1" 转 Long，content 原样透传 publishService（kind 解析下沉至 publishService）
@@ -306,7 +307,7 @@ class ConfigServiceImplTest {
         when(publishService.newVersion(any(), any(), any(), any(), any()))
                 .thenReturn(new DraftCreatedResult(10L, 30L, 2L, "DRAFT"));
 
-        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null, null);
+        RuleContent content = new RuleContent("名", "AST_BOOLEAN", null, null, null, null);
         configService.newVersion(1L, 10L, content, 50L, "actor");
 
         // content 原样透传 publishService，fromVersionId 原样透传
@@ -341,7 +342,7 @@ class ConfigServiceImplTest {
         v.setVersion(2L);
         v.setStatus(RuleVersionStatus.ACTIVE);
         v.setKind(RuleKind.AST_BOOLEAN);
-        v.setConditionAst(new AndNode(List.of(), null, null));
+        v.setBody(new AstBody(new AndNode(List.of(), null, null)));
         v.setTriggerEventTypes(List.of("TXN"));
         when(ruleVersionMapper.selectById(20L)).thenReturn(v);
 
@@ -351,7 +352,7 @@ class ConfigServiceImplTest {
         assertThat(vo.version()).isEqualTo(2L);
         assertThat(vo.status()).isEqualTo("ACTIVE");
         assertThat(vo.kind()).isEqualTo("AST_BOOLEAN");
-        assertThat(vo.conditionAst()).isNotNull();
+        assertThat(((AstBody) vo.body()).conditionAst()).isNotNull();
         assertThat(vo.triggerEventTypes()).containsExactly("TXN");
     }
 

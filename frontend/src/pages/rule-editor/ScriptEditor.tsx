@@ -1,6 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { Tag } from 'antd';
-import { useRuleStore } from '@/store/ruleStore';
 import { EditorView, basicSetup } from 'codemirror';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorState, Compartment } from '@codemirror/state';
@@ -10,6 +9,9 @@ import { autocompletion, type CompletionContext } from '@codemirror/autocomplete
 import type { MetricDescriptor } from '@/types';
 
 interface Props {
+  /** 受控脚本载体（source + lang）；null 视为空脚本、默认 CEL。 */
+  script: { source: string; lang: string } | null;
+  onChange: (script: { source: string; lang: string }) => void;
   availableMetrics: MetricDescriptor[];
   payloadFieldNames: string[];
 }
@@ -52,8 +54,7 @@ function scriptCompletions(ctx: CompletionContext, metrics: MetricDescriptor[], 
   return null;
 }
 
-export default function ScriptEditor({ availableMetrics, payloadFieldNames }: Props) {
-  const { script, setScript } = useRuleStore();
+export default function ScriptEditor({ script, onChange, availableMetrics, payloadFieldNames }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const langRef = useRef(script?.lang ?? 'CEL');
@@ -83,7 +84,7 @@ export default function ScriptEditor({ availableMetrics, payloadFieldNames }: Pr
         }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !updatingFromOutside.current) {
-            setScript({ lang: langRef.current, source: update.state.doc.toString() });
+            onChange({ lang: langRef.current, source: update.state.doc.toString() });
           }
         }),
       ],

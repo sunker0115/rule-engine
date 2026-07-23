@@ -19,6 +19,7 @@ import com.sstlfsj.rule.kernel.api.trace.NodeTraceFormatter;
 import com.sstlfsj.rule.kernel.internal.condition.KernelEvaluators;
 import com.sstlfsj.rule.kernel.internal.context.EvalContextAssembler;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
+import com.sstlfsj.rule.kernel.internal.evaluator.FlowExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
 import com.sstlfsj.rule.kernel.internal.index.SceneRuleIndex;
@@ -99,6 +100,10 @@ public class RuleEngineClient implements AutoCloseable {
         // ScriptExecutor 始终注册:避开 EvalEngine 对未知 kind 回退 AST_BOOLEAN 的陷阱(脚本规则 conditionAst=null)。
         // 引擎才是 opt-in——未注入任何 ExpressionEngine 时 engines 为空,碰脚本规则优雅返回 SCRIPT_NO_ENGINE,不连累其它规则。
         executors.put(RuleKind.EXPRESSION_SCRIPT.tag(), new ScriptExecutor(byLang(b.expressionEngines)));
+        // FlowExecutor 始终注册:同理避开未知 kind 回退 AST_BOOLEAN 陷阱(flow conditionAst=null)。
+        // leafExecutors 传 executors 本身(共享可变引用),再回填自身以支持嵌套 flow;Switch/Transform 按 lang 路由引擎。
+        FlowExecutor flowExecutor = new FlowExecutor(executors, byLang(b.expressionEngines));
+        executors.put(RuleKind.DECISION_FLOW.tag(), flowExecutor);
         this.evalEngine = new EvalEngine(index, assembler,
                 b.preGates != null ? b.preGates : Map.of(),
                 executors,

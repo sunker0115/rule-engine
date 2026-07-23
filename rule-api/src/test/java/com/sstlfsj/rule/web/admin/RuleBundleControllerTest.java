@@ -70,10 +70,11 @@ class RuleBundleControllerTest {
     private RuleBundle sampleBundle() {
         return new RuleBundle(2, "rev", "2026-06-06T10:00:00Z", "1",
                 List.of(new RuleBundle.RuleEntry("rule.a", "规则A", "AST_BOOLEAN", "risk.transfer",
-                        new com.sstlfsj.rule.kernel.api.model.ast.AndNode(List.of(), null, null),
+                        new com.sstlfsj.rule.kernel.api.model.AstBody(
+                                new com.sstlfsj.rule.kernel.api.model.ast.AndNode(List.of(), null, null)),
                         List.of(), List.of(), List.of(),
                         List.of(new MetricDependency("account.age", 1)), List.of(),
-                        null, "hash-a")),
+                        "hash-a")),
                 List.of(new RuleBundle.SceneSnapshot("risk.transfer", "转账风控", null, "USER",
                         "PUSH", "HIGHEST_PRIORITY", List.of(), List.of(), java.util.Map.of())),
                 List.of(), List.of());

@@ -1,12 +1,12 @@
 package com.sstlfsj.rule.kernel.internal.codec;
 
 import tools.jackson.core.JacksonException;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
-import com.sstlfsj.rule.kernel.api.model.ScriptSource;
-import com.sstlfsj.rule.kernel.api.model.ast.AstNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,9 +39,12 @@ public class SnapshotAssembler {
      * @throws JacksonException JSON 反序列化失败时抛出
      */
     public RuleVersionSnapshot assemble(RuleVersionRow row) throws JacksonException {
-        // 脚本规则 condition_ast 为 null:跳过 AST 反序列化(脚本载体走 script 字段)
-        AstNode conditionAst = (row.conditionAstJson() == null || row.conditionAstJson().isBlank())
-                ? null : codec.deserializeAst(row.conditionAstJson());
+        RuleBody body = codec.deserializeBody(row.bodyJson());
+        if (body == null) {
+            // body 迁移后 NOT NULL,理论不现;保守降级为空 AstBody,不中断索引加载
+            log.warn("ruleVersionId={} body 为空,降级为空 AstBody", row.ruleVersionId());
+            body = new AstBody(null);
+        }
         List<RuleVersionSnapshot.PreGateConfig> preGates =
                 codec.deserializePreGates(row.preGatesJson());
         List<RuleVersionSnapshot.DecisionBinding> decisionBindings =
@@ -52,13 +55,12 @@ public class SnapshotAssembler {
                 row.metricDependenciesJson() == null ? "[]" : row.metricDependenciesJson());
         List<PayloadDependency> payloadDependencies = codec.deserializePayloadDependencies(
                 row.payloadDependenciesJson() == null ? "[]" : row.payloadDependenciesJson());
-        ScriptSource script = codec.deserializeScriptSource(row.scriptSourceJson());
 
         return new RuleVersionSnapshot(
                 row.ruleVersionId(),
                 row.sceneCode(),
                 String.valueOf(row.tenantId()),
-                conditionAst,
+                body,
                 preGates,
                 decisionBindings,
                 triggerEventTypes,
@@ -66,8 +68,7 @@ public class SnapshotAssembler {
                 row.code(),
                 row.version(),
                 metricDependencies,
-                payloadDependencies,
-                script
+                payloadDependencies
         );
     }
 

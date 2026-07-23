@@ -1,19 +1,24 @@
 import { useState, useMemo } from 'react';
-import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip } from 'antd';
+import { Descriptions, Button, Tag, Timeline, message, Popconfirm, Divider, Tooltip, Dropdown } from 'antd';
+import { ExportOutlined } from '@ant-design/icons';
 import { ThunderboltOutlined, EyeOutlined, DiffOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from '@/constants/routes';
+import { ENDPOINTS } from '@/constants/api-endpoints';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { editDraft, publishRule, disableRule, enableRule, newVersion, deleteDraftVersion, deleteRule } from '@/api/rule';
+import apiClient from '@/api/client';
 import { colorOf, getRuleStatusOptions, getVersionStatusOptions } from '@/constants/enums';
 import { formatDateTime } from '@/utils/format';
+import { useEditorShortcuts } from '@/hooks/useEditorShortcuts';
 import RuleSessionsDrawer from './RuleSessionsDrawer';
 import VersionContentDrawer from './VersionContentDrawer';
 import VersionDiffDrawer from './VersionDiffDrawer';
 import { summarize, worstSeverityForRule, isAnalyzableKind } from './analysisSummary';
 import type { RuleDetail as RuleDetailType, RuleVersionItem, RuleSetAnalysisReport } from '@/types';
+import { carriersToBody } from '@/types';
 
 interface Props {
   ruleDetail: RuleDetailType;
@@ -38,8 +43,9 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
   const { currentId } = useTenantStore();
   // 优先用规则自身的 tenantId（从详情带回），避免依赖全局未选时传 0 导致后端校验失败
   const tenantId = Number(ruleDetail.tenantId) || currentId || 0;
-  const { ast, decisionBindings, preGates, triggerEventTypes, script, dirty } = useRuleStore();
+  const { ast, decisionBindings, preGates, triggerEventTypes, script, flowGraph, dirty, flowSceneRules, addFlowRuleRef, undo, redo } = useRuleStore();
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [viewVersionId, setViewVersionId] = useState<number | null>(null);
   const [diffVersionId, setDiffVersionId] = useState<number | null>(null);
@@ -57,13 +63,12 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
     setSaving(true);
     try {
       await editDraft(tenantId, ruleDetail.ruleDefinitionId, {
-        conditionAst: ast,
+        body: carriersToBody(ruleDetail.kind, { conditionAst: ast, script, flowGraph }),
         decisionBindings,
         preGates,
         triggerEventTypes,
         kind: ruleDetail.kind,
         name: ruleDetail.name,
-        script,
       });
       message.success(tc('message.saveSuccess'));
       // 草稿存盘后内容变了，规则集分析失效——轻量重算（不走全量 onUpdated，避免冗余请求）
@@ -113,9 +118,34 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
     navigate(ROUTES.RULES);
   };
 
+  const handleExportRule = async (format: 'bundle' | 'snapshot' = 'bundle') => {
+    if (!tenantId) return;
+    setExporting(true);
+    try {
+      const res = await apiClient.get(ENDPOINTS.RULE_EXPORT, {
+        params: { tenantId, ruleIds: String(ruleDetail.ruleDefinitionId), format },
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const suffix = format === 'snapshot' ? '-snapshot' : '';
+      a.download = `rule-${ruleDetail.code}${suffix}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.href = url;
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success(tc('message.exportSuccess'));
+    } catch { message.error(tc('message.loadError')); }
+    finally { setExporting(false); }
+  };
+
   const isDraft = ruleDetail.status === 'DRAFT';
   const isPublished = ruleDetail.status === 'PUBLISHED';
   const isDisabled = ruleDetail.status === 'DISABLED';
+
+  // 全局快捷键
+  useEditorShortcuts({ canSave: isDraft && dirty, onSave: handleSaveDraft, onUndo: undo, onRedo: redo });
+
   // 待发布的即草稿版本，发布确认框展示其真实版本号
   const draftVersion = (ruleDetail.versions ?? []).find(v => v.status === 'DRAFT');
   const hasDraft = draftVersion !== undefined;
@@ -171,8 +201,8 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
         </Descriptions.Item>
         <Descriptions.Item label={tc('label.name')}>{ruleDetail.name}</Descriptions.Item>
         <Descriptions.Item label={t('column.kind')}><Tag>{ruleDetail.kind}</Tag></Descriptions.Item>
-        {ruleDetail.kind === 'EXPRESSION_SCRIPT' && ruleDetail.script && (
-          <Descriptions.Item label={t('editor.leftPanel.executorLabel')}><Tag color="blue">{ruleDetail.script.lang}</Tag></Descriptions.Item>
+        {ruleDetail.kind === 'EXPRESSION_SCRIPT' && ruleDetail.body?.type === 'ScriptBody' && (
+          <Descriptions.Item label={t('editor.leftPanel.executorLabel')}><Tag color="blue">{ruleDetail.body.script.lang}</Tag></Descriptions.Item>
         )}
         <Descriptions.Item label={t('column.status')}>
           <Tag color={colorOf(ruleStatusOpts, ruleDetail.status as never)}>{ruleDetail.status}</Tag>
@@ -191,6 +221,12 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
         )}
         <Button block onClick={() => onOpenDryRun()} style={{ marginBottom: 8 }}>{t('action.dryRun')}</Button>
         <Button block onClick={() => setSessionsOpen(true)} style={{ marginBottom: 8 }}>{t('action.sessions')}</Button>
+        <Dropdown menu={{ items: [
+          { key: 'bundle', label: t('action.exportBundle') },
+          { key: 'snapshot', label: t('action.exportSnapshot') },
+        ], onClick: ({ key }) => handleExportRule(key as 'bundle' | 'snapshot') }} trigger={['click']}>
+          <Button block icon={<ExportOutlined />} loading={exporting} style={{ marginBottom: 8 }}>{t('action.export')}</Button>
+        </Dropdown>
 
         <Divider plain style={{ margin: '12px 0', fontSize: 11, color: '#bbb' }}>{t('editor.leftPanel.dividerPublish')}</Divider>
         {hasDraft && (
@@ -237,6 +273,29 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
           <Button block onClick={handleEnable}>{t('action.enable')}</Button>
         )}
       </div>
+
+      {ruleDetail.kind === 'DECISION_FLOW' && (
+        <div style={{ marginBottom: 12 }}>
+          <h4>{t('editor.flow.leftPanel.sceneRules')}</h4>
+          {flowSceneRules.length === 0 ? (
+            <p style={{ fontSize: 11, color: '#8a95a1', margin: '4px 0' }}>{t('editor.flow.leftPanel.sceneRulesHint')}</p>
+          ) : (
+            <div style={{ maxHeight: 160, overflow: 'auto' }}>
+              {flowSceneRules.map((r) => (
+                <div key={r.code}
+                  onClick={() => addFlowRuleRef(r.code)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f3f6'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 2, background: '#2f6bff', flex: 'none' }} />
+                  <span>{r.name}</span>
+                  <Tag style={{ marginLeft: 'auto', fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>{r.kind}</Tag>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <h4>{t('editor.leftPanel.versionTimeline')}</h4>
       <Timeline

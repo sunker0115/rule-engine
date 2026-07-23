@@ -3,6 +3,8 @@ package com.sstlfsj.rule.kernel.internal.analysis;
 import com.sstlfsj.rule.kernel.api.analysis.ConflictFinding;
 import com.sstlfsj.rule.kernel.api.analysis.CoverageGapFinding;
 import com.sstlfsj.rule.kernel.api.analysis.DeadRuleFinding;
+import com.sstlfsj.rule.kernel.api.analysis.FlowCycleFinding;
+import com.sstlfsj.rule.kernel.api.analysis.FlowDeadNodeFinding;
 import com.sstlfsj.rule.kernel.api.analysis.IncoherenceFinding;
 import com.sstlfsj.rule.kernel.api.analysis.OverlapFinding;
 import com.sstlfsj.rule.kernel.api.analysis.RedundancyFinding;
@@ -16,11 +18,13 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * 规则集静态分析编排器：把 6 个 detector 装配为单一 {@link RuleSetAnalysisReport}。
+ * 规则集静态分析编排器：把各 detector 装配为单一 {@link RuleSetAnalysisReport}。
  *
  * <p>编排顺序：矛盾（incoherence）/ 决策可达性缺口（coverageGap）整集分析；
  * overlap / dead / conflict 三类两两分析（仅对可投影的扁平 AST_BOOLEAN 立方体）；
- * 决策表行内分析（DMN 风格）。两两结果与决策表行内结果<b>合并</b>进报告对应列表后，
+ * 决策表行内分析（DMN 风格）；DECISION_FLOW 决策图结构分析（{@link FlowCycleDetector} 环 +
+ * {@link FlowReachabilityDetector} 死节点，各自单图内分析、与两两立方体分析不同维度）。
+ * 两两结果与决策表行内结果<b>合并</b>进报告对应列表后，
  * 各按 detector 同一比较器确定性排序（overlap/conflict 按 (locA,locB)，dead 按
  * (deadRuleCode,coveredByRuleCode)）。
  *
@@ -59,7 +63,8 @@ public final class RuleSetAnalyzer {
                                                 SceneExecutionStrategy strategy) {
         if (rules == null || rules.isEmpty()) {
             return new RuleSetAnalysisReport(sceneCode,
-                    List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                    List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                    List.of(), List.of());
         }
 
         List<IncoherenceFinding> incoherences = new ArrayList<>(IncoherenceDetector.detect(rules));
@@ -89,8 +94,13 @@ public final class RuleSetAnalyzer {
         redundancies.addAll(table.redundancies());
         redundancies.sort(REDUNDANCY_ORDER);
 
+        // DECISION_FLOW 决策图结构分析：单图内环/可达性，仅对 DECISION_FLOW 规则跑；各 detector 内部已确定性排序
+        List<FlowCycleFinding> flowCycles = FlowCycleDetector.detect(rules);
+        List<FlowDeadNodeFinding> flowDeadNodes = FlowReachabilityDetector.detect(rules);
+
         return new RuleSetAnalysisReport(sceneCode,
-                incoherences, deadRules, conflicts, overlaps, coverageGaps, unanalyzable, redundancies);
+                incoherences, deadRules, conflicts, overlaps, coverageGaps, unanalyzable, redundancies,
+                flowCycles, flowDeadNodes);
     }
 
     /** 收集未被立方体两两分析覆盖、且非决策表的规则，按 ruleCode 升序确定性排列。 */
@@ -123,6 +133,10 @@ public final class RuleSetAnalyzer {
         }
         if (RuleKind.EXPRESSION_SCRIPT.tag().equals(kind)) {
             return "脚本规则无法静态推理";
+        }
+        if (RuleKind.DECISION_FLOW.tag().equals(kind)) {
+            // flow 不走区间两两分析，但有专属结构分析（环/可达性），见 flowCycles / flowDeadNodes
+            return "决策图规则走结构分析(环/可达性)，不参与区间两两分析";
         }
         return kind + " 暂不支持静态分析";
     }

@@ -30,12 +30,19 @@ class CreditEvaluationScenario extends ScenarioSupport {
         createScene("loan", "贷款审批", "PULL", "USER", List.of("apply"));
         createDecision("REJECT", "拒贷", 100);
 
+        // B10 连接器标准化：EXTERNAL_HTTP metric 经已注册 connector 取数（connector 持请求/响应模板）
+        createConnector("credit-api-connector", "信用评分连接器", Map.of(
+                "endpointRef", "credit-api",
+                "request", Map.of("method", "GET", "pathTemplate", "/api/credit/score/{payload.uid}",
+                        "query", List.of(), "headers", List.of()),
+                "response", Map.of(
+                        "successWhen", Map.of("path", "code", "op", "EQ", "value", 0),
+                        "valuePath", "data.score"),
+                "resilience", Map.of(
+                        "connectTimeoutMs", 200, "readTimeoutMs", 300, "retries", 0, "retryOn", List.of())
+        ));
         createMetric("credit-score", "信用评分", "EXTERNAL_HTTP", "LONG",
-                Map.of(
-                        "endpoint", "credit-api",
-                        "path", "/api/credit/score/{payload.uid}",
-                        "jsonPath", "data.score"
-                ), 120, false);
+                Map.of("connector", "credit-api-connector", "vars", Map.of()), 120, false);
 
         Map<String, Object> conditionAst = Map.of(
                 "type", "AndNode",

@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.dto.ImportPolicy;
 import com.sstlfsj.rule.config.api.dto.RuleBundle;
 import com.sstlfsj.rule.config.api.service.RuleBundleService;
 import com.sstlfsj.rule.config.internal.bundle.RuleImportService.ImportConflictException;
+import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.web.common.ApiException;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -52,10 +53,20 @@ public class RuleBundleController {
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(@RequestParam Long tenantId,
                                          @RequestParam(required = false) List<Long> ruleIds,
-                                         @RequestParam(required = false) Long sceneId) {
-        RuleBundle bundle = ruleBundleService.export(tenantId, ruleIds, sceneId);
-        byte[] body = objectMapper.writeValueAsString(bundle).getBytes(StandardCharsets.UTF_8);
-        String filename = "rule-bundle-" + tenantId + "-" + LocalDateTime.now().format(FILE_TS) + ".json";
+                                         @RequestParam(required = false) Long sceneId,
+                                         @RequestParam(defaultValue = "bundle") String format) {
+        byte[] body;
+        String suffix;
+        if ("snapshot".equals(format)) {
+            List<RuleVersionSnapshot> snapshots = ruleBundleService.exportSnapshots(tenantId, ruleIds, sceneId);
+            body = objectMapper.writeValueAsString(snapshots).getBytes(StandardCharsets.UTF_8);
+            suffix = "snapshots";
+        } else {
+            RuleBundle bundle = ruleBundleService.export(tenantId, ruleIds, sceneId);
+            body = objectMapper.writeValueAsString(bundle).getBytes(StandardCharsets.UTF_8);
+            suffix = "bundle";
+        }
+        String filename = "rule-" + suffix + "-" + tenantId + "-" + LocalDateTime.now().format(FILE_TS) + ".json";
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")

@@ -4,6 +4,7 @@ export * from './metric';
 export * from './connector';
 export * from './decision';
 export * from './rule';
+export * from './flow';
 export * from './ast';
 export * from './eval';
 export * from './session';

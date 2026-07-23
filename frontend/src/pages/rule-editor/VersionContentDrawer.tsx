@@ -3,6 +3,7 @@ import { Drawer, Descriptions, Spin, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { getRuleVersion } from '@/api/rule';
 import type { RuleVersionContent } from '@/types';
+import { bodyToCarriers } from '@/types';
 
 interface Props {
   open: boolean;
@@ -50,11 +51,14 @@ export default function VersionContentDrawer({ open, onClose, tenantId, ruleId, 
           <Descriptions.Item label={t('editor.versionContent.triggerEventTypes')}>
             {(content.triggerEventTypes ?? []).join(', ') || '—'}
           </Descriptions.Item>
-          <Descriptions.Item label={t('editor.versionContent.conditionAst')}>{json(content.conditionAst)}</Descriptions.Item>
+          <Descriptions.Item label={t('editor.versionContent.conditionAst')}>{json(bodyToCarriers(content.body).conditionAst)}</Descriptions.Item>
           <Descriptions.Item label={t('editor.versionContent.decisionBindings')}>{json(content.decisionBindings)}</Descriptions.Item>
           <Descriptions.Item label={t('editor.versionContent.preGates')}>{json(content.preGates)}</Descriptions.Item>
-          {content.script && (
-            <Descriptions.Item label={t('editor.versionContent.script')}>{json(content.script)}</Descriptions.Item>
+          {bodyToCarriers(content.body).script && (
+            <Descriptions.Item label={t('editor.versionContent.script')}>{json(bodyToCarriers(content.body).script)}</Descriptions.Item>
+          )}
+          {bodyToCarriers(content.body).flowGraph && (
+            <Descriptions.Item label={t('editor.versionContent.flowGraph')}>{json(bodyToCarriers(content.body).flowGraph)}</Descriptions.Item>
           )}
           <Descriptions.Item label={t('editor.versionContent.publishedBy')}>
             {content.publishedBy || '—'}

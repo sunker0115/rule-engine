@@ -35,7 +35,7 @@ public final class AnnotatedDecideExecutor implements RuleVersionExecutor {
 
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
-        String key = ((ConditionNode) snapshot.conditionAst()).conditionType();
+        String key = ((ConditionNode) ((com.sstlfsj.rule.kernel.api.model.AstBody) snapshot.body()).conditionAst()).conditionType();
         Invocation inv = byKey.get(key);
         if (inv == null) return EvalResult.error(EvalErrorCode.ANNO_DECIDE_UNREGISTERED);
 

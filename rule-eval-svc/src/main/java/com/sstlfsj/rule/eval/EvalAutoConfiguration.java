@@ -23,6 +23,7 @@ import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTableExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.DecisionTreeExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScorecardExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.ScriptExecutor;
+import com.sstlfsj.rule.kernel.internal.evaluator.FlowExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.InterpretedExecutor;
 import com.sstlfsj.rule.kernel.internal.evaluator.AstCompiler;
 import com.sstlfsj.rule.kernel.internal.evaluator.CompiledExecutor;
@@ -177,6 +178,17 @@ public class EvalAutoConfiguration {
      */
     @Bean
     public ScriptExecutor scriptExecutor(List<ExpressionEngine> expressionEngines) {
+        return new ScriptExecutor(byLang(expressionEngines));
+    }
+
+    /**
+     * 按 lang 建表达式引擎路由表，同一 lang 重复声明时装配期 fail-fast。
+     * 供 scriptExecutor / flowExecutor 共享（EXPRESSION_SCRIPT 与 DECISION_FLOW 内 Switch/Transform 均按 lang 路由）。
+     *
+     * @param expressionEngines Spring 自动收集的表达式引擎
+     * @return lang → ExpressionEngine 映射
+     */
+    private static Map<String, ExpressionEngine> byLang(List<ExpressionEngine> expressionEngines) {
         Map<String, ExpressionEngine> byLang = new HashMap<>();
         for (ExpressionEngine engine : expressionEngines) {
             ExpressionEngine prev = byLang.putIfAbsent(engine.lang(), engine);
@@ -184,7 +196,39 @@ public class EvalAutoConfiguration {
                 throw new IllegalStateException("多个 ExpressionEngine 声明同一 lang=" + engine.lang());
             }
         }
-        return new ScriptExecutor(byLang);
+        return byLang;
+    }
+
+    /**
+     * 注册 FlowExecutor，供 kind=DECISION_FLOW 的规则版本评估使用。
+     * leafExecutors 用可变 map 组装：先放五个叶子 executor，构造 FlowExecutor（持 map 引用不 copyOf），
+     * 再把 flow 自身回填进 map，以支持嵌套 flow（环由发布期静态分析拒绝）。
+     * engines 按 lang 路由 Switch/Transform 表达式，与 scriptExecutor 同源。
+     *
+     * @param ruleVersionExecutor   AST_BOOLEAN executor
+     * @param scorecardExecutor     SCORECARD executor
+     * @param decisionTreeExecutor  DECISION_TREE executor
+     * @param decisionTableExecutor DECISION_TABLE executor
+     * @param scriptExecutor        EXPRESSION_SCRIPT executor
+     * @param expressionEngines     所有已注册的表达式引擎（Spring 自动收集）
+     * @return FlowExecutor 实例
+     */
+    @Bean
+    public FlowExecutor flowExecutor(RuleVersionExecutor ruleVersionExecutor,
+                                     ScorecardExecutor scorecardExecutor,
+                                     DecisionTreeExecutor decisionTreeExecutor,
+                                     DecisionTableExecutor decisionTableExecutor,
+                                     ScriptExecutor scriptExecutor,
+                                     List<ExpressionEngine> expressionEngines) {
+        Map<String, RuleVersionExecutor> leafExecutors = new HashMap<>();
+        leafExecutors.put(RuleKind.AST_BOOLEAN.tag(),       ruleVersionExecutor);
+        leafExecutors.put(RuleKind.SCORECARD.tag(),         scorecardExecutor);
+        leafExecutors.put(RuleKind.DECISION_TREE.tag(),     decisionTreeExecutor);
+        leafExecutors.put(RuleKind.DECISION_TABLE.tag(),    decisionTableExecutor);
+        leafExecutors.put(RuleKind.EXPRESSION_SCRIPT.tag(), scriptExecutor);
+        FlowExecutor flow = new FlowExecutor(leafExecutors, byLang(expressionEngines));
+        leafExecutors.put(RuleKind.DECISION_FLOW.tag(), flow);
+        return flow;
     }
 
     /**
@@ -263,6 +307,7 @@ public class EvalAutoConfiguration {
      * @param decisionTreeExecutor  DECISION_TREE executor
      * @param decisionTableExecutor DECISION_TABLE executor
      * @param scriptExecutor        EXPRESSION_SCRIPT executor
+     * @param flowExecutor          DECISION_FLOW executor
      * @param traceProperties       全局 NodeTrace 收集开关配置（engine.rule.trace.enabled，默认 true）
      * @return EvalEngine 实例
      */
@@ -276,6 +321,7 @@ public class EvalAutoConfiguration {
             DecisionTreeExecutor decisionTreeExecutor,
             DecisionTableExecutor decisionTableExecutor,
             ScriptExecutor scriptExecutor,
+            FlowExecutor flowExecutor,
             com.sstlfsj.rule.eval.internal.TraceProperties traceProperties) {
         Map<String, PreGate> gateMap = new HashMap<>();
         if (preGates != null) {
@@ -286,7 +332,8 @@ public class EvalAutoConfiguration {
                        RuleKind.SCORECARD.tag(),         scorecardExecutor,
                        RuleKind.DECISION_TREE.tag(),     decisionTreeExecutor,
                        RuleKind.DECISION_TABLE.tag(),    decisionTableExecutor,
-                       RuleKind.EXPRESSION_SCRIPT.tag(), scriptExecutor),
+                       RuleKind.EXPRESSION_SCRIPT.tag(), scriptExecutor,
+                       RuleKind.DECISION_FLOW.tag(),     flowExecutor),
                 traceProperties.isEnabled());
     }
 

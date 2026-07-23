@@ -171,11 +171,10 @@ class ConfigServiceImpl implements ConfigService {
                 rule.getId(), rule.getCode(), rule.getName(), rule.getStatus().name(),
                 rule.getKind() != null ? rule.getKind().name() : null,
                 scene != null ? scene.getCode() : null,
-                current != null ? current.getConditionAst() : null,
+                current != null ? current.getBody() : null,
                 current != null ? current.getDecisionBindings() : null,
                 current != null ? current.getPreGates() : null,
                 current != null ? current.getTriggerEventTypes() : null,
-                current != null ? current.getScriptSource() : null,
                 current != null ? current.getId() : null,
                 versions);
     }
@@ -193,8 +192,8 @@ class ConfigServiceImpl implements ConfigService {
         return new RuleVersionContentVO(
                 v.getId(), v.getVersion(), v.getStatus().name(),
                 v.getKind() != null ? v.getKind().name() : null,
-                v.getConditionAst(), v.getDecisionBindings(), v.getPreGates(),
-                v.getTriggerEventTypes(), v.getScriptSource(),
+                v.getBody(), v.getDecisionBindings(), v.getPreGates(),
+                v.getTriggerEventTypes(),
                 v.getCreatedAt() != null ? v.getCreatedAt().toString() : null,
                 v.getPublishedBy(), v.getPublishedAt() != null ? v.getPublishedAt().toString() : null);
     }

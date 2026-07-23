@@ -24,11 +24,11 @@
 
 ### 2.1 kind 多态（来源 D12）
 
-- **现状（全部实装）**：五种 kind 均已落地——`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）/ `EXPRESSION_SCRIPT`（D66）；`EvalResult` 多态字段（`score / category / decision`）各 kind 按需填充。
-- **驱动**：评分卡 / 决策树 / 决策表 / 表达式脚本类业务需求陆续到来，占位逐个填实。
-- **迁移成本**：已完成（五种 kind 的 evaluator 全部落地）。
+- **现状（全部实装）**：六种 kind 均已落地——`AST_BOOLEAN`（v1）/ `SCORECARD`（D12）/ `DECISION_TREE` / `DECISION_TABLE`（D42）/ `EXPRESSION_SCRIPT`（D66）/ `DECISION_FLOW`（D75，决策图编排层）；`EvalResult` 多态字段（`score / category / decision`）各 kind 按需填充。
+- **驱动**：评分卡 / 决策树 / 决策表 / 表达式脚本 / 决策图编排类业务需求陆续到来，占位逐个填实。
+- **迁移成本**：已完成（六种 kind 的 evaluator 全部落地）。
 
-**设计原则**：D12 引入 `Rule.kind` 时是为评分卡 / 决策树 / 决策表 / 脚本类规则**预留 schema 占位**（v1 仅 `AST_BOOLEAN`）；此后占位已全部填实（SCORECARD D12 / DECISION_TREE·DECISION_TABLE D42 / EXPRESSION_SCRIPT D66），同表多态 JSON 列承载，公共能力天然共享。
+**设计原则**：D12 引入 `Rule.kind` 时是为评分卡 / 决策树 / 决策表 / 脚本类规则**预留 schema 占位**（v1 仅 `AST_BOOLEAN`）；此后占位已全部填实（SCORECARD D12 / DECISION_TREE·DECISION_TABLE D42 / EXPRESSION_SCRIPT D66 / DECISION_FLOW D75），同表多态 JSON 列承载，公共能力天然共享。
 
 **各 kind 共享 Rule 的公共属性**：trigger / preGates（含 ROLLOUT 灰度）/ decisionBindings / version / Scene 治理都不变，多态只在"判定主体"内部——（注：actions 已迁移到 Decision，不再是 Rule 的直接字段，D27）
 
@@ -41,14 +41,21 @@
 | `DECISION_TREE` | JSON 列承载嵌套 if/then/else 树 | `EvalResult.category` | 已实装（D42） |
 | `DECISION_TABLE` | JSON 列承载输入列 + 输出列 + 行集合矩阵 | `EvalResult.decision` | 已实装（D42） |
 | `EXPRESSION_SCRIPT` | 文本列承载脚本（CEL / Aviator / Groovy / JEXL / QLExpress / JsonLogic 六引擎） | 按脚本返回值多态填 | 已实装（D66） |
+| `DECISION_FLOW` | JSON 列承载决策图 DAG（`flowGraph`：RuleRef / Switch / Transform / Output 节点）；图只编排、叶子经 RuleRef 复用现有 5 形态 | `finalDecision` / `hitDecisions`（Output 节点产出） | 已实装（D75） |
 
 **`EvalResult` 是稳定多态**：PULL 模式调用方拿到的对象 shape 是 `{satisfied, score?, category?, decision?, trace}`——SCORECARD 多填 `score`（D12），DECISION_TREE 填 `category`（D42），DECISION_TABLE 填 `decision`（D42），PULL API 签名始终不变；节点 trace 跨 kind 统一，运营自助排障的能力 100% 复用。
 
-**决策集 / 决策流不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；`ALL_HITS` / `FIRST_HIT` 已实装（D41）。命中后的编排（决策流）由消费方 / 流程引擎承载（D60），在 Rule 层级之外。
+**决策集不进 `Rule.kind` 枚举**：`Scene.executionStrategy` 是 Scene 字段，v1 已落地 `HIGHEST_PRIORITY`（D29）；`ALL_HITS` / `FIRST_HIT` 已实装（D41）。
+
+**「决策流」拆两义（命名双义澄清，D75）**：
+- ① **同步纯决策图编排**——一次评估内 `决策A → 按结果分支 → 决策B → 输出`，无状态、高频。作为第 6 种 kind `DECISION_FLOW` 进 `Rule.kind`，图只编排、叶子复用现有 5 形态（D75，已实装，详见 §2.4）。
+- ② **有状态动作编排**——跨时间、要等待 / 人工 / 外部事件的 `Rule → Rule` 流程。由消费方 / 流程引擎承载（D60），在 Rule 层级之外。
+
+本条早期表述「决策流不进 kind」特指 ②；① 是想清楚后的正解，归 kind。判据：要不要「等」——要等归流程引擎，一口气算完归 `DECISION_FLOW`。
 
 **为什么不另起表**：评分卡 / 决策树仍需要 Rule 的全部公共属性（触发 / 准入 / 灰度 / 决策绑定 / 版本快照），独立表会复制 80% 的列且数据散布、跨形态报表困难；用 `kind` 字段 + 多态 JSON 列在同一张表里，公共能力天然共享。
 
-**演进路径（已完成）**：五种 kind 的 evaluator 均已落地——SCORECARD 启用 `ConditionNode.weight`（D12）；DECISION_TREE / DECISION_TABLE 各自的内部 JSON 结构与 evaluator（D42）；EXPRESSION_SCRIPT 走 `ScriptExecutor` + 按 lang 路由的 `ExpressionEngine` SPI（D66）；`Scene.executionStrategy` 配合决策集（D29/D41）。
+**演进路径（已完成）**：六种 kind 的 evaluator 均已落地——SCORECARD 启用 `ConditionNode.weight`（D12）；DECISION_TREE / DECISION_TABLE 各自的内部 JSON 结构与 evaluator（D42）；EXPRESSION_SCRIPT 走 `ScriptExecutor` + 按 lang 路由的 `ExpressionEngine` SPI（D66）；DECISION_FLOW 走 `FlowExecutor`（第 6 个 `RuleVersionExecutor` 实现，从 input 顺边遍历、RuleRef 回调单规则求值入口，D75）；`Scene.executionStrategy` 配合决策集（D29/D41）。
 
 ### 2.2 Metric 版本化（来源 #2 占位）
 
@@ -90,8 +97,10 @@
 
 - **v1 现状**：引擎纯决策（D60），规则间不存在内置依赖与顺序保证；业务需要顺序走外部 MQ / 流程引擎编排。
 - **触发条件**："先反欺诈再合规"类顺序依赖需求，或"Rule A 命中后才触发 Rule B"的流程依赖，目前只能通过外部编排，依赖关系对运营不可见，排障成本高。
-- **演进方向**：接 Flowable / Camunda 流程引擎（D60），把"Rule 命中 → 触发下一 Rule"作为工作流节点而非 Rule 内能力。引擎仍保持单事件单评估，流程引擎做编排。
-- **迁移成本**：高（引入新组件、运维形态变化）。
+- **演进方向（分两类，按「要不要等」分流）**：
+  - ① **同步、一次评估内**的多步决策编排（`决策A → 按结果分支 → 决策B`），无状态、高频 → 第 6 种 kind `DECISION_FLOW` 在引擎内承载（D75，决策图编排层，已实装）；图只编排、叶子复用现有 5 形态，规则间依赖对运营可见（画布 + 血缘）。
+  - ② **跨时间、有状态**的 `Rule → Rule` 流程（要等待 / 人工 / 外部事件）→ 接 Flowable / Camunda 流程引擎（D60），把"Rule 命中 → 触发下一 Rule"作为工作流节点而非 Rule 内能力。引擎仍保持单事件单评估，有状态编排交流程引擎。
+- **迁移成本**：① 已完成（加性新 kind，D75 已实装）；② 高（引入新组件、运维形态变化）。
 
 ### 2.5 节点级 trace 冷热分级（来源 #5，并入 [`05-storage.md`](./05-storage.md) TODO）
 

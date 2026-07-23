@@ -13,8 +13,10 @@ import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
 import com.sstlfsj.rule.config.internal.repository.SceneMapper;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
+import com.sstlfsj.rule.kernel.api.model.ScriptBody;
 import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot.DecisionBinding;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
@@ -61,7 +63,7 @@ class RuleExportServiceTest {
         RuleVersion v = new RuleVersion();
         v.setId(100L + rdId); v.setRuleDefinitionId(rdId); v.setVersion(3L); v.setStatus(RuleVersionStatus.ACTIVE);
         v.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
-        v.setConditionAst(new AndNode(List.of(), null, null));
+        v.setBody(new AstBody(new AndNode(List.of(), null, null)));
         v.setDecisionBindings(List.of(new DecisionBinding("BLOCK", 100)));
         v.setPreGates(List.of());
         v.setTriggerEventTypes(List.of("transfer"));
@@ -113,7 +115,7 @@ class RuleExportServiceTest {
         assertThat(b.rules()).extracting(RuleBundle.RuleEntry::code).containsExactlyInAnyOrder("a", "b");
         assertThat(b.rules().getFirst().sceneCode()).isEqualTo("risk.transfer");
         assertThat(b.rules().getFirst().contentHash()).isNotBlank();  // v2：规则内容 SHA-256
-        assertThat(b.rules().getFirst().script()).isNull();          // AST_BOOLEAN：script=null
+        assertThat(b.rules().getFirst().body()).isInstanceOf(AstBody.class);  // AST_BOOLEAN：body 为 AstBody
         assertThat(b.rules().getFirst().payloadDependencies())
                 .containsExactly(new PayloadDependency("amount", "NUMBER", true));
         assertThat(b.scenes()).hasSize(1);
@@ -128,7 +130,7 @@ class RuleExportServiceTest {
         rd.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.EXPRESSION_SCRIPT);
         RuleVersion rv = activeVersion(12L);
         rv.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.EXPRESSION_SCRIPT);
-        rv.setScriptSource(new ScriptSource("metrics.amount > 1000", "CEL"));
+        rv.setBody(new ScriptBody(new ScriptSource("metrics.amount > 1000", "CEL")));
         when(ruleDefinitionMapper.selectForExport(any(), any(), any())).thenReturn(List.of(rd));
         when(ruleVersionMapper.findActiveVersion(12L)).thenReturn(rv);
         when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
@@ -138,9 +140,10 @@ class RuleExportServiceTest {
         RuleBundle b = sut.export(1L, List.of(12L), null);
 
         RuleBundle.RuleEntry entry = b.rules().getFirst();
-        assertThat(entry.script()).isNotNull();
-        assertThat(entry.script().source()).isEqualTo("metrics.amount > 1000");
-        assertThat(entry.script().lang()).isEqualTo("CEL");
+        assertThat(entry.body()).isInstanceOf(ScriptBody.class);
+        ScriptBody sb = (ScriptBody) entry.body();
+        assertThat(sb.script().source()).isEqualTo("metrics.amount > 1000");
+        assertThat(sb.script().lang()).isEqualTo("CEL");
         assertThat(entry.contentHash()).isNotBlank();
     }
 

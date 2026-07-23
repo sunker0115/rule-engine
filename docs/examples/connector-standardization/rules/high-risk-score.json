@@ -4,12 +4,15 @@
   "code": "demo-high-risk-score",
   "name": "外部风险分拦截",
   "kind": "AST_BOOLEAN",
-  "conditionAst": {
-    "type": "ConditionNode",
-    "displayLabel": "风险分>80",
-    "conditionType": "GT",
-    "metricCode": "demo.user.risk.score",
-    "params": { "threshold": 80 }
+  "body": {
+    "type": "AstBody",
+    "conditionAst": {
+      "type": "ConditionNode",
+      "displayLabel": "风险分>80",
+      "conditionType": "GT",
+      "metricCode": "demo.user.risk.score",
+      "params": { "threshold": 80 }
+    }
   },
   "decisionBindings": [{ "decisionCode": "REJECT" }],
   "preGates": [{ "gateType": "ROLLOUT", "params": { "percentage": 100 } }],

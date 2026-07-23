@@ -17,7 +17,7 @@ public interface RuleVersionReadMapper {
               rv.id              AS ruleVersionId,
               s.code             AS sceneCode,
               rd.tenant_id       AS tenantId,
-              rv.condition_ast   AS conditionAstJson,
+              rv.body            AS bodyJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
               rv.trigger_event_types AS triggerEventTypesJson,
@@ -27,7 +27,6 @@ public interface RuleVersionReadMapper {
               rv.payload_dependencies AS payloadDependenciesJson,
               rd.code            AS code,
               rv.version         AS version,
-              rv.script_source   AS scriptSourceJson,
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
@@ -43,7 +42,7 @@ public interface RuleVersionReadMapper {
               rv.id              AS ruleVersionId,
               s.code             AS sceneCode,
               rd.tenant_id       AS tenantId,
-              rv.condition_ast   AS conditionAstJson,
+              rv.body            AS bodyJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
               rv.trigger_event_types AS triggerEventTypesJson,
@@ -53,7 +52,6 @@ public interface RuleVersionReadMapper {
               rv.payload_dependencies AS payloadDependenciesJson,
               rd.code            AS code,
               rv.version         AS version,
-              rv.script_source   AS scriptSourceJson,
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
@@ -72,7 +70,7 @@ public interface RuleVersionReadMapper {
               rv.id              AS ruleVersionId,
               s.code             AS sceneCode,
               rd.tenant_id       AS tenantId,
-              rv.condition_ast   AS conditionAstJson,
+              rv.body            AS bodyJson,
               rv.pre_gates       AS preGatesJson,
               rv.decision_bindings AS decisionBindingsJson,
               rv.trigger_event_types AS triggerEventTypesJson,
@@ -82,7 +80,6 @@ public interface RuleVersionReadMapper {
               rv.payload_dependencies AS payloadDependenciesJson,
               rd.code            AS code,
               rv.version         AS version,
-              rv.script_source   AS scriptSourceJson,
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id

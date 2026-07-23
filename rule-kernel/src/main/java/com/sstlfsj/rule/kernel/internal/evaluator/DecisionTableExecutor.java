@@ -30,9 +30,9 @@ public class DecisionTableExecutor implements RuleVersionExecutor {
 
     @Override
     public EvalResult execute(RuleVersionSnapshot snapshot, EvalContext ctx) {
-        if (!(snapshot.conditionAst() instanceof DecisionTableNode(
+        if (!(snapshot.body() instanceof AstBody(DecisionTableNode(
                 List<DecisionTableNode.Column> columns, List<DecisionTableNode.Row> rows
-        ))) {
+        )))) {
             return EvalResult.error(EvalErrorCode.DECISION_TABLE_AST_TYPE_MISMATCH);
         }
 

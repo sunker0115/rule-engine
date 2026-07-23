@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>规则编辑器统一布局 · 原型</title>
+<style>
+  :root {
+    --bg: #f1f3f5; --panel: #fff; --border: #e3e6ea; --border-light: #f0f0f0;
+    --text: #1f2933; --text2: #5b6672; --text3: #8a95a1;
+    --accent: #2f6bff; --ok: #16a34a; --warn: #f59e0b; --err: #e5484d;
+    --ruleref: #2f6bff; --switch: #8b5cf6; --transform: #0ea5e9; --output: #16a34a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5}
+
+  .app{display:flex;flex-direction:column;height:100vh}
+  header{height:48px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 16px;flex:none;z-index:5}
+  header .t{font-weight:600;font-size:14px}
+  header .sep{color:var(--text3)}
+  .tabs{display:flex;gap:0;margin-left:24px}
+  .tabs button{padding:12px 18px;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;font-size:12.5px;color:var(--text2);font-weight:500}
+  .tabs button.on{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
+
+  .body{flex:1;display:flex;min-height:0}
+  .left{width:260px;background:var(--panel);border-right:1px solid var(--border-light);display:flex;flex-direction:column;flex:none}
+  .center{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+  .right{width:320px;background:var(--panel);border-left:1px solid var(--border-light);display:flex;flex-direction:column;flex:none}
+
+  /* left panel sections */
+  .lsec{padding:10px 14px;border-bottom:1px solid var(--border-light)}
+  .lsec-title{font-size:10.5px;font-weight:700;color:var(--text3);letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px}
+  .lsec:last-child{border-bottom:none}
+  .info-row{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:12px}
+  .info-row .k{color:var(--text3);width:40px;flex:none}
+  .tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;font-size:11px;font-weight:600}
+  .tag.blue{background:#eef3ff;color:var(--accent)}
+  .tag.green{background:#f2fbf4;color:var(--ok)}
+  .tag.orange{background:#fff7e6;color:#b7791f}
+  .tag.gray{background:#f2f4f7;color:var(--text2)}
+
+  .btn{height:28px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;cursor:pointer;font-weight:500;transition:.12s}
+  .btn:hover{border-color:#bcc4d0}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.pri:hover{opacity:.9}
+  .btn.green{background:var(--ok);border-color:var(--ok);color:#fff}
+  .btn.danger{color:var(--err);border-color:#f5c2c0}
+  .btn-group{display:flex;gap:6px;flex-wrap:wrap}
+  .btn-block{width:100%;margin:3px 0}
+
+  /* version timeline */
+  .vt-item{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px}
+  .vt-actions{margin-left:auto;display:flex;gap:2px}
+  .vt-actions .icon{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;color:var(--text3);font-size:12px}
+  .vt-actions .icon:hover{background:#f2f4f7;color:var(--text)}
+
+  /* center toolbar */
+  .ctoolbar{height:36px;background:var(--panel);border-bottom:1px solid var(--border-light);display:flex;align-items:center;gap:8px;padding:0 12px;flex:none}
+  .ctoolbar .spacer{flex:1}
+  .ctoolbar .status{font-size:11px;display:flex;align-items:center;gap:5px;font-weight:600}
+  .dot{width:7px;height:7px;border-radius:50%}
+
+  /* canvas */
+  .canvas-wrap{flex:1;background:#f7f8fa;position:relative;overflow:auto}
+
+  /* palette cards */
+  .palette{display:flex;gap:8px;align-items:center}
+  .pcard{display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:grab;font-size:11.5px;font-weight:600}
+  .pcard:hover{border-color:#bcc4d0}
+  .pcard .sw{width:7px;height:16px;border-radius:2px;flex:none}
+  .pcard .hint{font-size:10px;color:var(--text3);font-weight:400;margin-left:2px}
+
+  /* right panel */
+  .rsec{padding:10px 14px;border-bottom:1px solid var(--border-light);flex:1;overflow:auto}
+  .rsec:first-child{flex:none}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:10.5px;color:var(--text2);margin-bottom:4px;font-weight:600}
+  .field .val{border:1px solid var(--border);border-radius:6px;padding:6px 9px;background:#fbfcfd;font-size:12px}
+  .field .val.code{font-family:var(--mono);font-size:11.5px}
+  .field textarea{border:1px solid var(--border);border-radius:6px;padding:6px 9px;background:#fbfcfd;font-size:11.5px;font-family:var(--mono);width:100%;resize:vertical;min-height:60px}
+  .empty-hint{text-align:center;color:var(--text3);padding:40px 20px;font-size:12px}
+
+  /* analysis summary */
+  .analysis-bar{padding:5px 14px;background:#fafbfc;border-bottom:1px solid var(--border-light);font-size:11px;display:flex;gap:8px;align-items:center;cursor:pointer}
+  .analysis-bar:hover{background:#f0f3f6}
+
+  /* mode switch */
+  .mode-bar{display:flex;gap:0;padding:8px 12px;border-bottom:1px solid var(--border-light)}
+  .mode-btn{padding:5px 14px;border:1px solid var(--border);font-size:11.5px;cursor:pointer;background:#fff;color:var(--text2)}
+  .mode-btn:first-child{border-radius:5px 0 0 5px}
+  .mode-btn:last-child{border-radius:0 5px 5px 0;border-left:none}
+  .mode-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+
+  .divider{border-top:1px solid var(--border-light);margin:8px 0}
+  .muted{color:var(--text3);font-size:11px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ========== 顶部 Header ========== -->
+  <header>
+    <span class="t">规则引擎运营平台</span>
+    <span class="sep">/</span>
+    <span id="pageTitle" style="font-weight:500">stub.test · 演示决策流-金额分段风控</span>
+    <span class="tabs">
+      <button class="on" onclick="switchKind('DECISION_FLOW')">决策流</button>
+      <button id="tab-ast" onclick="switchKind('AST_BOOLEAN')">布尔树</button>
+      <button id="tab-script" onclick="switchKind('EXPRESSION_SCRIPT')">脚本</button>
+      <button id="tab-scorecard" onclick="switchKind('SCORECARD')">评分卡</button>
+    </span>
+  </header>
+
+  <div class="body">
+
+    <!-- ========== 左栏 ========== -->
+    <div class="left">
+
+      <!-- 分析摘要条（DECISION_FLOW 也显示，但内容不同） -->
+      <div class="analysis-bar">
+        <span id="analysisContent">✓ 规则集清晰 · 无冲突</span>
+        <span style="margin-left:auto;color:var(--text3)">分析 ›</span>
+      </div>
+
+      <!-- 规则信息 -->
+      <div class="lsec">
+        <div class="lsec-title">规则信息</div>
+        <div class="info-row"><span class="k">编码</span><span class="tag gray">demo_flow_001</span></div>
+        <div class="info-row"><span class="k">名称</span><span id="ruleName">演示决策流-金额分段风控</span></div>
+        <div class="info-row"><span class="k">类型</span><span id="ruleKind" class="tag blue">DECISION_FLOW</span></div>
+        <div class="info-row"><span class="k">场景</span><span class="tag gray">stub.test</span></div>
+        <div class="info-row"><span class="k">状态</span><span id="ruleStatus" class="tag orange">DRAFT</span></div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="lsec">
+        <div class="btn-group">
+          <button class="btn pri" style="width:100%">保存草稿</button>
+        </div>
+        <div class="btn-group" style="margin-top:6px">
+          <button class="btn" style="flex:1">试算</button>
+          <button class="btn" style="flex:1">会话</button>
+        </div>
+        <div class="divider"></div>
+        <div class="lsec-title" style="margin-top:4px">发布管理</div>
+        <button class="btn green btn-block">发布 v1</button>
+        <button class="btn danger btn-block">丢弃草稿</button>
+        <div class="divider"></div>
+        <button class="btn danger btn-block">禁用规则</button>
+      </div>
+
+      <!-- 版本时间线 -->
+      <div class="lsec" style="flex:1;overflow:auto">
+        <div class="lsec-title">版本时间线</div>
+        <div class="vt-item">
+          <span class="tag orange" style="font-size:10px;height:18px;padding:0 5px">v1</span>
+          <span style="color:var(--text3);font-size:10px">07-23</span>
+          <div class="vt-actions">
+            <span class="icon" title="查看">👁</span>
+            <span class="icon" title="对比">⇋</span>
+            <span class="icon" title="试算">⚡</span>
+            <span class="icon" title="恢复">↩</span>
+          </div>
+        </div>
+        <div class="vt-item" style="opacity:.5">
+          <span class="tag" style="font-size:10px;height:18px;padding:0 5px;background:#f2f4f7;color:var(--text2)">v0</span>
+          <span style="color:var(--text3);font-size:10px">07-20</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 中栏 ========== -->
+    <div class="center">
+      <!-- 工具栏 -->
+      <div class="ctoolbar" id="centerToolbar">
+        <!-- AST/Script/Scorecard 模式 -->
+        <span id="toolbar-generic">
+          <span style="font-weight:600;font-size:12px;color:var(--text2)">DECISION_FLOW</span>
+        </span>
+        <!-- DECISION_FLOW 模式 -->
+        <span id="toolbar-flow" style="display:none">
+          <div class="palette">
+            <span class="muted" style="font-weight:600;letter-spacing:.3px;text-transform:uppercase;font-size:10px">节点类型 · 拖入画布</span>
+            <div class="pcard"><span class="sw" style="background:var(--ruleref)"></span>RuleRef<span class="hint">引规则</span></div>
+            <div class="pcard"><span class="sw" style="background:var(--switch)"></span>Switch<span class="hint">分支</span></div>
+            <div class="pcard"><span class="sw" style="background:var(--transform)"></span>Transform<span class="hint">计算</span></div>
+            <div class="pcard"><span class="sw" style="background:var(--output)"></span>Output<span class="hint">产出</span></div>
+          </div>
+          <span class="spacer"></span>
+          <div class="status">
+            <span class="dot" style="background:var(--ok)"></span>
+            图分析通过
+          </div>
+        </span>
+      </div>
+
+      <!-- 编辑区 -->
+      <div class="canvas-wrap" id="centerContent">
+        <!-- AST_BOOLEAN 模式 -->
+        <div id="content-ast" style="display:none;padding:24px">
+          <div style="border:1px dashed var(--border);border-radius:8px;padding:24px;text-align:center;background:#fcfcfd">
+            <div style="font-size:13px;font-weight:600;margin-bottom:12px">AND · 全部满足</div>
+            <div style="border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin:6px 0;background:#fff;max-width:360px;margin:0 auto;text-align:left">
+              <span class="tag" style="background:#f2f4f7">GT</span>
+              <span style="font-family:var(--mono);margin:0 8px">metrics.score</span>
+              <span style="color:var(--text3)">&gt;</span>
+              <span style="font-family:var(--mono);margin:0 8px">80</span>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin:6px 0;background:#fff;max-width:360px;margin:6px auto;text-align:left">
+              <span class="tag" style="background:#f2f4f7">EQ</span>
+              <span style="font-family:var(--mono);margin:0 8px">payload.country</span>
+              <span style="color:var(--text3)">=</span>
+              <span style="font-family:var(--mono);margin:0 8px">"CN"</span>
+            </div>
+            <div style="margin-top:12px;font-size:11px;color:var(--accent);cursor:pointer">+ 添加条件</div>
+          </div>
+        </div>
+        <!-- DECISION_FLOW 模式 -->
+        <div id="content-flow" style="display:flex;height:100%;align-items:center;justify-content:center;position:relative">
+          <!-- 模拟画布节点 -->
+          <div style="position:relative;width:900px;height:400px;background:radial-gradient(#dfe3e8 1px,transparent 1px);background-size:18px 18px;border:1px solid var(--border);border-radius:8px">
+            <!-- entry marker -->
+            <div style="position:absolute;left:-30px;top:180px;font-size:10px;color:var(--text3);font-weight:600">入口→</div>
+            <!-- 节点 -->
+            <div class="n" style="position:absolute;left:40px;top:140px;width:160px;background:#fff;border:2px solid var(--switch);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" onmouseover="highlightNode(this)" onmouseout="unhighlightNode(this)">
+              <div style="height:3px;background:var(--switch)"></div>
+              <div style="padding:6px 10px"><span style="font-size:10px;font-weight:700;color:var(--switch);text-transform:uppercase">Switch</span><span class="tag" style="background:#eef3ff;color:var(--accent);margin-left:4px;font-size:9px;height:16px">入口</span></div>
+              <div style="padding:2px 10px 8px;font-size:11px;font-family:var(--mono);color:var(--text2);word-break:break-all">amount>5000 ?"crit":"high":"norm"</div>
+              <div style="padding:2px 10px 8px;display:flex;gap:3px;flex-wrap:wrap"><span style="font-size:9px;background:#f4effe;color:var(--switch);padding:1px 5px;border-radius:8px">critical</span><span style="font-size:9px;background:#f4effe;color:var(--switch);padding:1px 5px;border-radius:8px">high</span><span style="font-size:9px;background:#f4effe;color:var(--switch);padding:1px 5px;border-radius:8px">normal</span></div>
+            </div>
+            <div class="n" style="position:absolute;left:270px;top:80px;width:160px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" onmouseover="highlightNode(this)" onmouseout="unhighlightNode(this)">
+              <div style="height:3px;background:var(--output)"></div>
+              <div style="padding:6px 10px"><span style="font-size:10px;font-weight:700;color:var(--output);text-transform:uppercase">Output</span></div>
+              <div style="padding:2px 10px 8px;font-weight:600;font-size:12px">REJECT</div>
+            </div>
+            <div class="n" style="position:absolute;left:270px;top:220px;width:160px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" onmouseover="highlightNode(this)" onmouseout="unhighlightNode(this)">
+              <div style="height:3px;background:var(--switch)"></div>
+              <div style="padding:6px 10px"><span style="font-size:10px;font-weight:700;color:var(--switch);text-transform:uppercase">Switch</span></div>
+              <div style="padding:2px 10px 8px;font-size:11px;font-family:var(--mono);color:var(--text2)">amount>3000 ?"risky":"safe"</div>
+              <div style="padding:2px 10px 8px;display:flex;gap:3px"><span style="font-size:9px;background:#f4effe;color:var(--switch);padding:1px 5px;border-radius:8px">risky</span><span style="font-size:9px;background:#f4effe;color:var(--switch);padding:1px 5px;border-radius:8px">safe</span></div>
+            </div>
+            <div class="n" style="position:absolute;left:500px;top:140px;width:160px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" onmouseover="highlightNode(this)" onmouseout="unhighlightNode(this)">
+              <div style="height:3px;background:var(--output)"></div>
+              <div style="padding:6px 10px"><span style="font-size:10px;font-weight:700;color:var(--output);text-transform:uppercase">Output</span></div>
+              <div style="padding:2px 10px 8px;font-weight:600;font-size:12px">REVIEW</div>
+            </div>
+            <div class="n" style="position:absolute;left:500px;top:260px;width:160px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" onmouseover="highlightNode(this)" onmouseout="unhighlightNode(this)">
+              <div style="height:3px;background:var(--output)"></div>
+              <div style="padding:6px 10px"><span style="font-size:10px;font-weight:700;color:var(--output);text-transform:uppercase">Output</span></div>
+              <div style="padding:2px 10px 8px;font-weight:600;font-size:12px">MID</div>
+            </div>
+            <div class="n" style="position:absolute;left:270px;top:340px;width:160px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" onmouseover="highlightNode(this)" onmouseout="unhighlightNode(this)">
+              <div style="height:3px;background:var(--transform)"></div>
+              <div style="padding:6px 10px"><span style="font-size:10px;font-weight:700;color:var(--transform);text-transform:uppercase">Transform</span></div>
+              <div style="padding:2px 10px 8px;font-size:11px;color:var(--text2)"><span style="background:#e8f6fd;color:var(--transform);padding:1px 5px;border-radius:3px;font-size:10px">flow.final_amount</span></div>
+              <div style="padding:2px 10px 8px;font-size:11px;font-family:var(--mono);color:var(--text2)">= amount * 0.8</div>
+            </div>
+            <div class="n" style="position:absolute;left:500px;top:360px;width:160px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" onmouseover="highlightNode(this)" onmouseout="unhighlightNode(this)">
+              <div style="height:3px;background:var(--output)"></div>
+              <div style="padding:6px 10px"><span style="font-size:10px;font-weight:700;color:var(--output);text-transform:uppercase">Output</span></div>
+              <div style="padding:2px 10px 8px;font-weight:600;font-size:12px">PASS</div>
+            </div>
+            <!-- 提示 -->
+            <div style="position:absolute;left:50%;bottom:10px;transform:translateX(-50%);font-size:10px;color:var(--text3)">双击节点 → 右侧编辑属性 | 选中 + Delete 删除 | 拖 Handle 连线</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 右栏 ========== -->
+    <div class="right" id="rightPanel">
+      <!-- DECISION_FLOW 模式：节点属性 -->
+      <div id="right-flow" class="rsec">
+        <div class="lsec-title">节点属性 · Switch</div>
+        <div class="field">
+          <label>表达式引擎 (lang)</label>
+          <div class="val" style="display:flex;justify-content:space-between">CEL <span style="color:var(--text3)">▾</span></div>
+        </div>
+        <div class="field">
+          <label>分支表达式 (expression)</label>
+          <div class="val code">payload.amount &gt; 5000 ? "critical" : (payload.amount &gt; 1000 ? "high" : "normal")</div>
+        </div>
+        <div class="field">
+          <label>分支出口 (caseKeys)</label>
+          <div class="val">critical · high · normal</div>
+        </div>
+        <div class="field">
+          <label>可用变量</label>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:#f2f4f7;color:var(--text2)">metrics</span>
+            <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:#f2f4f7;color:var(--text2)">payload</span>
+            <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:#e8f6fd;color:var(--transform);font-weight:600">flow</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>入口</label>
+          <span class="tag blue">当前为入口节点</span>
+        </div>
+        <div class="divider"></div>
+        <button class="btn danger btn-block" style="margin-top:4px">删除此节点</button>
+      </div>
+
+      <!-- 通用模式：preGate + binding -->
+      <div id="right-generic" style="display:none">
+        <div class="lsec-title" style="padding:10px 14px 4px">决策绑定</div>
+        <div class="rsec">
+          <div class="field"><label>决策码</label><div class="val">REJECT</div></div>
+          <div class="field"><label>决策码</label><div class="val">PASS</div></div>
+          <div class="field"><label>决策码</label><div class="val">REVIEW</div></div>
+        </div>
+        <div class="lsec-title" style="padding:10px 14px 4px">前置门控</div>
+        <div class="rsec">
+          <div class="field">
+            <label>灰度比例</label>
+            <input type="range" style="width:100%" value="100">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3)"><span>0%</span><span>100%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let currentKind = 'DECISION_FLOW';
+
+function switchKind(kind) {
+  currentKind = kind;
+  // tabs
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
+  document.getElementById('tab-' + kind.toLowerCase().replace('_','-'))?.classList.add('on');
+
+  // toolbar
+  const isFlow = kind === 'DECISION_FLOW';
+  document.getElementById('toolbar-generic').style.display = isFlow ? 'none' : '';
+  document.getElementById('toolbar-flow').style.display = isFlow ? 'flex' : 'none';
+
+  // center content
+  document.getElementById('content-ast').style.display = isFlow ? 'none' : 'block';
+  document.getElementById('content-flow').style.display = isFlow ? 'flex' : 'none';
+
+  // right panel
+  document.getElementById('right-flow').style.display = isFlow ? '' : 'none';
+  document.getElementById('right-generic').style.display = isFlow ? 'none' : '';
+
+  // kind tag
+  const kindNames = {DECISION_FLOW:'决策流',AST_BOOLEAN:'布尔树',EXPRESSION_SCRIPT:'脚本',SCORECARD:'评分卡',DECISION_TREE:'决策树',DECISION_TABLE:'决策表'};
+  document.getElementById('ruleKind').textContent = kind;
+  document.getElementById('ruleName').textContent = kind === 'DECISION_FLOW' ? '演示决策流-金额分段风控' : '规则示例';
+  if (isFlow) document.getElementById('analysisContent').innerHTML = '✓ 图分析通过 · 无环 · 无死节点';
+  else document.getElementById('analysisContent').innerHTML = '✓ 规则集清晰 · 无冲突';
+}
+
+function highlightNode(el) { el.style.borderColor = 'var(--accent)'; el.style.boxShadow = '0 0 0 2px rgba(47,107,255,.18)'; }
+function unhighlightNode(el) { el.style.borderColor = 'var(--border)'; el.style.boxShadow = '0 1px 4px rgba(0,0,0,.08)'; }
+</script>
+
+</body>
+</html>

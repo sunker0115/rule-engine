@@ -28,7 +28,7 @@ class SceneSnapshotLoaderDefaultParamsTest {
     void loadAllWithStrategy_writesDefaultParamsToIndex() {
         RuleVersionRow row = new RuleVersionRow(
                 1L, "fraud", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
-                null, null, "code", 1L, null, "{\"timezone\":\"Asia/Shanghai\"}");
+                null, null, "code", 1L,"{\"timezone\":\"Asia/Shanghai\"}");
 
         RuleVersionReadMapper mapper = mock(RuleVersionReadMapper.class);
         SnapshotAssembler assembler = mock(SnapshotAssembler.class);
@@ -47,7 +47,7 @@ class SceneSnapshotLoaderDefaultParamsTest {
     void loadAllWithStrategy_nullDefaultParams_writesEmptyMap() {
         RuleVersionRow row = new RuleVersionRow(
                 2L, "payment", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
-                null, null, "code", 1L, null, null);
+                null, null, "code", 1L,null);
 
         RuleVersionReadMapper mapper = mock(RuleVersionReadMapper.class);
         SnapshotAssembler assembler = mock(SnapshotAssembler.class);
@@ -66,7 +66,7 @@ class SceneSnapshotLoaderDefaultParamsTest {
     void loadAllWithStrategy_invalidJson_writesEmptyMap() {
         RuleVersionRow row = new RuleVersionRow(
                 3L, "scene", 1L, "{}", "[]", "[]", "[]", "AST_BOOLEAN", "HIGHEST_PRIORITY",
-                null, null, "code", 1L, null, "not-json");
+                null, null, "code", 1L,"not-json");
 
         RuleVersionReadMapper mapper = mock(RuleVersionReadMapper.class);
         SnapshotAssembler assembler = mock(SnapshotAssembler.class);

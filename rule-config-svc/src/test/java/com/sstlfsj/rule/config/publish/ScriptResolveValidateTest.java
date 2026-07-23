@@ -79,7 +79,7 @@ class ScriptResolveValidateTest {
 
         PublishService.ResolvedDraft resolved = publishService.resolveAndValidate(
                 1L, scene, RuleKind.EXPRESSION_SCRIPT,
-                null, List.of(), List.of(), List.of(), script);
+                null, List.of(), List.of(), List.of(), script, null);
 
         // metric 依赖从 refVars(metrics.*) 冻入
         assertThat(resolved.metricDeps()).containsExactly(new MetricDependency("txn_cnt_1d", 2));
@@ -100,7 +100,7 @@ class ScriptResolveValidateTest {
         ScriptSource bad = new ScriptSource("metrics.txn_cnt_1d > ", "CEL");
         assertThatThrownBy(() -> publishService.resolveAndValidate(
                 1L, scene, RuleKind.EXPRESSION_SCRIPT,
-                null, List.of(), List.of(), List.of(), bad))
+                null, List.of(), List.of(), List.of(), bad, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("脚本编译失败");
     }
@@ -113,7 +113,7 @@ class ScriptResolveValidateTest {
         ScriptSource bad = new ScriptSource("payload.country > 100 ? 'REVIEW' : 'PASS'", "CEL");
         assertThatThrownBy(() -> publishService.resolveAndValidate(
                 1L, scene, RuleKind.EXPRESSION_SCRIPT,
-                null, List.of(), List.of(), List.of(), bad))
+                null, List.of(), List.of(), List.of(), bad, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("脚本类型检查失败");
     }
@@ -124,7 +124,7 @@ class ScriptResolveValidateTest {
         ScriptSource js = new ScriptSource("payload.amount > 0", "JS");
         assertThatThrownBy(() -> publishService.resolveAndValidate(
                 1L, scene, RuleKind.EXPRESSION_SCRIPT,
-                null, List.of(), List.of(), List.of(), js))
+                null, List.of(), List.of(), List.of(), js, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("无对应表达式引擎");
     }

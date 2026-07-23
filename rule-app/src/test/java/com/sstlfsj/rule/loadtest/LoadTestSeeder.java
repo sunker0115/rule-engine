@@ -88,8 +88,9 @@ class LoadTestSeeder {
         for (int i = 1; i <= ruleCount; i++) {
             DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
                     "lt-rule-" + i,
-                    new RuleContent("lt rule " + i, "AST_BOOLEAN", conditionAst(),
-                            List.of(new DecisionBinding("PASS", 1)), List.of(), List.of(EVENT_TYPE), null),
+                    new RuleContent("lt rule " + i, "AST_BOOLEAN",
+                            new com.sstlfsj.rule.kernel.api.model.AstBody(conditionAst()),
+                            List.of(new DecisionBinding("PASS", 1)), List.of(), List.of(EVENT_TYPE)),
                     ACTOR);
             configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
         }
@@ -119,8 +120,9 @@ class LoadTestSeeder {
                         Map.of("datasource", "loadtest_ro", "sql", "SELECT 100"), 60, false), ACTOR);
         DraftCreatedResult draft = configService.createDraft(TENANT, SCENE,
                 "lt-fetch-rule",
-                new RuleContent("lt fetch rule", "AST_BOOLEAN", conditionAstAgg(),
-                        List.of(new DecisionBinding("PASS", 1)), List.of(), List.of(EVENT_TYPE), null),
+                new RuleContent("lt fetch rule", "AST_BOOLEAN",
+                        new com.sstlfsj.rule.kernel.api.model.AstBody(conditionAstAgg()),
+                        List.of(new DecisionBinding("PASS", 1)), List.of(), List.of(EVENT_TYPE)),
                 ACTOR);
         configService.publish(TENANT, draft.ruleDefinitionId(), ACTOR);
     }
