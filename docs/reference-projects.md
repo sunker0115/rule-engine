@@ -21,6 +21,7 @@
 | **Kogito**（Java，Apache KIE） | Drools + jBPM + DMN 决策流程捆绑、cloud-native | 决策+编排捆绑反例，佐证 D60/D75 分层 | D60 / D75 | [§3.2.7](#327-kogitoapache-kie) |
 | **Evrete**（Java） | 轻量 RETE + JSR-94 + 注解 Java 规则 | 刻意非 RETE（轻量立面对立面）；D61 已有 easyrules 注解 | D6/D17/D61 | [§3.2.8](#328-evrete) |
 | **OpenL Tablets**（Java，LGPL） | Excel 规则 → JVM 字节码 → REST API | Excel 业务用户 authoring 参照；留 D74 待触发 | D74 | [§3.2.9](#329-openl-tabletslgpl) |
+| **ice**（Go+Java+Python，本地 `../ice`，Apache 2.0） | 树形编排规则引擎：Relation 节点 + Leaf 带副作用 + Roam 上下文 + 多语言 SDK + 零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK 非本项目方向；节点复用/并行已有等价物 | [§3.2.10](#3210-ice) |
 
 ---
 
@@ -38,7 +39,8 @@
 | **Drools Verifier**（Java，Apache KIE）| 规则集完备性/冲突校验 | §2.26（规则集静态分析，已落地 B31） | 吸收（命名/语义对齐 Verifier） |
 | **Easy Rules**（Java）| `@Condition`/`@Fact` 注解规则 | D61（SDK 注解规则，仅嵌入式 SDK） | 吸收（加糖，严守 D60） |
 | **urule**（Java）| FunctionLibrary（全局函数注册）/ ConstantLibrary | 08-evolution §四 | **已否决**（与闭合校验/禁副作用/metric 只读冲突） |
-| **CEL / Aviator / ice**（Go/Java/Go）| 表达式引擎 / 高吞吐评估形态 | D20；D66（六引擎 EXPRESSION_SCRIPT） | 吸收（CEL/Aviator 为六引擎之二；ice 作吞吐参照） |
+| **CEL / Aviator**（Go/Java）| 表达式引擎 / 高吞吐评估形态 | D20；D66（六引擎 EXPRESSION_SCRIPT） | 吸收（CEL/Aviator 为六引擎之二） |
+| **ice**（Go+Java+Python，本地 `../ice`，Apache 2.0）| 树形编排规则引擎：Relation 节点（AND/ANY/ALL/NONE/TRUE + P_AND/P_ANY 并行变体）+ Leaf 节点（Flow/Result/None 带副作用执行）+ Roam 共享上下文 + 多语言 SDK + 零依赖文件存储 + Lane 流量隔离 | 执行型有副作用（Result 发券、None 日志/查询）→ D60 拒绝；零依赖文件存储→本项目 DB 化相反；多语言 SDK→本项目 Java-only；节点复用→D75 RuleRef 已有；并行→§2.29 已捕获 | **不吸收**（执行+副作用+D60 否定；其余各有更优方案） |
 | **OpenFeature**（语言无关）| provider SPI + spec + conformance suite | D72（连接器标准化） | 吸收（声明式连接器 + conformance 套件） |
 | **OTel**（语言无关）| exporter SPI + OTLP 信封 + semantic conventions | D72；§2.22（OTLP + LGTM 可观测性） | 吸收 |
 | **Confluent Schema Registry / K8s**（语言无关 + Go）| 代理主键 + 反范式冗余自然键 | rule identity（code + version） | 吸收（保留代理 PK + 冗余自然键） |
@@ -89,6 +91,7 @@
 | 不需要 | Drools/Kogito | RETE 推理 + DMN/CEP 决策流程捆绑 | 刻意非 RETE（不可变快照+无状态）；捆绑反例佐证 D60/D75 分层 |
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
+| 不需要 | ice | 树形编排+Leaf 副作用执行+多语言 SDK+零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK/文件存储非本项目方向；节点复用(D75 RuleRef)/并行(§2.29)已有等价物 |
 | 待定 | gengine | 场景内独立规则并行求值 | §2.29（待实测吞吐瓶颈） |
 | 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
@@ -222,6 +225,23 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 | 不需要 | Excel → JVM 字节码编译链 | 本项目规则体是 typed JSON（AST/Script/FlowGraph），不走 Excel 路径；编译思路 D67 已覆盖 | — |
 | 不需要 | 业务用户 Excel 维护规则 | 这正是 D74（参数化模板）暂缓等场景——当前是技术作者配规则 | D74 暂缓 |
 | 不需要 | MCP AI 集成、自动 REST 暴露 | 附加功能，非核心对照点 | — |
+
+#### 3.2.10 ice（本地同级目录 `../ice`，Apache 2.0）
+
+> Go server（Web UI + 规则存储/发布）+ Java/Go/Python 多语言嵌入式 SDK。zero-dependency（文件存储，无 DB/MQ）。
+
+树形规则引擎：Relation 节点（AND/ANY/ALL/NONE/TRUE + **P_AND/P_ANY/P_ALL/P_NONE/P_TRUE 并行变体**）+ Leaf 节点（Flow=条件检查/Result=业务操作如发券/None=副作用如写日志查询）+ **Roam** 共享 context（线程安全 ConcurrentHashMap 多语言 + deep key + `@uid` 动态引用）+ 节点跨树复用 + Lane 流量隔离(A/B/灰度)。
+
+**类别不同**：ice 是**执行+副作用引擎**（Result/None 节点直接执行操作）。本项目 D60 纯决策化——决策与执行严格分层。Roam 的 `@uid` 动态引用有灵巧性，但等价于本项目 EvalContext bindings。多语言 SDK(Java/Go/Python)和零依赖文件存储和本项目 Java-only + DB-backed 方向相反。
+
+| 桶 | 点 | 细节 / 为什么 | 落点 |
+|---|---|---|---|
+| 不需要 | Leaf 副作用执行（Result/None） | 发券/写日志/查询等操作在规则节点内直接执行 | D60 纯决策不执行副作用 |
+| 不需要 | 多语言 SDK（Java/Go/Python） | 本项目 Java-only，无 polyglot 需求 | — |
+| 不需要 | 零依赖文件存储 | 本项目 DB-backed（MySQL + MyBatis + Flyway）不可变版本管理；文件存储不能满足审计/血缘/多租户需求 | — |
+| 不需要 | 并行关系节点（P_AND 等） | 已在 gengine §2.29 捕获；ice 的并行是节点内 child 并行，非场景级规则并行 | — |
+| 不需要 | Lane 流量隔离 | 本项目已有 rollout/pre-gate 灰度发布 + A/B bucket | — |
+| 不需要 | 节点跨树复用 | D75 DECISION_FLOW RuleRef 已有等价能力（发布期冻结被引规则快照） | — |
 
 ---
 
