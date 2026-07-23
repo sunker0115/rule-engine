@@ -90,8 +90,9 @@
   - 两种形态适用场景不同：Template 适合大框架复用（同一规则结构不同参数）；Fragment 适合条件组复用（同一 AND/OR 子树在多处出现）；
   - 新增 `rule_template` / `rule_fragment` 表 + 引用关系表；`rule_version` 发布时展开并生成不可变快照，与 D6 快照语义一致；
   - 灰度：Template 实例化后继承普通 `rule_version` 的 ROLLOUT Gate 语义，不需要专门机制。
-- **迁移成本**：高（schema 变更 + 发布事务展开逻辑 + dry-run 兼容 + 灰度桶继承 + UI）。
+- **迁移成本**：中（DDL 零变更；核心改动集中在 config-svc 5 处 + 前端 3 处 + 新增反向血缘查询）。
 - **依赖**：§2.10 规则模板市场依赖本节就位。
+- **已进入 OpenSpec**：`openspec/changes/cross-scene-rule-ref`——DECISION_FLOW RuleRefNode 跨 Scene 引用（ruleCode tenant 唯一 DDL 已就位，开放查询 + 反向血缘 + 前端扩展）。详见 `design.md`。
 
 ### 2.4 规则间依赖与编排（来源 #3）
 
