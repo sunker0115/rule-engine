@@ -76,7 +76,7 @@
 | 已吸收 | Apache Ranger | 字段声明 + 读时遮蔽 | D71 Trace PII 读时脱敏 |
 | 已吸收 | CEL / Aviator | 表达式引擎 | D66 六引擎之二 |
 | 已吸收 | ZEN L1 | 表达式编辑器变量补全（**六引擎通用**） | `expressionCompletions.ts` + ScriptEditor + ExpressionInput（Flow Switch/Transform），零后端 |
-| 已吸收 | FICO / Sapiens（效果·一半） | 业务结局标签回灌 | §2.27 B32 `decision_outcome` |
+| 已吸收 | FICO / Sapiens | 决策效果闭环 | §2.27 B32：`decision_outcome` 回灌 + `OUTCOME_INGESTION` 自动取标签 + `EffectivenessService` TP/FP/FN→precision/recall（RULE_VERSION/DECISION×DAY/WEEK 漂移）+ 前端 `EffectivenessPage` |
 | 已吸收 | ZEN L2 | CEL 实时类型诊断（CEL 专属） | `ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput debounced lint（弱类型引擎 no-op 自动通过） |
 | 不需要 | trae | 6 级 Context / 内部事件总线 / 自研验证框架 / 引擎耦合 JPA / `DecisionCode` 硬编码 / Rule 层组合策略 | 分别被 不可变 POJO / Modulith / Spring Validation / kernel 零 Spring / Decision 业务配置 / AST 组合 顶替 |
 | 不需要 | trae R4 | 自研有状态 Flow 编排 | 架构已定：同步图归 D75 `DECISION_FLOW`，有状态编排接 Flowable（D60/D75），不自研 |
@@ -95,7 +95,7 @@
 | 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH 压测：纯 AST_BOOLEAN 负优化 13-42x，仅含重脚本/决策图场景建议开启） |
 | 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
-| 待定 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 后续（标签位已就绪，聚合未做） |
+| 已吸收 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 B32 `EffectivenessService`（TP/FP/FN→precision/recall，RULE_VERSION/DECISION 维度 + DAY/WEEK 分桶漂移）+ 前端 `EffectivenessPage` |
 
 ### 3.2 分项目（细对比·融合版）
 
