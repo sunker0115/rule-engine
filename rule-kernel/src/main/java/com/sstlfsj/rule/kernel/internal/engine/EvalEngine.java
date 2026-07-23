@@ -22,7 +22,7 @@ public class EvalEngine {
      * 决策优先级裁决：priority 越大越优先；priority 相同时按 fromRuleVersionId 较大（较新规则版本）胜。
      * 二级键保证平局结果确定可复现，不随候选遍历顺序（索引/DB 返回序）漂移。
      */
-    private static final Comparator<Decision> DECISION_PRECEDENCE =
+    static final Comparator<Decision> DECISION_PRECEDENCE =
             Comparator.comparingInt(Decision::priority)
                     .thenComparing(Decision::fromRuleVersionId,
                             Comparator.nullsFirst(Comparator.naturalOrder()));
@@ -88,7 +88,8 @@ public class EvalEngine {
     public EvalOutcome evaluateWithContext(RuleEvent event,
                                            List<RuleVersionSnapshot> candidates, Instant now) {
         SceneExecutionStrategy strategy = index.getStrategy(event.tenantId(), event.sceneCode());
-        return evaluateWithContext(event, candidates, strategy, now);
+        ExecutionMode mode = index.getMode(event.tenantId(), event.sceneCode());
+        return evaluateWithContext(event, candidates, strategy, mode, now);
     }
 
     /**
@@ -100,9 +101,15 @@ public class EvalEngine {
      * @param now        本次评估统一时刻
      * @return 结果与上下文的聚合；早返回 miss 时 context 为 null
      */
+    /** 兼容旧调用方：默认 SEQUENTIAL 模式。 */
     public EvalOutcome evaluateWithContext(RuleEvent event, List<RuleVersionSnapshot> candidates,
                                            SceneExecutionStrategy strategy, Instant now) {
-        return evaluateWithContext(event, candidates, strategy, now, traceEnabled);
+        return evaluateWithContext(event, candidates, strategy, ExecutionMode.SEQUENTIAL, now);
+    }
+
+    public EvalOutcome evaluateWithContext(RuleEvent event, List<RuleVersionSnapshot> candidates,
+                                           SceneExecutionStrategy strategy, ExecutionMode mode, Instant now) {
+        return evaluateWithContext(event, candidates, strategy, mode, now, traceEnabled);
     }
 
     /**
@@ -118,10 +125,17 @@ public class EvalEngine {
      * @param collectTrace 本次评估是否收集 NodeTrace
      * @return 结果与上下文的聚合；早返回 miss 时 context 为 null
      */
+    /** 兼容旧调用方：默认 SEQUENTIAL 模式。 */
     public EvalOutcome evaluateWithContext(RuleEvent event, List<RuleVersionSnapshot> candidates,
                                            SceneExecutionStrategy strategy, Instant now,
                                            boolean collectTrace) {
-        return evaluate0(event, candidates, strategy, now, collectTrace, contextAssembler);
+        return evaluate0(event, candidates, strategy, ExecutionMode.SEQUENTIAL, now, collectTrace, contextAssembler);
+    }
+
+    public EvalOutcome evaluateWithContext(RuleEvent event, List<RuleVersionSnapshot> candidates,
+                                           SceneExecutionStrategy strategy, ExecutionMode mode,
+                                           Instant now, boolean collectTrace) {
+        return evaluate0(event, candidates, strategy, mode, now, collectTrace, contextAssembler);
     }
 
     /**
@@ -140,13 +154,13 @@ public class EvalEngine {
         RuleEvent replayEvent = event.toBuilder().providedMetrics(frozenMetrics).build();
         SceneExecutionStrategy strategy = index.getStrategy(event.tenantId(), event.sceneCode());
         EvalContextAssembler noFetch = new EvalContextAssembler(List.of(), List.of());
-        return evaluate0(replayEvent, candidates, strategy, evalNow, true, noFetch);
+        return evaluate0(replayEvent, candidates, strategy, ExecutionMode.SEQUENTIAL, evalNow, true, noFetch);
     }
 
     /** evaluateWithContext / evaluateReplay 共享的评估核心；assembler 决定取数（常规）还是回灌（重放）。 */
     private EvalOutcome evaluate0(RuleEvent event, List<RuleVersionSnapshot> candidates,
-                                  SceneExecutionStrategy strategy, Instant now,
-                                  boolean collectTrace, EvalContextAssembler assembler) {
+                                  SceneExecutionStrategy strategy, ExecutionMode mode,
+                                  Instant now, boolean collectTrace, EvalContextAssembler assembler) {
         if (candidates.isEmpty()) return new EvalOutcome(EvalResult.miss(), null);
 
         List<RuleVersionSnapshot> passed = new ArrayList<>();
@@ -156,24 +170,34 @@ public class EvalEngine {
             if (blockedBy == null) passed.add(snap);
             else if (firstBlockedBy == null) firstBlockedBy = blockedBy;
         }
-        // 候选全被 Pre-Gate 拦截：BLOCKED 第四态（D22），blockedBy 记首个阻断 gate；区别于评估后 MISS
         if (passed.isEmpty()) return new EvalOutcome(EvalResult.miss(), null, firstBlockedBy);
 
         EvalEnv env = new EvalEnv(now, index.getDefaultParams(event.tenantId(), event.sceneCode()));
         EvalContext ctx = assembler.assemble(event, passed, env);
 
-        // 仅执行器调用绑定 COLLECT：执行器读 TraceScope.COLLECT 决定是否构建 trace
         EvalResult result;
         try {
-            result = ScopedValue.where(TraceScope.COLLECT, collectTrace).call(() -> switch (strategy) {
-                case FIRST_HIT -> evaluateFirstHit(event, passed, ctx);
-                // HIGHEST_PRIORITY / ALL_HITS：语义相同，均全量评估收集所有命中决策
-                case HIGHEST_PRIORITY, ALL_HITS -> evaluateAllCandidates(passed, ctx);
+            result = ScopedValue.where(TraceScope.COLLECT, collectTrace).call(() -> {
+                if (mode == ExecutionMode.PARALLEL) {
+                    return switch (strategy) {
+                        case FIRST_HIT -> {
+                            List<RuleVersionSnapshot> sorted = new ArrayList<>(passed);
+                            sorted.sort(FIRST_HIT_ORDER);
+                            yield ParallelEvaluator.evaluateFirstHitBatched(
+                                    sorted, ctx, this::selectExecutor, sorted.size());
+                        }
+                        case HIGHEST_PRIORITY, ALL_HITS ->
+                                ParallelEvaluator.evaluateAllParallel(passed, ctx, this::selectExecutor);
+                    };
+                }
+                return switch (strategy) {
+                    case FIRST_HIT -> evaluateFirstHit(event, passed, ctx);
+                    case HIGHEST_PRIORITY, ALL_HITS -> evaluateAllCandidates(passed, ctx);
+                };
             });
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            // switch 分支无受检异常，CallableOp 声明的 Exception 不会真正发生
             throw new IllegalStateException(e);
         }
         return new EvalOutcome(result, ctx);

@@ -4,6 +4,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { getRule, editDraft, createRule } from '@/api/rule';
 import RuleBodyEditor from './RuleBodyEditor';
+import ExpressionInput from './ExpressionInput';
 import type {
   FlowNode, RuleRefNode, SwitchNode, TransformNode, OutputNode,
   SceneMetadata, DecisionItem, RuleDetail, AstNode,
@@ -122,7 +123,15 @@ export default function FlowNodeInspectorDrawer({
           </div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: '#5b6672', marginBottom: 5, fontWeight: 600 }}>{t('editor.flow.inspector.expression')}</div>
-            <Input.TextArea rows={3} value={s.expression} onChange={(e) => onChangeNode({ ...s, expression: e.target.value })} />
+            <ExpressionInput
+              value={s.expression}
+              onChange={(expression) => onChangeNode({ ...s, expression })}
+              availableMetrics={metadata?.availableMetrics ?? []}
+              payloadFieldNames={metadata?.payloadFieldNames ?? []}
+              payloadFieldTypes={metadata?.payloadFieldTypes}
+              tenantId={tenantId}
+              sceneCode={sceneCode}
+            />
           </div>
           <div>
             <div style={{ fontSize: 12, color: '#5b6672', marginBottom: 5, fontWeight: 600 }}>{t('editor.flow.inspector.caseKeys')}</div>
@@ -145,7 +154,15 @@ export default function FlowNodeInspectorDrawer({
           </div>
           <div>
             <div style={{ fontSize: 12, color: '#5b6672', marginBottom: 5, fontWeight: 600 }}>{t('editor.flow.inspector.expression')}</div>
-            <Input.TextArea rows={3} value={tr.expression} onChange={(e) => onChangeNode({ ...tr, expression: e.target.value })} />
+            <ExpressionInput
+              value={tr.expression}
+              onChange={(expression) => onChangeNode({ ...tr, expression })}
+              availableMetrics={metadata?.availableMetrics ?? []}
+              payloadFieldNames={metadata?.payloadFieldNames ?? []}
+              payloadFieldTypes={metadata?.payloadFieldTypes}
+              tenantId={tenantId}
+              sceneCode={sceneCode}
+            />
           </div>
         </>
       );
@@ -219,7 +236,10 @@ export default function FlowNodeInspectorDrawer({
                   conditionTypes={metadata?.conditionTypes ?? []}
                   availableMetrics={metadata?.availableMetrics ?? []}
                   payloadFieldNames={metadata?.payloadFieldNames ?? []}
+                  payloadFieldTypes={metadata?.payloadFieldTypes}
                   decisions={decisions}
+                  tenantId={tenantId}
+                  sceneCode={sceneCode}
                 />
                 <div style={{ marginTop: 12, textAlign: 'right' }}>
                   <Button type="primary" loading={savingRef} onClick={saveRef}>{t('editor.flow.drill.save')}</Button>

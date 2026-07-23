@@ -36,8 +36,7 @@ export default function () {
     eventType: 'login',
     subjectId: `s-${n}`,
     eventId: eventId,
-    payload: {},
-    providedMetrics: { 'demo.score': 100 },
+    payload: { amount: 100 },
   });
   const res = http.post(`${BASE}/api/v1/rule/evaluate`, body,
     { headers: { 'Content-Type': 'application/json' } });
