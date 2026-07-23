@@ -89,7 +89,7 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 待定 | gengine | 场景内独立规则并行求值 | §2.29（待实测吞吐瓶颈） |
-| 待定 | ZEN | CEL 实时类型诊断（Level 2，CEL 专属） | `POST /expressions/validate`（弱类型引擎 typeCheck 为 no-op），未立项 |
+| 待定 | ZEN | CEL 实时类型诊断（Level 2，CEL 专属） | **已实现**（`ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput 300ms debounced lint，弱类型引擎 no-op 自动通过） |
 | 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
 | 待定 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 后续（标签位已就绪，聚合未做） |
@@ -149,7 +149,7 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 | 不需要 | LSP（Level 3） | 多引擎各自实现 LSP 投入产出比低 | — |
 | 不需要 | 自然语言转表达式 | 中文运营场景 + 准确度风险 | — |
 | 已吸收 | 变量补全（Level 1，**六引擎通用**） | CodeMirror `completionSource`：顶层变量 + `metrics./payload./subject.` 字段 + dataType 提示；Script 编辑器 + Flow Switch/Transform 三处统一 | `expressionCompletions.ts` + ScriptEditor + ExpressionInput，零后端 |
-| 待定 | CEL 实时类型诊断（Level 2，CEL 专属） | keystroke 级红波浪，复用 CEL `typeCheck` + 编译缓存（弱类型引擎 typeCheck 为 no-op） | `POST /expressions/validate` + 前端 debounced |
+| 已吸收 | CEL 实时类型诊断（Level 2，CEL 专属） | keystroke 级红波浪，复用 CEL `typeCheck` + 编译缓存（弱类型引擎 typeCheck 为 no-op） | `ExpressionValidationService` + controller + ScriptEditor/ExpressionInput debounced lint |
 
 #### 3.2.4 gengine（bilibili）
 

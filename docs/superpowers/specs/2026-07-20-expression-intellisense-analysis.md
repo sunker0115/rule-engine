@@ -1,7 +1,7 @@
 # 表达式编辑器智能辅助：现状与演进
 
 **日期**：2026-07-20
-**状态**：L1 变量补全已落地（2026-07-23，`expressionCompletions.ts` 共享补全源 + ScriptEditor + ExpressionInput，零后端）；L2 类型诊断/L3 LSP/自然语言 仍待定
+**状态**：L1 变量补全已落地（2026-07-23，`expressionCompletions.ts` + ScriptEditor + ExpressionInput，零后端）；L2 类型诊断 已落地（2026-07-23，`ExpressionValidationService` + `POST /admin/v1/expressions/validate` + 前端 debounced lint）；L3 LSP/自然语言 仍待定
 
 ## 一、既有基础（已落地）
 
