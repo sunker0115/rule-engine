@@ -166,20 +166,20 @@
 
 按 CLAUDE.md「功能测试纪律」：打可执行包起真实服务，别用 reactor run 目标。
 
-- [ ] **Step 1:** 打包起服务，确认 V1_39 迁移执行、服务就绪。
-- [ ] **Step 2:** 建两条叶子规则（如布尔树 A、评分卡 B）并发布。
-- [ ] **Step 3:** 建 DECISION_FLOW（RuleRef A → Switch 分支 → RuleRef B → Output）并发布。
-- [ ] **Step 4:** 查 `rule_version.flow_graph` 真落库 + 被引规则版本真冻进快照 + metricDependencies 真是并集（不是空/占位）。
-- [ ] **Step 5:** 评估：验证图遍历输出正确 + trace 覆盖每个节点。
-- [ ] **Step 6:** 环检测：造一条成环 flow，验证发布被拒。
-- [ ] **Step 7:** DB 恒空字段审计：`flow_graph` 该有值的规则真有值；清理本次测试数据回干净基线。
+- [x] **Step 1:** 打包起服务，确认 V1_39 迁移执行、服务就绪。
+- [x] **Step 2:** 建两条叶子规则（如布尔树 A、评分卡 B）并发布。
+- [x] **Step 3:** 建 DECISION_FLOW（RuleRef A → Switch 分支 → RuleRef B → Output）并发布。
+- [x] **Step 4:** 查 `rule_version.flow_graph` 真落库 + 被引规则版本真冻进快照 + metricDependencies 真是并集（不是空/占位）。
+- [x] **Step 5:** 评估：验证图遍历输出正确 + trace 覆盖每个节点。
+- [x] **Step 6:** 环检测：造一条成环 flow，验证发布被拒。
+- [x] **Step 7:** DB 恒空字段审计：`flow_graph` 该有值的规则真有值；清理本次测试数据回干净基线。
 
 ---
 
 ## 收尾
 
-- [ ] `$MVN clean test` 全量兜底（跨模块改实体类型）——**现有 5 形态的单测/集成测试全绿 = 未退化**，任一现有测试变红即为回归，必须查而非改测试就绿。
-- [ ] **防退化回归**：e2e 抽验现有 5 形态各建/发布/评估一条不受影响（尤其 EXPRESSION_SCRIPT，ScriptEditor 改造 + RuleContentHasher 加键后）；确认现有规则 API 响应新增 `flowGraph:null` 不影响既有前端/SDK 消费。
+- [x] `$MVN clean test` 全量兜底（跨模块改实体类型）——**现有 5 形态的单测/集成测试全绿 = 未退化**，任一现有测试变红即为回归，必须查而非改测试就绿。
+- [x] **防退化回归**：e2e 抽验现有 5 形态各建/发布/评估一条不受影响（尤其 EXPRESSION_SCRIPT，ScriptEditor 改造 + RuleContentHasher 加键后）；确认现有规则 API 响应新增 `flowGraph:null` 不影响既有前端/SDK 消费。
 - [x] 更新 01-concepts（新 kind）、03-rule-expression 或新章（flow 节点语义）、05-storage（flow_graph 列）、10-api-contract（DECISION_FLOW 请求体）；改前跑 `doc-consistency-review`。
 - [ ] 派 `rule-engine-reviewer` 审代码 ↔ 文档对齐。
-- [ ] 本计划归档进 `plans/archive/`，设计并入 docs 正文。
+- [x] 本计划归档进 `plans/archive/`，设计并入 docs 正文。
