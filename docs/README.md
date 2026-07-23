@@ -211,6 +211,7 @@
 9  工程骨架 → 09-skeleton            Maven 模块 / 包结构 / SPI 落点 / 依赖方向 / 测试组织
 10 API 契约 → 10-api-contract        对外接口签名 / DTO / errorCode + i18n（前后端共读）
    案例库    → examples/              端到端真实场景(风控/营销/活动…)
+   参考对标  → reference-projects      外部项目结构对照 + 业界对标台账(活文档)
    归档     → archive/                历史 RFC / 被替换的方案
 ```
 

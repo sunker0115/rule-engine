@@ -267,19 +267,11 @@
 
 ### 2.21 XOR 逻辑节点（来源 trae 参考分析 R1）
 
-- **v1 现状**：AST sealed `RuleNode` 支持 `AndNode / OrNode / NotNode / ConditionNode` 四种节点，不含 XOR（"有且仅有一个子条件满足"）。
-- **触发条件**：运营配置出现"非此即彼"类场景——如"下列渠道恰好只来自一个"、"以下优惠类型恰好命中一种"，目前需用 `(A AND NOT B) OR (B AND NOT A)` 的组合规避，可读性差。
-- **演进方向**：
-  - `RuleNode` sealed class 增加 `XorNode { children: List<RuleNode>, displayLabel?: String }`；
-  - `InterpretedExecutor` 补充 XOR 分支：遍历全部子节点（不短路），计数满足节点数，`count == 1` 则 `satisfied=true`；
-  - `ConditionNode.weight` 对 XorNode 无意义（XOR 语义与权重不兼容），评估器忽略子节点 weight；
-  - trace 层：XorNode 记录 `satisfied` + 各子节点 `satisfied` 结果，帮助运营理解"哪个子条件满足了"；
-  - 前端 UI：条件分组卡片新增 XOR 选项（显示文案"有且仅有一个满足"）；
-  - 无 DDL 变更（AST 存 JSON，加节点类型是 JSON key 变更）；
-  - 发布期输入闭合校验（D20 §3）对 XorNode 透明——只关心 ConditionNode 的变量引用，不感知父节点类型。
-- **参考来源**：trae `rule/strategy/RuleXorStrategy.java`，详见 [`docs/superpowers/specs/archive/2026-06-04-trae-reference-design.md`](./specs/archive/2026-06-04-trae-reference-design.md) §三 R1。
-- **已实装（d12-scorecard-evaluator Task 7）**：`XorNode` sealed AST 节点 + `AstJsonCodec` 映射 + `InterpretedExecutor` / `TracingInterpretedExecutor` 全量遍历分支 + 5 个单测覆盖（恰好一个/全部满足/全部不满足/空/两个满足）。
-- **迁移成本**：低（sealed class + evaluator + 前端编辑器，无 DDL，无 schema 迁移）。
+**已实装（d12-scorecard-evaluator Task 7）：`XorNode` 加入 sealed AST，语义为"有且仅有一个子条件满足"。**
+
+- **能力**：`RuleNode` sealed class 含 `XorNode { children, displayLabel? }`；`InterpretedExecutor` / `TracingInterpretedExecutor` 遍历全部子节点（不短路）计数满足数，`count == 1` 则 `satisfied=true`；`AstJsonCodec` 映射 + 5 个单测（恰好一个/全部满足/全部不满足/空/两个满足）。覆盖"非此即彼"场景（"渠道恰好来自一个"等），免去 `(A AND NOT B) OR (B AND NOT A)` 的可读性负担。
+- **边界**：`ConditionNode.weight` 对 XorNode 无意义（XOR 与权重不兼容），评估器忽略子节点 weight；trace 记录 XorNode `satisfied` + 各子节点结果；发布期输入闭合校验（D20 §3）对 XorNode 透明（只认 ConditionNode 变量引用）；无 DDL 变更（AST 存 JSON）。
+- **来源**：trae `rule/strategy/RuleXorStrategy.java`，见 [`reference-projects.md`](./reference-projects.md) §2.1 R1 / [`specs/archive/2026-06-04-trae-reference-design.md`](./superpowers/specs/archive/2026-06-04-trae-reference-design.md) §三 R1。
 
 ### 2.22 基础设施层可观测性（OTLP + LGTM）
 
@@ -393,7 +385,14 @@
 
 ---
 
-## 三、决策时间线
+### 2.29 场景内独立规则并行求值（来源 gengine 对照 — 见 [`reference-projects.md`](./reference-projects.md) §2.4）
+
+**候选，未立项。触发条件不满足前不实现（守 §2 以简为先）。**
+
+- **想法**：gengine 把"一个场景内多条独立规则并行求值"做成一等执行模型（Concurrent / DAG 层内并行）。本项目评估当前是**同步串行**——`SceneRuleIndex` 命中的 N 条规则逐条 `execute`。对**含多条重规则**的场景（多次 `EXTERNAL_HTTP` 取数、`EXPRESSION_SCRIPT` 重算），并行求值可能是真实吞吐杠杆。
+- **为何暂不做**：① metric 预拉**已批量**（D20 `EvalContextAssembler` 一次取全），取数不是逐规则 N+1，最大的并行收益已被批量吃掉；② 轻量条件规则（`AST_BOOLEAN` 比较）求值本身是纳秒级，并行的调度开销可能大于收益；③ 与 D60 同步纯决策定位需权衡（引入并行=引入线程模型/超时/错误聚合复杂度）；④ D75 `DECISION_FLOW` 的图层已能表达"独立分支"，若需要结构化并行应走图而非隐式并行整个场景。
+- **触发条件（满足再展开为 spec）**：出现**实测吞吐瓶颈**证据——某场景规则数多且以重取数/重脚本为主，串行求值 P99 超标，且 benchmark 证明并行确有收益（对齐 D67 预编译的"benchmark 闸先行"范式）。
+- **边界红线**：并行只针对**相互独立**的规则（无 `DECISION_FLOW` RuleRef 依赖）；错误聚合仍归 D15 语义（单规则失败不拖垮整场景）；命中合成（hit policy）在并行收敛后按既有 priority 语义执行，不因并行改变判定结果。
 
 > 来源：`00-decisions.md` 各组标题 + `README.md` §七 版本史。按 D 编号顺序，标记"何时做了什么取舍"。
 
