@@ -130,9 +130,9 @@ class ScheduledTaskAnnotationIntegrationTest {
                 + "status, kind, current_version) VALUES (1, 1, 1, 'fraud-rule-001', '欺诈检测规则', "
                 + "'PUBLISHED', 'AST_BOOLEAN', 1)");
         jdbc.execute("INSERT IGNORE INTO rule_version (id, rule_definition_id, version, "
-                + "condition_ast, decision_bindings, pre_gates, kind, trigger_event_types, "
+                + "body, decision_bindings, pre_gates, kind, trigger_event_types, "
                 + "metric_dependencies, status) VALUES (1, 1, 1, "
-                + "'{\"type\":\"AndNode\",\"children\":[],\"displayLabel\":null,\"weight\":null}', "
+                + "'{\"type\":\"AstBody\",\"conditionAst\":{\"type\":\"AndNode\",\"children\":[],\"displayLabel\":null,\"weight\":null}}', "
                 + "'[{\"decisionCode\":\"REJECT\",\"priority\":100}]', '[]', "
                 + "'AST_BOOLEAN', '[\"login\"]', '[]', 'ACTIVE')");
     }
