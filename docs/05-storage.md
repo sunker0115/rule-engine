@@ -148,7 +148,7 @@ CREATE TABLE connector_definition (
 CREATE TABLE rule_definition (
   id            BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id     BIGINT       NOT NULL,
-  scene_id      BIGINT       NOT NULL COMMENT '关联 scene.id',
+  scene_code    VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '关联 scene.code，业务标识（V1_41 由 scene_id 迁移；D77 消灭代理键翻译层）',
   code          VARCHAR(128) NOT NULL COMMENT '规则标识，租户内唯一',
   name          VARCHAR(255) NOT NULL,
   description   TEXT,
@@ -162,7 +162,7 @@ CREATE TABLE rule_definition (
   updated_by      VARCHAR(64)  COMMENT '最近修改人（D14）',
   updated_at      TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_tenant_code (tenant_id, code),
-  KEY idx_scene_id (scene_id)
+  KEY idx_tenant_scene (tenant_id, scene_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='规则主记录（D12 kind 占位，D19 状态机）';
 ```
 
@@ -424,7 +424,7 @@ Matcher 路由不走 DB（运行时内存倒排索引，D17 派生）。
 | `evaluation_session` | `idx_scene_subject (scene_code, subject_id)` | 按用户查历史评估记录 |
 | `evaluation_session` | （无专用索引）按规则查历史 session 走 `node_trace.rule_version_id` IN 该规则所有版本 id → 取 `evaluation_session_id` → JOIN evaluation_session；不在 evaluation_session 加规则外键索引以避免写热点，JOIN 量小可接受（见 10-api-contract §6.4） | |
 | `node_trace` | `idx_tenant_evaluated (tenant_id, evaluated_at)` | 对账：按租户 + 时间范围聚合 trace 量 |
-| `rule_definition` | `idx_scene_id (scene_id)` | 按 Scene 查规则列表 |
+| `rule_definition` | `idx_tenant_scene (tenant_id, scene_code)` | 按 Scene 查规则列表（D77：scene_code 业务标识，消灭 scene_id 翻译层） |
 | `connector_definition` | UK `uk_tenant_connector (tenant_id, connector_code)` | 租户内连接器码唯一性约束 + 按 code 解析 descriptor（eval 侧 `ConnectorDefinitionResolver` 命中后 Caffeine 缓存） |
 | `rule_version` | UK `uk_def_version (rule_definition_id, version)` | 版本唯一性约束 + 按规则查所有版本 |
 | `audit_log` | `idx_tenant_target (tenant_id, target_type, target_id)`<br>`idx_operated_at (operated_at)` | 查某个规则/Scene 的所有变更记录<br>按时间范围查审计日志 |

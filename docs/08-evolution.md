@@ -82,7 +82,7 @@
 
 ### 2.3 跨 Scene 规则复用（来源 #1）
 
-- **v1 现状**：Rule 属于唯一 Scene，没有跨 Scene 复用机制；相似规则需在多个 Scene 重复配置。
+- **现状（D77 已实装轻量路径）**：`rule_definition` 去 `scene_id` 改 `scene_code`（业务标识，消灭代理键翻译层，V1_41），`ruleCode` 为 tenant 级唯一；**DECISION_FLOW 的 RuleRefNode 已可跨 Scene 引用**（发布期按 tenant 级查被引规则并冻结其自身 sceneCode，D75 冻结机制不变）+ 反向血缘 `GET /admin/v1/rules/{code}/referencedBy`。下述 RuleTemplate / RuleFragment 仍为未实装的更重演进方向（供相似规则批量复用，非 flow 编排场景）。
 - **触发条件**：相同条件逻辑在多个 Scene 重复配置（如"账户开立 < 90 天"同时出现在 risk.transfer / risk.withdrawal / risk.payment），改动时需逐 Scene 同步，易漏、易产生版本漂移。
 - **演进方向**：
   - **`RuleTemplate`**：参数化的规则骨架，变量用占位符，实例化时注入 Scene 专属参数值；发布时膨胀为普通 `rule_version`，评估期不感知模板，公共能力（灰度 / Pre-Gate / Action）完全复用；
@@ -92,7 +92,7 @@
   - 灰度：Template 实例化后继承普通 `rule_version` 的 ROLLOUT Gate 语义，不需要专门机制。
 - **迁移成本**：中（DDL 零变更；核心改动集中在 config-svc 5 处 + 前端 3 处 + 新增反向血缘查询）。
 - **依赖**：§2.10 规则模板市场依赖本节就位。
-- **已进入 OpenSpec**：`openspec/changes/cross-scene-rule-ref`——DECISION_FLOW RuleRefNode 跨 Scene 引用（ruleCode tenant 唯一 DDL 已就位，开放查询 + 反向血缘 + 前端扩展）。详见 `design.md`。
+- **已实装（D77）**：`openspec/changes/cross-scene-rule-ref`——`rule_definition` scene_id→scene_code + DECISION_FLOW RuleRefNode 跨 Scene 引用 + 反向血缘 + 前端 RuleRef 下拉 tenant 全量并按 sceneCode 分组。RuleTemplate / RuleFragment（相似规则批量复用）仍为后续演进。
 
 ### 2.4 规则间依赖与编排（来源 #3）
 

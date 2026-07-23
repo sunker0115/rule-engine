@@ -1,5 +1,8 @@
 # Tasks: cross-scene-rule-ref
 
+> 状态：**全部完成**（2026-07-24，见 00-decisions D77）。config-svc 431 + eval-svc 324 + rule-api Controller 27 测试通过（含 Testcontainers 集成测试真实执行）；前端 `tsc --noEmit` + `vite build` 通过。
+> 说明：T3「PublishService 跨 scene + 快照 sceneCode 正确性」与「code tenant 级唯一」由既有 `FlowResolveValidateTest`（跨 Scene 用例反转为成功冻结、断言 `refSnap.sceneCode()` 取被引规则 sceneCode）+ `PublishServiceTest.createDraft_duplicateCode_throwsIllegalArgument` 覆盖，未另建重复测试。
+
 ## T1. DDL + 实体
 
 - V1_41：rule_definition DROP scene_id，ADD scene_code
