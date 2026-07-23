@@ -92,7 +92,7 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 不需要 | ice | 树形编排+Leaf 副作用执行+多语言 SDK+零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK/文件存储非本项目方向；节点复用(D75 RuleRef)/并行(§2.29)已有等价物 |
-| 待定 | gengine | 场景内独立规则并行求值 | §2.29（待实测吞吐瓶颈） |
+| 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread 并行 fork/join，default_params 配置） |
 | 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
 | 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
 | 待定 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 后续（标签位已就绪，聚合未做） |
@@ -173,7 +173,7 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 | 不需要 | 规则池 GenginePool | 扛 Go build AST 成本 | D6/D17 不可变快照 + D67 预编译 + Caffeine 已有等价物 |
 | 不需要 | salience / StopTag | 优先级 + 提前退出 | priority + hit policy（FIRST_HIT/HIGHEST_PRIORITY），声明式更适配 |
 | 不需要 | DAG 执行模型 `[][]string` | 分层调度、层内并行 | D75 typed 节点 + 发布期冻结更结构化 |
-| 待定 | 场景内独立规则并行求值 | Concurrent / DAG 层内并行；含多重 EXTERNAL_HTTP/SCRIPT 场景或有吞吐收益 | §2.29（待实测瓶颈触发） |
+| 已吸收 | 场景内独立规则并行求值 | Concurrent/MixModel → 收为 `ExecutionMode.PARALLEL`（与 `SceneExecutionStrategy` 正交，VirtualThread，default_params 热更） | §2.29 + `ParallelEvaluator` + `EvalEngine` 并行分支 |
 
 #### 3.2.5 RuleGo（rulego.dev）
 

@@ -391,8 +391,7 @@
 
 - **想法**：gengine 把"一个场景内多条独立规则并行求值"做成一等执行模型（Concurrent / DAG 层内并行）。本项目评估当前是**同步串行**——`SceneRuleIndex` 命中的 N 条规则逐条 `execute`。对**含多条重规则**的场景（多次 `EXTERNAL_HTTP` 取数、`EXPRESSION_SCRIPT` 重算），并行求值可能是真实吞吐杠杆。
 - **为何暂不做**：① metric 预拉**已批量**（D20 `EvalContextAssembler` 一次取全），取数不是逐规则 N+1，最大的并行收益已被批量吃掉；② 轻量条件规则（`AST_BOOLEAN` 比较）求值本身是纳秒级，并行的调度开销可能大于收益；③ 与 D60 同步纯决策定位需权衡（引入并行=引入线程模型/超时/错误聚合复杂度）；④ D75 `DECISION_FLOW` 的图层已能表达"独立分支"，若需要结构化并行应走图而非隐式并行整个场景。
-- **触发条件（满足再展开为 spec）**：出现**实测吞吐瓶颈**证据——某场景规则数多且以重取数/重脚本为主，串行求值 P99 超标，且 benchmark 证明并行确有收益（对齐 D67 预编译的"benchmark 闸先行"范式）。
-- **边界红线**：并行只针对**相互独立**的规则（无 `DECISION_FLOW` RuleRef 依赖）；错误聚合仍归 D15 语义（单规则失败不拖垮整场景）；命中合成（hit policy）在并行收敛后按既有 priority 语义执行，不因并行改变判定结果。
+- **已实现（2026-07-23）**：`ExecutionMode.PARALLEL` + `ParallelEvaluator`（VirtualThread 并行 fork/join，复用现有汇聚逻辑）。模式与 `SceneExecutionStrategy` 正交，默认 SEQUENTIAL——存量零影响。配置经 `scene.default_params.executionMode` 热更生效，前端 defaultParams 编辑器直接设置。设计见 `openspec/changes/parallel-rule-execution/design.md`。
 
 > 来源：`00-decisions.md` 各组标题 + `README.md` §七 版本史。按 D 编号顺序，标记"何时做了什么取舍"。
 
