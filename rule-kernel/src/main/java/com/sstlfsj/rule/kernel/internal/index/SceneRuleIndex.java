@@ -1,5 +1,6 @@
 package com.sstlfsj.rule.kernel.internal.index;
 
+import com.sstlfsj.rule.kernel.api.model.ExecutionMode;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.SceneExecutionStrategy;
 
@@ -123,6 +124,23 @@ public class SceneRuleIndex {
     public SceneExecutionStrategy getStrategy(String tenantId, String sceneCode) {
         return strategies.getOrDefault(tenantId + ":" + sceneCode,
                 SceneExecutionStrategy.HIGHEST_PRIORITY);
+    }
+
+    /**
+     * 从场景 default_params 读取执行模式；无显式设置或值非法时返回 SEQUENTIAL。
+     * default_params 已由 {@link #setDefaultParams} 通过 loader 或事件热更注入。
+     *
+     * @param tenantId  租户标识
+     * @param sceneCode 场景编码
+     * @return 该场景的执行模式
+     */
+    public ExecutionMode getMode(String tenantId, String sceneCode) {
+        Map<String, Object> params = getDefaultParams(tenantId, sceneCode);
+        Object raw = params.get("executionMode");
+        if ("PARALLEL".equalsIgnoreCase(raw instanceof String s ? s : null)) {
+            return ExecutionMode.PARALLEL;
+        }
+        return ExecutionMode.SEQUENTIAL;
     }
 
     /**
