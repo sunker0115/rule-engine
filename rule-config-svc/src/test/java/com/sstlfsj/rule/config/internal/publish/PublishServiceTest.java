@@ -11,6 +11,8 @@ import com.sstlfsj.rule.config.internal.repository.*;
 import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.MetricDependency;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.ScriptBody;
+import com.sstlfsj.rule.kernel.api.model.ScriptSource;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -307,6 +309,22 @@ class PublishServiceTest {
         assertThat(audit.action()).isEqualTo(com.sstlfsj.rule.config.internal.domain.AuditAction.CREATE);
         assertThat(audit.beforeSnapshot()).isSameAs(audit.afterSnapshot());
         assertThat(audit.afterSnapshot()).isEqualTo(new DraftCreatedSnapshot(10L, 20L));
+    }
+
+    @Test
+    void createDraft_kindBodyMismatch_rejected() {
+        // D76：kind=AST_BOOLEAN 但 body 为 ScriptBody → 发布期 kind↔body 一致校验拒绝，规则未落库
+        SceneDef sc = new SceneDef();
+        sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
+        when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
+        lenient().when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+
+        RuleContent content = new RuleContent("mismatch", "AST_BOOLEAN",
+                new ScriptBody(new ScriptSource("x > 1", "CEL")), List.of(), List.of(), List.of());
+        assertThatThrownBy(() -> publishService.createDraft(1L, "PAYMENT", "rule.mm", content, "actor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("KIND_BODY_MISMATCH");
+        verify(ruleDefinitionMapper, never()).insert(any(RuleDefinition.class));
     }
 
     @Test
