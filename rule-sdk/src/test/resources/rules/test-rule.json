@@ -9,11 +9,14 @@
     "triggerEventTypes": ["TEST_EVENT"],
     "decisionBindings": [{"decisionCode": "PASS", "priority": 10}],
     "preGates": [],
-    "conditionAst": {
-      "type": "AndNode",
-      "children": [],
-      "displayLabel": null,
-      "weight": null
+    "body": {
+      "type": "AstBody",
+      "conditionAst": {
+        "type": "AndNode",
+        "children": [],
+        "displayLabel": null,
+        "weight": null
+      }
     }
   }
 ]

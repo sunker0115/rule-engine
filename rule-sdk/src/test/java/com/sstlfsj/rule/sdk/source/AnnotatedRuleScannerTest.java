@@ -41,7 +41,7 @@ class AnnotatedRuleScannerTest {
         assertThat(snap.metricDependencies())
                 .extracting(MetricDependency::metricCode).containsExactly("total");
         // 合成算子键 = conditionAst 叶子的 conditionType,且 evaluators 含同键
-        String condType = ((com.sstlfsj.rule.kernel.api.model.ast.ConditionNode) snap.conditionAst()).conditionType();
+        String condType = ((com.sstlfsj.rule.kernel.api.model.ast.ConditionNode) ((com.sstlfsj.rule.kernel.api.model.AstBody) snap.body()).conditionAst()).conditionType();
         assertThat(r.evaluators()).containsKey(condType);
     }
 
