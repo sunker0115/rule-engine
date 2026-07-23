@@ -190,6 +190,11 @@ class SceneServiceImpl implements SceneService {
                         + "（须为合法 IANA 时区名，如 Asia/Shanghai）");
             }
         }
+        Object mode = defaultParams.get("executionMode");
+        if (mode != null && !(mode instanceof String s && ("SEQUENTIAL".equals(s) || "PARALLEL".equals(s)))) {
+            throw new IllegalArgumentException(
+                    "非法 scene default_params.executionMode=" + mode + "，合法值：SEQUENTIAL / PARALLEL");
+        }
     }
 
     private SceneDetailDto toDto(SceneDef scene) {
