@@ -4,27 +4,30 @@
   "code": "demo-high-risk-login",
   "name": "高风险登录拦截",
   "kind": "AST_BOOLEAN",
-  "conditionAst": {
-    "type": "AndNode",
-    "displayLabel": "全部满足",
-    "children": [
-      {
-        "type": "ConditionNode",
-        "displayLabel": "金额>1000",
-        "conditionType": "GT",
-        "metricCode": "amount",
-        "valueRef": "PAYLOAD",
-        "params": { "threshold": 1000 }
-      },
-      {
-        "type": "ConditionNode",
-        "displayLabel": "高风险国家",
-        "conditionType": "IN",
-        "metricCode": "country",
-        "valueRef": "PAYLOAD",
-        "params": { "values": ["US", "RU", "IR"] }
-      }
-    ]
+  "body": {
+    "type": "AstBody",
+    "conditionAst": {
+      "type": "AndNode",
+      "displayLabel": "全部满足",
+      "children": [
+        {
+          "type": "ConditionNode",
+          "displayLabel": "金额>1000",
+          "conditionType": "GT",
+          "metricCode": "amount",
+          "valueRef": "PAYLOAD",
+          "params": { "threshold": 1000 }
+        },
+        {
+          "type": "ConditionNode",
+          "displayLabel": "高风险国家",
+          "conditionType": "IN",
+          "metricCode": "country",
+          "valueRef": "PAYLOAD",
+          "params": { "values": ["US", "RU", "IR"] }
+        }
+      ]
+    }
   },
   "decisionBindings": [{ "decisionCode": "REJECT" }],
   "preGates": [{ "gateType": "ROLLOUT", "params": { "percentage": 100 } }],

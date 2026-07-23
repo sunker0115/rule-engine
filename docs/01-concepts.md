@@ -209,7 +209,7 @@ metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）�
 | `name / description` | 给运营看 |
 | `kind` | 规则形态枚举：`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE` / `EXPRESSION_SCRIPT` / `DECISION_FLOW`（均已实装）。发布校验按 kind 校验各自结构 schema（AST 系校验 AST，EXPRESSION_SCRIPT 校验脚本，DECISION_FLOW 校验决策图 flowGraph；详见下方 **kind 多态边界**） |
 | `triggerEventTypes` | 数组：哪些 eventType 触发本规则（如 `["trade.completed"]`） |
-| `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 AST 系 kind 用各自的 JSON 内部结构，与 ast 互斥）。**三承载互斥**：`conditionAst`（AST 系四形态）/ `scriptSource`（`EXPRESSION_SCRIPT`）/ `flowGraph`（`DECISION_FLOW`）按 kind 三选一，同一 RuleVersion 只填其一，另两者为 null |
+| `ast` | 单棵 `RuleNode` AST 树，整体求值为 boolean（当 `kind=AST_BOOLEAN` 时使用；其他 AST 系 kind 用各自的 JSON 内部结构，与 ast 互斥）。**判定主体多态载体（D76）**：三承载收敛为单一 sealed `RuleBody`，三变体 `AstBody(conditionAst)`（AST 系四形态）/ `ScriptBody(script)`（`EXPRESSION_SCRIPT`）/ `FlowBody(flowGraph, referencedSnapshots)`（`DECISION_FLOW`）按 kind 择一，`type` 判别；持久化为 `rule_version.body` 单列，发布期校验 kind↔body 一致 |
 | `preGates` | 准入闸门列表（v1 仅灰度命中 ROLLOUT，D52） |
 | `status` | `rule_definition` 状态机：`DRAFT` → `PUBLISHED`；`PUBLISHED ↔ DISABLED` 独立分支。版本行（`rule_version`）有自己的状态 `DRAFT` / `ACTIVE` / `SUPERSEDED`（D56）：createDraft/newVersion 产 DRAFT 行，publish 把最新 DRAFT 行**原地翻 ACTIVE**（不增版本）并 supersede 旧 ACTIVE，无需 INSERT 新行（D19/D56） |
 | `current_version` | 指向当前生效 `rule_version` 行的**主键 id**（`BIGINT`，即 `rule_version.id`，而非业务版本序号 `rule_version.version`）。`PUBLISHED` / `DISABLED` 状态下有值；`DISABLED` 切换不变更 `current_version`，恢复 `PUBLISHED` 沿用同一版本。`rule_definition` 不冗余持有"最大版本号"——避免双写不一致（D19） |
