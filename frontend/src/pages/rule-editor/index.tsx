@@ -203,6 +203,7 @@ export default function RuleEditor() {
         eventTypes={metadata?.eventTypes ?? ruleDetail.triggerEventTypes ?? []}
         payloadFieldNames={metadata?.payloadFieldNames ?? []}
         payloadFieldTypes={metadata?.payloadFieldTypes}
+        paramKeys={ruleDetail.body?.type === 'ScriptBody' ? Object.keys(ruleDetail.body.script?.params ?? {}) : []}
       />
 
       <RuleAnalysisDrawer

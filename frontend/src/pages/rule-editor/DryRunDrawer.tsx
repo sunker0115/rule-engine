@@ -18,6 +18,8 @@ interface Props {
   eventTypes: string[];
   payloadFieldNames: string[];
   payloadFieldTypes?: Record<string, string>;
+  /** 模板参数名（来自 script.params），试算时可选择并覆盖。 */
+  paramKeys?: string[];
 }
 
 interface PayloadPair {
@@ -28,7 +30,7 @@ interface PayloadPair {
 
 let nextPairId = 0;
 
-export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabel, ruleId, sceneCode, eventTypes, payloadFieldNames, payloadFieldTypes }: Props) {
+export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabel, ruleId, sceneCode, eventTypes, payloadFieldNames, payloadFieldTypes, paramKeys }: Props) {
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
@@ -185,13 +187,16 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
           {pairs.map(p => (
             <Row gutter={8} key={p.id} style={{ marginBottom: 8 }}>
               <Col flex="auto">
-                {payloadFieldNames.length > 0 ? (
+                {(payloadFieldNames.length > 0 || (paramKeys?.length ?? 0) > 0) ? (
                   <Select
                     showSearch
                     value={p.key || undefined}
                     onChange={(val) => updatePair(p.id, 'key', val ?? '')}
                     placeholder={te('dryRun.field')}
-                    options={payloadFieldNames.map((f) => ({ value: f, label: f }))}
+                    options={[
+                      ...(paramKeys ?? []).map((k) => ({ value: `params.${k}`, label: `📋 params.${k}` })),
+                      ...payloadFieldNames.map((f) => ({ value: f, label: f })),
+                    ]}
                     allowClear
                     style={{ width: '100%' }}
                   />
