@@ -3,11 +3,12 @@ import { Button, Card, Form, Input, Select, InputNumber, DatePicker, Switch, mes
 import { ArrowLeftOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useTenantStore } from '@/store/tenantStore';
 import { useSceneStore } from '@/store/sceneStore';
 import { getTemplate, instantiateTemplate } from '@/api/template';
+import { listTenants } from '@/api/tenant';
 import { ROUTES, route } from '@/constants/routes';
 import type { TemplateDetail, TemplateSlot } from '@/types/template';
+import type { TenantInfo } from '@/types';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -15,21 +16,33 @@ const { Title, Text } = Typography;
 export default function TemplateInstantiate() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { currentId } = useTenantStore();
   const { list: scenes, loadList: loadScenes } = useSceneStore();
   const { t } = useTranslation('template');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [tmpl, setTmpl] = useState<TemplateDetail | null>(null);
+  const [tenants, setTenants] = useState<TenantInfo[]>([]);
+  const [targetTenantId, setTargetTenantId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
   useEffect(() => {
-    if (currentId && code) {
+    listTenants().then((list) => {
+      const filtered = (list ?? []).filter((t) => t.code !== 'SYSTEM');
+      setTenants(filtered);
+      if (filtered.length > 0 && !targetTenantId) setTargetTenantId(filtered[0].id);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (code) {
       setLoading(true);
-      loadScenes(currentId);
-      getTemplate(currentId, code).then(setTmpl).finally(() => setLoading(false));
+      getTemplate(1, code).then(setTmpl).finally(() => setLoading(false));
     }
-  }, [currentId, code]);
+  }, [code]);
+
+  useEffect(() => {
+    if (targetTenantId) loadScenes(targetTenantId);
+  }, [targetTenantId, loadScenes]);
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
@@ -46,7 +59,7 @@ export default function TemplateInstantiate() {
     setSubmitting(true);
     try {
       const result = await instantiateTemplate(code!, {
-        tenantId: currentId,
+        tenantId: targetTenantId,
         ruleCode: values.ruleCode,
         ruleName: values.ruleName,
         sceneCode: values.sceneCode,
@@ -123,6 +136,15 @@ export default function TemplateInstantiate() {
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item label={t('instantiate.selectTenant') ?? '目标租户'} required>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              value={targetTenantId}
+              onChange={(v) => setTargetTenantId(v)}
+              options={tenants.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+            />
+          </Form.Item>
           <Form.Item name="sceneCode" label={t('instantiate.selectScene') ?? '目标场景'} rules={[{ required: true }]}>
             <Select
               showSearch

@@ -3,40 +3,34 @@ import { Table, Button, Modal, Form, Input, Select, message, Space, Tag, Popconf
 import { PlusOutlined, EditOutlined, SendOutlined, StopOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useTenantStore } from '@/store/tenantStore';
 import { listTemplates, createTemplate, publishTemplate, disableTemplate, enableTemplate } from '@/api/template';
 import { ROUTES, route } from '@/constants/routes';
 import { getRuleKindOptions } from '@/constants/enums';
 import type { RuleTemplate } from '@/types/template';
 
+const SYSTEM_TENANT = 1; // 模板市场固定使用 SYSTEM 租户
 const STATUS_COLOR: Record<string, string> = { DRAFT: 'blue', PUBLISHED: 'green', DISABLED: 'red' };
 
 export default function TemplateList() {
   const navigate = useNavigate();
-  const { currentId, activeList, setCurrentById } = useTenantStore();
   const { t } = useTranslation('template');
-  // enum.kind.* 键在 rule ns，复用 rule 命名空间的 t 解析（与 rule-list 单一真相源一致）
   const tr = useTranslation('rule').t;
   const tc = useTranslation('common').t;
   const [templates, setTemplates] = useState<RuleTemplate[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tenantFilter, setTenantFilter] = useState<number | undefined>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [form] = Form.useForm();
 
-  const tenantId = tenantFilter ?? currentId ?? 0;
-
   const load = async () => {
-    if (!tenantId) return;
     setLoading(true);
     try {
-      const data = await listTemplates(tenantId);
+      const data = await listTemplates(SYSTEM_TENANT);
       setTemplates(data);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [tenantId]);
+  useEffect(() => { load(); }, []);
 
   const handleCreate = async () => {
     const values = await form.validateFields();
@@ -58,7 +52,7 @@ export default function TemplateList() {
       } else {
         bodySkeleton = { type: 'AstBody', conditionAst: { type: 'AndNode', children: [] } };
       }
-      await createTemplate(currentId!, {
+      await createTemplate(SYSTEM_TENANT, {
         ...values, bodySkeleton, slots: [], bindings: [],
       });
       message.success(tc('message.createSuccess'));
