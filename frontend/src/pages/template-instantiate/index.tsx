@@ -52,7 +52,7 @@ export default function TemplateInstantiate() {
         sceneCode: values.sceneCode,
         triggerEventTypes: values.triggerEventTypes || [],
         slotValues,
-      });
+      }, 'admin');
       message.success(t('instantiate.success'));
       navigate(route(ROUTES.RULE_EDITOR, { ruleId: result.ruleDefinitionId }));
     } catch { /* interceptor */ }

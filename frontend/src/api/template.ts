@@ -66,10 +66,11 @@ export async function enableTemplate(tenantId: number, code: string, actorId: st
   });
 }
 
-export async function instantiateTemplate(code: string, body: Record<string, unknown>) {
+export async function instantiateTemplate(code: string, body: Record<string, unknown>, actorId: string) {
   const res = await apiClient.post<ApiResponse<DraftCreatedResult>>(
     ENDPOINTS.TEMPLATE_INSTANTIATE(code),
     body,
+    { headers: { 'X-Actor-Id': actorId } },
   );
   return res.data.data;
 }
