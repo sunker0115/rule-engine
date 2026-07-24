@@ -20,4 +20,8 @@ public interface RuleTemplateVersionMapper extends BaseMapper<RuleTemplateVersio
     /** 查指定模板的 DRAFT 版本快照，不存在返回 null。 */
     @Select("SELECT * FROM rule_template_version WHERE template_id = #{templateId} AND status = 'DRAFT' ORDER BY version DESC LIMIT 1")
     RuleTemplateVersion findDraft(Long templateId);
+
+    /** 查指定模板的最大版本号，无记录时返回 0。 */
+    @Select("SELECT COALESCE(MAX(version), 0) FROM rule_template_version WHERE template_id = #{templateId}")
+    int findMaxVersion(Long templateId);
 }

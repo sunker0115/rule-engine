@@ -4,9 +4,13 @@ import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.SlotBinding;
 import com.sstlfsj.rule.config.api.dto.SlotConstraint;
+import com.sstlfsj.rule.config.api.dto.SlotKind;
+import com.sstlfsj.rule.config.api.dto.SlotResolutionContext;
+import com.sstlfsj.rule.config.api.dto.TemplateDetail;
 import com.sstlfsj.rule.config.api.dto.TemplateSlot;
 import com.sstlfsj.rule.config.api.dto.ValueDataType;
 import com.sstlfsj.rule.config.api.service.RuleTemplateService;
+import com.sstlfsj.rule.config.api.service.SlotRefResolver;
 import com.sstlfsj.rule.config.internal.domain.ActorType;
 import com.sstlfsj.rule.config.internal.domain.AuditAction;
 import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
@@ -26,6 +30,8 @@ import com.sstlfsj.rule.kernel.api.model.FlowBody;
 import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.ScriptBody;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,12 +43,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 规则模板管理实现（v2）：body skeleton + SlotBinding sidecar，binder SPI 按 body 变体分派，
- * 覆盖全 6 kind；无 token 逻辑、无 exportFromRule。
- * 模板身份存 rule_template，版本快照存 rule_template_version，溯源存 rule_template_instantiation。
+ * 规则模板管理实现（v2 版本化）：身份（RuleTemplate）+ 快照（RuleTemplateVersion）分离，
+ * SlotRefResolver SPI 接入，实例化流水线（REF pass-through / DISABLED 拦截 / 溯源 best-effort）。
  */
 @Service
 public class RuleTemplateServiceImpl implements RuleTemplateService {
+
+    private static final Logger log = LoggerFactory.getLogger(RuleTemplateServiceImpl.class);
 
     private final RuleTemplateMapper templateMapper;
     private final RuleTemplateVersionMapper versionMapper;
@@ -50,19 +57,22 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
     private final PublishService publishService;
     private final ApplicationEventPublisher eventPublisher;
     private final List<TemplateBinder> binders;
+    private final List<SlotRefResolver> refResolvers;
 
     public RuleTemplateServiceImpl(RuleTemplateMapper templateMapper,
                                    RuleTemplateVersionMapper versionMapper,
                                    RuleTemplateInstantiationMapper instantiationMapper,
                                    PublishService publishService,
                                    ApplicationEventPublisher eventPublisher,
-                                   List<TemplateBinder> binders) {
+                                   List<TemplateBinder> binders,
+                                   List<SlotRefResolver> refResolvers) {
         this.templateMapper = templateMapper;
         this.versionMapper = versionMapper;
         this.instantiationMapper = instantiationMapper;
         this.publishService = publishService;
         this.eventPublisher = eventPublisher;
         this.binders = binders;
+        this.refResolvers = refResolvers;
     }
 
     @Override
@@ -75,13 +85,11 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         TemplateBinder binder = pickBinder(bodySkeleton);
         binder.validate(bodySkeleton, safe(bindings), safe(slots));
 
-        // 预检 (tenant,code) 唯一性
         if (templateMapper.findByTenantAndCode(tenantId, code) != null) {
             throw new IllegalArgumentException("模板编码已存在: " + code);
         }
 
         LocalDateTime now = LocalDateTime.now();
-        // 写入身份
         RuleTemplate tmpl = new RuleTemplate();
         tmpl.setCode(code);
         tmpl.setTenantId(tenantId);
@@ -95,7 +103,6 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         tmpl.setUpdatedAt(now);
         templateMapper.insert(tmpl);
 
-        // 写入 v1 版本快照
         RuleTemplateVersion v1 = new RuleTemplateVersion();
         v1.setTemplateId(tmpl.getId());
         v1.setVersion(1);
@@ -120,17 +127,19 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
     public void update(Long tenantId, String code, String name, String kind,
                        String description, RuleBody bodySkeleton,
                        List<TemplateSlot> slots, List<SlotBinding> bindings, String actorId) {
-        RuleTemplate tmpl = requireDraft(tenantId, code);
+        RuleTemplate tmpl = requireTemplate(tenantId, code);
+        if (tmpl.getStatus() == TemplateStatus.DISABLED) {
+            throw new IllegalArgumentException("DISABLED 模板不可编辑: " + code);
+        }
         RuleKind rk = validateKind(kind);
         validateKindBody(rk, bodySkeleton);
         TemplateBinder binder = pickBinder(bodySkeleton);
         binder.validate(bodySkeleton, safe(bindings), safe(slots));
 
         RuleTemplateVersion draft = versionMapper.findDraft(tmpl.getId());
-        var before = toSnapshot(tmpl, draft);
-
+        RuleTemplateSnapshot before = toSnapshot(tmpl, draft);
         LocalDateTime now = LocalDateTime.now();
-        // 更新身份
+
         tmpl.setName(name);
         tmpl.setDescription(description);
         tmpl.setKind(rk);
@@ -138,20 +147,30 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         tmpl.setUpdatedAt(now);
         templateMapper.updateById(tmpl);
 
-        // 写入新版本快照
-        int nextVersion = draft != null ? draft.getVersion() + 1 : 1;
-        RuleTemplateVersion next = new RuleTemplateVersion();
-        next.setTemplateId(tmpl.getId());
-        next.setVersion(nextVersion);
-        next.setBodySkeleton(bodySkeleton);
-        next.setSlots(safe(slots));
-        next.setBindings(safe(bindings));
-        next.setStatus(TemplateStatus.DRAFT);
-        next.setCreatedBy(actorId);
-        next.setCreatedAt(now);
-        versionMapper.insert(next);
+        if (draft != null) {
+            // 有 DRAFT 版本 → 原地更新（同 version，同 row）
+            draft.setBodySkeleton(bodySkeleton);
+            draft.setSlots(safe(slots));
+            draft.setBindings(safe(bindings));
+            draft.setCreatedBy(actorId);
+            versionMapper.updateById(draft);
+        } else {
+            // 无 DRAFT（已 PUBLISHED）→ 新建 v(n+1) DRAFT
+            int maxVersion = versionMapper.findMaxVersion(tmpl.getId());
+            RuleTemplateVersion next = new RuleTemplateVersion();
+            next.setTemplateId(tmpl.getId());
+            next.setVersion(maxVersion + 1);
+            next.setBodySkeleton(bodySkeleton);
+            next.setSlots(safe(slots));
+            next.setBindings(safe(bindings));
+            next.setStatus(TemplateStatus.DRAFT);
+            next.setCreatedBy(actorId);
+            next.setCreatedAt(now);
+            versionMapper.insert(next);
+            draft = next;
+        }
 
-        var after = toSnapshot(tmpl, next);
+        var after = toSnapshot(tmpl, draft);
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, ActorType.USER, AuditAction.UPDATE,
                 AuditTargetType.RULE_TEMPLATE, tmpl.getId().toString(),
@@ -161,7 +180,10 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
     @Override
     @Transactional
     public void publish(Long tenantId, String code, String actorId) {
-        RuleTemplate tmpl = requireDraft(tenantId, code);
+        RuleTemplate tmpl = requireTemplate(tenantId, code);
+        if (tmpl.getStatus() == TemplateStatus.DISABLED) {
+            throw new IllegalArgumentException("DISABLED 模板不可发布: " + code);
+        }
         RuleTemplateVersion draft = versionMapper.findDraft(tmpl.getId());
         if (draft == null) {
             throw new IllegalArgumentException("模板无 DRAFT 版本可发布: " + code);
@@ -172,24 +194,16 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         var before = toSnapshot(tmpl, draft);
         LocalDateTime now = LocalDateTime.now();
 
-        // 发布：插入 PUBLISHED 版本快照 + 更新身份状态
-        RuleTemplateVersion published = new RuleTemplateVersion();
-        published.setTemplateId(tmpl.getId());
-        published.setVersion(draft.getVersion() + 1);
-        published.setBodySkeleton(draft.getBodySkeleton());
-        published.setSlots(draft.getSlots());
-        published.setBindings(draft.getBindings());
-        published.setStatus(TemplateStatus.PUBLISHED);
-        published.setCreatedBy(actorId);
-        published.setCreatedAt(now);
-        versionMapper.insert(published);
+        // DRAFT 版本原地翻为 PUBLISHED
+        draft.setStatus(TemplateStatus.PUBLISHED);
+        versionMapper.updateById(draft);
 
         tmpl.setStatus(TemplateStatus.PUBLISHED);
         tmpl.setUpdatedBy(actorId);
         tmpl.setUpdatedAt(now);
         templateMapper.updateById(tmpl);
 
-        var after = toSnapshot(tmpl, published);
+        var after = toSnapshot(tmpl, draft);
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, ActorType.USER, AuditAction.PUBLISH,
                 AuditTargetType.RULE_TEMPLATE, tmpl.getId().toString(),
@@ -203,17 +217,19 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         if (tmpl.getStatus() != TemplateStatus.PUBLISHED) {
             throw new IllegalArgumentException("仅 PUBLISHED 状态的模板可禁用");
         }
-        var before = toSnapshot(tmpl, versionMapper.findLatestPublished(tmpl.getId()));
+        RuleTemplateVersion published = versionMapper.findLatestPublished(tmpl.getId());
+        var before = toSnapshot(tmpl, published);
+        LocalDateTime now = LocalDateTime.now();
         tmpl.setStatus(TemplateStatus.DISABLED);
         tmpl.setUpdatedBy(actorId);
-        tmpl.setUpdatedAt(LocalDateTime.now());
+        tmpl.setUpdatedAt(now);
         templateMapper.updateById(tmpl);
 
-        var after = toSnapshot(tmpl, versionMapper.findLatestPublished(tmpl.getId()));
+        var after = toSnapshot(tmpl, published);
         eventPublisher.publishEvent(new OperationAuditedEvent(
                 tenantId, actorId, ActorType.USER, AuditAction.DISABLE,
                 AuditTargetType.RULE_TEMPLATE, tmpl.getId().toString(),
-                before, after, LocalDateTime.now()));
+                before, after, now));
     }
 
     @Override
@@ -221,12 +237,36 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         if (status != null && !status.isBlank()) {
             return templateMapper.findByTenantId(tenantId, TemplateStatus.valueOf(status));
         }
-        return templateMapper.findByTenantId(tenantId);
+        return templateMapper.findVisibleByTenant(tenantId);
     }
 
     @Override
     public RuleTemplate get(Long tenantId, String code) {
-        return requireTemplate(tenantId, code);
+        RuleTemplate tmpl = templateMapper.findVisibleByCode(tenantId, code);
+        if (tmpl == null) {
+            throw new IllegalArgumentException("模板不存在: code=" + code);
+        }
+        return tmpl;
+    }
+
+    @Override
+    public TemplateDetail getVersion(Long tenantId, String code) {
+        RuleTemplate tmpl = requireTemplate(tenantId, code);
+        RuleTemplateVersion ver = versionMapper.findLatestPublished(tmpl.getId());
+        if (ver == null) {
+            throw new IllegalArgumentException("模板无版本快照: code=" + code);
+        }
+        return new TemplateDetail(tmpl, ver);
+    }
+
+    @Override
+    public TemplateDetail getVersion(Long tenantId, String code, Integer version) {
+        RuleTemplate tmpl = requireTemplate(tenantId, code);
+        RuleTemplateVersion ver = versionMapper.findByVersion(tmpl.getId(), version);
+        if (ver == null) {
+            throw new IllegalArgumentException("模板版本不存在: code=" + code + " version=" + version);
+        }
+        return new TemplateDetail(tmpl, ver);
     }
 
     @Override
@@ -235,36 +275,51 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
                                           String ruleCode, String ruleName,
                                           String sceneCode, List<String> triggerEventTypes,
                                           Map<String, Object> slotValues, String actorId) {
-        RuleTemplate tmpl = templateMapper.findPublishedByCode(tenantId, templateCode);
+        // 1. 查模板（可见性），DISABLED 拒绝
+        RuleTemplate tmpl = templateMapper.findVisibleByCode(tenantId, templateCode);
         if (tmpl == null) {
-            throw new IllegalArgumentException("模板不存在或未发布: " + templateCode);
+            throw new IllegalArgumentException("模板不存在: code=" + templateCode);
         }
+        if (tmpl.getStatus() == TemplateStatus.DISABLED) {
+            throw new IllegalArgumentException("DISABLED 模板不可实例化: " + templateCode);
+        }
+
+        // 2. 取最新 PUBLISHED 版本
         RuleTemplateVersion published = versionMapper.findLatestPublished(tmpl.getId());
         if (published == null) {
             throw new IllegalArgumentException("模板无 PUBLISHED 版本: " + templateCode);
         }
+
+        // 3. 校验 slot 值并构建 coercedValues
+        SlotResolutionContext ctx = new SlotResolutionContext(tenantId, sceneCode);
+        Map<String, Object> coerced = validateAndCoerce(safe(published.getSlots()),
+                slotValues != null ? slotValues : Map.of(), ctx);
+
+        // 4. binder.bind
         TemplateBinder binder = pickBinder(published.getBodySkeleton());
-        Map<String, Object> values = slotValues != null ? slotValues : Map.of();
-        Map<String, Object> coerced = validateAndCoerce(safe(published.getSlots()), values);
         RuleBody bound = binder.bind(published.getBodySkeleton(), safe(published.getBindings()), coerced);
 
-        RuleContent content = new RuleContent(ruleName, published.getBodySkeleton() instanceof AstBody
-                ? RuleKind.AST_BOOLEAN.tag() : tmpl.getKind().tag(), bound,
+        // 5. createDraft（5 参版，callerTenantId）
+        RuleContent content = new RuleContent(ruleName, tmpl.getKind().tag(), bound,
                 List.of(), List.of(),
                 triggerEventTypes != null ? triggerEventTypes : List.of());
         DraftCreatedResult result = publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId);
 
-        // 写入溯源记录
-        RuleTemplateInstantiation ri = new RuleTemplateInstantiation();
-        ri.setTemplateId(tmpl.getId());
-        ri.setTemplateVersionId(published.getId());
-        ri.setTemplateVersion(published.getVersion());
-        ri.setRuleDefinitionId(result.ruleDefinitionId());
-        ri.setRuleVersionId(result.ruleVersionId());
-        ri.setSlotValues(coerced);
-        ri.setInstantiatedAt(LocalDateTime.now());
-        ri.setInstantiatedBy(actorId);
-        instantiationMapper.insert(ri);
+        // 6. 溯源（best-effort）
+        try {
+            RuleTemplateInstantiation ri = new RuleTemplateInstantiation();
+            ri.setTemplateId(tmpl.getId());
+            ri.setTemplateVersionId(published.getId());
+            ri.setTemplateVersion(published.getVersion());
+            ri.setRuleDefinitionId(result.ruleDefinitionId());
+            ri.setRuleVersionId(result.ruleVersionId());
+            ri.setSlotValues(coerced);
+            ri.setInstantiatedAt(LocalDateTime.now());
+            ri.setInstantiatedBy(actorId);
+            instantiationMapper.insert(ri);
+        } catch (Exception e) {
+            log.warn("模板溯源记录写入失败（best-effort）: template={} rule={}", templateCode, ruleCode, e);
+        }
 
         return result;
     }
@@ -303,36 +358,39 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         return tmpl;
     }
 
-    private RuleTemplate requireDraft(Long tenantId, String code) {
-        RuleTemplate tmpl = requireTemplate(tenantId, code);
-        if (tmpl.getStatus() != TemplateStatus.DRAFT) {
-            throw new IllegalArgumentException("仅 DRAFT 状态的模板可编辑/发布");
-        }
-        return tmpl;
-    }
-
     private RuleTemplateSnapshot toSnapshot(RuleTemplate tmpl, RuleTemplateVersion ver) {
         if (ver == null) {
             return RuleTemplateSnapshot.builder()
                     .id(tmpl.getId()).code(tmpl.getCode())
-                    .name(tmpl.getName()).status(tmpl.getStatus().name())
-                    .version(0)
+                    .tenantId(tmpl.getTenantId())
+                    .name(tmpl.getName()).description(tmpl.getDescription())
+                    .kind(tmpl.getKind()).status(tmpl.getStatus().name())
+                    .versionId(null).version(0)
                     .bodySkeleton(null).slots(List.of()).bindings(List.of())
                     .build();
         }
         return RuleTemplateSnapshot.builder()
                 .id(tmpl.getId()).code(tmpl.getCode())
-                .name(tmpl.getName()).status(tmpl.getStatus().name())
-                .version(ver.getVersion())
+                .tenantId(tmpl.getTenantId())
+                .name(tmpl.getName()).description(tmpl.getDescription())
+                .kind(tmpl.getKind()).status(tmpl.getStatus().name())
+                .versionId(ver.getId()).version(ver.getVersion())
                 .bodySkeleton(ver.getBodySkeleton())
                 .slots(ver.getSlots())
                 .bindings(ver.getBindings())
                 .build();
     }
 
-    private Map<String, Object> validateAndCoerce(List<TemplateSlot> slots, Map<String, Object> slotValues) {
+    /**
+     * 校验并强转 slot 填值。
+     * VALUE slot 经 {@link #coerceValue} 类型强转；REF slot (METRIC_REF/DECISION_REF/RULE_REF)
+     * 经 {@link SlotRefResolver} 校验后原值 pass-through。
+     */
+    private Map<String, Object> validateAndCoerce(List<TemplateSlot> slots, Map<String, Object> slotValues,
+                                                   SlotResolutionContext ctx) {
         Map<String, TemplateSlot> byKey = new HashMap<>();
         slots.forEach(s -> byKey.put(s.key(), s));
+        // 必填检查
         for (TemplateSlot def : slots) {
             if (def.required() && !slotValues.containsKey(def.key())) {
                 throw new IllegalArgumentException("缺少必填 slot: " + def.key());
@@ -344,11 +402,31 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
             if (def == null) {
                 throw new IllegalArgumentException("slotValues 包含未声明的 slot: " + entry.getKey());
             }
-            Object value = coerceValue(entry.getValue(), def.dataType());
-            validateConstraint(def, value);
-            coerced.put(entry.getKey(), value);
+            Object value = entry.getValue();
+            if (def.kind() == SlotKind.VALUE) {
+                // VALUE slot：类型强转 + 约束校验
+                Object coercedValue = coerceValue(value, def.dataType());
+                validateConstraint(def, coercedValue);
+                coerced.put(entry.getKey(), coercedValue);
+            } else {
+                // REF slot：经 SlotRefResolver 校验后原值 pass-through
+                validateRefSlot(def, value, ctx);
+                coerced.put(entry.getKey(), value);
+            }
         }
         return coerced;
+    }
+
+    /** 为 REF slot 找到匹配的 SlotRefResolver 并校验。 */
+    private void validateRefSlot(TemplateSlot def, Object value, SlotResolutionContext ctx) {
+        String strValue = value == null ? null : String.valueOf(value);
+        for (SlotRefResolver resolver : refResolvers) {
+            if (resolver.supports(def.kind())) {
+                resolver.validate(strValue, def, ctx);
+                return;
+            }
+        }
+        throw new IllegalArgumentException("TEMPLATE_SLOT_REF_UNSUPPORTED: 无 SlotRefResolver 支持 kind=" + def.kind());
     }
 
     private void validateConstraint(TemplateSlot def, Object coerced) {
