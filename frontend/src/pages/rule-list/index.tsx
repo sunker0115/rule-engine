@@ -55,6 +55,17 @@ export default function RuleList() {
 
   const tenantId = tenantFilter ?? currentId ?? 0;
 
+  // 挂载时自动选中第一个非 SYSTEM 租户（平台租户不应有规则）
+  useEffect(() => {
+    if (activeList.length > 0 && !tenantFilter) {
+      const firstBiz = activeList.find((t) => t.code !== 'SYSTEM');
+      if (firstBiz) {
+        setTenantFilter(firstBiz.id);
+        setCurrentById(firstBiz.id);
+      }
+    }
+  }, [activeList]);
+
   /** 打开创建弹窗时拉取引擎语言列表 */
   const openCreateModal = async () => {
     form.resetFields();
@@ -131,7 +142,7 @@ export default function RuleList() {
         value={tenantFilter ?? currentId ?? undefined}
         onChange={(v) => { setTenantFilter(v); setCurrentById(v); setPage(1); }}
         allowClear
-        options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+        options={activeList.filter((t) => t.code !== 'SYSTEM').map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
         style={{ width: 200 }}
       />
       <Select
