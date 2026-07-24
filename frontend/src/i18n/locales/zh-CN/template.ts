@@ -37,6 +37,13 @@ const template: TemplateTranslation = {
     jsonPointer: 'JSON Pointer',
     jsonPointerPlaceholder: '/conditionAst/children/0/params/threshold',
     addBinding: '添加绑定',
+    referenceScene: '参照场景',
+    referenceScenePlaceholder: '选择场景以加载指标/字段/决策元数据',
+    referenceSceneHint: '仅用于取指标/字段/决策元数据辅助编辑，不写入模板',
+    parameterize: '参数化位置',
+    parameterizePlaceholder: '选择规则体中要参数化的位置',
+    parameterizeScriptHint: '脚本类型经下方参数表的「参数化」开关声明 slot',
+    slotEnum: '枚举值', slotMin: '最小值', slotMax: '最大值',
   },
   instantiate: {
     selectScene: '目标场景',

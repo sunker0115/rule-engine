@@ -805,6 +805,9 @@ export interface TemplateTranslation {
     bindingSlot: string;
     jsonPointer: string; jsonPointerPlaceholder: string;
     addBinding: string;
+    referenceScene: string; referenceScenePlaceholder: string; referenceSceneHint: string;
+    parameterize: string; parameterizePlaceholder: string; parameterizeScriptHint: string;
+    slotEnum: string; slotMin: string; slotMax: string;
   };
   instantiate: {
     selectScene: string;

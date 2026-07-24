@@ -37,6 +37,13 @@ const template: TemplateTranslation = {
     jsonPointer: 'JSON Pointer',
     jsonPointerPlaceholder: '/conditionAst/children/0/params/threshold',
     addBinding: 'Add Binding',
+    referenceScene: 'Reference Scene',
+    referenceScenePlaceholder: 'Select a scene to load metric/field/decision metadata',
+    referenceSceneHint: 'Authoring metadata only (metrics/fields/decisions); not saved into the template',
+    parameterize: 'Parameterize Position',
+    parameterizePlaceholder: 'Select a position in the rule body to parameterize',
+    parameterizeScriptHint: 'For scripts, declare slots via the “Parameterize” switch in the params table below',
+    slotEnum: 'Enum', slotMin: 'Min', slotMax: 'Max',
   },
   instantiate: {
     selectScene: 'Target Scene',
