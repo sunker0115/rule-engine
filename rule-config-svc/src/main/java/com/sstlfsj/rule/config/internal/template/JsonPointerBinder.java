@@ -84,7 +84,6 @@ public class JsonPointerBinder implements TemplateBinder {
     public RuleBody bind(RuleBody skeleton, List<SlotBinding> bindings, Map<String, Object> values) {
         JsonNode tree = objectMapper.convertValue(skeleton, JsonNode.class);
         for (SlotBinding b : bindings) {
-            // 省略的可选 slot（values 无该键）→ 保留 skeleton 默认值，不用 null 覆盖
             if (!values.containsKey(b.slotKey())) continue;
             if (b.target() instanceof JsonPointerTarget jpt) {
                 JsonPointer pointer = JsonPointer.compile(jpt.jsonPointer());
@@ -92,10 +91,8 @@ public class JsonPointerBinder implements TemplateBinder {
                 JsonPointer last = pointer.last();
                 JsonNode valueNode = objectMapper.convertValue(values.get(b.slotKey()), JsonNode.class);
                 if (parentNode instanceof ObjectNode parent) {
-                    // 对象属性位：末段为属性名
                     parent.set(last.getMatchingProperty(), valueNode);
                 } else if (parentNode instanceof ArrayNode array) {
-                    // 数组元素位（如 DecisionTable Row.conditions[i]）：末段为下标
                     int idx = last.getMatchingIndex();
                     if (idx >= 0 && idx < array.size()) {
                         array.set(idx, valueNode);

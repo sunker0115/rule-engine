@@ -47,6 +47,7 @@ public final class ConditionTypeCatalog {
      * @return 规格；null = 缺席放行
      */
     public static OperatorSpec spec(String conditionType) {
+        if (conditionType == null) return null;
         return CATALOG.get(conditionType);
     }
 
