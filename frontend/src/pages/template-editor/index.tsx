@@ -72,6 +72,16 @@ export default function TemplateEditor() {
       setSlots(data.slots ?? []);
       setBindings(data.bindings ?? []);
       setBodySkeleton(data.bodySkeleton ?? EMPTY_BODY);
+
+      // DECISION_FLOW：tmpl 确认后立刻拉 tenant 全量已发布规则写入 store
+      // 不依赖 kind 的 effect 时序——tmpl 加载完即同步，供画布 RuleRef 选取
+      if (data.kind === 'DECISION_FLOW') {
+        listRules(currentId, undefined, { page: 1, size: 500 }).then((rules) => {
+          setFlowSceneRules((rules.items ?? [])
+            .filter((r) => r.code !== data.code && r.status === 'PUBLISHED' && r.kind !== 'DECISION_FLOW')
+            .map((r) => ({ code: r.code, name: r.name, ruleDefinitionId: r.ruleDefinitionId, kind: r.kind, sceneCode: r.sceneCode })));
+        });
+      }
     } finally { setLoading(false); }
   };
 
@@ -83,16 +93,6 @@ export default function TemplateEditor() {
     getTenantMetadata(currentId).then((m) => setMetadata(m));
     listDecisions(currentId).then((d) => setDecisions(d ?? []));
   }, [currentId]);
-
-  // DECISION_FLOW：拉取 tenant 全量已发布规则写入 store，供画布 RuleRef 选取（照 CenterPanel）
-  useEffect(() => {
-    if (!currentId || kind !== 'DECISION_FLOW') return;
-    listRules(currentId, undefined, { page: 1, size: 500 }).then((data) => {
-      setFlowSceneRules((data.items ?? [])
-        .filter((r) => r.code !== tmpl?.code && r.status === 'PUBLISHED' && r.kind !== 'DECISION_FLOW')
-        .map((r) => ({ code: r.code, name: r.name, ruleDefinitionId: r.ruleDefinitionId, kind: r.kind, sceneCode: r.sceneCode })));
-    });
-  }, [currentId, kind, tmpl?.code, setFlowSceneRules]);
 
 
   const carriers = bodyToCarriers(bodySkeleton);
