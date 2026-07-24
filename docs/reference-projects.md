@@ -93,7 +93,7 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 不需要 | ice | 树形编排+Leaf 副作用执行+多语言 SDK+零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK/文件存储非本项目方向；节点复用(D75 RuleRef)/并行(§2.29)已有等价物 |
-| 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
+| 待触发（实验性铺路） | Drools | guided rule template（参数化模板） | D74 实验性预实现（默认关 `rule.template.enabled=false`），受 Drools 启发但定位为 authoring 便利层，待真实业务场景出现再开开关 |
 
 ### 3.2 分项目（细对比·融合版）
 
@@ -195,7 +195,7 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
-| 已吸收 | 规则集完备性/冲突校验 | Drools Verifier 思路已吸收进 B31 静态分析（命名/语义对齐）；决策表 + guided template 入 D42/D74 | §2.26 B31 |
+| 已吸收 | 规则集完备性/冲突校验 | Drools Verifier 思路已吸收进 B31 静态分析（命名/语义对齐）；决策表入 D42；guided template 为 D74 实验性预实现（默认关，待真实场景触发） | §2.26 B31 |
 | 不需要 | RETE 前向/后向推理引擎 | 本项目刻意非 RETE：不可变快照 (D6) + 倒排索引 (D17) + 每事件无状态求值 | — |
 | 不需要 | CEP 复杂事件处理 | 事件流处理留 Flink/CEP 扩展，不内嵌引擎 | §2.24 |
 | 不需要 | DRL 命令式规则 DSL | 同 gengine·grule：命令式 + 副作用，D60 纯决策拒绝 | — |
