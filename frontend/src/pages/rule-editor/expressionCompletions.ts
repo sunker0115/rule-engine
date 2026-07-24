@@ -2,8 +2,15 @@ import type { CompletionContext, CompletionResult } from '@codemirror/autocomple
 import type { MetricDescriptor } from '@/types';
 
 /**
- * 六引擎通用的表达式补全源：命名空间 metrics. / payload. / subject. 跨引擎共享。
+ * 六引擎通用的表达式补全源：命名空间 metrics. / payload. / subject. / params.（模板常量）跨引擎共享。
  * 顶层变量（now / subjectId / tenantId）不依赖 "." 触发，在任意位置都可补全。
+ *
+ * @param ctx CodeMirror 补全上下文
+ * @param metrics 可用指标描述符，供 metrics.<code> 补全
+ * @param payloadFields 事件载荷字段名，供 payload.<field> 补全
+ * @param payloadTypes 载荷字段名→类型映射，用于补全项的类型提示
+ * @param paramKeys 本规则冻结常量键集，供 params.<键> 补全
+ * @return 补全结果；无匹配时返回 null
  */
 export function expressionCompletions(
   ctx: CompletionContext,

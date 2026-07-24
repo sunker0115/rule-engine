@@ -300,7 +300,7 @@ export default function TemplateEditor() {
           renderItem={(item) => (
             <List.Item
               actions={editable ? [
-                <Popconfirm key="del" title={`${t('action.disable')} ${item.key}?`} onConfirm={() => removeSlot(item.key)}>
+                <Popconfirm key="del" title={`${t('action.remove')} ${item.key}?`} onConfirm={() => removeSlot(item.key)}>
                   <Button size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>,
               ] : []}

@@ -157,7 +157,7 @@ export interface MetricTranslation {
       STREAM: string;
     };
     dataType: {
-      LONG: string; DOUBLE: string; STRING: string;
+      LONG: string; DOUBLE: string; DECIMAL: string; STRING: string;
       BOOLEAN: string; LIST: string; DATE: string; DATETIME: string;
     };
   };
@@ -775,6 +775,7 @@ export interface TemplateTranslation {
     create: string; edit: string; publish: string; publishConfirm: string;
     disable: string; disableConfirm: string;
     instantiate: string;
+    remove: string;
     back: string; save: string; saveSuccess: string;
   };
   column: {
@@ -796,15 +797,10 @@ export interface TemplateTranslation {
     basicInfo: string;
     bodySkeleton: string;
     slots: string;
-    slotKey: string; slotKeyPlaceholder: string;
+    slotKey: string;
     slotLabel: string; slotLabelPlaceholder: string;
     slotDataType: string;
     slotRequired: string;
-    addSlot: string;
-    bindings: string;
-    bindingSlot: string;
-    jsonPointer: string; jsonPointerPlaceholder: string;
-    addBinding: string;
     referenceScene: string; referenceScenePlaceholder: string; referenceSceneHint: string;
     parameterize: string; parameterizePlaceholder: string; parameterizeScriptHint: string;
     slotEnum: string; slotMin: string; slotMax: string;

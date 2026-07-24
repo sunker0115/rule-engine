@@ -24,6 +24,7 @@ const metric: MetricTranslation = {
     dataType: {
       LONG: '整数',
       DOUBLE: '浮点',
+      DECIMAL: '高精度小数',
       STRING: '字符串',
       BOOLEAN: '布尔',
       LIST: '列表',

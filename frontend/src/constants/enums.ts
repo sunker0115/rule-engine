@@ -52,6 +52,7 @@ export function getDataTypeOptions(t: TFunction) {
   return [
     { value: 'LONG',     label: t('enum.dataType.LONG')     },
     { value: 'DOUBLE',   label: t('enum.dataType.DOUBLE')   },
+    { value: 'DECIMAL',  label: t('enum.dataType.DECIMAL')  },
     { value: 'STRING',   label: t('enum.dataType.STRING')   },
     { value: 'BOOLEAN',  label: t('enum.dataType.BOOLEAN')  },
     { value: 'LIST',     label: t('enum.dataType.LIST')     },
