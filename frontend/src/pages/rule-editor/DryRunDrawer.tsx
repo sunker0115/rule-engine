@@ -91,7 +91,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
     return {
       tenantCode: current ?? '',
       sceneCode,
-      eventType: values.eventType,
+      eventType: values.eventType || 'default',
       subjectId: values.subjectId,
       eventId: `dry-${Date.now()}`,
       occurredAt: new Date().toISOString(),
@@ -170,10 +170,14 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
         </div>
       )}
       <Form form={form} layout="vertical" onValuesChange={(_, all) => setFormValues(all)}>
-        <Form.Item name="eventType" label={te('dryRun.eventType')} rules={[{ required: eventTypes.length > 0 }]}>
-          {eventTypes.length > 0
-            ? <Select options={eventTypes.map((e) => ({ value: e, label: e }))} />
-            : <Input placeholder={te('dryRun.eventTypeAny')} />}
+        <Form.Item name="eventType" label={te('dryRun.eventType')} initialValue="default" rules={[{ required: true }]}>
+          <Select
+            mode="tags"
+            maxCount={1}
+            placeholder={te('dryRun.eventTypeAny')}
+            options={eventTypes.map((e) => ({ value: e, label: e }))}
+            style={{ width: '100%' }}
+          />
         </Form.Item>
         <Form.Item name="subjectId" label={te('dryRun.subjectId')} rules={[{ required: true }]}>
           <Input />
