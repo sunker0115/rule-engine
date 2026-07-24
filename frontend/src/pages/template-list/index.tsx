@@ -132,16 +132,6 @@ export default function TemplateList() {
         {t('action.create')}
       </Button>
     </div>
-    <Space style={{ marginBottom: 16 }}>
-      <Select
-        placeholder={tc('tenant.placeholder')}
-        value={tenantFilter ?? currentId ?? undefined}
-        onChange={(v) => { setTenantFilter(v); setCurrentById(v); }}
-        allowClear
-        options={activeList.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
-        style={{ width: 200 }}
-      />
-    </Space>
     <Table rowKey="id" columns={columns} dataSource={templates} loading={loading} pagination={false} />
 
     <Modal title={t('action.create')} open={modalOpen} confirmLoading={confirmLoading}
