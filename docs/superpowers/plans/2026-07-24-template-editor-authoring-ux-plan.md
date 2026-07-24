@@ -22,6 +22,12 @@
 - **纯逻辑必写 vitest**(introspect / expressionCompletions);组件写渲染 smoke + 关键行为(SlotValueInput 按类型渲染、参数表增删改);集成/编辑器整体靠手动核对(§Task 7)。
 - 匹配现有 React/AntD/i18n 风格,不引新依赖。
 
+**Task 5 与 Task 6 的接口契约(参数化列 ↔ slots/bindings 接线):**
+- ScriptEditor 新增 optional prop `onParamSlotToggle?: (key: string, enabled: boolean, dataType: DataType) => void`。
+  - 模板编辑器(Task 6)传入:勾选 → 自动 `push({key,label,dataType,required:false})` 到 slots + 对应 binding `/script/params/<key>`;取消 → 移除 slot+binding。
+  - 规则编辑器(editableParams=false):不传 → 参数化列隐藏。
+- 模板编辑器的 `+ 参数化` 按钮(AST/Flow 位选)和脚本参数表的参数化列**走同一条 slots/bindings 面板**——前者从内省器候选生成,后者从 param key + callback 生成,两者统一对接模板编辑器的 slots/bindings state。
+
 ## 复用锚点(实现者先读这些,别臆造)
 
 - `frontend/src/pages/rule-editor/RuleBodyEditor.tsx` —— prop 驱动,props: `{kind, ast, script, onAstChange, onScriptChange, conditionTypes, availableMetrics, payloadFieldNames, payloadFieldTypes, decisions, tenantId, sceneCode}`;覆盖 5 kind(非 flow)。
@@ -100,9 +106,9 @@ if (prefix === 'params') {
 ```
 函数签名加 `paramKeys: string[]`(放末位)。
 
-- [ ] **Step 2: 改所有调用点传 paramKeys**
+- [ ] **Step 2: 改所有调用点传 paramKeys(先传空,Task 5 再接真源)**
 
-grep `expressionCompletions(` 找调用点(ScriptEditor 的 `completeFn`、flow 的 ExpressionInput 若有)。ScriptEditor 传 `Object.keys(script?.params ?? {})`;其它调用点暂传 `[]`(Task 4 再接 ScriptEditor 的真实源)。
+grep `expressionCompletions(` 找调用点(ScriptEditor 的 `completeFn`、flow 的 ExpressionInput 若有)。**本轮全部传 `[]`**(空数组)——ScriptEditor 还没接 params 表,params 尚未存在,不能传真键(tsc 也报错)。Task 5 再来把 ScriptEditor 调用改为真源。
 
 - [ ] **Step 3: 写 vitest(纯逻辑)**
 
@@ -337,8 +343,13 @@ Props 加 `editableParams?: boolean`。`script` 类型已含 `params?`(Task 1)�
 - 可编辑(true):表格,每行 参数名(Input)/类型(Select DataType)/默认值(SlotValueInput)/🗑;底部 `+ 添加参数`。新增/改/删都构造新 params 对象 → `onChange({ source, lang, params: next })`。
 - 类型不持久化到 body(script.params 只存值);编辑期用一个 `Record<string, DataType>` 局部 state 记类型(仅 UI,或从值推断)。默认值走 SlotValueInput。
 - 补全:`completeFn` 里把 `Object.keys(script?.params ?? {})` 作为 paramKeys 传给 `expressionCompletions`(接 Task 2)。
+- **顺带修 RightPanel 切 lang 丢 params(数据丢失 bug):**  `frontend/src/pages/rule-editor/RightPanel.tsx` 切换脚本语言时 `setScript({ lang, source: script?.source ?? '' })` 没带 `params`——补 `params: script?.params`。与 Task 1 修的 round-trip 同宗。
 
-(完整实现读现有 ScriptEditor 结构后照其风格写;params 表是新增 UI 块,不改 CodeMirror 部分,只在 return 里追加。)
+(完整实现读现有 ScriptEditor/RightPanel 后照其风格写;params 表是新增 UI 块,不改 CodeMirror 部分,只在 return 里追加。)
+
+- [ ] **Step 2b: 加 `onParamSlotToggle` prop(接口契约,供 Task 6 接线)**:
+  类型签名为 `(key: string, enabled: boolean, dataType: DataType) => void`。模板编辑器传入——勾选时在模板编辑器的 slots/bindings state 里 push/remove。规则编辑器不传 →"参数化"列不渲染。
+- [ ] **Step 2c: 修复 RightPanel 丢 params**
 
 - [ ] **Step 2: 验证**
 
