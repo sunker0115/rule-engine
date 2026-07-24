@@ -4,7 +4,7 @@ import { PlusOutlined, EditOutlined, SendOutlined, StopOutlined, ThunderboltOutl
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
-import { listTemplates, createTemplate, publishTemplate, disableTemplate } from '@/api/template';
+import { listTemplates, createTemplate, publishTemplate, disableTemplate, enableTemplate } from '@/api/template';
 import { ROUTES, route } from '@/constants/routes';
 import { getRuleKindOptions } from '@/constants/enums';
 import type { RuleTemplate } from '@/types/template';
@@ -69,15 +69,23 @@ export default function TemplateList() {
     finally { setConfirmLoading(false); }
   };
 
+  const ACTOR = 'admin'; // 临时：项目无全局 auth 体系
+
   const handlePublish = async (code: string) => {
-    await publishTemplate(tenantId, code);
+    await publishTemplate(tenantId, code, ACTOR);
     message.success(tc('message.publishSuccess'));
     load();
   };
 
   const handleDisable = async (code: string) => {
-    await disableTemplate(tenantId, code);
+    await disableTemplate(tenantId, code, ACTOR);
     message.success(tc('message.disabled'));
+    load();
+  };
+
+  const handleEnable = async (code: string) => {
+    await enableTemplate(tenantId, code, ACTOR);
+    message.success(tc('message.enabled'));
     load();
   };
 
@@ -85,14 +93,12 @@ export default function TemplateList() {
     { title: t('column.name'), dataIndex: 'name', key: 'name' },
     { title: t('column.code'), dataIndex: 'code', key: 'code' },
     { title: t('column.kind'), dataIndex: 'kind', key: 'kind', width: 150 },
-    { title: t('column.version'), dataIndex: 'version', key: 'version', width: 80 },
-    { title: t('column.slots'), dataIndex: 'slots', key: 'slots', width: 80, render: (s: unknown[]) => (s ?? []).length },
     {
       title: t('column.status'), dataIndex: 'status', key: 'status', width: 100,
       render: (status: string) => <Tag color={STATUS_COLOR[status]}>{t(`enum.status.${status}`)}</Tag>,
     },
     {
-      title: t('column.actions'), key: 'actions', width: 280,
+      title: t('column.actions'), key: 'actions', width: 320,
       render: (_: unknown, record: RuleTemplate) => (
         <Space>
           <Button size="small" icon={<EditOutlined />}
@@ -114,6 +120,11 @@ export default function TemplateList() {
                 <Button size="small" danger icon={<StopOutlined />}>{t('action.disable')}</Button>
               </Popconfirm>
             </>
+          )}
+          {record.status === 'DISABLED' && (
+            <Popconfirm title={t('action.enableConfirm')} onConfirm={() => handleEnable(record.code)}>
+              <Button size="small" icon={<SendOutlined />}>{t('action.enable')}</Button>
+            </Popconfirm>
           )}
         </Space>
       ),

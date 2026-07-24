@@ -1,16 +1,16 @@
 import type { RuleBody, RuleKind } from '@/types';
-import type { DataType } from '@/types/template';
+import type { ValueDataType } from '@/types/template';
 
 /** 可参数化位置候选：JsonPointer 寻址 + 展示标签 + 当前值 + 推断类型。 */
 export interface Candidate {
   jsonPointer: string;
   label: string;
   currentValue: unknown;
-  dataType: DataType;
+  dataType: ValueDataType;
 }
 
 /** 按 JS 运行时值推断槽位 dataType（整数→LONG / 小数→DOUBLE / 布尔→BOOLEAN / 数组→LIST / 其余→STRING）。 */
-function inferType(v: unknown): DataType {
+function inferType(v: unknown): ValueDataType {
   if (typeof v === 'boolean') return 'BOOLEAN';
   if (typeof v === 'number') return Number.isInteger(v) ? 'LONG' : 'DOUBLE';
   if (Array.isArray(v)) return 'LIST';

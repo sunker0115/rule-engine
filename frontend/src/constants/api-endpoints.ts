@@ -96,12 +96,14 @@ export const ENDPOINTS = {
   TENANT_LIST: `${ADMIN}/tenants`,
   TENANT_TOGGLE_STATUS: (id: number) => `${ADMIN}/tenants/${id}/status`,
 
-  // Template (D74)
+  // Template V2
   TEMPLATE_LIST:        `${ADMIN}/rule-templates`,
   TEMPLATE_DETAIL:      (code: string) => `${ADMIN}/rule-templates/${code}`,
   TEMPLATE_CREATE:      `${ADMIN}/rule-templates`,
   TEMPLATE_UPDATE:      (code: string) => `${ADMIN}/rule-templates/${code}`,
   TEMPLATE_PUBLISH:     (code: string) => `${ADMIN}/rule-templates/${code}/publish`,
   TEMPLATE_DISABLE:     (code: string) => `${ADMIN}/rule-templates/${code}/disable`,
+  TEMPLATE_ENABLE:      (code: string) => `${ADMIN}/rule-templates/${code}/enable`,
   TEMPLATE_INSTANTIATE: (code: string) => `${ADMIN}/rule-templates/${code}/instantiate`,
+  TEMPLATE_VERSIONS:    (code: string) => `${ADMIN}/rule-templates/${code}/versions`,
 } as const;

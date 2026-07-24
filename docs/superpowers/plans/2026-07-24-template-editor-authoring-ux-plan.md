@@ -4,6 +4,8 @@
 
 **Goal:** 把 Task 12 占位模板编辑器(JSON 文本框 + 手打 JsonPointer + 仅 AST kind)正式化为架构清晰、复用规则编辑器的授权界面:全 6 kind、脚本 params 表、点选式声明参数化(不暴露 JsonPointer)、参照场景。
 
+> **后端 V2 已落地（2026-07-25）**：本计划写于后端 V2 实现之前，当时假设"后端 0 改动"。后端 V2 已完成的变更会影响前端，见下文「后端 V2 契约变更」。
+
 **Architecture(按关注点分层,自底向上):**
 
 ```
@@ -16,9 +18,40 @@ L4 收尾         i18n · 全量 tsc/vitest · 手动 e2e
 
 **Tech Stack:** React + TS + AntD + zustand + CodeMirror + i18next;Vite + Vitest(jsdom + @testing-library)。门槛 = `npm test` + `npx tsc -b` 干净 + L4 手验。后端 0 改动。
 
+## 后端 V2 契约变更（2026-07-25 对齐）
+
+本计划最初写于后端 V2 实现之前。后端 V2 已于 2026-07-25 落地（13 commits），以下变更影响前端类型和 API 调用：
+
+### 类型层断裂
+
+| 原前端类型 | 后端 V2 实际 | 影响 |
+|-----------|-------------|------|
+| `RuleTemplate` 含 `bodySkeleton/slots/bindings/version` | 列表返回**身份字段 only** | `template-editor` 读 `data.slots` 会 `undefined` |
+| `TemplateSlot` 无 `kind`，`dataType` 必填 | 后端 `TemplateSlot{kind: SlotKind, dataType?: ValueDataType, required}` | 创建/更新缺 `kind` 后端直接拒绝 |
+| 无 `TemplateDetail`/`RuleTemplateVersion`/`SlotKind` 类型 | 后端新增 | GET 详情返回 `TemplateDetail{template, version}` |
+
+### API 层断裂
+
+| 缺失 | 后端端点 | 说明 |
+|------|---------|------|
+| `enableTemplate()` | `POST /{code}/enable` | 后端收尾时新增，前端计划未覆盖 |
+| `getVersions()` | `GET /{code}/versions` | 版本历史查询 |
+| `getTemplate` 返回类型变更 | `GET /{code}` → `TemplateDetail` | 不再是 `RuleTemplate` |
+| `publish`/`disable` 缺少 `X-Actor-Id` header | 后端 publish/disable/enable 都需要 | 当前请求只传 `X-Tenant-Id` |
+
+### 已修复（2026-07-25 前端对齐提交）
+
+- `types/template.ts`：重写，新增 `SlotKind`、`ValueDataType`、`TemplateDetail`、`RuleTemplateVersion`；`TemplateSlot` 加 `kind`；`SlotConstraint` 加 `allowedDataTypes`；`DataType` 保留为 `ValueDataType` 别名
+- `api/template.ts`：新增 `enableTemplate`/`listVersions`/`getVersion`；`publishTemplate`/`disableTemplate`/`enableTemplate` 加 `actorId` 参数；`getTemplate` 返回 `TemplateDetail`
+- `constants/api-endpoints.ts`：新增 `TEMPLATE_ENABLE`/`TEMPLATE_VERSIONS`
+- `pages/template-instantiate`：`TemplateDetail` 解包（`tmpl.slots`→`tmpl.version.slots`）；REF slot 文本输入占位
+- `pages/template-editor`：`TemplateDetail` 解包；slot 构造加 `kind: 'VALUE'`；`DataType`→`ValueDataType`
+- `pages/template-list`：新增 `enable` 按钮（DISABLED 行）；publish/disable 补 `actorId`
+- `introspect.ts`：`DataType`→`ValueDataType`
+
 ## Global Constraints
 
-- **后端 0 改动**;不碰 kernel/config/api;功能已默认开启。
+- **后端 V2 已落地**；不再"后端 0 改动"；前端需对齐 `TemplateDetail` / `SlotKind` / `enable` / `actorId` 等契约变更。
 - **能复用就复用,不重造**:body 编辑走 `RuleBodyEditor`/`FlowCanvasEditor`;kind 下拉走 `getRuleKindOptions(t)`;payload 提取走抽共享的 `extractPayloadSchema`;值输入 `SlotValueInput`;补全 `expressionCompletions`。新增仅限"确无可复用"的原语。
 - **单一真相源**:脚本参数 = `script.params`(喂补全/默认/slot 候选);kind 选项 = `getRuleKindOptions`;可参数化位置 = `introspectPositions`(AST/Flow)+ 参数表(Script)。
 - **用户不接触 JsonPointer**:位置靠"选/勾"派生,pointer 藏在 binding 背后。
@@ -42,7 +75,7 @@ L4 收尾         i18n · 全量 tsc/vitest · 手动 e2e
 | `getSceneMetadata` | **`@/api/metadata`**(非 scene) | `getScene` 在 `@/api/scene` |
 | `extractPayloadSchema` | `pages/rule-editor/index.tsx:27-46`(**局部未导出**) | payload 字段提取;参照场景需抽共享(L1) |
 | `RightPanel` | `pages/rule-editor/RightPanel.tsx` | 切脚本 lang 处 `setScript({lang,source})` **丢 params**(L0 要修) |
-| 类型 | `types/rule.ts` / `types/template.ts` | `RuleBody`/`BodyCarriers`/`carriersToBody`;`TemplateSlot`/`SlotBinding`/`JsonPointerTarget`/`DataType`(勿改契约) |
+| 类型 | `types/rule.ts` / `types/template.ts` | `RuleBody`/`BodyCarriers`/`carriersToBody`;`TemplateSlot{kind,dataType?,required,constraint?}`/`SlotBinding`/`JsonPointerTarget`/`ValueDataType`；**注：已对齐 V2**——`TemplateSlot` 加 `kind:SlotKind`、`dataType` 改为 `ValueDataType?`；新增 `SlotKind`/`TemplateDetail`/`RuleTemplateVersion`；`DataType` 保留为 `ValueDataType` 别名 |
 | 实例化页 | `pages/template-instantiate/` | 现用 DatePicker(dayjs)+constraint+enum Select;**本轮不动**(见 L1 SlotValueInput 说明) |
 
 ---

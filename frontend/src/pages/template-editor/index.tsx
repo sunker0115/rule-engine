@@ -13,19 +13,19 @@ import { listRules } from '@/api/rule';
 import { getRuleKindOptions } from '@/constants/enums';
 import { ROUTES } from '@/constants/routes';
 import { bodyToCarriers, carriersToBody } from '@/types';
-import type { RuleTemplate, TemplateSlot, SlotBinding, SlotConstraint, DataType } from '@/types/template';
+import type { TemplateDetail, TemplateSlot, SlotBinding, SlotConstraint, ValueDataType } from '@/types/template';
 import type { RuleBody, RuleKind, SceneMetadata, DecisionItem } from '@/types';
 import RuleBodyEditor from '@/pages/rule-editor/RuleBodyEditor';
 import FlowCanvasEditor from '@/pages/rule-editor/FlowCanvasEditor';
 import { introspectPositions } from './introspect';
 
 const { Text } = Typography;
-const DATA_TYPES: DataType[] = ['LONG', 'DOUBLE', 'DECIMAL', 'STRING', 'BOOLEAN', 'DATE', 'DATETIME', 'LIST'];
+const DATA_TYPES: ValueDataType[] = ['LONG', 'DOUBLE', 'DECIMAL', 'STRING', 'BOOLEAN', 'DATE', 'DATETIME', 'LIST'];
 
 /** 数值类型——支持 Min/Max 约束。 */
-const NUMERIC_TYPES: DataType[] = ['LONG', 'DOUBLE', 'DECIMAL'];
+const NUMERIC_TYPES: ValueDataType[] = ['LONG', 'DOUBLE', 'DECIMAL'];
 /** 枚举类型——支持 enumValues 约束。 */
-const ENUM_TYPES: DataType[] = ['STRING', 'LIST'];
+const ENUM_TYPES: ValueDataType[] = ['STRING', 'LIST'];
 const EMPTY_BODY: RuleBody = { type: 'AstBody', conditionAst: null };
 
 /** 由 JsonPointer 末段（数字段回退父段）派生一个稳定、去重的 slotKey。 */
@@ -55,7 +55,7 @@ export default function TemplateEditor() {
   const tr = useTranslation('rule').t;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tmpl, setTmpl] = useState<RuleTemplate | null>(null);
+  const [tmpl, setTmpl] = useState<TemplateDetail | null>(null);
   const [form] = Form.useForm();
   const [slots, setSlots] = useState<TemplateSlot[]>([]);
   const [bindings, setBindings] = useState<SlotBinding[]>([]);
@@ -65,8 +65,8 @@ export default function TemplateEditor() {
   const [metadata, setMetadata] = useState<SceneMetadata | null>(null);
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
 
-  const editable = tmpl?.status === 'DRAFT';
-  const kind: RuleKind = tmpl?.kind ?? 'AST_BOOLEAN';
+  const editable = tmpl?.template?.status === 'DRAFT';
+  const kind: RuleKind = tmpl?.template?.kind ?? 'AST_BOOLEAN';
 
   const load = async () => {
     if (!currentId || !code) return;
@@ -74,17 +74,17 @@ export default function TemplateEditor() {
     try {
       const data = await getTemplate(currentId, code);
       setTmpl(data);
-      form.setFieldsValue({ name: data.name, kind: data.kind, description: data.description });
-      setSlots(data.slots ?? []);
-      setBindings(data.bindings ?? []);
-      setBodySkeleton(data.bodySkeleton ?? EMPTY_BODY);
+      form.setFieldsValue({ name: data.template.name, kind: data.template.kind, description: data.template.description });
+      setSlots(data.version.slots ?? []);
+      setBindings(data.version.bindings ?? []);
+      setBodySkeleton(data.version.bodySkeleton ?? EMPTY_BODY);
 
       // DECISION_FLOW：tmpl 确认后立刻拉 tenant 全量已发布规则写入 store
       // 不依赖 kind 的 effect 时序——tmpl 加载完即同步，供画布 RuleRef 选取
-      if (data.kind === 'DECISION_FLOW') {
+      if (data.template.kind === 'DECISION_FLOW') {
         listRules(currentId, undefined, { page: 1, size: 500 }).then((rules) => {
           setFlowSceneRules((rules.items ?? [])
-            .filter((r) => r.code !== data.code && r.status === 'PUBLISHED' && r.kind !== 'DECISION_FLOW')
+            .filter((r) => r.code !== data.template.code && r.status === 'PUBLISHED' && r.kind !== 'DECISION_FLOW')
             .map((r) => ({ code: r.code, name: r.name, ruleDefinitionId: r.ruleDefinitionId, kind: r.kind, sceneCode: r.sceneCode })));
         });
       }
@@ -121,12 +121,12 @@ export default function TemplateEditor() {
     const c = candidates.find((x) => x.jsonPointer === jsonPointer);
     if (!c) return;
     const key = deriveSlotKey(c.jsonPointer, new Set(slots.map((s) => s.key)));
-    setSlots((prev) => [...prev, { key, label: c.label, dataType: c.dataType, required: false }]);
+    setSlots((prev) => [...prev, { key, label: c.label, kind: 'VALUE' as const, dataType: c.dataType, required: false }]);
     setBindings((prev) => [...prev, { slotKey: key, target: { type: 'JsonPointerTarget', jsonPointer: c.jsonPointer } }]);
   };
 
   // Script 入口：参数表开关 → slotKey==param 键，binding 指向 /script/params/<key>
-  const handleParamSlotToggle = (key: string, enabled: boolean, dataType: DataType) => {
+  const handleParamSlotToggle = (key: string, enabled: boolean, dataType: ValueDataType) => {
     const jsonPointer = `/script/params/${key}`;
     setBindings((prev) => {
       const exists = prev.some((b) => b.target.jsonPointer === jsonPointer);
@@ -136,7 +136,7 @@ export default function TemplateEditor() {
     });
     setSlots((prev) => {
       const exists = prev.some((s) => s.key === key);
-      if (enabled && !exists) return [...prev, { key, label: key, dataType, required: false }];
+      if (enabled && !exists) return [...prev, { key, label: key, kind: 'VALUE' as const, dataType, required: false }];
       if (!enabled) return prev.filter((s) => s.key !== key);
       return prev;
     });
@@ -181,7 +181,7 @@ export default function TemplateEditor() {
             value={carriers.flowGraph}
             onChange={(g) => setBodySkeleton(carriersToBody('DECISION_FLOW', { flowGraph: g }))}
             sceneCode=''
-            ruleCode={tmpl?.code ?? ''}
+            ruleCode={tmpl?.template?.code ?? ''}
             tenantId={currentId ?? 0}
             metadata={metadata}
             decisions={decisions}
@@ -255,9 +255,9 @@ export default function TemplateEditor() {
     <div style={{ padding: 24 }}>
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(ROUTES.TEMPLATES)}>{t('action.back')}</Button>
-        <h2 style={{ margin: 0 }}>{t('title.editor')}: {tmpl.name}</h2>
-        <Tag color="blue">{t(`enum.status.${tmpl.status}`)}</Tag>
-        <Tag>{t('enum.version')}{tmpl.version}</Tag>
+        <h2 style={{ margin: 0 }}>{t('title.editor')}: {tmpl.template.name}</h2>
+        <Tag color="blue">{t(`enum.status.${tmpl.template.status}`)}</Tag>
+        <Tag>{t('enum.version')}{tmpl.version.version}</Tag>
       </Space>
 
       <Card title={t('form.basicInfo')} style={{ marginBottom: 16 }}>
@@ -336,9 +336,9 @@ export default function TemplateEditor() {
                   <span>{t('form.slotRequired')} <Switch size="small" disabled={!editable} checked={item.required} onChange={(c) => updateSlot(item.key, { required: c })} /></span>
                 </Space>
                 {/* 约束输入随 dataType 联动——只显示对该类型有意义的项 */}
-                {(NUMERIC_TYPES.includes(item.dataType) || ENUM_TYPES.includes(item.dataType)) && (
+                {(item.dataType && (NUMERIC_TYPES.includes(item.dataType) || ENUM_TYPES.includes(item.dataType))) && (
                   <Space wrap>
-                    {NUMERIC_TYPES.includes(item.dataType) && (
+                    {item.dataType && NUMERIC_TYPES.includes(item.dataType) && (
                       <>
                         <InputNumber
                           size="small" disabled={!editable} addonBefore={t('form.slotMin')}
@@ -352,7 +352,7 @@ export default function TemplateEditor() {
                         />
                       </>
                     )}
-                    {ENUM_TYPES.includes(item.dataType) && (
+                    {item.dataType && ENUM_TYPES.includes(item.dataType) && (
                       <Input
                         size="small" style={{ width: 240 }} disabled={!editable}
                         addonBefore={t('form.slotEnum')} placeholder="a,b,c"

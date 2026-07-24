@@ -7,7 +7,7 @@ import { useTenantStore } from '@/store/tenantStore';
 import { useSceneStore } from '@/store/sceneStore';
 import { getTemplate, instantiateTemplate } from '@/api/template';
 import { ROUTES, route } from '@/constants/routes';
-import type { RuleTemplate } from '@/types/template';
+import type { TemplateDetail, TemplateSlot } from '@/types/template';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -20,7 +20,7 @@ export default function TemplateInstantiate() {
   const { t } = useTranslation('template');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [tmpl, setTmpl] = useState<RuleTemplate | null>(null);
+  const [tmpl, setTmpl] = useState<TemplateDetail | null>(null);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function TemplateInstantiate() {
   const handleSubmit = async () => {
     const values = await form.validateFields();
     const slotValues: Record<string, unknown> = {};
-    for (const slot of tmpl?.slots ?? []) {
+    for (const slot of tmpl?.version.slots ?? []) {
       let val = values[`slot_${slot.key}`];
       if (slot.dataType === 'DATE' && val) {
         val = (val as dayjs.Dayjs).format('YYYY-MM-DD');
@@ -62,10 +62,15 @@ export default function TemplateInstantiate() {
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!tmpl) return <div style={{ padding: 24 }}>模板不存在</div>;
 
-  const renderSlotInput = (slot: typeof tmpl.slots[0]) => {
+  const renderSlotInput = (slot: TemplateSlot) => {
     const name = `slot_${slot.key}`;
     const rules = slot.required ? [{ required: true, message: `请填写 ${slot.label}` }] : [];
     const fieldProps: Record<string, unknown> = { name, label: slot.label, rules };
+
+    // REF slot：暂时用文本输入（后续计划加 picker）
+    if (slot.kind !== 'VALUE') {
+      return <Form.Item {...fieldProps}><Input placeholder={slot.kind} /></Form.Item>;
+    }
 
     switch (slot.dataType) {
       case 'STRING':
@@ -93,11 +98,11 @@ export default function TemplateInstantiate() {
     <div style={{ padding: 24, maxWidth: 800 }}>
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(ROUTES.TEMPLATES)}>返回</Button>
-        <Title level={3} style={{ margin: 0 }}>{t('title.instantiate')}: {tmpl.name}</Title>
+        <Title level={3} style={{ margin: 0 }}>{t('title.instantiate')}: {tmpl.template.name}</Title>
       </Space>
 
       <Card size="small" style={{ marginBottom: 16 }}>
-        <Text type="secondary">模板: {tmpl.code} | Kind: {tmpl.kind} | Slots: {tmpl.slots.length}</Text>
+        <Text type="secondary">模板: {tmpl.template.code} | Kind: {tmpl.template.kind} | Slots: {tmpl.version.slots.length}</Text>
       </Card>
 
       <Card>
@@ -123,7 +128,7 @@ export default function TemplateInstantiate() {
           </Form.Item>
 
           <Title level={5}>{t('instantiate.fillSlots') ?? '填写 Slot 值'}</Title>
-          {(tmpl.slots ?? []).map((slot) => (
+          {(tmpl.version.slots ?? []).map((slot) => (
             <Row key={slot.key} gutter={16}>
               <Col span={12}>{renderSlotInput(slot)}</Col>
             </Row>
