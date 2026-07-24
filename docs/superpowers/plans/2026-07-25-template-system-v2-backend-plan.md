@@ -230,40 +230,45 @@ git commit -m "feat(config): SlotKind/ValueDataType 枚举拆分,TemplateSlot �
 
 ## Task 4: RuleVersion 核心表清理
 
+**现状（已核实）：** `RuleVersion` 有 `templateId`(43行)/`templateVersion`(45行) 字段。`PublishService` 有**两个 createDraft 重载**：
+- 7 参版 `createDraft(tenantId, sceneCode, code, content, actorId, templateId, templateVersion)`（868行），内部调 `buildDraftVersion(rd.getId(), 1L, resolved, templateId, templateVersion)`
+- 5 参版（932行）委托 7 参版传 null,null
+
+7 参版**唯一业务消费点** = `RuleTemplateServiceImpl:200`（旧 instantiate）。其余业务调用点（`ConfigServiceImpl:183`、`RuleImportService:173`）都用 5 参版，不受影响。
+
 **Files:**
-- Modify: `rule-config-svc/.../internal/domain/RuleVersion.java`
-- Modify: `rule-config-svc/.../internal/publish/PublishService.java`
-- Modify: 所有 `createDraft` 调用点（grep 确认）
-- Test: 现有 PublishService/RuleVersion 相关测试更新
+- Modify: `rule-config-svc/.../internal/domain/RuleVersion.java`（删两字段）
+- Modify: `rule-config-svc/.../internal/publish/PublishService.java`（删 7 参重载 + buildDraftVersion 去两形参）
+- Modify: `rule-config-svc/.../internal/service/RuleTemplateServiceImpl.java:200`（临时降级为 5 参版，让 config-svc 编译通过；Task 7 整体重写此文件）
+- Test: `PublishServiceTest.java`（删 templateId 落库相关断言）
 
 **Interfaces:**
-- Produces: `RuleVersion` 无 templateId/templateVersion；`PublishService.createDraft(...)` 签名不含模板参数。
+- Produces: `RuleVersion` 无 templateId/templateVersion；`PublishService.createDraft` 只剩 5 参版；`buildDraftVersion` 不含模板形参。
 
-- [ ] **Step 1: grep 影响面**
+- [ ] **Step 1: 删 RuleVersion 两字段 + @TableField**
 
-```bash
-grep -rn "templateId\|templateVersion\|template_id\|template_version" rule-config-svc/src rule-api/src rule-eval-svc/src --include=*.java | grep -v "rule_template\|RuleTemplate"
-grep -rn "createDraft" rule-config-svc/src rule-api/src --include=*.java
-```
-列出所有引用点。createDraft 的模板参数消费方只有旧 RuleTemplateServiceImpl.instantiate —— Task 8 会重写它，这里先让 createDraft 干净。
+删 `RuleVersion.java` 的 `templateId`/`templateVersion` 字段及相关注解。
 
-- [ ] **Step 2: 删 RuleVersion 字段**
+- [ ] **Step 2: PublishService 删 7 参重载 + 改 buildDraftVersion**
 
-删 `RuleVersion.java` 的 `templateId`/`templateVersion` 字段 + 相关 `@TableField`。
+- 删 868 行的 7 参 `createDraft` 重载整体
+- 把 932 行的 5 参版改为直接实现（原 7 参版的方法体搬进来，去掉 templateId/templateVersion 参数和它们在 buildDraftVersion 的传递）
+- `buildDraftVersion` 签名去掉 `templateId, templateVersion` 两形参，方法内不再 set 这两个（读 970 行确认）
 
-- [ ] **Step 3: 改 PublishService.createDraft**
+- [ ] **Step 3: RuleTemplateServiceImpl:200 临时降级**
 
-读当前签名，删模板参数。若 createDraft 内部把这俩写入 RuleVersion，一并删。保留其余逻辑不动。
+把 `publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId, templateId, templateVersion)` 改为 5 参版 `createDraft(tenantId, sceneCode, ruleCode, content, actorId)`。**仅为让 config-svc 编译通过**——Task 7 会整体重写 instantiate。
 
-- [ ] **Step 4: 修所有调用点 + 测试**
+- [ ] **Step 4: 修测试**
 
-调用点（含旧 instantiate、测试）适配新签名。若旧 instantiate 暂时编译不过，可临时注释其模板参数传递（Task 8 重写）——或先跑 Task 5-8 再回来，但优先让 config-svc 编译通过。
+- `PublishServiceTest`：删任何验证 `templateId`/`templateVersion` 落库的断言（如 `createDraft_insertsRuleDefinitionAndVersion` 若断言了这俩）。5 参调用点不受影响。
+- `RuleTemplateServiceImplTest`：旧测试用 7 参版 + `tenant_id=0`——本 task 只需让它**编译**（Task 7 整体重写），可临时改 5 参版调用；断言逻辑 Task 7 重做。
 
 - [ ] **Step 5: 验证 + Commit**
 
 ```bash
 $MVN -pl rule-config-svc -am test
-git add -A && git commit -m "refactor(config): RuleVersion 删 templateId/templateVersion,PublishService.createDraft 签名去模板参数——核心表零污染"
+git add -A && git commit -m "refactor(config): RuleVersion 删 templateId/templateVersion,PublishService 删 7 参 createDraft 重载,buildDraftVersion 去模板形参——核心表零污染"
 ```
 
 ---
@@ -388,15 +393,16 @@ git add -A && git commit -m "feat(config): SlotRefResolver SPI + Metric/Decision
 - [ ] **Step 2: 重写 ServiceImpl**
 
 按 spec §5.2 + §5.4 状态机实现。DRAFT 唯一性：新建 DRAFT 前 `findDraft` 检查，有则复用更新。REF slot 值 pass-through 进 coercedValues。callerTenantId 贯穿。溯源 try-catch best-effort。
+构造 `RuleContent` 前先读 `rule-config-svc/.../api/dto/RuleContent.java` 确认构造器签名（当前 instantiate 已在用，照搬其构造方式）。
 
-- [ ] **Step 3: 测试**
+- [ ] **Step 3: 重写测试（旧测试用 tenant_id=0 魔法值，必须改真实 tenant id）**
 
-`RuleTemplateServiceImplTest`（Mockito mock 三 mapper + resolver + binder + publishService）：
-- create → 建身份 + v1 DRAFT
-- update DRAFT → 同 version 更新；update PUBLISHED → 新 v2 DRAFT
-- publish → status 流转正确
-- instantiate：VALUE+REF 都进 coercedValues；DISABLED 模板抛异常；REF slot 调对应 resolver；溯源写入
-- 可选 slot 未填不报错
+`RuleTemplateServiceImplTest`（Mockito mock 三 mapper + resolver + binder + publishService）——**旧测试用 `createDraft(eq(0L)...)` + tenant_id=0，全部改为真实 tenant id（如 STANDARD=9001）**，不得沿用 0：
+- create → 建身份 rule_template(DRAFT) + rule_template_version(v1,DRAFT)
+- update：有 DRAFT → 同 version 更新；无 DRAFT（PUBLISHED 态）→ 新 v(n+1) DRAFT
+- publish → rule_template.status + version.status 流转正确（§5.4 表）
+- instantiate：VALUE 强转 + REF 原样都进 coercedValues；DISABLED 模板抛异常；每个 REF slot 调 `supports` 匹配的 resolver；createDraft 用 5 参版 + callerTenantId；溯源 insert 带 template_version_id
+- 可选 slot（required=false）未填 → 不报错、不进 coercedValues
 
 - [ ] **Step 4: 验证 + Commit**
 
@@ -479,6 +485,8 @@ Task6(SlotRefResolver SPI) ────┘(Task7 消费)
 ```
 
 Task1-4 相对独立可先行；Task5 依赖 Task2/3；Task6 独立（依赖 Task3 的 SlotKind）；Task7 依赖 Task4/5/6；Task8 依赖 Task7；Task9 收口。
+
+**Task4→Task7 的过渡状态**：Task4 删 7 参 createDraft 后，旧 `RuleTemplateServiceImpl` 临时降级为 5 参版仅为编译通过（此时 instantiate 不写模板参数是无害的——反正核心表已无这两列）。Task7 整体重写该文件，接入版本化 + SlotRefResolver + 溯源表。两 task 之间 config-svc 始终可编译、测试可跑。
 
 ## 自检（spec 覆盖）
 
