@@ -5,7 +5,8 @@ import type { RuleTemplate } from '@/types/template';
 
 export async function listTemplates(tenantId: number, status?: string) {
   const res = await apiClient.get<ApiResponse<RuleTemplate[]>>(ENDPOINTS.TEMPLATE_LIST, {
-    params: { tenantId, status },
+    params: { status },
+    headers: { 'X-Tenant-Id': tenantId },
   });
   return res.data.data;
 }

@@ -72,7 +72,7 @@ export default function TemplateList() {
 
   const handleDisable = async (code: string) => {
     await disableTemplate(tenantId, code);
-    message.success(t('action.disable'));
+    message.success(tc('message.disabled'));
     load();
   };
 
