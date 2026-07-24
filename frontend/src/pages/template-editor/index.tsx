@@ -20,6 +20,11 @@ import { introspectPositions } from './introspect';
 
 const { Text } = Typography;
 const DATA_TYPES: DataType[] = ['LONG', 'DOUBLE', 'DECIMAL', 'STRING', 'BOOLEAN', 'DATE', 'DATETIME', 'LIST'];
+
+/** 数值类型——支持 Min/Max 约束。 */
+const NUMERIC_TYPES: DataType[] = ['LONG', 'DOUBLE', 'DECIMAL'];
+/** 枚举类型——支持 enumValues 约束。 */
+const ENUM_TYPES: DataType[] = ['STRING', 'LIST'];
 const EMPTY_BODY: RuleBody = { type: 'AstBody', conditionAst: null };
 
 /** 由 JsonPointer 末段（数字段回退父段）派生一个稳定、去重的 slotKey。 */
@@ -276,24 +281,33 @@ export default function TemplateEditor() {
                   />
                   <span>{t('form.slotRequired')} <Switch size="small" disabled={!editable} checked={item.required} onChange={(c) => updateSlot(item.key, { required: c })} /></span>
                 </Space>
-                <Space wrap>
-                  <Input
-                    size="small" style={{ width: 200 }} disabled={!editable}
-                    addonBefore={t('form.slotEnum')} placeholder="a,b,c"
-                    value={item.constraint?.enumValues?.join(',') ?? ''}
-                    onChange={(e) => setSlotConstraint(item.key, { enumValues: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) })}
-                  />
-                  <InputNumber
-                    size="small" disabled={!editable} addonBefore={t('form.slotMin')}
-                    value={item.constraint?.min ?? undefined}
-                    onChange={(v) => setSlotConstraint(item.key, { min: (v as number) ?? null })}
-                  />
-                  <InputNumber
-                    size="small" disabled={!editable} addonBefore={t('form.slotMax')}
-                    value={item.constraint?.max ?? undefined}
-                    onChange={(v) => setSlotConstraint(item.key, { max: (v as number) ?? null })}
-                  />
-                </Space>
+                {/* 约束输入随 dataType 联动——只显示对该类型有意义的项 */}
+                {(NUMERIC_TYPES.includes(item.dataType) || ENUM_TYPES.includes(item.dataType)) && (
+                  <Space wrap>
+                    {NUMERIC_TYPES.includes(item.dataType) && (
+                      <>
+                        <InputNumber
+                          size="small" disabled={!editable} addonBefore={t('form.slotMin')}
+                          value={item.constraint?.min ?? undefined}
+                          onChange={(v) => setSlotConstraint(item.key, { min: (v as number) ?? null })}
+                        />
+                        <InputNumber
+                          size="small" disabled={!editable} addonBefore={t('form.slotMax')}
+                          value={item.constraint?.max ?? undefined}
+                          onChange={(v) => setSlotConstraint(item.key, { max: (v as number) ?? null })}
+                        />
+                      </>
+                    )}
+                    {ENUM_TYPES.includes(item.dataType) && (
+                      <Input
+                        size="small" style={{ width: 240 }} disabled={!editable}
+                        addonBefore={t('form.slotEnum')} placeholder="a,b,c"
+                        value={item.constraint?.enumValues?.join(',') ?? ''}
+                        onChange={(e) => setSlotConstraint(item.key, { enumValues: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) })}
+                      />
+                    )}
+                  </Space>
+                )}
               </Space>
             </List.Item>
           )}
