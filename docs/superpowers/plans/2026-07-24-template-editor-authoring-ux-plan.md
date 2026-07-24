@@ -369,8 +369,9 @@ git commit -m "feat(frontend): ScriptEditor 加 params 表 + editableParams 分�
 
 - [ ] **Step 0(6a): 创建入口(template-list)kind 扩展 + Script/Flow 骨架播种**
 
-`frontend/src/pages/template-list/index.tsx` 的创建弹窗当前只列 AST 四种(`AST_KINDS`),`handleCreate` 的骨架播种也只覆盖那四种(`else` 兜底 AndNode)。改:
-- 创建弹窗 kind `Select` 选项扩为全 6 kind:`['AST_BOOLEAN','SCORECARD','DECISION_TREE','DECISION_TABLE','EXPRESSION_SCRIPT','DECISION_FLOW']`(label 走 `t('enum.kind.<K>')`,与规则编辑器一致)。
+`frontend/src/pages/template-list/index.tsx` 的创建弹窗当前只列 AST 四种(自造 `AST_KINDS` + `label: k` 无 i18n),`handleCreate` 骨架播种也只覆盖那四种(`else` 兜底 AndNode)。改:
+- **kind `Select` 复用现成共享 helper** `getRuleKindOptions(t)`(`@/constants/enums`,与 rule-list/rules-all **同一份**,全 6 kind + `enum.kind.*` i18n label),**删除自造的 `AST_KINDS` 常量**。即 `<Select options={getRuleKindOptions(t)} />`。
+  - `enum.kind.*` key 在 **rule** i18n namespace 下——模板页用 `useTranslation(['template','rule'])` 并以 `t('rule:enum.kind.X')` 解析,或给 `getRuleKindOptions` 传能解析该 key 的 `t`(实现时确认 key 归属;不要在 template namespace 重复定义 kind label,避免又一处重复)。
 - `handleCreate` 的 `bodySkeleton` 播种加两分支:
   - `EXPRESSION_SCRIPT` → `{ type: 'ScriptBody', script: { source: '', lang: 'CEL', params: {} } }`
   - `DECISION_FLOW` → `{ type: 'FlowBody', flowGraph: { nodes: [], edges: [], inputNodeId: '', params: {} }, referencedSnapshots: {} }`
@@ -379,7 +380,7 @@ git commit -m "feat(frontend): ScriptEditor 加 params 表 + editableParams 分�
 
 - [ ] **Step 1(6a): skeleton 复用 RuleBodyEditor + 参照场景 + kind 扩展**
 
-- kind Select 从 `AST_KINDS` 扩为全 6 kind(或至少 AST 四 + EXPRESSION_SCRIPT + DECISION_FLOW)。
+- kind Select **同样复用 `getRuleKindOptions(t)`**(删 `template-editor` 自造的 `AST_KINDS`);编辑态 kind 通常 disabled(kind 建后不改),但选项来源统一。
 - 顶部加**参照场景 Select**(拉 tenant 场景列表,存 `refSceneCode` 局部 state);选后调 `getSceneMetadata(tenantId, refSceneCode)` + `getScene` 得 `availableMetrics/payloadFieldNames/payloadFieldTypes/conditionTypes`,`listDecisions` 得 decisions(参照 rule-editor/index.tsx:106-115 与 CenterPanel 的加载)。
 - bodySkeleton 从 JSON 文本框改为:把 `bodySkeleton` 拆成 `bodyToCarriers` → 用 `RuleBodyEditor`(非 flow)或 `FlowCanvasEditor`(flow)渲染;`onChange` 收集回 `carriersToBody(kind, carriers)`。script kind 传 `editableParams`。
 - 保存:`bodySkeleton` 直接用受控 state(不再 JSON.parse)。
