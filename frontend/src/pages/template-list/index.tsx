@@ -84,7 +84,7 @@ export default function TemplateList() {
   };
 
   const columns = [
-    { title: t('column.name'), dataIndex: 'name', key: 'name', width: 180, ellipsis: true },
+    { title: t('column.name'), dataIndex: 'name', key: 'name', ellipsis: true },
     { title: t('column.code'), dataIndex: 'code', key: 'code', width: 140 },
     { title: t('column.kind'), dataIndex: 'kind', key: 'kind', width: 140,
       render: (k: string) => <Tag>{k}</Tag>,
@@ -94,7 +94,7 @@ export default function TemplateList() {
       render: (status: string) => <Tag color={STATUS_COLOR[status]}>{t(`enum.status.${status}`)}</Tag>,
     },
     {
-      title: t('column.actions'), key: 'actions', width: 300,
+      title: t('column.actions'), key: 'actions', width: 220,
       render: (_: unknown, record: RuleTemplate) => (
         <Space>
           <Button size="small" icon={<EditOutlined />}
