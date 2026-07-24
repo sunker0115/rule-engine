@@ -18,6 +18,6 @@ public interface RuleTemplateVersionMapper extends BaseMapper<RuleTemplateVersio
     RuleTemplateVersion findByVersion(Long templateId, Integer version);
 
     /** 查指定模板的 DRAFT 版本快照，不存在返回 null。 */
-    @Select("SELECT * FROM rule_template_version WHERE template_id = #{templateId} AND status = 'DRAFT'")
+    @Select("SELECT * FROM rule_template_version WHERE template_id = #{templateId} AND status = 'DRAFT' ORDER BY version DESC LIMIT 1")
     RuleTemplateVersion findDraft(Long templateId);
 }
