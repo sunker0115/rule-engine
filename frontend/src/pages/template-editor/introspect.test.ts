@@ -196,3 +196,18 @@ describe('inferType 各分支（经 introspectPositions 值位覆盖）', () => 
     expect(cellType(null)).toBe('STRING');
   });
 });
+
+describe('introspectPositions — ScriptBody 返回空', () => {
+  it('ScriptBody 不经过 AST/Flow 遍历，始终返回空数组', () => {
+    const body: RuleBody = { type: 'ScriptBody', script: { source: 'return true;', lang: 'Aviator' } };
+    expect(introspectPositions('EXPRESSION_SCRIPT', body)).toEqual([]);
+  });
+
+  it('ScriptBody 带 params 也不产候选', () => {
+    const body: RuleBody = {
+      type: 'ScriptBody',
+      script: { source: 'return x > p.threshold;', lang: 'CEL', params: { threshold: '100' } },
+    };
+    expect(introspectPositions('EXPRESSION_SCRIPT', body)).toEqual([]);
+  });
+});
