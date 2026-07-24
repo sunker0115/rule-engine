@@ -226,11 +226,17 @@ export default function TemplateEditor() {
         </Form>
       </Card>
 
-      <Card title={t('form.bodySkeleton')} style={{ marginBottom: 16 }}>
-        <div style={editable ? undefined : { pointerEvents: 'none', opacity: 0.6 }}>
-          {kind === 'DECISION_FLOW'
-            ? <div style={{ height: 520, border: '1px solid #f0f0f0', borderRadius: 6 }}>{renderBodyEditor()}</div>
-            : renderBodyEditor()}
+      <Card
+        title={t('form.bodySkeleton')}
+        style={{ marginBottom: 16 }}
+        // flow 画布需要确定高度；AntD Card body 默认不是 flex，需手动设置
+        styles={kind === 'DECISION_FLOW' ? { body: { padding: 0, display: 'flex', flexDirection: 'column', height: 520 } } : undefined}
+      >
+        <div style={editable
+          ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }
+          : { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, pointerEvents: 'none', opacity: 0.6 }
+        }>
+          {renderBodyEditor()}
         </div>
       </Card>
 
