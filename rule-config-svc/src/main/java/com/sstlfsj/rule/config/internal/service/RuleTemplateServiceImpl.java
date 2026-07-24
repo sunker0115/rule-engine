@@ -197,8 +197,7 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         RuleContent content = new RuleContent(ruleName, tmpl.getKind().tag(), bound,
                 List.of(), List.of(),
                 triggerEventTypes != null ? triggerEventTypes : List.of());
-        return publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId,
-                tmpl.getId(), tmpl.getVersion());
+        return publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId);
     }
 
     // ---------- 内部 ----------

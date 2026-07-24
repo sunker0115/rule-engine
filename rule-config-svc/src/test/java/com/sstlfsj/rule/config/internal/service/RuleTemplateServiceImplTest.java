@@ -118,7 +118,7 @@ class RuleTemplateServiceImplTest {
         RuleTemplate tmpl = publishedTemplate(null);
         when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);
         when(publishService.createDraft(eq(0L), eq("scene-x"), eq("rule-1"), any(RuleContent.class),
-                eq("u1"), eq(7L), eq(3)))
+                eq("u1")))
                 .thenReturn(new DraftCreatedResult(11L, 22L, 1L, "DRAFT"));
 
         DraftCreatedResult result = service.instantiate(0L, "tmpl-a", "rule-1", "规则1",
@@ -127,7 +127,7 @@ class RuleTemplateServiceImplTest {
         assertThat(result.ruleVersionId()).isEqualTo(22L);
         ArgumentCaptor<RuleContent> captor = ArgumentCaptor.forClass(RuleContent.class);
         verify(publishService).createDraft(eq(0L), eq("scene-x"), eq("rule-1"), captor.capture(),
-                eq("u1"), eq(7L), eq(3));
+                eq("u1"));
         AstBody bound = (AstBody) captor.getValue().body();
         ConditionNode cn = (ConditionNode) ((AndNode) bound.conditionAst()).children().get(0);
         assertThat(((Number) cn.params().get("threshold")).longValue()).isEqualTo(200L);
