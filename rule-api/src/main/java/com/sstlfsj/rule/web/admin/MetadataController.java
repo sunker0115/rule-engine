@@ -23,3 +23,4 @@ public class MetadataController {
         return ApiResponse.ok(metadataService.getSceneMetadata(tenantId, sceneCode));
     }
 }
+

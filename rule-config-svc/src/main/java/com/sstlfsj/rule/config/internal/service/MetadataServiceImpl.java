@@ -93,6 +93,29 @@ class MetadataServiceImpl implements MetadataService {
     }
 
     @Override
+    public MetadataResponse getTenantMetadata(Long tenantId) {
+        // conditionTypes: SPI 全局注册，与 scene/tenant 无关
+        Map<String, OperatorSpec> merged = new LinkedHashMap<>();
+        ConditionTypeCatalog.all().forEach(s -> merged.put(s.code(), s));
+        customSpecs.forEach(s -> merged.putIfAbsent(s.code(), s));
+        List<OperatorSpec> conditionTypes = List.copyOf(merged.values());
+
+        // metrics: tenant 级，与场景无关（metric 在 tenant 级对所有 scene 可用）
+        List<MetricMeta> metricMetas = metricDefinitionMapper.findActiveByTenant(tenantId)
+                .stream()
+                .map(m -> new MetricMeta(m.getMetricCode(), m.getName(),
+                        m.getDataType(), m.getSourceType(),
+                        Boolean.TRUE.equals(m.getAllowProvided())))
+                .toList();
+
+        List<String> langs = expressionEngines.stream()
+                .map(ExpressionEngine::lang).distinct().toList();
+
+        // eventTypes 与场景无关，返回空列表（模板不绑定事件类型）
+        return new MetadataResponse(conditionTypes, metricMetas, List.of(), langs);
+    }
+
+    @Override
     public List<MetricDescriptor> listMetricDefinitions(MetricListQuery q) {
         Long tid = q.tenantId();
 

@@ -376,4 +376,40 @@ class MetadataServiceImplTest {
                 .filter(s -> "GT".equals(s.code())).findFirst().orElseThrow();
         assertThat(gt.displayName()).isEqualTo("大于");
     }
+
+    // ---- getTenantMetadata：不依赖 scene ----
+
+    @Test
+    void getTenantMetadata_returnsConditionTypesAndMetrics_withoutScene() {
+        MetricDefinition metric = new MetricDefinition();
+        metric.setMetricCode("txn.amount");
+        metric.setName("交易金额");
+        metric.setDataType("LONG");
+        metric.setSourceType("SQL_AGGREGATE");
+        metric.setAllowProvided(false);
+        when(metricDefinitionMapper.findActiveByTenant(1L)).thenReturn(List.of(metric));
+
+        MetadataService.MetadataResponse resp = newService(List.of()).getTenantMetadata(1L);
+
+        // conditionTypes 来自全局 catalog，非空
+        assertThat(resp.conditionTypes()).isNotEmpty();
+        // metrics 来自 tenant，正确返回
+        assertThat(resp.availableMetrics()).hasSize(1);
+        assertThat(resp.availableMetrics().get(0).metricCode()).isEqualTo("txn.amount");
+        // eventTypes 为空（模板不绑定事件类型）
+        assertThat(resp.eventTypes()).isEmpty();
+        // 确认没有调 sceneMapper（tenant 级不依赖 scene）
+        verifyNoInteractions(sceneMapper);
+    }
+
+    @Test
+    void getTenantMetadata_noMetrics_returnsEmptyMetrics() {
+        when(metricDefinitionMapper.findActiveByTenant(9001L)).thenReturn(List.of());
+
+        MetadataService.MetadataResponse resp = newService(List.of()).getTenantMetadata(9001L);
+
+        assertThat(resp.conditionTypes()).isNotEmpty(); // conditionType 全局，始终有
+        assertThat(resp.availableMetrics()).isEmpty();
+        verifyNoInteractions(sceneMapper);
+    }
 }

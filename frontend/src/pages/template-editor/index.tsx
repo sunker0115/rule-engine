@@ -1,21 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, Select, Switch, InputNumber, Space, message, Tag, List, Popconfirm, Typography, Row, Col, Alert, Empty } from 'antd';
+import { Button, Card, Form, Input, Select, Switch, InputNumber, Space, message, Tag, List, Popconfirm, Typography, Alert, Empty } from 'antd';
 import { SaveOutlined, DeleteOutlined, ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { getTemplate, updateTemplate } from '@/api/template';
-import { listScenes, getScene } from '@/api/scene';
-import { getSceneMetadata } from '@/api/metadata';
+import { getTenantMetadata } from '@/api/metadata';
 import { listDecisions } from '@/api/decision';
 import { listRules } from '@/api/rule';
-import { extractPayloadSchema } from '@/utils/payloadSchema';
 import { getRuleKindOptions } from '@/constants/enums';
 import { ROUTES } from '@/constants/routes';
 import { bodyToCarriers, carriersToBody } from '@/types';
 import type { RuleTemplate, TemplateSlot, SlotBinding, SlotConstraint, DataType } from '@/types/template';
-import type { RuleBody, RuleKind, SceneListItem, SceneMetadata, DecisionItem } from '@/types';
+import type { RuleBody, RuleKind, SceneMetadata, DecisionItem } from '@/types';
 import RuleBodyEditor from '@/pages/rule-editor/RuleBodyEditor';
 import FlowCanvasEditor from '@/pages/rule-editor/FlowCanvasEditor';
 import { introspectPositions } from './introspect';
@@ -52,9 +50,7 @@ export default function TemplateEditor() {
   const [bindings, setBindings] = useState<SlotBinding[]>([]);
   // bodySkeleton 受控：经 body 编辑器直接编辑，保存直传（不再 JSON.parse）
   const [bodySkeleton, setBodySkeleton] = useState<RuleBody>(EMPTY_BODY);
-  // 参照场景：仅取元数据辅助编辑，不写入模板
-  const [refSceneCode, setRefSceneCode] = useState<string | undefined>(undefined);
-  const [scenes, setScenes] = useState<SceneListItem[]>([]);
+  // tenant 级元数据：conditionTypes + metrics，进编辑器即加载，不依赖 scene
   const [metadata, setMetadata] = useState<SceneMetadata | null>(null);
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
 
@@ -76,10 +72,10 @@ export default function TemplateEditor() {
 
   useEffect(() => { load(); }, [currentId, code]);
 
-  // 租户级资源：场景列表（参照场景下拉）+ 决策列表（下传 body 编辑器）
+  // tenant 级资源：进编辑器即加载，不需要先选 scene
   useEffect(() => {
     if (!currentId) return;
-    listScenes(currentId).then((d) => setScenes(d ?? []));
+    getTenantMetadata(currentId).then((m) => setMetadata(m));
     listDecisions(currentId).then((d) => setDecisions(d ?? []));
   }, [currentId]);
 
@@ -93,22 +89,6 @@ export default function TemplateEditor() {
     });
   }, [currentId, kind, tmpl?.code, setFlowSceneRules]);
 
-  // 选参照场景：拉 metadata + payloadSchema（接线照 rule-editor index）
-  const handleRefScene = async (sceneCode: string | undefined) => {
-    setRefSceneCode(sceneCode);
-    if (!currentId || !sceneCode) { setMetadata(null); return; }
-    const [metaRes, sceneRes] = await Promise.all([
-      getSceneMetadata(currentId, sceneCode),
-      getScene(currentId, sceneCode),
-    ]);
-    const meta = metaRes ?? null;
-    if (meta) {
-      const schema = extractPayloadSchema(sceneRes?.payloadSchema);
-      meta.payloadFieldNames = schema.names;
-      meta.payloadFieldTypes = schema.types;
-    }
-    setMetadata(meta);
-  };
 
   const carriers = bodyToCarriers(bodySkeleton);
 
@@ -186,7 +166,7 @@ export default function TemplateEditor() {
         <FlowCanvasEditor
           value={carriers.flowGraph}
           onChange={(g) => setBodySkeleton(carriersToBody('DECISION_FLOW', { flowGraph: g }))}
-          sceneCode={refSceneCode ?? ''}
+          sceneCode=''
           ruleCode={tmpl?.code ?? ''}
           tenantId={currentId ?? 0}
           metadata={metadata}
@@ -207,7 +187,7 @@ export default function TemplateEditor() {
         payloadFieldTypes={metadata?.payloadFieldTypes}
         decisions={decisions}
         tenantId={currentId ?? undefined}
-        sceneCode={refSceneCode}
+        sceneCode={undefined}
         editableParams={editable}
         onParamSlotToggle={handleParamSlotToggle}
         slottedParamKeys={slottedParamKeys}
@@ -227,46 +207,21 @@ export default function TemplateEditor() {
         <Tag>{t('enum.version')}{tmpl.version}</Tag>
       </Space>
 
-      <Row gutter={16}>
-        <Col span={12}>
-          <Card title={t('form.basicInfo')} style={{ marginBottom: 16 }}>
-            <Form form={form} layout="vertical">
-              <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}>
-                <Input disabled={!editable} />
-              </Form.Item>
-              <Form.Item name="kind" label={t('form.kind')}>
-                <Select options={getRuleKindOptions(tr)} disabled />
-              </Form.Item>
-              <Form.Item name="description" label={t('form.description')}>
-                <Input.TextArea rows={2} disabled={!editable} />
-              </Form.Item>
-            </Form>
-          </Card>
-        </Col>
-
-        <Col span={12}>
-          <Card title={t('form.referenceScene')} style={{ marginBottom: 16 }}>
-            <Select
-              showSearch
-              allowClear
-              style={{ width: '100%' }}
-              placeholder={t('form.referenceScenePlaceholder')}
-              optionFilterProp="label"
-              value={refSceneCode}
-              onChange={handleRefScene}
-              options={scenes.map((s) => ({ value: s.sceneCode, label: s.name ? `${s.name} (${s.sceneCode})` : s.sceneCode }))}
-            />
-            <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-              {t('form.referenceSceneHint')}
-            </Text>
-          </Card>
-        </Col>
-      </Row>
+      <Card title={t('form.basicInfo')} style={{ marginBottom: 16 }}>
+        <Form form={form} layout="vertical">
+          <Form.Item name="name" label={t('form.name')} rules={[{ required: true }]}>
+            <Input disabled={!editable} />
+          </Form.Item>
+          <Form.Item name="kind" label={t('form.kind')}>
+            <Select options={getRuleKindOptions(tr)} disabled />
+          </Form.Item>
+          <Form.Item name="description" label={t('form.description')}>
+            <Input.TextArea rows={2} disabled={!editable} />
+          </Form.Item>
+        </Form>
+      </Card>
 
       <Card title={t('form.bodySkeleton')} style={{ marginBottom: 16 }}>
-        {!metadata && kind !== 'DECISION_FLOW' && (
-          <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t('form.referenceScenePlaceholder')} />
-        )}
         <div style={editable ? undefined : { pointerEvents: 'none', opacity: 0.6 }}>
           {kind === 'DECISION_FLOW'
             ? <div style={{ height: 520, border: '1px solid #f0f0f0', borderRadius: 6 }}>{renderBodyEditor()}</div>

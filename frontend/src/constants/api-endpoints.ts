@@ -56,6 +56,8 @@ export const ENDPOINTS = {
 
   // Metadata
   SCENE_METADATA: (sceneCode: string) => `${ADMIN}/scenes/${sceneCode}/metadata`,
+  /** 租户级元数据（conditionTypes/metrics/expressionLangs），不依赖 scene，供模板编辑器使用。 */
+  TENANT_METADATA: `${ADMIN}/metadata`,
 
   // Evaluation
   EVAL_EVENT:    `${API}/event`,

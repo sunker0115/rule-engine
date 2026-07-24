@@ -48,6 +48,14 @@ public interface MetadataService {
     MetadataResponse getSceneMetadata(Long tenantId, String sceneCode);
 
     /**
+     * 返回租户级元数据：conditionTypes(SPI 全局)+ tenant 全量 ACTIVE metrics + expressionLangs。
+     * 不依赖任何 scene，供模板编辑器等 scene-agnostic 上下文直接使用。
+     *
+     * @param tenantId 租户 ID
+     */
+    MetadataResponse getTenantMetadata(Long tenantId);
+
+    /**
      * 查场景输入参数清单：该场景所有 ACTIVE 规则引用的 payload 字段并集
      * （eventType 非空则收窄到会被该事件类型触发的规则）。
      *
