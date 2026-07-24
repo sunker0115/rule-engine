@@ -86,7 +86,7 @@ export default function TemplateList() {
   const columns = [
     { title: t('column.name'), dataIndex: 'name', key: 'name' },
     { title: t('column.code'), dataIndex: 'code', key: 'code', width: 150, ellipsis: true },
-    { title: t('column.kind'), dataIndex: 'kind', key: 'kind', width: 150 },
+    { title: t('column.kind'), dataIndex: 'kind', key: 'kind', width: 160, ellipsis: true },
     {
       title: t('column.status'), dataIndex: 'status', key: 'status', width: 100,
       render: (status: string) => <Tag color={STATUS_COLOR[status]}>{t(`enum.status.${status}`)}</Tag>,
