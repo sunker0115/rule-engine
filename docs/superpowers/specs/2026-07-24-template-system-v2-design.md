@@ -252,10 +252,10 @@ public interface SlotRefResolver {
 public record SlotResolutionContext(Long tenantId, @Nullable String sceneCode) {}
 ```
 
-V1 实现（Phase 1）：
-- `MetricRefResolver`：验证 metric code 在 tenant 内存在且 ACTIVE，检查 allowedDataTypes 兼容
+V1 实现（Phase 1，只做存在性校验）：
+- `MetricRefResolver`：验证 metric code 在 tenant 内存在且 ACTIVE（Phase 2 补 allowedDataTypes 兼容性深度校验）
 - `DecisionRefResolver`：验证 decision code 在 target scene 内存在且 ACTIVE
-- `RuleRefResolver`：验证 rule code 在 tenant 内存在且有 ACTIVE/PUBLISHED 版本
+- `RuleRefResolver`：验证 rule code 在 tenant 内存在且有 PUBLISHED 版本
 
 ### 5.2 实例化流水线（关注点分离，每步独立）
 
@@ -355,7 +355,9 @@ ORDER BY version DESC LIMIT 1
 ```
 两个 PUBLISHED 版本并存时取 version 最大的，保证实例化用最新发布版本。
 
-**约定：** `rule_template.status` 跟踪"当前最新版本的状态"，是显示给用户的聚合状态，不作为实例化资格判断的唯一依据——实例化检查路径：`tmpl.status != DISABLED && tmplVer != null`。
+**约定：**
+- `rule_template.status` 跟踪"当前最新版本的状态"，是显示给用户的聚合状态，不作为实例化资格判断的唯一依据——实例化检查路径：`tmpl.status != DISABLED && tmplVer != null`。
+- **同一模板同时只能有一个 DRAFT 版本**（应用层保证）：新建 DRAFT 前先检查是否已有 DRAFT 行，有则复用（更新），无则新建。DB 层不加唯一约束（允许 DRAFT+PUBLISHED 并存），业务逻辑保证 DRAFT 行最多一条。
 
 ### 5.6 可见性查询
 
