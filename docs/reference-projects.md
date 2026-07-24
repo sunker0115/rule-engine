@@ -76,6 +76,7 @@
 | 已吸收 | Apache Ranger | 字段声明 + 读时遮蔽 | D71 Trace PII 读时脱敏 |
 | 已吸收 | CEL / Aviator | 表达式引擎 | D66 六引擎之二 |
 | 已吸收 | ZEN L1 | 表达式编辑器变量补全（**六引擎通用**） | `expressionCompletions.ts` + ScriptEditor + ExpressionInput（Flow Switch/Transform），零后端 |
+| 已吸收 | Drools | guided rule template（参数化模板） | D74：JsonPointer 统一寻址覆盖全 6 kind + params 冻结常量命名空间消除 Script/Flow 异类 + binder SPI + 快照式实例化；受 Drools 启发但定位为 authoring 便利层 |
 | 已吸收 | FICO / Sapiens | 决策效果闭环 | §2.27 B32：`decision_outcome` 回灌 + `OUTCOME_INGESTION` 自动取标签 + `EffectivenessService` TP/FP/FN→precision/recall（RULE_VERSION/DECISION×DAY/WEEK 漂移）+ 前端 `EffectivenessPage` |
 | 已吸收 | ZEN L2 | CEL 实时类型诊断（CEL 专属） | `ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput debounced lint（弱类型引擎 no-op 自动通过） |
 | 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH 压测：纯 AST_BOOLEAN 负优化 13-42x，仅含重脚本/决策图场景建议开启） |
@@ -93,7 +94,6 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 不需要 | ice | 树形编排+Leaf 副作用执行+多语言 SDK+零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK/文件存储非本项目方向；节点复用(D75 RuleRef)/并行(§2.29)已有等价物 |
-| 已实装（默认关） | Drools | guided rule template（参数化模板） | D74 已实装（`rule.template.enabled=false` 默认关）：JsonPointer 统一寻址覆盖全 6 kind + params 冻结常量命名空间 + binder SPI + 快照式实例化；受 Drools 启发但定位为 authoring 便利层；待真实业务场景出现后开启开关 |
 
 ### 3.2 分项目（细对比·融合版）
 
@@ -195,7 +195,7 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
-| 已吸收 | 规则集完备性/冲突校验 | Drools Verifier 思路已吸收进 B31 静态分析（命名/语义对齐）；决策表入 D42；guided template 为 D74 实验性预实现（默认关，待真实场景触发） | §2.26 B31 |
+| 已吸收 | 规则集完备性/冲突校验 | Drools Verifier 思路已吸收进 B31 静态分析（命名/语义对齐）；决策表入 D42；guided template 为 D74（已实装,JsonPointer 统一寻址+params 命名空间+binder SPI+快照式实例化） | §2.26 B31 |
 | 不需要 | RETE 前向/后向推理引擎 | 本项目刻意非 RETE：不可变快照 (D6) + 倒排索引 (D17) + 每事件无状态求值 | — |
 | 不需要 | CEP 复杂事件处理 | 事件流处理留 Flink/CEP 扩展，不内嵌引擎 | §2.24 |
 | 不需要 | DRL 命令式规则 DSL | 同 gengine·grule：命令式 + 副作用，D60 纯决策拒绝 | — |
