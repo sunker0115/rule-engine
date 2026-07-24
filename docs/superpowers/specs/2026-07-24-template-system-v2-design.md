@@ -387,7 +387,35 @@ RuleTemplate findVisibleByCode(Long tenantId, String code);
 
 ## 6. 前端设计
 
-### 6.1 组件分层与复用边界
+### 6.1 模板编辑器布局（三栏，与规则编辑器对齐）
+
+模板编辑器整体骨架复用规则编辑器的三栏布局，概念一一对应：
+
+```
+规则编辑器                       模板编辑器
+─────────────────────────────────────────────────────────
+左栏：规则元数据                 左栏：模板元数据
+      (name/kind/scene)               (name/kind/description)
+
+中栏：body 编辑器                中栏：body skeleton 编辑器
+      RuleBodyEditor /                RuleBodyEditor /
+      FlowCanvasEditor                FlowCanvasEditor（已复用）
+
+右栏：RightPanel                 右栏：参数化面板
+      - 节点 inspector                 - Slots 列表（已声明参数）
+      - pre-gate 配置                  - "+ 参数化" 位置选择器
+      - decision binding               - Slot schema 编辑（kind/dataType/约束/required）
+```
+
+**结构语义对应**：规则右栏的 decision binding / pre-gate 是"规则的配置 sidecar"，与 body 是两件事但共同定义一条规则；模板右栏的 slots/bindings 也是"模板的配置 sidecar"，与 body skeleton 共同定义一个模板。语义一致，位置就一致。
+
+**一处差异（不影响布局）**：规则右栏是 context-sensitive（点画布节点 → 右栏内容切换到该节点属性）；模板右栏是静态列表（slots 一张表，不随选中节点变化）。右栏仍是独立区域，只是内容驱动方式不同。
+
+**实现层面**：页面骨架（左中右三栏 CSS 布局）复用规则编辑器那套；中栏已是同一组件；左栏换 Form 内容；右栏换成 slots/bindings 面板。不重造布局。
+
+> 注：flow 节点属性编辑（SwitchNode expression / OutputNode decision 等）复用已抽出的 `FlowNodeInspector` 组件（prop 驱动、无 store 依赖），规则编辑器和模板编辑器共用，见 §6.2。
+
+### 6.2 组件分层与复用边界
 
 **原则：共享逻辑，不共享上下文。** 相同的 picker 组件在两个不同上下文（模板编辑器的约束预览 vs 实例化表单的值填写）中复用，但它们各自的容器（`SlotValueInput` vs `SlotFormItem`）保持独立，因为两个上下文的数据流和 Form.Item 绑定需求根本不同——强行合并会很别扭。
 
@@ -405,7 +433,7 @@ RuleTemplate findVisibleByCode(Long tenantId, String code);
   SlotFormItem（新建，统一封装，替换 renderSlotInput switch）
 ```
 
-### 6.2 共享 picker 接口
+### 6.3 共享 picker 接口
 
 ```typescript
 /** 所有 picker 的统一 props——headless，不含 Form.Item */
@@ -433,7 +461,7 @@ const SLOT_PICKER: Record<SlotKind, React.ComponentType<SlotPickerProps>> = {
 };
 ```
 
-### 6.3 SlotFormItem（实例化表单专用，替换 renderSlotInput）
+### 6.4 SlotFormItem（实例化表单专用，替换 renderSlotInput）
 
 ```typescript
 /**
@@ -470,7 +498,7 @@ export default function SlotFormItem({ slot, context }: SlotFormItemProps) {
 ))}
 ```
 
-### 6.4 实例化表单结构（响应式，无 wizard 分步）
+### 6.5 实例化表单结构（响应式，无 wizard 分步）
 
 行业标准（CloudFormation / Backstage）：参数全部展示在一个表单，依赖关系用响应式联动，不做分步 wizard。
 
@@ -495,7 +523,7 @@ export default function SlotFormItem({ slot, context }: SlotFormItemProps) {
 
 **sceneCode 联动**：`Form.useWatch('sceneCode')` 得到实时场景值，传入 `SlotFormItem` context，DecisionPicker 的 `useEffect([sceneCode])` 自动重拉该场景的决策列表。场景未选时 DecisionPicker disabled 并给提示。提交时后端 SlotRefResolver 做完整校验（前端联动是体验层）。
 
-### 6.5 模板编辑器保存语义（随版本化调整）
+### 6.6 模板编辑器保存语义（随版本化调整）
 
 和规则编辑器的草稿保存完全同构：
 
@@ -507,14 +535,14 @@ export default function SlotFormItem({ slot, context }: SlotFormItemProps) {
 
 前端只需在保存时区分"草稿 PUT"vs"新版本 POST"，与现有规则编辑器的行为模式一致，用户心智零增量。
 
-### 6.6 模板列表
+### 6.7 模板列表
 
 - SYSTEM tenant 的模板带 `[系统]` 标签区分，租户自有模板无标签
 - 实例化入口：列表行"实例化"按钮 → 跳 `template-instantiate/:code`（默认最新 PUBLISHED 版本）
 - 版本历史：点模板名可查历史 `rule_template_version` 列表，可选择从某个历史版本实例化
 - Phase 1：SYSTEM 模板由 API 创建，列表只读展示；创建/编辑只对 STANDARD tenant 自有模板开放
 
-### 6.7 类型定义更新（一次性改对）
+### 6.8 类型定义更新（一次性改对）
 
 ```typescript
 // types/template.ts
