@@ -4,7 +4,9 @@
 
 **Goal:** 把 Task 12 占位模板编辑器(JSON 文本框 + 手打 JsonPointer + 仅 AST kind)正式化为架构清晰、复用规则编辑器的授权界面:全 6 kind、脚本 params 表、点选式声明参数化(不暴露 JsonPointer)、参照场景。
 
-> **后端 V2 已落地（2026-07-25）**：本计划写于后端 V2 实现之前，当时假设"后端 0 改动"。后端 V2 已完成的变更会影响前端，见下文「后端 V2 契约变更」。
+> **后端 V2 已落地（2026-07-25）**：本计划写于后端 V2 实现之前。后端 V2 已完成的变更会影响前端，见下文「后端 V2 契约变更」。
+> 
+> **V2 对齐提交（`01d2dbc0`）只修了类型/API 断裂**——让 `npx tsc -b` 编译通过、类型不崩。**不涉及任何计划中的功能实现**（L0 params round-trip / L1 原语 / L2 ScriptEditor 参数表 / L3 模板编辑器重写都还没做）。**实现时按本计划设计走，不被已有 placeholder 代码牵制；已有代码该删就删，不修补旧骨架**。
 
 **Architecture(按关注点分层,自底向上):**
 
@@ -16,7 +18,7 @@ L3 编排组合     template-list 创建 · template-editor(参照场景+复用 
 L4 收尾         i18n · 全量 tsc/vitest · 手动 e2e
 ```
 
-**Tech Stack:** React + TS + AntD + zustand + CodeMirror + i18next;Vite + Vitest(jsdom + @testing-library)。门槛 = `npm test` + `npx tsc -b` 干净 + L4 手验。后端 0 改动。
+**Tech Stack:** React + TS + AntD + zustand + CodeMirror + i18next;Vite + Vitest(jsdom + @testing-library)。门槛 = `npm test` + `npx tsc -b` 干净 + L4 手验。
 
 ## 后端 V2 契约变更（2026-07-25 对齐）
 
@@ -205,7 +207,7 @@ git commit -m "feat(frontend): SlotValueInput 按 DataType 渲染 primitive 值�
 
 **架构意图:** "哪些位置可参数化、怎么寻址(JsonPointer)、标签、推断类型"由此一处产出。AST/Flow 结构位置走它;Script 位置走参数表(不走本函数)。创作期便利,非运行时机制。
 
-**Files:** Create `pages/template-editor/introspect.ts` + `.test.ts`
+**Files:** `pages/template-editor/introspect.ts`（已有骨架——V2 对齐时改过 `DataType→ValueDataType`，代码与下方 Step 2 基本一致）+ **缺** `introspect.test.ts`（vitest 未写）
 
 **Interfaces:** `interface Candidate { jsonPointer; label; currentValue; dataType }`;`introspectPositions(kind: RuleKind, body: RuleBody): Candidate[]`。
 
@@ -339,7 +341,7 @@ git commit -m "feat(frontend): ScriptEditor 参数表+editableParams+onParamSlot
 
 **架构意图:** 创建入口 kind 复用 `getRuleKindOptions`(与 rule 单一真相源),骨架播种补齐 Script/Flow。
 
-**Files:** Modify `pages/template-list/index.tsx`
+**Files:** `pages/template-list/index.tsx`（已有占位代码——V2 对齐时改了 type imports + 加 enable 按钮 + 补 actorId，但创建弹窗/骨架播种仍是旧逻辑。按本 task 设计重写，不修补旧骨架）
 
 - [ ] **Step 1:** 创建弹窗 kind `Select` 改 `options={getRuleKindOptions(t)}`(删自造 `AST_KINDS`);`enum.kind.*` 在 rule ns,用 `useTranslation(['template','rule'])` 并 `t('rule:enum.kind.X')` 解析(或传能解析该 key 的 t;勿在 template ns 重复定义)。
 - [ ] **Step 2:** `handleCreate` 骨架播种加两分支:
@@ -358,7 +360,7 @@ git commit -m "feat(frontend): 模板创建入口 kind 复用 getRuleKindOptions
 
 **架构意图:** 模板 = skeleton(复用 body 编辑器搭)+ slot 声明覆盖层。skeleton 经 `RuleBodyEditor`/`FlowCanvasEditor`(与规则编辑器同一套,经 L2 门面支持脚本参数表可编辑)。slot 声明统一汇入模板编辑器的 `slots`/`bindings` state,两个入口:AST/Flow 走 `introspectPositions` 位置选择器,Script 走参数表 `onParamSlotToggle`。用户全程不见 JsonPointer。
 
-**Files:** Modify `pages/template-editor/index.tsx`;依赖 Task 3/4/6 + `getRuleKindOptions`/`getSceneMetadata`/`getScene`/`extractPayloadSchema`/`listDecisions`
+**Files:** `pages/template-editor/index.tsx`（已有 ~17KB placeholder——V2 对齐时改了 `TemplateDetail` 解包 + `ValueDataType` + slot `kind`。**按本 task 设计重写，不修补旧骨架。旧的手填 jsonPointer 表单、`addBinding` 手打逻辑全部删除**）
 
 - [ ] **Step 1: skeleton 复用 body 编辑器 + 参照场景 + kind 复用**
 
