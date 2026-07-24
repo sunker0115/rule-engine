@@ -3,6 +3,7 @@ import type {
   AstNode, ScorecardRootNode, IfNode, DecisionTableNode,
   ConditionTypeMeta, MetricDescriptor, DecisionItem, RuleKind, ScriptParams,
 } from '@/types';
+import type { DataType } from '@/types/template';
 import ConditionTreeEditor from './ConditionTreeEditor';
 import ScorecardEditor from './ScorecardEditor';
 import DecisionTreeEditor from './DecisionTreeEditor';
@@ -24,6 +25,10 @@ interface Props {
   decisions: DecisionItem[];
   tenantId?: number;
   sceneCode?: string;
+  /** 透传给 ScriptEditor：true 时脚本参数表可编辑（模板编辑场景）。 */
+  editableParams?: boolean;
+  /** 透传给 ScriptEditor：参数化开关回调，接线模板 slots/bindings。 */
+  onParamSlotToggle?: (key: string, enabled: boolean, dataType: DataType) => void;
 }
 
 /**
@@ -33,7 +38,7 @@ interface Props {
 export default function RuleBodyEditor({
   kind, ast, script, onAstChange, onScriptChange,
   conditionTypes, availableMetrics, payloadFieldNames, payloadFieldTypes, decisions,
-  tenantId, sceneCode,
+  tenantId, sceneCode, editableParams, onParamSlotToggle,
 }: Props) {
   const { t } = useTranslation('rule');
   const shared = { conditionTypes, availableMetrics, payloadFieldNames };
@@ -73,6 +78,8 @@ export default function RuleBodyEditor({
         payloadFieldTypes={payloadFieldTypes}
         tenantId={tenantId}
         sceneCode={sceneCode}
+        editableParams={editableParams}
+        onParamSlotToggle={onParamSlotToggle}
       />
     );
   }
