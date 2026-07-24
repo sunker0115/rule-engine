@@ -161,6 +161,24 @@ class JsonPointerBinderTest {
                 .hasMessageContaining("TEMPLATE_TARGET_FORBIDDEN");
     }
 
+    // ---- 省略的可选 slot：不用 null 覆盖 skeleton 默认值 ----
+    @Test
+    void bind_omittedOptionalSlot_preservesSkeletonDefault() {
+        AstBody skeleton = new AstBody(new AndNode(List.of(
+                new ConditionNode("GT", "amount", "金额",
+                        Map.of("threshold", 100, "cap", 500), 0.0)), null, null));
+        SlotBinding thresholdBinding = new SlotBinding("t",
+                new JsonPointerTarget("/conditionAst/children/0/params/threshold"));
+        SlotBinding capBinding = new SlotBinding("c",
+                new JsonPointerTarget("/conditionAst/children/0/params/cap"));
+        // 仅传 t，省略可选的 c → c 处应保留 skeleton 默认值 500，而非被 null 抹掉
+        RuleBody result = binder.bind(skeleton, List.of(thresholdBinding, capBinding), Map.of("t", 200));
+        AstBody ab = (AstBody) result;
+        ConditionNode cn = (ConditionNode) ((AndNode) ab.conditionAst()).children().get(0);
+        assertThat(cn.params().get("threshold")).isEqualTo(200);
+        assertThat(cn.params().get("cap")).isEqualTo(500);
+    }
+
     @Test
     void bind_preservesSkeleton() {
         AstBody skeleton = new AstBody(

@@ -104,6 +104,15 @@ class RuleTemplateServiceImplTest {
     }
 
     @Test
+    void create_kindBodyVariantMismatch_rejected() {
+        // kind=DECISION_FLOW 但 body 是 AstBody skeleton → 应在落库前拒收（否则模板永不可实例化）
+        assertThatThrownBy(() -> service.create(0L, "tmpl-a", "模板A", RuleKind.DECISION_FLOW.name(),
+                "desc", skeleton(), slots(null), bindings(), "u1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("KIND_BODY");
+    }
+
+    @Test
     void instantiate_bindsValuesAndCallsCreateDraftWithTemplateProvenance() {
         RuleTemplate tmpl = publishedTemplate(null);
         when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);

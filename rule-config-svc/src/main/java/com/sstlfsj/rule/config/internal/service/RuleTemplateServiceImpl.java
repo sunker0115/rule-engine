@@ -16,9 +16,12 @@ import com.sstlfsj.rule.config.internal.event.RuleTemplateSnapshot;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.RuleTemplateMapper;
 import com.sstlfsj.rule.config.internal.template.TemplateBinder;
+import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.sstlfsj.rule.kernel.api.model.FlowBody;
 import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
+import com.sstlfsj.rule.kernel.api.model.ScriptBody;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -59,6 +62,7 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
                        String description, RuleBody bodySkeleton,
                        List<TemplateSlot> slots, List<SlotBinding> bindings, String actorId) {
         RuleKind rk = validateKind(kind);
+        validateKindBody(rk, bodySkeleton);
         TemplateBinder binder = pickBinder(bodySkeleton);
         binder.validate(bodySkeleton, safe(bindings), safe(slots));
 
@@ -94,6 +98,7 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
                        List<TemplateSlot> slots, List<SlotBinding> bindings, String actorId) {
         RuleTemplate tmpl = requireDraft(tenantId, code);
         RuleKind rk = validateKind(kind);
+        validateKindBody(rk, bodySkeleton);
         TemplateBinder binder = pickBinder(bodySkeleton);
         binder.validate(bodySkeleton, safe(bindings), safe(slots));
 
@@ -207,6 +212,24 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
     private RuleKind validateKind(String kind) {
         if (kind == null || kind.isBlank()) throw new IllegalArgumentException("模板 kind 不可为空");
         return RuleKind.valueOf(kind);
+    }
+
+    /**
+     * 校验 kind 家族与 body skeleton 变体一致，避免 kind 与 body 错配的模板落库后每次实例化才失败（永不可实例化）。
+     * 与 PublishService.validateKindBodyConsistent 同款语义（后者私有静态不可复用，此处最小镜像）。
+     * body 为 null 时跳过（binder 分派会另行拒收）。
+     */
+    private void validateKindBody(RuleKind kind, RuleBody body) {
+        if (body == null) return;
+        boolean ok = switch (kind) {
+            case AST_BOOLEAN, SCORECARD, DECISION_TREE, DECISION_TABLE -> body instanceof AstBody;
+            case EXPRESSION_SCRIPT -> body instanceof ScriptBody;
+            case DECISION_FLOW -> body instanceof FlowBody;
+        };
+        if (!ok) {
+            throw new IllegalArgumentException("KIND_BODY_MISMATCH: 模板 kind=" + kind
+                    + " 与 body 类型 " + body.getClass().getSimpleName() + " 不一致");
+        }
     }
 
     private RuleTemplate requireTemplate(Long tenantId, String code) {
