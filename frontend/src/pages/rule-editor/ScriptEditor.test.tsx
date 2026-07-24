@@ -85,6 +85,50 @@ describe('ScriptEditor 参数表', () => {
     expect(onParamSlotToggle).toHaveBeenCalledWith('threshold', true, 'LONG');
   });
 
+  // 受控回填：重开已有脚本模板时开关态须由 slottedParamKeys（模板 bindings 真相源）驱动，
+  // 不再是内部 state 恒空导致全 OFF。
+  it('参数化开关 checked 受控于 slottedParamKeys（重开回填）', () => {
+    const onChange = vi.fn();
+    const onParamSlotToggle = vi.fn();
+    const { getByRole } = render(
+      <ScriptEditor
+        script={{ source: 'a > 1', lang: 'CEL', params: { threshold: 1 } }}
+        onChange={onChange}
+        availableMetrics={[]}
+        payloadFieldNames={[]}
+        editableParams
+        onParamSlotToggle={onParamSlotToggle}
+        slottedParamKeys={['threshold']}
+      />,
+    );
+    expect(getByRole('switch')).toBeChecked();
+  });
+
+  // 改名传播：已参数化的键改名 → 通知模板先摘旧 slot(old,false) 再加新 slot(new,true)，
+  // 使 binding 从 /script/params/<old> 迁到 <new>，修陈旧指针数据 bug。
+  it('已参数化的 param 改名 → onParamSlotToggle(old,false) 后 (new,true)', () => {
+    const onChange = vi.fn();
+    const onParamSlotToggle = vi.fn();
+    const { getByDisplayValue } = render(
+      <ScriptEditor
+        script={{ source: 'a > 1', lang: 'CEL', params: { threshold: 1 } }}
+        onChange={onChange}
+        availableMetrics={[]}
+        payloadFieldNames={[]}
+        editableParams
+        onParamSlotToggle={onParamSlotToggle}
+        slottedParamKeys={['threshold']}
+      />,
+    );
+    const input = getByDisplayValue('threshold');
+    fireEvent.change(input, { target: { value: 'newThreshold' } });
+    fireEvent.blur(input);
+    expect(onParamSlotToggle.mock.calls).toEqual([
+      ['threshold', false, 'LONG'],
+      ['newThreshold', true, 'LONG'],
+    ]);
+  });
+
   // 受控父组件回归：锁死双源 cross-overwrite。
   // 两个 onChange 源——CodeMirror updateListener（读 paramsRef，由 useEffect([script?.params]) 同步）
   // 与参数表 emitParams（读 props.source）——在受控父下必须都拿到最新值：

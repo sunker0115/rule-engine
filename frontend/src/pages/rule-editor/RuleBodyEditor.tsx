@@ -29,6 +29,8 @@ interface Props {
   editableParams?: boolean;
   /** 透传给 ScriptEditor：参数化开关回调，接线模板 slots/bindings。 */
   onParamSlotToggle?: (key: string, enabled: boolean, dataType: DataType) => void;
+  /** 透传给 ScriptEditor：已参数化的 param 键集合（真相源=模板 bindings），受控开关态。 */
+  slottedParamKeys?: string[];
 }
 
 /**
@@ -38,7 +40,7 @@ interface Props {
 export default function RuleBodyEditor({
   kind, ast, script, onAstChange, onScriptChange,
   conditionTypes, availableMetrics, payloadFieldNames, payloadFieldTypes, decisions,
-  tenantId, sceneCode, editableParams, onParamSlotToggle,
+  tenantId, sceneCode, editableParams, onParamSlotToggle, slottedParamKeys,
 }: Props) {
   const { t } = useTranslation('rule');
   const shared = { conditionTypes, availableMetrics, payloadFieldNames };
@@ -80,6 +82,7 @@ export default function RuleBodyEditor({
         sceneCode={sceneCode}
         editableParams={editableParams}
         onParamSlotToggle={onParamSlotToggle}
+        slottedParamKeys={slottedParamKeys}
       />
     );
   }

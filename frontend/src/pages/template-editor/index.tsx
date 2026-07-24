@@ -112,6 +112,14 @@ export default function TemplateEditor() {
 
   const carriers = bodyToCarriers(bodySkeleton);
 
+  // Script 参数化开关的真相源：绑到 /script/params/<key> 的 binding，取指针尾段还原 param 键
+  const slottedParamKeys = useMemo(
+    () => bindings
+      .filter((b) => b.target.jsonPointer.startsWith('/script/params/'))
+      .map((b) => b.target.jsonPointer.slice('/script/params/'.length)),
+    [bindings],
+  );
+
   // 可参数化位置候选（AST/Flow）；排除已绑 pointer
   const candidates = useMemo(() => introspectPositions(kind, bodySkeleton), [kind, bodySkeleton]);
   const boundPointers = new Set(bindings.map((b) => b.target.jsonPointer));
@@ -202,6 +210,7 @@ export default function TemplateEditor() {
         sceneCode={refSceneCode}
         editableParams={editable}
         onParamSlotToggle={handleParamSlotToggle}
+        slottedParamKeys={slottedParamKeys}
       />
     );
   };

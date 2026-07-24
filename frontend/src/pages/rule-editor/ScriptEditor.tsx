@@ -28,6 +28,8 @@ interface Props {
   editableParams?: boolean;
   /** 参数化开关回调——参数表↔模板 slots/bindings 的接线契约；未传时不渲染参数化列。 */
   onParamSlotToggle?: (key: string, enabled: boolean, dataType: DataType) => void;
+  /** 已参数化的 param 键集合（真相源来自模板 bindings）；参数化开关 checked 态受控于此，不用内部 state。 */
+  slottedParamKeys?: string[];
 }
 
 const DATA_TYPES: DataType[] = ['LONG', 'DOUBLE', 'DECIMAL', 'STRING', 'BOOLEAN', 'DATE', 'DATETIME', 'LIST'];
@@ -87,7 +89,7 @@ function parseCelErrors(errorText: string): Diagnostic[] {
 const languageCompartment = new Compartment();
 const autocompleteCompartment = new Compartment();
 
-export default function ScriptEditor({ script, onChange, availableMetrics, payloadFieldNames, payloadFieldTypes, tenantId, sceneCode, editableParams = false, onParamSlotToggle }: Props) {
+export default function ScriptEditor({ script, onChange, availableMetrics, payloadFieldNames, payloadFieldTypes, tenantId, sceneCode, editableParams = false, onParamSlotToggle, slottedParamKeys }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const langRef = useRef(script?.lang ?? 'CEL');
@@ -101,9 +103,9 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
   const params = script?.params ?? {};
   const types = payloadFieldTypes ?? {};
 
-  // dataType 与参数化开关态均为 UI-only（不入 script.params，只存值）
+  // dataType 为 UI-only（不入 script.params，只存值）；参数化开关态受控于 slottedParamKeys prop（真相源=模板 bindings）
   const [typeMap, setTypeMap] = useState<Record<string, DataType>>({});
-  const [slotMap, setSlotMap] = useState<Record<string, boolean>>({});
+  const slottedKeys = useMemo(() => new Set(slottedParamKeys ?? []), [slottedParamKeys]);
   const dataTypeOf = (key: string) => typeMap[key] ?? inferDataType(params[key]);
 
   const paramKeys = useMemo(() => Object.keys(script?.params ?? {}), [script?.params]);
@@ -124,7 +126,13 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
   const handleKeyRename = (oldKey: string, newKey: string) => {
     if (!newKey || newKey === oldKey || Object.prototype.hasOwnProperty.call(params, newKey)) return;
     setTypeMap((m) => (m[oldKey] === undefined ? m : { ...m, [newKey]: m[oldKey] }));
-    setSlotMap((m) => (m[oldKey] === undefined ? m : { ...m, [newKey]: m[oldKey] }));
+    // 若旧键已参数化，须把模板 binding 从 /script/params/<oldKey> 迁到 <newKey>，
+    // 否则 body 改了名而 binding 仍指旧指针 → 实例化填不进（陈旧指针）
+    if (slottedKeys.has(oldKey)) {
+      const dt = dataTypeOf(oldKey);
+      onParamSlotToggle?.(oldKey, false, dt);
+      onParamSlotToggle?.(newKey, true, dt);
+    }
     emitParams(renameKey(params, oldKey, newKey));
   };
 
@@ -143,7 +151,6 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
   };
 
   const handleSlotToggle = (key: string, enabled: boolean) => {
-    setSlotMap((m) => ({ ...m, [key]: enabled }));
     onParamSlotToggle?.(key, enabled, dataTypeOf(key));
   };
 
@@ -256,7 +263,7 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
       ? [{
           title: '参数化',
           render: (_: unknown, row: Row) => (
-            <Switch checked={!!slotMap[row.key]} onChange={(enabled) => handleSlotToggle(row.key, enabled)} />
+            <Switch checked={slottedKeys.has(row.key)} onChange={(enabled) => handleSlotToggle(row.key, enabled)} />
           ),
         } as TableColumnsType<Row>[number]]
       : []),
