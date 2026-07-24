@@ -4,5 +4,5 @@
  */
 export const FEATURES = {
   // 参数化规则模板（后端 rule.template.enabled 默认关闭）
-  templates: false,
+  templates: true,
 } as const;

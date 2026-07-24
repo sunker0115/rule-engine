@@ -1,3 +1,7 @@
+rule:
+  template:
+    enabled: true
+
 spring:
   application:
     name: rule-engine
