@@ -43,7 +43,7 @@ export default function TemplateEditor() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const { currentId } = useTenantStore();
-  const { setFlowSceneRules } = useRuleStore();
+  const { setFlowSceneRules, setSelectedFlowNodeId, setSelectedFlowEdgeIndex } = useRuleStore();
   const { t } = useTranslation('template');
   // enum.kind.* 键在 rule ns，复用 rule 命名空间 t（与 template-list 单一真相源一致）
   const tr = useTranslation('rule').t;
@@ -176,6 +176,10 @@ export default function TemplateEditor() {
           tenantId={currentId ?? 0}
           metadata={metadata}
           decisions={decisions}
+          onSelectedNodeChange={setSelectedFlowNodeId}
+          onSelectedEdgeChange={setSelectedFlowEdgeIndex}
+          onOpenRightPanel={() => {}}
+          onCloseRightPanel={() => {}}
         />
       );
     }
