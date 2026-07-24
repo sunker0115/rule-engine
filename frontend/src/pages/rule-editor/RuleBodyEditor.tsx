@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type {
   AstNode, ScorecardRootNode, IfNode, DecisionTableNode,
-  ConditionTypeMeta, MetricDescriptor, DecisionItem, RuleKind,
+  ConditionTypeMeta, MetricDescriptor, DecisionItem, RuleKind, ScriptParams,
 } from '@/types';
 import ConditionTreeEditor from './ConditionTreeEditor';
 import ScorecardEditor from './ScorecardEditor';
@@ -13,9 +13,9 @@ interface Props {
   /** 规则体的种类（DECISION_FLOW 以外的 5 种，由画布单独承载）。 */
   kind: RuleKind;
   ast: AstNode | null;
-  script: { source: string; lang: string } | null;
+  script: { source: string; lang: string; params?: ScriptParams } | null;
   onAstChange: (ast: AstNode) => void;
-  onScriptChange: (script: { source: string; lang: string }) => void;
+  onScriptChange: (script: { source: string; lang: string; params?: ScriptParams }) => void;
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
   payloadFieldNames: string[];

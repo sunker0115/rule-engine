@@ -8,7 +8,7 @@ import RuleBodyEditor from './RuleBodyEditor';
 import ExpressionInput from './ExpressionInput';
 import type {
   FlowNode, RuleRefNode, SwitchNode, TransformNode, OutputNode,
-  SceneMetadata, DecisionItem, RuleDetail, AstNode,
+  SceneMetadata, DecisionItem, RuleDetail, AstNode, ScriptParams,
 } from '@/types';
 import { bodyToCarriers, carriersToBody } from '@/types';
 
@@ -54,7 +54,7 @@ export default function FlowNodeInspectorDrawer({
   // 被引规则下钻编辑的本地态
   const [refDetail, setRefDetail] = useState<RuleDetail | null>(null);
   const [refAst, setRefAst] = useState<AstNode | null>(null);
-  const [refScript, setRefScript] = useState<{ source: string; lang: string } | null>(null);
+  const [refScript, setRefScript] = useState<{ source: string; lang: string; params?: ScriptParams } | null>(null);
   const [loadingRef, setLoadingRef] = useState(false);
   const [savingRef, setSavingRef] = useState(false);
   const [newLeafOpen, setNewLeafOpen] = useState(false);

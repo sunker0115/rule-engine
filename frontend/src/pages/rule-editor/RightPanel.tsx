@@ -205,7 +205,7 @@ export default function RightPanel({ metadata, ruleDetail }: Props) {
       label: t('editor.rightPanel.executor'),
       children: (
         <div style={{ padding: 16 }}>
-          <Select size="small" style={{ width: '100%', marginBottom: 12 }} value={currentLang} onChange={(lang) => setScript({ lang, source: script?.source ?? '' })} options={langOptions} />
+          <Select size="small" style={{ width: '100%', marginBottom: 12 }} value={currentLang} onChange={(lang) => setScript({ lang, source: script?.source ?? '', params: script?.params })} options={langOptions} />
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, whiteSpace: 'pre-line', background: '#f5f5f5', padding: 8, borderRadius: 4, margin: 0 }}>
             {t(`editor.script.syntaxHints.${currentLang}`)}
           </Typography.Paragraph>

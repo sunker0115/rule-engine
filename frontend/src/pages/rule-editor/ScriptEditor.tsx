@@ -7,13 +7,13 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { autocompletion, type CompletionContext } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint';
-import type { MetricDescriptor } from '@/types';
+import type { MetricDescriptor, ScriptParams } from '@/types';
 import { expressionCompletions } from './expressionCompletions';
 import { validateExpression } from '@/api/expression';
 
 interface Props {
-  script: { source: string; lang: string } | null;
-  onChange: (script: { source: string; lang: string }) => void;
+  script: { source: string; lang: string; params?: ScriptParams } | null;
+  onChange: (script: { source: string; lang: string; params?: ScriptParams }) => void;
   availableMetrics: MetricDescriptor[];
   payloadFieldNames: string[];
   payloadFieldTypes?: Record<string, string>;
@@ -64,6 +64,9 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const langRef = useRef(script?.lang ?? 'CEL');
+  // updateListener 闭包在空依赖 init effect 内，直接读 script?.params 会读到旧值；
+  // 用 ref 随 params 同步，onChange 时补回当前 params，避免每次编辑丢参数
+  const paramsRef = useRef<ScriptParams | undefined>(script?.params);
   const updatingFromOutside = useRef(false);
 
   const lang = script?.lang ?? 'CEL';
@@ -112,7 +115,7 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
         }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !updatingFromOutside.current) {
-            onChange({ lang: langRef.current, source: update.state.doc.toString() });
+            onChange({ lang: langRef.current, source: update.state.doc.toString(), params: paramsRef.current });
             runValidate(update.view, update.state.doc.toString(), langRef.current);
           }
         }),
@@ -122,6 +125,10 @@ export default function ScriptEditor({ script, onChange, availableMetrics, paylo
     viewRef.current = new EditorView({ state, parent: containerRef.current });
     return () => { viewRef.current?.destroy(); viewRef.current = null; };
   }, []);
+
+  useEffect(() => {
+    paramsRef.current = script?.params;
+  }, [script?.params]);
 
   useEffect(() => {
     langRef.current = lang;
