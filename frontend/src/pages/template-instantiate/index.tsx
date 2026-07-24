@@ -78,7 +78,8 @@ export default function TemplateInstantiate() {
   const renderSlotInput = (slot: TemplateSlot) => {
     const name = `slot_${slot.key}`;
     const rules = slot.required ? [{ required: true, message: `请填写 ${slot.label}` }] : [];
-    const fieldProps: Record<string, unknown> = { name, label: slot.label, rules };
+    const labelSuffix = slot.kind !== 'VALUE' ? ` (${slot.kind})` : ` (${slot.dataType ?? '?'}${slot.required ? ', 必填' : ''})`;
+    const fieldProps: Record<string, unknown> = { name, label: `${slot.label}${labelSuffix}`, rules };
 
     const placeholder = slot.kind === 'VALUE'
       ? `输入${slot.dataType ?? '值'}（实际值，非表达式）`
@@ -126,17 +127,17 @@ export default function TemplateInstantiate() {
         <Form form={form} layout="vertical">
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="ruleCode" label={t('instantiate.ruleCode') ?? '规则编码'} rules={[{ required: true }]}>
+              <Form.Item name="ruleCode" label={t('instantiate.ruleCode')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="ruleName" label={t('instantiate.ruleName') ?? '规则名称'} rules={[{ required: true }]}>
+              <Form.Item name="ruleName" label={t('instantiate.ruleName')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item label={t('instantiate.selectTenant') ?? '目标租户'} required>
+          <Form.Item label={t('instantiate.selectTenant')} required>
             <Select
               showSearch
               optionFilterProp="label"
@@ -145,7 +146,7 @@ export default function TemplateInstantiate() {
               options={tenants.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))}
             />
           </Form.Item>
-          <Form.Item name="sceneCode" label={t('instantiate.selectScene') ?? '目标场景'} rules={[{ required: true }]}>
+          <Form.Item name="sceneCode" label={t('instantiate.selectScene')} rules={[{ required: true }]}>
             <Select
               showSearch
               optionFilterProp="label"
@@ -153,11 +154,11 @@ export default function TemplateInstantiate() {
             />
           </Form.Item>
 
-          <Form.Item name="triggerEventTypes" label={t('instantiate.triggerEventTypes') ?? '事件类型（可选）'}>
-            <Select mode="tags" placeholder="输入事件类型后回车，如 order.created" />
+          <Form.Item name="triggerEventTypes" label={t('instantiate.triggerEventTypes')}>
+            <Select mode="tags" placeholder={t('instantiate.triggerEventTypes')} />
           </Form.Item>
 
-          <Title level={5}>{t('instantiate.fillSlots') ?? '填写 Slot 值'}</Title>
+          <Title level={5}>{t('instantiate.fillSlots')}</Title>
           {(tmpl.version.slots ?? []).map((slot) => (
             <Row key={slot.key} gutter={16}>
               <Col span={12}>{renderSlotInput(slot)}</Col>

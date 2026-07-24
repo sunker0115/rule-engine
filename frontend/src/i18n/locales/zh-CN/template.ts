@@ -41,8 +41,10 @@ const template: TemplateTranslation = {
     slotEnum: '枚举值', slotMin: '最小值', slotMax: '最大值',
   },
   instantiate: {
+    selectTenant: '目标租户',
     selectScene: '目标场景',
     ruleCode: '规则编码', ruleName: '规则名称',
+    triggerEventTypes: '事件类型',
     fillSlots: '填写参数',
     submit: '立即实例化',
     success: '实例化成功！',

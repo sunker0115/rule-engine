@@ -41,8 +41,10 @@ const template: TemplateTranslation = {
     slotEnum: 'Enum', slotMin: 'Min', slotMax: 'Max',
   },
   instantiate: {
+    selectTenant: 'Target Tenant',
     selectScene: 'Target Scene',
     ruleCode: 'Rule Code', ruleName: 'Rule Name',
+    triggerEventTypes: 'Event Types',
     fillSlots: 'Fill Slots',
     submit: 'Instantiate',
     success: 'Instantiated successfully!',

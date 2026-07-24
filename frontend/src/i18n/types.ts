@@ -806,8 +806,10 @@ export interface TemplateTranslation {
     slotEnum: string; slotMin: string; slotMax: string;
   };
   instantiate: {
+    selectTenant: string;
     selectScene: string;
     ruleCode: string; ruleName: string;
+    triggerEventTypes: string;
     fillSlots: string;
     submit: string; success: string;
     goToRule: string;
