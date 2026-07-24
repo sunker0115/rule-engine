@@ -23,7 +23,7 @@ const audit: AuditTranslation = {
       CREATE: 'Create', UPDATE: 'Update', PUBLISH: 'Publish',
       ENABLE: 'Enable', DISABLE: 'Disable', DELETE: 'Delete', IMPORT: 'Import',
     },
-    targetType: { RULE: 'Rule', SCENE: 'Scene', METRIC: 'Metric', DECISION: 'Decision', JOB: 'Job' },
+    targetType: { RULE: 'Rule', SCENE: 'Scene', METRIC: 'Metric', DECISION: 'Decision', JOB: 'Job', RULE_TEMPLATE: 'Rule Template' },
   },
   diff: { before: 'Before', after: 'After', expand: 'Expand', noDiff: 'No changes', renderError: 'Render Error', calcError: 'Calc Error', noSnapshot: 'No Snapshot' },
 };

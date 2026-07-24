@@ -15,3 +15,4 @@ export * from './metadata';
 export * from './tenant';
 export * from './analysis';
 export * from './effectiveness';
+export * from './template';

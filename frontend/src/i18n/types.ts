@@ -61,6 +61,7 @@ export interface CommonTranslation {
   };
   menu: {
     tenants: string; scenes: string; rules: string;
+    templates: string;
     metrics: string; decisions: string;
     sessions: string; auditLogs: string;
     scheduledTasks: string; importExport: string;
@@ -458,7 +459,7 @@ export interface AuditTranslation {
       CREATE: string; UPDATE: string; PUBLISH: string;
       ENABLE: string; DISABLE: string; DELETE: string; IMPORT: string;
     };
-    targetType: { RULE: string; SCENE: string; METRIC: string; DECISION: string; JOB: string };
+    targetType: { RULE: string; SCENE: string; METRIC: string; DECISION: string; JOB: string; RULE_TEMPLATE: string };
   };
   diff: { before: string; after: string; expand: string; noDiff: string; renderError: string; calcError: string; noSnapshot: string };
 }
@@ -766,6 +767,53 @@ export interface EffectivenessTranslation {
   };
 }
 
+// ===== template 命名空间（D74）=====
+export interface TemplateTranslation {
+  title: { list: string; editor: string; instantiate: string };
+  action: {
+    create: string; edit: string; publish: string; publishConfirm: string;
+    disable: string; disableConfirm: string;
+    instantiate: string;
+    back: string; save: string; saveSuccess: string;
+  };
+  column: {
+    name: string; code: string; kind: string; version: string;
+    slots: string; status: string;
+    createdAt: string; actions: string;
+  };
+  enum: {
+    version: string;
+    status: { DRAFT: string; PUBLISHED: string; DISABLED: string };
+    dataType: {
+      LONG: string; DOUBLE: string; DECIMAL: string; STRING: string;
+      BOOLEAN: string; DATE: string; DATETIME: string; LIST: string;
+    };
+  };
+  form: {
+    name: string; code: string; kind: string;
+    description: string;
+    basicInfo: string;
+    bodySkeleton: string;
+    slots: string;
+    slotKey: string; slotKeyPlaceholder: string;
+    slotLabel: string; slotLabelPlaceholder: string;
+    slotDataType: string;
+    slotRequired: string;
+    addSlot: string;
+    bindings: string;
+    bindingSlot: string;
+    jsonPointer: string; jsonPointerPlaceholder: string;
+    addBinding: string;
+  };
+  instantiate: {
+    selectScene: string;
+    ruleCode: string; ruleName: string;
+    fillSlots: string;
+    submit: string; success: string;
+    goToRule: string;
+  };
+}
+
 export interface TranslationResources {
   common: CommonTranslation;
   effectiveness: EffectivenessTranslation;
@@ -780,4 +828,5 @@ export interface TranslationResources {
   connector: ConnectorTranslation;
   analysis: RuleSetAnalysisTranslation;
   lineage: LineageTranslation;
+  template: TemplateTranslation;
 }

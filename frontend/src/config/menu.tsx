@@ -12,6 +12,7 @@ import {
   ClockCircleOutlined,
   ImportOutlined,
   BarChartOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { ROUTES } from '@/constants/routes';
 
@@ -31,6 +32,11 @@ export function getMenuItems(t: TFunction): ItemType[] {
       key: ROUTES.RULES,
       icon: <ApartmentOutlined />,
       label: t('menu.rules'),
+    },
+    {
+      key: ROUTES.TEMPLATES,
+      icon: <FileTextOutlined />,
+      label: t('menu.templates'),
     },
     {
       key: ROUTES.METRICS,

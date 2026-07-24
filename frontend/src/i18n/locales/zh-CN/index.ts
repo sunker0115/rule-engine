@@ -11,6 +11,7 @@ import importExport from './import-export';
 import connector from './connector';
 import analysis from './analysis';
 import lineage from './lineage';
+import template from './template';
 
 const zhCN = {
   common,
@@ -26,6 +27,7 @@ const zhCN = {
   connector,
   analysis,
   lineage,
+  template,
 };
 
 export default zhCN;

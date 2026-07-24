@@ -1,0 +1,51 @@
+import type { TemplateTranslation } from '../../types';
+
+const template: TemplateTranslation = {
+  title: { list: '规则模板', editor: '编辑模板', instantiate: '实例化模板' },
+  action: {
+    create: '创建模板', edit: '编辑', publish: '发布', publishConfirm: '确认发布此模板？',
+    disable: '禁用', disableConfirm: '确认禁用此模板？',
+    instantiate: '实例化',
+    back: '返回', save: '保存', saveSuccess: '保存成功',
+  },
+  column: {
+    name: '名称', code: '编码', kind: '类型', version: '版本',
+    slots: 'Slots', status: '状态',
+    createdAt: '创建时间', actions: '操作',
+  },
+  enum: {
+    version: 'v',
+    status: { DRAFT: '草稿', PUBLISHED: '已发布', DISABLED: '已禁用' },
+    dataType: {
+      LONG: '长整数', DOUBLE: '浮点数', DECIMAL: '小数', STRING: '字符串',
+      BOOLEAN: '布尔', DATE: '日期', DATETIME: '日期时间', LIST: '列表',
+    },
+  },
+  form: {
+    name: '名称', code: '编码', kind: '模板类型',
+    description: '说明',
+    basicInfo: '基本信息',
+    bodySkeleton: 'Body 骨架（含默认值）',
+    slots: 'Slot 定义',
+    slotKey: 'Key', slotKeyPlaceholder: 'param 键名',
+    slotLabel: '标签', slotLabelPlaceholder: '运营可见名称',
+    slotDataType: '数据类型',
+    slotRequired: '必填',
+    addSlot: '添加 Slot',
+    bindings: 'Slot 绑定',
+    bindingSlot: '绑定到 Slot',
+    jsonPointer: 'JSON Pointer',
+    jsonPointerPlaceholder: '/conditionAst/children/0/params/threshold',
+    addBinding: '添加绑定',
+  },
+  instantiate: {
+    selectScene: '目标场景',
+    ruleCode: '规则编码', ruleName: '规则名称',
+    fillSlots: '填写参数',
+    submit: '立即实例化',
+    success: '实例化成功！',
+    goToRule: '前往编辑',
+  },
+};
+
+export default template;
