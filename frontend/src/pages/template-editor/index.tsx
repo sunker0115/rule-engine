@@ -4,7 +4,6 @@ import FlowNodeInspector from '@/pages/rule-editor/FlowNodeInspector';
 import { SaveOutlined, DeleteOutlined, ArrowLeftOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
 import { useSceneStore } from '@/store/sceneStore';
 import { getTemplate, updateTemplate, publishTemplate } from '@/api/template';
@@ -46,7 +45,7 @@ function deriveSlotKey(jsonPointer: string, taken: Set<string>): string {
 export default function TemplateEditor() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { currentId } = useTenantStore();
+  const SYSTEM_TENANT = 1;
   const {
     setFlowSceneRules,
     setSelectedFlowNodeId, selectedFlowNodeId,
@@ -79,10 +78,10 @@ export default function TemplateEditor() {
   const kind: RuleKind = tmpl?.template?.kind ?? 'AST_BOOLEAN';
 
   const load = async () => {
-    if (!currentId || !code) return;
+    if (!SYSTEM_TENANT || !code) return;
     setLoading(true);
     try {
-      const data = await getTemplate(currentId, code);
+      const data = await getTemplate(SYSTEM_TENANT, code);
       setTmpl(data);
       form.setFieldsValue({ name: data.template.name, kind: data.template.kind, description: data.template.description });
       setSlots(data.version.slots ?? []);
@@ -92,7 +91,7 @@ export default function TemplateEditor() {
       // DECISION_FLOW：tmpl 确认后立刻拉 tenant 全量已发布规则写入 store
       // 不依赖 kind 的 effect 时序——tmpl 加载完即同步，供画布 RuleRef 选取
       if (data.template.kind === 'DECISION_FLOW') {
-        listRules(currentId, undefined, { page: 1, size: 500 }).then((rules) => {
+        listRules(SYSTEM_TENANT, undefined, { page: 1, size: 500 }).then((rules) => {
           setFlowSceneRules((rules.items ?? [])
             .filter((r) => r.code !== data.template.code && r.status === 'PUBLISHED' && r.kind !== 'DECISION_FLOW')
             .map((r) => ({ code: r.code, name: r.name, ruleDefinitionId: r.ruleDefinitionId, kind: r.kind, sceneCode: r.sceneCode })));
@@ -101,30 +100,30 @@ export default function TemplateEditor() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [currentId, code]);
+  useEffect(() => { load(); }, [SYSTEM_TENANT, code]);
 
   // scene 列表：进编辑器即加载
   useEffect(() => {
-    if (currentId) loadScenes(currentId);
-  }, [currentId, loadScenes]);
+    if (SYSTEM_TENANT) loadScenes(SYSTEM_TENANT);
+  }, [SYSTEM_TENANT, loadScenes]);
 
   // tenant 级资源：进编辑器即加载，不需要先选 scene
   useEffect(() => {
-    if (!currentId) return;
-    getTenantMetadata(currentId).then((m) => setMetadata(m));
-    listDecisions(currentId).then((d) => setDecisions(d ?? []));
-  }, [currentId]);
+    if (!SYSTEM_TENANT) return;
+    getTenantMetadata(SYSTEM_TENANT).then((m) => setMetadata(m));
+    listDecisions(SYSTEM_TENANT).then((d) => setDecisions(d ?? []));
+  }, [SYSTEM_TENANT]);
 
   // 参照场景变更时，加载 scene 级元数据 + payload schema
   useEffect(() => {
-    if (!currentId || !refSceneCode) {
+    if (!SYSTEM_TENANT || !refSceneCode) {
       setSceneMeta(null);
       setScenePayload({ names: [], types: {} });
       return;
     }
     Promise.all([
-      getSceneMetadata(currentId, refSceneCode),
-      getScene(currentId, refSceneCode),
+      getSceneMetadata(SYSTEM_TENANT, refSceneCode),
+      getScene(SYSTEM_TENANT, refSceneCode),
     ]).then(([meta, detail]) => {
       setSceneMeta(meta);
       setScenePayload(extractPayloadSchema(detail.payloadSchema));
@@ -132,7 +131,7 @@ export default function TemplateEditor() {
       setSceneMeta(null);
       setScenePayload({ names: [], types: {} });
     });
-  }, [currentId, refSceneCode]);
+  }, [SYSTEM_TENANT, refSceneCode]);
 
   // 有效元数据：选 scene 则用 scene 级，否则用 tenant 级
   const effectiveMetadata = useMemo((): SceneMetadata | null => {
@@ -211,7 +210,7 @@ export default function TemplateEditor() {
     if (!tmpl) return;
     setPublishing(true);
     try {
-      await publishTemplate(currentId!, code!, 'admin');
+      await publishTemplate(SYSTEM_TENANT!, code!, 'admin');
       message.success(t('action.publishConfirm'));
       load(); // 刷新模板状态
     } catch { /* interceptor */ }
@@ -223,7 +222,7 @@ export default function TemplateEditor() {
     const values = await form.validateFields();
     setSaving(true);
     try {
-      await updateTemplate(currentId!, code!, { ...values, bodySkeleton, slots, bindings });
+      await updateTemplate(SYSTEM_TENANT!, code!, { ...values, bodySkeleton, slots, bindings });
       message.success(t('action.saveSuccess'));
     } catch { /* interceptor */ }
     finally { setSaving(false); }
@@ -240,7 +239,7 @@ export default function TemplateEditor() {
             onChange={(g) => setBodySkeleton(carriersToBody('DECISION_FLOW', { flowGraph: g }))}
             sceneCode=''
             ruleCode={tmpl?.template?.code ?? ''}
-            tenantId={currentId ?? 0}
+            tenantId={SYSTEM_TENANT ?? 0}
             metadata={effectiveMetadata}
             decisions={decisions}
             onSelectedNodeChange={setSelectedFlowNodeId}
@@ -297,7 +296,7 @@ export default function TemplateEditor() {
         payloadFieldNames={effectiveMetadata?.payloadFieldNames ?? []}
         payloadFieldTypes={effectiveMetadata?.payloadFieldTypes}
         decisions={decisions}
-        tenantId={currentId ?? undefined}
+        tenantId={SYSTEM_TENANT ?? undefined}
         sceneCode={undefined}
         editableParams={editable}
         onParamSlotToggle={handleParamSlotToggle}
