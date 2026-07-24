@@ -3,8 +3,9 @@ package com.sstlfsj.rule.config.internal.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.config.internal.domain.RuleTemplate;
-import com.sstlfsj.rule.config.internal.domain.RuleTemplateStatus;
+import com.sstlfsj.rule.config.internal.domain.TemplateStatus;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
 
@@ -24,7 +25,7 @@ public interface RuleTemplateMapper extends BaseMapper<RuleTemplate> {
         return selectOne(new LambdaQueryWrapper<RuleTemplate>()
                 .eq(RuleTemplate::getTenantId, tenantId)
                 .eq(RuleTemplate::getCode, code)
-                .eq(RuleTemplate::getStatus, RuleTemplateStatus.PUBLISHED));
+                .eq(RuleTemplate::getStatus, TemplateStatus.PUBLISHED));
     }
 
     /** 按租户查全部模板。 */
@@ -34,9 +35,32 @@ public interface RuleTemplateMapper extends BaseMapper<RuleTemplate> {
     }
 
     /** 按租户 + 状态查模板列表。 */
-    default List<RuleTemplate> findByTenantId(Long tenantId, RuleTemplateStatus status) {
+    default List<RuleTemplate> findByTenantId(Long tenantId, TemplateStatus status) {
         return selectList(new LambdaQueryWrapper<RuleTemplate>()
                 .eq(RuleTemplate::getTenantId, tenantId)
                 .eq(status != null, RuleTemplate::getStatus, status));
     }
+
+    /**
+     * 按租户查可见模板：STANDARD 租户可见 SYSTEM 模板 + 自身模板。
+     * 通过 JOIN tenant.type 判断可见性。
+     */
+    @Select("""
+            SELECT rt.* FROM rule_template rt
+            INNER JOIN tenant t ON rt.tenant_id = t.id
+            WHERE (t.type = 'SYSTEM' OR rt.tenant_id = #{tenantId})
+            ORDER BY rt.id
+            """)
+    List<RuleTemplate> findVisibleByTenant(Long tenantId);
+
+    /**
+     * 按租户 + code 查可见模板：STANDARD 租户可见 SYSTEM 模板 + 自身模板。
+     */
+    @Select("""
+            SELECT rt.* FROM rule_template rt
+            INNER JOIN tenant t ON rt.tenant_id = t.id
+            WHERE rt.code = #{code}
+              AND (t.type = 'SYSTEM' OR rt.tenant_id = #{tenantId})
+            """)
+    RuleTemplate findVisibleByCode(Long tenantId, String code);
 }

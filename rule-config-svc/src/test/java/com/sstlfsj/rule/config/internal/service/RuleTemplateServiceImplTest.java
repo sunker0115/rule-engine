@@ -5,17 +5,21 @@ import com.sstlfsj.rule.config.api.dto.JsonPointerTarget;
 import com.sstlfsj.rule.config.api.dto.RuleContent;
 import com.sstlfsj.rule.config.api.dto.SlotBinding;
 import com.sstlfsj.rule.config.api.dto.SlotConstraint;
+import com.sstlfsj.rule.config.api.dto.SlotKind;
 import com.sstlfsj.rule.config.api.dto.TemplateSlot;
+import com.sstlfsj.rule.config.api.dto.ValueDataType;
 import com.sstlfsj.rule.config.internal.domain.RuleTemplate;
-import com.sstlfsj.rule.config.internal.domain.RuleTemplateStatus;
+import com.sstlfsj.rule.config.internal.domain.RuleTemplateInstantiation;
+import com.sstlfsj.rule.config.internal.domain.RuleTemplateVersion;
+import com.sstlfsj.rule.config.internal.domain.TemplateStatus;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
+import com.sstlfsj.rule.config.internal.repository.RuleTemplateInstantiationMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleTemplateMapper;
+import com.sstlfsj.rule.config.internal.repository.RuleTemplateVersionMapper;
 import com.sstlfsj.rule.config.internal.template.JsonPointerBinder;
 import com.sstlfsj.rule.config.internal.template.TemplateBinder;
 import com.sstlfsj.rule.kernel.api.model.AstBody;
-import com.sstlfsj.rule.config.api.dto.SlotKind;
-import com.sstlfsj.rule.config.api.dto.ValueDataType;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -45,6 +49,10 @@ class RuleTemplateServiceImplTest {
     @Mock
     RuleTemplateMapper templateMapper;
     @Mock
+    RuleTemplateVersionMapper versionMapper;
+    @Mock
+    RuleTemplateInstantiationMapper instantiationMapper;
+    @Mock
     PublishService publishService;
     @Mock
     ApplicationEventPublisher eventPublisher;
@@ -54,7 +62,8 @@ class RuleTemplateServiceImplTest {
     @BeforeEach
     void setUp() {
         List<TemplateBinder> binders = List.of(new JsonPointerBinder(new ObjectMapper()));
-        service = new RuleTemplateServiceImpl(templateMapper, publishService, eventPublisher, binders);
+        service = new RuleTemplateServiceImpl(templateMapper, versionMapper, instantiationMapper,
+                publishService, eventPublisher, binders);
     }
 
     // 一个合法 AstBody 骨架：ConditionNode.params.threshold 默认 100，绑定到 slot "threshold"
@@ -73,6 +82,31 @@ class RuleTemplateServiceImplTest {
         return List.of(new TemplateSlot("threshold", "阈值", SlotKind.VALUE, ValueDataType.LONG, true, constraint));
     }
 
+    /** 构造 PUBLISHED 状态的模板（身份 + 版本快照）。 */
+    private RuleTemplateVersion publishedVersion(SlotConstraint constraint) {
+        RuleTemplateVersion ver = new RuleTemplateVersion();
+        ver.setId(70L);
+        ver.setTemplateId(7L);
+        ver.setVersion(3);
+        ver.setBodySkeleton(skeleton());
+        ver.setSlots(slots(constraint));
+        ver.setBindings(bindings());
+        ver.setStatus(TemplateStatus.PUBLISHED);
+        return ver;
+    }
+
+    /** 构造 PUBLISHED 模板身份。 */
+    private RuleTemplate publishedTemplate() {
+        RuleTemplate tmpl = new RuleTemplate();
+        tmpl.setId(7L);
+        tmpl.setCode("tmpl-a");
+        tmpl.setTenantId(0L);
+        tmpl.setName("模板A");
+        tmpl.setKind(RuleKind.AST_BOOLEAN);
+        tmpl.setStatus(TemplateStatus.PUBLISHED);
+        return tmpl;
+    }
+
     @Test
     void create_insertsTemplateAndPublishesCreateAudit() {
         when(templateMapper.insert(any(RuleTemplate.class))).thenAnswer(inv -> {
@@ -80,6 +114,7 @@ class RuleTemplateServiceImplTest {
             t.setId(1L);
             return 1;
         });
+        when(versionMapper.insert(any(RuleTemplateVersion.class))).thenReturn(1);
 
         Long id = service.create(0L, "tmpl-a", "模板A", RuleKind.AST_BOOLEAN.name(), "desc",
                 skeleton(), slots(null), bindings(), "u1");
@@ -97,7 +132,8 @@ class RuleTemplateServiceImplTest {
     @Test
     void create_noBinderSupportsBody_throwsKindUnsupported() {
         RuleTemplateServiceImpl noBinder =
-                new RuleTemplateServiceImpl(templateMapper, publishService, eventPublisher, List.of());
+                new RuleTemplateServiceImpl(templateMapper, versionMapper, instantiationMapper,
+                        publishService, eventPublisher, List.of());
         assertThatThrownBy(() -> noBinder.create(0L, "tmpl-a", "模板A", RuleKind.AST_BOOLEAN.name(),
                 "desc", skeleton(), slots(null), bindings(), "u1"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -106,7 +142,6 @@ class RuleTemplateServiceImplTest {
 
     @Test
     void create_kindBodyVariantMismatch_rejected() {
-        // kind=DECISION_FLOW 但 body 是 AstBody skeleton → 应在落库前拒收（否则模板永不可实例化）
         assertThatThrownBy(() -> service.create(0L, "tmpl-a", "模板A", RuleKind.DECISION_FLOW.name(),
                 "desc", skeleton(), slots(null), bindings(), "u1"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -115,11 +150,13 @@ class RuleTemplateServiceImplTest {
 
     @Test
     void instantiate_bindsValuesAndCallsCreateDraftWithTemplateProvenance() {
-        RuleTemplate tmpl = publishedTemplate(null);
+        RuleTemplate tmpl = publishedTemplate();
         when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);
+        when(versionMapper.findLatestPublished(7L)).thenReturn(publishedVersion(null));
         when(publishService.createDraft(eq(0L), eq("scene-x"), eq("rule-1"), any(RuleContent.class),
                 eq("u1")))
                 .thenReturn(new DraftCreatedResult(11L, 22L, 1L, "DRAFT"));
+        when(instantiationMapper.insert(any(RuleTemplateInstantiation.class))).thenReturn(1);
 
         DraftCreatedResult result = service.instantiate(0L, "tmpl-a", "rule-1", "规则1",
                 "scene-x", List.of("evt"), Map.of("threshold", 200), "u1");
@@ -144,8 +181,10 @@ class RuleTemplateServiceImplTest {
 
     @Test
     void instantiate_constraintViolation_throwsValueInvalid() {
-        RuleTemplate tmpl = publishedTemplate(new SlotConstraint(null, BigDecimal.valueOf(100), null, null));
+        RuleTemplate tmpl = publishedTemplate();
         when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);
+        when(versionMapper.findLatestPublished(7L)).thenReturn(
+                publishedVersion(new SlotConstraint(null, BigDecimal.valueOf(100), null, null)));
         assertThatThrownBy(() -> service.instantiate(0L, "tmpl-a", "rule-1", "规则1",
                 "scene-x", List.of(), Map.of("threshold", 200), "u1"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -154,7 +193,6 @@ class RuleTemplateServiceImplTest {
 
     @Test
     void create_slotMissingBinding_rejected() {
-        // slots 有 threshold 但 bindings 为空 → 缺少 binding
         List<TemplateSlot> slots = List.of(new TemplateSlot("threshold", "阈值", SlotKind.VALUE, ValueDataType.LONG, true, null));
         assertThatThrownBy(() -> service.create(0L, "tmpl-b", "模板B", RuleKind.AST_BOOLEAN.name(),
                 "desc", skeleton(), slots, List.of(), "u1"))
@@ -164,9 +202,9 @@ class RuleTemplateServiceImplTest {
 
     @Test
     void instantiate_missingRequiredSlotValue_rejected() {
-        RuleTemplate tmpl = publishedTemplate(null);
+        RuleTemplate tmpl = publishedTemplate();
         when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);
-        // threshold 是 required=true 的 slot，但 slotValues 为空
+        when(versionMapper.findLatestPublished(7L)).thenReturn(publishedVersion(null));
         assertThatThrownBy(() -> service.instantiate(0L, "tmpl-a", "rule-2", "规则2",
                 "scene-x", List.of(), Map.of(), "u1"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -175,27 +213,12 @@ class RuleTemplateServiceImplTest {
 
     @Test
     void instantiate_unknownSlotKey_rejected() {
-        RuleTemplate tmpl = publishedTemplate(null);
+        RuleTemplate tmpl = publishedTemplate();
         when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);
-        // 必填 slot 齐全 + 多余未知键 → 触发 unknown key 分支
+        when(versionMapper.findLatestPublished(7L)).thenReturn(publishedVersion(null));
         assertThatThrownBy(() -> service.instantiate(0L, "tmpl-a", "rule-3", "规则3",
                 "scene-x", List.of(), Map.of("threshold", 200, "unknownKey", 123), "u1"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("未声明的 slot");
-    }
-
-    private RuleTemplate publishedTemplate(SlotConstraint constraint) {
-        RuleTemplate tmpl = new RuleTemplate();
-        tmpl.setId(7L);
-        tmpl.setCode("tmpl-a");
-        tmpl.setTenantId(0L);
-        tmpl.setName("模板A");
-        tmpl.setKind(RuleKind.AST_BOOLEAN);
-        tmpl.setBodySkeleton(skeleton());
-        tmpl.setSlots(slots(constraint));
-        tmpl.setBindings(bindings());
-        tmpl.setVersion(3);
-        tmpl.setStatus(RuleTemplateStatus.PUBLISHED);
-        return tmpl;
     }
 }
