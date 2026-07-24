@@ -93,7 +93,7 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 不需要 | ice | 树形编排+Leaf 副作用执行+多语言 SDK+零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK/文件存储非本项目方向；节点复用(D75 RuleRef)/并行(§2.29)已有等价物 |
-| 待触发（实验性铺路） | Drools | guided rule template（参数化模板） | D74 实验性预实现（默认关 `rule.template.enabled=false`），受 Drools 启发但定位为 authoring 便利层，待真实业务场景出现再开开关 |
+| 已实装（默认关） | Drools | guided rule template（参数化模板） | D74 已实装（`rule.template.enabled=false` 默认关）：JsonPointer 统一寻址覆盖全 6 kind + params 冻结常量命名空间 + binder SPI + 快照式实例化；受 Drools 启发但定位为 authoring 便利层；待真实业务场景出现后开启开关 |
 
 ### 3.2 分项目（细对比·融合版）
 
