@@ -22,7 +22,6 @@ import com.sstlfsj.rule.kernel.api.model.FlowBody;
 import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.ScriptBody;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +37,6 @@ import java.util.Map;
  * 覆盖全 6 kind；无 token 逻辑、无 exportFromRule。
  */
 @Service
-@ConditionalOnProperty(name = "rule.template.enabled", havingValue = "true")
 public class RuleTemplateServiceImpl implements RuleTemplateService {
 
     private final RuleTemplateMapper templateMapper;

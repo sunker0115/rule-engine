@@ -15,7 +15,6 @@ import {
   FileTextOutlined,
 } from '@ant-design/icons';
 import { ROUTES } from '@/constants/routes';
-import { FEATURES } from '@/config/features';
 
 export function getMenuItems(t: TFunction): ItemType[] {
   return [
@@ -34,15 +33,11 @@ export function getMenuItems(t: TFunction): ItemType[] {
       icon: <ApartmentOutlined />,
       label: t('menu.rules'),
     },
-    ...(FEATURES.templates
-      ? [
-          {
-            key: ROUTES.TEMPLATES,
-            icon: <FileTextOutlined />,
-            label: t('menu.templates'),
-          },
-        ]
-      : []),
+    {
+      key: ROUTES.TEMPLATES,
+      icon: <FileTextOutlined />,
+      label: t('menu.templates'),
+    },
     {
       key: ROUTES.METRICS,
       icon: <LineChartOutlined />,

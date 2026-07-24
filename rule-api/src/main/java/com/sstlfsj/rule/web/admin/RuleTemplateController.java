@@ -9,7 +9,6 @@ import com.sstlfsj.rule.web.admin.dto.UpdateTemplateRequest;
 import com.sstlfsj.rule.web.common.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,7 +18,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/v1/rule-templates")
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "rule.template.enabled", havingValue = "true")
 public class RuleTemplateController {
 
     private final RuleTemplateService templateService;

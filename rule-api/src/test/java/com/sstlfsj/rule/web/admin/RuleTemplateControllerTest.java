@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** RuleTemplateController 单元测试：新 API（bodySkeleton + bindings）+ feature flag 条件装配。 */
+/** RuleTemplateController 单元测试：新 API（bodySkeleton + bindings）。 */
 class RuleTemplateControllerTest {
 
     private MockMvc mockMvc;
@@ -211,27 +211,4 @@ class RuleTemplateControllerTest {
                 eq("risk.transfer"), eq(List.of("TXN")), any(), eq("user1"));
     }
 
-    // ---- feature flag：@ConditionalOnProperty(rule.template.enabled=true) ----
-
-    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withBean(RuleTemplateService.class, () -> mock(RuleTemplateService.class))
-            .withUserConfiguration(RuleTemplateController.class);
-
-    @Test
-    void controllerBeanAbsent_whenFlagUnset() {
-        contextRunner.run(context ->
-                assertThat(context).doesNotHaveBean(RuleTemplateController.class));
-    }
-
-    @Test
-    void controllerBeanAbsent_whenFlagFalse() {
-        contextRunner.withPropertyValues("rule.template.enabled=false")
-                .run(context -> assertThat(context).doesNotHaveBean(RuleTemplateController.class));
-    }
-
-    @Test
-    void controllerBeanPresent_whenFlagTrue() {
-        contextRunner.withPropertyValues("rule.template.enabled=true")
-                .run(context -> assertThat(context).hasSingleBean(RuleTemplateController.class));
-    }
 }

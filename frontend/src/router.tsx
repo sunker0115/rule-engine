@@ -3,7 +3,6 @@ import { lazy, Suspense } from 'react';
 import type { ReactNode } from 'react';
 import { Spin } from 'antd';
 import { ROUTES } from '@/constants/routes';
-import { FEATURES } from '@/config/features';
 import App from './App';
 
 const TenantList        = lazy(() => import('@/pages/tenant-list'));
@@ -63,13 +62,9 @@ export const router = createBrowserRouter([
       { path: ROUTES.SCHEDULED_TASKS,       element: <LazyPage><ScheduledTaskList /></LazyPage> },
       { path: ROUTES.SCHEDULED_TASK_DETAIL, element: <LazyPage><ScheduledTaskDetail /></LazyPage> },
       { path: ROUTES.IMPORT_EXPORT,  element: <LazyPage><ImportExport /></LazyPage> },
-      ...(FEATURES.templates
-        ? [
-            { path: ROUTES.TEMPLATES,             element: <LazyPage><TemplateList /></LazyPage> },
-            { path: ROUTES.TEMPLATE_EDITOR,       element: <LazyPage><TemplateEditor /></LazyPage> },
-            { path: ROUTES.TEMPLATE_INSTANTIATE,  element: <LazyPage><TemplateInstantiate /></LazyPage> },
-          ]
-        : []),
+      { path: ROUTES.TEMPLATES,             element: <LazyPage><TemplateList /></LazyPage> },
+      { path: ROUTES.TEMPLATE_EDITOR,       element: <LazyPage><TemplateEditor /></LazyPage> },
+      { path: ROUTES.TEMPLATE_INSTANTIATE,  element: <LazyPage><TemplateInstantiate /></LazyPage> },
     ],
   },
 ]);

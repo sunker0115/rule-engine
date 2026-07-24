@@ -7,7 +7,6 @@ import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.FlowBody;
 import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.ScriptBody;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JsonPointer;
 import tools.jackson.databind.JsonNode;
@@ -26,7 +25,6 @@ import java.util.Set;
  * slot↔binding 1:1 + body 专属守卫。
  */
 @Component
-@ConditionalOnProperty(name = "rule.template.enabled", havingValue = "true")
 public class JsonPointerBinder implements TemplateBinder {
 
     private static final String SCRIPT_PARAMS_PREFIX = "/script/params/";
