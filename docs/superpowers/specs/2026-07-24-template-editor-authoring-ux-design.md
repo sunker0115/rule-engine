@@ -147,7 +147,7 @@ D74 参数化模板的**后端**已完整落地(JsonPointer 统一寻址、param
 - `types/rule.ts`:`ScriptBody`/`BodyCarriers`/`carriersToBody`/`bodyToCarriers` 带 `params`(round-trip)。**已起改**。
 - `store/ruleStore.ts`:`script` 类型带 `params`。**已起改**。
 - `expressionCompletions.ts`:加 `params` 命名空间 + 分支(约 10 行),补全源 = 传入 param 键集。
-- 新增 `SlotValueInput`:按 `DataType` 渲染值输入;实例化表单 + 参数表默认值格共用(部分从实例化页抽取)。
+- 新增 `SlotValueInput`:按 `DataType` 渲染 primitive 值输入,**仅供脚本参数表默认值格**。实例化页**不复用、保持原样**——其 DatePicker(dayjs)/constraint 边界/`valuePropName=checked` 与参数表的 primitive 值表示天然冲突,强行共用会回归;DRY 让步给安全,真要统一另立任务。
 - `ScriptEditor.tsx`:参数表(CRUD + 参数化开关)+ `editableParams` + 自 `script.params` 派生补全键。
 - 模板编辑器 `template-editor/`:JSON 文本框 → 复用 `RuleBodyEditor`/`FlowCanvasEditor` 搭 skeleton;参照场景选择器;位置选择器(AST/flow 结构);slots 面板保留结构化表单、binding 改为选位置派生(去掉手填 pointer)。
 - 位置内省器:AST walker(值位→标签+pointer+推断类型)、flow 结构 walker(ruleCode/decision/caseKeys)。
