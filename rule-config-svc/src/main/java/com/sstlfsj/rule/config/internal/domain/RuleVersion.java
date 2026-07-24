@@ -39,6 +39,10 @@ public class RuleVersion {
     private List<MetricDependency> metricDependencies;
     @TableField(typeHandler = Jackson3TypeHandler.class)
     private List<PayloadDependency> payloadDependencies;
+    /** 实例化来源模板 ID（D74，手建规则为 null）。 */
+    private Long templateId;
+    /** 实例化时模板版本号。 */
+    private Integer templateVersion;
     private RuleVersionStatus status;
     private String publishedBy;
     private java.time.LocalDateTime publishedAt;

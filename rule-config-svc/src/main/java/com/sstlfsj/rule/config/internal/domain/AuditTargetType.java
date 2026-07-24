@@ -19,7 +19,8 @@ public enum AuditTargetType {
     METRIC_DEFINITION("metric_definition"),
     DECISION_DEFINITION("decision_definition"),
     CONNECTOR_DEFINITION("connector_definition"),
-    JOB("job");
+    JOB("job"),
+    RULE_TEMPLATE("rule_template");
 
     @EnumValue
     private final String code;
