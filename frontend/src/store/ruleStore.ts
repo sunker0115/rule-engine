@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import type { AstNode, DecisionBinding, PreGate, RuleKind, FlowGraph } from '@/types';
+import type { AstNode, DecisionBinding, PreGate, RuleKind, FlowGraph, ScriptParams } from '@/types';
 
 /** 编辑器快照——undo/redo 的最小还原面 */
 interface EditSnapshot {
   ast: AstNode | null;
-  script: { source: string; lang: string } | null;
+  script: { source: string; lang: string; params?: ScriptParams } | null;
   flowGraph: FlowGraph | null;
   decisionBindings: DecisionBinding[];
   preGates: PreGate[];
@@ -50,7 +50,7 @@ interface RuleState {
   kind: RuleKind;
   displayLabel: string;
   dirty: boolean;
-  script: { source: string; lang: string } | null;
+  script: { source: string; lang: string; params?: ScriptParams } | null;
   flowGraph: FlowGraph | null;
 
   setAst: (ast: AstNode) => void;
@@ -59,7 +59,7 @@ interface RuleState {
   setTriggerEventTypes: (types: string[]) => void;
   setKind: (kind: RuleKind) => void;
   setDisplayLabel: (label: string) => void;
-  setScript: (script: { source: string; lang: string } | null) => void;
+  setScript: (script: { source: string; lang: string; params?: ScriptParams } | null) => void;
   setFlowGraph: (flowGraph: FlowGraph | null) => void;
   selectedFlowNodeId: string | null;
   selectedFlowEdgeIndex: number | null;
@@ -81,7 +81,7 @@ interface RuleState {
 
   loadFromDetail: (
     ast: AstNode | null, bindings: DecisionBinding[], gates: PreGate[],
-    types: string[], kind: RuleKind, script: { source: string; lang: string } | null,
+    types: string[], kind: RuleKind, script: { source: string; lang: string; params?: ScriptParams } | null,
     flowGraph: FlowGraph | null,
   ) => void;
   reset: () => void;
@@ -95,7 +95,7 @@ const initialState = {
   kind: 'AST_BOOLEAN' as RuleKind,
   displayLabel: '',
   dirty: false,
-  script: null as { source: string; lang: string } | null,
+  script: null as { source: string; lang: string; params?: ScriptParams } | null,
   flowGraph: null as FlowGraph | null,
   selectedFlowNodeId: null as string | null,
   selectedFlowEdgeIndex: null as number | null,

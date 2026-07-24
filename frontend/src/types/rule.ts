@@ -5,16 +5,19 @@ export type RuleKind = 'AST_BOOLEAN' | 'SCORECARD' | 'DECISION_TREE' | 'DECISION
 export type RuleStatus = 'DRAFT' | 'PUBLISHED' | 'DISABLED';
 export type VersionStatus = 'DRAFT' | 'ACTIVE' | 'SUPERSEDED';
 
+/** 脚本参数类型（对齐后端 ScriptSource.params，冻结常量 map）。 */
+export type ScriptParams = Record<string, unknown>;
+
 /** 判定主体多态载体（三承载收敛，与后端 RuleBody 对齐，type 判别）。 */
 export type RuleBody =
   | { type: 'AstBody'; conditionAst?: AstNode | null }
-  | { type: 'ScriptBody'; script: { source: string; lang: string } }
+  | { type: 'ScriptBody'; script: { source: string; lang: string; params?: ScriptParams } }
   | { type: 'FlowBody'; flowGraph: FlowGraph; referencedSnapshots?: Record<string, unknown> };
 
 /** 编辑态平铺载体（store/编辑器内部用，与 body 在 API 边界互转）。 */
 export interface BodyCarriers {
   conditionAst: AstNode | null;
-  script: { source: string; lang: string } | null;
+  script: { source: string; lang: string; params?: ScriptParams } | null;
   flowGraph: FlowGraph | null;
 }
 
@@ -32,9 +35,9 @@ export function bodyToCarriers(body: RuleBody | null | undefined): BodyCarriers 
 /** 平铺载体 → body（请求组装时 wrap，按 kind 判别）。 */
 export function carriersToBody(
   kind: RuleKind,
-  c: { conditionAst?: AstNode | null; script?: { source: string; lang: string } | null; flowGraph?: FlowGraph | null },
+  c: { conditionAst?: AstNode | null; script?: { source: string; lang: string; params?: ScriptParams } | null; flowGraph?: FlowGraph | null },
 ): RuleBody {
-  if (kind === 'EXPRESSION_SCRIPT') return { type: 'ScriptBody', script: c.script as { source: string; lang: string } };
+  if (kind === 'EXPRESSION_SCRIPT') return { type: 'ScriptBody', script: c.script as { source: string; lang: string; params?: ScriptParams } };
   if (kind === 'DECISION_FLOW') return { type: 'FlowBody', flowGraph: c.flowGraph as FlowGraph, referencedSnapshots: {} };
   return { type: 'AstBody', conditionAst: c.conditionAst ?? null };
 }
