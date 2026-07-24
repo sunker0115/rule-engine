@@ -21,6 +21,7 @@ class ScriptExecutorTest {
         private final boolean throwOnEval;
         private final boolean throwOnCompile;
         private int compileCount;
+        private Map<String, Object> lastBindings;   // 捕获最近一次 evaluate 的绑定面,供 params 注入断言
         FakeEngine(Object result) { this(result, false, false); }
         FakeEngine(Object result, boolean throwOnEval) { this(result, throwOnEval, false); }
         FakeEngine(Object result, boolean throwOnEval, boolean throwOnCompile) {
@@ -33,6 +34,7 @@ class ScriptExecutorTest {
             return Set::of;
         }
         public Object evaluate(CompiledExpression c, Map<String, Object> b) {
+            lastBindings = b;
             if (throwOnEval) throw new RuntimeException("boom");
             return result;
         }
@@ -147,6 +149,32 @@ class ScriptExecutorTest {
                 List.of(), List.of(), new ScriptSource("expr", "CEL"));
         EvalResult r = executor(new FakeEngine(List.of("x"))).execute(snap, ctx());
         assertThat(r.errorCode()).isEqualTo(EvalErrorCode.SCRIPT_EVAL_ERROR.name());
+    }
+
+    @Test
+    void paramsInjectedIntoBinding() {
+        // 求值期 script.params() 并入 binding 顶层 params key
+        FakeEngine engine = new FakeEngine(Boolean.TRUE);
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "scene", "t1", null,
+                List.of(), List.of(), List.of(), RuleKind.EXPRESSION_SCRIPT.tag(), "R1", 1L,
+                List.of(), List.of(),
+                new ScriptSource("params.threshold > 0", "CEL", Map.of("threshold", 100)));
+        executor(engine).execute(snap, ctx());
+        assertThat(engine.lastBindings).containsKey("params");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> params = (Map<String, Object>) engine.lastBindings.get("params");
+        assertThat(params).containsEntry("threshold", 100);
+    }
+
+    @Test
+    void paramsEmptyMapWhenNoParams() {
+        // 旧 2 参 ScriptSource → 空 params,binding 仍含 params key(空 map)
+        FakeEngine engine = new FakeEngine(Boolean.TRUE);
+        RuleVersionSnapshot snap = new RuleVersionSnapshot(1L, "scene", "t1", null,
+                List.of(), List.of(), List.of(), RuleKind.EXPRESSION_SCRIPT.tag(), "R1", 1L,
+                List.of(), List.of(), new ScriptSource("expr", "CEL"));
+        executor(engine).execute(snap, ctx());
+        assertThat((Map<?, ?>) engine.lastBindings.get("params")).isEmpty();
     }
 
     private RuleVersionSnapshot scriptSnap(String lang) {
