@@ -496,3 +496,30 @@ Task1-4 相对独立可先行；Task5 依赖 Task2/3；Task6 独立（依赖 Tas
 - §8 迁移(T1)✓
 - 前端(§6)→ 独立前端计划，不在本计划
 - Phase 2 项(METRIC_REF 深度校验等)→ 不做
+
+## 实际执行记录（2026-07-25）
+
+12 commits (2298b8dc..1dc8739c)，8 tasks + 1 fix wave。全量 clean test: 515 tests, 0 Failures（11 Errors 为预存 Testcontainers ApplicationContext 加载失败）。
+
+### 执行中偏离 plan 的修正
+
+| 偏离 | 说明 | 阶段 |
+|------|------|------|
+| `findDraft` SQL 补 `ORDER BY version DESC LIMIT 1` | 多 DRAFT 行时歧义，review 发现 | Task 5 fix |
+| `MetricRefResolver` 错误消息拆分 | 存在/状态两路径独立消息，与另外两 resolver 对齐 | Task 6 fix |
+| `SlotRefResolverDispatchTest` mock 同步 | `findActiveByCode`→`findAnyByCode`，修复拆分后未同步 | Task 6 fix |
+| `update` PUBLISHED 后重编→`setStatus(DRAFT)` | spec 状态机表明确约定，实现遗漏 | 收尾 fix |
+| `list(status)` 走可见性查询 | 原实现在 status 非空时不 JOIN tenant.type | 收尾 fix |
+| `findVisibleByCode` 加同名优先 `ORDER BY + LIMIT 1` | spec §5.6 约定 STANDARD 自有模板优先于 SYSTEM 同名 | 收尾 fix |
+| 集成测试 `@ComponentScan` excludeFilters | `scanBasePackages` + `@MapperScan` 双扫冲突，排除 Mapper 注解解决 | 收尾 fix |
+
+### 补齐规则侧已有但模板缺失的能力
+
+| 能力 | 规则 | 模板（补齐后） |
+|------|------|----------------|
+| **enable**（DISABLED→PUBLISHED） | `ConfigService.enable` | `RuleTemplateService.enable` + Controller `POST /{code}/enable` |
+| **`getVersion` 按状态分派** | `getRuleDetail`: DRAFT→`findLatestDraft`, 其他→`findActiveVersion` | `getVersion`: DRAFT→`findDraft`, 其他→`findLatestPublished` |
+
+### 预存问题（非本次引入）
+
+- 3 个 `*IntegrationTest` 的 `ConflictingBeanDefinitionException: decisionDefinitionMapper`：`@SpringBootApplication(scanBasePackages="internal")` + `@MapperScan("repository")` 双扫同一 Mapper 接口，stash 验证 100% 复现。已加 `excludeFilters = @Filter(Mapper.class)` 修复但测试仍需 Docker（`@Testcontainers(disabledWithoutDocker=true)` 本地跳过）。

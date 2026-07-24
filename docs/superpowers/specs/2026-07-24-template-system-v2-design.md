@@ -328,7 +328,7 @@ try {
 
 **状态流转：**
 ```
-rule_template.status:         DRAFT → PUBLISHED → DISABLED
+rule_template.status:         DRAFT → PUBLISHED ⇄ DISABLED
 rule_template_version.status: DRAFT → PUBLISHED（每个 version 行独立）
 ```
 
@@ -342,6 +342,7 @@ rule_template_version.status: DRAFT → PUBLISHED（每个 version 行独立）
 | 发布后再编辑 | status→DRAFT | 新增 v(n+1) 行，status=DRAFT；原 PUBLISHED 行不动 |
 | 再次发布 | status→PUBLISHED | 新 DRAFT version→PUBLISHED |
 | 禁用 | status→DISABLED | 所有 version 行不变（历史快照完整保留） |
+| 启用 | status→PUBLISHED | 所有 version 行不变（复用已有 PUBLISHED 版本，参考规则 enable） |
 
 **findLatestPublished 逻辑：**
 ```sql
@@ -354,6 +355,7 @@ ORDER BY version DESC LIMIT 1
 **约定：**
 - `rule_template.status` 跟踪"当前最新版本的状态"，是显示给用户的聚合状态，不作为实例化资格判断的唯一依据——实例化检查路径：`tmpl.status != DISABLED && tmplVer != null`。
 - **同一模板同时只能有一个 DRAFT 版本**（应用层保证）：新建 DRAFT 前先检查是否已有 DRAFT 行，有则复用（更新），无则新建。DB 层不加唯一约束（允许 DRAFT+PUBLISHED 并存），业务逻辑保证 DRAFT 行最多一条。
+- **`getVersion` 按模板状态分派**（对齐规则 `getRuleDetail`）：DRAFT 状态→查 `findDraft`（返回当前编辑中的草稿版本），PUBLISHED/DISABLED→查 `findLatestPublished`（返回最新已发布版本）。
 
 ### 5.6 可见性查询
 
