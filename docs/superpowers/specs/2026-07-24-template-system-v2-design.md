@@ -1,0 +1,421 @@
+# 规则模板系统 V2 — 设计文档
+
+## 1. 设计目标
+
+模板是独立于租户体系的 **Platform 层能力**，不是某个租户的私有数据。规则引擎的核心链路（scene → rule → metric → eval）**完全不知道模板的存在**，有没有模板功能核心运行零影响。
+
+三条不可破坏的红线：
+1. **核心表零污染**：`rule_version`、`rule_definition`、`scene`、`metric_definition` 等核心表无任何模板字段
+2. **单向依赖**：模板子系统依赖核心，核心不依赖模板
+3. **零魔法值**：所有状态用枚举表达，不用 `tenant_id=0` 之类的约定数字
+
+---
+
+## 2. 分层架构与数据流
+
+```
+Platform 层 (SYSTEM tenant)
+  rule_template              ← 模板定义，system 级，不属于任何业务租户
+  rule_template_slot         ← slot schema（嵌入 template JSON 列）
+  rule_template_binding      ← binding（嵌入 template JSON 列）
+        │
+        │ 实例化（单向）
+        ▼
+Tenant 层
+  rule_definition            ← 核心，零模板字段
+  rule_version               ← 核心，零模板字段
+  rule_template_instantiation ← 溯源表，单向持有(template→rule_version)，可删
+        │
+        ▼
+Scene 层
+  eval pipeline              ← 完全不知道模板存在
+```
+
+依赖方向严格单向向下。删掉 `rule_template_instantiation` 表，两层完全解耦，核心功能零影响。
+
+---
+
+## 3. 数据模型
+
+### 3.1 Tenant 类型扩展
+
+```sql
+ALTER TABLE tenant
+  ADD COLUMN type VARCHAR(16) NOT NULL DEFAULT 'STANDARD'
+  COMMENT 'STANDARD=普通租户, SYSTEM=平台系统租户';
+
+-- SYSTEM tenant 初始化（迁移文件）
+INSERT INTO tenant (code, name, type, status, ...)
+  VALUES ('SYSTEM', '平台系统', 'SYSTEM', 'ACTIVE', ...);
+```
+
+Java 枚举（不使用魔法数字）：
+```java
+public enum TenantType { STANDARD, SYSTEM }
+```
+
+### 3.2 rule_template 表（全量重建）
+
+```sql
+CREATE TABLE rule_template (
+  id              BIGINT        NOT NULL AUTO_INCREMENT,
+  tenant_id       BIGINT        NOT NULL COMMENT '所属租户，SYSTEM tenant = 平台级模板',
+  code            VARCHAR(128)  NOT NULL,
+  name            VARCHAR(256)  NOT NULL,
+  description     VARCHAR(1024),
+  kind            VARCHAR(32)   NOT NULL COMMENT 'RuleKind 枚举',
+  body_skeleton   JSON          NOT NULL COMMENT '合法 body，所有值位已填默认值',
+  slots           JSON          NOT NULL COMMENT 'TemplateSlot[]',
+  bindings        JSON          NOT NULL COMMENT 'SlotBinding[]',
+  version         INT           NOT NULL DEFAULT 1,
+  status          VARCHAR(16)   NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT/PUBLISHED/DISABLED',
+  created_by      VARCHAR(64),
+  created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by      VARCHAR(64),
+  updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_tenant_code (tenant_id, code)
+) COLLATE = utf8mb4_unicode_ci;
+```
+
+### 3.3 rule_template_instantiation 表（溯源，可插拔）
+
+```sql
+CREATE TABLE rule_template_instantiation (
+  id                  BIGINT  NOT NULL AUTO_INCREMENT,
+  template_id         BIGINT  NOT NULL COMMENT '模板 ID（platform 层）',
+  template_version    INT     NOT NULL COMMENT '实例化时的模板版本号',
+  rule_definition_id  BIGINT  NOT NULL COMMENT '产物规则定义 ID（tenant 层）',
+  rule_version_id     BIGINT  NOT NULL COMMENT '产物规则版本 ID（tenant 层）',
+  slot_values         JSON    NOT NULL COMMENT '实例化时的填值快照',
+  instantiated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  instantiated_by     VARCHAR(64),
+  PRIMARY KEY (id),
+  -- 外键只往核心方向走，核心表不知道此表存在
+  KEY idx_template_id (template_id),
+  KEY idx_rule_version_id (rule_version_id)
+) COLLATE = utf8mb4_unicode_ci;
+```
+
+### 3.4 核心表变更（删除污染字段）
+
+```sql
+-- 从 rule_version 删掉模板字段
+ALTER TABLE rule_version
+  DROP COLUMN template_id,
+  DROP COLUMN template_version;
+```
+
+Java 实体同步删除：`RuleVersion.templateId`、`RuleVersion.templateVersion` 字段删除。  
+`PublishService.createDraft` 签名恢复干净，不带任何模板参数。
+
+---
+
+## 4. Slot 类型体系
+
+### 4.1 SlotKind（分类，不混入值类型）
+
+```java
+/**
+ * Slot 的种类。决定实例化时的验证逻辑和前端渲染的 picker 控件。
+ * kind 本身编码了解析作用域，无需额外 scope 字段。
+ */
+public enum SlotKind {
+  /** 具体值，dataType 字段指定类型 */
+  VALUE,
+  /** 指标引用，tenant 层解析，constraint.allowedDataTypes 限制兼容类型 */
+  METRIC_REF,
+  /** 决策引用，scene 层解析（实例化时由 target sceneCode 确定） */
+  DECISION_REF,
+  /** 规则引用，tenant 层解析（Flow RuleRefNode.ruleCode） */
+  RULE_REF
+}
+```
+
+作用域由 `kind` 隐含：
+- `METRIC_REF` / `RULE_REF` → tenant 层，实例化时在 tenant 内验证存在性
+- `DECISION_REF` → scene 层，实例化时在 target scene 内验证存在性
+
+### 4.2 ValueDataType（仅 VALUE kind 使用）
+
+```java
+/** 值类型，仅 SlotKind.VALUE 时有意义。 */
+public enum ValueDataType {
+  LONG, DOUBLE, DECIMAL, STRING, BOOLEAN, DATE, DATETIME, LIST
+}
+```
+
+### 4.3 TemplateSlot record
+
+```java
+/**
+ * 模板参数 schema。
+ * kind=VALUE 时 dataType 必填；kind=*_REF 时 dataType 为 null。
+ */
+public record TemplateSlot(
+    String key,
+    String label,
+    SlotKind kind,
+    @Nullable ValueDataType dataType,   // 仅 VALUE 时有效
+    boolean required,
+    @Nullable SlotConstraint constraint
+) {}
+```
+
+### 4.4 SlotConstraint
+
+```java
+/**
+ * Slot 值的约束条件。不同 kind 使用不同字段：
+ * VALUE(数值类型) → min / max
+ * VALUE(枚举类型) → enumValues
+ * METRIC_REF     → allowedDataTypes（限制 metric 的 dataType 兼容性）
+ * DECISION_REF / RULE_REF → 暂无约束（存在性校验由 SlotRefResolver 完成）
+ */
+public record SlotConstraint(
+    @Nullable BigDecimal min,
+    @Nullable BigDecimal max,
+    @Nullable List<String> enumValues,
+    @Nullable List<String> allowedDataTypes   // METRIC_REF 专用
+) {}
+```
+
+### 4.5 SlotBinding / SlotTarget（沿用，不改）
+
+```java
+sealed interface SlotTarget permits JsonPointerTarget {}
+record JsonPointerTarget(String jsonPointer) implements SlotTarget {}
+record SlotBinding(String slotKey, SlotTarget target) {}
+```
+
+`JsonPointerTarget` 统一寻址 body skeleton 内任意 JSON 位置：
+- AST 值位：`/conditionAst/children/0/params/threshold`
+- script 常量：`/script/params/threshold`
+- flow 常量：`/flowGraph/params/threshold`
+- flow 节点字段：`/flowGraph/nodes/0/ruleCode`（RULE_REF）
+
+---
+
+## 5. 后端代码架构
+
+### 5.1 SlotRefResolver SPI（新增，仿 TemplateBinder 定式）
+
+```java
+/**
+ * 引用类型 Slot 的验证器 SPI。
+ * Spring 注入 List<SlotRefResolver>，按 supports() 分派，零 switch。
+ * 加新 kind = 加一个实现类 + 注册，Service 代码零改动。
+ */
+public interface SlotRefResolver {
+    /** 是否处理此 kind */
+    boolean supports(SlotKind kind);
+
+    /**
+     * 验证引用值在目标作用域内合法存在且满足约束。
+     * 不合法抛带错误码的 IllegalArgumentException。
+     * @param value  slot 填入的字符串值（metricCode / decisionCode / ruleCode）
+     * @param slot   slot schema（含 constraint.allowedDataTypes 等约束）
+     * @param ctx    解析上下文（tenantId 必有，sceneCode DECISION_REF 时有效）
+     */
+    void validate(String value, TemplateSlot slot, SlotResolutionContext ctx);
+}
+
+/** 解析上下文——携带验证所需的作用域信息 */
+public record SlotResolutionContext(Long tenantId, @Nullable String sceneCode) {}
+```
+
+V1 实现（Phase 1）：
+- `MetricRefResolver`：验证 metric code 在 tenant 内存在且 ACTIVE，检查 allowedDataTypes 兼容
+- `DecisionRefResolver`：验证 decision code 在 target scene 内存在且 ACTIVE
+- `RuleRefResolver`：验证 rule code 在 tenant 内存在且有 ACTIVE/PUBLISHED 版本
+
+### 5.2 实例化流水线（关注点分离，每步独立）
+
+```java
+// 1. 加载模板（必须 PUBLISHED）
+RuleTemplate tmpl = templateMapper.findPublishedByCode(tenantId, templateCode);
+// tenantId 来自 caller，查询时 union SYSTEM tenant（见 §6）
+
+// 2. VALUE slot 值的强转 + constraint 校验（现有 validateSlotValues 扩展）
+Map<String, Object> coercedValues = validateAndCoerce(tmpl.slots(), slotValues);
+
+// 3. 引用类型 slot 验证（新增，SlotRefResolver SPI 分派，零 switch）
+for (TemplateSlot slot : tmpl.slots()) {
+    if (slot.kind() != SlotKind.VALUE) {
+        SlotRefResolver resolver = pick(slot.kind()); // supports() 匹配
+        resolver.validate((String) slotValues.get(slot.key()), slot,
+                          new SlotResolutionContext(tenantId, sceneCode));
+    }
+}
+
+// 4. bind：把所有值填入 skeleton（现有 TemplateBinder SPI，不改）
+RuleBody bound = binder.bind(tmpl.bodySkeleton(), tmpl.bindings(), coercedValues);
+
+// 5. 创建草稿（PublishService.createDraft 签名干净，不带任何模板参数）
+RuleContent content = new RuleContent(ruleName, tmpl.kind().tag(), bound, ...);
+DraftCreatedResult result = publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId);
+
+// 6. 写溯源（独立步骤，失败不影响规则创建）
+instantiationMapper.insert(new RuleTemplateInstantiation(
+    tmpl.id(), tmpl.version(),
+    result.ruleDefinitionId(), result.ruleVersionId(),
+    slotValues
+));
+```
+
+### 5.3 TemplateBinder SPI（沿用现有，不改）
+
+`TemplateBinder.bind()` 处理 VALUE 和 REF 两种 slot 的 body 填充逻辑完全相同——都是 JsonPointer 替换 JSON 节点。REF 类型的值（metricCode 字符串）和 VALUE 类型的值（100L）在 bind 层面没有区别，bind 层不需要知道 kind。
+
+已通过 Phase 1 实现和 e2e 验证，零改动。
+
+### 5.4 可见性查询（可配置）
+
+```java
+// TemplateMapper：查询当前租户可见的模板（自有 + SYSTEM tenant 的模板）
+@Select("""
+    SELECT t.* FROM rule_template t
+    JOIN tenant tn ON t.tenant_id = tn.id
+    WHERE tn.id = #{tenantId}
+       OR tn.type = 'SYSTEM'
+    ORDER BY tn.type DESC, t.created_at DESC
+""")
+List<RuleTemplate> findVisibleByTenant(Long tenantId);
+```
+
+无 UNION，单次 JOIN，SYSTEM tenant 记录靠 `tenant.type` 字段过滤。
+
+---
+
+## 6. 前端设计
+
+### 6.1 SlotKind → 渲染控件映射（Record，不写 switch）
+
+```typescript
+type SlotKind = 'VALUE' | 'METRIC_REF' | 'DECISION_REF' | 'RULE_REF';
+
+/** kind → picker 组件映射，加新 kind 只改这里 */
+const SLOT_KIND_WIDGET: Record<SlotKind, React.ComponentType<SlotPickerProps>> = {
+  VALUE:        SlotValueInput,    // 内部按 dataType 渲染（已有）
+  METRIC_REF:   MetricPicker,      // tenant 全量 ACTIVE metric 下拉，按 allowedDataTypes 过滤
+  DECISION_REF: DecisionPicker,    // 响应式：依赖 sceneCode，动态加载该 scene 的 decision
+  RULE_REF:     RulePicker,        // tenant 全量已发布规则下拉
+};
+
+interface SlotPickerProps {
+  slot: TemplateSlot;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  context: { tenantId: number; sceneCode?: string }; // DECISION_REF 用 sceneCode
+}
+```
+
+### 6.2 实例化表单结构
+
+```
+固定上下文字段（非 slot，所有实例化必填）
+  ├── target scene ← 填了这个，DecisionPicker 响应式更新选项
+  ├── rule code
+  ├── rule name
+  └── trigger events
+
+Slot 值表单（按 SlotKind 渲染不同 picker）
+  VALUE        → SlotValueInput（按 dataType）
+  METRIC_REF   → MetricPicker（tenant 级，不依赖 scene）
+  DECISION_REF → DecisionPicker（响应式，依赖 sceneCode，sceneCode 空时 disabled + 提示）
+  RULE_REF     → RulePicker（tenant 级，不依赖 scene）
+```
+
+**sceneCode 联动**：DecisionPicker 的 `useEffect([sceneCode])` 触发重新拉取该 scene 的 decision 列表，不需要 wizard 步骤。sceneCode 未填时 DecisionPicker disabled 并提示"请先选择目标场景"。
+
+提交时后端再做完整校验（前端联动是体验，后端 SlotRefResolver 是正确性保证）。
+
+### 6.3 模板列表可见性
+
+查询结果中 SYSTEM tenant 的模板带 `[系统]` 标签，租户自有模板无标签。两者在同一列表中展示，实例化操作无差别。
+
+Phase 1 暂不做创建/编辑界面上的 tenant 选择——SYSTEM 模板由直接 API 调用创建（后续 admin 角色管理跟进）。
+
+---
+
+## 7. Phase 边界
+
+### Phase 1（当前可实现）
+
+- `TenantType` 枚举 + `tenant.type` 字段
+- SYSTEM tenant 初始化
+- 核心表清理（删 `rule_version.template_id/version`，`PublishService` 签名还原）
+- `rule_template_instantiation` 溯源表
+- 模板可见性查询（JOIN tenant.type）
+- `SlotKind` 枚举拆分（VALUE + METRIC_REF + DECISION_REF + RULE_REF schema 定义）
+- `SlotRefResolver` SPI 框架 + 三个实现（Phase 1 只做存在性校验，不做深度类型兼容）
+- 前端 `SLOT_KIND_WIDGET` Record + DecisionPicker / MetricPicker / RulePicker 组件（骨架）
+- bodySkeleton 里 metricCode 仍为具体字符串（SYSTEM tenant 建自己的示例 metric）
+
+### Phase 2（另立项）
+
+- `METRIC_REF` slot 的实例化深度验证（metricCode 对应的 metric dataType 与 allowedDataTypes 兼容）
+- bodySkeleton 中 `metricCode` 改为参数化（从写死字符串改为 METRIC_REF slot）
+- 前端 MetricPicker 按 `allowedDataTypes` 过滤
+- 模板真正做到 tenant-agnostic（实例化时 tenant 填自己的 metric）
+- admin 角色管理（SYSTEM tenant 模板的创建/编辑权限）
+
+---
+
+## 8. 迁移方案
+
+### V1_42（改写，当前未 apply）
+
+```sql
+-- 1. tenant 表加 type 字段
+ALTER TABLE tenant ADD COLUMN type VARCHAR(16) NOT NULL DEFAULT 'STANDARD';
+
+-- 2. 插入 SYSTEM tenant
+INSERT INTO tenant (code, name, type, status) VALUES ('SYSTEM', '平台系统', 'SYSTEM', 'ACTIVE');
+
+-- 3. rule_template 表（全新定义，无 token）
+CREATE TABLE rule_template (...);  -- 见 §3.2
+
+-- 4. rule_template_instantiation 溯源表
+CREATE TABLE rule_template_instantiation (...);  -- 见 §3.3
+
+-- 注意：V1_42 不再包含 ALTER TABLE rule_version，核心表不动
+```
+
+### rule_version 清理（单独迁移文件 V1_43）
+
+```sql
+ALTER TABLE rule_version
+  DROP COLUMN template_id,
+  DROP COLUMN template_version;
+```
+
+---
+
+## 9. 不做的事
+
+- **B 活链接**：模板改动不传播到已实例化的规则（快照式，D6 红线）
+- **反向导出**（`exportFromRule`）：已删，Phase 2 如需另立
+- **Flow 表达式 params UI**（flow 表达式常量参数化）：后端已支持，前端待真需求
+- **跨租户模板共享**（tenant A 模板给 tenant B 用）：超出 SYSTEM/STANDARD 两级设计，不在范围内
+- **模板版本 diff / rollback**：YAGNI
+
+---
+
+## 10. 关键不变量
+
+1. 删除 `rule_template_instantiation` 表 → 规则引擎核心功能零影响
+2. 删除整个 `rule_template` 表 → 规则引擎核心功能零影响
+3. `SlotRefResolver` 新增实现 → `Service` / `Controller` 代码零改动（SPI 自动收集）
+4. 新增 `SlotKind` 枚举值 → 前端只改 `SLOT_KIND_WIDGET` Record 一行
+5. `TemplateBinder.bind()` 对 VALUE 和 REF slot 行为完全一致 → bind 层不需要知道 kind
+
+---
+
+## References
+
+- 当前 D74 实现：`2026-07-24-parameterized-rule-template-redesign-design.md`
+- 模板编辑器 UX：`2026-07-24-template-editor-authoring-ux-design.md`
+- TemplateBinder SPI 现有实现：`rule-config-svc/internal/template/JsonPointerBinder.java`
+- FlowNodeInspector 组件化：`rule-editor/FlowNodeInspector.tsx`
+- 行业参照：[CloudFormation Rules](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/rules-section-structure.html) · [Backstage Templates](https://backstage.io/docs/features/software-templates/writing-templates/)
