@@ -260,38 +260,65 @@ V1 实现（Phase 1）：
 ### 5.2 实例化流水线（关注点分离，每步独立）
 
 ```java
-// 1. 加载身份 + 快照（两张表，同 rule_definition + rule_version 的查询模式）
-RuleTemplate tmpl = templateMapper.findByCode(tenantId, templateCode);
-// 可见性：tenant 自有 OR SYSTEM tenant（JOIN tenant.type，见 §5.4）
-RuleTemplateVersion tmplVer = templateVersionMapper.findLatestPublished(tmpl.id());
-// 也可指定版本：findByVersion(tmpl.id(), requestedVersion)
+// 1. 加载身份（带可见性：tenant 自有 OR SYSTEM tenant，JOIN tenant.type）
+//    同名 code 时 STANDARD 自有模板优先于 SYSTEM 模板（业务优先级约定）
+RuleTemplate tmpl = templateMapper.findVisibleByCode(callerTenantId, templateCode);
+if (tmpl == null) throw new NotFoundException("模板不存在: " + templateCode);
+if (tmpl.status() == TemplateStatus.DISABLED) throw new IllegalStateException("模板已禁用");
 
-// 2. VALUE slot 强转 + constraint 校验（slots/bindings/skeleton 全在 tmplVer 上）
-Map<String, Object> coercedValues = validateAndCoerce(tmplVer.slots(), slotValues);
+// 加载最新 PUBLISHED 快照（版本号最大的 PUBLISHED 行）
+// 也可指定：findByVersion(tmpl.id(), requestedVersion)
+RuleTemplateVersion tmplVer = templateVersionMapper.findLatestPublished(tmpl.id());
+if (tmplVer == null) throw new IllegalStateException("模板无已发布版本");
+
+// 2. 构造 coercedValues：VALUE slot 做强转，REF slot 原样字符串 pass-through
+//    bind() 需要所有 slot 的值（VALUE + REF 都要），不能只传 VALUE 的
+Map<String, Object> coercedValues = new HashMap<>();
+for (TemplateSlot slot : tmplVer.slots()) {
+    Object raw = slotValues.get(slot.key());
+    if (slot.kind() == SlotKind.VALUE) {
+        coercedValues.put(slot.key(), coerce(raw, slot));  // 强转 + VALUE constraint 校验
+    } else {
+        // REF slot：值是字符串（metricCode/decisionCode/ruleCode），原样放入
+        coercedValues.put(slot.key(), raw);
+    }
+    if (slot.required() && raw == null) throw new IllegalArgumentException("必填 slot 未提供: " + slot.key());
+}
 
 // 3. 引用类型 slot 验证（SlotRefResolver SPI 分派，零 switch）
+//    注意：callerTenantId 是调用方租户（STANDARD tenant），不是模板归属的 tenant
+//    metric/rule/decision 均在调用方租户 + 目标场景内验证，与模板来源无关
 for (TemplateSlot slot : tmplVer.slots()) {
     if (slot.kind() != SlotKind.VALUE) {
-        SlotRefResolver resolver = pick(slot.kind()); // supports() 匹配
-        resolver.validate((String) slotValues.get(slot.key()), slot,
-                          new SlotResolutionContext(tenantId, sceneCode));
+        SlotRefResolver resolver = pick(slot.kind());
+        resolver.validate((String) coercedValues.get(slot.key()), slot,
+                          new SlotResolutionContext(callerTenantId, sceneCode));
     }
 }
 
-// 4. bind：把值填入 skeleton（TemplateBinder SPI，不改；skeleton/bindings 在 tmplVer 上）
+// 4. bind：把值填入 skeleton（TemplateBinder SPI 不改）
+//    可选 slot 未提供时 coercedValues.containsKey 为 false → binder 跳过 → 保留 skeleton 默认值
 RuleBody bound = binder.bind(tmplVer.bodySkeleton(), tmplVer.bindings(), coercedValues);
 
-// 5. 创建草稿（PublishService.createDraft 签名干净，不带任何模板参数）
+// 5. 创建草稿（PublishService.createDraft 签名干净，不带模板参数）
 RuleContent content = new RuleContent(ruleName, tmpl.kind().tag(), bound, ...);
-DraftCreatedResult result = publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId);
+DraftCreatedResult result = publishService.createDraft(callerTenantId, sceneCode, ruleCode, content, actorId);
 
-// 6. 写溯源（独立步骤，失败不影响规则创建；FK 指向真实 rule_template_version 行）
-instantiationMapper.insert(new RuleTemplateInstantiation(
-    tmpl.id(), tmplVer.id(), tmplVer.version(),
-    result.ruleDefinitionId(), result.ruleVersionId(),
-    slotValues
-));
+// 6. 写溯源（best-effort，独立事务；失败记录错误日志但不回滚步骤 5 已创建的规则）
+try {
+    instantiationMapper.insert(new RuleTemplateInstantiation(
+        tmpl.id(), tmplVer.id(), tmplVer.version(),
+        result.ruleDefinitionId(), result.ruleVersionId(),
+        slotValues   // 保存原始填值快照（未强转），便于人工排查
+    ));
+} catch (Exception e) {
+    log.error("溯源写入失败，规则已创建，可人工补录: ruleVersionId={}", result.ruleVersionId(), e);
+}
 ```
+
+**关键约束说明：**
+- `callerTenantId`（调用方 STANDARD tenant）贯穿整个流程：metric/rule/decision 验证、`createDraft` 归属、溯源记录。模板来自 SYSTEM tenant 只影响可见性查询，不影响实例化产物的归属。
+- 可选 slot（required=false）未提供值时，步骤 2 不放入 coercedValues，步骤 4 的 binder 检测到 key 缺失跳过该 binding，skeleton 默认值保留——这是期望行为，不是 bug。
 
 ### 5.3 TemplateBinder SPI（沿用现有，不改）
 
@@ -299,21 +326,60 @@ instantiationMapper.insert(new RuleTemplateInstantiation(
 
 已通过 Phase 1 实现和 e2e 验证，零改动。
 
-### 5.4 可见性查询（可配置）
+### 5.4 模板状态机与双表同步协议
+
+`rule_template`（身份层）和 `rule_template_version`（快照层）各有 status，同步规则如下：
+
+**状态流转：**
+```
+rule_template.status:         DRAFT → PUBLISHED → DISABLED
+rule_template_version.status: DRAFT → PUBLISHED（每个 version 行独立）
+```
+
+**操作 → 两表变更：**
+
+| 操作 | rule_template | rule_template_version |
+|---|---|---|
+| 创建 | status=DRAFT | 新增 v1 行，status=DRAFT |
+| 保存草稿 | status 不变（DRAFT）| 更新当前 DRAFT 行（同 version 号） |
+| 发布 | status→PUBLISHED | 当前 DRAFT version→PUBLISHED；旧 PUBLISHED 版本保留原状（不变为 SUPERSEDED，靠 max version 消歧） |
+| 发布后再编辑 | status→DRAFT | 新增 v(n+1) 行，status=DRAFT；原 PUBLISHED 行不动 |
+| 再次发布 | status→PUBLISHED | 新 DRAFT version→PUBLISHED |
+| 禁用 | status→DISABLED | 所有 version 行不变（历史快照完整保留） |
+
+**findLatestPublished 逻辑：**
+```sql
+SELECT * FROM rule_template_version
+WHERE template_id = #{templateId} AND status = 'PUBLISHED'
+ORDER BY version DESC LIMIT 1
+```
+两个 PUBLISHED 版本并存时取 version 最大的，保证实例化用最新发布版本。
+
+**约定：** `rule_template.status` 跟踪"当前最新版本的状态"，是显示给用户的聚合状态，不作为实例化资格判断的唯一依据——实例化检查路径：`tmpl.status != DISABLED && tmplVer != null`。
+
+### 5.6 可见性查询
 
 ```java
-// TemplateMapper：查询当前租户可见的模板（自有 + SYSTEM tenant 的模板）
+// 列表查询：当前 tenant 自有模板 + SYSTEM tenant 模板，单次 JOIN，无 UNION
 @Select("""
     SELECT t.* FROM rule_template t
     JOIN tenant tn ON t.tenant_id = tn.id
-    WHERE tn.id = #{tenantId}
-       OR tn.type = 'SYSTEM'
+    WHERE tn.id = #{tenantId} OR tn.type = 'SYSTEM'
     ORDER BY tn.type DESC, t.created_at DESC
 """)
 List<RuleTemplate> findVisibleByTenant(Long tenantId);
-```
 
-无 UNION，单次 JOIN，SYSTEM tenant 记录靠 `tenant.type` 字段过滤。
+// 单条查询（实例化用）：同名 code 时 STANDARD 自有模板优先于 SYSTEM 模板
+@Select("""
+    SELECT t.* FROM rule_template t
+    JOIN tenant tn ON t.tenant_id = tn.id
+    WHERE t.code = #{code}
+      AND (tn.id = #{tenantId} OR tn.type = 'SYSTEM')
+    ORDER BY CASE WHEN tn.id = #{tenantId} THEN 0 ELSE 1 END
+    LIMIT 1
+""")
+RuleTemplate findVisibleByCode(Long tenantId, String code);
+```
 
 ---
 
