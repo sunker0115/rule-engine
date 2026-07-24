@@ -523,3 +523,16 @@ Task1-4 相对独立可先行；Task5 依赖 Task2/3；Task6 独立（依赖 Tas
 ### 预存问题（非本次引入）
 
 - 3 个 `*IntegrationTest` 的 `ConflictingBeanDefinitionException: decisionDefinitionMapper`：`@SpringBootApplication(scanBasePackages="internal")` + `@MapperScan("repository")` 双扫同一 Mapper 接口，stash 验证 100% 复现。已加 `excludeFilters = @Filter(Mapper.class)` 修复但测试仍需 Docker（`@Testcontainers(disabledWithoutDocker=true)` 本地跳过）。
+
+### e2e 执行中发现的 bug 及修复
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| publish 报"无 binder 支持 body 类型 null" | `RuleTemplateVersionMapper` 用 `@Select` 不走 MyBatis-Plus `autoResultMap`，JSON TypeHandler 未触发 | 改用 `default` 方法 + `LambdaQueryWrapper` |
+| 决策表实例化 NPE (`"pk" is null`) | `ConditionTypeCatalog.spec(null)` 未防御；模板 JSON 用错字段名 `conditionType` 应为 `operator` | 加 null guard + 明确错误消息 |
+| Flow 实例化要求被引规则预存在 | `PublishService.createDraft()` 调用 `resolveFlowDraft()` 冻结 RuleRef/Output，阻塞模板实例化 | 新增 `strictRefs` 参数，模板实例化时跳过，发布时再校验 |
+| 集成测试 Bean 冲突 | `@SpringBootApplication(scanBasePackages)` + `@MapperScan` 双扫 Mapper 接口 | `@ComponentScan` 加 `excludeFilters = @Filter(Mapper.class)` |
+
+### 最终统计（2026-07-25 收尾）
+
+41 commits，70 files，+2471/-487 行。后端 515 tests 全绿（11 预存 errors），前端 tsc 0 + 44 tests，e2e 6/6 场景通过。

@@ -440,3 +440,11 @@ L1 Task2 ─┤(并行)
 - spec §1 Scope:AST(T4/T8)+Script(T1/T2/T3/T6/T8)+Flow 结构(T4/T8)+SlotValueInput(T3)+参照场景(T5/T8)+round-trip(T1) ✓
 - spec §3 不暴露 pointer(T8)✓;§4 参数表单一真相源(T6)✓;§7 参照场景 A(T5/T8)✓;§8 editableParams(T6)✓;§9 组件清单全覆盖 ✓;§10 不做项均未含 ✓
 - **Review Blocker/Important 全归零**:① ScriptEditor updateListener 主泄漏(T1 paramsRef)✓ ② RuleBodyEditor 透传(T6 门面)✓ ③ SlotValueInput 缩范围不碰实例化(T3)✓ ④ Script 走参数表非 introspect(T4/T8 澄清)✓ ⑤ flow 骨架去 params(T7)✓ ⑥ getSceneMetadata@metadata/extractPayloadSchema 抽共享(锚点表/T5)✓ ⑦ DECIMAL i18n(T9)✓ ⑧ weight/scorecard 阈值候选(T4)✓
+
+## 实际执行记录（2026-07-25 收尾）
+
+L0-L4 全部 9 个 task 完成。大部分 task（1/2/3/5/6/7/9）为预存 commit；本次新增：
+- Task 4：introspectPositions vitest 21 tests
+- Task 8：参照场景选择器 + publish 按钮
+- V2 对齐：类型/API/页面适配后端模板系统 V2（TemplateDetail/SlotKind/enable/actorId/模板市场/规则列表隔离/DryRun eventType/实例化表单）
+- e2e 验证：6/6 场景通过，发现并修复 JsonPointerBinder 的 @Select→LambdaQueryWrapper 问题
