@@ -126,15 +126,11 @@ CREATE TABLE rule_template_instantiation (
 ) COLLATE = utf8mb4_unicode_ci;
 ```
 
-### 3.4 核心表变更（删除污染字段）
+### 3.4 核心表零模板字段（greenfield 天然干净）
 
-```sql
-ALTER TABLE rule_version
-  DROP COLUMN template_id,
-  DROP COLUMN template_version;
-```
+`rule_version` 从建表迁移（V1_40）起就不含任何模板字段。旧 D74 的 `template_id`/`template_version` 是旧 V1_42 用 `ALTER` 加的——V1_42 改写为 V2 形态后该 ALTER 消失，`flyway clean` 重建后这两列天然不存在，无需 DROP COLUMN 迁移。
 
-Java 实体同步：`RuleVersion.templateId`、`RuleVersion.templateVersion` 字段删除。  
+Java 实体同步删除：`RuleVersion.templateId`、`RuleVersion.templateVersion` 字段。  
 `PublishService.createDraft` 签名恢复干净，不带任何模板参数。
 
 ---
@@ -581,7 +577,7 @@ export interface TemplateSlot {
 
 - `TenantType` 枚举 + `tenant.type` 字段
 - SYSTEM tenant 初始化
-- 核心表清理（删 `rule_version.template_id/version`，`PublishService` 签名还原）
+- 核心表清理（`RuleVersion` 实体删 templateId/version 字段，`PublishService` 签名还原；DB 层靠 V1_42 改写 + flyway clean 天然不含这两列）
 - `rule_template`（身份层）+ `rule_template_version`（快照层，不可变）双表设计
 - `rule_template_instantiation` 溯源表（FK 指向 `rule_template_version`）
 - 模板版本化编辑行为：DRAFT 版本可直接更新同一行；PUBLISH 后新编辑产生新 version 行（同 rule_version 模式）
@@ -603,7 +599,11 @@ export interface TemplateSlot {
 
 ## 8. 迁移方案
 
-### V1_42（改写，当前未 apply）
+**greenfield：无数据迁移、无代码兼容负担。** 数据可丢，dev 环境 `flyway clean` 重建整库；V1_42 直接改写为 V2 最终形态（不留旧版痕迹，符合项目文档纪律"废弃内容直接删不留痕"）。现有 D74 代码（旧 `RuleTemplate` 实体/service/`PublishService` 模板参数/`RuleVersion.templateId`）直接删改重写，不做过渡兼容。
+
+### V1_42（改写为 V2 最终形态）
+
+原 V1_42 已 apply，但 dev 无生产数据——`flyway clean` 后按新内容重建。改写后 V1_42 = 模板系统的完整定义：
 
 ```sql
 -- 1. tenant 表加 type 字段
@@ -612,25 +612,14 @@ ALTER TABLE tenant ADD COLUMN type VARCHAR(16) NOT NULL DEFAULT 'STANDARD';
 -- 2. 插入 SYSTEM tenant
 INSERT INTO tenant (code, name, type, status) VALUES ('SYSTEM', '平台系统', 'SYSTEM', 'ACTIVE');
 
--- 3. rule_template 身份表（精简，无内容字段）
-CREATE TABLE rule_template (...);          -- 见 §3.2
-
--- 4. rule_template_version 快照表（不可变，同 rule_version 设计）
-CREATE TABLE rule_template_version (...);  -- 见 §3.2
-
--- 5. rule_template_instantiation 溯源表（FK 指向 rule_template_version）
-CREATE TABLE rule_template_instantiation (...);  -- 见 §3.3
-
--- 注意：V1_42 不再包含 ALTER TABLE rule_version，核心表不动
+-- 3. rule_template 身份表（精简，无内容字段）  -- 见 §3.2 完整 DDL
+-- 4. rule_template_version 快照表（不可变）    -- 见 §3.2 完整 DDL
+-- 5. rule_template_instantiation 溯源表        -- 见 §3.3 完整 DDL
 ```
 
-### rule_version 清理（单独迁移文件 V1_43）
+**rule_version 不需要 DROP COLUMN**：因为 `flyway clean` 重建，`rule_version` 从建表迁移（V1_40）起就不包含 `template_id`/`template_version`（V1_40 本身不含这两列，是旧 V1_42 用 ALTER 加的——改写后旧 V1_42 的 ALTER 消失，列自然不存在）。核心表天然干净，无需清理迁移。
 
-```sql
-ALTER TABLE rule_version
-  DROP COLUMN template_id,
-  DROP COLUMN template_version;
-```
+**执行方式**：dev 环境 `flyway clean && flyway migrate`（或应用启动时 `spring.flyway.clean-on-validation-error` / 手动清库重跑）。
 
 ---
 
