@@ -61,9 +61,16 @@ public class JsonPointerBinder implements TemplateBinder {
                 }
             }
         }
-        // 3. slot↔binding 1:1 双射
+        // 3. slots 自身 key 无重复
         Set<String> slotKeys = new HashSet<>();
-        if (slots != null) slots.forEach(s -> slotKeys.add(s.key()));
+        if (slots != null) {
+            for (TemplateSlot s : slots) {
+                if (!slotKeys.add(s.key())) {
+                    throw new IllegalArgumentException("TEMPLATE_SLOT_BINDING_MISMATCH: slot key 重复: " + s.key());
+                }
+            }
+        }
+        // 4. slot↔binding 1:1 双射
         if (!bindingSlots.equals(slotKeys)) {
             Set<String> missing = new HashSet<>(slotKeys);
             missing.removeAll(bindingSlots);

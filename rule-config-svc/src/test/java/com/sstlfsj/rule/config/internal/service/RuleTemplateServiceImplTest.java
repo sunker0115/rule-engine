@@ -151,6 +151,38 @@ class RuleTemplateServiceImplTest {
                 .hasMessageContaining("TEMPLATE_SLOT_VALUE_INVALID");
     }
 
+    @Test
+    void create_slotMissingBinding_rejected() {
+        // slots 有 threshold 但 bindings 为空 → 缺少 binding
+        List<TemplateSlot> slots = List.of(new TemplateSlot("threshold", "阈值", DataType.LONG, true, null));
+        assertThatThrownBy(() -> service.create(0L, "tmpl-b", "模板B", RuleKind.AST_BOOLEAN.name(),
+                "desc", skeleton(), slots, List.of(), "u1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("TEMPLATE_SLOT_BINDING_MISMATCH");
+    }
+
+    @Test
+    void instantiate_missingRequiredSlotValue_rejected() {
+        RuleTemplate tmpl = publishedTemplate(null);
+        when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);
+        // threshold 是 required=true 的 slot，但 slotValues 为空
+        assertThatThrownBy(() -> service.instantiate(0L, "tmpl-a", "rule-2", "规则2",
+                "scene-x", List.of(), Map.of(), "u1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("缺少必填 slot");
+    }
+
+    @Test
+    void instantiate_unknownSlotKey_rejected() {
+        RuleTemplate tmpl = publishedTemplate(null);
+        when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);
+        // 必填 slot 齐全 + 多余未知键 → 触发 unknown key 分支
+        assertThatThrownBy(() -> service.instantiate(0L, "tmpl-a", "rule-3", "规则3",
+                "scene-x", List.of(), Map.of("threshold", 200, "unknownKey", 123), "u1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("未声明的 slot");
+    }
+
     private RuleTemplate publishedTemplate(SlotConstraint constraint) {
         RuleTemplate tmpl = new RuleTemplate();
         tmpl.setId(7L);

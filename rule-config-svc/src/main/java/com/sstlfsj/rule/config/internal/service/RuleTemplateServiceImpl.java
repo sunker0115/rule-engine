@@ -66,6 +66,11 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         TemplateBinder binder = pickBinder(bodySkeleton);
         binder.validate(bodySkeleton, safe(bindings), safe(slots));
 
+        // 预检 (tenant,code) 唯一性，避免穿透到 DB 唯一键报错
+        if (templateMapper.findByTenantAndCode(tenantId, code) != null) {
+            throw new IllegalArgumentException("模板编码已存在: " + code);
+        }
+
         RuleTemplate tmpl = new RuleTemplate();
         tmpl.setCode(code);
         tmpl.setTenantId(tenantId);
@@ -73,8 +78,8 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         tmpl.setDescription(description);
         tmpl.setKind(rk);
         tmpl.setBodySkeleton(bodySkeleton);
-        tmpl.setSlots(slots);
-        tmpl.setBindings(bindings);
+        tmpl.setSlots(safe(slots));
+        tmpl.setBindings(safe(bindings));
         tmpl.setVersion(1);
         tmpl.setStatus(RuleTemplateStatus.DRAFT);
         tmpl.setCreatedBy(actorId);
@@ -107,8 +112,8 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         tmpl.setDescription(description);
         tmpl.setKind(rk);
         tmpl.setBodySkeleton(bodySkeleton);
-        tmpl.setSlots(slots);
-        tmpl.setBindings(bindings);
+        tmpl.setSlots(safe(slots));
+        tmpl.setBindings(safe(bindings));
         tmpl.setVersion(tmpl.getVersion() + 1);
         tmpl.setUpdatedBy(actorId);
         tmpl.setUpdatedAt(LocalDateTime.now());
