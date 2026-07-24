@@ -54,44 +54,74 @@ Java 枚举（不使用魔法数字）：
 public enum TenantType { STANDARD, SYSTEM }
 ```
 
-### 3.2 rule_template 表（全量重建）
+### 3.2 模板版本化（与规则完全同构）
+
+模板的身份层与快照层分离，和 `rule_definition` / `rule_version` 的设计完全镜像：
+
+```
+规则：  rule_definition（身份）  ←→  rule_version（不可变快照）
+模板：  rule_template（身份）    ←→  rule_template_version（不可变快照）
+```
+
+生命周期：
+- 每次编辑 → 新建一个 `rule_template_version` 行（不覆盖旧版本）
+- PUBLISHED 版本永不修改（同 `rule_version`）
+- 身份层 `rule_template.status` 跟踪最新状态
+
+**rule_template（身份层，精简）**
 
 ```sql
 CREATE TABLE rule_template (
-  id              BIGINT        NOT NULL AUTO_INCREMENT,
-  tenant_id       BIGINT        NOT NULL COMMENT '所属租户，SYSTEM tenant = 平台级模板',
-  code            VARCHAR(128)  NOT NULL,
-  name            VARCHAR(256)  NOT NULL,
-  description     VARCHAR(1024),
-  kind            VARCHAR(32)   NOT NULL COMMENT 'RuleKind 枚举',
-  body_skeleton   JSON          NOT NULL COMMENT '合法 body，所有值位已填默认值',
-  slots           JSON          NOT NULL COMMENT 'TemplateSlot[]',
-  bindings        JSON          NOT NULL COMMENT 'SlotBinding[]',
-  version         INT           NOT NULL DEFAULT 1,
-  status          VARCHAR(16)   NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT/PUBLISHED/DISABLED',
-  created_by      VARCHAR(64),
-  created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_by      VARCHAR(64),
-  updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id          BIGINT        NOT NULL AUTO_INCREMENT,
+  tenant_id   BIGINT        NOT NULL COMMENT '所属租户；SYSTEM tenant = 平台级模板',
+  code        VARCHAR(128)  NOT NULL,
+  name        VARCHAR(256)  NOT NULL,
+  description VARCHAR(1024),
+  kind        VARCHAR(32)   NOT NULL COMMENT 'RuleKind 枚举',
+  status      VARCHAR(16)   NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT/PUBLISHED/DISABLED',
+  created_by  VARCHAR(64),
+  created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by  VARCHAR(64),
+  updated_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_tenant_code (tenant_id, code)
 ) COLLATE = utf8mb4_unicode_ci;
 ```
 
+**rule_template_version（快照层，不可变，同 rule_version）**
+
+```sql
+CREATE TABLE rule_template_version (
+  id            BIGINT  NOT NULL AUTO_INCREMENT,
+  template_id   BIGINT  NOT NULL COMMENT '→ rule_template.id',
+  version       INT     NOT NULL COMMENT '同一模板内单调递增',
+  body_skeleton JSON    NOT NULL COMMENT '合法 body，所有值位已填默认值，无 token',
+  slots         JSON    NOT NULL COMMENT 'TemplateSlot[]',
+  bindings      JSON    NOT NULL COMMENT 'SlotBinding[]',
+  status        VARCHAR(16) NOT NULL DEFAULT 'DRAFT' COMMENT 'DRAFT/PUBLISHED',
+  created_by    VARCHAR(64),
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_template_version (template_id, version)
+) COLLATE = utf8mb4_unicode_ci;
+```
+
 ### 3.3 rule_template_instantiation 表（溯源，可插拔）
+
+FK 指向 `rule_template_version`——现在有真正的语义（知道从哪个版本实例化出来的）。
 
 ```sql
 CREATE TABLE rule_template_instantiation (
-  id                  BIGINT  NOT NULL AUTO_INCREMENT,
-  template_id         BIGINT  NOT NULL COMMENT '模板 ID（platform 层）',
-  template_version    INT     NOT NULL COMMENT '实例化时的模板版本号',
-  rule_definition_id  BIGINT  NOT NULL COMMENT '产物规则定义 ID（tenant 层）',
-  rule_version_id     BIGINT  NOT NULL COMMENT '产物规则版本 ID（tenant 层）',
-  slot_values         JSON    NOT NULL COMMENT '实例化时的填值快照',
+  id                  BIGINT   NOT NULL AUTO_INCREMENT,
+  template_id         BIGINT   NOT NULL COMMENT '→ rule_template.id',
+  template_version_id BIGINT   NOT NULL COMMENT '→ rule_template_version.id（真正的 FK）',
+  template_version    INT      NOT NULL COMMENT '冗余版本号，便于查询',
+  rule_definition_id  BIGINT   NOT NULL COMMENT '→ rule_definition.id（tenant 层）',
+  rule_version_id     BIGINT   NOT NULL COMMENT '→ rule_version.id（tenant 层）',
+  slot_values         JSON     NOT NULL COMMENT '实例化时的填值快照',
   instantiated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   instantiated_by     VARCHAR(64),
   PRIMARY KEY (id),
-  -- 外键只往核心方向走，核心表不知道此表存在
   KEY idx_template_id (template_id),
   KEY idx_rule_version_id (rule_version_id)
 ) COLLATE = utf8mb4_unicode_ci;
@@ -100,13 +130,12 @@ CREATE TABLE rule_template_instantiation (
 ### 3.4 核心表变更（删除污染字段）
 
 ```sql
--- 从 rule_version 删掉模板字段
 ALTER TABLE rule_version
   DROP COLUMN template_id,
   DROP COLUMN template_version;
 ```
 
-Java 实体同步删除：`RuleVersion.templateId`、`RuleVersion.templateVersion` 字段删除。  
+Java 实体同步：`RuleVersion.templateId`、`RuleVersion.templateVersion` 字段删除。  
 `PublishService.createDraft` 签名恢复干净，不带任何模板参数。
 
 ---
@@ -232,9 +261,11 @@ V1 实现（Phase 1）：
 ### 5.2 实例化流水线（关注点分离，每步独立）
 
 ```java
-// 1. 加载模板（必须 PUBLISHED）
-RuleTemplate tmpl = templateMapper.findPublishedByCode(tenantId, templateCode);
-// tenantId 来自 caller，查询时 union SYSTEM tenant（见 §6）
+// 1. 加载模板身份 + 最新 PUBLISHED 快照（同 rule_definition + rule_version 的查询模式）
+RuleTemplate tmpl = templateMapper.findByCode(tenantId, templateCode);
+// 可见性：tenant 自有 OR SYSTEM tenant（JOIN tenant.type，见 §6.5）
+RuleTemplateVersion tmplVer = templateVersionMapper.findLatestPublished(tmpl.id());
+// 也可指定版本：findByVersion(tmpl.id(), requestedVersion)
 
 // 2. VALUE slot 值的强转 + constraint 校验（现有 validateSlotValues 扩展）
 Map<String, Object> coercedValues = validateAndCoerce(tmpl.slots(), slotValues);
@@ -255,9 +286,9 @@ RuleBody bound = binder.bind(tmpl.bodySkeleton(), tmpl.bindings(), coercedValues
 RuleContent content = new RuleContent(ruleName, tmpl.kind().tag(), bound, ...);
 DraftCreatedResult result = publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId);
 
-// 6. 写溯源（独立步骤，失败不影响规则创建）
+// 6. 写溯源（独立步骤，失败不影响规则创建；FK 指向真实快照行）
 instantiationMapper.insert(new RuleTemplateInstantiation(
-    tmpl.id(), tmpl.version(),
+    tmpl.id(), tmplVer.id(), tmplVer.version(),
     result.ruleDefinitionId(), result.ruleVersionId(),
     slotValues
 ));
@@ -471,10 +502,13 @@ ALTER TABLE tenant ADD COLUMN type VARCHAR(16) NOT NULL DEFAULT 'STANDARD';
 -- 2. 插入 SYSTEM tenant
 INSERT INTO tenant (code, name, type, status) VALUES ('SYSTEM', '平台系统', 'SYSTEM', 'ACTIVE');
 
--- 3. rule_template 表（全新定义，无 token）
-CREATE TABLE rule_template (...);  -- 见 §3.2
+-- 3. rule_template 身份表（精简，无内容字段）
+CREATE TABLE rule_template (...);          -- 见 §3.2
 
--- 4. rule_template_instantiation 溯源表
+-- 4. rule_template_version 快照表（不可变，同 rule_version 设计）
+CREATE TABLE rule_template_version (...);  -- 见 §3.2
+
+-- 5. rule_template_instantiation 溯源表（FK 指向 rule_template_version）
 CREATE TABLE rule_template_instantiation (...);  -- 见 §3.3
 
 -- 注意：V1_42 不再包含 ALTER TABLE rule_version，核心表不动
@@ -496,7 +530,7 @@ ALTER TABLE rule_version
 - **反向导出**（`exportFromRule`）：已删，Phase 2 如需另立
 - **Flow 表达式 params UI**（flow 表达式常量参数化）：后端已支持，前端待真需求
 - **跨租户模板共享**（tenant A 模板给 tenant B 用）：超出 SYSTEM/STANDARD 两级设计，不在范围内
-- **模板版本 diff / rollback**：YAGNI
+- **模板版本 diff UI**：版本化数据已有，diff 展示留后续
 
 ---
 
@@ -507,6 +541,8 @@ ALTER TABLE rule_version
 3. `SlotRefResolver` 新增实现 → `Service` / `Controller` 代码零改动（SPI 自动收集）
 4. 新增 `SlotKind` 枚举值 → 前端只改 `SLOT_KIND_WIDGET` Record 一行
 5. `TemplateBinder.bind()` 对 VALUE 和 REF slot 行为完全一致 → bind 层不需要知道 kind
+6. `rule_template_version` 发布后不可变 → 任何版本的实例化产物都可追溯到当时的 skeleton/slots/bindings 快照
+7. 增加模板版本化 → `TemplateBinder`/`SlotRefResolver`/`PublishService`/前端 picker 全部不改，只改模板子系统内部 mapper/service
 
 ---
 
