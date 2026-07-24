@@ -3,7 +3,6 @@ package com.sstlfsj.rule.config.internal.template.ref;
 import com.sstlfsj.rule.config.api.dto.SlotKind;
 import com.sstlfsj.rule.config.api.dto.SlotResolutionContext;
 import com.sstlfsj.rule.config.api.dto.TemplateSlot;
-import com.sstlfsj.rule.config.api.dto.ValueDataType;
 import com.sstlfsj.rule.config.internal.domain.MetricDefinition;
 import com.sstlfsj.rule.config.internal.domain.MetricStatus;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
@@ -55,7 +54,7 @@ class MetricRefResolverTest {
         MetricDefinition md = new MetricDefinition();
         md.setMetricCode("score");
         md.setStatus(MetricStatus.ACTIVE);
-        when(metricDefinitionMapper.findActiveByCode(any(), anyString()))
+        when(metricDefinitionMapper.findAnyByCode(any(), anyString()))
                 .thenReturn(md);
 
         TemplateSlot slot = new TemplateSlot("m", "指标", SlotKind.METRIC_REF, null, false, null);
@@ -64,14 +63,28 @@ class MetricRefResolverTest {
 
     @Test
     void validate_metricNotExists_throws() {
-        when(metricDefinitionMapper.findActiveByCode(any(), anyString()))
+        when(metricDefinitionMapper.findAnyByCode(any(), anyString()))
                 .thenReturn(null);
 
         TemplateSlot slot = new TemplateSlot("m", "指标", SlotKind.METRIC_REF, null, false, null);
         assertThatThrownBy(() -> resolver.validate("nonexistent", slot, ctx))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("METRIC_REF slot 'm'")
-                .hasMessageContaining("nonexistent")
-                .hasMessageContaining("tenant=1");
+                .hasMessageContaining("不存在")
+                .hasMessageNotContaining("非 ACTIVE");
+    }
+
+    @Test
+    void validate_metricExistsButDisabled_throws() {
+        MetricDefinition md = new MetricDefinition();
+        md.setMetricCode("score");
+        md.setStatus(MetricStatus.DISABLED);
+        when(metricDefinitionMapper.findAnyByCode(any(), anyString()))
+                .thenReturn(md);
+
+        TemplateSlot slot = new TemplateSlot("m", "指标", SlotKind.METRIC_REF, null, false, null);
+        assertThatThrownBy(() -> resolver.validate("score", slot, ctx))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("存在但非 ACTIVE")
+                .hasMessageContaining("DISABLED");
     }
 }
