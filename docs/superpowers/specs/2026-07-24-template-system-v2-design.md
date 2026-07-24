@@ -15,23 +15,22 @@
 
 ```
 Platform 层 (SYSTEM tenant)
-  rule_template              ← 模板定义，system 级，不属于任何业务租户
-  rule_template_slot         ← slot schema（嵌入 template JSON 列）
-  rule_template_binding      ← binding（嵌入 template JSON 列）
+  rule_template              ← 身份层：code / name / kind / status（同 rule_definition）
+  rule_template_version      ← 快照层：body_skeleton / slots / bindings，不可变（同 rule_version）
         │
         │ 实例化（单向）
         ▼
 Tenant 层
   rule_definition            ← 核心，零模板字段
   rule_version               ← 核心，零模板字段
-  rule_template_instantiation ← 溯源表，单向持有(template→rule_version)，可删
+  rule_template_instantiation ← 溯源表，单向持有(template_version → rule_version)，可删
         │
         ▼
 Scene 层
   eval pipeline              ← 完全不知道模板存在
 ```
 
-依赖方向严格单向向下。删掉 `rule_template_instantiation` 表，两层完全解耦，核心功能零影响。
+依赖方向严格单向向下。`rule_template_instantiation` 是唯一跨层的表，删掉它两层完全解耦，核心功能零影响。`rule_template`/`rule_template_version` 整体删除，核心同样零影响。
 
 ---
 
@@ -261,17 +260,17 @@ V1 实现（Phase 1）：
 ### 5.2 实例化流水线（关注点分离，每步独立）
 
 ```java
-// 1. 加载模板身份 + 最新 PUBLISHED 快照（同 rule_definition + rule_version 的查询模式）
+// 1. 加载身份 + 快照（两张表，同 rule_definition + rule_version 的查询模式）
 RuleTemplate tmpl = templateMapper.findByCode(tenantId, templateCode);
-// 可见性：tenant 自有 OR SYSTEM tenant（JOIN tenant.type，见 §6.5）
+// 可见性：tenant 自有 OR SYSTEM tenant（JOIN tenant.type，见 §5.4）
 RuleTemplateVersion tmplVer = templateVersionMapper.findLatestPublished(tmpl.id());
 // 也可指定版本：findByVersion(tmpl.id(), requestedVersion)
 
-// 2. VALUE slot 值的强转 + constraint 校验（现有 validateSlotValues 扩展）
-Map<String, Object> coercedValues = validateAndCoerce(tmpl.slots(), slotValues);
+// 2. VALUE slot 强转 + constraint 校验（slots/bindings/skeleton 全在 tmplVer 上）
+Map<String, Object> coercedValues = validateAndCoerce(tmplVer.slots(), slotValues);
 
-// 3. 引用类型 slot 验证（新增，SlotRefResolver SPI 分派，零 switch）
-for (TemplateSlot slot : tmpl.slots()) {
+// 3. 引用类型 slot 验证（SlotRefResolver SPI 分派，零 switch）
+for (TemplateSlot slot : tmplVer.slots()) {
     if (slot.kind() != SlotKind.VALUE) {
         SlotRefResolver resolver = pick(slot.kind()); // supports() 匹配
         resolver.validate((String) slotValues.get(slot.key()), slot,
@@ -279,14 +278,14 @@ for (TemplateSlot slot : tmpl.slots()) {
     }
 }
 
-// 4. bind：把所有值填入 skeleton（现有 TemplateBinder SPI，不改）
-RuleBody bound = binder.bind(tmpl.bodySkeleton(), tmpl.bindings(), coercedValues);
+// 4. bind：把值填入 skeleton（TemplateBinder SPI，不改；skeleton/bindings 在 tmplVer 上）
+RuleBody bound = binder.bind(tmplVer.bodySkeleton(), tmplVer.bindings(), coercedValues);
 
 // 5. 创建草稿（PublishService.createDraft 签名干净，不带任何模板参数）
 RuleContent content = new RuleContent(ruleName, tmpl.kind().tag(), bound, ...);
 DraftCreatedResult result = publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId);
 
-// 6. 写溯源（独立步骤，失败不影响规则创建；FK 指向真实快照行）
+// 6. 写溯源（独立步骤，失败不影响规则创建；FK 指向真实 rule_template_version 行）
 instantiationMapper.insert(new RuleTemplateInstantiation(
     tmpl.id(), tmplVer.id(), tmplVer.version(),
     result.ruleDefinitionId(), result.ruleVersionId(),
@@ -428,13 +427,26 @@ export default function SlotFormItem({ slot, context }: SlotFormItemProps) {
 
 **sceneCode 联动**：`Form.useWatch('sceneCode')` 得到实时场景值，传入 `SlotFormItem` context，DecisionPicker 的 `useEffect([sceneCode])` 自动重拉该场景的决策列表。场景未选时 DecisionPicker disabled 并给提示。提交时后端 SlotRefResolver 做完整校验（前端联动是体验层）。
 
-### 6.5 模板列表
+### 6.5 模板编辑器保存语义（随版本化调整）
+
+和规则编辑器的草稿保存完全同构：
+
+| 操作 | 行为 |
+|---|---|
+| 保存草稿 | 更新当前 DRAFT `rule_template_version` 行（同一 version 号） |
+| 发布 | 当前 DRAFT version 改为 PUBLISHED，不可再修改 |
+| 发布后再编辑 | 新建一个 DRAFT `rule_template_version` 行（version+1） |
+
+前端只需在保存时区分"草稿 PUT"vs"新版本 POST"，与现有规则编辑器的行为模式一致，用户心智零增量。
+
+### 6.6 模板列表
 
 - SYSTEM tenant 的模板带 `[系统]` 标签区分，租户自有模板无标签
-- 实例化入口：列表行"实例化"按钮 → 跳 `template-instantiate/:code`
+- 实例化入口：列表行"实例化"按钮 → 跳 `template-instantiate/:code`（默认最新 PUBLISHED 版本）
+- 版本历史：点模板名可查历史 `rule_template_version` 列表，可选择从某个历史版本实例化
 - Phase 1：SYSTEM 模板由 API 创建，列表只读展示；创建/编辑只对 STANDARD tenant 自有模板开放
 
-### 6.6 类型定义更新（一次性改对）
+### 6.7 类型定义更新（一次性改对）
 
 ```typescript
 // types/template.ts
@@ -474,11 +486,13 @@ export interface TemplateSlot {
 - `TenantType` 枚举 + `tenant.type` 字段
 - SYSTEM tenant 初始化
 - 核心表清理（删 `rule_version.template_id/version`，`PublishService` 签名还原）
-- `rule_template_instantiation` 溯源表
+- `rule_template`（身份层）+ `rule_template_version`（快照层，不可变）双表设计
+- `rule_template_instantiation` 溯源表（FK 指向 `rule_template_version`）
+- 模板版本化编辑行为：DRAFT 版本可直接更新同一行；PUBLISH 后新编辑产生新 version 行（同 rule_version 模式）
 - 模板可见性查询（JOIN tenant.type）
 - `SlotKind` 枚举拆分（VALUE + METRIC_REF + DECISION_REF + RULE_REF schema 定义）
 - `SlotRefResolver` SPI 框架 + 三个实现（Phase 1 只做存在性校验，不做深度类型兼容）
-- 前端 `SLOT_KIND_WIDGET` Record + DecisionPicker / MetricPicker / RulePicker 组件（骨架）
+- 前端：`SLOT_KIND_WIDGET` Record + DecisionPicker / MetricPicker / RulePicker 组件（骨架）；`SlotFormItem` 替换 renderSlotInput switch；模板编辑器保存行为同步版本化语义
 - bodySkeleton 里 metricCode 仍为具体字符串（SYSTEM tenant 建自己的示例 metric）
 
 ### Phase 2（另立项）
@@ -537,7 +551,7 @@ ALTER TABLE rule_version
 ## 10. 关键不变量
 
 1. 删除 `rule_template_instantiation` 表 → 规则引擎核心功能零影响
-2. 删除整个 `rule_template` 表 → 规则引擎核心功能零影响
+2. 删除 `rule_template` + `rule_template_version` 两表 → 规则引擎核心功能零影响
 3. `SlotRefResolver` 新增实现 → `Service` / `Controller` 代码零改动（SPI 自动收集）
 4. 新增 `SlotKind` 枚举值 → 前端只改 `SLOT_KIND_WIDGET` Record 一行
 5. `TemplateBinder.bind()` 对 VALUE 和 REF slot 行为完全一致 → bind 层不需要知道 kind
