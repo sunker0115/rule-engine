@@ -29,14 +29,14 @@ export function getMenuItems(t: TFunction): ItemType[] {
       label: t('menu.scenes'),
     },
     {
-      key: ROUTES.RULES,
-      icon: <ApartmentOutlined />,
-      label: t('menu.rules'),
-    },
-    {
       key: ROUTES.TEMPLATES,
       icon: <FileTextOutlined />,
       label: t('menu.templates'),
+    },
+    {
+      key: ROUTES.RULES,
+      icon: <ApartmentOutlined />,
+      label: t('menu.rules'),
     },
     {
       key: ROUTES.METRICS,

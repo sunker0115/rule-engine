@@ -1,7 +1,7 @@
 import type { TemplateTranslation } from '../../types';
 
 const template: TemplateTranslation = {
-  title: { list: '规则模板', editor: '编辑模板', instantiate: '实例化模板' },
+  title: { list: '模板管理', editor: '编辑模板', instantiate: '实例化模板' },
   action: {
     create: '创建模板', edit: '编辑', publish: '发布', publishConfirm: '确认发布此模板？',
     disable: '禁用', disableConfirm: '确认禁用此模板？',
