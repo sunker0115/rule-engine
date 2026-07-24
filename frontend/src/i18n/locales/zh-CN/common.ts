@@ -59,7 +59,7 @@ const common: CommonTranslation = {
     tenants: '租户管理',
     scenes: '场景管理',
     rules: '规则管理',
-    templates: '规则模板',
+    templates: '模板管理',
     metrics: '指标管理',
     connectors: '连接器',
     decisions: '决策管理',

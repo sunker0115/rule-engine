@@ -59,7 +59,7 @@ const common: CommonTranslation = {
     tenants: 'Tenants',
     scenes: 'Scenes',
     rules: 'Rules',
-    templates: 'Templates',
+    templates: 'Template Management',
     metrics: 'Metrics',
     connectors: 'Connectors',
     decisions: 'Decisions',
