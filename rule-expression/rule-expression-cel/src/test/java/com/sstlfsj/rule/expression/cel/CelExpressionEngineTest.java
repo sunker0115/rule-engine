@@ -140,4 +140,17 @@ class CelExpressionEngineTest {
         // params.* 开放(dyn),类型检查不报未声明变量错
         engine.typeCheck("params.threshold > 50", new ScriptTypeEnv(Map.of(), Map.of()));
     }
+
+    @Test
+    void evaluatesBigDecimalFractionInParams() {
+        // BigDecimal 小数经 normalizeNumerics→stripTrailingZeros().scale()>0→doubleValue() 分支
+        CompiledExpression c = engine.compile("params.threshold == 75.5");
+        Map<String, Object> b = new HashMap<>();
+        b.put("params", Map.of("threshold", new java.math.BigDecimal("75.5")));
+        b.put("metrics", Map.of());
+        b.put("payload", Map.of());
+        b.put("subject", Map.of());
+        b.put("now", Instant.parse("2026-06-01T00:00:00Z"));
+        assertThat(engine.evaluate(c, b)).isEqualTo(true);
+    }
 }
