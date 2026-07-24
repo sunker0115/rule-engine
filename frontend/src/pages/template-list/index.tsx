@@ -6,16 +6,17 @@ import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { listTemplates, createTemplate, publishTemplate, disableTemplate } from '@/api/template';
 import { ROUTES, route } from '@/constants/routes';
+import { getRuleKindOptions } from '@/constants/enums';
 import type { RuleTemplate } from '@/types/template';
-import type { RuleKind } from '@/types';
 
 const STATUS_COLOR: Record<string, string> = { DRAFT: 'blue', PUBLISHED: 'green', DISABLED: 'red' };
-const AST_KINDS: RuleKind[] = ['AST_BOOLEAN', 'SCORECARD', 'DECISION_TREE', 'DECISION_TABLE'];
 
 export default function TemplateList() {
   const navigate = useNavigate();
   const { currentId, activeList, setCurrentById } = useTenantStore();
   const { t } = useTranslation('template');
+  // enum.kind.* 键在 rule ns，复用 rule 命名空间的 t 解析（与 rule-list 单一真相源一致）
+  const tr = useTranslation('rule').t;
   const tc = useTranslation('common').t;
   const [templates, setTemplates] = useState<RuleTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,6 +51,10 @@ export default function TemplateList() {
         bodySkeleton = { type: 'AstBody', conditionAst: { type: 'IfNode', condition: { type: 'AndNode', children: [] }, thenBranch: { type: 'DecisionLeafNode', decisionCode: '', category: null }, elseBranch: null } };
       } else if (kind === 'DECISION_TABLE') {
         bodySkeleton = { type: 'AstBody', conditionAst: { type: 'DecisionTableNode', columns: [], rows: [] } };
+      } else if (kind === 'EXPRESSION_SCRIPT') {
+        bodySkeleton = { type: 'ScriptBody', script: { source: '', lang: 'CEL', params: {} } };
+      } else if (kind === 'DECISION_FLOW') {
+        bodySkeleton = { type: 'FlowBody', flowGraph: { nodes: [], edges: [], inputNodeId: '' }, referencedSnapshots: {} };
       } else {
         bodySkeleton = { type: 'AstBody', conditionAst: { type: 'AndNode', children: [] } };
       }
@@ -144,7 +149,7 @@ export default function TemplateList() {
           <Input />
         </Form.Item>
         <Form.Item name="kind" label={t('form.kind')} rules={[{ required: true }]} initialValue="AST_BOOLEAN">
-          <Select options={AST_KINDS.map((k) => ({ value: k, label: k }))} />
+          <Select options={getRuleKindOptions(tr)} />
         </Form.Item>
         <Form.Item name="description" label={t('form.description')}>
           <Input.TextArea rows={2} />
