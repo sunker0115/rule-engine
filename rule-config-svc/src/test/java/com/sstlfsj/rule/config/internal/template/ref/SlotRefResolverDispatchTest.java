@@ -44,7 +44,7 @@ class SlotRefResolverDispatchTest {
             MetricDefinition md = new MetricDefinition();
             md.setMetricCode("score");
             md.setStatus(MetricStatus.ACTIVE);
-            when(m.findActiveByCode(any(), anyString())).thenReturn(md);
+            when(m.findAnyByCode(any(), anyString())).thenReturn(md);
             return m;
         }
 
