@@ -4,10 +4,26 @@
 
 ## 目录划分
 
-| 目录 | 职责 | 修改原则 |
-|---|---|---|
-| `docs/` | 产品设计:`00-decisions` / `01-concepts` / ... / `10-api-contract` + `examples/` | 改前用 `doc-consistency-review` skill 扫文档自洽性 |
-| `rule-*/`（Maven 多模块） | 代码实现。核心:`rule-kernel`(纯 Java SPI+模型+求值内核,无 Spring)、`rule-config-svc`(配置写:scene/rule/metric/binding CRUD + 发布)、`rule-eval-svc`(评估+取数+action 派发+异步落库)、`rule-api`(HTTP `/admin·api·sdk/v1`)、`rule-app`(装配 + Modulith 边界 + 启动);辅助:`rule-observability`/`rule-audit-svc`/`rule-job-svc`/`rule-job-xxl`/`rule-sdk(-spring-boot-starter)`/`rule-benchmark` | 改动审查派 `rule-engine-reviewer` agent |
+- **`docs/`** — 产品设计(`00-decisions` / `01-concepts` / … / `10-api-contract` + `examples/`)。改前用 `doc-consistency-review` skill 扫文档自洽性。
+- **`rule-*/`(Maven 多模块)** — 代码实现;改动审查派 `rule-engine-reviewer` agent。模块分层:
+
+```
+rule-engine
+├─ 核心
+│  ├─ rule-kernel ......... 纯 Java SPI + 模型 + 求值内核(无 Spring)
+│  ├─ rule-config-svc ..... 配置写:scene/rule/metric/binding CRUD + 发布
+│  ├─ rule-eval-svc ....... 评估 + 取数 + 决策输出 + 异步落库(纯决策化,只出 Decision)
+│  ├─ rule-api ............ HTTP 入口 /admin·api·sdk/v1
+│  └─ rule-app ............ 装配 + Modulith 边界 + 启动
+├─ 表达式引擎(EXPRESSION_SCRIPT,SPI 收集)
+│  └─ rule-expression + 六引擎 CEL / Aviator / QLExpress / JsonLogic / JEXL / Groovy
+│     (每引擎各带一个 -spring-boot-starter)
+├─ 实时流式
+│  └─ rule-rt-stream / rule-rt-bridge
+└─ 辅助
+   └─ rule-observability / rule-audit-svc / rule-job-svc / rule-job-xxl /
+      rule-sdk(-spring-boot-starter) / rule-benchmark / rule-samples
+```
 
 ## 专用 review agent(只读)
 
@@ -27,11 +43,11 @@
 承载结构化数据的字段——DTO、service 接口入参/出参、API 请求体、领域实体的 JSON 列——**一律用已定义的具体类型**，**禁止 JSON String，禁止裸 `Object`，禁止用 `Map` 当万能容器**。
 
 1. **优先具体类型**：能引用已定义的 record/类（如 `AstNode` / `List<DecisionBinding>` / `List<PreGateConfig>` / `RuleKind`）就用它，不要降级成 `Map`/`Object`/`String`。
-2. **`Map<String, Object>` 仅在「确实无定义」时用**：即结构开放/异构、没有也不该有固定类型的场景（如 action `default_params` 依 actionType 而异）。这是唯一例外，不是默认选项。
+2. **`Map<String, Object>` 仅在「确实无定义」时用**：即结构开放/异构、没有也不该有固定类型的场景（如 scene `default_params` 键开放、按需扩展）。这是唯一例外，不是默认选项。
 3. **实体 JSON 列以 `RuleVersion` 为模板**：`@TableName(autoResultMap = true)` + 字段为 typed（`AstNode` / `List<...>`）+ `@TableField(typeHandler = Jackson3TypeHandler.class)`。JSON↔对象由 MyBatis TypeHandler 在持久层完成，**实体/service/controller 内一律不手写 ObjectMapper 序列化、不传 JSON String**。
 4. **请求参数同样适用**：controller 收 typed 请求 DTO，直传 service 的 typed 入参；不得 typed→String→typed 来回。
 5. **DTO ↔ service/实体 转换走 MapStruct**（`web/admin/convert/` 包），不在 controller/service 内联手写（字段极少的一次性映射可手写，见全局 §5）。
-6. **封闭取值用 enum，不用魔法字符串**：状态 / 生命周期 / 类型判别等**取值有限且封闭**的字段（如 rule/scene/metric 的 status `DRAFT`/`ACTIVE`/`PUBLISHED`/`DISABLED`/`SUPERSEDED`、`actorType`、`kind` 等），一律定义 enum（或既有常量集），**禁止散落字符串字面量**。仅当集合**开放可扩展**（如 conditionType / actionType 走 SPI）时才用常量类而非 enum。
+6. **封闭取值用 enum，不用魔法字符串**：状态 / 生命周期 / 类型判别等**取值有限且封闭**的字段（如 rule/scene/metric 的 status `DRAFT`/`ACTIVE`/`PUBLISHED`/`DISABLED`/`SUPERSEDED`、`actorType`、`kind` 等），一律定义 enum（或既有常量集），**禁止散落字符串字面量**。仅当集合**开放可扩展**（如 conditionType / 表达式引擎走 SPI）时才用常量类而非 enum。
    - **DB 列用 VARCHAR，不用 MySQL `ENUM` 类型**（ENUM 加值要 ALTER + 与 app 双重定义；VARCHAR 后允许值校验上移 app，单一真相源在 enum，见 V1_11）。
    - **实体字段用 Java enum**（枚举名 == varchar 值，MyBatis-Plus 默认按 name 转换）；**出 VO/DTO/API 契约边界 `.name()` 转 String**（对外契约保持 String 不变，代码内是 enum）。
 
@@ -45,10 +61,10 @@
 |---|---|---|---|---|---|
 | **A 跨模块集成** | producer 提交后通知别的模块（config→eval 索引热更） | producer 的 `api/event`（公开契约） | `ApplicationEventPublisher` | `@ApplicationModuleListener`（Modulith，提交后异步） | 最终一致 |
 | **B 同模块强一致副作用** | 须与主业务同事务原子（`audit_log` D14 红线） | 本模块 `internal/event` | `ApplicationEventPublisher` | `@TransactionalEventListener(BEFORE_COMMIT)` | 同事务 |
-| **C 同模块异步 best-effort** | 旁路可丢、未来可换 MQ（评估执行审计 / trace / action 落库） | 与 persister 同包（`internal/async`） | `DomainEventPublisher` 缝（进程内/MQ 各一实现） | persister `@EventListener` + 队列 | 旁路可丢 |
+| **C 同模块异步 best-effort** | 旁路可丢、未来可换 MQ（评估执行审计 / trace / decision 落库） | 与 persister 同包（`internal/async`） | `DomainEventPublisher` 缝（进程内/MQ 各一实现） | persister `@EventListener` + 队列 | 旁路可丢 |
 
 **贯穿规则**：
-- **命名统一**：所有领域事件 `<聚合><过去式>Event`（`SceneChangedEvent` / `RulePublishedEvent` / `ActionExecutedEvent`…），不混用无后缀的 `XxxRecorded`/`XxxExecuted`。
+- **命名统一**：所有领域事件 `<聚合><过去式>Event`（`SceneChangedEvent` / `RulePublishedEvent` / `DecisionFiredEvent`…），不混用无后缀的 `XxxRecorded`/`XxxExecuted`。
 - **一个聚合 / 一类副作用 = 一个事件 + 一个集中监听器**：不开多入口、不每个 service 各发各的私有逻辑（如各处私有 `writeAudit` 收敛成单一审计事件 + 单一落库监听器）。
 - C 类的 `DomainEventPublisher` 是**有意的 transport 缝**（为未来 MQ），与 A/B 的 `ApplicationEventPublisher` 是不同类别的不同 transport，**不是重复，不要为"统一"合并掉**。
 - 目的：主业务方法只表达业务意图；副作用集中到监听器，便于增删副作用而不动业务代码。
@@ -59,6 +75,16 @@
 - 使用 `mvn-env` skill 设置环境后执行：`$MVN -pl <module> -am test`
 - **跨模块改动必须带 `-am`**：否则用 `~/.m2` 里的旧 jar，出 `NoSuchMethodError` / 编译假象。一轮改动最终用全量 `$MVN clean test`（无 `-pl`）兜底——只有 `clean` 才强制重编译所有 test 类，增量编译会漏掉过期 test。
 - 有测试失败不得用 `-DskipTests` 绕过，必须修复后再提交。
+- **rule-config-svc 内写 testcontainers 集成测试的装配陷阱**：本模块的 `ConfigAutoConfiguration` 是 `@AutoConfiguration` + `@ComponentScan("...config.internal")`，被 `@EnableAutoConfiguration`/`@SpringBootApplication` 自动激活后会扫 `config.internal`；若测试再写 `@MapperScan("...config.internal.repository")`，两者对同一批 Mapper 形成两条注册路径，抛 `ConflictingBeanDefinitionException`（`bean 'xxxMapper' conflicts with existing ... class [null]`）。给 `@ComponentScan` 加 `excludeFilters(ANNOTATION, Mapper.class)` **无效**（`@Mapper` 是接口本就不被 ComponentScan 注册）。正确写法——mapper/DB 往返切片测试**排除该 auto-config**，只留 mapper 切片（范例见 `DecisionDefinitionRoundTripIT`）：
+
+  ```java
+  @Configuration
+  @EnableAutoConfiguration(excludeName = "com.sstlfsj.rule.config.ConfigAutoConfiguration")
+  @MapperScan("com.sstlfsj.rule.config.internal.repository")
+  static class TestApp {}
+  ```
+
+  需要完整 service 层的场景改走页面/API 端到端（`docs/examples/`），不在 config-svc 模块内起全量 `@SpringBootTest`。
 
 ## 功能测试纪律(集成测试通过后)
 
