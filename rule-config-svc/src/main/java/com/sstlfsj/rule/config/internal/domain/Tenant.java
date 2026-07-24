@@ -15,6 +15,7 @@ public class Tenant {
     private Long id;
     private String code;
     private String name;
+    private TenantType type;
     private TenantStatus status;
     private java.time.LocalDateTime createdAt;
     private java.time.LocalDateTime updatedAt;
