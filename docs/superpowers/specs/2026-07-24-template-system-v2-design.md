@@ -289,52 +289,150 @@ List<RuleTemplate> findVisibleByTenant(Long tenantId);
 
 ## 6. 前端设计
 
-### 6.1 SlotKind → 渲染控件映射（Record，不写 switch）
+### 6.1 组件分层与复用边界
+
+**原则：共享逻辑，不共享上下文。** 相同的 picker 组件在两个不同上下文（模板编辑器的约束预览 vs 实例化表单的值填写）中复用，但它们各自的容器（`SlotValueInput` vs `SlotFormItem`）保持独立，因为两个上下文的数据流和 Form.Item 绑定需求根本不同——强行合并会很别扭。
+
+```
+共享 picker（headless，无 Form.Item）
+  ├── SlotValueInput    已有，VALUE kind，按 dataType 渲染原始值输入
+  ├── MetricPicker      新建，加载 tenant ACTIVE metrics，按 allowedDataTypes 过滤
+  ├── DecisionPicker    新建，响应式依赖 sceneCode，动态加载 scene decisions
+  └── RulePicker        新建，加载 tenant 已发布规则
+
+  ↓ 模板编辑器用（约束预览，参数表格里）
+  SlotValueInput（直接用，不经 Form.Item，已有）
+
+  ↓ 实例化表单用（带 Form.Item、验证、dayjs 转换）
+  SlotFormItem（新建，统一封装，替换 renderSlotInput switch）
+```
+
+### 6.2 共享 picker 接口
 
 ```typescript
-type SlotKind = 'VALUE' | 'METRIC_REF' | 'DECISION_REF' | 'RULE_REF';
-
-/** kind → picker 组件映射，加新 kind 只改这里 */
-const SLOT_KIND_WIDGET: Record<SlotKind, React.ComponentType<SlotPickerProps>> = {
-  VALUE:        SlotValueInput,    // 内部按 dataType 渲染（已有）
-  METRIC_REF:   MetricPicker,      // tenant 全量 ACTIVE metric 下拉，按 allowedDataTypes 过滤
-  DECISION_REF: DecisionPicker,    // 响应式：依赖 sceneCode，动态加载该 scene 的 decision
-  RULE_REF:     RulePicker,        // tenant 全量已发布规则下拉
-};
-
+/** 所有 picker 的统一 props——headless，不含 Form.Item */
 interface SlotPickerProps {
-  slot: TemplateSlot;
   value: unknown;
   onChange: (v: unknown) => void;
-  context: { tenantId: number; sceneCode?: string }; // DECISION_REF 用 sceneCode
+  disabled?: boolean;
+  context: {
+    tenantId: number;
+    sceneCode?: string;    // DecisionPicker 需要，其他可忽略
+  };
+  constraint?: SlotConstraint;
+}
+
+// MetricPicker：tenant 全量 ACTIVE metric，按 constraint.allowedDataTypes 过滤
+// DecisionPicker：useEffect([sceneCode]) 响应式拉取，sceneCode 空时 disabled
+// RulePicker：tenant 全量 PUBLISHED 规则
+
+/** kind → picker 映射，加新 kind 只在这里加一行，渲染逻辑不改 */
+const SLOT_PICKER: Record<SlotKind, React.ComponentType<SlotPickerProps>> = {
+  VALUE:        SlotValueInput,
+  METRIC_REF:   MetricPicker,
+  DECISION_REF: DecisionPicker,
+  RULE_REF:     RulePicker,
+};
+```
+
+### 6.3 SlotFormItem（实例化表单专用，替换 renderSlotInput）
+
+```typescript
+/**
+ * 实例化表单的 slot 输入项。
+ * 封装 Form.Item + 按 SlotKind 分派 picker + dayjs 转换。
+ * 替换 template-instantiate/index.tsx 里手写的 renderSlotInput switch。
+ */
+interface SlotFormItemProps {
+  slot: TemplateSlot;               // kind + dataType + constraint + required
+  context: { tenantId: number; sceneCode?: string };
+}
+
+export default function SlotFormItem({ slot, context }: SlotFormItemProps) {
+  const Picker = SLOT_PICKER[slot.kind];  // 按 kind 分派，零 switch
+  return (
+    <Form.Item
+      name={`slot_${slot.key}`}
+      label={slot.label}
+      rules={slot.required ? [{ required: true }] : []}
+      getValueFromEvent={slot.kind === 'VALUE' && (slot.dataType === 'DATE' || slot.dataType === 'DATETIME')
+        ? (v: Dayjs) => v?.toISOString()   // dayjs 转换只在需要时做
+        : undefined}
+    >
+      <Picker context={context} constraint={slot.constraint} />
+    </Form.Item>
+  );
 }
 ```
 
-### 6.2 实例化表单结构
-
-```
-固定上下文字段（非 slot，所有实例化必填）
-  ├── target scene ← 填了这个，DecisionPicker 响应式更新选项
-  ├── rule code
-  ├── rule name
-  └── trigger events
-
-Slot 值表单（按 SlotKind 渲染不同 picker）
-  VALUE        → SlotValueInput（按 dataType）
-  METRIC_REF   → MetricPicker（tenant 级，不依赖 scene）
-  DECISION_REF → DecisionPicker（响应式，依赖 sceneCode，sceneCode 空时 disabled + 提示）
-  RULE_REF     → RulePicker（tenant 级，不依赖 scene）
+实例化表单里原来的 `renderSlotInput` switch **整段删除**，替换为：
+```tsx
+{tmpl.slots.map((slot) => (
+  <SlotFormItem key={slot.key} slot={slot} context={{ tenantId: currentId, sceneCode: watchedSceneCode }} />
+))}
 ```
 
-**sceneCode 联动**：DecisionPicker 的 `useEffect([sceneCode])` 触发重新拉取该 scene 的 decision 列表，不需要 wizard 步骤。sceneCode 未填时 DecisionPicker disabled 并提示"请先选择目标场景"。
+### 6.4 实例化表单结构（响应式，无 wizard 分步）
 
-提交时后端再做完整校验（前端联动是体验，后端 SlotRefResolver 是正确性保证）。
+行业标准（CloudFormation / Backstage）：参数全部展示在一个表单，依赖关系用响应式联动，不做分步 wizard。
 
-### 6.3 模板列表可见性
+```
+┌─────────────────────────────────────────────┐
+│ 目标场景   [Select] ← 填了这个，             │
+│                      DecisionPicker 自动更新  │
+│ 规则编码   [Input]                           │
+│ 规则名称   [Input]                           │
+│ 触发事件   [Select tags]                     │
+├─────────────────────────────────────────────┤
+│ Slot 参数                                    │
+│                                             │
+│ threshold  [SlotFormItem → SlotValueInput]  │  kind=VALUE
+│ metric     [SlotFormItem → MetricPicker]    │  kind=METRIC_REF
+│ outcome    [SlotFormItem → DecisionPicker]  │  kind=DECISION_REF，依赖上面的场景
+│ refRule    [SlotFormItem → RulePicker]      │  kind=RULE_REF
+│                                             │
+│           [实例化] →跳转规则编辑器           │
+└─────────────────────────────────────────────┘
+```
 
-查询结果中 SYSTEM tenant 的模板带 `[系统]` 标签，租户自有模板无标签。两者在同一列表中展示，实例化操作无差别。
+**sceneCode 联动**：`Form.useWatch('sceneCode')` 得到实时场景值，传入 `SlotFormItem` context，DecisionPicker 的 `useEffect([sceneCode])` 自动重拉该场景的决策列表。场景未选时 DecisionPicker disabled 并给提示。提交时后端 SlotRefResolver 做完整校验（前端联动是体验层）。
 
-Phase 1 暂不做创建/编辑界面上的 tenant 选择——SYSTEM 模板由直接 API 调用创建（后续 admin 角色管理跟进）。
+### 6.5 模板列表
+
+- SYSTEM tenant 的模板带 `[系统]` 标签区分，租户自有模板无标签
+- 实例化入口：列表行"实例化"按钮 → 跳 `template-instantiate/:code`
+- Phase 1：SYSTEM 模板由 API 创建，列表只读展示；创建/编辑只对 STANDARD tenant 自有模板开放
+
+### 6.6 类型定义更新（一次性改对）
+
+```typescript
+// types/template.ts
+
+export type SlotKind = 'VALUE' | 'METRIC_REF' | 'DECISION_REF' | 'RULE_REF';
+
+// ValueDataType 独立，不再和 SlotKind 混在一个 DataType 里
+export type ValueDataType =
+  'LONG' | 'DOUBLE' | 'DECIMAL' | 'STRING' | 'BOOLEAN' | 'DATE' | 'DATETIME' | 'LIST';
+
+export interface SlotConstraint {
+  min?: number | null;
+  max?: number | null;
+  enumValues?: string[] | null;
+  allowedDataTypes?: string[] | null;   // METRIC_REF 专用：限制 metric 的 dataType
+}
+
+export interface TemplateSlot {
+  key: string;
+  label: string;
+  kind: SlotKind;
+  dataType?: ValueDataType;   // 仅 kind=VALUE 时有值
+  required: boolean;
+  constraint?: SlotConstraint | null;
+}
+```
+
+旧的 `DataType` 类型从 `TemplateSlot.dataType` 上删除，改为 `ValueDataType`（可选）。
+`SlotValueInput` props 里的 `dataType: DataType` 改为 `dataType?: ValueDataType`，组件内部不变。
 
 ---
 
