@@ -29,7 +29,7 @@ import java.util.Map;
 
 /**
  * dev.cel 实现的运行期表达式引擎(EXPRESSION_SCRIPT 默认引擎)。
- * dyn env(metrics/payload/subject = map(string,dyn)、now = timestamp),scene 无关、线程安全单例。
+ * dyn env(metrics/payload/subject/params = map(string,dyn)、now = timestamp),scene 无关、线程安全单例。
  * 按源码内容缓存编译产物(Caffeine);类型检查在发布期(config-svc)另做,本引擎只 compile+eval。
  */
 public final class CelExpressionEngine implements ExpressionEngine {
@@ -51,6 +51,7 @@ public final class CelExpressionEngine implements ExpressionEngine {
                 .addVar("metrics", MapType.create(SimpleType.STRING, SimpleType.DYN))
                 .addVar("payload", MapType.create(SimpleType.STRING, SimpleType.DYN))
                 .addVar("subject", MapType.create(SimpleType.STRING, SimpleType.DYN))
+                .addVar("params", MapType.create(SimpleType.STRING, SimpleType.DYN))
                 .addVar("now", SimpleType.TIMESTAMP)
                 .build();
         this.runtime = CelRuntimeFactory.standardCelRuntimeBuilder().build();
@@ -101,6 +102,7 @@ public final class CelExpressionEngine implements ExpressionEngine {
     public void typeCheck(String source, ScriptTypeEnv typeEnv) {
         CelCompilerBuilder builder = CelCompilerFactory.standardCelCompilerBuilder()
                 .addVar("subject", MapType.create(SimpleType.STRING, SimpleType.DYN))
+                .addVar("params", MapType.create(SimpleType.STRING, SimpleType.DYN))
                 .addVar("now", SimpleType.TIMESTAMP);
         typeEnv.metrics().forEach((code, dt) -> builder.addVar("metrics." + code, celType(dt)));
         typeEnv.payload().forEach((field, dt) -> builder.addVar("payload." + field, celType(dt)));
@@ -149,7 +151,7 @@ public final class CelExpressionEngine implements ExpressionEngine {
                     .setNanos(instant.getNano())
                     .build());
         }
-        for (String ns : new String[]{"metrics", "payload", "subject"}) {
+        for (String ns : new String[]{"metrics", "payload", "subject", "params"}) {
             if (bindings.get(ns) instanceof Map<?, ?> nsMap) {
                 adapted.put(ns, normalizeNumerics(nsMap));
             }

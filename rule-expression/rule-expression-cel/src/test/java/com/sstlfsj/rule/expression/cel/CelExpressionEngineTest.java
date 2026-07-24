@@ -121,4 +121,23 @@ class CelExpressionEngineTest {
         // subject.* 开放(dyn),任意访问不报类型错
         engine.typeCheck("subject.level == 'VIP'", new ScriptTypeEnv(Map.of(), Map.of()));
     }
+
+    @Test
+    void evaluatesParamsVariable() {
+        // params 命名空间(参数化模板注入槽位值)须声明为 map(string,dyn),否则 CEL 编译期拒未声明变量
+        CompiledExpression c = engine.compile("params.threshold > 50");
+        Map<String, Object> b = new HashMap<>();
+        b.put("params", Map.of("threshold", 75));
+        b.put("metrics", Map.of());
+        b.put("payload", Map.of());
+        b.put("subject", Map.of());
+        b.put("now", Instant.parse("2026-06-01T00:00:00Z"));
+        assertThat(engine.evaluate(c, b)).isEqualTo(true);
+    }
+
+    @Test
+    void typeCheckParamsIsOpen() {
+        // params.* 开放(dyn),类型检查不报未声明变量错
+        engine.typeCheck("params.threshold > 50", new ScriptTypeEnv(Map.of(), Map.of()));
+    }
 }
