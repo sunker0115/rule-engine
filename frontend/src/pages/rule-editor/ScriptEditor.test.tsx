@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, within } from '@testing-library/react';
+import { render, fireEvent, within, act } from '@testing-library/react';
 import { EditorView } from '@codemirror/view';
+import type { ScriptParams } from '@/types';
 import ScriptEditor from './ScriptEditor';
 
 describe('ScriptEditor updateListener 保留 params', () => {
@@ -81,6 +83,52 @@ describe('ScriptEditor 参数表', () => {
     // 唯一的 switch 即参数化列（threshold 推断为 LONG → 默认值格是 InputNumber 而非 Switch）
     fireEvent.click(getByRole('switch'));
     expect(onParamSlotToggle).toHaveBeenCalledWith('threshold', true, 'LONG');
+  });
+
+  // 受控父组件回归：锁死双源 cross-overwrite。
+  // 两个 onChange 源——CodeMirror updateListener（读 paramsRef，由 useEffect([script?.params]) 同步）
+  // 与参数表 emitParams（读 props.source）——在受控父下必须都拿到最新值：
+  // 参数表编辑 → props 更新 → paramsRef 刷新 → 源码编辑读到新 params（不覆盖回旧值），反之亦然。
+  it('受控父下：参数表编辑后源码编辑不丢新 params（paramsRef 同步 + 源码不被覆盖）', () => {
+    let latest: { source: string; lang: string; params?: ScriptParams } = {
+      source: 'metrics.x > 1',
+      lang: 'CEL',
+      params: { threshold: 1 },
+    };
+    function Wrapper() {
+      const [s, setS] = useState<{ source: string; lang: string; params?: ScriptParams }>(latest);
+      latest = s;
+      return (
+        <ScriptEditor
+          script={s}
+          onChange={setS}
+          availableMetrics={[]}
+          payloadFieldNames={[]}
+          editableParams
+        />
+      );
+    }
+
+    const { getByText, container } = render(<Wrapper />);
+
+    // 1. 参数表编辑：新增一个参数 → 受控父 state.params 更新为 {threshold:1, param1:''}
+    act(() => {
+      fireEvent.click(getByText('添加参数'));
+    });
+    expect(latest.params).toEqual({ threshold: 1, param1: '' });
+    expect(latest.source).toBe('metrics.x > 1');
+
+    // 2. 源码编辑：通过内部 CodeMirror view dispatch 一个文档变更模拟 keystroke
+    const view = EditorView.findFromDOM(container.querySelector('.cm-editor') as HTMLElement);
+    expect(view).not.toBeNull();
+    act(() => {
+      view!.dispatch({ changes: { from: view!.state.doc.length, insert: ' + 2' } });
+    });
+
+    // 3. 最终受控状态同时带「新 source」与「新 params」：
+    //    源码编辑没有用旧闭包 params 覆盖参数表新增（paramsRef 已同步）
+    expect(latest.source).toBe('metrics.x > 1 + 2');
+    expect(latest.params).toEqual({ threshold: 1, param1: '' });
   });
 
   it('editableParams=false → 只读展示，无增删控件', () => {
