@@ -54,13 +54,29 @@ public interface RuleTemplateMapper extends BaseMapper<RuleTemplate> {
     List<RuleTemplate> findVisibleByTenant(Long tenantId);
 
     /**
+     * 按租户 + 状态查可见模板：STANDARD 租户可见 SYSTEM 模板 + 自身模板，
+     * 附加 status 过滤。
+     */
+    @Select("""
+            SELECT rt.* FROM rule_template rt
+            INNER JOIN tenant t ON rt.tenant_id = t.id
+            WHERE (t.type = 'SYSTEM' OR rt.tenant_id = #{tenantId})
+              AND rt.status = #{status}
+            ORDER BY rt.id
+            """)
+    List<RuleTemplate> findVisibleByTenant(Long tenantId, TemplateStatus status);
+
+    /**
      * 按租户 + code 查可见模板：STANDARD 租户可见 SYSTEM 模板 + 自身模板。
+     * 同名时自身模板优先（ORDER BY CASE WHEN own THEN 0 ELSE 1 LIMIT 1）。
      */
     @Select("""
             SELECT rt.* FROM rule_template rt
             INNER JOIN tenant t ON rt.tenant_id = t.id
             WHERE rt.code = #{code}
               AND (t.type = 'SYSTEM' OR rt.tenant_id = #{tenantId})
+            ORDER BY CASE WHEN rt.tenant_id = #{tenantId} THEN 0 ELSE 1 END
+            LIMIT 1
             """)
     RuleTemplate findVisibleByCode(Long tenantId, String code);
 }

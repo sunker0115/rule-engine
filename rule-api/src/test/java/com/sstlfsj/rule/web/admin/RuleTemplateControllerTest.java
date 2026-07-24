@@ -201,6 +201,19 @@ class RuleTemplateControllerTest {
     }
 
     @Test
+    void enable_returns200_andReadsTenantFromHeader() throws Exception {
+        doNothing().when(templateService).enable(any(), any(), any());
+
+        mockMvc.perform(post("/admin/v1/rule-templates/tpl.a/enable")
+                        .header("X-Tenant-Id", "1")
+                        .header("X-Actor-Id", "user1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(templateService).enable(1L, "tpl.a", "user1");
+    }
+
+    @Test
     void list_returns200_withTemplates() throws Exception {
         RuleTemplate t = new RuleTemplate();
         t.setId(1L);

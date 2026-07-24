@@ -19,12 +19,15 @@ import com.sstlfsj.rule.kernel.api.model.MetricDescriptor;
 import com.sstlfsj.rule.kernel.api.model.PayloadDependency;
 import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
+import org.apache.ibatis.annotations.Mapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -48,7 +51,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MetadataServiceIntegrationTest {
 
     /** 内嵌测试应用：扫 config.internal 全部 Bean（含 JacksonConfig 的 ObjectMapper）+ MapperScan 仓储。 */
-    @SpringBootApplication(scanBasePackages = "com.sstlfsj.rule.config.internal")
+    @SpringBootApplication
+    @ComponentScan(
+            basePackages = "com.sstlfsj.rule.config.internal",
+            excludeFilters = @ComponentScan.Filter(
+                    type = FilterType.ANNOTATION,
+                    classes = Mapper.class
+            )
+    )
     @MapperScan("com.sstlfsj.rule.config.internal.repository")
     static class TestApp {
     }

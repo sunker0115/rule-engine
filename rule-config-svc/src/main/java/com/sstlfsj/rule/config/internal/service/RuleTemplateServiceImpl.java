@@ -145,7 +145,6 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         tmpl.setKind(rk);
         tmpl.setUpdatedBy(actorId);
         tmpl.setUpdatedAt(now);
-        templateMapper.updateById(tmpl);
 
         if (draft != null) {
             // 有 DRAFT 版本 → 原地更新（同 version，同 row）
@@ -155,7 +154,7 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
             draft.setCreatedBy(actorId);
             versionMapper.updateById(draft);
         } else {
-            // 无 DRAFT（已 PUBLISHED）→ 新建 v(n+1) DRAFT
+            // 无 DRAFT（已 PUBLISHED）→ 新建 v(n+1) DRAFT，身份回设为 DRAFT
             int maxVersion = versionMapper.findMaxVersion(tmpl.getId());
             RuleTemplateVersion next = new RuleTemplateVersion();
             next.setTemplateId(tmpl.getId());
@@ -167,8 +166,10 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
             next.setCreatedBy(actorId);
             next.setCreatedAt(now);
             versionMapper.insert(next);
+            tmpl.setStatus(TemplateStatus.DRAFT);
             draft = next;
         }
+        templateMapper.updateById(tmpl);
 
         var after = toSnapshot(tmpl, draft);
         eventPublisher.publishEvent(new OperationAuditedEvent(
@@ -233,9 +234,31 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
     }
 
     @Override
+    @Transactional
+    public void enable(Long tenantId, String code, String actorId) {
+        RuleTemplate tmpl = requireTemplate(tenantId, code);
+        if (tmpl.getStatus() != TemplateStatus.DISABLED) {
+            throw new IllegalArgumentException("仅 DISABLED 状态的模板可重新启用");
+        }
+        RuleTemplateVersion published = versionMapper.findLatestPublished(tmpl.getId());
+        var before = toSnapshot(tmpl, published);
+        LocalDateTime now = LocalDateTime.now();
+        tmpl.setStatus(TemplateStatus.PUBLISHED);
+        tmpl.setUpdatedBy(actorId);
+        tmpl.setUpdatedAt(now);
+        templateMapper.updateById(tmpl);
+
+        var after = toSnapshot(tmpl, published);
+        eventPublisher.publishEvent(new OperationAuditedEvent(
+                tenantId, actorId, ActorType.USER, AuditAction.ENABLE,
+                AuditTargetType.RULE_TEMPLATE, tmpl.getId().toString(),
+                before, after, now));
+    }
+
+    @Override
     public List<RuleTemplate> list(Long tenantId, String status) {
         if (status != null && !status.isBlank()) {
-            return templateMapper.findByTenantId(tenantId, TemplateStatus.valueOf(status));
+            return templateMapper.findVisibleByTenant(tenantId, TemplateStatus.valueOf(status));
         }
         return templateMapper.findVisibleByTenant(tenantId);
     }
@@ -252,7 +275,12 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
     @Override
     public TemplateDetail getVersion(Long tenantId, String code) {
         RuleTemplate tmpl = requireTemplate(tenantId, code);
-        RuleTemplateVersion ver = versionMapper.findLatestPublished(tmpl.getId());
+        RuleTemplateVersion ver;
+        if (tmpl.getStatus() == TemplateStatus.DRAFT) {
+            ver = versionMapper.findDraft(tmpl.getId());
+        } else {
+            ver = versionMapper.findLatestPublished(tmpl.getId());
+        }
         if (ver == null) {
             throw new IllegalArgumentException("模板无版本快照: code=" + code);
         }

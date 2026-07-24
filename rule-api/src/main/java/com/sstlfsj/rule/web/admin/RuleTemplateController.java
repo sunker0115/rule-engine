@@ -66,6 +66,16 @@ public class RuleTemplateController {
         return ApiResponse.ok((Void) null);
     }
 
+    /** POST /admin/v1/rule-templates/{code}/enable — 重新启用模板。 */
+    @PostMapping("/{code}/enable")
+    public ApiResponse<Void> enable(
+            @PathVariable String code,
+            @RequestHeader("X-Tenant-Id") Long tenantId,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        templateService.enable(tenantId, code, actorId);
+        return ApiResponse.ok((Void) null);
+    }
+
     /** GET /admin/v1/rule-templates — 模板列表（可见性过滤）。 */
     @GetMapping
     public ApiResponse<List<RuleTemplate>> list(

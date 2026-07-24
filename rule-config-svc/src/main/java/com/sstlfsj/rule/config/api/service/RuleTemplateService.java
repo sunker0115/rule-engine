@@ -33,6 +33,9 @@ public interface RuleTemplateService {
     /** 禁用模板 PUBLISHED→DISABLED。 */
     void disable(Long tenantId, String code, String actorId);
 
+    /** 重新启用模板 DISABLED→PUBLISHED。 */
+    void enable(Long tenantId, String code, String actorId);
+
     /** 按租户列出可见模板（STANDARD 租户可见 SYSTEM 模板 + 自身模板）。 */
     List<RuleTemplate> list(Long tenantId, String status);
 

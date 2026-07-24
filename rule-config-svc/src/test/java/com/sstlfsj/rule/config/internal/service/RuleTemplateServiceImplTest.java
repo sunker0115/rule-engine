@@ -285,6 +285,34 @@ class RuleTemplateServiceImplTest {
                 .hasMessageContaining("仅 PUBLISHED");
     }
 
+    // ---------- enable ----------
+
+    @Test
+    void enable_disabledToPublished_updatesStatus() {
+        RuleTemplate tmpl = template(1L, TemplateStatus.DISABLED);
+        RuleTemplateVersion pub = publishedVersion(1L, 2);
+        when(templateMapper.findByTenantAndCode(TENANT_ID, "tmpl-a")).thenReturn(tmpl);
+        when(versionMapper.findLatestPublished(1L)).thenReturn(pub);
+
+        service.enable(TENANT_ID, "tmpl-a", "u1");
+
+        assertThat(tmpl.getStatus()).isEqualTo(TemplateStatus.PUBLISHED);
+        verify(templateMapper).updateById(tmpl);
+        // 审计事件
+        ArgumentCaptor<OperationAuditedEvent> evtCaptor = ArgumentCaptor.forClass(OperationAuditedEvent.class);
+        verify(eventPublisher).publishEvent(evtCaptor.capture());
+        assertThat(evtCaptor.getValue().action().name()).isEqualTo("ENABLE");
+    }
+
+    @Test
+    void enable_notDisabled_throws() {
+        RuleTemplate tmpl = template(1L, TemplateStatus.PUBLISHED);
+        when(templateMapper.findByTenantAndCode(TENANT_ID, "tmpl-a")).thenReturn(tmpl);
+        assertThatThrownBy(() -> service.enable(TENANT_ID, "tmpl-a", "u1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("仅 DISABLED");
+    }
+
     // ---------- get / getVersion ----------
 
     @Test
@@ -306,6 +334,19 @@ class RuleTemplateServiceImplTest {
         var detail = service.getVersion(TENANT_ID, "tmpl-a");
         assertThat(detail.template().getCode()).isEqualTo("tmpl-a");
         assertThat(detail.version().getVersion()).isEqualTo(3);
+    }
+
+    @Test
+    void getVersion_draftStatus_returnsDraftVersion() {
+        RuleTemplate tmpl = template(1L, TemplateStatus.DRAFT);
+        RuleTemplateVersion draft = draftVersion(1L, 1);
+        when(templateMapper.findByTenantAndCode(TENANT_ID, "tmpl-a")).thenReturn(tmpl);
+        when(versionMapper.findDraft(1L)).thenReturn(draft);
+
+        var detail = service.getVersion(TENANT_ID, "tmpl-a");
+        assertThat(detail.template().getStatus()).isEqualTo(TemplateStatus.DRAFT);
+        assertThat(detail.version().getStatus()).isEqualTo(TemplateStatus.DRAFT);
+        assertThat(detail.version().getVersion()).isEqualTo(1);
     }
 
     @Test
