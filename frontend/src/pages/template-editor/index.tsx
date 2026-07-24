@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Input, Select, Switch, InputNumber, Space, message, Tag, List, Popconfirm, Typography, Alert, Empty } from 'antd';
+import FlowNodeInspector from '@/pages/rule-editor/FlowNodeInspector';
 import { SaveOutlined, DeleteOutlined, ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -13,8 +14,7 @@ import { getRuleKindOptions } from '@/constants/enums';
 import { ROUTES } from '@/constants/routes';
 import { bodyToCarriers, carriersToBody } from '@/types';
 import type { RuleTemplate, TemplateSlot, SlotBinding, SlotConstraint, DataType } from '@/types/template';
-import type { RuleBody, RuleKind, SceneMetadata, DecisionItem, FlowNode } from '@/types';
-import type { SwitchNode, TransformNode, OutputNode, RuleRefNode } from '@/types/flow';
+import type { RuleBody, RuleKind, SceneMetadata, DecisionItem } from '@/types';
 import RuleBodyEditor from '@/pages/rule-editor/RuleBodyEditor';
 import FlowCanvasEditor from '@/pages/rule-editor/FlowCanvasEditor';
 import { introspectPositions } from './introspect';
@@ -171,129 +171,10 @@ export default function TemplateEditor() {
     finally { setSaving(false); }
   };
 
-  /** 模板编辑器内联 flow 节点属性面板——复用规则编辑器 RightPanel 相同的渲染逻辑 */
-  const renderFlowNodeInspector = () => {
-    if (!carriers.flowGraph) return null;
-    const graph = carriers.flowGraph;
-    const selectedNode = selectedFlowNodeId ? graph.nodes.find((n) => n.id === selectedFlowNodeId) ?? null : null;
-    const selectedEdge = selectedFlowEdgeIndex !== null ? graph.edges[selectedFlowEdgeIndex] ?? null : null;
-
-    const updateFlowNode = (updated: FlowNode) => {
-      setBodySkeleton(carriersToBody('DECISION_FLOW', {
-        flowGraph: { ...graph, nodes: graph.nodes.map((n) => n.id === updated.id ? updated : n) },
-      }));
-    };
-
-    if (!selectedNode && !selectedEdge) return null;
-
-    return (
-      <Card size="small" title={t('editor.flow.inspector.title')} style={{ marginTop: 8 }}>
-        {selectedEdge && (() => {
-          const srcNode = graph.nodes.find((n) => n.id === selectedEdge.from);
-          const swNode = srcNode?.type === 'SwitchNode' ? srcNode as SwitchNode : null;
-          return (
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 4, fontWeight: 600 }}>
-                {srcNode?.type === 'RuleRefNode' ? t('editor.flow.inspector.ruleResult') : t('editor.flow.inspector.caseKeys')}
-              </div>
-              <Select size="small" style={{ width: '100%' }}
-                value={selectedEdge.caseKey ?? '__none__'}
-                options={[
-                  { value: '__none__', label: '— 无条件（默认出边）' },
-                  ...(srcNode?.type === 'RuleRefNode'
-                    ? [{ value: 'true', label: 'true — 规则命中' }, { value: 'false', label: 'false — 规则未命中' }]
-                    : swNode ? swNode.caseKeys.map((k) => ({ value: k, label: k })) : []),
-                ]}
-                onChange={(v) => {
-                  setBodySkeleton(carriersToBody('DECISION_FLOW', {
-                    flowGraph: { ...graph, edges: graph.edges.map((e, i) => i === selectedFlowEdgeIndex ? { ...e, caseKey: v === '__none__' ? null : v } : e) as typeof graph.edges },
-                  }));
-                }}
-              />
-            </div>
-          );
-        })()}
-
-        {selectedNode?.type === 'SwitchNode' && (() => {
-          const s = selectedNode as SwitchNode;
-          return (<Space direction="vertical" style={{ width: '100%' }} size={8}>
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 3, fontWeight: 600 }}>{t('editor.flow.inspector.lang')}</div>
-              <Select size="small" style={{ width: '100%' }} value={s.lang}
-                options={(metadata?.expressionLangs ?? ['CEL']).map((l) => ({ value: l, label: l }))}
-                onChange={(lang) => updateFlowNode({ ...s, lang })} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 3, fontWeight: 600 }}>{t('editor.flow.inspector.expression')}</div>
-              <Input.TextArea rows={3} value={s.expression} onChange={(e) => updateFlowNode({ ...s, expression: e.target.value })} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 3, fontWeight: 600 }}>{t('editor.flow.inspector.caseKeys')}</div>
-              <Select mode="tags" size="small" style={{ width: '100%' }} value={s.caseKeys} onChange={(caseKeys) => updateFlowNode({ ...s, caseKeys })} />
-            </div>
-          </Space>);
-        })()}
-
-        {selectedNode?.type === 'TransformNode' && (() => {
-          const tr = selectedNode as TransformNode;
-          return (<Space direction="vertical" style={{ width: '100%' }} size={8}>
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 3, fontWeight: 600 }}>{t('editor.flow.inspector.lang')}</div>
-              <Select size="small" style={{ width: '100%' }} value={tr.lang}
-                options={(metadata?.expressionLangs ?? ['CEL']).map((l) => ({ value: l, label: l }))}
-                onChange={(lang) => updateFlowNode({ ...tr, lang })} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 3, fontWeight: 600 }}>{t('editor.flow.inspector.outputKey')}</div>
-              <Input size="small" value={tr.outputKey} addonBefore="flow." onChange={(e) => updateFlowNode({ ...tr, outputKey: e.target.value })} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 3, fontWeight: 600 }}>{t('editor.flow.inspector.expression')}</div>
-              <Input.TextArea rows={3} value={tr.expression} onChange={(e) => updateFlowNode({ ...tr, expression: e.target.value })} />
-            </div>
-          </Space>);
-        })()}
-
-        {selectedNode?.type === 'OutputNode' && (() => {
-          const o = selectedNode as OutputNode;
-          return (
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 3, fontWeight: 600 }}>{t('editor.flow.inspector.decisionCode')}</div>
-              <Select size="small" style={{ width: '100%' }} value={o.decisionCode || undefined}
-                placeholder={t('editor.flow.node.selectDecision')}
-                options={decisions.map((d) => ({ value: d.code, label: `${d.name ?? d.code} (${d.code})` }))}
-                onChange={(v) => updateFlowNode({ ...o, decisionCode: v })} />
-            </div>
-          );
-        })()}
-
-        {selectedNode?.type === 'RuleRefNode' && (() => {
-          const ref = selectedNode as RuleRefNode;
-          return (
-            <div>
-              <div style={{ fontSize: 11, color: '#5b6672', marginBottom: 3, fontWeight: 600 }}>{t('editor.flow.inspector.ruleCode')}</div>
-              <Select size="small" style={{ width: '100%' }} value={ref.ruleCode || undefined} showSearch optionFilterProp="label"
-                placeholder={t('editor.flow.node.selectRule')}
-                options={Object.entries(
-                  flowSceneRules.reduce((acc, r) => {
-                    const sc = r.sceneCode ?? '';
-                    (acc[sc] = acc[sc] ?? []).push(r);
-                    return acc;
-                  }, {} as Record<string, typeof flowSceneRules>),
-                ).map(([sc, items]) => ({
-                  label: sc || '—',
-                  options: items.map((r) => ({ value: r.code, label: `${r.name} (${r.code})` })),
-                }))}
-                onChange={(v) => updateFlowNode({ ...ref, ruleCode: v })} />
-            </div>
-          );
-        })()}
-      </Card>
-    );
-  };
-
   const renderBodyEditor = () => {
     if (kind === 'DECISION_FLOW') {
+      const flowGraph = carriers.flowGraph ?? { nodes: [], edges: [], inputNodeId: '' };
+      const hasSelection = selectedFlowNodeId !== null || selectedFlowEdgeIndex !== null;
       return (
         <>
           <FlowCanvasEditor
@@ -309,7 +190,40 @@ export default function TemplateEditor() {
             onOpenRightPanel={() => {}}
             onCloseRightPanel={() => {}}
           />
-          {renderFlowNodeInspector()}
+          {hasSelection && (
+            <Card size="small" title={t('editor.flow.inspector.title')} style={{ marginTop: 8 }}>
+              <FlowNodeInspector
+                graph={flowGraph}
+                selectedNodeId={selectedFlowNodeId}
+                selectedEdgeIndex={selectedFlowEdgeIndex}
+                decisions={decisions}
+                sceneRules={flowSceneRules}
+                expressionLangs={metadata?.expressionLangs ?? ['CEL']}
+                onChangeNode={(updated) => setBodySkeleton(carriersToBody('DECISION_FLOW', {
+                  flowGraph: { ...flowGraph, nodes: flowGraph.nodes.map((n) => n.id === updated.id ? updated : n) },
+                }))}
+                onChangeEdge={(index, caseKey) => setBodySkeleton(carriersToBody('DECISION_FLOW', {
+                  flowGraph: { ...flowGraph, edges: flowGraph.edges.map((e, i) => i === index ? { ...e, caseKey } : e) as typeof flowGraph.edges },
+                }))}
+                onDeleteNode={(id) => {
+                  const remain = new Set(flowGraph.nodes.map((n) => n.id).filter((nid) => nid !== id));
+                  setBodySkeleton(carriersToBody('DECISION_FLOW', {
+                    flowGraph: {
+                      nodes: flowGraph.nodes.filter((n) => remain.has(n.id)),
+                      edges: flowGraph.edges.filter((e) => remain.has(e.from) && remain.has(e.to)),
+                      inputNodeId: remain.has(flowGraph.inputNodeId) ? flowGraph.inputNodeId : (flowGraph.nodes.find((n) => remain.has(n.id))?.id ?? ''),
+                    },
+                  }));
+                  setSelectedFlowNodeId(null);
+                  setSelectedFlowEdgeIndex(null);
+                }}
+                onSetInput={(id) => setBodySkeleton(carriersToBody('DECISION_FLOW', {
+                  flowGraph: { ...flowGraph, inputNodeId: id },
+                }))}
+                // 模板编辑器不需要下钻——没有 RuleVersion 可以下钻编辑
+              />
+            </Card>
+          )}
         </>
       );
     }
