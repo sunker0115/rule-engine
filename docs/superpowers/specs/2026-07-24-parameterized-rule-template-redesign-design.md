@@ -200,6 +200,17 @@ ALTER TABLE rule_version
 
 **开关**:默认关闭不变(`RuleTemplateController` + `RuleTemplateServiceImpl` 带 `@ConditionalOnProperty(rule.template.enabled)`;前端 `FEATURES.templates`)。
 
+### 首版代码处置(就地重写,不整体回退)
+
+首版模板代码全部**未提交**(工作区 `??` 新文件 + `M` 修改共享文件),且新设计沿用其中约 1/3。故**不 `git checkout`/`git clean` 整体回退**(会抹掉保留部分 + 无 commit 可恢复,属破坏性操作),改按文件就地处置:
+
+- **KEEP(原样保留)**:`RuleVersion`(template_id/version)、`PublishService.createDraft` 重载、`AuditTargetType.RULE_TEMPLATE`、`AuditSnapshot`、`RuleTemplateStatus`、`RuleTemplateMapper`、前端 menu/routes/api-endpoints/i18n + feature flag。
+- **REWRITE(整文件 `Write` 覆盖)**:`RuleTemplateServiceImpl`、`RuleTemplate` 实体、`TemplateSlot`、`RuleTemplateSnapshot`、create/update 请求 DTO、`RuleTemplateController`、`V1_42` 迁移、前端 `types/template.ts` + `template-editor`。
+- **DELETE(砍)**:反向导出 `ExportFromRuleRequest` + 前端导出入口。
+- **NEW(新增)**:`SlotBinding`/`SlotTarget`/`JsonPointerTarget`、`TemplateBinder`/`JsonPointerBinder`、kernel `ScriptSource`/`FlowGraph` 的 params。
+
+**测试同步(强制)**:每个 REWRITE/NEW/DELETE Task 在收尾时同步更新对应测试用例——改行为的补/改测试、删能力的删对应测试、加能力的加测试,与实现**同 Task 同 commit**(遵项目"测试与实现同 commit"纪律),不接受"先合代码后补测试"。提交前跑 `$MVN -pl <module> -am test`,一轮结束 `$MVN clean test` 兜底。
+
 ## 错误码
 
 - `TEMPLATE_KIND_UNSUPPORTED`:无 binder `supports` 该 body。
