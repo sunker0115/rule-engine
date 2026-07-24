@@ -369,7 +369,7 @@ class RuleTemplateServiceImplTest {
         when(templateMapper.findVisibleByCode(TENANT_ID, "tmpl-a")).thenReturn(tmpl);
         when(versionMapper.findLatestPublished(7L)).thenReturn(pub);
         when(binder.bind(any(), any(), any())).thenReturn(skeleton());
-        when(publishService.createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1")))
+        when(publishService.createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1"), eq(false)))
                 .thenReturn(new DraftCreatedResult(11L, 22L, 1L, "DRAFT"));
         when(instantiationMapper.insert(any(RuleTemplateInstantiation.class))).thenReturn(1);
 
@@ -378,7 +378,7 @@ class RuleTemplateServiceImplTest {
 
         assertThat(result.ruleVersionId()).isEqualTo(22L);
         // 校验 createDraft 被调用
-        verify(publishService).createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1"));
+        verify(publishService).createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1"), eq(false));
         // 溯源记录写入
         ArgumentCaptor<RuleTemplateInstantiation> riCaptor = ArgumentCaptor.forClass(RuleTemplateInstantiation.class);
         verify(instantiationMapper).insert(riCaptor.capture());
@@ -407,7 +407,7 @@ class RuleTemplateServiceImplTest {
         when(templateMapper.findVisibleByCode(TENANT_ID, "tmpl-a")).thenReturn(tmpl);
         when(versionMapper.findLatestPublished(7L)).thenReturn(pub);
         when(binder.bind(any(), any(), any())).thenReturn(skeleton());
-        when(publishService.createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1")))
+        when(publishService.createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1"), eq(false)))
                 .thenReturn(new DraftCreatedResult(11L, 22L, 1L, "DRAFT"));
         when(instantiationMapper.insert(any(RuleTemplateInstantiation.class))).thenReturn(1);
 
@@ -464,7 +464,7 @@ class RuleTemplateServiceImplTest {
         when(templateMapper.findVisibleByCode(TENANT_ID, "tmpl-a")).thenReturn(tmpl);
         when(versionMapper.findLatestPublished(7L)).thenReturn(pub);
         when(binder.bind(any(), any(), any())).thenReturn(skeleton());
-        when(publishService.createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1")))
+        when(publishService.createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1"), eq(false)))
                 .thenReturn(new DraftCreatedResult(11L, 22L, 1L, "DRAFT"));
         when(instantiationMapper.insert(any(RuleTemplateInstantiation.class))).thenReturn(1);
 
@@ -487,7 +487,7 @@ class RuleTemplateServiceImplTest {
         when(templateMapper.findVisibleByCode(TENANT_ID, "tmpl-a")).thenReturn(tmpl);
         when(versionMapper.findLatestPublished(7L)).thenReturn(pub);
         when(binder.bind(any(), any(), any())).thenReturn(skeleton());
-        when(publishService.createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1")))
+        when(publishService.createDraft(eq(TENANT_ID), eq("scene-x"), eq("rule-1"), any(RuleContent.class), eq("u1"), eq(false)))
                 .thenReturn(new DraftCreatedResult(11L, 22L, 1L, "DRAFT"));
         when(instantiationMapper.insert(any(RuleTemplateInstantiation.class)))
                 .thenThrow(new RuntimeException("DB down"));
