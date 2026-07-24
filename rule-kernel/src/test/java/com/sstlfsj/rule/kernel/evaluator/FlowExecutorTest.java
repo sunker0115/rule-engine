@@ -174,6 +174,33 @@ class FlowExecutorTest {
     }
 
     @Test
+    void switchExpressionReadsParamsFromFlowGraph() {
+        FlowGraph g = new FlowGraph(
+                List.of(new SwitchNode("n1", ExpressionLang.CEL, "gate", List.of("hi", "lo")),
+                        new OutputNode("nh", "REVIEW"), new OutputNode("nl", "PASS")),
+                List.of(new FlowEdge("n1", "nh", "hi"), new FlowEdge("n1", "nl", "lo")),
+                "n1",
+                Map.of("threshold", 75));
+        RuleVersionSnapshot snap = RuleVersionSnapshot.builder()
+                .ruleVersionId(100L).code("flow1").kind(RuleKind.DECISION_FLOW.tag())
+                .flowGraph(g)
+                .addDecisionBinding("REVIEW", "复核", 50)
+                .addDecisionBinding("PASS", "放行", 10)
+                .build();
+
+        // gate 读 FlowGraph.params 里的冻结常量 threshold，验证 params 命名空间求值期可见
+        BiFunction<String, Map<String, Object>, Object> fn = (expr, b) -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> params = (Map<String, Object>) b.get("params");
+            int threshold = ((Number) params.get("threshold")).intValue();
+            return threshold > 50 ? "hi" : "lo";
+        };
+
+        EvalResult r = executor(fn, Map.of()).execute(snap, ctx());
+        assertThat(r.finalDecision().code()).isEqualTo("REVIEW");
+    }
+
+    @Test
     void ruleRefReceivesOriginalCtxWithoutFlowVars() {
         FlowGraph g = new FlowGraph(
                 List.of(new TransformNode("n1", ExpressionLang.CEL, "calc", "x"),
