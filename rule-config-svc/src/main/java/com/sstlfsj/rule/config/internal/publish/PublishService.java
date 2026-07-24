@@ -41,6 +41,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +59,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class PublishService {
+
+    private static final Logger log = LoggerFactory.getLogger(PublishService.class);
 
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
@@ -133,14 +138,31 @@ public class PublishService {
         if (scene == null) {
             throw new IllegalStateException("Scene 不存在: code=" + rule.getSceneCode());
         }
-        // 加载最新 DRAFT（已是冻结快照，premise A）；无待发布草稿则拒
+        // 加载最新 DRAFT；无待发布草稿则拒
         RuleVersion draft = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
         if (draft == null) {
             throw new IllegalStateException("没有待发布的草稿版本，请先保存规则草稿");
         }
+
+        // DECISION_FLOW：模板实例化时 strictRefs=false 跳过了引用冻结，发布时需重解析以冻快照并级联发布子规则
+        if (draft.getKind() == RuleKind.DECISION_FLOW && draft.getBody() instanceof FlowBody fb) {
+            ResolvedDraft resolved = resolveAndValidate(
+                    tenantId, scene, RuleKind.DECISION_FLOW,
+                    null, draft.getDecisionBindings(), draft.getPreGates(),
+                    draft.getTriggerEventTypes(), null, fb.flowGraph(), true);
+            RuleVersion reFrozen = buildDraftVersion(ruleDefinitionId, draft.getVersion(), resolved);
+            draft.setBody(reFrozen.getBody());
+            draft.setDecisionBindings(reFrozen.getDecisionBindings());
+            draft.setPreGates(reFrozen.getPreGates());
+            draft.setTriggerEventTypes(reFrozen.getTriggerEventTypes());
+            draft.setMetricDependencies(reFrozen.getMetricDependencies());
+            draft.setPayloadDependencies(reFrozen.getPayloadDependencies());
+            ruleVersionMapper.updateById(draft);
+        }
+
         Long previousActiveId = rule.getCurrentVersion();
 
-        // 原地激活 DRAFT 行（不增版本、不重解析）
+        // 原地激活 DRAFT 行（不增版本）
         draft.setStatus(RuleVersionStatus.ACTIVE);
         draft.setPublishedBy(actorId);
         draft.setPublishedAt(LocalDateTime.now());
@@ -670,7 +692,17 @@ public class PublishService {
         }
         RuleVersion active = ruleVersionMapper.findActiveVersion(ref.getId());
         if (active == null) {
-            throw new IllegalArgumentException("DECISION_FLOW 引用的规则无 ACTIVE 版本，无法冻结: " + ruleCode);
+            // 无 ACTIVE → 检查是否 DRAFT，有则级联自动发布
+            RuleVersion draft = ruleVersionMapper.findLatestDraft(ref.getId());
+            if (draft != null) {
+                log.info("Flow 发布：级联自动发布被引规则 {} (id={})", ruleCode, ref.getId());
+                publish(tenantId, ref.getId(), "system");  // 发布后产生 ACTIVE 版本
+                active = ruleVersionMapper.findActiveVersion(ref.getId());
+            }
+            if (active == null) {
+                throw new IllegalArgumentException(
+                    "DECISION_FLOW 引用的规则无 ACTIVE 版本且无 DRAFT 可自动发布: " + ruleCode);
+            }
         }
         RuleKind refKind = active.getKind() != null ? active.getKind() : RuleKind.AST_BOOLEAN;
         // 直接由 typed 实体字段组装完整快照（同 SnapshotAssembler 的形状，但源为实体而非 JSON，保全 payloadDeps 等全字段）；
