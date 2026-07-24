@@ -178,6 +178,14 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
         <Form.Item name="subjectId" label={te('dryRun.subjectId')} rules={[{ required: true }]}>
           <Input />
         </Form.Item>
+        {(paramKeys?.length ?? 0) > 0 && (
+          <Form.Item label="模板参数（已内嵌，无需手动添加）">
+            {paramKeys!.map((k) => (
+              <Tag key={k} style={{ marginBottom: 4 }}>{k}</Tag>
+            ))}
+          </Form.Item>
+        )}
+
         <Form.Item label={te('dryRun.payload')}>
           {pairs.length === 0 && (
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
@@ -187,16 +195,13 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
           {pairs.map(p => (
             <Row gutter={8} key={p.id} style={{ marginBottom: 8 }}>
               <Col flex="auto">
-                {(payloadFieldNames.length > 0 || (paramKeys?.length ?? 0) > 0) ? (
+                {payloadFieldNames.length > 0 ? (
                   <Select
                     showSearch
                     value={p.key || undefined}
                     onChange={(val) => updatePair(p.id, 'key', val ?? '')}
                     placeholder={te('dryRun.field')}
-                    options={[
-                      ...(paramKeys ?? []).map((k) => ({ value: `params.${k}`, label: `📋 params.${k}` })),
-                      ...payloadFieldNames.map((f) => ({ value: f, label: f })),
-                    ]}
+                    options={payloadFieldNames.map((f) => ({ value: f, label: f }))}
                     allowClear
                     style={{ width: '100%' }}
                   />
