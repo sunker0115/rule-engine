@@ -6,7 +6,9 @@
 
 **Architecture:** 纯前端,后端 0 改动。单一真相源 `script.params`;`RuleBodyEditor`/`FlowCanvasEditor`/`expressionCompletions`/实例化值输入全部复用;`editableParams` 一个组件分流模板(可编辑)/规则(只读)两场景。
 
-**Tech Stack:** React + TypeScript + Ant Design + zustand + CodeMirror + i18next;Vite。验证门槛 = `cd frontend && npx tsc -b` 干净(前端无单测基座)+ §末手动核对清单。
+**Tech Stack:** React + TypeScript + Ant Design + zustand + CodeMirror + i18next;Vite + **Vitest(jsdom + @testing-library/react)**。验证门槛 = `npm test`(vitest run)+ `npx tsc -b` 干净 + §末手动核对清单。
+
+**测试基座(已由 controller 建好,Task 从此依赖):** vitest 已接线——`package.json` `test`=`vitest run`;`vite.config.ts` 有 `test` 段(globals/jsdom/setupFiles);`src/test/setup.ts` 引 `@testing-library/jest-dom/vitest`;已装 jsdom/@testing-library/{react,jest-dom,user-event}。纯逻辑测 node 侧、组件测 jsdom+render 均验证可跑。测试文件就近放 `*.test.ts(x)`。
 
 ## Global Constraints
 
@@ -16,7 +18,8 @@
 - `editableParams`:模板编辑器 true(可增删改),规则编辑器 false(只读 round-trip)。
 - Flow 本轮**仅结构参数化**(RuleRefNode.ruleCode/OutputNode.decisionCode/SwitchNode.caseKeys);flow 表达式 `params.x` 常量 UI 不做。
 - dataType 用 `types/template.ts` 的 `DataType`(8 值,不含 UNKNOWN);slot 无 defaultValue(默认=skeleton 位置值)。
-- 每 Task 收尾 `npx tsc -b` 必须干净;i18n key 在用到处补齐(en + zh-CN + types.ts)。
+- 每 Task 收尾 `npm test`(vitest,若该 Task 有测试)+ `npx tsc -b` 必须干净;i18n key 在用到处补齐(en + zh-CN + types.ts)。
+- **纯逻辑必写 vitest**(introspect / expressionCompletions);组件写渲染 smoke + 关键行为(SlotValueInput 按类型渲染、参数表增删改);集成/编辑器整体靠手动核对(§Task 7)。
 - 匹配现有 React/AntD/i18n 风格,不引新依赖。
 
 ## 复用锚点(实现者先读这些,别臆造)
@@ -101,17 +104,25 @@ if (prefix === 'params') {
 
 grep `expressionCompletions(` 找调用点(ScriptEditor 的 `completeFn`、flow 的 ExpressionInput 若有)。ScriptEditor 传 `Object.keys(script?.params ?? {})`;其它调用点暂传 `[]`(Task 4 再接 ScriptEditor 的真实源)。
 
-- [ ] **Step 3: 验证**
+- [ ] **Step 3: 写 vitest(纯逻辑)**
+
+`frontend/src/pages/rule-editor/expressionCompletions.test.ts`:构造一个最小 `CompletionContext`(可用 vitest 手搓 `{ matchBefore: (re) => ... , pos, state }` 或读 CodeMirror 测试范式),断言:
+- 顶层输入 `par` → 建议含 `params` namespace 项。
+- `params.th` + paramKeys=['threshold','thd'] → options 含 `threshold`/`thd`,过滤掉不匹配。
+- `metrics.`/`payload.` 分支不受影响(回归)。
+先读 `expressionCompletions` 现有测试范式(若无则参考 `ctx.matchBefore` 签名手构 stub)。
+
+- [ ] **Step 4: 验证**
 
 ```bash
-cd frontend && npx tsc -b
+cd frontend && npm test -- expressionCompletions && npx tsc -b
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/src/pages/rule-editor/expressionCompletions.ts frontend/src/pages/rule-editor/ScriptEditor.tsx frontend/src/pages/rule-editor/ExpressionInput.tsx
-git commit -m "feat(frontend): expressionCompletions 加 params 命名空间(params.<键> 补全)"
+git add frontend/src/pages/rule-editor/expressionCompletions.ts frontend/src/pages/rule-editor/expressionCompletions.test.ts frontend/src/pages/rule-editor/ScriptEditor.tsx frontend/src/pages/rule-editor/ExpressionInput.tsx
+git commit -m "feat(frontend): expressionCompletions 加 params 命名空间(params.<键> 补全)+ vitest"
 ```
 
 ---
@@ -178,12 +189,21 @@ export default function SlotValueInput({ dataType, value, onChange, disabled }: 
 
 把 `template-instantiate/` 里按类型 render 的那段替换为 `<SlotValueInput dataType={slot.dataType} value={...} onChange={...} />`,删重复逻辑。行为不变。
 
-- [ ] **Step 4: 验证 + Commit**
+- [ ] **Step 4: 写 vitest(组件渲染 + 行为)**
+
+`frontend/src/components/SlotValueInput.test.tsx`(testing-library):
+- `dataType=BOOLEAN` → 渲染 Switch;点击触发 `onChange(true/false)`。
+- `dataType=LONG` → 渲染数值输入;输入触发 `onChange(number)`。
+- `dataType=STRING` → 渲染文本框。
+- `dataType=LIST` → 渲染多值(tags)输入。
+覆盖各分支渲染 + 至少一个 onChange 行为。
+
+- [ ] **Step 5: 验证 + Commit**
 
 ```bash
-cd frontend && npx tsc -b
-git add frontend/src/components/SlotValueInput.tsx frontend/src/pages/template-instantiate/
-git commit -m "feat(frontend): 抽 SlotValueInput 按 DataType 渲染值输入,实例化表单复用"
+cd frontend && npm test -- SlotValueInput && npx tsc -b
+git add frontend/src/components/SlotValueInput.tsx frontend/src/components/SlotValueInput.test.tsx frontend/src/pages/template-instantiate/
+git commit -m "feat(frontend): 抽 SlotValueInput 按 DataType 渲染值输入,实例化表单复用 + vitest"
 ```
 
 ---
@@ -200,9 +220,16 @@ git commit -m "feat(frontend): 抽 SlotValueInput 按 DataType 渲染值输入,�
 
 **Context:** 遍历 skeleton 产可参数化位置候选(标签 + pointer + 当前值 + 推断 dataType)。创作期便利,非运行时机制。AST 走值位;Flow 只走结构字段。
 
-- [ ] **Step 1: 写测试(纯函数,可加最小 vitest 或就靠 tsc + 手验)**
+- [ ] **Step 1: 写 vitest(纯函数,最高价值,先写)**
 
-前端若有 vitest 则加 `introspect.test.ts` 覆盖:AndNode 深层 ConditionNode.params → pointer `/conditionAst/children/0/params/threshold`;flow RuleRefNode → `/flowGraph/nodes/0/ruleCode`。若无 vitest,跳过自动化,靠 Task 6 集成手验。先 `ls frontend` 找 vitest 配置确认。
+`frontend/src/pages/template-editor/introspect.test.ts`——这是本轮最该单测的纯逻辑,覆盖:
+- AST:`AndNode[ConditionNode{params:{threshold:100}}]` → 候选含 `{jsonPointer:'/conditionAst/children/0/params/threshold', dataType:'LONG', currentValue:100}`。
+- AST 深层:`IfNode.condition` 里的 ConditionNode → pointer 含 `/conditionAst/condition/children/0/params/...`。
+- 决策表:Row.conditions cell → `/conditionAst/rows/0/conditions/0`。
+- Scorecard:`/conditionAst/conditions/0/...`。
+- Flow 结构:RuleRefNode → `/flowGraph/nodes/0/ruleCode`;OutputNode → `.../decisionCode`;SwitchNode → `.../caseKeys`(dataType LIST)。
+- inferType:integer→LONG、小数→DOUBLE、bool→BOOLEAN、array→LIST、其余→STRING。
+pointer 字段名须与后端 `JsonPointerBinderTest` 路径逐字一致(children/child/condition/thenBranch/elseBranch/conditions/rows/params)。
 
 - [ ] **Step 2: 实现 introspect**
 
@@ -332,12 +359,23 @@ git commit -m "feat(frontend): ScriptEditor 加 params 表 + editableParams 分�
 
 **Files:**
 - Modify(重写): `frontend/src/pages/template-editor/index.tsx`
+- Modify: `frontend/src/pages/template-list/index.tsx`(创建弹窗 kind 扩展 + Script/Flow 骨架播种)
 - 依赖: `RuleBodyEditor`/`FlowCanvasEditor`(复用)、`introspect.ts`(Task 4)、`ScriptEditor` editableParams(Task 5)、`getSceneMetadata`/`getScene`/`listDecisions`。
 
 **Interfaces:**
 - Consumes: Task 3/4/5;`RuleBodyEditor` props(见复用锚点);`introspectPositions`。
 
 **Context:** 把 JSON 文本框换成可视化 skeleton 编辑 + 参照场景 + 选位置声明 binding。这是最大一块;分两步提交(6a skeleton+参照场景+kind 扩展;6b 位置选择器+binding 派生)。
+
+- [ ] **Step 0(6a): 创建入口(template-list)kind 扩展 + Script/Flow 骨架播种**
+
+`frontend/src/pages/template-list/index.tsx` 的创建弹窗当前只列 AST 四种(`AST_KINDS`),`handleCreate` 的骨架播种也只覆盖那四种(`else` 兜底 AndNode)。改:
+- 创建弹窗 kind `Select` 选项扩为全 6 kind:`['AST_BOOLEAN','SCORECARD','DECISION_TREE','DECISION_TABLE','EXPRESSION_SCRIPT','DECISION_FLOW']`(label 走 `t('enum.kind.<K>')`,与规则编辑器一致)。
+- `handleCreate` 的 `bodySkeleton` 播种加两分支:
+  - `EXPRESSION_SCRIPT` → `{ type: 'ScriptBody', script: { source: '', lang: 'CEL', params: {} } }`
+  - `DECISION_FLOW` → `{ type: 'FlowBody', flowGraph: { nodes: [], edges: [], inputNodeId: '', params: {} }, referencedSnapshots: {} }`
+  (AST 四种维持现状;`else` 兜底仍 AndNode。)
+- 建完跳转到编辑器(现有行为),由 6a 的编辑器渲染对应 body。
 
 - [ ] **Step 1(6a): skeleton 复用 RuleBodyEditor + 参照场景 + kind 扩展**
 
@@ -350,8 +388,8 @@ git commit -m "feat(frontend): ScriptEditor 加 params 表 + editableParams 分�
 
 ```bash
 cd frontend && npx tsc -b
-git add frontend/src/pages/template-editor/index.tsx frontend/src/i18n/
-git commit -m "feat(frontend): 模板编辑器 skeleton 改用 RuleBodyEditor/FlowCanvasEditor + 参照场景 + 全 kind"
+git add frontend/src/pages/template-editor/index.tsx frontend/src/pages/template-list/index.tsx frontend/src/i18n/
+git commit -m "feat(frontend): 模板创建/编辑扩全 6 kind(Script/Flow 骨架播种)+ skeleton 改用 RuleBodyEditor/FlowCanvasEditor + 参照场景"
 ```
 
 - [ ] **Step 3(6b): 位置选择器 + binding 派生(去手打 pointer)**
@@ -391,6 +429,7 @@ exit 0。
 - [ ] **Step 3: 手动端到端核对(前端无单测基座,此为验收门)**
 
 起前端(`npm run dev`)+ 后端(模板功能已默认开),核对:
+0. 创建弹窗 kind 下拉出现全 6 种;选 EXPRESSION_SCRIPT/DECISION_FLOW 建出的模板骨架为 ScriptBody/FlowBody(非兜底 AndNode)。
 1. 建 EXPRESSION_SCRIPT 模板:选参照场景 → 写 `metrics.x > params.threshold`(`metrics.`/`params.` 补全出现)→ 参数表加 threshold=100 → `+ 参数化` 选中该位置生成 slot+binding(界面不见 pointer)→ 保存 → 发布。
 2. 实例化该模板填 threshold=500 → 查生成规则 body `script.params.threshold=500`。
 3. 该实例化规则在**规则编辑器**打开:params 表只读显示 500,改源码保存后 params 不丢(round-trip)。
