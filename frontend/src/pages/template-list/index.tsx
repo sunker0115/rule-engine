@@ -66,26 +66,26 @@ export default function TemplateList() {
   const ACTOR = 'admin'; // 临时：项目无全局 auth 体系
 
   const handlePublish = async (code: string) => {
-    await publishTemplate(tenantId, code, ACTOR);
+    await publishTemplate(SYSTEM_TENANT, code, ACTOR);
     message.success(tc('message.publishSuccess'));
     load();
   };
 
   const handleDisable = async (code: string) => {
-    await disableTemplate(tenantId, code, ACTOR);
+    await disableTemplate(SYSTEM_TENANT, code, ACTOR);
     message.success(tc('message.disabled'));
     load();
   };
 
   const handleEnable = async (code: string) => {
-    await enableTemplate(tenantId, code, ACTOR);
+    await enableTemplate(SYSTEM_TENANT, code, ACTOR);
     message.success(tc('message.enabled'));
     load();
   };
 
   const columns = [
     { title: t('column.name'), dataIndex: 'name', key: 'name' },
-    { title: t('column.code'), dataIndex: 'code', key: 'code' },
+    { title: t('column.code'), dataIndex: 'code', key: 'code', width: 150, ellipsis: true },
     { title: t('column.kind'), dataIndex: 'kind', key: 'kind', width: 150 },
     {
       title: t('column.status'), dataIndex: 'status', key: 'status', width: 100,
