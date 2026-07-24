@@ -868,9 +868,16 @@ public class PublishService {
      * @param actorId   操作人
      * @return 新建草稿的 id 和版本信息
      */
+    /**
+     * 从模板实例化或手建规则创建草稿（主入口）。
+     *
+     * @param templateId      实例化来源模板 ID（手建规则为 null）
+     * @param templateVersion 实例化时模板版本号（手建规则为 null）
+     */
     @Transactional
     public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
-                                          String code, RuleContent content, String actorId) {
+                                          String code, RuleContent content, String actorId,
+                                          Long templateId, Integer templateVersion) {
         String name = content.name();
         String kind = content.kind();
         RuleBody body = content.body();
@@ -913,7 +920,7 @@ public class PublishService {
         ResolvedDraft resolved = resolveAndValidate(
                 tenantId, scene, effectiveRuleKind,
                 conditionAst, decisionBindings, preGates, triggerEventTypes, script, flowGraph);
-        RuleVersion rv = buildDraftVersion(rd.getId(), 1L, resolved);
+        RuleVersion rv = buildDraftVersion(rd.getId(), 1L, resolved, templateId, templateVersion);
         ruleVersionMapper.insert(rv);
 
         // 6. 发布操作审计事件（集中监听器 BEFORE_COMMIT 同事务落 audit_log，D14 约定）
@@ -926,6 +933,15 @@ public class PublishService {
                 LocalDateTime.now()));
 
         return new DraftCreatedResult(rd.getId(), rv.getId(), 1L, RuleDefinitionStatus.DRAFT.name());
+    }
+
+    /**
+     * 手建规则创建草稿（向后兼容入口）。
+     */
+    @Transactional
+    public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
+                                          String code, RuleContent content, String actorId) {
+        return createDraft(tenantId, sceneCode, code, content, actorId, null, null);
     }
 
     /** 解析 kind 字符串为 RuleKind，null/空返回 null（由下游兜底现有 kind 或 AST_BOOLEAN），非法抛 IllegalArgumentException。 */
@@ -962,7 +978,8 @@ public class PublishService {
     }
 
     /** 用冻结内容组装 DRAFT 版本行（createDraft/newVersion 共用）。 */
-    private RuleVersion buildDraftVersion(Long ruleDefinitionId, long version, ResolvedDraft r) {
+    private RuleVersion buildDraftVersion(Long ruleDefinitionId, long version, ResolvedDraft r,
+                                          Long templateId, Integer templateVersion) {
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(ruleDefinitionId);
         rv.setVersion(version);
@@ -973,9 +990,15 @@ public class PublishService {
         rv.setTriggerEventTypes(r.triggerEventTypes());
         rv.setMetricDependencies(r.metricDeps());
         rv.setPayloadDependencies(r.payloadDeps());
+        rv.setTemplateId(templateId);
+        rv.setTemplateVersion(templateVersion);
         rv.setStatus(RuleVersionStatus.DRAFT);
         rv.setCreatedAt(LocalDateTime.now());
         return rv;
+    }
+
+    private RuleVersion buildDraftVersion(Long ruleDefinitionId, long version, ResolvedDraft r) {
+        return buildDraftVersion(ruleDefinitionId, version, r, null, null);
     }
 
     /**
