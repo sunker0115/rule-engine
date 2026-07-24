@@ -24,4 +24,8 @@ public interface RuleTemplateVersionMapper extends BaseMapper<RuleTemplateVersio
     /** 查指定模板的最大版本号，无记录时返回 0。 */
     @Select("SELECT COALESCE(MAX(version), 0) FROM rule_template_version WHERE template_id = #{templateId}")
     int findMaxVersion(Long templateId);
+
+    /** 查指定模板的所有版本快照，按 version DESC 排序。 */
+    @Select("SELECT * FROM rule_template_version WHERE template_id = #{templateId} ORDER BY version DESC")
+    java.util.List<RuleTemplateVersion> findByTemplateId(Long templateId);
 }

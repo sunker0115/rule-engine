@@ -5,6 +5,7 @@ import com.sstlfsj.rule.config.api.dto.SlotBinding;
 import com.sstlfsj.rule.config.api.dto.TemplateDetail;
 import com.sstlfsj.rule.config.api.dto.TemplateSlot;
 import com.sstlfsj.rule.config.internal.domain.RuleTemplate;
+import com.sstlfsj.rule.config.internal.domain.RuleTemplateVersion;
 import com.sstlfsj.rule.kernel.api.model.RuleBody;
 
 import java.util.List;
@@ -43,6 +44,9 @@ public interface RuleTemplateService {
 
     /** 查模板身份 + 指定版本快照。 */
     TemplateDetail getVersion(Long tenantId, String code, Integer version);
+
+    /** 列出模板的所有版本快照（按 version DESC 排序）。 */
+    List<RuleTemplateVersion> listVersions(Long tenantId, String code);
 
     /**
      * 实例化流水线（spec §5.2）：

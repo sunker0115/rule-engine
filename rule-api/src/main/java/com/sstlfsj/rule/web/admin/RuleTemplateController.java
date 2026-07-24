@@ -1,8 +1,10 @@
 package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.dto.TemplateDetail;
 import com.sstlfsj.rule.config.api.service.RuleTemplateService;
 import com.sstlfsj.rule.config.internal.domain.RuleTemplate;
+import com.sstlfsj.rule.config.internal.domain.RuleTemplateVersion;
 import com.sstlfsj.rule.web.admin.dto.CreateTemplateRequest;
 import com.sstlfsj.rule.web.admin.dto.InstantiateRequest;
 import com.sstlfsj.rule.web.admin.dto.UpdateTemplateRequest;
@@ -14,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/** 规则模板管理入口（D74 authoring 便利层，参数化重设计；默认关闭，需 rule.template.enabled=true 开启）。 */
+/** 规则模板管理入口（v2：身份/快照分离，版本化生命周期，可见性列表，VO 边界 enum→String）。 */
 @RestController
 @RequestMapping("/admin/v1/rule-templates")
 @RequiredArgsConstructor
@@ -22,7 +24,7 @@ public class RuleTemplateController {
 
     private final RuleTemplateService templateService;
 
-    /** POST /admin/v1/rule-templates — 创建模板（DRAFT）。 */
+    /** POST /admin/v1/rule-templates — 创建 DRAFT 模板。 */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Long> create(
@@ -33,7 +35,7 @@ public class RuleTemplateController {
                 req.description(), req.bodySkeleton(), req.slots(), req.bindings(), actorId));
     }
 
-    /** PUT /admin/v1/rule-templates/{code} — 更新 DRAFT 模板。 */
+    /** PUT /admin/v1/rule-templates/{code} — 更新模板（原地更新 DRAFT 或新建 v(n+1) DRAFT）。 */
     @PutMapping("/{code}")
     public ApiResponse<Void> update(
             @PathVariable String code,
@@ -64,7 +66,7 @@ public class RuleTemplateController {
         return ApiResponse.ok((Void) null);
     }
 
-    /** GET /admin/v1/rule-templates — 模板列表。 */
+    /** GET /admin/v1/rule-templates — 模板列表（可见性过滤）。 */
     @GetMapping
     public ApiResponse<List<RuleTemplate>> list(
             @RequestHeader("X-Tenant-Id") Long tenantId,
@@ -72,12 +74,29 @@ public class RuleTemplateController {
         return ApiResponse.ok(templateService.list(tenantId, status));
     }
 
-    /** GET /admin/v1/rule-templates/{code} — 模板详情。 */
+    /** GET /admin/v1/rule-templates/{code} — 模板详情（身份 + 最新版本快照）。 */
     @GetMapping("/{code}")
-    public ApiResponse<RuleTemplate> get(
+    public ApiResponse<TemplateDetail> get(
             @PathVariable String code,
             @RequestHeader("X-Tenant-Id") Long tenantId) {
-        return ApiResponse.ok(templateService.get(tenantId, code));
+        return ApiResponse.ok(templateService.getVersion(tenantId, code));
+    }
+
+    /** GET /admin/v1/rule-templates/{code}/versions — 版本历史列表。 */
+    @GetMapping("/{code}/versions")
+    public ApiResponse<List<RuleTemplateVersion>> listVersions(
+            @PathVariable String code,
+            @RequestHeader("X-Tenant-Id") Long tenantId) {
+        return ApiResponse.ok(templateService.listVersions(tenantId, code));
+    }
+
+    /** GET /admin/v1/rule-templates/{code}/versions/{version} — 指定版本快照。 */
+    @GetMapping("/{code}/versions/{version}")
+    public ApiResponse<TemplateDetail> getVersion(
+            @PathVariable String code,
+            @PathVariable Integer version,
+            @RequestHeader("X-Tenant-Id") Long tenantId) {
+        return ApiResponse.ok(templateService.getVersion(tenantId, code, version));
     }
 
     /** POST /admin/v1/rule-templates/{code}/instantiate — 实例化模板为规则（核心）。 */

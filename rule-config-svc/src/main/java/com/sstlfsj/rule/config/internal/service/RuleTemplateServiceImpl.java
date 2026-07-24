@@ -270,6 +270,12 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
     }
 
     @Override
+    public List<RuleTemplateVersion> listVersions(Long tenantId, String code) {
+        RuleTemplate tmpl = requireTemplate(tenantId, code);
+        return versionMapper.findByTemplateId(tmpl.getId());
+    }
+
+    @Override
     @Transactional
     public DraftCreatedResult instantiate(Long tenantId, String templateCode,
                                           String ruleCode, String ruleName,

@@ -2,16 +2,21 @@ package com.sstlfsj.rule.web.admin;
 
 import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
 import com.sstlfsj.rule.config.api.dto.SlotBinding;
+import com.sstlfsj.rule.config.api.dto.TemplateDetail;
 import com.sstlfsj.rule.config.api.dto.TemplateSlot;
+import com.sstlfsj.rule.config.api.dto.SlotKind;
+import com.sstlfsj.rule.config.api.dto.ValueDataType;
 import com.sstlfsj.rule.config.api.service.RuleTemplateService;
 import com.sstlfsj.rule.config.internal.domain.RuleTemplate;
+import com.sstlfsj.rule.config.internal.domain.RuleTemplateVersion;
+import com.sstlfsj.rule.config.internal.domain.TemplateStatus;
 import com.sstlfsj.rule.kernel.api.model.AstBody;
 import com.sstlfsj.rule.kernel.api.model.RuleBody;
+import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.web.common.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -31,7 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** RuleTemplateController 单元测试：新 API（bodySkeleton + bindings）。 */
+/** RuleTemplateController 单元测试：V2 适配（slots 带 kind，返回 TemplateDetail，版本历史，enum→String VO 边界）。 */
 class RuleTemplateControllerTest {
 
     private MockMvc mockMvc;
@@ -66,7 +71,7 @@ class RuleTemplateControllerTest {
                               "kind": "AST_BOOLEAN",
                               "description": "desc",
                               "bodySkeleton": {"type":"AstBody","conditionAst":{"type":"AndNode","children":[]}},
-                              "slots": [{"key":"threshold","label":"阈值","dataType":"LONG","required":true}],
+                              "slots": [{"key":"threshold","label":"阈值","kind":"VALUE","dataType":"LONG","required":true}],
                               "bindings": [{"slotKey":"threshold","target":{"type":"JsonPointerTarget","jsonPointer":"/conditionAst"}}]
                             }
                             """))
@@ -84,6 +89,7 @@ class RuleTemplateControllerTest {
         assertThat(bodyCaptor.getValue()).isInstanceOf(AstBody.class);
         assertThat(slotsCaptor.getValue()).hasSize(1);
         assertThat(slotsCaptor.getValue().get(0).key()).isEqualTo("threshold");
+        assertThat(slotsCaptor.getValue().get(0).kind()).isEqualTo(SlotKind.VALUE);
         assertThat(bindingsCaptor.getValue()).hasSize(1);
         assertThat(bindingsCaptor.getValue().get(0).slotKey()).isEqualTo("threshold");
     }
@@ -97,6 +103,48 @@ class RuleTemplateControllerTest {
                             {"code":"tpl.a","name":"模板A","kind":"AST_BOOLEAN"}
                             """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void create_slotWithKind_deserializesCorrectly() throws Exception {
+        when(templateService.create(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(200L);
+
+        mockMvc.perform(post("/admin/v1/rule-templates")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor-Id", "user1")
+                        .content("""
+                            {
+                              "tenantId": 1,
+                              "code": "tpl.ref",
+                              "name": "REF模板",
+                              "kind": "AST_BOOLEAN",
+                              "bodySkeleton": {"type":"AstBody","conditionAst":{"type":"AndNode","children":[]}},
+                              "slots": [
+                                {"key":"threshold","label":"阈值","kind":"VALUE","dataType":"LONG","required":true},
+                                {"key":"metric","label":"指标","kind":"METRIC_REF","dataType":null,"required":false}
+                              ],
+                              "bindings": [
+                                {"slotKey":"threshold","target":{"type":"JsonPointerTarget","jsonPointer":"/conditionAst"}}
+                              ]
+                            }
+                            """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data").value(200));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TemplateSlot>> slotsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(templateService).create(eq(1L), eq("tpl.ref"), any(), eq("AST_BOOLEAN"),
+                any(), any(), slotsCaptor.capture(), any(), eq("user1"));
+        assertThat(slotsCaptor.getValue()).hasSize(2);
+        // VALUE slot
+        assertThat(slotsCaptor.getValue().get(0).key()).isEqualTo("threshold");
+        assertThat(slotsCaptor.getValue().get(0).kind()).isEqualTo(SlotKind.VALUE);
+        assertThat(slotsCaptor.getValue().get(0).dataType()).isEqualTo(ValueDataType.LONG);
+        // REF slot — dataType 为空
+        assertThat(slotsCaptor.getValue().get(1).key()).isEqualTo("metric");
+        assertThat(slotsCaptor.getValue().get(1).kind()).isEqualTo(SlotKind.METRIC_REF);
+        assertThat(slotsCaptor.getValue().get(1).dataType()).isNull();
     }
 
     @Test
@@ -170,18 +218,84 @@ class RuleTemplateControllerTest {
     }
 
     @Test
-    void get_returns200_withTemplate() throws Exception {
+    void get_returns200_withTemplateDetail() throws Exception {
         RuleTemplate t = new RuleTemplate();
         t.setId(1L);
         t.setCode("tpl.a");
-        when(templateService.get(1L, "tpl.a")).thenReturn(t);
+        t.setTenantId(1L);
+        t.setName("模板A");
+        t.setKind(RuleKind.AST_BOOLEAN);
+        t.setStatus(TemplateStatus.PUBLISHED);
+
+        RuleTemplateVersion v = new RuleTemplateVersion();
+        v.setId(10L);
+        v.setTemplateId(1L);
+        v.setVersion(1);
+        v.setStatus(TemplateStatus.PUBLISHED);
+
+        TemplateDetail detail = new TemplateDetail(t, v);
+        when(templateService.getVersion(1L, "tpl.a")).thenReturn(detail);
 
         mockMvc.perform(get("/admin/v1/rule-templates/tpl.a")
                         .header("X-Tenant-Id", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.code").value("tpl.a"));
+                .andExpect(jsonPath("$.data.template.code").value("tpl.a"))
+                .andExpect(jsonPath("$.data.template.status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.data.version.version").value(1))
+                .andExpect(jsonPath("$.data.version.status").value("PUBLISHED"));
 
-        verify(templateService).get(1L, "tpl.a");
+        verify(templateService).getVersion(1L, "tpl.a");
+    }
+
+    @Test
+    void listVersions_returns200_withVersionList() throws Exception {
+        RuleTemplateVersion v1 = new RuleTemplateVersion();
+        v1.setId(10L);
+        v1.setTemplateId(1L);
+        v1.setVersion(2);
+        v1.setStatus(TemplateStatus.PUBLISHED);
+
+        RuleTemplateVersion v2 = new RuleTemplateVersion();
+        v2.setId(11L);
+        v2.setTemplateId(1L);
+        v2.setVersion(1);
+        v2.setStatus(TemplateStatus.PUBLISHED);
+
+        when(templateService.listVersions(1L, "tpl.a")).thenReturn(List.of(v1, v2));
+
+        mockMvc.perform(get("/admin/v1/rule-templates/tpl.a/versions")
+                        .header("X-Tenant-Id", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].version").value(2))
+                .andExpect(jsonPath("$.data[0].status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.data[1].version").value(1));
+
+        verify(templateService).listVersions(1L, "tpl.a");
+    }
+
+    @Test
+    void getVersion_returns200_withSpecificVersion() throws Exception {
+        RuleTemplate t = new RuleTemplate();
+        t.setId(1L);
+        t.setCode("tpl.a");
+
+        RuleTemplateVersion v = new RuleTemplateVersion();
+        v.setId(10L);
+        v.setTemplateId(1L);
+        v.setVersion(2);
+        v.setStatus(TemplateStatus.DRAFT);
+
+        TemplateDetail detail = new TemplateDetail(t, v);
+        when(templateService.getVersion(1L, "tpl.a", 2)).thenReturn(detail);
+
+        mockMvc.perform(get("/admin/v1/rule-templates/tpl.a/versions/2")
+                        .header("X-Tenant-Id", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.version.version").value(2))
+                .andExpect(jsonPath("$.data.version.status").value("DRAFT"));
+
+        verify(templateService).getVersion(1L, "tpl.a", 2);
     }
 
     @Test
