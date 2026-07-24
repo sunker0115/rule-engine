@@ -1,7 +1,8 @@
 package com.sstlfsj.rule.config.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 
 /**
  * 模板 Slot 参数定义。
@@ -10,15 +11,16 @@ import com.sstlfsj.rule.kernel.api.model.DataType;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record TemplateSlot(
-        String key,
-        String label,
-        DataType dataType,
-        boolean required,
+        String key, String label,
+        SlotKind kind,
+        ValueDataType dataType,      // 仅 kind=VALUE 时非空
+        @JsonSetter(nulls = Nulls.AS_EMPTY) boolean required,
         SlotConstraint constraint
 ) {
     public TemplateSlot {
         if (key == null || key.isBlank()) throw new IllegalArgumentException("slot key 不能为空");
-        if (dataType == null) throw new IllegalArgumentException("slot dataType 不能为空");
-        if (dataType == DataType.UNKNOWN) throw new IllegalArgumentException("slot dataType 不能为 UNKNOWN");
+        if (kind == null) throw new IllegalArgumentException("slot kind 不能为空");
+        if (kind == SlotKind.VALUE && dataType == null)
+            throw new IllegalArgumentException("VALUE slot 必须指定 dataType");
     }
 }

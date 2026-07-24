@@ -14,7 +14,8 @@ import com.sstlfsj.rule.config.internal.repository.RuleTemplateMapper;
 import com.sstlfsj.rule.config.internal.template.JsonPointerBinder;
 import com.sstlfsj.rule.config.internal.template.TemplateBinder;
 import com.sstlfsj.rule.kernel.api.model.AstBody;
-import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.sstlfsj.rule.config.api.dto.SlotKind;
+import com.sstlfsj.rule.config.api.dto.ValueDataType;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
 import com.sstlfsj.rule.kernel.api.model.ast.AndNode;
 import com.sstlfsj.rule.kernel.api.model.ast.ConditionNode;
@@ -69,7 +70,7 @@ class RuleTemplateServiceImplTest {
     }
 
     private List<TemplateSlot> slots(SlotConstraint constraint) {
-        return List.of(new TemplateSlot("threshold", "阈值", DataType.LONG, true, constraint));
+        return List.of(new TemplateSlot("threshold", "阈值", SlotKind.VALUE, ValueDataType.LONG, true, constraint));
     }
 
     @Test
@@ -143,7 +144,7 @@ class RuleTemplateServiceImplTest {
 
     @Test
     void instantiate_constraintViolation_throwsValueInvalid() {
-        RuleTemplate tmpl = publishedTemplate(new SlotConstraint(null, BigDecimal.valueOf(100), null));
+        RuleTemplate tmpl = publishedTemplate(new SlotConstraint(null, BigDecimal.valueOf(100), null, null));
         when(templateMapper.findPublishedByCode(0L, "tmpl-a")).thenReturn(tmpl);
         assertThatThrownBy(() -> service.instantiate(0L, "tmpl-a", "rule-1", "规则1",
                 "scene-x", List.of(), Map.of("threshold", 200), "u1"))
@@ -154,7 +155,7 @@ class RuleTemplateServiceImplTest {
     @Test
     void create_slotMissingBinding_rejected() {
         // slots 有 threshold 但 bindings 为空 → 缺少 binding
-        List<TemplateSlot> slots = List.of(new TemplateSlot("threshold", "阈值", DataType.LONG, true, null));
+        List<TemplateSlot> slots = List.of(new TemplateSlot("threshold", "阈值", SlotKind.VALUE, ValueDataType.LONG, true, null));
         assertThatThrownBy(() -> service.create(0L, "tmpl-b", "模板B", RuleKind.AST_BOOLEAN.name(),
                 "desc", skeleton(), slots, List.of(), "u1"))
                 .isInstanceOf(IllegalArgumentException.class)

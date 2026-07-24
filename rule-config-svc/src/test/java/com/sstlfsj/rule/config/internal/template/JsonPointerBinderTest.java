@@ -121,7 +121,7 @@ class JsonPointerBinderTest {
         SlotBinding binding = new SlotBinding("t",
                 new JsonPointerTarget("/conditionAst/children/999/params/x"));
         assertThatThrownBy(() -> binder.validate(skeleton, List.of(binding), List.of(
-                new TemplateSlot("t", "", DataType.LONG, true, null))))
+                new TemplateSlot("t", "", SlotKind.VALUE, ValueDataType.LONG, true, null))))
                 .hasMessageContaining("TEMPLATE_BINDING_UNRESOLVABLE");
     }
 
@@ -133,8 +133,8 @@ class JsonPointerBinderTest {
         SlotBinding binding = new SlotBinding("t",
                 new JsonPointerTarget("/conditionAst/children/0/params/t"));
         assertThatThrownBy(() -> binder.validate(skeleton, List.of(binding), List.of(
-                new TemplateSlot("t", "", DataType.LONG, true, null),
-                new TemplateSlot("extra", "", DataType.STRING, false, null))))
+                new TemplateSlot("t", "", SlotKind.VALUE, ValueDataType.LONG, true, null),
+                new TemplateSlot("extra", "", SlotKind.VALUE, ValueDataType.STRING, false, null))))
                 .hasMessageContaining("TEMPLATE_SLOT_BINDING_MISMATCH");
     }
 
@@ -145,7 +145,7 @@ class JsonPointerBinderTest {
         SlotBinding binding = new SlotBinding("s",
                 new JsonPointerTarget("/script/source"));
         assertThatThrownBy(() -> binder.validate(skeleton, List.of(binding), List.of(
-                new TemplateSlot("s", "", DataType.STRING, true, null))))
+                new TemplateSlot("s", "", SlotKind.VALUE, ValueDataType.STRING, true, null))))
                 .hasMessageContaining("TEMPLATE_TARGET_FORBIDDEN");
     }
 
@@ -157,7 +157,7 @@ class JsonPointerBinderTest {
         SlotBinding binding = new SlotBinding("r",
                 new JsonPointerTarget("/referencedSnapshots/someRule"));
         assertThatThrownBy(() -> binder.validate(skeleton, List.of(binding), List.of(
-                new TemplateSlot("r", "", DataType.STRING, true, null))))
+                new TemplateSlot("r", "", SlotKind.VALUE, ValueDataType.STRING, true, null))))
                 .hasMessageContaining("TEMPLATE_TARGET_FORBIDDEN");
     }
 

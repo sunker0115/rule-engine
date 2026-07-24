@@ -17,7 +17,7 @@ import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.RuleTemplateMapper;
 import com.sstlfsj.rule.config.internal.template.TemplateBinder;
 import com.sstlfsj.rule.kernel.api.model.AstBody;
-import com.sstlfsj.rule.kernel.api.model.DataType;
+import com.sstlfsj.rule.config.api.dto.ValueDataType;
 import com.sstlfsj.rule.kernel.api.model.FlowBody;
 import com.sstlfsj.rule.kernel.api.model.RuleBody;
 import com.sstlfsj.rule.kernel.api.model.RuleKind;
@@ -313,7 +313,7 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
     }
 
     /** 按 slot DataType 把原始填值强转为目标类型，转不动抛 TEMPLATE_SLOT_VALUE_INVALID。 */
-    private Object coerceValue(Object value, DataType dt) {
+    private Object coerceValue(Object value, ValueDataType dt) {
         if (value == null) return null;
         return switch (dt) {
             case LONG -> {

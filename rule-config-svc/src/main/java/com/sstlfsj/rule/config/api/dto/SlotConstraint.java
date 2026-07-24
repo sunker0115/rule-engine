@@ -7,5 +7,6 @@ import java.util.List;
 public record SlotConstraint(
         BigDecimal min,
         BigDecimal max,
-        List<String> enumValues
+        List<String> enumValues,
+        List<String> allowedDataTypes       // METRIC_REF 专用，限制可选 metric dataType；其余 null
 ) {}
