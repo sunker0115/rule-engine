@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.kernel.api.model.flow;
 
 import org.junit.jupiter.api.Test;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,7 +25,7 @@ class FlowGraphTest {
 
     @Test
     void paramsAreImmutable() {
-        java.util.Map<String, Object> mutable = new java.util.HashMap<>();
+        Map<String, Object> mutable = new HashMap<>();
         mutable.put("k", "v");
         FlowGraph graph = new FlowGraph(List.of(), List.of(), "in", mutable);
         mutable.put("extra", "x");
