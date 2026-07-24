@@ -67,19 +67,23 @@ export default function TemplateInstantiate() {
     const rules = slot.required ? [{ required: true, message: `请填写 ${slot.label}` }] : [];
     const fieldProps: Record<string, unknown> = { name, label: slot.label, rules };
 
+    const placeholder = slot.kind === 'VALUE'
+      ? `输入${slot.dataType ?? '值'}（实际值，非表达式）`
+      : `输入${slot.kind}引用的 code`;
+
     // REF slot：暂时用文本输入（后续计划加 picker）
     if (slot.kind !== 'VALUE') {
-      return <Form.Item {...fieldProps}><Input placeholder={slot.kind} /></Form.Item>;
+      return <Form.Item {...fieldProps}><Input placeholder={placeholder} /></Form.Item>;
     }
 
     switch (slot.dataType) {
       case 'STRING':
-        return <Form.Item {...fieldProps}><Input /></Form.Item>;
+        return <Form.Item {...fieldProps}><Input placeholder={placeholder} /></Form.Item>;
       case 'DECIMAL':
       case 'DOUBLE':
-        return <Form.Item {...fieldProps}><InputNumber style={{ width: '100%' }} step="0.01" min={slot.constraint?.min ?? undefined} max={slot.constraint?.max ?? undefined} /></Form.Item>;
+        return <Form.Item {...fieldProps}><InputNumber style={{ width: '100%' }} placeholder={placeholder} step="0.01" min={slot.constraint?.min ?? undefined} max={slot.constraint?.max ?? undefined} /></Form.Item>;
       case 'LONG':
-        return <Form.Item {...fieldProps}><InputNumber style={{ width: '100%' }} step={1} min={slot.constraint?.min ?? undefined} max={slot.constraint?.max ?? undefined} /></Form.Item>;
+        return <Form.Item {...fieldProps}><InputNumber style={{ width: '100%' }} placeholder={placeholder} step={1} min={slot.constraint?.min ?? undefined} max={slot.constraint?.max ?? undefined} /></Form.Item>;
       case 'DATE':
         return <Form.Item {...fieldProps}><DatePicker style={{ width: '100%' }} /></Form.Item>;
       case 'DATETIME':
@@ -90,7 +94,7 @@ export default function TemplateInstantiate() {
         if (slot.constraint?.enumValues?.length) {
           return <Form.Item {...fieldProps}><Select options={slot.constraint.enumValues.map((v) => ({ value: v, label: v }))} /></Form.Item>;
         }
-        return <Form.Item {...fieldProps}><Input /></Form.Item>;
+        return <Form.Item {...fieldProps}><Input placeholder={placeholder} /></Form.Item>;
     }
   };
 
@@ -125,6 +129,10 @@ export default function TemplateInstantiate() {
               optionFilterProp="label"
               options={(scenes ?? []).map((s) => ({ value: s.sceneCode, label: s.name ? `${s.name} (${s.sceneCode})` : s.sceneCode }))}
             />
+          </Form.Item>
+
+          <Form.Item name="triggerEventTypes" label={t('instantiate.triggerEventTypes') ?? '事件类型（可选）'}>
+            <Select mode="tags" placeholder="输入事件类型后回车，如 order.created" />
           </Form.Item>
 
           <Title level={5}>{t('instantiate.fillSlots') ?? '填写 Slot 值'}</Title>
