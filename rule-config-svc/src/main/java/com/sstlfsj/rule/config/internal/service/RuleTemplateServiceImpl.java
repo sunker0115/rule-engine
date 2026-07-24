@@ -337,7 +337,8 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
         RuleContent content = new RuleContent(ruleName, tmpl.getKind().tag(), bound,
                 List.of(), List.of(),
                 triggerEventTypes != null ? triggerEventTypes : List.of());
-        DraftCreatedResult result = publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId);
+        // strictRefs=false: DECISION_FLOW 模板实例化时跳过 RuleRef/Output 冻快照(被引规则尚不存在),发布时再校验
+        DraftCreatedResult result = publishService.createDraft(tenantId, sceneCode, ruleCode, content, actorId, false);
 
         // 6. 溯源（best-effort）
         try {
