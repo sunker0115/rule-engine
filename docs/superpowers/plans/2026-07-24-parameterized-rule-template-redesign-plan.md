@@ -730,17 +730,26 @@ public interface TemplateBinder {
 }
 ```
 
-- [ ] **Step 2: 写 JsonPointerBinder 测试(覆盖核心覆盖首版漏掉的场景)**
+- [ ] **Step 2: 写 JsonPointerBinder 测试(覆盖核心 + 首版漏掉的深层场景)**
+
+> **AST 节点真实签名(已核实,构造勿错):**
+> - `AndNode(List<AstNode> children, String displayLabel, Double weight)` —— 三参
+> - `ScorecardRootNode(List<ConditionNode> conditions, List<ScoreBand> bands)` —— 双参
+> - `IfNode(AstNode condition, AstNode thenBranch, AstNode elseBranch)`
+> - `DecisionLeafNode(String decisionCode, String category)` —— 双参
+> - `DecisionTableNode(List<Column> columns, List<Row> rows)`;`Column(String metricCode, String operator, String dataType, ValueRef valueRef)`(**无 params**);`Row(List<Object> conditions, String decisionCode)` —— 比较值在 Row.conditions
+> - `ConditionNode(String conditionType, String metricCode, String displayLabel, Map params, Double weight)` —— 5 参便捷构造(dataType=null/valueRef=METRIC)
 
 ```java
 // rule-config-svc/src/test/java/com/sstlfsj/rule/config/internal/template/JsonPointerBinderTest.java
 package com.sstlfsj.rule.config.internal.template;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sstlfsj.rule.config.api.dto.*;
 import com.sstlfsj.rule.kernel.api.model.*;
 import com.sstlfsj.rule.kernel.api.model.ast.*;
+import com.sstlfsj.rule.kernel.api.model.flow.*;
 import org.junit.jupiter.api.*;
+import tools.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
@@ -768,7 +777,7 @@ class JsonPointerBinderTest {
     void bind_conditionNode_replacesThreshold() {
         AstBody skeleton = new AstBody(
                 new AndNode(List.of(new ConditionNode("GT", "amount", "金额大于",
-                        map("threshold", 100), 0.0))));
+                        Map.of("threshold", 100), 0.0)), null, null));
         SlotBinding binding = new SlotBinding("t",
                 new JsonPointerTarget("/conditionAst/children/0/params/threshold"));
         RuleBody result = binder.bind(skeleton, List.of(binding), Map.of("t", 200));
@@ -777,11 +786,12 @@ class JsonPointerBinderTest {
         assertThat(cn.params().get("threshold")).isEqualTo(200);
     }
 
-    // ---- ScorecardRootNode:band params ----
+    // ---- ScorecardRootNode:叶子 condition weight(双参构造:conditions + bands) ----
     @Test
-    void bind_scorecardBand_weight() {
-        ScorecardRootNode root = new ScorecardRootNode(List.of(
-                new ConditionNode("GT", "score", ">60", Map.of("threshold", 60), 0.3)));
+    void bind_scorecardCondition_weight() {
+        ScorecardRootNode root = new ScorecardRootNode(
+                List.of(new ConditionNode("GT", "score", ">60", Map.of("threshold", 60), 0.3)),
+                List.of());
         AstBody skeleton = new AstBody(root);
         SlotBinding binding = new SlotBinding("w",
                 new JsonPointerTarget("/conditionAst/conditions/0/weight"));
@@ -791,20 +801,19 @@ class JsonPointerBinderTest {
         assertThat(sc.conditions().get(0).weight()).isEqualTo(0.5);
     }
 
-    // ---- DecisionTableNode cell ----
+    // ---- DecisionTableNode:比较值在 Row.conditions(首版漏掉的 DECISION_TABLE 深层) ----
     @Test
-    void bind_decisionTableCell_threshold() {
-        // 构造 DecisionTableNode 含 columns,其中一列 condition 的 params 含 threshold
+    void bind_decisionTableRowCell() {
         DecisionTableNode dt = new DecisionTableNode(
-                List.of(new DecisionTableNode.Column("cond1", "GT", "amount", ValueRef.METRIC, "LONG", Map.of("threshold", 100))),
-                List.of(), "decisionCol");
+                List.of(new DecisionTableNode.Column("amount", "GT", "LONG", ValueRef.METRIC)),
+                List.of(new DecisionTableNode.Row(List.of(100), "PASS")));
         AstBody skeleton = new AstBody(dt);
         SlotBinding binding = new SlotBinding("t",
-                new JsonPointerTarget("/conditionAst/columns/0/conditionParams/threshold"));
+                new JsonPointerTarget("/conditionAst/rows/0/conditions/0"));
         RuleBody result = binder.bind(skeleton, List.of(binding), Map.of("t", 200));
         AstBody ab = (AstBody) result;
         DecisionTableNode resultDt = (DecisionTableNode) ab.conditionAst();
-        assertThat(resultDt.columns().get(0).conditionParams().get("threshold")).isEqualTo(200);
+        assertThat(resultDt.rows().get(0).conditions().get(0)).isEqualTo(200);
     }
 
     // ---- IfNode 深层(首版漏掉的 DECISION_TREE) ----
@@ -812,8 +821,8 @@ class JsonPointerBinderTest {
     void bind_ifNodeCondition_threshold() {
         IfNode ifn = new IfNode(
                 new AndNode(List.of(new ConditionNode("GT", "amt", "",
-                        Map.of("threshold", 50), 0.0))),
-                new DecisionLeafNode("PASS"), null);
+                        Map.of("threshold", 50), 0.0)), null, null),
+                new DecisionLeafNode("PASS", null), null);
         AstBody skeleton = new AstBody(ifn);
         SlotBinding binding = new SlotBinding("t",
                 new JsonPointerTarget("/conditionAst/condition/children/0/params/threshold"));
@@ -841,7 +850,7 @@ class JsonPointerBinderTest {
     @Test
     void validate_unresolvablePointer_throws() {
         AstBody skeleton = new AstBody(
-                new AndNode(List.of(new ConditionNode("GT", "a", "", Map.of("t", 1), 0.0))));
+                new AndNode(List.of(new ConditionNode("GT", "a", "", Map.of("t", 1), 0.0)), null, null));
         SlotBinding binding = new SlotBinding("t",
                 new JsonPointerTarget("/conditionAst/children/999/params/x"));
         assertThatThrownBy(() -> binder.validate(skeleton, List.of(binding), List.of(
@@ -853,7 +862,7 @@ class JsonPointerBinderTest {
     @Test
     void validate_slotBindingMismatch_extraSlot_throws() {
         AstBody skeleton = new AstBody(
-                new AndNode(List.of(new ConditionNode("GT", "a", "", Map.of("t", 1), 0.0))));
+                new AndNode(List.of(new ConditionNode("GT", "a", "", Map.of("t", 1), 0.0)), null, null));
         SlotBinding binding = new SlotBinding("t",
                 new JsonPointerTarget("/conditionAst/children/0/params/t"));
         assertThatThrownBy(() -> binder.validate(skeleton, List.of(binding), List.of(
@@ -888,37 +897,33 @@ class JsonPointerBinderTest {
     @Test
     void bind_preservesSkeleton() {
         AstBody skeleton = new AstBody(
-                new AndNode(List.of(new ConditionNode("GT", "a", "", Map.of("t", 100), 0.0))));
+                new AndNode(List.of(new ConditionNode("GT", "a", "", Map.of("t", 100), 0.0)), null, null));
         SlotBinding binding = new SlotBinding("t",
                 new JsonPointerTarget("/conditionAst/children/0/params/t"));
         RuleBody result = binder.bind(skeleton, List.of(binding), Map.of("t", 200));
-        // skeleton 原值不变
         AstBody original = (AstBody) skeleton;
         ConditionNode originalCn = (ConditionNode) ((AndNode) original.conditionAst()).children().get(0);
         assertThat(originalCn.params().get("t")).isEqualTo(100);
-        // result 是新对象
         assertThat(result).isNotSameAs(skeleton);
-    }
-
-
-    private static <K, V> Map<K, V> map(K k1, V v1) {
-        return Map.of(k1, v1);
     }
 }
 ```
 
 - [ ] **Step 3: 实现 JsonPointerBinder**
 
+> **Jackson3 依赖(已核实项目用法):** `ObjectMapper`/`JsonNode`/`ObjectNode` 均在 `tools.jackson.databind[.node]`(项目 69 处),`JsonPointer` 在 `tools.jackson.core`;对象↔树用 `objectMapper.convertValue`(项目惯用,非 `valueToTree`)。
+> **实现前先核** `tools.jackson.core.JsonPointer` 的 API:`compile(String)` / `head()`(去末段父指针) / `last().getMatchingProperty()`(末段属性名) —— 若 Jackson3 方法名不同,以实际 IDE/编译为准调整(遵"写测试前先读被测依赖行为"纪律)。
+
 ```java
 // rule-config-svc/src/main/java/com/sstlfsj/rule/config/internal/template/JsonPointerBinder.java
 package com.sstlfsj.rule.config.internal.template;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sstlfsj.rule.config.api.dto.*;
 import com.sstlfsj.rule.kernel.api.model.*;
 import tools.jackson.core.JsonPointer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.util.*;
 
@@ -941,7 +946,7 @@ public class JsonPointerBinder implements TemplateBinder {
         // 1. body 专属守卫
         guardBodySpecific(skeleton, bindings);
         // 2. pointer 可解析到已存在节点
-        JsonNode tree = objectMapper.valueToTree(skeleton);
+        JsonNode tree = objectMapper.convertValue(skeleton, JsonNode.class);
         Set<String> bindingSlots = new HashSet<>();
         for (SlotBinding b : bindings) {
             if (!bindingSlots.add(b.slotKey())) {
@@ -971,14 +976,14 @@ public class JsonPointerBinder implements TemplateBinder {
 
     @Override
     public RuleBody bind(RuleBody skeleton, List<SlotBinding> bindings, Map<String, Object> values) {
-        JsonNode tree = objectMapper.valueToTree(skeleton);
+        JsonNode tree = objectMapper.convertValue(skeleton, JsonNode.class);
         for (SlotBinding b : bindings) {
             if (b.target() instanceof JsonPointerTarget jpt) {
                 JsonPointer pointer = JsonPointer.compile(jpt.jsonPointer());
                 JsonNode parentNode = tree.at(pointer.head());
                 if (parentNode instanceof ObjectNode parent) {
                     Object value = values.get(b.slotKey());
-                    JsonNode valueNode = objectMapper.valueToTree(value);
+                    JsonNode valueNode = objectMapper.convertValue(value, JsonNode.class);
                     parent.set(pointer.last().getMatchingProperty(), valueNode);
                 }
             }
@@ -1017,7 +1022,7 @@ public class JsonPointerBinder implements TemplateBinder {
 ```bash
 $MVN -pl rule-config-svc test -Dtest=JsonPointerBinderTest
 ```
-若个别 AST 节点(DecisionTableNode/IfNode)的 record 签名与 pointer 路径不完全一致,根据实际 compile 错误微调 pointer 字符串和测试构造。
+若 `Row.conditions` 数组元素替换后类型(Integer vs Long)导致断言微差,按实际 Jackson 反序列化类型调整断言(如 `isEqualTo(200)` vs `200L`)。
 
 - [ ] **Step 5: Commit**
 
@@ -1522,7 +1527,35 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
             if (def == null) {
                 throw new IllegalArgumentException("slotValues 包含未声明的 slot: " + entry.getKey());
             }
-            coerceValue(entry.getValue(), def.dataType()); // 强转校验,不存结果(实例化时 coerceValues)
+            // 强转校验 + SlotConstraint 校验(补首版缺口:min/max/enumValues)
+            Object coerced = coerceValue(entry.getValue(), def.dataType());
+            validateConstraint(def, coerced);
+        }
+    }
+
+    /** 校验 SlotConstraint:数值 min/max、标量/LIST 元素 enumValues 成员。 */
+    private void validateConstraint(TemplateSlot def, Object coerced) {
+        SlotConstraint c = def.constraint();
+        if (c == null || coerced == null) return;
+        if (coerced instanceof Number n) {
+            double d = n.doubleValue();
+            if (c.min() != null && d < c.min().doubleValue()) {
+                throw new IllegalArgumentException("TEMPLATE_SLOT_VALUE_INVALID: " + def.key() + " 小于 min " + c.min());
+            }
+            if (c.max() != null && d > c.max().doubleValue()) {
+                throw new IllegalArgumentException("TEMPLATE_SLOT_VALUE_INVALID: " + def.key() + " 大于 max " + c.max());
+            }
+        }
+        if (c.enumValues() != null && !c.enumValues().isEmpty()) {
+            if (coerced instanceof List<?> list) {
+                for (Object el : list) {
+                    if (!c.enumValues().contains(String.valueOf(el))) {
+                        throw new IllegalArgumentException("TEMPLATE_SLOT_VALUE_INVALID: " + def.key() + " 元素不在 enumValues: " + el);
+                    }
+                }
+            } else if (!c.enumValues().contains(String.valueOf(coerced))) {
+                throw new IllegalArgumentException("TEMPLATE_SLOT_VALUE_INVALID: " + def.key() + " 不在 enumValues: " + coerced);
+            }
         }
     }
 
@@ -1599,7 +1632,7 @@ $MVN -pl rule-config-svc test                                     # → 模块�
 ```bash
 git add rule-config-svc/src/main/java/com/sstlfsj/rule/config/internal/service/RuleTemplateServiceImpl.java \
         rule-config-svc/src/test/java/com/sstlfsj/rule/config/internal/service/RuleTemplateServiceImplTest.java
-git commit -m "feat(config): RuleTemplateServiceImpl 重写——binder SPI 分派、删 token 逻辑、DataTxpe 强转+constraint 校验"
+git commit -m "feat(config): RuleTemplateServiceImpl 重写——binder SPI 分派、删 token 逻辑、DataType 强转+constraint 校验"
 ```
 
 ---
@@ -1611,51 +1644,149 @@ git commit -m "feat(config): RuleTemplateServiceImpl 重写——binder SPI 分�
 - Modify(Write 覆盖):`rule-api/src/main/java/com/sstlfsj/rule/web/admin/dto/CreateTemplateRequest.java`
 - Modify(Write 覆盖):`rule-api/src/main/java/com/sstlfsj/rule/web/admin/dto/UpdateTemplateRequest.java`
 - Delete:`rule-api/src/main/java/com/sstlfsj/rule/web/admin/dto/ExportFromRuleRequest.java`
-- Modify(若需要):`rule-api/src/main/java/com/sstlfsj/rule/web/admin/dto/InstantiateRequest.java`(核查 field 名,可能无需改动)
+- Keep(无需改):`rule-api/src/main/java/com/sstlfsj/rule/web/admin/dto/InstantiateRequest.java`(已核实:字段 tenantId/ruleCode/ruleName/sceneCode/triggerEventTypes/slotValues 全对得上,零改动)
 
 **Interfaces:**
 - Consumes: `RuleTemplateService`(Task 9)
 
-- [ ] **Step 1: 改写请求 DTO(type→Body,加 bindings)**
+**Context(已核实首版真实结构,勿臆造):** Controller 路径 `@RequestMapping("/admin/v1/rule-templates")`(复数连字符);`create`/`update` 从**请求体**读 `tenantId`(`req.tenantId()`),`publish`/`disable`/`list`/`get` 从 `X-Tenant-Id` **header** 读;`instantiate` 从 `InstantiateRequest.tenantId` 读。首版 DTO 用 `Object templateBody`,本轮改 typed `RuleBody bodySkeleton` + 加 `bindings`;`create`/`update` DTO **必须保留 tenantId**。首版 Controller **无** `@ConditionalOnProperty`,本轮补上(feature flag)。
+
+- [ ] **Step 1: 改写请求 DTO(templateBody→bodySkeleton typed,加 bindings,保留 tenantId)**
 
 ```java
 // CreateTemplateRequest.java
-public record CreateTemplateRequest(
-        String code, String name, String kind, String description,
-        RuleBody bodySkeleton,
-        List<TemplateSlot> slots,
-        List<SlotBinding> bindings) {}
+package com.sstlfsj.rule.web.admin.dto;
 
-// UpdateTemplateRequest.java
-public record UpdateTemplateRequest(
-        String name, String kind, String description,
+import com.sstlfsj.rule.config.api.dto.SlotBinding;
+import com.sstlfsj.rule.config.api.dto.TemplateSlot;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+import java.util.List;
+
+public record CreateTemplateRequest(
+        @NotNull Long tenantId,
+        @NotBlank String code,
+        @NotBlank String name,
+        @NotBlank String kind,
+        String description,
         RuleBody bodySkeleton,
         List<TemplateSlot> slots,
-        List<SlotBinding> bindings) {}
+        List<SlotBinding> bindings
+) {}
 ```
 
-- [ ] **Step 2: 改写 Controller(删 export 端点)**
+```java
+// UpdateTemplateRequest.java
+package com.sstlfsj.rule.web.admin.dto;
+
+import com.sstlfsj.rule.config.api.dto.SlotBinding;
+import com.sstlfsj.rule.config.api.dto.TemplateSlot;
+import com.sstlfsj.rule.kernel.api.model.RuleBody;
+import jakarta.validation.constraints.NotNull;
+
+import java.util.List;
+
+public record UpdateTemplateRequest(
+        @NotNull Long tenantId,
+        String name,
+        String kind,
+        String description,
+        RuleBody bodySkeleton,
+        List<TemplateSlot> slots,
+        List<SlotBinding> bindings
+) {}
+```
+
+- [ ] **Step 2: 改写 Controller(路径/header 沿用首版,templateBody→bodySkeleton+bindings,删 export,加 flag)**
 
 ```java
+// RuleTemplateController.java
+package com.sstlfsj.rule.web.admin;
+
+import com.sstlfsj.rule.config.api.dto.DraftCreatedResult;
+import com.sstlfsj.rule.config.api.service.RuleTemplateService;
+import com.sstlfsj.rule.config.internal.domain.RuleTemplate;
+import com.sstlfsj.rule.web.admin.dto.CreateTemplateRequest;
+import com.sstlfsj.rule.web.admin.dto.InstantiateRequest;
+import com.sstlfsj.rule.web.admin.dto.UpdateTemplateRequest;
+import com.sstlfsj.rule.web.common.ApiResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/** 规则模板管理入口(D74 authoring 便利层,重设计;默认关闭)。 */
 @RestController
-@RequestMapping("/admin/v1")
+@RequestMapping("/admin/v1/rule-templates")
+@RequiredArgsConstructor
 @ConditionalOnProperty(name = "rule.template.enabled", havingValue = "true")
 public class RuleTemplateController {
 
-    private final RuleTemplateService service;
+    private final RuleTemplateService templateService;
 
-    @PostMapping("/templates")              // create
-    @PutMapping("/templates/{code}")        // update
-    @PostMapping("/templates/{code}/publish")   // publish
-    @PostMapping("/templates/{code}/disable")   // disable
-    @GetMapping("/templates")               // list(?status=...)
-    @GetMapping("/templates/{code}")        // get
-    @PostMapping("/templates/{code}/instantiate") // instantiate
-    // 删: @PostMapping("/templates/export-from-rule")
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<Long> create(@Valid @RequestBody CreateTemplateRequest req,
+                                    @RequestHeader("X-Actor-Id") String actorId) {
+        return ApiResponse.ok(templateService.create(
+                req.tenantId(), req.code(), req.name(), req.kind(),
+                req.description(), req.bodySkeleton(), req.slots(), req.bindings(), actorId));
+    }
+
+    @PutMapping("/{code}")
+    public ApiResponse<Void> update(@PathVariable String code,
+                                    @Valid @RequestBody UpdateTemplateRequest req,
+                                    @RequestHeader("X-Actor-Id") String actorId) {
+        templateService.update(req.tenantId(), code, req.name(), req.kind(),
+                req.description(), req.bodySkeleton(), req.slots(), req.bindings(), actorId);
+        return ApiResponse.ok((Void) null);
+    }
+
+    @PostMapping("/{code}/publish")
+    public ApiResponse<Void> publish(@PathVariable String code,
+                                     @RequestHeader("X-Tenant-Id") Long tenantId,
+                                     @RequestHeader("X-Actor-Id") String actorId) {
+        templateService.publish(tenantId, code, actorId);
+        return ApiResponse.ok((Void) null);
+    }
+
+    @PostMapping("/{code}/disable")
+    public ApiResponse<Void> disable(@PathVariable String code,
+                                     @RequestHeader("X-Tenant-Id") Long tenantId,
+                                     @RequestHeader("X-Actor-Id") String actorId) {
+        templateService.disable(tenantId, code, actorId);
+        return ApiResponse.ok((Void) null);
+    }
+
+    @GetMapping
+    public ApiResponse<List<RuleTemplate>> list(@RequestHeader("X-Tenant-Id") Long tenantId,
+                                                @RequestParam(required = false) String status) {
+        return ApiResponse.ok(templateService.list(tenantId, status));
+    }
+
+    @GetMapping("/{code}")
+    public ApiResponse<RuleTemplate> get(@PathVariable String code,
+                                         @RequestHeader("X-Tenant-Id") Long tenantId) {
+        return ApiResponse.ok(templateService.get(tenantId, code));
+    }
+
+    @PostMapping("/{code}/instantiate")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<DraftCreatedResult> instantiate(@PathVariable String code,
+                                                        @Valid @RequestBody InstantiateRequest req,
+                                                        @RequestHeader("X-Actor-Id") String actorId) {
+        return ApiResponse.ok(templateService.instantiate(
+                req.tenantId(), code, req.ruleCode(), req.ruleName(), req.sceneCode(),
+                req.triggerEventTypes(), req.slotValues(), actorId));
+    }
+    // 删: exportFromRule 端点 + ExportFromRuleRequest import
 }
 ```
-
-具体用首版 Controller 骨架替换方法签名(DTO→service 调用行),删 `exportFromRule` 端点及 `@PostMapping` 方法。
 
 - [ ] **Step 3: 删 `ExportFromRuleRequest.java`**
 
@@ -1666,14 +1797,15 @@ rm rule-api/src/main/java/com/sstlfsj/rule/web/admin/dto/ExportFromRuleRequest.j
 - [ ] **Step 4: 编译 + 跑测试**
 
 ```bash
-$MVN -pl rule-api test  # → PASS
+$MVN -pl rule-api -am test  # → PASS(带 -am 拉 config-svc 新签名)
 ```
+若首版有 `RuleTemplateControllerTest` 引用旧签名(templateBody/export),同步改为 bodySkeleton+bindings、删 export 用例;补开关测试:`@SpringBootTest(properties="rule.template.enabled=false")` 时 `POST /admin/v1/rule-templates` → 404。
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add rule-api/
-git commit -m "feat(api): RuleTemplateController/DTO 重写——bodySkeleton+SlotBinding,删 exportFromRule 端点"
+git commit -m "feat(api): RuleTemplateController/DTO 重写——bodySkeleton+SlotBinding,删 exportFromRule 端点,加 feature flag"
 ```
 
 ---
