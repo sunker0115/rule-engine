@@ -859,16 +859,6 @@ public class PublishService {
     }
 
     /**
-     * 创建规则草稿：INSERT rule_definition + rule_version（status=DRAFT）+ audit_log。
-     *
-     * @param tenantId  租户 id
-     * @param sceneCode 场景编码
-     * @param code      规则编码
-     * @param content   规则内容（name/kind/conditionAst/decisionBindings/preGates/triggerEventTypes/script，kind null 时默认 AST_BOOLEAN）
-     * @param actorId   操作人
-     * @return 新建草稿的 id 和版本信息
-     */
-    /**
      * 从模板实例化或手建规则创建草稿（主入口）。
      *
      * @param templateId      实例化来源模板 ID（手建规则为 null）

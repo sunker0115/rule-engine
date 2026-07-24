@@ -349,16 +349,19 @@ public class RuleTemplateServiceImpl implements RuleTemplateService {
                 if (value instanceof String s) yield Boolean.parseBoolean(s.trim());
                 throw invalid("BOOLEAN 类型需要布尔值", value);
             }
-            case DATE, DATETIME -> {
+            case DATE -> {
                 if (value instanceof String s) {
-                    try { java.time.LocalDate.parse(s); }
-                    catch (Exception e) {
-                        try { java.time.Instant.parse(s); }
-                        catch (Exception e2) { throw invalid("无法解析日期", s); }
-                    }
-                    yield s;
+                    try { java.time.LocalDate.parse(s); yield s; }
+                    catch (Exception e) { throw invalid("无法解析 DATE，需 ISO 日期", s); }
                 }
-                throw invalid("DATE/DATETIME 需要 ISO 字符串", value);
+                throw invalid("DATE 需要 ISO 日期字符串", value);
+            }
+            case DATETIME -> {
+                if (value instanceof String s) {
+                    try { java.time.Instant.parse(s); yield s; }
+                    catch (Exception e) { throw invalid("无法解析 DATETIME，需 ISO 时间戳", s); }
+                }
+                throw invalid("DATETIME 需要 ISO 时间戳字符串", value);
             }
             case LIST -> {
                 if (value instanceof List<?> l) yield l;
