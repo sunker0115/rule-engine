@@ -30,4 +30,12 @@ public class TenantController {
         configService.toggleTenantStatus(id, enable);
         return ApiResponse.ok(null);
     }
+
+    @PostMapping
+    public ApiResponse<Long> create(
+            @RequestParam String code,
+            @RequestParam String name,
+            @RequestHeader("X-Actor-Id") String actorId) {
+        return ApiResponse.ok(configService.createTenant(code, name, actorId));
+    }
 }

@@ -11,14 +11,7 @@ import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.api.service.ConfigService;
-import com.sstlfsj.rule.config.internal.domain.ActorType;
-import com.sstlfsj.rule.config.internal.domain.AuditAction;
-import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
-import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
-import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
-import com.sstlfsj.rule.config.internal.domain.RuleVersion;
-import com.sstlfsj.rule.config.internal.domain.Tenant;
-import com.sstlfsj.rule.config.internal.domain.TenantStatus;
+import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
@@ -225,5 +218,20 @@ class ConfigServiceImpl implements ConfigService {
         if (t == null) throw new IllegalArgumentException("租户不存在: " + tenantId);
         t.setStatus(enable ? TenantStatus.ACTIVE : TenantStatus.DISABLED);
         tenantMapper.updateById(t);
+    }
+
+    @Override
+    @Transactional
+    public Long createTenant(String code, String name, String actorId) {
+        if (tenantMapper.selectOne(new LambdaQueryWrapper<Tenant>().eq(Tenant::getCode, code)) != null) {
+            throw new IllegalArgumentException("租户编码已存在: " + code);
+        }
+        Tenant t = new Tenant();
+        t.setCode(code);
+        t.setName(name);
+        t.setType(TenantType.STANDARD);
+        t.setStatus(TenantStatus.ACTIVE);
+        tenantMapper.insert(t);
+        return t.getId();
     }
 }

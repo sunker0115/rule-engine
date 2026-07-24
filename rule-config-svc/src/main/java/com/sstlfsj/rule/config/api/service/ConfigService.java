@@ -139,4 +139,7 @@ public interface ConfigService {
 
     /** 启/禁租户。 */
     void toggleTenantStatus(Long tenantId, boolean enable);
+
+    /** 创建 STANDARD 租户。返回新租户 id。 */
+    Long createTenant(String code, String name, String actorId);
 }

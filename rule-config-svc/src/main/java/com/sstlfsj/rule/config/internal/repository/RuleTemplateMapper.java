@@ -1,6 +1,7 @@
 package com.sstlfsj.rule.config.internal.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.config.internal.domain.RuleTemplate;
 import com.sstlfsj.rule.config.internal.domain.TemplateStatus;
@@ -43,28 +44,23 @@ public interface RuleTemplateMapper extends BaseMapper<RuleTemplate> {
 
     /**
      * 按租户查可见模板：STANDARD 租户可见 SYSTEM 模板 + 自身模板。
-     * 通过 JOIN tenant.type 判断可见性。
+     * 通过子查询 JOIN tenant.type 避免 @Select 与 BaseMapper 方法冲突。
      */
-    @Select("""
-            SELECT rt.* FROM rule_template rt
-            INNER JOIN tenant t ON rt.tenant_id = t.id
-            WHERE (t.type = 'SYSTEM' OR rt.tenant_id = #{tenantId})
-            ORDER BY rt.id
-            """)
-    List<RuleTemplate> findVisibleByTenant(Long tenantId);
+    default List<RuleTemplate> findVisibleByTenant(Long tenantId) {
+        return selectList(new QueryWrapper<RuleTemplate>()
+                .apply("tenant_id IN (SELECT rt.tenant_id FROM rule_template rt INNER JOIN tenant t ON rt.tenant_id = t.id WHERE t.type = 'SYSTEM' OR rt.tenant_id = {0})", tenantId)
+                .orderByAsc("id"));
+    }
 
     /**
      * 按租户 + 状态查可见模板：STANDARD 租户可见 SYSTEM 模板 + 自身模板，
      * 附加 status 过滤。
      */
-    @Select("""
-            SELECT rt.* FROM rule_template rt
-            INNER JOIN tenant t ON rt.tenant_id = t.id
-            WHERE (t.type = 'SYSTEM' OR rt.tenant_id = #{tenantId})
-              AND rt.status = #{status}
-            ORDER BY rt.id
-            """)
-    List<RuleTemplate> findVisibleByTenant(Long tenantId, TemplateStatus status);
+    default List<RuleTemplate> findVisibleByTenant(Long tenantId, TemplateStatus status) {
+        return selectList(new QueryWrapper<RuleTemplate>()
+                .apply("tenant_id IN (SELECT rt.tenant_id FROM rule_template rt INNER JOIN tenant t ON rt.tenant_id = t.id WHERE (t.type = 'SYSTEM' OR rt.tenant_id = {0}) AND rt.status = {1})", tenantId, status.name())
+                .orderByAsc("id"));
+    }
 
     /**
      * 按租户 + code 查可见模板：STANDARD 租户可见 SYSTEM 模板 + 自身模板。

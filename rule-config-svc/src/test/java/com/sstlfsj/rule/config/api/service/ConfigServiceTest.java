@@ -81,6 +81,7 @@ class ConfigServiceTest {
             throw new UnsupportedOperationException("stub");
         }
         @Override public void toggleTenantStatus(Long tenantId, boolean enable) { throw new UnsupportedOperationException("stub"); }
+        @Override public Long createTenant(String code, String name, String actorId) { throw new UnsupportedOperationException("stub"); }
     };
 
     @Test
