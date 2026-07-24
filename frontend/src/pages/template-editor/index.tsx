@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Input, Select, Switch, InputNumber, Space, message, Tag, List, Popconfirm, Typography, Alert, Empty } from 'antd';
 import FlowNodeInspector from '@/pages/rule-editor/FlowNodeInspector';
-import { SaveOutlined, DeleteOutlined, ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
+import { SaveOutlined, DeleteOutlined, ArrowLeftOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTenantStore } from '@/store/tenantStore';
 import { useRuleStore } from '@/store/ruleStore';
-import { getTemplate, updateTemplate } from '@/api/template';
-import { getTenantMetadata } from '@/api/metadata';
+import { useSceneStore } from '@/store/sceneStore';
+import { getTemplate, updateTemplate, publishTemplate } from '@/api/template';
+import { getTenantMetadata, getSceneMetadata } from '@/api/metadata';
+import { getScene } from '@/api/scene';
 import { listDecisions } from '@/api/decision';
 import { listRules } from '@/api/rule';
 import { getRuleKindOptions } from '@/constants/enums';
@@ -18,6 +20,7 @@ import type { RuleBody, RuleKind, SceneMetadata, DecisionItem } from '@/types';
 import RuleBodyEditor from '@/pages/rule-editor/RuleBodyEditor';
 import FlowCanvasEditor from '@/pages/rule-editor/FlowCanvasEditor';
 import { introspectPositions } from './introspect';
+import { extractPayloadSchema } from '@/utils/payloadSchema';
 
 const { Text } = Typography;
 const DATA_TYPES: ValueDataType[] = ['LONG', 'DOUBLE', 'DECIMAL', 'STRING', 'BOOLEAN', 'DATE', 'DATETIME', 'LIST'];
@@ -55,6 +58,7 @@ export default function TemplateEditor() {
   const tr = useTranslation('rule').t;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [tmpl, setTmpl] = useState<TemplateDetail | null>(null);
   const [form] = Form.useForm();
   const [slots, setSlots] = useState<TemplateSlot[]>([]);
@@ -64,6 +68,12 @@ export default function TemplateEditor() {
   // tenant 级元数据：conditionTypes + metrics，进编辑器即加载，不依赖 scene
   const [metadata, setMetadata] = useState<SceneMetadata | null>(null);
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
+
+  // 参照场景
+  const { list: scenes, loadList: loadScenes } = useSceneStore();
+  const [refSceneCode, setRefSceneCode] = useState<string | undefined>();
+  const [sceneMeta, setSceneMeta] = useState<SceneMetadata | null>(null);
+  const [scenePayload, setScenePayload] = useState<{ names: string[]; types: Record<string, string> }>({ names: [], types: {} });
 
   const editable = tmpl?.template?.status === 'DRAFT';
   const kind: RuleKind = tmpl?.template?.kind ?? 'AST_BOOLEAN';
@@ -93,12 +103,49 @@ export default function TemplateEditor() {
 
   useEffect(() => { load(); }, [currentId, code]);
 
+  // scene 列表：进编辑器即加载
+  useEffect(() => {
+    if (currentId) loadScenes(currentId);
+  }, [currentId, loadScenes]);
+
   // tenant 级资源：进编辑器即加载，不需要先选 scene
   useEffect(() => {
     if (!currentId) return;
     getTenantMetadata(currentId).then((m) => setMetadata(m));
     listDecisions(currentId).then((d) => setDecisions(d ?? []));
   }, [currentId]);
+
+  // 参照场景变更时，加载 scene 级元数据 + payload schema
+  useEffect(() => {
+    if (!currentId || !refSceneCode) {
+      setSceneMeta(null);
+      setScenePayload({ names: [], types: {} });
+      return;
+    }
+    Promise.all([
+      getSceneMetadata(currentId, refSceneCode),
+      getScene(currentId, refSceneCode),
+    ]).then(([meta, detail]) => {
+      setSceneMeta(meta);
+      setScenePayload(extractPayloadSchema(detail.payloadSchema));
+    }).catch(() => {
+      setSceneMeta(null);
+      setScenePayload({ names: [], types: {} });
+    });
+  }, [currentId, refSceneCode]);
+
+  // 有效元数据：选 scene 则用 scene 级，否则用 tenant 级
+  const effectiveMetadata = useMemo((): SceneMetadata | null => {
+    if (refSceneCode && sceneMeta) {
+      return {
+        ...sceneMeta,
+        payloadFieldNames: scenePayload.names,
+        payloadFieldTypes: scenePayload.types,
+        expressionLangs: sceneMeta.expressionLangs ?? metadata?.expressionLangs ?? [],
+      };
+    }
+    return metadata;
+  }, [refSceneCode, sceneMeta, scenePayload, metadata]);
 
 
   const carriers = bodyToCarriers(bodySkeleton);
@@ -160,6 +207,17 @@ export default function TemplateEditor() {
     }));
   };
 
+  const handlePublish = async () => {
+    if (!tmpl) return;
+    setPublishing(true);
+    try {
+      await publishTemplate(currentId!, code!, 'admin');
+      message.success(t('action.publishConfirm'));
+      load(); // 刷新模板状态
+    } catch { /* interceptor */ }
+    finally { setPublishing(false); }
+  };
+
   const handleSave = async () => {
     if (!tmpl) return;
     const values = await form.validateFields();
@@ -183,7 +241,7 @@ export default function TemplateEditor() {
             sceneCode=''
             ruleCode={tmpl?.template?.code ?? ''}
             tenantId={currentId ?? 0}
-            metadata={metadata}
+            metadata={effectiveMetadata}
             decisions={decisions}
             onSelectedNodeChange={setSelectedFlowNodeId}
             onSelectedEdgeChange={setSelectedFlowEdgeIndex}
@@ -198,7 +256,7 @@ export default function TemplateEditor() {
                 selectedEdgeIndex={selectedFlowEdgeIndex}
                 decisions={decisions}
                 sceneRules={flowSceneRules}
-                expressionLangs={metadata?.expressionLangs ?? ['CEL']}
+                expressionLangs={effectiveMetadata?.expressionLangs ?? ['CEL']}
                 onChangeNode={(updated) => setBodySkeleton(carriersToBody('DECISION_FLOW', {
                   flowGraph: { ...flowGraph, nodes: flowGraph.nodes.map((n) => n.id === updated.id ? updated : n) },
                 }))}
@@ -234,10 +292,10 @@ export default function TemplateEditor() {
         script={carriers.script}
         onAstChange={(ast) => setBodySkeleton(carriersToBody(kind, { conditionAst: ast }))}
         onScriptChange={(s) => setBodySkeleton(carriersToBody(kind, { script: s }))}
-        conditionTypes={metadata?.conditionTypes ?? []}
-        availableMetrics={metadata?.availableMetrics ?? []}
-        payloadFieldNames={metadata?.payloadFieldNames ?? []}
-        payloadFieldTypes={metadata?.payloadFieldTypes}
+        conditionTypes={effectiveMetadata?.conditionTypes ?? []}
+        availableMetrics={effectiveMetadata?.availableMetrics ?? []}
+        payloadFieldNames={effectiveMetadata?.payloadFieldNames ?? []}
+        payloadFieldTypes={effectiveMetadata?.payloadFieldTypes}
         decisions={decisions}
         tenantId={currentId ?? undefined}
         sceneCode={undefined}
@@ -270,6 +328,19 @@ export default function TemplateEditor() {
           </Form.Item>
           <Form.Item name="description" label={t('form.description')}>
             <Input.TextArea rows={2} disabled={!editable} />
+          </Form.Item>
+          <Form.Item label={t('form.referenceScene')} help={t('form.referenceSceneHint')}>
+            <Select
+              allowClear
+              showSearch
+              disabled={!editable}
+              style={{ width: 320 }}
+              placeholder={t('form.referenceScenePlaceholder')}
+              optionFilterProp="label"
+              value={refSceneCode}
+              onChange={(v) => setRefSceneCode(v)}
+              options={scenes.map((s) => ({ value: s.sceneCode, label: `${s.name} (${s.sceneCode})` }))}
+            />
           </Form.Item>
         </Form>
       </Card>
@@ -369,9 +440,14 @@ export default function TemplateEditor() {
       </Card>
 
       {editable && (
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
-          {t('action.save')}
-        </Button>
+        <Space>
+          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
+            {t('action.save')}
+          </Button>
+          <Button icon={<SendOutlined />} loading={publishing} onClick={handlePublish}>
+            {t('action.publish')}
+          </Button>
+        </Space>
       )}
     </div>
   );
