@@ -10,6 +10,7 @@ export function expressionCompletions(
   metrics: MetricDescriptor[],
   payloadFields: string[],
   payloadTypes: Record<string, string>,
+  paramKeys: string[],
 ): CompletionResult | null {
   // 顶层变量：now、subjectId、tenantId（不以 . 结尾触发，前缀匹配即出）
   const topWord = ctx.matchBefore(/\b([a-zA-Z_]\w*)/);
@@ -22,6 +23,7 @@ export function expressionCompletions(
       { label: 'metrics', type: 'namespace', detail: '命名空间', info: '指标取值' },
       { label: 'payload', type: 'namespace', detail: '命名空间', info: '事件载荷字段' },
       { label: 'subject', type: 'namespace', detail: '命名空间', info: '主体属性' },
+      { label: 'params', type: 'namespace', detail: '模板常量', info: '本规则冻结常量(params.<键>)' },
     ].filter((b) => b.label.toLowerCase().startsWith(partial));
     if (builtins.length > 0) {
       return { from: topWord.from, options: builtins };
@@ -29,7 +31,7 @@ export function expressionCompletions(
   }
 
   // 命名空间.字段补全
-  const nsWord = ctx.matchBefore(/(?:metrics|payload|subject)\.(\w*)/);
+  const nsWord = ctx.matchBefore(/(?:metrics|payload|subject|params)\.(\w*)/);
   if (!nsWord) return null;
 
   const prefix = nsWord.text.split('.')[0];
@@ -74,6 +76,18 @@ export function expressionCompletions(
         detail: s === 'id' || s === 'type' ? 'STRING' : undefined,
       }));
     return { from: nsWord.from + 'subject.'.length, options: all };
+  }
+  if (prefix === 'params') {
+    return {
+      from: nsWord.from + 'params.'.length,
+      options: paramKeys
+        .filter((k) => k.startsWith(partial))
+        .map((k) => ({
+          label: k,
+          type: 'property',
+          detail: '常量',
+        })),
+    };
   }
 
   return null;
