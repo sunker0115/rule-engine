@@ -40,6 +40,9 @@
 | `scheduled_task` | 通用调度任务定义（§3.10）：`task_type` 判别 + typed 静态 `config` + 运行态 `run_cursor` 列，TRIGGER 为评估触发类型 | 同步事务 | 永久 |
 | `scheduled_task_execution` | 调度任务每次运行记录（§3.10） | 异步 | 永久 |
 | `audit_log` | 配置变更审计——人的行为（D14，同步事务红线） | 同步事务 | 永久 |
+| `rule_template` | 模板身份层——code/name/kind/status，归属 SYSTEM tenant（D74） | 同步事务 | 永久 |
+| `rule_template_version` | 模板版本快照——body_skeleton/slots/bindings，不可变（D74） | 同步事务 | 永久 |
+| `rule_template_instantiation` | 模板实例化溯源——template_version_id→rule_version_id，可删核心零影响（D74） | best-effort | 永久 |
 
 **评估层表（运行面，量大）：**
 
@@ -65,6 +68,7 @@ CREATE TABLE tenant (
   id          BIGINT AUTO_INCREMENT PRIMARY KEY,
   code        VARCHAR(64)  NOT NULL COMMENT '租户标识，全局唯一',
   name        VARCHAR(128) NOT NULL COMMENT '租户名称',
+  type        VARCHAR(16)  NOT NULL DEFAULT 'STANDARD' COMMENT 'SYSTEM=平台系统租户(承载模板), STANDARD=普通业务租户(见 V1_42)',
   is_default  TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否默认租户（单业务线启动时只有一个 default 租户）',
   status      VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '取值: ACTIVE/DISABLED',
   created_by  VARCHAR(64)  COMMENT '创建人（来自 X-Actor-Id header，D14）',
@@ -289,6 +293,63 @@ CREATE TABLE audit_log (
   KEY idx_operated_at (operated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配置变更审计（D14，同步事务写）';
 ```
+
+**rule_template**（D74 模板系统 V2：身份层，同 rule_definition 结构）
+
+```sql
+CREATE TABLE rule_template (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id   BIGINT       NOT NULL COMMENT '所属租户；SYSTEM tenant=平台级模板',
+  code        VARCHAR(128) NOT NULL,
+  name        VARCHAR(256) NOT NULL,
+  description VARCHAR(1024) DEFAULT NULL,
+  kind        VARCHAR(32)  NOT NULL COMMENT 'RuleKind 枚举（六种）',
+  status      VARCHAR(16)  NOT NULL DEFAULT 'DRAFT' COMMENT 'TemplateStatus: DRAFT/PUBLISHED/DISABLED',
+  created_by  VARCHAR(64)  DEFAULT NULL,
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by  VARCHAR(64)  DEFAULT NULL,
+  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_tenant_code (tenant_id, code),
+  KEY idx_tenant_status (tenant_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模板身份层（D74，V1_42）';
+```
+
+**rule_template_version**（D74：快照层，不可变，同 rule_version 语义）
+
+```sql
+CREATE TABLE rule_template_version (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  template_id   BIGINT      NOT NULL COMMENT '→ rule_template.id',
+  version       INT         NOT NULL COMMENT '同一模板内单调递增',
+  body_skeleton JSON        NOT NULL COMMENT '合法 body，所有值位已填默认值，无 token（typed RuleBody）',
+  slots         JSON        NOT NULL COMMENT 'TemplateSlot[]（SlotKind=VALUE/METRIC_REF/DECISION_REF/RULE_REF）',
+  bindings      JSON        NOT NULL COMMENT 'SlotBinding[]',
+  status        VARCHAR(16) NOT NULL DEFAULT 'DRAFT' COMMENT 'TemplateStatus: DRAFT/PUBLISHED',
+  created_by    VARCHAR(64) DEFAULT NULL,
+  created_at    DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_template_version (template_id, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模板版本快照（D74，不可变，V1_42）';
+```
+
+**rule_template_instantiation**（D74：溯源，可删，核心零影响）
+
+```sql
+CREATE TABLE rule_template_instantiation (
+  id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+  template_id         BIGINT   NOT NULL COMMENT '→ rule_template.id',
+  template_version_id BIGINT   NOT NULL COMMENT '→ rule_template_version.id',
+  template_version    INT      NOT NULL COMMENT '冗余版本号，便于查询',
+  rule_definition_id  BIGINT   NOT NULL COMMENT '→ rule_definition.id',
+  rule_version_id     BIGINT   NOT NULL COMMENT '→ rule_version.id',
+  slot_values         JSON     NOT NULL COMMENT '实例化填值快照（Map<String,Object>，typed JSON）',
+  instantiated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  instantiated_by     VARCHAR(64) DEFAULT NULL,
+  KEY idx_template_id (template_id),
+  KEY idx_rule_version_id (rule_version_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模板实例化溯源（D74，可删，V1_42）';
+```
+
+> **核心表零污染**：`rule_version` 不含 `templateId`/`templateVersion` 列。模板是 Platform 层独立子系统，单向依赖核心，核心不 import 任何模板类型（D74）。
 
 ### 3.2 评估层
 

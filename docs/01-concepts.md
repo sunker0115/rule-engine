@@ -151,6 +151,7 @@ Decision           ┌───────────────────�
 | `subjectType` | 业务主体类型枚举：`USER` / `ACCOUNT` / `DEVICE` / `ORDER` / `CUSTOM`；决定 EvalContext 构建时从哪张主体表取属性（v1 仅 `USER` 实装） |
 | `defaultParams` | Scene 级缺省 JSON：`timezone` / `currency` / `defaultRateLimit` / `defaultCacheTtl` 等；规则不显式配置的参数回落到此处 |
 | `eventTypes` | 该 Scene 允许的 eventType 白名单数组；事件接入按 (scene + eventType) 二元组校验，规则 trigger 下拉与 Job `eventTypeTemplate` 也按此过滤 |
+| `executionMode` | 候选规则评估执行模式：`SEQUENTIAL`（逐条串行，默认）/ `PARALLEL`（VirtualThread 并发）。经 `default_params.executionMode` 字符串配置（热更生效），与 `decisionStrategy` 正交。ALL_HITS/HIGHEST_PRIORITY 全量并行，FIRST_HIT 批式并行。纯 AST_BOOLEAN 场景负优化 ~42x，仅在含多重脚本/决策图场景建议开启（见 08-evolution §2.29） |
 | `decisionStrategy` | 多规则命中时的合成策略。v1 固定为 `HIGHEST_PRIORITY`（priority 最小者胜出），DDL 层 NOT NULL DEFAULT，PUSH/HYBRID Scene 强制生效（D29）；PULL Scene 不参与合成，配置了也忽略。v2 预留 `MAJORITY` / `CUSTOM_SPI` 扩展位（届时需 `ALTER TABLE MODIFY COLUMN`，非加列） |
 
 metric 在 tenant 级对所有 scene 可用（D54，无 scene_metric_binding）。Scene 与 TRIGGER 类 `ScheduledTask`（经 `TriggerConfig.sceneCode` 关联）一对多关联，PULL Scene 不允许配置 TRIGGER 任务（发布拒绝 + UI 屏蔽）。详细 DDL 见 [05-storage](./05-storage.md)。
@@ -757,6 +758,31 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 - **快照不可变**（D6）：RuleDecisionBinding 快照进 `rule_version` 后永不变更；修改绑定 = 修改 Rule 草稿 → 走标准发布产新 version；
 - **DDL**：见 [`05-storage.md`](./05-storage.md) §rule_decision_binding 表。
+
+### 3.21 RuleTemplate（规则模板，D74 实验性预实现）
+
+**是什么**：参数化规则骨架（authoring 便利层）——运营不写规则逻辑，只填槽位值，一键生成规则草稿。模板是 Platform 层独立子系统，**核心表零污染**（`rule_version` 无模板列，D74）。
+
+**身份/快照分离**：同 `rule_definition` / `rule_version` 模式——`rule_template`（身份：code/name/kind/status）+ `rule_template_version`（不可变快照：body_skeleton/slots/bindings），实例化时冻结模板版本号。
+
+**SlotKind（四种槽类型）**：
+
+| kind | 含义 | 实例化时做什么 |
+|------|------|-------------|
+| `VALUE` | 填具体值（数字/字符串/布尔） | 强转类型（`ValueDataType`），直接替换占位符 |
+| `METRIC_REF` | 选一个平台 metric code | `MetricRefResolver` 验证存在性，值 pass-through 进 `coercedValues` |
+| `DECISION_REF` | 选一个 decision code | `DecisionRefResolver` 验证存在性，值 pass-through |
+| `RULE_REF` | 选一个已发布规则 code | `RuleRefResolver` 验证存在性，值 pass-through |
+
+**实例化流水线**：`slotValues → SlotRefResolver SPI 验证 REF → TemplateBinder 填 skeleton → PublishService.createDraft → 产 rule_definition(草稿) + rule_version(DRAFT) + 溯源表记录`
+
+**跨租户可见性**：模板归属 `SYSTEM` tenant（`tenant.type=SYSTEM`），`STANDARD` tenant 经 `findVisibleByTenant` 查询可见 SYSTEM 模板并可实例化到自己的 Scene。
+
+**关键边界**：
+- 默认关闭（`rule.template.enabled=false`），实验性预实现
+- 全 6 kind 覆盖，JsonPointer 统一寻址 body skeleton
+- `SlotRefResolver` 零 switch 分派（加新 REF 目标类型 = 加实现类）
+- DDL 见 [05-storage §rule_template](./05-storage.md)
 
 ---
 

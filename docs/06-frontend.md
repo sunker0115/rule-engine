@@ -137,6 +137,25 @@
 
 ---
 
+## 六·D、模板编辑器（D74）
+
+三页面体系——模板列表、编辑器、实例化页：
+
+- **`/templates`（模板列表）**：按状态筛选（DRAFT/PUBLISHED/DISABLED），展示模板 code/name/kind/status
+- **`/templates/:code/edit`（模板编辑器）**：body skeleton 编辑区——复用 `RuleBodyEditor`（AST/Flow/Script 三变体）；slot 管理（key/label/kind/dataType/required/constraint）；binding 管理（slot→body 位置映射，JsonPointer 统一寻址）；版本历史侧栏
+- **`/templates/:code/instantiate`（实例化）**：填 slot 值（VALUE 直接输、REF 下拉查 metric/decision/rule），调用 instantiate API 一步生成规则草稿
+
+API 层 `api/template.ts` 封装全部 10 个模板端点。
+
+## 六·E、表达式编辑器 intellisense
+
+两层智能提示，跨六引擎：
+
+- **L1 变量补全**（`expressionCompletions.ts`）：CodeMirror `completionSource`，按命名空间补全——`metrics.<code>` / `payload.<field>` / `subject.<field>` / `params.<key>` + 顶层变量 `now`/`subjectId`/`tenantId`。六引擎通用，零后端
+- **L2 实时类型诊断**：编辑器 300ms debounce → `POST /admin/v1/expressions/validate` → CodeMirror `lintGutter` + `setDiagnostics` 红色波浪线。CEL 真实类型检查，弱类型引擎（Aviator/Groovy/JEXL）自动返回 valid=true
+
+Script 编辑器 + Flow Switch/Transform 三处统一使用。
+
 ## 七、技术栈与工程目录
 
 技术栈决策见 [`00-decisions.md`](./00-decisions.md) D31。前端工程放 `frontend/` 目录，与 `src/` 平级。
@@ -169,16 +188,24 @@ frontend/
 │   │   ├── client.ts                   # axios 实例，注入 X-Actor-Id header
 │   │   ├── scene.ts                    # Scene / Rule CRUD
 │   │   ├── eval.ts                     # 评估 / dry-run 接口
-│   │   └── audit.ts                    # 审计日志接口
+│   │   ├── audit.ts                    # 审计日志接口
+│   │   ├── template.ts                # 模板 CRUD / 实例化（D74）
+│   │   └── expression.ts              # 表达式验证（L2 intellisense）
 │   ├── pages/
 │   │   ├── scene-list/                 # Scene 列表页
 │   │   ├── rule-editor/                # 规则编辑主页（三栏布局）
-│   │   │   ├── index.tsx               # 布局骨架（左：规则树 | 中：AST 编辑器 | 右：属性面板）
-│   │   │   ├── RuleTree.tsx            # 左栏：Scene/Rule 树（Ant Design Tree）
+│   │   │   ├── index.tsx               # 布局骨架
+│   │   │   ├── RuleTree.tsx            # 左栏：Scene/Rule 树
 │   │   │   ├── ConditionEditor.tsx     # 中栏：react-querybuilder 封装
-│   │   │   └── PropertyPanel.tsx       # 右栏：规则属性 / paramsSchema 动态表单
+│   │   │   ├── ScriptEditor.tsx        # 脚本编辑器（CodeMirror + L1补全 + L2诊断）
+│   │   │   ├── ExpressionInput.tsx     # Flow Switch/Transform 表达式输入
+│   │   │   ├── expressionCompletions.ts # L1 变量补全源（六引擎通用）
+│   │   │   └── PropertyPanel.tsx       # 右栏：规则属性
 │   │   ├── dry-run/                    # dry-run 执行与结果展示
-│   │   └── audit/                      # 审计日志查询与 diff 展示
+│   │   ├── audit/                      # 审计日志查询与 diff 展示
+│   │   ├── template-list/              # 模板列表页（D74）
+│   │   ├── template-editor/            # 模板编辑器（D74）
+│   │   └── template-instantiate/       # 模板实例化页（D74）
 │   └── components/
 │       ├── dry-run-result/             # 节点级 ✅/❌/⏭ + actualValue 叠加层
 │       └── params-schema-form/         # 根据 paramsSchema JSON 动态渲染表单控件
@@ -194,6 +221,8 @@ frontend/
 | paramsSchema 渲染 | `ParamsSchemaForm` 根据 `conditionType` 的 schema 动态生成输入控件 |
 | dry-run 结果叠加 | `DryRunResult` 用 react-querybuilder 的 `ruleGroupProps` 覆盖，不修改 AST 数据结构 |
 | 前后端跨域 | Vite dev proxy 转发到本地后端；生产由 Nginx 同域反代 |
+| 表达式补全 | L1 变量补全六引擎通用、零后端（`expressionCompletions.ts`）；L2 类型诊断 300ms debounce，弱类型引擎自动通过 |
+| 模板编辑器 | 复用 `RuleBodyEditor`（AST/Flow/Script 三变体）+ `FlowCanvasEditor`；slots/bindings 管理 |
 
 ---
 

@@ -79,7 +79,7 @@
 | 已吸收 | Drools | guided rule template（参数化模板） | D74：JsonPointer 统一寻址覆盖全 6 kind + params 冻结常量命名空间消除 Script/Flow 异类 + binder SPI + 快照式实例化；受 Drools 启发但定位为 authoring 便利层 |
 | 已吸收 | FICO / Sapiens | 决策效果闭环 | §2.27 B32：`decision_outcome` 回灌 + `OUTCOME_INGESTION` 自动取标签 + `EffectivenessService` TP/FP/FN→precision/recall（RULE_VERSION/DECISION×DAY/WEEK 漂移）+ 前端 `EffectivenessPage` |
 | 已吸收 | ZEN L2 | CEL 实时类型诊断（CEL 专属） | `ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput debounced lint（弱类型引擎 no-op 自动通过） |
-| 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH 压测：纯 AST_BOOLEAN 负优化 13-42x，仅含重脚本/决策图场景建议开启） |
+| 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH：纯 AST_BOOLEAN 20 规则 42x 负优化、10 重/20 混合 1.30x 交叉、20 全重 1.97x 加速——仅含重脚本/决策图场景建议开启） |
 | 不需要 | trae | 6 级 Context / 内部事件总线 / 自研验证框架 / 引擎耦合 JPA / `DecisionCode` 硬编码 / Rule 层组合策略 | 分别被 不可变 POJO / Modulith / Spring Validation / kernel 零 Spring / Decision 业务配置 / AST 组合 顶替 |
 | 不需要 | trae R4 | 自研有状态 Flow 编排 | 架构已定：同步图归 D75 `DECISION_FLOW`，有状态编排接 Flowable（D60/D75），不自研 |
 | 不需要 | gengine | 命令式副作用 DSL / DataContext 任意函数 / 规则池 / salience·StopTag / DAG 执行模型 | 分别被 D60 / urule 否决 / 快照+预编译 / hit policy / D75 覆盖 |

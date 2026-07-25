@@ -17,12 +17,14 @@
 | 章节 | 状态 |
 |------|------|
 | §二 加 ConditionType | ✅ 已展开 |
+| §三 加表达式引擎（ExpressionEngine SPI） | ✅ 六引擎 + 编译缓存 |
 | §四 加 MetricSource | ✅ 已展开 |
 | §五 元数据契约 | ✅ 已展开 |
 | §六 实现指南 | ✅ 已展开 |
 | §七 SubjectLoader 实现指南 | ✅ 已展开 |
 | §八 维护原则 | ✅ 已展开 |
 | §九 代码定义规则（`@RuleDef` 注解模式） | ✅ 已展开 |
+| §十 模板 REF Slot 解析器（SlotRefResolver SPI） | ✅ |
 
 ---
 
@@ -97,6 +99,59 @@ public class GeoDistanceWithinEvaluator implements ConditionEvaluator {
 - 如果 params 缺必填字段 → 抛 `IllegalArgumentException`，引擎归 `CONDITION_EVAL_ERROR`
 - evaluate() 必须无副作用（不能修改 EvalContext，D20 §1 EvalContext 不可变）
 - 单元测试模板：构造 `MockConditionNode`（直接设 params）+ `MockEvalContext`（直接注入 metric 值）→ 断言 evaluate() 返回预期布尔值
+
+---
+
+## 三、加表达式引擎（ExpressionEngine SPI）
+
+> 用于 `EXPRESSION_SCRIPT` kind 的脚本求值和 `DECISION_FLOW` 中 Switch/Transform 表达式节点的求值（D66 / D75）。
+
+### 3.1 SPI 接口
+
+```java
+package com.sstlfsj.rule.kernel.api.spi.expression;
+
+public interface ExpressionEngine {
+    /** 引擎标识（如 "cel"、"aviator"），对应 ExpressionLang.tag()。 */
+    String lang();
+
+    /** 编译表达式源码，返回编译产物（可缓存复用）。 */
+    Object compile(String source);
+
+    /** 求值已编译表达式，bindings 为变量绑定 map。 */
+    Object evaluate(Object compiled, Map<String, Object> bindings);
+
+    /** 类型检查（L2 intellisense 后端）。弱类型引擎可返回 no-op（valid=true）。 */
+    default TypeCheckResult typeCheck(String source, Map<String, String> varTypes) {
+        return TypeCheckResult.valid();
+    }
+}
+```
+
+### 3.2 内置引擎（六种，D66）
+
+| 引擎 | `lang` 标识 | 特点 | 模块 |
+|------|-----------|------|------|
+| CEL | `cel` | 强类型、Google 出品、原生沙箱 | `rule-expression-cel` |
+| Aviator | `aviator` | 高性能、弱类型、字节码编译 | `rule-expression-aviator` |
+| QLExpress | `qlexpress` | 阿里出品、弱类型、规则场景优化 | `rule-expression-qlexpress` |
+| JsonLogic | `jsonlogic` | JSON 原生、数据即规则 | `rule-expression-jsonlogic` |
+| JEXL | `jexl` | Apache、弱类型、类 Java 语法 | `rule-expression-jexl` |
+| Groovy | `groovy` | 全 Java 兼容、动态脚本 | `rule-expression-groovy` |
+
+### 3.3 注册方式
+
+每引擎提供一个 Spring Boot Starter（`rule-expression-*-spring-boot-starter`），内部 `@Bean` 注册 `ExpressionEngine` 实现，`ExpressionEngineRegistry` 按 `lang()` 自动收集。加新引擎 = 新增模块 + 实现 SPI + 提供 Starter，引擎侧零改动。
+
+### 3.4 编译产物缓存
+
+`ExpressionEngine.compile()` 产物由调用方按源码哈希缓存在 Caffeine（`ScriptExecutor` 内部），同一表达式跨规则复用编译产物，不引入对象池（JDK 25 下各引擎线程安全且编译成本低）。
+
+### 3.5 实现约束
+
+- `compile()` + `evaluate()` 必须线程安全（多规则并发评估共用同一引擎实例）
+- `typeCheck()` 仅 CEL 做真实类型诊断；弱类型引擎返回 `TypeCheckResult.valid()` 自动通过
+- 前端 intellisense：L1 变量补全（`expressionCompletions.ts`）六引擎通用，零后端；L2 类型诊断经 `POST /admin/v1/expressions/validate`，debounced 300ms
 
 ---
 
@@ -432,3 +487,53 @@ try (RuleEngineClient client = RuleEngineClient.builder()
 - `@RuleDef` 与 `InlineRuleSpec` 必须同类标注 + 实现；`AnnotationRuleSource` 跳过未标注 `@RuleDef` 的 spec。
 - `code` 在 `(tenant, sceneCode)` 作用域内须唯一且稳定——它参与代理键 `ruleVersionId` 的哈希派生，改 `code` = 换一条规则身份。
 - `condition()` 应为纯函数（无副作用、不依赖外部可变状态），与 §2.5 ConditionEvaluator 的无状态约束一致。
+
+---
+
+## 十、模板 REF Slot 解析器（SlotRefResolver SPI）
+
+> 用于模板实例化时验证 REF 类型 slot 的引用有效性（D74 模板系统 V2）。
+> 见 [01-concepts §3.21](./01-concepts.md) 模板概念、[05-storage §3.1](./05-storage.md) 模板表结构。
+
+### 10.1 SPI 接口
+
+```java
+package com.sstlfsj.rule.config.api.service;
+
+public interface SlotRefResolver {
+    /** 本解析器支持的 SlotKind，一个实现只认一种 kind。 */
+    boolean supports(SlotKind kind);
+
+    /** 验证引用值有效；无效抛 IllegalArgumentException。Phase 1 只做存在性校验。 */
+    void validate(String value, TemplateSlot slot, SlotResolutionContext ctx);
+}
+```
+
+### 10.2 内置实现（三种）
+
+| 实现 | `supports` | 验证内容 | 查询 |
+|------|-----------|---------|------|
+| `MetricRefResolver` | `SlotKind.METRIC_REF` | metric code 在 tenant 内存在且 ACTIVE | `MetricDefinitionMapper` |
+| `DecisionRefResolver` | `SlotKind.DECISION_REF` | decision code 在指定 scene 内存在且 ACTIVE | `DecisionMapper` |
+| `RuleRefResolver` | `SlotKind.RULE_REF` | rule code 在 tenant 内有 PUBLISHED 版本 | `RuleDefinitionMapper` |
+
+### 10.3 注册与分派
+
+三个实现均为 Spring `@Component`，`RuleTemplateService` 注入 `List<SlotRefResolver>`，按 `supports(kind)` 匹配唯一实现——**零 switch，加新 REF 目标类型 = 加一个实现类，service 不改**。
+
+### 10.4 上下文（SlotResolutionContext）
+
+```java
+public record SlotResolutionContext(
+    Long tenantId, String sceneCode, Long callerTenantId
+) {}
+```
+
+- `tenantId`：被验证资源所在租户（模板归属 `SYSTEM` tenant 时仍在此查）
+- `callerTenantId`：实例化发起方租户，仅溯源用，不影响验证逻辑
+
+### 10.5 实现约束
+
+- `validate()` 失败必须抛 `IllegalArgumentException`（含明确消息，如 "metric 'xxx' 不存在或已禁用"）
+- Phase 1 仅做存在性校验，Phase 2 预留 `allowedDataTypes` 深度校验（如 METRIC_REF 的目标 metric sourceType 需在允许清单内）
+- 各实现读现有 mapper 的存在性查询方法，不新增专用查询

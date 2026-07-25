@@ -28,21 +28,27 @@
 
 ## 二、Maven 模块拆分
 
-v1 阶段 10 个模块（6 个 Spring 模块 + 1 个零 Spring 内核库 + 1 个可选轮询库 + 2 个 SDK 库），单 Spring Boot 服务部署。
+16 个模块，单 Spring Boot 服务部署（`rule-rt-stream` 为独立 Flink 作业，不入主服务）。
 
 | 模块 | 职责 | 部署形态 |
 |------|------|---------|
-| `rule-kernel` | 零 Spring 零 DB，所有 SPI 接口定义 + 纯评估逻辑（含 EvalEngine / SceneRuleIndex / KernelEvaluators） | 库（jar），嵌入式 SDK 核心 |
+| `rule-kernel` | 零 Spring 零 DB，所有 SPI 接口定义 + 纯评估逻辑（含 EvalEngine / SceneRuleIndex / FlowExecutor / ParallelEvaluator / KernelEvaluators） | 库（jar），嵌入式 SDK 核心 |
 | `rule-kernel-polling` | `DbPollingRuleWatcher` / `DbPollingSceneWatcher` 实现，SDK 使用方按需引入 | 可选库（jar），仅 SDK 模式使用 |
-| `rule-config-svc` | 规则/Scene/元数据 CRUD、发布、快照生成 | Spring 模块，内嵌于主服务 |
+| `rule-config-svc` | 规则/Scene/元数据 CRUD、发布、快照生成、模板系统（D74） | Spring 模块，内嵌于主服务 |
 | `rule-eval-svc` | 评估入口（PUSH/PULL/dry-run）、metric 预拉、session 落库 | Spring 模块，内嵌于主服务 |
-| `rule-job-svc` | 通用调度任务框架（D11 / D73）：调度注册、`ScheduledTask` + `TaskExecutor` SPI（TRIGGER 主体查询合成 RuleEvent 注入）、`ScheduledTaskExecution` 记录 | Spring 模块，内嵌于主服务 |
+| `rule-job-svc` | 通用调度任务框架（D11 / D73） | Spring 模块，内嵌于主服务 |
+| `rule-job-xxl` | xxl-job 调度适配器（`XxlJobSchedulerAdapter`） | Spring 模块，按需引入 |
 | `rule-audit-svc` | 审计查询、dry-run 结果存储、日志聚合 | Spring 模块，内嵌于主服务 |
 | `rule-observability` | TraceWriter DB 实现、Prometheus 指标名常量、告警默认配置 | Spring 模块，内嵌于主服务 |
-| `rule-api` | 所有 HTTP controller、鉴权、限流、API 版本前缀（三类受众前缀 `/admin/v1`、`/api/v1`、`/sdk/v1`） | Spring 模块，内嵌于主服务 |
+| `rule-api` | 所有 HTTP controller（三类受众前缀 `/admin/v1`、`/api/v1`、`/sdk/v1`） | Spring 模块，内嵌于主服务 |
 | `rule-app` | Spring Boot 启动类，组装所有模块，无业务逻辑 | 可执行 jar（主服务） |
-| `rule-sdk` | 嵌入式 SDK：`RuleEngineClient` 门面 + `SnapshotPoller` HTTP 轮询 + 本地模式（代码定义规则，零网络）+ FETCHED 取数（宿主注入 handler，定义独立下发，D46） | 库（jar），业务方引入，零 Spring |
-| `rule-sdk-spring-boot-starter` | Spring Boot 自动装配胶水层：读 `rule.sdk.*` 配置，注册 `RuleEngineClient` Bean | 库（jar），Spring Boot 业务方引入 |
+| `rule-sdk` | 嵌入式 SDK：`RuleEngineClient` + `SnapshotPoller` + 本地模式 + FETCHED 取数（D46） | 库（jar），业务方引入，零 Spring |
+| `rule-sdk-spring-boot-starter` | Spring Boot 自动装配胶水层 | 库（jar），Spring Boot 业务方引入 |
+| `rule-expression` | 多表达式引擎父模块（6 引擎子模块 + 各 Starter） | 库（jar） |
+| `rule-rt-stream` | Apache Flink 实时流特征计算作业（窗口聚合 + Stage-1 削峰 + Redis 特征库） | 独立 Flink jar，不入主服务 |
+| `rule-rt-bridge` | Kafka 桥接：消费可疑事件 → 调引擎 HTTP 评估 → 发布决策 | Spring Boot，独立部署 |
+| `rule-benchmark` | JMH 性能基准（EvalEngine / compiled / match / mixed） | 不入服务，仅开发期 |
+| `rule-samples` | 示例规则集 + 集成测试（OrderFraud / CreditEvaluation / DecisionFlow） | 不入服务，仅开发期 |
 
 > **kernel 引入 Lombok（D49）**：`rule-kernel` 自 D49 起引 Lombok（如 `RuleEvent` 的 `@Builder(toBuilder)`）。Lombok 是**编译期注解处理器**，编译后无运行时依赖，保持 kernel「运行时零依赖」。
 

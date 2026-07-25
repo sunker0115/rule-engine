@@ -49,8 +49,13 @@ RuleEvent
   │  · payload 字段直接注入（valueRef=PAYLOAD）；metric 按 provided（SDK/Job 注入）优先 → 其余按 sourceType 并发取数（D25/D55）
   │  · 组装 EvalContext（不可变 POJO）；evaluation_session 行同步写入 DB
   ▼
-⑤ AST 评估（Visitor 树遍历）
-  │  · InterpretedExecutor（v1 默认实现）
+⑤ 规则判定主体评估（按 kind 路由执行器）
+  │  · AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE → InterpretedExecutor（Visitor 树遍历）
+  │  · EXPRESSION_SCRIPT → ScriptExecutor（六引擎表达式求值，见 04-extension §三）
+  │  · DECISION_FLOW → FlowExecutor（DAG 图遍历：RuleRef/Switch/Transform/Output，见 §3.5b）
+  │  · 按 Scene.executionMode 决定候选规则执行方式（见 §3.5a）：
+  │    SEQUENTIAL（默认）：逐条串行
+  │    PARALLEL：ParallelEvaluator 并发（VirtualThread，ALL_HITS/HIGHEST_PRIORITY 全量并行 / FIRST_HIT 批式并行）
   │  · 每个节点评估结果收集到 TraceCollector（内存 ArrayList，无锁）
   │  · 单节点失败：节点 satisfied=false，整树继续短路求值（D15）
   │  · 评估结束：EvalResult 出树，node_trace 批量 submit 入 TraceWriter 队列（异步，D21）
@@ -198,45 +203,102 @@ RuleEvent
 - 单 metric 加载失败 → 该 metric 标记 `FETCH_FAIL`；引用该 metric 的 ConditionNode 在 AST 评估期 evaluated=false；整树继续短路求值（D15）；
 - 全体等待超时（`allOf().join(timeout)`）→ 已完成的 metric 有效，未完成的视同失败，超时阈值在 07-operability 给。
 
-### 3.5 AST 评估（InterpretedExecutor）
+### 3.5 规则判定主体评估（按 kind 路由执行器）
 
-**输入**：`EvalContext` + 候选 `RuleVersion`（含预解析 AST）
+**输入**：`EvalContext` + 候选 `RuleVersionSnapshot`（含 `body` JSON → `RuleBody` 多态：`AstBody`/`ScriptBody`/`FlowBody`，D76）
 
 **输出**：`EvalResult` + node_trace batch（入 TraceWriter 队列，异步）
 
 **核心动作**：
-- `InterpretedExecutor` 以 Visitor 模式递归遍历 AST；
-- 每个节点评估后追加一行到 `TraceCollector`（内存 `ArrayList`，无锁，O(1) 追加）；
-- EvalResult 出树时一次性 `traceWriter.submit(batch)`（非阻塞 offer，队满丢弃+告警，D21）。
+- `EvalEngine.selectExecutor(snap)` 按 `snap.kind()` 路由到对应 `RuleVersionExecutor` 实现；
+- 每种执行器的判定主体不同，但返回统一的 `EvalResult` + trace；
+- 评估结束后 `node_trace` 批量 submit 入 TraceWriter 队列（非阻塞 offer，队满丢弃+告警，D21）。
 
-**节点类型与求值语义**：
+**六种 kind 与执行器对应**：
+
+| kind | 判定主体（RuleBody 变体） | 执行器 | 求值方式 |
+|------|--------------------------|--------|---------|
+| `AST_BOOLEAN` | `AstBody(conditionAst)` | `InterpretedExecutor` | Visitor 递归遍历 AST 树 |
+| `SCORECARD` | `AstBody(conditionAst)` | `InterpretedExecutor` | Visitor + weight 加权评分 |
+| `DECISION_TREE` | `AstBody(conditionAst)` | `InterpretedExecutor` | Visitor + 分支路径选择 |
+| `DECISION_TABLE` | `AstBody(conditionAst)` | `InterpretedExecutor` | Visitor + 行列匹配 |
+| `EXPRESSION_SCRIPT` | `ScriptBody(script)` | `ScriptExecutor` | 六引擎表达式求值（见 04-extension §三） |
+| `DECISION_FLOW` | `FlowBody(flowGraph, referencedSnapshots)` | `FlowExecutor` | DAG 图遍历（见 §3.5b） |
+
+**AST 系四种 kind 的节点求值语义**（`InterpretedExecutor`）：
 
 | 节点 | 求值逻辑 | 短路行为 |
 |------|---------|---------|
-| `AndNode` | 全部子节点 true | 首个 false 即短路，剩余 `result=null`（跳过，不遍历） |
+| `AndNode` | 全部子节点 true | 首个 false 即短路，剩余跳过 |
 | `OrNode` | 任一子节点 true | 首个 true 即短路，剩余跳过 |
 | `NotNode` | 取反唯一子节点 | 无短路 |
 | `ConditionNode` | 调用对应 `ConditionEvaluator.evaluate()` | 失败时 satisfied=false，整树继续（D15） |
 
-**dry-run 模式**：恒走"带版本单快照"分支（按 `ruleVersionId` / `ruleId` 解析出的单个版本试跑），**结构上不进派发链路、不写 prod `evaluation_session`**——副作用从分支结构根除，而非靠 `isDryRun` 标志逐处门控（D56）。痕迹写 `dry_run_session` / `dry_run_node_trace`，TraceWriter 按 `EvalContext.dryRun` 标记路由到 dry-run 目标表（D7 / D21）。
+**dry-run 模式**：恒走"带版本单快照"分支（按 `ruleVersionId` / `ruleId` 解析出的单个版本试跑），**结构上不进派发链路、不写 prod `evaluation_session`**（D56）。痕迹写 `dry_run_session` / `dry_run_node_trace`，TraceWriter 按 `EvalContext.dryRun` 标记路由到 dry-run 目标表（D7 / D21）。
 
-**EvalResult 输出字段**（D12 多态，v1 仅填 satisfied 部分）：
+**EvalResult 输出字段**（D12 多态，六种 kind 按需填）：
 
 ```
 EvalResult {
-    satisfied:       boolean           // AST_BOOLEAN kind：整树求值结果
-    score?:          Number            // D12 占位，v1 不填；SCORECARD kind 启用
-    category?:       String            // D12 占位，v1 不填；DECISION_TREE kind 启用
-    decision?:       Map<String,Any>   // D12 占位，v1 不填；DECISION_TABLE kind 启用
-    finalDecision?:  DecisionRef       // D26：合成后最终 Decision（Scene 配了 decisionStrategy 时填充）
-    hitDecisions:    List<DecisionRef> // D26：所有命中规则的 Decision 按 priority 排序
-    trace:           List<NodeTrace>   // 节点级 trace（PULL/dry-run 同步返回；PUSH 仅异步落库）
-    errorCode?:      String            // D15：非空表示有节点失败（METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR，见 10-api-contract §七）
+    satisfied:       boolean           // AST_BOOLEAN：整树求值结果
+    score?:          Number            // SCORECARD：加权评分
+    category?:       String            // DECISION_TREE：分支类别
+    decision?:       Map<String,Any>   // DECISION_TABLE：匹配行输出
+    finalDecision?:  DecisionRef       // D26：合成后最终 Decision
+    hitDecisions:    List<DecisionRef> // D26：所有命中规则的 Decision
+    trace:           List<NodeTrace>   // 节点级 trace
+    errorCode?:      String            // D15：非空表示有节点失败
     errorMessage?:   String
     failedNodeIds?:  List<String>
     partial?:        Boolean
 }
 ```
+
+### 3.5a 候选规则执行模式（ExecutionMode）
+
+候选规则（经 Matcher + Pre-Gate 后）在评估阶段的执行方式由 Scene 级 `executionMode` 控制，与 `decisionStrategy` 正交：
+
+| 模式 | 行为 | 适用 |
+|------|------|------|
+| `SEQUENTIAL`（默认） | 逐条串行执行候选规则，与 v1 行为一致 | 所有场景 |
+| `PARALLEL` | `ParallelEvaluator` 用 `Executors.newVirtualThreadPerTaskExecutor()` 并发执行，零新依赖（JDK 25） | 含多重脚本/决策图场景 |
+
+**PARALLEL 模式下的两种策略**：
+
+| 决策策略 | 并行行为 |
+|---------|---------|
+| `ALL_HITS` / `HIGHEST_PRIORITY` | 全量候选规则并行 fork，join 后 `mergeResults` 收集全部 hitDecisions + 首个 errorCode + max score |
+| `FIRST_HIT` | 批式并行：候选按 priority 排序后一批 N 条（默认全部候选）并行跑，取最高 priority 命中；全不中跑下一批 |
+
+**并发安全**：`EvalContext` 不可变（防御性拷贝），各规则返回独立 `EvalResult`，零共享可变状态，无需加锁。一条规则抛异常时 errorCode 被捕获，其余规则结果仍正常收集。
+
+**适用面（重要）**：纯 AST_BOOLEAN 场景 PARALLEL 负优化 ~42x（虚拟线程调度开销 > 纳秒级求值）。仅在场景含多条重规则（`EXPRESSION_SCRIPT` / `DECISION_FLOW`）且候选数 ≥ 3 时建议开启。配置经 `scene.default_params.executionMode` 热更生效。详细 benchmark 见 08-evolution §2.29。
+
+### 3.5b DECISION_FLOW 评估（FlowExecutor）
+
+第 6 种 kind `DECISION_FLOW` 由 `FlowExecutor implements RuleVersionExecutor` 求值——它不遍历 AST 树，而遍历 **DAG 决策图**（`FlowBody.flowGraph`）。
+
+**图结构**：节点 `FlowNode` sealed（`RuleRefNode` / `SwitchNode` / `TransformNode` / `OutputNode` 四变体）+ 边 `FlowEdge`（`from` / `to` / `caseKey`）。
+
+**遍历流程**（`Walker.run()`）：
+
+```
+inputNodeId → while (cur != null) cur = step(node) → assemble()
+```
+
+| 节点类型 | 求值逻辑 | 下一步 |
+|---------|---------|--------|
+| `RuleRefNode` | 调被引规则的冻结快照（`FlowBody.referencedSnapshots`，发布期 D6 冻结）+ 走对应 kind executor 求值 | 按 `true`/`false` 选 Switch 出边 |
+| `SwitchNode` | 求值表达式（六引擎之一，bindings = metrics/payload/subject/now/flow/params/上一步 hitDecisions） | 匹配 caseKey 的边；无匹配走 default（`caseKey=null`）；无 default 终止 |
+| `TransformNode` | 求值表达式 → 写 `flowVars`（图内变量命名空间，不污染 EvalContext） | 唯一出边 |
+| `OutputNode` | 产出 Decision（匹配 `decisionBindings` 中的 code）→ 进 `hitDecisions` | 终止或下一跳 |
+
+**关键约束**：
+- **同步无状态**：一次 Flow 评估内一次性走完，不挂起、不等外部事件
+- **RuleRef 冻结快照**：发布期把被引规则的 ACTIVE 版本冻结进 `FlowBody.referencedSnapshots`（D6），评估期零 DB 查询
+- **环检测**：发布期静态拒绝成环 flow（`FlowGraphValidator`），运行期兜底 `visited` set 断环
+- **被引规则隔离**：传原始 `EvalContext`，不注入 flow 变量——被引规则行为独立于调用方
+- **与 BPMN 分界**：FlowExecutor 是"一口气算完"的同步决策图；"要等"的编排交流程引擎（D60/D75 判据）
 
 ### 3.6 决策合成（decisionStrategy）
 

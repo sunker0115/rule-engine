@@ -82,7 +82,7 @@
 
 ### 2.3 跨 Scene 规则复用（来源 #1）
 
-- **现状（D77 已实装轻量路径）**：`rule_definition` 去 `scene_id` 改 `scene_code`（业务标识，消灭代理键翻译层，V1_41），`ruleCode` 为 tenant 级唯一；**DECISION_FLOW 的 RuleRefNode 已可跨 Scene 引用**（发布期按 tenant 级查被引规则并冻结其自身 sceneCode，D75 冻结机制不变）+ 反向血缘 `GET /admin/v1/rules/{code}/referencedBy`。下述 RuleTemplate / RuleFragment 仍为未实装的更重演进方向（供相似规则批量复用，非 flow 编排场景）。
+- **现状（D77 已实装轻量路径）**：`rule_definition` 去 `scene_id` 改 `scene_code`（业务标识，消灭代理键翻译层，V1_41），`ruleCode` 为 tenant 级唯一；**DECISION_FLOW 的 RuleRefNode 已可跨 Scene 引用**（发布期按 tenant 级查被引规则并冻结其自身 sceneCode，D75 冻结机制不变）+ 反向血缘 `GET /admin/v1/rules/{code}/referencedBy`。
 - **触发条件**：相同条件逻辑在多个 Scene 重复配置（如"账户开立 < 90 天"同时出现在 risk.transfer / risk.withdrawal / risk.payment），改动时需逐 Scene 同步，易漏、易产生版本漂移。
 - **演进方向**：
   - **`RuleTemplate`**：参数化的规则骨架，变量用占位符，实例化时注入 Scene 专属参数值；发布时膨胀为普通 `rule_version`，评估期不感知模板，公共能力（灰度 / Pre-Gate / Action）完全复用；
@@ -92,7 +92,9 @@
   - 灰度：Template 实例化后继承普通 `rule_version` 的 ROLLOUT Gate 语义，不需要专门机制。
 - **迁移成本**：中（DDL 零变更；核心改动集中在 config-svc 5 处 + 前端 3 处 + 新增反向血缘查询）。
 - **依赖**：§2.10 规则模板市场依赖本节就位。
-- **已实装（D77）**：`openspec/changes/cross-scene-rule-ref`——`rule_definition` scene_id→scene_code + DECISION_FLOW RuleRefNode 跨 Scene 引用 + 反向血缘 + 前端 RuleRef 下拉 tenant 全量并按 sceneCode 分组。RuleTemplate / RuleFragment（相似规则批量复用）仍为后续演进。
+- **已实装（D77 + D74）**：
+  - D77（`openspec/changes/cross-scene-rule-ref`）：`rule_definition` scene_id→scene_code + DECISION_FLOW RuleRefNode 跨 Scene 引用 + 反向血缘 + 前端 RuleRef 下拉 tenant 全量并按 sceneCode 分组
+  - D74 模板系统 V2（2026-07-25）：platform 层 `rule_template`(身份)/`rule_template_version`(快照,不可变)/`rule_template_instantiation`(溯源) 三表；SlotKind 拆分（VALUE/METRIC_REF/DECISION_REF/RULE_REF）；SlotRefResolver SPI；实例化流水线（REF pass-through + binder 填 skeleton + PublishService.createDraft）；跨租户可见性（SYSTEM tenant 级模板 → STANDARD tenant 实例化）；核心表零模板列。**RuleTemplate 已覆盖**，RuleFragment（AST 子树提取复用）仍为后续演进。
 
 ### 2.4 规则间依赖与编排（来源 #3）
 
@@ -157,9 +159,9 @@
 
 ### 2.10 规则模板市场（来源 #16）
 
-- **v1 现状**：不考虑平台级规则模板共享。
-- **演进方向**：依赖 2.3（跨 Scene 复用）与 2.9（导出 / 导入）就位后，再考虑平台级模板仓库 + 评分 + 版本管理 + 跨租户分发。
-- **优先级**：低（v3 范畴）。
+- **v1 现状**：D74 模板系统 V2 已落地——platform 层 `rule_template` / `rule_template_version` / `rule_template_instantiation`，跨租户可见性（SYSTEM→STANDARD），实例化流水线。B7 导出/导入也已落地。模板市场的前置依赖（模板本身 + 跨环境搬运）已全部就位。
+- **演进方向**：在现有模板子系统上叠加**发现/评分/分类层**——平台级模板仓库（按 kind/领域/热度浏览）+ 评分/评论 + 版本管理 + 跨租户分发。本质是模板的"应用商店"层，而非模板机制本身。
+- **优先级**：低（v3 范畴，依赖实际多租户运营规模触发）。
 
 ### 2.11 外部系统集成契约标准化（来源 #17）
 
@@ -388,11 +390,17 @@
 
 ### 2.29 场景内独立规则并行求值（来源 gengine 对照 — 见 [`reference-projects.md`](./reference-projects.md) §2.4）
 
-**候选，未立项。触发条件不满足前不实现（守 §2 以简为先）。**
+**已实现（2026-07-23）。场景级 opt-in，默认 SEQUENTIAL 零影响。**
 
-- **想法**：gengine 把"一个场景内多条独立规则并行求值"做成一等执行模型（Concurrent / DAG 层内并行）。本项目评估当前是**同步串行**——`SceneRuleIndex` 命中的 N 条规则逐条 `execute`。对**含多条重规则**的场景（多次 `EXTERNAL_HTTP` 取数、`EXPRESSION_SCRIPT` 重算），并行求值可能是真实吞吐杠杆。
-- **为何暂不做**：① metric 预拉**已批量**（D20 `EvalContextAssembler` 一次取全），取数不是逐规则 N+1，最大的并行收益已被批量吃掉；② 轻量条件规则（`AST_BOOLEAN` 比较）求值本身是纳秒级，并行的调度开销可能大于收益；③ 与 D60 同步纯决策定位需权衡（引入并行=引入线程模型/超时/错误聚合复杂度）；④ D75 `DECISION_FLOW` 的图层已能表达"独立分支"，若需要结构化并行应走图而非隐式并行整个场景。
-- **已实现（2026-07-23）**：`ExecutionMode.PARALLEL` + `ParallelEvaluator`（VirtualThread 并行 fork/join，复用现有汇聚逻辑）。模式与 `SceneExecutionStrategy` 正交，默认 SEQUENTIAL——存量零影响。配置经 `scene.default_params.executionMode` 热更生效，前端 defaultParams 编辑器直接设置。设计见 `openspec/changes/parallel-rule-execution/design.md`。
+- **来源**：gengine 把"一个场景内多条独立规则并行求值"做成一等执行模型（Concurrent / DAG 层内并行）。本项目评估原为**同步串行**——`SceneRuleIndex` 命中的 N 条规则逐条 `execute`，由调研触发对照分析。
+- **实现**：`ExecutionMode enum { SEQUENTIAL, PARALLEL }` + `ParallelEvaluator`（`Executors.newVirtualThreadPerTaskExecutor` fork/join，零新依赖）。模式与 `SceneExecutionStrategy` 正交（ALL_HITS 全量并行、FIRST_HIT 批式并行），汇聚逻辑复用 `evaluateAllCandidates` 语义。设计见 `openspec/changes/parallel-rule-execution/design.md`。
+- **适用面窄（重要）**：metric 预拉已批量（D20），单条 AST_BOOLEAN 规则求值是纳秒级，虚拟线程创建+调度开销 ~µs。JMH benchmark 数据：
+  - 纯 AST_BOOLEAN（20 条轻量规则）：PARALLEL 41,256ns vs SEQUENTIAL 992ns — **42x 负优化**
+  - 混合场景（20 条中 10 条带模拟重计算 ≈ 脚本/Flow）：PARALLEL 75,194ns vs SEQUENTIAL 97,591ns — **1.30x 加速**（交叉点）
+  - 全重（20 条全带计算负载）：PARALLEL 97,484ns vs SEQUENTIAL 192,486ns — **1.97x 加速**
+  
+  **仅在场景含多条重规则（`EXPRESSION_SCRIPT` 复杂脚本 / `DECISION_FLOW` 多阶段图）且候选数 ≥ 3 时，并行才可能带来真实收益**。运营看到 benchmark 数据后自行判断开不开——引擎不替运营做启发式阈值。
+- **为何不进一步**：不做并行度/线程池参数暴露（JDK 虚拟线程无限并行已够）、不做节点级并行（ice P_AND 风格——D75 图层分支等价）、不做引擎侧自适应切换（启发式不可靠，opt-in 更透明）。
 
 > 来源：`00-decisions.md` 各组标题 + `README.md` §七 版本史。按 D 编号顺序，标记"何时做了什么取舍"。
 

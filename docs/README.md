@@ -201,6 +201,7 @@
 
 ```
 0  入口      → README                 我是谁 / 为什么存在 / 一句话架构 / 怎么读下去
+   路线图    → ROADMAP                各产品主线"现在/下一步/未来"一屏概览
 1  概念词典  → 01-concepts            术语 + 心智模型(Event/Rule/Condition/Action/Context)
 2  运行时    → 02-runtime             "从一个事件进来到动作落地"全链路 + 时序图
 3  规则表达  → 03-rule-expression     AST 结构 / 操作符 / 短路 / 节点级 trace
@@ -213,12 +214,14 @@
 10 API 契约 → 10-api-contract        对外接口签名 / DTO / errorCode + i18n（前后端共读）
    案例库    → examples/              端到端真实场景(风控/营销/活动…)
    参考对标  → reference-projects      外部项目结构对照 + 业界对标台账(活文档)
-   归档     → archive/                历史 RFC / 被替换的方案
+   测试覆盖  → 99-functional-test-coverage  端到端功能测试状态追踪(活清单)
+   归档     → archive/                历史 RFC / 被替换方案 / 事故记录
 ```
 
 | 文档 | 解决什么疑问 | 状态 |
 |------|--------------|------|
 | **README** | 这是什么？我该读哪篇？ | ✅ |
+| **ROADMAP** | 各产品主线做到哪了？下一步做什么？ | ✅ |
 | 01-concepts | "Rule / Condition / Action 到底指什么？" | ✅ |
 | 02-runtime | "一个事件进来后，引擎内部发生了什么？" | ✅ |
 | 03-rule-expression | "我能写多复杂的规则？怎么表达嵌套逻辑？" | ✅ |
@@ -230,6 +233,8 @@
 | 09-skeleton | "新代码放哪个模块/包？SPI 接口在哪？业务方依赖哪个 jar？测试怎么组织？" | ✅ |
 | 10-api-contract | "调用方要传什么 / 收到什么？有哪些 errorCode？SDK 怎么用？" | ✅ |
 | examples/ | "真实业务场景长什么样？" | ✅ README 就位（子案例待沉淀） |
+| reference-projects | "外部项目怎么做的？我们吸收了哪些？" | ✅ |
+| 99-functional-test-coverage | "哪些流程已走真服务端到端验证？哪些还没跑？" | ✅ |
 
 **推荐阅读顺序**：
 

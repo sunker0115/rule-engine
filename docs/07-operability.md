@@ -157,6 +157,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | MetricSource (EXTERNAL_HTTP) | 取数超时 | D15 单节点降级 false，EvalResult.errorCode=METRIC_FETCH_FAIL |
 | MetricSource (SQL_AGGREGATE) | DB 慢查询 / 连接池耗尽 | 同上；建议对 SQL 指标设 cache_ttl > 0 |
 | TraceWriter 队列满 | trace 行丢弃 | trace 丢弃 + counter 告警；**不影响** EvalResult |
+| VirtualThread（PARALLEL 模式） | 候选规则数多 → 大量虚拟线程 | 虚拟线程极轻量（堆上几 KB），P99 延迟主导为最慢单条规则；异常规则不影响其余并发（见 08-evolution §2.29 benchmark） |
 
 ### v1 不做的高可用（见 08-evolution）
 
