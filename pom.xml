@@ -5,13 +5,9 @@
                              https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.0</version>
-        <relativePath/>
-    </parent>
-
+    <!-- 无 parent 聚合根：本项目对外发布 rule-kernel / rule-sdk / rule-*-spring-boot-starter，
+         走"库/框架"惯例——不继承 spring-boot-starter-parent，改由 dependencyManagement import
+         spring-boot-dependencies BOM，避免 app 级构建约定强加到可复用产物上。 -->
     <groupId>com.sstlfsj.rule</groupId>
     <artifactId>rule-engine</artifactId>
     <version>${revision}</version>
@@ -45,6 +41,19 @@
     <properties>
         <revision>1.0.0-SNAPSHOT</revision>
         <java.version>25</java.version>
+        <!-- 去 parent 后 java.version 不再自动映射编译级别，显式声明 -->
+        <maven.compiler.release>25</maven.compiler.release>
+        <!-- Spring 参数名绑定（@ConfigurationProperties 构造绑定等）依赖 -parameters -->
+        <maven.compiler.parameters>true</maven.compiler.parameters>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!-- Spring Boot BOM：去 parent 后经 dependencyManagement import 接管 Spring 依赖版本 -->
+        <spring-boot.version>4.1.0</spring-boot.version>
+        <!-- 构建插件版本：BOM 只管依赖不管插件，去 parent 后自管；取值 = boot 4.1.0 parent 同版本 -->
+        <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <maven-failsafe-plugin.version>3.5.6</maven-failsafe-plugin.version>
+        <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
         <spring-modulith.version>2.1.0</spring-modulith.version>
         <mybatis-plus.version>3.5.16</mybatis-plus.version>
         <archunit.version>1.4.2</archunit.version>
@@ -82,11 +91,44 @@
     </properties>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- 去 parent 后自管构建插件版本；spring-boot-maven-plugin 补回默认 repackage execution，
+                     可执行模块(rule-app / rule-rt-bridge)据此打 fat jar（原由 parent pluginManagement 提供） -->
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                    <executions>
+                        <execution>
+                            <id>repackage</id>
+                            <goals><goal>repackage</goal></goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven-failsafe-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>${maven-shade-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <!-- 注解处理器：Lombok 必须在 MapStruct 之前，否则 MapStruct 看不到 Lombok 生成的方法 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
                 <configuration>
                     <annotationProcessorPaths>
                         <path>
@@ -149,6 +191,15 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Spring Boot BOM：去 parent 后以 import 接管全部 Spring / 常用第三方依赖版本 -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- Spring Modulith BOM -->
             <dependency>
                 <groupId>org.springframework.modulith</groupId>
