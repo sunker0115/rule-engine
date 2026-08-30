@@ -61,7 +61,7 @@
         <guava.version>33.2.1-jre</guava.version>
         <lombok.version>1.18.44</lombok.version>
         <mysql-connector-j.version>9.0.0</mysql-connector-j.version>
-        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
+        <flatten-maven-plugin.version>1.8.0</flatten-maven-plugin.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <!-- WireMock standalone：rule-app 集成测试桩外部 HTTP；Spring Boot BOM 未管理 -->
         <wiremock.version>3.12.1</wiremock.version>
