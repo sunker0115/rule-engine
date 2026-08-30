@@ -66,9 +66,9 @@
 | D4 | **动作协议** | ~~声明式优先 + SPI 兜底~~ **已被 D60 作废**（引擎纯决策化，动作子系统整体移除；编排交流程引擎） | — |
 | D5 | **触发模型** | **单事件 + MetricSource 内 SQL 聚合**覆盖 80% 时间窗场景 | v1 不引入 Flink。`RuleEvent` / `MetricSource` 协议允许后续接入序列事件和窗口指标 |
 | D6 | **版本与灰度一等公民** | 规则有版本号，发布即快照不可变；灰度按 % 放量 + 按用户标签命中 | 安全、可回滚、A/B 实验内置。复杂分桶留到接 ABTest 平台时切外部，hash bucket 算法内置兜底 |
-| D7 | **Dry-run 一等公民** | 走完整评估链路（Matcher / Pre-Gate / Context / AST），节点级 trace 落 `dry_run_session`；前端有专门试算面板 | 评估层试算 + 节点级 trace 与真实执行同源；引擎纯决策化后（D60）无动作层，dry-run 即决策输出预览 |
+| D7 | **Dry-run 一等公民** | 走完整评估链路（Matcher / Pre-Gate / Context / 规则求值），节点级 trace 随响应返回且不持久化；前端有专门试算面板 | 评估层试算 + 节点级 trace 与真实执行同源；引擎纯决策化后（D60）无动作层，dry-run 即决策输出预览 |
 | D8 | **性能目标** | **千级 QPS / <500ms 起步**，万级 QPS / <100ms 为下一档目标 | 接口按万级 QPS 设计（候选规则倒排索引、AST 预编译、指标缓存接口）；实现按千级 QPS 起步 |
-| D9 | **持久化分层** | **全 MySQL 起步**，数据保留 30 天 | 运维一致、起步最简。观测到日志表膨胀或查询慢，切冷热分级或引 ClickHouse / ES |
+| D9 | **持久化分层** | MySQL 单库起步；D79 将默认运行、集成测试与生产部署统一为 MySQL | 开发与生产使用同一方言，测试用 Docker 临时数据库。观测到日志表膨胀或查询慢，再切冷热分级或引 ClickHouse / ES |
 | D10 | **AI 评估节点** | **预留 `LLMConditionEvaluator` 接口**，v1 不实现 | `ConditionEvaluator` 接口本就开放，预留零成本；当前 LLM 不确定性大，不适合做核心决策 |
 | D11 | **Job 模式 + 调度器** | **Job 作为 Trigger 适配器**（不是独立第四概念）；**xxl-job 作首个 Scheduler 实现，接口化预留可换** | 定时类规则共用标准评估链路（`eventId = hash(jobRunId + subjectId)` 幂等）；xxl-job 提供 HA / 重试 / admin UI，未来换 Quartz / 云调度仅替换 `Scheduler` Adapter。Job 仅对 PUSH / HYBRID Scene 开放 |
 | D12 | **Rule.kind 多态 + 输出预留** | **六种 kind 均已实装**（`AST_BOOLEAN` v1 / `SCORECARD` D12 / `DECISION_TREE` / `DECISION_TABLE` D42 / `EXPRESSION_SCRIPT` D66 / `DECISION_FLOW` D75）；`Rule.kind` / `EvalResult` 多态字段（顶级 `score?/category?/decision?`，无独立 `output` 包装层）/ `ConditionNode.weight` 由占位转为启用 | 评分卡 / 决策树 / 决策表 / 脚本类形态的演进锚点；现在加列零成本，后期加列要 alter / 改 API 签名。决策流拆两义（D75）：同步纯决策图编排 → 第 6 种 kind `DECISION_FLOW`（已实装）；有状态动作编排 → 流程引擎承载（D60 后交 Flowable/Camunda）；决策集留到 08-evolution `Scene.executionStrategy` |
@@ -95,6 +95,7 @@
 | D75 | **决策图编排层 `DECISION_FLOW`（第 6 种 kind，已实装）** | 加性新增第 6 种 rule kind：图是 DAG（`RuleRef` / `Switch` / `Transform` / `Output` 四种节点），**图只编排、叶子经 `RuleRef` 复用现有 5 形态**。求值加 `FlowExecutor`（第 6 个 `RuleVersionExecutor`），同步无状态；发布期冻结被引规则 ACTIVE 快照 + metric/payload 依赖并集 + 环 / 死节点静态检测。API 走现有 `/admin/v1/rules` 同入口。**注：其 body 承载形态已由 D76 收敛进多态 `RuleBody.FlowBody`** | 对标 GoRules ZEN Engine JDM（决策图 = DAG、叶子是原子决策、图只编排）；填补扁平模型无法表达的"一次评估内多步分支决策流水线"。是 DMN 类同步决策图，**不是 BPMN 类流程引擎**（要"等"归流程引擎，一口气算完归 `DECISION_FLOW`）。详见 [`00-decisions.md`](./00-decisions.md) D75 |
 | D76 | **三承载平铺收敛为多态 `RuleBody`（全栈 L2，已实装）** | `RuleVersion` 三个互斥可空载体（`conditionAst`/`scriptSource`/`flowGraph`+`referencedSnapshots`）收敛为单一 sealed `RuleBody`（`AstBody`/`ScriptBody`/`FlowBody` 三变体，`type` 判别）。DB `rule_version` 四列合并为单 `body JSON`（迁移 V1_40）；kernel/config/API/前端全栈以 `body` 承载。`kind` 保留作 executor 选择器 + 发布期 kind↔body 一致校验（`KIND_BODY_MISMATCH`）；`decisionBindings`/依赖等跨 kind 元数据留平铺 | 加第 7 种 kind = 加一个 body 变体、零 DDL / 零平铺孪生位点；executor 由「读三可空字段+kind 判空」变 `switch(body)` 编译期穷尽。取代 D75 的三承载平铺形态。详见 [`00-decisions.md`](./00-decisions.md) D76 |
 | D77 | **`rule_definition` scene_id→scene_code + DECISION_FLOW RuleRef 跨 Scene 引用（已实装）** | `rule_definition.scene_id`（代理键）改 `scene_code`（业务标识，V1_41），消灭 config-svc 内 sceneCode↔sceneId 翻译层；`ruleCode` tenant 级唯一。D75 的 `RuleRefNode` 由「同 Scene」开放为 **tenant 级跨 Scene 引用**（发布期冻结取被引规则自身 sceneCode，D6 快照隔离 + FlowExecutor 零改动）+ 反向血缘 `GET /admin/v1/rules/{code}/referencedBy`；eval-svc JOIN 改 `(tenant_id, scene_code)`；前端 RuleRef 下拉 tenant 全量并按 sceneCode 分组 | 08-evolution §2.3 跨 Scene 复用的轻量已实装路径（RuleTemplate/RuleFragment 仍为后续演进）。详见 [`00-decisions.md`](./00-decisions.md) D77 |
+| D79 | **运行与验证统一 MySQL** | 默认启动无需 profile，数据源环境变量可覆盖；`mysql` profile 保留严格凭据要求；集成测试和 CI 使用 Docker 临时 MySQL | 取消 D78 的默认内嵌数据库与双数据库门禁，保留 V1 基线及旧库数据保护。详见 [`00-decisions.md`](./00-decisions.md) D79 |
 
 > **派生约束**（由上述决策推出、值得单独标注的工程约定，详见 §六设计原则）：
 >
@@ -177,8 +178,7 @@
 | `ConditionEvaluator` | 纯函数判定 `(ConditionNode node, EvalContext ctx) → boolean`；`actualValue` 由 AST Evaluator 从 EvalContext 提取后写入 node_trace，不在返回值中（见 [`04-extension.md`](./04-extension.md) §2.1） | — |
 | `ConditionTypeRegistry` | 注册中心，启动扫 `@ConditionType` 注解 | — |
 | `RuleEvalVisitor` | 遍历 AST，短路 + 节点级 trace | — |
-| `EvaluationSession` | 一次评估的持久化记录（D23 幂等锚点）：1 行 per event；`status ∈ {HIT/MISS/BLOCKED/ERROR}`（D22 四态）；`(tenant_id, event_id)` DB uk；同步写（D21）；dry-run 写独立 `dry_run_session` 表 | — |
-| `DryRunSession` | 试算评估的隔离记录（D7 + §3.16）：无 UK 约束，同 eventId 可重复 dry-run；不计入生产统计报表；保留期短于生产 | — |
+| `EvaluationSession` | 一次生产评估的持久化记录（D23 幂等锚点）：1 行 per event；`status ∈ {HIT/MISS/BLOCKED/ERROR}`（D22 四态）；`(tenant_id, event_id)` DB uk；同步写（D21）；dry-run 不写入 | — |
 | `Gate` | 准入闸门接口（v1 仅灰度命中 ROLLOUT，D52） | — |
 | `IdempotencyGuard` | Redis trySet + DB uk 双兜底 | — |
 | `ScheduledTask` | 通用调度任务配置：`task_type`（TRIGGER / OUTCOME_INGESTION）+ cron + typed `config`（TRIGGER 为 `TriggerConfig{sceneCode, eventType, subjectQuery}`），按 `TaskExecutor` SPI 分发 | — |

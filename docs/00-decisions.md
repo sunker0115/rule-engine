@@ -10,7 +10,7 @@
 |------|------|--------|
 | **一、产品定位** | D1, D10, D60 | 引擎是什么、边界在哪、不做什么 |
 | **二、核心数据模型** | D2, D3, D4, D5, D6, D11, D12, D13, D26, D27 | 概念边界、数据结构、核心协议 |
-| **三、评估运行时与可靠性** | D14, D15, D16, D17, D20, D22, D23, D24, D25, D7, D8, D9, D18, D19, D21 | 引擎执行、热路径优化、发布运维、排障 |
+| **三、评估运行时与可靠性** | D14, D15, D16, D17, D20, D22, D23, D24, D25, D7, D8, D9, D18, D19, D21, D78, D79 | 引擎执行、热路径优化、发布运维、排障 |
 | **四、精化与派生** | D28, D29, D30 | 主决策的细节推论、易踩坑处理 |
 
 > 决策编号按历史追加顺序排列，阅读时建议按分组顺序（先一二、再三四、最后五）而非 D 编号顺序。
@@ -1598,6 +1598,43 @@ public class AmountFraudRule implements InlineRuleSpec {
 
 ---
 
+## D78. 首次公开版本数据库基线与默认内嵌运行模式 ⭐⭐⭐
+
+> 默认内嵌 H2 与双数据库门禁部分已被 D79 取代；V1 基线、旧库数据保护及其余约束保留。以下正文记录当时的决定与验证。
+
+**背景**：公开前已有 43 个只服务开发过程的 Flyway migration，包含大量已删除对象和过渡 `ALTER`；默认启动又依赖外部 MySQL 和弱开发凭据，不利于外部贡献者复现。
+
+**决策**：
+
+1. 首次公开版本把开发期 migration 收敛为单一 `V1__baseline.sql`，只描述原 `v1.42` 执行后的最终 16 张业务表。公开版本发布后冻结该基线，后续结构变化只新增顺序 migration。
+2. 默认服务使用内嵌 H2 文件数据库并启用 MySQL 兼容模式，克隆后无需安装数据库即可启动；生产部署通过显式 `mysql` profile 使用 MySQL 8.0+。这只改变默认开发体验，不推翻 D9 的生产持久化分层选择。
+3. 数据库门禁分两层：H2 默认启动测试保证开箱运行，Testcontainers MySQL 验证生产方言、JSON、时间精度和索引行为。
+4. 已处于旧 `v1.42` 最终结构的开发库不执行新基线。核对结构后仅重建 `flyway_schema_history` 并标记 `baselineVersion=1`，业务表和业务数据不删不改；结构存在漂移时停止基线化并人工处理。
+5. Docker Compose 仅用于本地开发，密码由未跟踪的 `.env` 注入，所有宿主端口默认只绑定回环地址，Grafana 关闭匿名管理员访问。
+6. 最终结构不保留 `dry_run_session` / `dry_run_node_trace`；dry-run 结果与节点 trace 仅随响应返回，不写生产或专用历史表。
+
+**验证**：在无挂载临时 MySQL 8.4 中完整执行旧 43 个 migration 导出最终结构；新基线分别通过 H2 MySQL 模式和空 MySQL 8.4 迁移；旧结构只重建 Flyway 历史后 `validate/migrate` 通过，业务表数量和种子数据不变。
+
+---
+
+## D79. 运行与验证统一 MySQL
+
+**背景**：默认内嵌数据库与生产 MySQL 的 JSON 往返、统计查询等行为存在差异；为默认启动维护另一套数据库兼容路径，增加了贡献者复现业务问题和验证生产行为的成本。
+
+**决定（2026-08-30）**：取消 D78 的默认内嵌 H2 与双数据库门禁，运行和数据库验证统一使用 MySQL。
+
+**落地范围**：
+
+1. 默认配置直接连接 MySQL，无需激活 profile；连接信息可由 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD` 覆盖。保留 `mysql` profile 作为严格部署模式，要求显式提供这三项配置。
+2. 移除 H2 依赖及其运行、兼容承诺，不引入数据库方言适配层。集成测试与 GitHub Actions 使用 Docker 临时 MySQL，不依赖或连接已有业务数据库。
+3. 默认启动验证沿用应用真实配置，不设置测试 profile 或覆盖 JDBC 驱动；完整门禁验证 V1 迁移、16 张业务表、`SYSTEM` 租户、健康状态及既有业务场景，并核查必要测试报告未缺失或跳过。镜像烟测同样使用临时 MySQL，测试组织见 [09-skeleton §七](./09-skeleton.md#七测试组织)，运行命令与报告清单入口见 [贡献指南](../CONTRIBUTING.md)。
+4. 保留 D78 的 `V1__baseline.sql` 最终结构、现有索引名、公开后冻结基线和后续顺序 migration 规则；本次不修改基线 DDL，不恢复旧索引名。
+5. 原业务库及 `flyway_schema_history` 均不因本决策调整。D78 的旧库基线切换仅在另行核对和安排后执行，业务表及业务数据保护约束保持不变，详见 [05-storage §一](./05-storage.md#一数据库与迁移边界)。
+
+**保留边界**：D9 的 MySQL 单库起步、D78 的 Compose 本地开发与凭据注入要求不变；Docker 完整数据库验证不可用轻量测试或静态检查替代。
+
+---
+
 ## 附：决策汇总表
 
 | # | 决策 | 你的选择 | 备注              |
@@ -1673,5 +1710,7 @@ public class AmountFraudRule implements InlineRuleSpec {
 | D75 | 决策图编排层 `DECISION_FLOW`（第 6 种规则形态）——**已实装** | A | 对标 GoRules ZEN Engine 的 JDM（决策图 = Input→节点→Output 的 DAG，叶子是决策表、`Decision` 节点调子决策；图只做编排、叶子是原子）。填补现有扁平模型（Scene 下平铺规则 + 优先级合成）无法表达的一类需求：**一次评估内把多条决策串成有分支的流水线**（决策 A → 按结果分支 → 决策 B → 输出），跨规则复用 + 多步编排 + 按中间结果分流。**核心判断（加性、不重写）**：`DECISION_FLOW` 是并列的第 6 种 rule kind，**图只编排、叶子仍是现有 5 形态**（经 `RuleRef` 引用，作者用既有表单编辑器写），复用内核 / Metric SPI / 发布灰度血缘。**形态归属 = script 范式非 ast 范式**：body 走平级独立 typed 字段 `FlowGraph flowGraph`（`conditionAst=null`），全链路照抄 `scriptSource` 孪生位点。**四种节点最小集**：`RuleRef`（调一条已有规则）/ `Switch`（按表达式结果分支）/ `Transform`（表达式变换 context）/ `Output`（产出决策），`FlowNode` sealed + Jackson 多态仿 `AstNode`。**求值**：新增 `FlowExecutor implements RuleVersionExecutor`，从 input 顺边遍历，RuleRef 回调单规则求值入口 `execute(snap,ctx)`；同步、无状态、无持久化——是 DMN 类决策图，**不是 BPMN 类流程引擎**。**发布期冻结（复用 `freezeMetricDeps` 模式）**：把 RuleRef 引用规则的 ACTIVE 版本冻进 flow 快照（无 ACTIVE 拒绝发布，对齐 D6 不可变）+ metricDeps 全图并集，评估期 `EvalContextAssembler` 一次取全、零额外查询。**静态分析加维度**：图环检测 + 死节点可达性（仿静态 detector，与现有 7 类「规则集两两」维度正交）。**三条边界红线**：① 不做流程引擎（要长运行有状态编排另立项目，参考 raftkit 拆分先例，规则做被调节点）；② 不做 Function/JS 节点（zen 有 QuickJS，本项目 D60 已纯决策化，`Transform` 只允许表达式走既有 6 引擎、禁任意副作用脚本）；③ 不重写扁平模型（单条规则仍可独立存在，不强制包图）。**触发**：出现「一条规则结果喂另一条 / 多场景复用同段决策 / 决策走多步分支流水线」的真实需求（本轮用户确认此为规划中能力，故落设计稿）。**与既有「决策流不进 Rule.kind」表述的关系（命名双义澄清）**：08-evolution §2.1/§2.4 与 README D12 行早期写的「决策流由流程引擎承载、不进 kind」特指**有状态动作编排**（跨时间、要等待/人工/外部事件的 Rule→Rule 流程，接 Flowable/Camunda，仍成立）；本条 `DECISION_FLOW` 是**同步纯决策图**（一次评估内算完、无状态、高频），与前者不同物，故进 kind。判据 = 要不要「等」：要等归流程引擎，一口气算完归 `DECISION_FLOW`。本条不推翻流程引擎边界，只把「决策流」一词拆成两义。设计见 `specs/2026-07-20-decision-flow-orchestration-design.md`，实现计划见 `plans/2026-07-20-decision-flow-orchestration.md`。 |
 | D76 | 三承载平铺收敛为多态 `RuleBody`（全栈 L2） | A | 把 `RuleVersion` / `RuleVersionSnapshot` 顶层三个按 kind 三选一互斥、另两者恒 null 的承载字段（`conditionAst`(AST 系四形态) / `scriptSource`(EXPRESSION_SCRIPT) / `flowGraph`+`referencedSnapshots`(DECISION_FLOW)）收敛为**一个 sealed `RuleBody`** 多态类型，三变体一一对应：`AstBody(conditionAst)` / `ScriptBody(script)` / `FlowBody(flowGraph, referencedSnapshots)`，`@JsonTypeInfo` 判别 `type`（仿 `AstNode`/`FlowNode`）。**全栈贯穿 L2**：DB `rule_version` **四列收敛为单 `body JSON NOT NULL` 列**（迁移 V1_40，drop `condition_ast`/`script_source`/`flow_graph`/`referenced_snapshots`，存量按原载体转换）；kernel 模型 / config 实体 / DTO(`RuleContent`/`RuleDetailVO`/`RuleVersionContentVO`/`RuleBundle.RuleEntry`) / API 请求响应契约 / 前端一律以 `body` 承载。**`kind` 保留**作 executor 选择器（AST 系四 kind 共用 `AstBody` 但各有 executor），发布期加 **kind↔body 一致性校验**（不符抛 `KIND_BODY_MISMATCH`）。**`decisionBindings`/metric·payload 依赖/preGates/triggerEventTypes 留顶层平铺**（跨 kind 元数据，非三选一）。**加性等价**：六形态求值/发布/分析/导入导出行为不变，纯结构收敛。**动因**：DECISION_FLOW(D75) 落地后暴露「每加一种 kind 要在十余个平铺孪生位点各加可空字段 + 兼容构造器堆积 + kind 判空散落」的债；收敛后加第 7 种 kind = 加一个 `RuleBody` 变体、一列 DDL 一个平铺位点都不动，executor 由「读三可空字段+kind 判空」变 `switch(body)` 编译期穷尽。**收敛过渡工程决定**（非契约）：`RuleVersionSnapshot` 保留 flat 载体便捷构造/builder setter 作输入语法糖（record 状态 body-only）、`AnalyzableRule`/`ResolvedDraft` 保留 typed 分离视图（detector/resolve 内部便利，API/存储边界仍 body）；前端 store 内部保留 ast/script/flowGraph 编辑态，仅 API 边界 wrap/unwrap（`bodyToCarriers`/`carriersToBody`）。**取代 D75「body 走平级独立 typed 字段 flowGraph、照抄 scriptSource 孪生位点」的三承载平铺形态**（历史条目不改，本条声明其平铺形态被收敛）。设计见 `specs/2026-07-23-polymorphic-rulebody-design.md`，实现计划见 `plans/2026-07-23-polymorphic-rulebody.md`。 |
 | D77 | `rule_definition` 去 `scene_id` 改 `scene_code` + 开放 DECISION_FLOW RuleRef 跨 Scene 引用 | A | 把 `rule_definition.scene_id`（BIGINT 代理键→scene.id）改为 `scene_code`（VARCHAR 业务标识，V1_41：drop scene_id/idx_scene_id，add scene_code + idx_tenant_scene），**消灭 config-svc 内 sceneCode↔sceneId 的翻译层**（发布/列表/导出/血缘等处直接用 `RuleDefinition.getSceneCode()`，删 `getSceneCodeMap`/`findBySceneAndCode`/`findByTenantAndSceneIds`）；`ruleCode` 唯一性由 (tenant,scene,code) 收敛为 tenant 级（DB `uk_tenant_code(tenant_id,code)` 本就是 tenant 级，app 校验对齐）。**开放 D75 DECISION_FLOW 的 RuleRefNode 跨 Scene 引用**：`freezeReferencedRule` 由「同 Scene 查」改为 tenant 级 `findByTenantAndCode`，冻结快照的 `sceneCode` 取**被引规则自身**的 sceneCode（非引用方 flow 的 Scene）；D75 发布期冻结 + D6 快照隔离机制不变，评估期 FlowExecutor 零改动。**反向血缘**：`RuleLineageService.findFlowsReferencingRule` 遍历 tenant 下 ACTIVE DECISION_FLOW 的 `FlowBody.referencedSnapshots` 反查引用方，`GET /admin/v1/rules/{code}/referencedBy`。**eval-svc**：`RuleVersionReadMapper` 3 处 `INNER JOIN scene ON rd.scene_id=s.id` 改 `ON rd.tenant_id=s.tenant_id AND rd.scene_code=s.code`。**前端**：RuleRef 下拉由「同场景」改 tenant 全量（排除自身与 DECISION_FLOW 防递归、仅 PUBLISHED），按 sceneCode 分组；新建叶子规则可选目标 Scene。**边界**：kernel/FlowExecutor/SceneRuleIndex/评估链路零改动；`scene` 表本身不改；不考虑历史数据兼容（开发期）。这是 §2.3 跨 Scene 复用的**轻量已实装路径**（RuleTemplate/RuleFragment 相似规则批量复用仍为后续演进）。设计见 `openspec/changes/cross-scene-rule-ref/design.md`，实现计划见 `plans/2026-07-24-cross-scene-rule-ref.md`。 |
+| D78 | 首次公开版本数据库基线与默认内嵌运行模式 | A（部分被 D79 取代） | 保留 `V1__baseline.sql` 与旧库数据保护；默认 H2 和双数据库门禁由 D79 取代 |
+| D79 | 运行与验证统一 MySQL | A | 默认 MySQL 无需 profile，环境变量覆盖；保留严格 `mysql` profile；集成测试与 CI 使用 Docker 临时 MySQL；不修改 V1 DDL、原业务库及 Flyway 历史 |
 
 > README §二决策表 + §四抽象表已按本表落定；01-concepts §三各章节关键边界已对齐。新增决策追加 D22+ 后回填本表 + README §二 + 相关概念关键边界。

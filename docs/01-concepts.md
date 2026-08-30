@@ -266,7 +266,7 @@ DecisionRef {
 - **运行时锁定快照版本**（D17 派生）：evaluation_session 开始时拍当前候选规则版本快照，整 session 用同一快照——即使中途发生 publish 切版本，本次评估不受影响。索引热更：单服务模式由 Modulith `RulePublishedEvent` 触发（毫秒级）；嵌入式 SDK 模式由 `DbPollingRuleWatcher`（默认 15s 轮询）触发（15s 最终一致）。
 - **草稿即冻结快照，校验前移到草稿写入期**（premise A，D56）：createDraft / editDraft / newVersion 时即跑全套 `resolveAndValidate`（metric 须 ACTIVE、payload 字段须在 `Scene.payloadSchema` 声明、decision 须存在、kind 结构 + 算子×dataType 校验），不过即拒（400），不落库非法草稿。落库的 DRAFT 行已是完整冻结快照（`resolvedAst` 含 dataType、`metric_dependencies`/`payload_dependencies` 已冻、`decision_bindings` 含 `name`、`trigger_event_types` 是草稿自己声明的值）。**publish 退化为激活**：把最新 DRAFT 行原地翻 ACTIVE（不增版本、不重解析），supersede 旧 ACTIVE，单事务内迁状态 + 写 audit_log + 发 `RulePublishedEvent`；保证"dry-run 预览 == 发布"。版本号只在 createDraft（v1）/ newVersion（v_max+1）产生，editDraft 原地、publish 激活都不增。批量发布由前端拆成逐条调用，v1 不提供批量原子 API。
 - **"回滚到旧版本" = newVersion 带 `fromVersionId`**（D19/D56）：克隆指定旧版本的输入意图、按当前世界重新解析冻结产出 `v_max+1` DRAFT，再显式 publish 激活；不可变快照永不覆盖。
-- **删草稿边界**（D56）：deleteRule 仅删从未发布过的规则（无 ACTIVE/SUPERSEDED），级联删 `rule_definition` + 全部 `rule_version`；deleteDraftVersion 仅删 DRAFT 版本行；碰 ACTIVE/SUPERSEDED 一律拒（只能 disable）。级联范围只 `rule_version`/`rule_definition`，dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`）视同审计历史不级联删，靠 TTL 退休。
+- **删草稿边界**（D56）：deleteRule 仅删从未发布过的规则（无 ACTIVE/SUPERSEDED），级联删 `rule_definition` + 全部 `rule_version`；deleteDraftVersion 仅删 DRAFT 版本行；碰 ACTIVE/SUPERSEDED 一律拒（只能 disable）。级联范围只 `rule_version`/`rule_definition`；dry-run 不持久化，不参与级联。
 - **DISABLED 状态从倒排索引剔除**（D17 + D19 派生）：`PUBLISHED → DISABLED` 切换后，下一次索引热更（单服务模式：事件触发，毫秒级；SDK 模式：15s 轮询）将该 RuleVersion 从内存 `(scene, eventType) → List<RuleVersionSnapshot>` 倒排索引中剔除；`DISABLED → PUBLISHED` 切换则按同一窗口重新入索引。`current_version` 指针在切换过程中**不变**（D19）——索引剔除/回填只动运行时视图，不动 `rule_version` 表内容。
 
 ### 3.5 AST 与"分组心智"
@@ -346,7 +346,7 @@ EvalContext {
 }
 ```
 
-> **`traceId` / `dryRun` 不是 EvalContext 字段**：链路 ID 走 MDC / OTel 横切层（见 §3.3）；dry-run 是引擎内部路由标志，由 `EvalServiceImpl.doEvaluate` 单独以 `isDryRun` 入参传递（true 时 TraceWriter 写 `dry_run_session` 系列表而非 prod 表，D7/D21），不进 EvalContext。
+> **`traceId` / `dryRun` 不是 EvalContext 字段**：链路 ID 走 MDC / OTel 横切层（见 §3.3）；dry-run 通过独立的单版本试算入口执行，结果和节点 trace 直接随响应返回，不进 EvalContext，也不写评估历史表。
 
 **AST 条件表达式的内置可寻址路径**（D20 §3 闭合枚举——发布期输入引用闭合校验的根路径表）：
 
@@ -504,7 +504,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 - **Job 不增加抽象层**：Job 只是 Trigger 适配器，业务层规则、AST、Decision 模型完全不变。
 - **仅 PUSH / HYBRID Scene 可绑定 Job**：PULL Scene 是同步业务调用语义，定时触发没意义；发布拒绝 + UI 屏蔽。
-- **幂等 = Redis trySet + DB uk 双兜底**：`eventId = hash(jobRunId + subjectId)` 落 `evaluation_session` 的 eventId 列，`evaluation_session(tenant_id, event_id)` 维持 DB unique key 作为"下半层"兜底（Redis trySet 是上半层快速路径，DB uk 是持久化最终校验，D11 / D21 均依赖此双层结构）；重跑同一 jobRun 不会重复评估。具体 DDL 详见 [`05-storage.md`](./05-storage.md)。
+- **事件标识与去重边界**：`evaluation_session(tenant_id, event_id)` 唯一键只去重异步审计记录；当前没有 Redis 请求去重，不能保证重跑任务不重复评估。需要禁止重复业务执行时，由接入方或执行方实现幂等。具体存储语义见 [`05-storage.md`](./05-storage.md)。
 - **rateLimit 是注入端控制**：调度器按 `rateLimit` 缓冲注入，下游 Matcher / 评估链路不需要再做令牌桶。
 - **Job 与规则灰度独立**：Job 负责"对谁发事件"，规则的 ROLLOUT 灰度仍按命中算法决定"对哪些主体最终命中"——Job 不要做灰度抽样，二级灰度逻辑只会让排障复杂。
 - **灰度桶计算时机**（D6 + D11 派生）：所有 RuleEvent（含 Job 合成）的灰度桶在**引擎 Pre-Gate 阶段**按 `hash(subjectId, experimentId ?? ruleVersionId)` 算（D6）；Job 端只负责合成 RuleEvent 注入，**不**在调度器端预算桶 / 预筛主体——预算桶会让 Job 与具体 RuleVersion 形成隐式耦合，违反"Job 不要做灰度抽样"约束。
@@ -563,7 +563,7 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 - **冻结快照**（D6 / D56）：ACTIVE / SUPERSEDED 行永不 UPDATE、永不 DELETE。DRAFT 行可经 editDraft 原地更新（同 version，premise A 下仍是完整冻结快照）、可经 deleteDraftVersion 删除；publish 把 DRAFT 翻 ACTIVE 后即不可变。
 - **回滚不是覆盖**（D19 / D56）：回滚到 `version=N-2` = newVersion 带 `fromVersionId=<N-2 的 id>`，克隆 N-2 的输入意图、按当前世界重解析冻结产出 `version=N+1` DRAFT，再显式 publish 激活；审计链完整可追溯，旧行均原样保留。
-- **删草稿边界**（D56）：deleteRule 仅删从未发布规则（无 ACTIVE/SUPERSEDED）级联全部 `rule_version`；deleteDraftVersion 仅删 DRAFT 行；碰 ACTIVE/SUPERSEDED 拒绝（只能 disable）。dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`）不级联删，靠 TTL 退休。
+- **删草稿边界**（D56）：deleteRule 仅删从未发布规则（无 ACTIVE/SUPERSEDED）级联全部 `rule_version`；deleteDraftVersion 仅删 DRAFT 行；碰 ACTIVE/SUPERSEDED 拒绝（只能 disable）。dry-run 不持久化，不参与级联。
 - **运行时锁定**（D17 派生）：`evaluation_session` 开始时按 `(scene, eventType)` **倒排索引**拿当前候选 `rule_version` 列表（`current_version` 在索引预热时已解析）并拍快照，整 session 用同一组版本——即使中途切版本，本次评估不受影响。
 - **灰度桶稳定性**（D6 派生）：`hash(subjectId, experimentId ?? ruleVersionId)` 计算桶号，每个不可变版本对应稳定的桶分布；版本切换会触发桶漂移，这是 D6 的固有语义。`subjectId` 由 Scene.subjectType 决定语义（v1 仅 USER 实装），与 §3.10 Job / §3.4 ROLLOUT 灰度口径一致。
 - **与 `node_trace` 的关联**：`node_trace` 以 `session_id` 为外键，并记 `rule_version_id` 便于按版本对账 trace。
@@ -617,78 +617,35 @@ SPI 仅保留「注册 / 撤销 cron 任务」最小职责（cron → Runnable�
 
 ### 3.15 EvaluationSession（评估会话，非一等公民）
 
-**是什么**：一次 RuleEvent 处理的持久化记录，每次引擎受理 RuleEvent 产生 **1 行**；同时充当幂等守护的 DB 下半层（D23，Redis trySet 是上半层快速路径，DB uk 是持久化最终校验）。对应的 `node_trace` 行以 `session_id` 为锚。
+**是什么**：有候选规则的正式评估完成后异步写入的审计记录。唯一键 `(tenant_id, event_id)` 只防重复记录，不保证同一事件只求值一次。无候选、dry-run 或异步写入失败时可能没有记录。
 
-**字段**：
-
-| 字段 | 说明 |
-|------|------|
-| `id` | PK，雪花 BIGINT（概念上称 session_id） |
-| `tenant_id` | 租户 ID |
-| `event_id` | 业务事件 ID；与 `tenant_id` 构成 **DB 唯一键**（D23），防重复评估 |
-| `scene_code` | 场景码（Matcher 路由键，DDL 列名 `scene_code`） |
-| `event_type` | 事件类型 |
-| `subject_id` | 主体 ID |
-| `status` | `PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态终态）/ `FAILED`（引擎异常崩溃，未正常结束）；D22 四态是对账统计口径，`PENDING` / `FAILED` 是运行时中间态，不参与对账分母 |
-| `blocked_by` | nullable；拦截 Gate 类型（D52 收敛后仅 `ROLLOUT`）；仅 `status=BLOCKED` 时有值，记录首个命中的拦截类型 |
-| `error_code` | nullable；D15 `EvalResult.errorCode`；仅 `status=ERROR` 时有值 |
-| `candidate_rule_count` | Matcher 命中的候选 RuleVersion 数量 |
-| `hit_rule_count` | AST 求值满足（HIT）的 Rule 数量 |
-| `source` | `HTTP / MQ / JOB / SDK / REPLAY`（D49）；记录**事件来源渠道**，取自 `RuleEvent.source`（由注入入口权威设置）；不改幂等语义（D23：`source=REPLAY` 仅作来源标记） |
-| `mode` | `PUSH / PULL`（D49）；记录**评估模式**，由 EvalService 入口判定（`acceptEvent`=PUSH 异步 / `evaluate`·`dryRun`=PULL 同步）；与 `source` 渠道正交——Job 触发走 `acceptEvent` 故 mode=PUSH、source=JOB |
-| `occurred_at` | 业务事件发生时间（来自 RuleEvent.occurredAt，非引擎收到时间） |
-| `started_at` | 评估开始时间 |
-| `finished_at` | 评估结束时间 |
-| `eval_duration_ms` | 整 session 耗时（ms） |
-| `context_snapshot` | nullable JSON；EvalContext 构建完成后的快照，已在 B20 升级为嵌套结构 `{"metrics": {metricCode: value, ...}, "evalNow": "<ISO-8601 instant>"}`，其中 `metrics` 为各指标取数结果，`evalNow` 为本次评估注入的 `EvalContext.now`（统一时钟）；用于 dry-run 重放时还原历史 metric 值及时间点，避免重放时取到当前新值；EvalContext 构建失败（`status=ERROR, errorCode=METRIC_FETCH_FAIL`）时为 null |
-
-**`status` 聚合语义**（session 结束时由引擎按规则集合结果填充）：
-
-| 规则集合结果 | `status` |
-|------------|---------|
-| ≥1 条 Rule AST 求值为 true | `HIT` |
-| 进入 AST 的 Rule ≥1 条且 ≥1 条 AST 评估出 ERROR（D15） | `ERROR` |
-| 进入 AST 的 Rule ≥1 条且全部 AST false | `MISS` |
-| 全部候选 Rule 均被 Pre-Gate 拦截，0 条进入 AST | `BLOCKED` |
-
-> 优先级：`HIT > ERROR > MISS > BLOCKED`（只要有一条 HIT 就是 HIT；BLOCKED 只在无任何 Rule 进入 AST 时才用）。
-
-**关键边界**：
-
-- **同步写（D21）**：`evaluation_session` 行在 `EvalResult` 返回前同步写入；单行 INSERT，量小，延迟可忽略；
-- **生产专用**：dry-run 场景写独立的 `dry_run_session` 表（§3.16），不污染生产幂等键；
-- **与 `node_trace` 的关联**：`node_trace` 以 `session_id` 为外键关联，可从 session 横向拉出完整评估链路；
-- **与 `rule_version` 的关联**：`node_trace` 记 `rule_version_id` 提供按版本对账路径（§3.12 派生）；
-- **`context_snapshot` 写入时机**：EvalContext 构建成功后、进入 AST 评估前，由评估线程同步写入 `evaluation_session` 行（与 session INSERT 同事务，开销为一次 JSON 序列化）；构建失败时置 null，不阻塞 session 落库；
-- **DDL**：见 [`05-storage.md`](./05-storage.md) §evaluation_session 表。
-
-### 3.16 DryRunSession（试算会话，非一等公民）
-
-**是什么**：dry-run 试算（D7）产生的独立会话记录，存放在 `dry_run_session` 系列表中，**不受生产幂等约束**——同一 eventId 可以重复 dry-run，不会与生产评估相互干扰。
-
-**与 EvaluationSession 的关键差异**：
-
-| 维度 | `evaluation_session`（生产） | `dry_run_session`（试算） |
-|------|--------------------------|------------------------|
-| 唯一键 | `(tenant_id, event_id)` UK | 无 UK 约束，同 eventId 可多次 dry-run |
-| 关联 trace | `node_trace` | `dry_run_node_trace` |
-| 计入统计报表 | 是（HIT/MISS/BLOCKED/ERROR 汇总） | 否 |
-| 保留时长 | 30 天（D9） | 短于生产（由 07-operability 定，建议 7 天） |
-
-**额外字段**（在 `evaluation_session` 基础上新增）：
+**字段分组**：
 
 | 字段 | 说明 |
 |------|------|
-| `rule_version_id` | NOT NULL；本次 dry-run 实际评估使用的 RuleVersion id（由 `target_rule_version_id` 或 `current_version` 解析得出） |
-| `trigger` | `MANUAL` / `API`；dry-run 触发来源（MANUAL=运营从管理台手动发起，API=调用方通过接口触发） |
-| `requested_by` | 发起 dry-run 的操作人 ID（来源 `X-Actor-Id` header，D14） |
-| `target_rule_version_id` | nullable；调用方指定 dry-run 的目标 RuleVersion；未指定时使用 `current_version`（可提前预览未发布版本效果） |
-| `context_snapshot` | 同 §3.15；dry-run 场景下为本次试算时真实取到的 metric 快照，方便运营对比"重放时 metric 值"与"当前 metric 值"的差异 |
+| `id` / `tenant_id` / `event_id` | 预生成的雪花 ID、租户与业务事件标识 |
+| `scene_code` / `event_type` / `subject_id` | 事件路由及主体 |
+| `source` / `mode` | 来源渠道与 PUSH/PULL 评估模式，二者正交（D49） |
+| `status` / `blocked_by` / `error_code` | 审计终态、首个拦截门与错误码 |
+| `final_decision` / `hit_decisions` / `score` / `category` | 决策输出 |
+| `occurred_at` / `started_at` / `finished_at` / `eval_duration_ms` | 事件时间与评估耗时 |
+| `context_snapshot` / `payload` / `candidate_rule_version_ids` | 受快照开关控制的忠实重放材料 |
+
+**状态聚合**：结果含 `errorCode` → `ERROR`；否则含 `blockedBy` → `BLOCKED`；否则 `ruleHit=true` → `HIT`；其余 → `MISS`。枚举保留 `PENDING / FAILED`，但当前审计路径不写这两个状态。
 
 **关键边界**：
 
-- **dry-run 行为全定义在 §五 Q10**：本节只定义存储结构，不重复 Q10 的副作用 / 短路规则；
-- **DDL**：见 [`05-storage.md`](./05-storage.md) §dry_run_session 表。
+- 正式评估产出结果后发布 `AuditRecordedEvent`；`AuditPersister` 非阻塞入队，在虚拟线程中批量 INSERT 终态。
+- 这是 best-effort 观察通道：队满、进程退出或写库失败可能丢失记录，不影响已产出的评估结果。
+- `node_trace.evaluation_session_id` 是逻辑关联，不建数据库外键；session 与 trace 可能部分写入成功，必须检查日志和真实落库。
+- `context_snapshot` 仅在 `engine.rule.audit.context-snapshot.enabled` 开启时由异步消费者序列化写入；上下文缺失或序列化失败时为 null。
+- 表字段、索引与保留期见 [05-storage](./05-storage.md)；队列及故障边界见 [07-operability](./07-operability.md)。
+
+### 3.16 Dry-run（即时试算，不持久化）
+
+dry-run 按 `ruleVersionId` 精确试跑，或按 `ruleId` 取最新版本（含 DRAFT）试跑。它复用真实的取数、Pre-Gate、求值和决策合成逻辑，但不写 `evaluation_session`、`node_trace`、`audit_log` 或任何专用历史表；结果和嵌套节点 trace 仅随当前 HTTP 响应返回。
+
+因此同一 `eventId` 可以重复 dry-run，不受生产 `(tenant_id, event_id)` 幂等约束，也没有独立保留期或清理任务。需要长期留痕时由调用方保存已脱敏的响应，或另行设计受控的试算审计能力。
 
 ### 3.17 / 3.18 Action 子系统（已整体移除，D60）
 
@@ -956,21 +913,21 @@ AndNode (displayLabel: "金额门槛")
 
 ### Q10: dry-run 试算时这些概念有何不同？
 
-dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 / AST 评估 / trace 落库），产出与正式评估一致的决策预览（`finalDecision` / `hitDecisions`），只是 trace 落 `dry_run_session`、不落 `evaluation_session`。引擎纯决策化后无副作用入口（D60），dry-run 与正式评估的差异仅在落库目标。
+dry-run 复用取数、Pre-Gate、规则求值和决策合成链路，产出与正式评估一致的决策预览（`finalDecision` / `hitDecisions`）及当前请求的节点 trace。它不进入生产 session 持久化链路，也不写任何专用 dry-run 表。
 
-**核心原则：判定执行，副作用不落**。dry-run 期望"看见会发生什么"，而不是"真的发生"，所以所有有副作用的环节都要透传 `dryRun=true` 标志并自行短路写副作用：
+**核心原则：判定执行，副作用不落**。dry-run 先解析目标版本，恒走单版本分支并在产出结果后返回，结构上不进入生产审计事件发布路径，不依赖各环节自行短路写入：
 
 | 环节 | dry-run 行为 |
 |------|--------------|
 | **Pre-Gate 灰度命中**（ROLLOUT，v1 唯一 Pre-Gate） | 纯只读判定，无副作用差异（hash 算法稳定，不依赖状态） |
 | **EvalContext 构建（取 metric）** | 真实取数（dry-run 期望看到真实指标值），但**走只读路径**，不触发预聚合写回 |
-| **AST 评估 + 节点 trace** | 真实评估、真实节点 trace；trace 写入 `dry_run_session` 表，不进 `evaluation_session` |
+| **规则评估 + 节点 trace** | 真实评估、真实节点 trace；trace 只随响应返回，不持久化 |
 | **决策合成（finalDecision / hitDecisions）** | 真实合成，预览结果随 dry-run 响应返回 |
 | **审计 `audit_log`** | 不写入（dry-run 不是发布操作） |
 
 **为什么 Pre-Gate 判定要执行**：运营试算的核心诉求之一就是"看见这个用户会不会被灰度门槛拦下"——如果 Pre-Gate 一律跳过，trace 就缺失了关键信息；正确做法是判定执行但不落副作用。
 
-**dry-run 与正常评估几乎等价**（引擎纯决策化后无动作派发，D60）——区别仅在：1) trace 落 `dry_run_session` 表；2) 不落 `evaluation_session`。
+**dry-run 与正常评估的判定语义等价**（引擎纯决策化后无动作派发，D60）；区别是 dry-run 的结果与 trace 只随响应返回，不写生产或专用历史表。
 
 详见 [07-operability](./07-operability.md) §试算面板。
 
@@ -1013,7 +970,7 @@ dry-run 复用**全部**评估链路（Matcher / Pre-Gate / EvalContext 构建 /
 | 前端怎么把这些概念画成 UI | [06-frontend](./06-frontend.md) |
 | 幂等 / 灰度 / dry-run / 监控的运营细节 | [07-operability](./07-operability.md) |
 | 生产评估持久化（字段表 / 四态 `status` 聚合） | §3.15 EvaluationSession |
-| dry-run 试算会话（隔离表、可重复运行） | §3.16 DryRunSession |
+| dry-run 即时试算（结果与 trace 不持久化） | §3.16 Dry-run |
 | 引擎纯决策化，动作子系统移除（D60） | §3.7（已移除说明）+ [00-decisions D60](./00-decisions.md) |
 | Tenant 级决策码定义（REJECT / REVIEW / PASS 等） | §3.19 Decision |
 | Rule 与 Decision 的绑定关系 + 多规则命中合成策略 | §3.20 RuleDecisionBinding |

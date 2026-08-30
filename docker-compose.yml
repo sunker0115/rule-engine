@@ -2,14 +2,16 @@ services:
   mysql:
     image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: rule_engine
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-rule_engine}
+      MYSQL_USER: ${MYSQL_USER:-rule_engine}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -18,12 +20,13 @@ services:
   otel-lgtm:
     image: grafana/otel-lgtm:0.11.5
     ports:
-      - "3000:3000"   # Grafana UI
-      - "4317:4317"   # gRPC OTLP
-      - "4318:4318"   # HTTP OTLP
+      - "127.0.0.1:3000:3000"   # Grafana UI
+      - "127.0.0.1:4317:4317"   # gRPC OTLP
+      - "127.0.0.1:4318:4318"   # HTTP OTLP
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
     healthcheck:
       test: ["CMD", "curl", "-f", "-s", "http://localhost:3000/api/health"]
       interval: 5s
@@ -36,11 +39,12 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_PROFILES_ACTIVE: mysql
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-rule_engine}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-rule_engine}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-lgtm:4318/v1/metrics
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-lgtm:4318/v1/traces
       OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-lgtm:4318/v1/logs

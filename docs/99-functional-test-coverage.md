@@ -17,7 +17,7 @@
 |---|---|---|---|---|
 | PULL 评估 `/evaluate`(命中/未命中) | `EvalController.evaluate` | ✅ | 示例 / 2026-06-10 | 含 payload 注入、`evaluation_session` + `node_trace` 落库 |
 | 评估期入参校验(缺必填/类型不符 → 400) | `EvalServiceImpl` + `PayloadInputValidator` | ✅ | 2026-06-10 | `MISSING_REQUIRED_INPUT` / `INPUT_TYPE_MISMATCH` |
-| dry-run `/dry-run?ruleVersionId=`(精确版本) | `EvalController.dryRun` | ✅ | 2026-06-10 | `dry_run_session` + `dry_run_node_trace` 落库;**本轮逮并修了 actual_value JSON bug** |
+| dry-run `/dry-run?ruleVersionId=`(精确版本) | `EvalController.dryRun` | ✅ | 2026-06-10 | 结果与节点 trace 随响应返回，不落生产或专用历史表 |
 | dry-run `/dry-run?ruleId=`(取最新版本含 DRAFT,D56) | `EvalController.dryRun` | ✅ | 2026-06-11 | 取到 v2 DRAFT(ruleVersionId=1756),trace 对;`evaluation_session`=0 —— 无副作用 ✅ |
 | dry-run 无 target → 400 `MISSING_DRYRUN_TARGET`(D56) | `EvalController.dryRun` | ✅ | 2026-06-11 | 不传 ruleId/ruleVersionId → 400 + "MISSING_DRYRUN_TARGET: 必须指定 ruleId 或 ruleVersionId" |
 | ~~dry-run 场景级副作用 BUG~~(D56 已根除) | `EvalServiceImpl.dryRun` | ✅ | 2026-06-11 | D56 **结构根除**已真服务验证:dry-run 恒走带版本单快照分支,不落 `evaluation_session`;不再靠 `isDryRun` 逐处门控 |
@@ -83,7 +83,7 @@
 
 | 流程 | 入口 | 状态 | 验证 | 备注 |
 |---|---|---|---|---|
-| 数据保留清理(4 表) | `TraceRetentionCleaner` / `SessionRetentionCleaner`(`@Scheduled`) | ✅ | 2026-06-10 | evaluation_session/node_trace 直接验;dry_run 两表同款路径(D60 后无 action_execution 表)|
+| 数据保留清理(2 表) | `TraceRetentionCleaner` / `SessionRetentionCleaner`(`@Scheduled`) | ✅ | 2026-06-10 | `evaluation_session` / `node_trace` 直接验；dry-run 不持久化 |
 
 ---
 

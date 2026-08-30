@@ -1,6 +1,6 @@
 # rule-engine — 通用规则引擎产品
 
-本仓库是**通用规则引擎产品**的设计与实现库,从 `cpt/integrate-service` 的 `docs/rule-engine/` 抽离独立。
+本仓库是**通用规则引擎产品**的设计与实现库。
 
 ## 目录划分
 

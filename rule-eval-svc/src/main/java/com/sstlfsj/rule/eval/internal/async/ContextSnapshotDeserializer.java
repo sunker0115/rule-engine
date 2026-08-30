@@ -1,7 +1,6 @@
 package com.sstlfsj.rule.eval.internal.async;
 
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
+import com.sstlfsj.rule.eval.internal.domain.EvaluationContextSnapshot;
 
 import java.time.Instant;
 import java.util.Map;
@@ -22,18 +21,11 @@ public final class ContextSnapshotDeserializer {
     /**
      * 反序列化 context_snapshot。
      *
-     * @param om   全局 ObjectMapper
-     * @param json context_snapshot 列内容
-     * @return 解析结果；json 为 null/空时 metrics 为空 map、evalNow 为 null
+     * @param snapshot context_snapshot 列内容
+     * @return 解析结果；snapshot 为 null 时 metrics 为空 map、evalNow 为 null
      */
-    @SuppressWarnings("unchecked")
-    public static Snapshot deserialize(ObjectMapper om, String json) {
-        if (json == null || json.isBlank()) return new Snapshot(Map.of(), null);
-        Map<String, Object> root = om.readValue(json, new TypeReference<Map<String, Object>>() {});
-        Map<String, Object> metrics = root.get("metrics") instanceof Map
-                ? (Map<String, Object>) root.get("metrics") : Map.of();
-        Object evalNow = root.get("evalNow");
-        Instant ts = evalNow != null ? Instant.parse(evalNow.toString()) : null;
-        return new Snapshot(metrics, ts);
+    public static Snapshot deserialize(EvaluationContextSnapshot snapshot) {
+        if (snapshot == null) return new Snapshot(Map.of(), null);
+        return new Snapshot(snapshot.metrics() != null ? snapshot.metrics() : Map.of(), snapshot.evalNow());
     }
 }

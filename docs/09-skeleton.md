@@ -38,7 +38,7 @@
 | `rule-eval-svc` | 评估入口（PUSH/PULL/dry-run）、metric 预拉、session 落库 | Spring 模块，内嵌于主服务 |
 | `rule-job-svc` | 通用调度任务框架（D11 / D73） | Spring 模块，内嵌于主服务 |
 | `rule-job-xxl` | xxl-job 调度适配器（`XxlJobSchedulerAdapter`） | Spring 模块，按需引入 |
-| `rule-audit-svc` | 审计查询、dry-run 结果存储、日志聚合 | Spring 模块，内嵌于主服务 |
+| `rule-audit-svc` | 审计查询、日志聚合 | Spring 模块，内嵌于主服务 |
 | `rule-observability` | TraceWriter DB 实现、Prometheus 指标名常量、告警默认配置 | Spring 模块，内嵌于主服务 |
 | `rule-api` | 所有 HTTP controller（三类受众前缀 `/admin/v1`、`/api/v1`、`/sdk/v1`） | Spring 模块，内嵌于主服务 |
 | `rule-app` | Spring Boot 启动类，组装所有模块，无业务逻辑 | 可执行 jar（主服务） |
@@ -112,7 +112,7 @@ com.sstlfsj.rule
 │   │   └── service                 # AuditService（审计查询，供 rule-api 调用）
 │   └── internal
 │       ├── repository              # MyBatis-Plus Mapper
-│       └── listener                # DryRunCompletedEvent 监听，落 dry_run_session
+│       └── listener                # 配置审计事件监听与落库
 │
 ├── observability                   # rule-observability 模块
 │   ├── api
@@ -223,6 +223,8 @@ rule-app ──► 所有模块（组装层，不含业务逻辑）
 
 **主配置**：`rule-app/src/main/resources/application.yml`，统一入口，按模块分块注释。
 
+**数据库配置（D79）**：默认配置使用 MySQL，无需激活 profile，可由 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD` 覆盖；`application-mysql.yml` 保留生产部署的严格模式，要求显式提供三项连接配置。
+
 **命名空间**：`engine.rule.*`，全部配置项默认值见 [`07-operability.md`](./07-operability.md) §九运维参数表。本节只列结构，不列默认值。
 
 ```yaml
@@ -247,7 +249,6 @@ engine:
       batch-size: ...
       evaluation-session-days: ...
       node-trace-days: ...
-      dry-run-session-days: ...
     observability:
       # 告警阈值，由 rule-observability 模块绑定
       eval-error-rate-threshold: ...
@@ -303,7 +304,8 @@ rule-app/src/test/java/com/sstlfsj/rule/app/
 
 ### 7.3 集成测策略
 
-- **DB 用真实 schema**：集成测使用 Testcontainers MySQL，不 mock 数据库（避免 mock 与生产迁移行为分歧，对应 07-operability.md 测试原则）
+- **统一 MySQL 门禁（D79）**：默认配置启动测试和涉及 JSON、时间精度、索引或生产 SQL 的集成测试均使用 Testcontainers 临时 MySQL，不 mock 数据库、不连接已有业务库。`MySqlDatabaseStartupTest` 不设置测试 profile 或覆盖 JDBC 驱动，验证 V1、16 张业务表、`SYSTEM` 租户及健康状态 `UP`
+- **完整报告与镜像验证**：门禁覆盖四个 MySQL 集成测试类、三个端到端场景和默认启动测试共八类，权威清单为 `scripts/verify_database_tests.py`，不允许缺失、失败或跳过；CI 镜像烟测使用 `scripts/verify_mysql_image.sh` 创建的临时 MySQL，执行方式见 [贡献指南](../CONTRIBUTING.md)
 - **Scene / Rule 端到端用例**：覆盖 PUSH / PULL / dry-run 三种模式 + 灰度路由 + Pre-Gate 拦截
 - **幂等验证**：相同 `idempotency_key` 重复请求，验证 `evaluation_session` 只写一条
 - **Modulith 边界测试**：`@ApplicationModuleTest` 覆盖所有模块，检测非法跨模块访问
@@ -332,7 +334,7 @@ v1 阶段以下模块暂时合并，v2 触发时按对应演进锚点拆分：
 | 暂时合并的内容 | 合并原因 | v2 拆分触发条件 | 演进锚点 |
 |-------------|---------|---------------|---------|
 | `rule-job-svc` 调度任务（Scheduler）与主服务同进程内嵌 | v1 评估量不足以独立部署调度服务 | 调度任务资源抢占影响评估 P99 | [`08-evolution.md`](./08-evolution.md) §2.4 |
-| `rule-audit-svc` 含 dry-run 结果存储 | v1 审计量小，独立部署成本高 | trace / 审计数据膨胀导致存储独立扩容需求出现 | [`08-evolution.md`](./08-evolution.md) §2.5 |
+| `rule-audit-svc` 与主服务同进程 | v1 审计量小，独立部署成本高 | trace / 审计数据膨胀导致存储独立扩容需求出现 | [`08-evolution.md`](./08-evolution.md) §2.5 |
 | `rule-kernel` 不单独发布到 Maven 仓库 | v1 无外部 SDK 使用方 | 外部业务方需要嵌入式 SDK 接入 | [`08-evolution.md`](./08-evolution.md) §2.14 |
 | `rule-kernel-polling`（独立 artifact）未发布到 Maven 仓库 | v1 无外部 SDK 使用方，无需对外发布 | 外部业务方需要嵌入式 SDK 接入 | [`08-evolution.md`](./08-evolution.md) §2.14 |
 

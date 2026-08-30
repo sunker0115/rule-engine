@@ -20,6 +20,11 @@ src/checkstyle/
 .DS_Store
 Thumbs.db
 
+# Local runtime data and secrets
+.env
+.env.local
+data/
+
 # Logs
 *.log
 logs/

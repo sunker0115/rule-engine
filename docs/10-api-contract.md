@@ -135,7 +135,7 @@ POST /api/v1/rule/dry-run
 
 - 两者都不传 → 400 `MISSING_DRYRUN_TARGET`（见 §七）。
 - 两者都传时以 `ruleVersionId` 为准（精确版本优先）。
-- dry-run 恒走"带版本单快照"分支：**不写 `evaluation_session`**，dry-run 痕迹按需落 `dry_run_session` / `dry_run_node_trace`（与正式评估隔离，D7）。
+- dry-run 恒走"带版本单快照"分支：**不写 `evaluation_session`、`node_trace` 或任何专用历史表**；结果与节点 trace 仅随响应返回。
 
 **Response 200：** 同 3.2，但 `nodeTrace` 字段填充真实节点路径（evaluate 时为空数组）；引擎纯决策化后只返回决策预览（`finalDecision` / `hitDecisions`），无 `actionResults`：
 ```json
@@ -337,7 +337,7 @@ DELETE /admin/v1/rules/{ruleDefinitionId}
 ```
 
 - 规则存在任一 ACTIVE / SUPERSEDED 版本（曾上线）→ 拒绝（返回 400），只能 §4.3 disable。
-- 级联范围**只 `rule_version` + `rule_definition`**；dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`，按 ruleVersionId 关联）视同审计历史**不级联删**，靠 TTL 退休（D56 / D7）。被引用的 metric/decision/scene 不受影响。
+- 级联范围**只 `rule_version` + `rule_definition`**；dry-run 不持久化，因此没有试算历史需要级联。被引用的 metric/decision/scene 不受影响。
 
 **Response 200：** 删除成功。
 

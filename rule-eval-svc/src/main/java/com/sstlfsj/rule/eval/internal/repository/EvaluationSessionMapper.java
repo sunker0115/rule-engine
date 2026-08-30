@@ -31,10 +31,10 @@ public interface EvaluationSessionMapper extends BaseMapper<EvaluationSession> {
             VALUES
             <foreach collection="list" item="s" separator=",">
               (#{s.id}, #{s.tenantId}, #{s.eventId}, #{s.sceneCode}, #{s.eventType}, #{s.subjectId},
-               #{s.source}, #{s.mode}, #{s.status}, #{s.finalDecision}, #{s.hitDecisions}, #{s.blockedBy},
+               #{s.source}, #{s.mode}, #{s.status}, #{s.finalDecision}, #{s.hitDecisions,typeHandler=com.sstlfsj.rule.eval.internal.repository.BestEffortJsonTypeHandler}, #{s.blockedBy},
                #{s.errorCode}, #{s.candidateRuleCount}, #{s.hitRuleCount}, #{s.score}, #{s.category},
-               #{s.occurredAt}, #{s.startedAt}, #{s.finishedAt}, #{s.contextSnapshot}, #{s.evalDurationMs},
-               #{s.payload}, #{s.candidateRuleVersionIds})
+               #{s.occurredAt}, #{s.startedAt}, #{s.finishedAt}, #{s.contextSnapshot,typeHandler=com.sstlfsj.rule.eval.internal.repository.BestEffortJsonTypeHandler}, #{s.evalDurationMs},
+               #{s.payload,typeHandler=com.sstlfsj.rule.eval.internal.repository.BestEffortJsonTypeHandler}, #{s.candidateRuleVersionIds,typeHandler=com.sstlfsj.rule.eval.internal.repository.BestEffortJsonTypeHandler})
             </foreach>
             ON DUPLICATE KEY UPDATE id = id
             </script>

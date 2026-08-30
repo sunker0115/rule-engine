@@ -27,48 +27,33 @@
 
 ---
 
-## 二、幂等
+## 二、请求重复与审计去重
 
-### 双层保障（D11）
+当前服务端不实现 Redis 请求锁或 EvalResult 缓存。相同事件可能多次求值；调用方负责业务执行的幂等。
 
-| 层 | 实现 | 失效场景 |
-|----|------|---------|
-| 上半层 | `SET rule:session:{tenantId}:{eventId} <evalResultJson> NX EX 3600` | Redis 宕机 / 键过期 |
-| 下半层 | `evaluation_session` UK `(tenant_id, event_id)` | 分布式竞争时最终一致 |
-
-**流程：**
-1. 评估前先 Redis SET NX：命中 → 返回缓存 EvalResult，不再评估
-2. 未命中 → 正常评估 → evaluation_session INSERT
-3. INSERT 遇 DuplicateKeyException → SELECT 已有行 → 返回已有 EvalResult
-
-**幂等范围**：一次"评估"（Matcher + Pre-Gate + AST + 记录 session）幂等。引擎纯决策化（D60），命中后的执行/编排交消费方，其幂等由消费方自负。
+`evaluation_session` 的唯一键 `(tenant_id, event_id)` 只限制持久化记录不重复。异步批写使用重复键空更新，不查询旧记录并将其作为本次评估响应。不得把数据库唯一键理解为“请求恰好执行一次”。
 
 ---
 
 ## 三、EvaluationSession 落库策略
 
-| 操作 | 模式 | 原因 |
-|------|------|------|
-| `evaluation_session` 行 INSERT | **同步事务** | 幂等 UK 需先存在；量小（1 行/次），P99 延迟可忽略 |
-| `node_trace` 批 INSERT | **异步批写** | 量大（10-1000 行/次）；旁路观察通道，失败降级丢弃，不影响主流程 |
+| 操作 | 模式 | 失败边界 |
+|------|------|----------|
+| `evaluation_session` 终态 INSERT | 异步 best-effort 批写 | 队满、进程退出或写库失败可能丢记录，不影响已产出的 EvalResult |
+| `node_trace` 批 INSERT | 独立队列异步批写 | 失败可丢，与 session 不构成原子事务 |
 
-TraceWriter 队列参数（建议默认值，可 `engine.rule.trace.*` 配置覆盖，见 §九）：
+`EvalServiceImpl` 发布 `AuditRecordedEvent`；`AuditPersister` 在发布线程中只做非阻塞入队，虚拟线程消费后批写 session，再将 trace 交给 `TraceWriter`。session 缺行而 trace 存在，或反过来，均应检查日志，不默认视作正常。
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `queue.capacity` | 100,000 | 内存 ArrayBlockingQueue 容量 |
-| `batch.size` | 500 | 每批 INSERT 行数 |
-| `flush.interval.ms` | 200 | 超时强制 flush |
-| `consumer.threads` | 2 | 批写消费线程数 |
+审计队列当前固定为 10,000 条、每批 500 条、200 ms 消费间隔；这不是可配置契约。trace 参数见 §九。审计查询和效果统计只能反映成功落库的样本，不能用来承诺完整业务对账。
 
 ---
 
 ## 四、dry-run 链路
 
-dry-run 走完整评估链路（Matcher / Pre-Gate / EvalContext / AST），但：
-- **不写** `evaluation_session` / `node_trace` prod 表
-- **写** `dry_run_session` / `dry_run_node_trace`（隔离表，D7）
-- 返回完整 `nodeTrace`（AST 每个节点的 result / actualValue / errorCode）
+dry-run 解析指定规则版本，复用 Pre-Gate / EvalContext / 规则求值；不经过场景 Matcher 候选分支，并且：
+- **返回**完整 `nodeTrace`，供当前试算页面展示
+- **不写** `evaluation_session` / `node_trace` 或任何专用 dry-run 历史表
+- 纯决策化后无动作层，故不存在动作派发副作用（D60）
 
 **入口**：`POST /api/v1/rule/dry-run`（PULL 模式同步返回，见 10-api-contract §三）
 
@@ -76,7 +61,7 @@ dry-run 走完整评估链路（Matcher / Pre-Gate / EvalContext / AST），但�
 1. 规则发布前验证：编辑器内构造 mockEvent → 查看每个节点求值结果
 2. 线上排障：用历史事件 eventId 重放 → 对比 trace 差异
 
-**dry_run_session 保留期**：默认 7 天（见 §九 `engine.rule.retention.dry-run-session-days`）。
+dry-run 无服务端保留期。需要留痕时由调用方保存脱敏后的响应；管理端不得默认记录含敏感取值的完整 trace。
 
 ---
 
@@ -152,8 +137,8 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 
 | 依赖 | 失效影响 | v1 降级策略 |
 |------|---------|------------|
-| MySQL | 无法写 evaluation_session，评估阻塞 | 评估入口返回 503；Redis 幂等层仍可检查重复 |
-| Redis | 幂等上半层失效 | 降级走 DB UK 幂等；metric cache 全部击穿 DB / 外部服务 |
+| 生产 MySQL | 配置读写、快照加载和历史查询可能失败；运行审计可能丢失 | 已缓存规则的纯计算不因审计写失败而阻塞；依赖该库取数的指标仍会失败，启动迁移也不能完成 |
+| Redis | 使用 Redis 的缓存或 STREAM 取数不可用 | 按对应取数器返回缓存缺失或取数错误；当前没有 Redis→DB 的请求幂等降级协议 |
 | MetricSource (EXTERNAL_HTTP) | 取数超时 | D15 单节点降级 false，EvalResult.errorCode=METRIC_FETCH_FAIL |
 | MetricSource (SQL_AGGREGATE) | DB 慢查询 / 连接池耗尽 | 同上；建议对 SQL 指标设 cache_ttl > 0 |
 | TraceWriter 队列满 | trace 行丢弃 | trace 丢弃 + counter 告警；**不影响** EvalResult |
@@ -161,7 +146,7 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 
 ### v1 不做的高可用（见 08-evolution）
 
-- evaluation_session 异步化（§2.15）
+- 审计可靠投递与完整对账保证（§2.15）
 - 嵌入式 SDK 模式（§2.14，无跨进程网络依赖）
 - 节点级 trace 冷热分级（§2.5）
 
@@ -189,7 +174,6 @@ pass   = bucketStart <= bucket < bucketEnd   # 桶区间模式（A/B 互斥，�
 | `engine.rule.retention.batch-size` | 1000 | 单批 `DELETE ... LIMIT` 上限（分批短事务循环） |
 | `engine.rule.retention.evaluation-session-days` | 90 | evaluation_session 保留天数（D9） |
 | `engine.rule.retention.node-trace-days` | 30 | node_trace 保留天数 |
-| `engine.rule.retention.dry-run-session-days` | 7 | dry_run_session + dry_run_node_trace 保留天数（同管 dry_run 两表） |
 
 ---
 
@@ -320,12 +304,13 @@ management:
 otel-lgtm:
   image: grafana/otel-lgtm:0.11.5
   ports:
-    - "3000:3000"   # Grafana UI
-    - "4317:4317"   # gRPC OTLP
-    - "4318:4318"   # HTTP OTLP
+    - "127.0.0.1:3000:3000"   # Grafana UI
+    - "127.0.0.1:4317:4317"   # gRPC OTLP
+    - "127.0.0.1:4318:4318"   # HTTP OTLP
   environment:
-    GF_AUTH_ANONYMOUS_ENABLED: "true"
-    GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    GF_AUTH_ANONYMOUS_ENABLED: "false"
+    GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+    GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
   healthcheck:
     test: ["CMD", "curl", "-f", "-s", "http://localhost:3000/api/health"]
     interval: 5s
@@ -336,7 +321,7 @@ otel-lgtm:
 
 `rule-app` 容器依赖 `service_healthy` 而非 `service_started`，确保 OTLP 端口就绪后再启动应用。
 
-本地 Grafana 地址：`http://localhost:3000`（匿名 Admin，无需登录）
+本地 Grafana 地址：`http://localhost:3000`，使用 `.env` 中配置的管理员账号登录。
 
 | 数据源 | 用途 | 在 Grafana 里查询 |
 |--------|------|-------------------|

@@ -6,6 +6,7 @@ import com.sstlfsj.rule.eval.internal.domain.EvalMode;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import com.sstlfsj.rule.eval.internal.domain.SessionStatus;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
+import com.sstlfsj.rule.eval.internal.repository.BestEffortJsonTypeHandler;
 import com.sstlfsj.rule.kernel.api.model.Decision;
 import com.sstlfsj.rule.kernel.api.model.EvalContext;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
@@ -18,6 +19,8 @@ import org.mockito.ArgumentCaptor;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.sql.PreparedStatement;
+import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 
@@ -37,8 +40,7 @@ class AuditPersisterTest {
     void insertsTerminalSessionOnceAndWritesTrace() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -62,8 +64,7 @@ class AuditPersisterTest {
     void startedAtFromContextNow_andEvalDurationMsFromEvent() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -89,8 +90,7 @@ class AuditPersisterTest {
     void blockedBy_nonNull_persistsBlockedStatusAndBlockedBy() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -112,8 +112,7 @@ class AuditPersisterTest {
     void scorecardResult_persistsScore() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -135,8 +134,7 @@ class AuditPersisterTest {
     void hitDecisions_serializedAsObjectsWithCategory_andSessionCategoryFromFinal() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -154,17 +152,16 @@ class AuditPersisterTest {
         verify(mapper, times(1)).insertBatch(captor.capture());
         EvaluationSession s = captor.getValue().get(0);
         assertThat(s.getCategory()).isEqualTo("中危");
-        assertThat(s.getHitDecisions()).contains("\"category\":\"中危\"")
-                .contains("\"category\":\"大额\"").contains("\"ruleVersionId\":11");
+        assertThat(s.getHitDecisions()).extracting("category").containsExactly("中危", "大额");
+        assertThat(s.getHitDecisions()).extracting("ruleVersionId").containsExactly(11L, 22L);
     }
 
     @Test
     void contextSnapshotEnabled_backfillsMetricValues() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
         // 开关 ON：终态 session 回填 context_snapshot
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, true);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, true);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -180,17 +177,16 @@ class AuditPersisterTest {
         ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
         verify(mapper, times(1)).insertBatch(captor.capture());
         EvaluationSession s = captor.getValue().get(0);
-        assertThat(s.getContextSnapshot()).isNotNull()
-                .contains("\"amount\":8888").contains("\"evalNow\":\"2026-06-09T01:02:03Z\"");
+        assertThat(s.getContextSnapshot().metrics()).containsEntry("amount", 8888);
+        assertThat(s.getContextSnapshot().evalNow()).isEqualTo(Instant.parse("2026-06-09T01:02:03Z"));
     }
 
     @Test
     void contextSnapshotDisabled_leavesSnapshotNull() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
         // 开关 OFF（默认）：即便事件携带 context 也不回填，快照保持 null
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -212,9 +208,8 @@ class AuditPersisterTest {
     void captureEnabled_writesPayloadAndCandidateVersionIds() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
         // 捕获开关 ON：重放三件套(payload + 候选版本 id + context_snapshot)一并落库
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, true);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, true);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -230,16 +225,15 @@ class AuditPersisterTest {
         ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
         verify(mapper, times(1)).insertBatch(captor.capture());
         EvaluationSession s = captor.getValue().get(0);
-        assertThat(s.getPayload()).contains("amount").contains("5000");
-        assertThat(s.getCandidateRuleVersionIds()).contains("11").contains("22");
+        assertThat(s.getPayload()).containsEntry("amount", 5000);
+        assertThat(s.getCandidateRuleVersionIds()).containsExactly(11L, 22L);
     }
 
     @Test
     void captureDisabled_leavesReplayColumnsNull() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -259,14 +253,11 @@ class AuditPersisterTest {
     }
 
     @Test
-    void hitDecisionsSerializationFails_doesNotDropWholeBatch() throws Exception {
+    void typedHitDecisions_stillCreatesSessionBeforeJdbcBinding() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        // mock ObjectMapper：hit_decisions 序列化抛异常。toSession 经 serializeJson 吞掉降级 null，
-        // 不应把异常抛进 .map() 流导致整批 INSERT 丢失（#3）
-        tools.jackson.databind.ObjectMapper om = mock(tools.jackson.databind.ObjectMapper.class);
-        when(om.writeValueAsString(any())).thenThrow(new RuntimeException("serialize boom"));
-        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, om, false);
+        // 类型化后 JSON 编码在 JDBC 绑定阶段进行；这里仍须先形成完整 session，避免消费线程丢整批。
+        AuditPersister persister = new AuditPersister(2000, 200, 50, mapper, traceWriter, false);
         persister.afterPropertiesSet();
 
         RuleEvent event = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")
@@ -278,21 +269,35 @@ class AuditPersisterTest {
         Thread.sleep(300);
         persister.destroy();
 
-        // session 仍落库（hit_decisions 降级 null），整批未因单条序列化失败而丢
+        // session 已进入批量 INSERT；实际 JSON 编码失败由 TypeHandler 单字段降级。
         ArgumentCaptor<List<EvaluationSession>> captor = batchCaptor();
         verify(mapper, times(1)).insertBatch(captor.capture());
         EvaluationSession s = captor.getValue().get(0);
         assertThat(s.getId()).isEqualTo(50L);
-        assertThat(s.getHitDecisions()).isNull();
+        assertThat(s.getHitDecisions()).hasSize(1);
+    }
+
+    @Test
+    void bestEffortJsonHandler_serializationFails_writesSqlNull() throws Exception {
+        PreparedStatement statement = mock(PreparedStatement.class);
+        BestEffortJsonTypeHandler handler = new BestEffortJsonTypeHandler(Object.class) {
+            @Override
+            public String toJson(Object value) {
+                throw new RuntimeException("serialize boom");
+            }
+        };
+
+        handler.setNonNullParameter(statement, 3, Map.of("bad", true), null);
+
+        verify(statement).setNull(3, Types.VARCHAR);
     }
 
     @Test
     void destroy_drainsEntireQueue_notJustOneBatch() throws Exception {
         EvaluationSessionMapper mapper = mock(EvaluationSessionMapper.class);
         TraceWriter traceWriter = mock(TraceWriter.class);
-        tools.jackson.databind.ObjectMapper om = tools.jackson.databind.json.JsonMapper.builder().build();
         // batchSize=2、flushInterval 很长（不靠定时 flush）：积压 5 条 > batchSize，destroy 必须排空全部（#4）
-        AuditPersister persister = new AuditPersister(2000, 2, 100000, mapper, traceWriter, om, false);
+        AuditPersister persister = new AuditPersister(2000, 2, 100000, mapper, traceWriter, false);
         persister.afterPropertiesSet();
         for (int i = 0; i < 5; i++) {
             RuleEvent ev = RuleEvent.builder().tenantId("1").sceneCode("s").eventType("t")

@@ -4,6 +4,8 @@
 
 **纯决策引擎**：只出 Decision（finalDecision + hitDecisions），不执行动作。「命中后做什么」交给消费方或流程引擎。
 
+> **安全边界**：管理接口本身不负责身份认证，`X-Actor-Id` / `X-Actor-Type` 必须由可信网关注入。请勿把管理端口直接暴露到公网，详见 [安全策略](SECURITY.md)。
+
 ---
 
 ## 一、一句话说清楚能做什么
@@ -22,7 +24,7 @@
 
 ## 二、核心能力矩阵
 
-### 2.1 五种规则形态，全实装
+### 2.1 六种规则形态，全实装
 
 | 形态 | 适合什么 | 怎么理解 |
 |------|---------|---------|
@@ -96,64 +98,117 @@
 
 - Java 25
 - Maven 3.9+
-- MySQL 8.0+（需要 `rule_engine` 库）
-- Redis（可选，幂等上半层）
+- Docker（真实 MySQL 集成测试和本地 Compose 环境需要）
+- MySQL 8.0+（默认运行、完整业务体验和生产部署统一使用）
+- Bash、curl、jq（运行下方接口示例需要）
 
-### 3.2 三步启动
+### 3.2 构建与启动
+
+在仓库根目录执行完整后端验证；数据库测试会自行创建临时 MySQL，不使用已有业务数据库：
 
 ```bash
-# 1. 初始化数据库（首次）
-mysql -u root -e "CREATE DATABASE IF NOT EXISTS rule_engine DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci"
-# 迁移脚本在 rule-app 启动时自动执行
-
-# 2. 编译打包
-mvn clean package -DskipTests
-
-# 3. 启动服务
-java -jar rule-app/target/rule-app-*.jar
-# 服务启动在 localhost:8080
+docker info
+mvn --batch-mode --no-transfer-progress clean verify -Pexamples \
+  '-Dsurefire.includes=**/Test*.java,**/*Test.java,**/*Tests.java,**/*TestCase.java,**/*IT.java'
 ```
 
-### 3.3 第一条规则（5 分钟体验）
+测试报告核验及前端构建命令见 [贡献指南](CONTRIBUTING.md)。
+
+默认配置使用 MySQL，可通过 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD` 覆盖连接信息，**无需设置 profile**。首次启动会对目标空库执行 Flyway 基线；请先准备独立的 MySQL 环境。
+
+在全新本地环境中，可通过 Compose 启动 MySQL、应用和可观测套件：
 
 ```bash
-# 1. 创建 Tenant
-curl -X POST http://localhost:8080/admin/v1/tenants \
-  -H 'Content-Type: application/json' \
-  -d '{"code":"demo","name":"演示租户"}'
+# 仅在尚无 .env 时复制，避免覆盖已有配置
+if [ ! -e .env ]; then cp .env.example .env; fi
+# 修改 .env 中的所有密码后启动
+docker compose up --build
+```
 
-# 2. 创建 Scene
-curl -X POST http://localhost:8080/admin/v1/scenes \
-  -H 'Content-Type: application/json' \
-  -d '{"tenantCode":"demo","code":"promo","name":"营销活动","mode":"PULL"}'
+Compose 使用独立的 `mysql-data` 卷，服务端口只绑定 `127.0.0.1`。若 3306、8080、3000、4317 或 4318 已被占用，请先规划独立端口，不要停止或清空已有数据库。不要把合并后的 V1 迁移直接指向已有业务库；旧库的 Flyway 历史切换需另行核对。
+
+已有**专门新建的空 MySQL 数据库**时，也可设置以下环境变量后直接启动 jar：
+
+```bash
+export SPRING_DATASOURCE_URL='jdbc:mysql://127.0.0.1:3306/rule_engine_demo?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
+export SPRING_DATASOURCE_USERNAME='rule_engine_demo'
+export SPRING_DATASOURCE_PASSWORD='<该空库用户的密码>'
+java -jar rule-app/target/rule-app-*.jar
+```
+
+以上方式二选一。启动日志出现 `Started RuleEngineApplication` 后，访问 `http://localhost:8080/actuator/health` 检查健康状态（正常应为 `UP`），也可通过 `/admin/v1/tenants` 验证数据库读取。
+
+Redis 健康检查默认关闭，数据库等其他健康检查保持启用。下方 payload 规则不需要 Redis；部署使用 `STREAM` 取数时，必须配置实际 Redis 连接并设置 `MANAGEMENT_HEALTH_REDIS_ENABLED=true`，Redis 不可用时整体健康检查将返回 `DOWN`。该开关只控制健康检查，不禁用 Redis 客户端或取数逻辑。直接运行 jar 可用环境变量开启；Compose 部署则需将该变量传入 `rule-app` 容器，仅写入 `.env` 不会自动传入。
+
+Compose 仅用于本地开发；生产环境应使用 `mysql` profile、外部密钥管理和可信鉴权网关。`mysql` profile 强制要求显式提供上述三项数据源环境变量，不使用开发默认连接信息。
+
+### 3.3 第一条规则（MySQL）
+
+示例规则为「订单金额大于等于 100 时返回 `SEND_COUPON` 决策」。它不判断是否首单，也不实际发券或扣减金额。订单金额直接来自事件 `payload`，无需预建 Metric。
+
+确认连接的是上一步的独立演示环境后，在 Bash 中复制执行整个代码块。每次创建一个新租户；管理请求中的 actor 头仅用于本地演示，生产环境必须由可信网关注入。
+
+```bash
+# 子 shell 遇到 HTTP 错误或断言失败立即退出
+(
+set -euo pipefail
+BASE_URL="${BASE_URL:-http://localhost:8080}"
+TENANT_CODE="quickstart_$(date +%s)"
+
+# 1. 创建 Tenant
+TENANT_ID=$(curl -fsS -X POST \
+  "$BASE_URL/admin/v1/tenants?code=$TENANT_CODE&name=Quickstart" \
+  -H 'X-Actor-Id: quickstart' | jq -er '.data')
+
+# 2. 创建 Scene，并声明订单金额字段
+curl -fsS -X POST "$BASE_URL/admin/v1/scenes" \
+  -H 'Content-Type: application/json' -H 'X-Actor-Id: quickstart' \
+  -d '{"tenantId":'"$TENANT_ID"',"sceneCode":"promo","name":"营销活动",
+       "dominantMode":"PULL","subjectType":"USER","eventTypes":["ORDER"],
+       "payloadSchema":[{"name":"orderAmount","type":"NUMBER","required":true}],
+       "defaultParams":{}}' | jq -e '.success == true'
 
 # 3. 创建 Decision
-curl -X POST http://localhost:8080/admin/v1/decisions \
-  -H 'Content-Type: application/json' \
-  -d '{"tenantCode":"demo","code":"SEND_COUPON","name":"发券","priority":10}'
+curl -fsS -X POST "$BASE_URL/admin/v1/decisions?tenantId=$TENANT_ID" \
+  -H 'Content-Type: application/json' -H 'X-Actor-Id: quickstart' \
+  -d '{"code":"SEND_COUPON","name":"建议发券","priority":10}' \
+  | jq -e '.success == true'
 
-# 4. 创建规则（满 100 减 10）
-curl -X POST http://localhost:8080/admin/v1/rules \
-  -H 'Content-Type: application/json' \
+# 4. 创建规则草稿，保存返回的规则定义 ID
+RULE_ID=$(curl -fsS -X POST "$BASE_URL/admin/v1/rules" \
+  -H 'Content-Type: application/json' -H 'X-Actor-Id: quickstart' \
   -d '{
-    "tenantCode":"demo","sceneCode":"promo","name":"首单满减",
-    "kind":"AST_BOOLEAN",
-    "conditions":[{"conditionType":"GT","metricCode":"orderAmount","params":{"threshold":100}}],
-    "decisionBindings":[{"decisionCode":"SEND_COUPON"}]
-  }'
+    "tenantId":'"$TENANT_ID"',"sceneCode":"promo","code":"order-coupon",
+    "name":"订单满额发券建议","kind":"AST_BOOLEAN",
+    "body":{"type":"AstBody","conditionAst":{"type":"AndNode","children":[
+      {"type":"ConditionNode","conditionType":"GTE","valueRef":"PAYLOAD",
+       "metricCode":"orderAmount","params":{"threshold":100}}
+    ]}},
+    "decisionBindings":[{"decisionCode":"SEND_COUPON"}],
+    "preGates":[],"triggerEventTypes":["ORDER"]
+  }' | jq -er '.data.ruleDefinitionId')
 
 # 5. 发布
-curl -X POST http://localhost:8080/admin/v1/rules/publish \
-  -H 'Content-Type: application/json' \
-  -d '{"ruleId":"<上一步返回的 ruleId>"}'
+curl -fsS -X POST "$BASE_URL/admin/v1/rules/$RULE_ID/publish?tenantId=$TENANT_ID" \
+  -H 'X-Actor-Id: quickstart' | jq -e '.success == true'
 
-# 6. 评估
-curl -X POST http://localhost:8080/api/v1/rule/evaluate \
+# 6. 金额恰好 100：命中，输出 SEND_COUPON
+curl -fsS -X POST "$BASE_URL/api/v1/rule/evaluate" \
   -H 'Content-Type: application/json' \
-  -d '{"tenantCode":"demo","sceneCode":"promo","subjectType":"USER","subjectId":"u1","providedMetrics":{"orderAmount":150}}'
+  -d '{"tenantCode":"'"$TENANT_CODE"'","sceneCode":"promo","eventType":"ORDER",
+       "subjectId":"u1","eventId":"order-100","payload":{"orderAmount":100}}' \
+  | jq -e '.data | select(.ruleHit == true and .finalDecision.code == "SEND_COUPON" and .errorCode == null)'
 
-# 返回：{"finalDecision":{"code":"SEND_COUPON",...},"hitDecisions":[...],"satisfied":true}
+# 7. 金额 99：未命中且没有错误
+curl -fsS -X POST "$BASE_URL/api/v1/rule/evaluate" \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantCode":"'"$TENANT_CODE"'","sceneCode":"promo","eventType":"ORDER",
+       "subjectId":"u1","eventId":"order-99","payload":{"orderAmount":99}}' \
+  | jq -e '.data | select(.ruleHit == false and .finalDecision == null and .errorCode == null)'
+)
 ```
+
+HTTP 成功响应统一包装为 `{"success":true,"data":...}`，上面的评估命令只输出 `data`。演示配置和审计数据会保留在演示库中，重复执行会新增租户，不会自动清理已有数据。
 
 ### 3.4 模块导航
 
@@ -247,7 +302,7 @@ rule-engine/
 | 语言 | Java 25 |
 | 框架 | Spring Boot 4.1 + Spring Modulith 2.1 |
 | ORM | MyBatis-Plus 3.5 |
-| DB | MySQL 8.0（v1 全 MySQL） |
+| DB | MySQL 8.0+（默认运行与生产部署统一） |
 | 缓存 | Redis + Caffeine |
 | 调度 | XXL-JOB 3.4（多实例）/ ThreadPoolTaskScheduler（单机） |
 | 表达式 | CEL / Aviator / QLExpress / JsonLogic / JEXL / Groovy（sandbox） |
@@ -265,3 +320,12 @@ rule-engine/
 - **想调接口** → `docs/10-api-contract.md`
 - **想看路线图** → `docs/ROADMAP.md`
 - **想看例子** → `docs/examples/`
+
+---
+
+## 七、参与贡献与许可证
+
+- 提交代码前请阅读 [贡献指南](CONTRIBUTING.md) 和 [行为准则](CODE_OF_CONDUCT.md)。
+- 安全问题请按 [安全策略](SECURITY.md) 私密报告，不要提交公开 Issue。
+- 对外变更记录见 [CHANGELOG](CHANGELOG.md)。
+- 本项目采用 [GNU General Public License v3.0](LICENSE)（GPL-3.0-only）发布。
