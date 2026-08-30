@@ -85,7 +85,7 @@
         <!-- protobuf-java:覆盖 Spring Boot 4 BOM 的 4.26.1,dev.cel 0.13.0 gencode 需运行时 ≥ 4.33 -->
         <protobuf.version>4.35.1</protobuf.version>
         <!-- Flink 2.1.3 流计算 -->
-        <flink.version>2.1.3</flink.version>
+        <flink.version>2.3.0</flink.version>
         <flink-kafka-connector.version>5.0.0-2.1</flink-kafka-connector.version>
         <jedis.version>5.2.0</jedis.version>
     </properties>
