@@ -57,7 +57,7 @@
 
 ### 注册语义:**有了不管**(与参考实现相反)
 
-- 参考 `cpt/common-framework-xxljob` 的 `JobInfoServiceImpl.addJobInfo`:发现已存在 handler 时调 `updateJobInfo` **覆盖 admin 配置**——即"有了就 update"。
+- 旧参考实现的 `JobInfoServiceImpl.addJobInfo` 在发现已存在 handler 时调用 `updateJobInfo` **覆盖 admin 配置**——即"有了就 update"。
 - **本设计取反**:启动 seed 时若 admin 已存在该 handler,**保持不动**(不 update),让 **admin 控制台成为 cron 的权威源**,运维改了不被启动覆盖。
 - 不可在 admin 改动的身份字段:`executorHandler` / `executorParam` / `appname`(改了会与执行器对不上)。
 
@@ -100,7 +100,7 @@
 
 ## 决策记录(待写入 00-decisions)
 
-- **D50**:rule-job 调度扩展边界——job 为服务端生产侧概念,**不做嵌入式 job SDK**(嵌入式 `RuleEngineClient` 已本地持有引擎,批量即循环 `evaluate`);xxl-job 作为 `Scheduler` 适配实现接入(future `rule-job-xxl`,`xxl-job-core:3.4.0`),复用 `JobRunner` 不重写组装,装配经已预留的 `engine.rule.job.scheduler=xxl-job` 钩子;注册语义"**有了不管**"(admin 为 cron 权威源,与 cpt 参考的"有了就 update"相反);双开关(app `status` 守卫 + admin stop);`source=JOB` 保留(审计维度);跨服务触发经 rule-api 瘦 REST 入口(`triggerOnce`),不发组装 SDK。明确不做:通用 job 平台 / `JobDefinition` 去 rule 化 / `Scheduler` SPI 瘦身。GraalVM native image 兼容性为接 xxl 的 go/no-go 前置。
+- **D50**:rule-job 调度扩展边界——job 为服务端生产侧概念,**不做嵌入式 job SDK**(嵌入式 `RuleEngineClient` 已本地持有引擎,批量即循环 `evaluate`);xxl-job 作为 `Scheduler` 适配实现接入(future `rule-job-xxl`,`xxl-job-core:3.4.0`),复用 `JobRunner` 不重写组装,装配经已预留的 `engine.rule.job.scheduler=xxl-job` 钩子;注册语义"**有了不管**"(admin 为 cron 权威源,与旧参考实现的"有了就 update"相反);双开关(app `status` 守卫 + admin stop);`source=JOB` 保留(审计维度);跨服务触发经 rule-api 瘦 REST 入口(`triggerOnce`),不发组装 SDK。明确不做:通用 job 平台 / `JobDefinition` 去 rule 化 / `Scheduler` SPI 瘦身。GraalVM native image 兼容性为接 xxl 的 go/no-go 前置。
 
 ## 实施后批注(2026-06-08)
 

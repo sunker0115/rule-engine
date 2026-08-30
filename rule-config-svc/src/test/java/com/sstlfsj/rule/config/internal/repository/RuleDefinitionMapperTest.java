@@ -28,15 +28,15 @@ class RuleDefinitionMapperTest {
 
     @Test
     void selectForExport_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
-        Method m = RuleDefinitionMapper.class.getDeclaredMethod("selectForExport", Long.class, List.class, Long.class);
+        Method m = RuleDefinitionMapper.class.getDeclaredMethod("selectForExport", Long.class, List.class, String.class);
         assertTrue(m.isDefault(), "selectForExport 应为 default 方法");
         assertEquals(List.class, m.getReturnType());
     }
 
     @Test
-    void findBySceneAndCode_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
-        Method m = RuleDefinitionMapper.class.getDeclaredMethod("findBySceneAndCode", Long.class, Long.class, String.class);
-        assertTrue(m.isDefault(), "findBySceneAndCode 应为 default 方法");
+    void findByTenantAndCode_defaultMethodExists_withCorrectSignature() throws NoSuchMethodException {
+        Method m = RuleDefinitionMapper.class.getDeclaredMethod("findByTenantAndCode", Long.class, String.class);
+        assertTrue(m.isDefault(), "findByTenantAndCode 应为 default 方法");
         assertEquals(RuleDefinition.class, m.getReturnType());
     }
 }

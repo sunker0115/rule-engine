@@ -82,7 +82,7 @@
 
 ### 2.3 跨 Scene 规则复用（来源 #1）
 
-- **v1 现状**：Rule 属于唯一 Scene，没有跨 Scene 复用机制；相似规则需在多个 Scene 重复配置。
+- **现状（D77 已实装轻量路径）**：`rule_definition` 去 `scene_id` 改 `scene_code`（业务标识，消灭代理键翻译层，V1_41），`ruleCode` 为 tenant 级唯一；**DECISION_FLOW 的 RuleRefNode 已可跨 Scene 引用**（发布期按 tenant 级查被引规则并冻结其自身 sceneCode，D75 冻结机制不变）+ 反向血缘 `GET /admin/v1/rules/{code}/referencedBy`。
 - **触发条件**：相同条件逻辑在多个 Scene 重复配置（如"账户开立 < 90 天"同时出现在 risk.transfer / risk.withdrawal / risk.payment），改动时需逐 Scene 同步，易漏、易产生版本漂移。
 - **演进方向**：
   - **`RuleTemplate`**：参数化的规则骨架，变量用占位符，实例化时注入 Scene 专属参数值；发布时膨胀为普通 `rule_version`，评估期不感知模板，公共能力（灰度 / Pre-Gate / Action）完全复用；
@@ -90,8 +90,11 @@
   - 两种形态适用场景不同：Template 适合大框架复用（同一规则结构不同参数）；Fragment 适合条件组复用（同一 AND/OR 子树在多处出现）；
   - 新增 `rule_template` / `rule_fragment` 表 + 引用关系表；`rule_version` 发布时展开并生成不可变快照，与 D6 快照语义一致；
   - 灰度：Template 实例化后继承普通 `rule_version` 的 ROLLOUT Gate 语义，不需要专门机制。
-- **迁移成本**：高（schema 变更 + 发布事务展开逻辑 + dry-run 兼容 + 灰度桶继承 + UI）。
+- **迁移成本**：中（DDL 零变更；核心改动集中在 config-svc 5 处 + 前端 3 处 + 新增反向血缘查询）。
 - **依赖**：§2.10 规则模板市场依赖本节就位。
+- **已实装（D77 + D74）**：
+  - D77（`openspec/changes/cross-scene-rule-ref`）：`rule_definition` scene_id→scene_code + DECISION_FLOW RuleRefNode 跨 Scene 引用 + 反向血缘 + 前端 RuleRef 下拉 tenant 全量并按 sceneCode 分组
+  - D74 模板系统 V2（2026-07-25）：platform 层 `rule_template`(身份)/`rule_template_version`(快照,不可变)/`rule_template_instantiation`(溯源) 三表；SlotKind 拆分（VALUE/METRIC_REF/DECISION_REF/RULE_REF）；SlotRefResolver SPI；实例化流水线（REF pass-through + binder 填 skeleton + PublishService.createDraft）；跨租户可见性（SYSTEM tenant 级模板 → STANDARD tenant 实例化）；核心表零模板列。**RuleTemplate 已覆盖**，RuleFragment（AST 子树提取复用）仍为后续演进。
 
 ### 2.4 规则间依赖与编排（来源 #3）
 
@@ -104,7 +107,7 @@
 
 ### 2.5 节点级 trace 冷热分级（来源 #5，并入 [`05-storage.md`](./05-storage.md) TODO）
 
-- **v1 现状**：D9 决定全 MySQL 起步，数据保留 30 天；`node_trace` 表与 `evaluation_session` 表同库；写入路径走 `TraceWriter` 异步批写（D21）——本演进锚点是**存储分层**（冷热分级 / 列存），与 D21 的**写入路径**（同步 vs 异步）正交，二者独立演进。
+- **v1 现状**：D9 的 MySQL 单库起步选择保持不变，D79 将默认开发运行、集成测试与生产部署统一为 MySQL；`node_trace` 表与 `evaluation_session` 表同库；写入路径走 `TraceWriter` 异步批写（D21）——本演进锚点是**存储分层**（冷热分级 / 列存），与 D21 的**写入路径**（同步 vs 异步）正交，二者独立演进。
 - **触发条件**：观测到 trace 表膨胀影响查询性能 / 存储成本不可控。
 - **演进方向**：热表保留 7 天 + 冷归档表（按月分区）+ 可选 ClickHouse / ES 列存；存储与查询接口隔离，业务侧零改动。
 - **接收内容**：本锚点在 05-storage 展开时迁入"§冷热分级" 章节。
@@ -156,9 +159,9 @@
 
 ### 2.10 规则模板市场（来源 #16）
 
-- **v1 现状**：不考虑平台级规则模板共享。
-- **演进方向**：依赖 2.3（跨 Scene 复用）与 2.9（导出 / 导入）就位后，再考虑平台级模板仓库 + 评分 + 版本管理 + 跨租户分发。
-- **优先级**：低（v3 范畴）。
+- **v1 现状**：D74 模板系统 V2 已落地——platform 层 `rule_template` / `rule_template_version` / `rule_template_instantiation`，跨租户可见性（SYSTEM→STANDARD），实例化流水线。B7 导出/导入也已落地。模板市场的前置依赖（模板本身 + 跨环境搬运）已全部就位。
+- **演进方向**：在现有模板子系统上叠加**发现/评分/分类层**——平台级模板仓库（按 kind/领域/热度浏览）+ 评分/评论 + 版本管理 + 跨租户分发。本质是模板的"应用商店"层，而非模板机制本身。
+- **优先级**：低（v3 范畴，依赖实际多租户运营规模触发）。
 
 ### 2.11 外部系统集成契约标准化（来源 #17）
 
@@ -180,7 +183,7 @@
 - **trace 兼容**：trace 永远走解释器（编译版只服务非 trace 快路径），故每条 RuleVersion 的 NodeTrace 仍逐行展开，切换前后 trace 逐行一致（D7 不变）天然成立。
 - **灰度**：`engine.rule.eval.compiled-executor.*`（`enabled` / `rule-code-whitelist` / `on-compile-error`=FALLBACK\|FAIL），默认 `enabled=false` 逐字节等同解释器，`EvalEngine` 零改动；`CompiledPredicateEvictor` 监听 `RulePublishedEvent`/`SceneChangedEvent` 调 `evictAll`（键不可变免脏，纯内存卫生）。
 - **实测收益（替代原预测）**：Phase 0（冻结 LONG）AST 求值亚微秒（50 条件 865ns），JIT 逃逸分析已使解释器非 trace 路径近零分配（72–120 B/op）——故原"5–10μs→0.3–1μs"预测与"零分配"目标均不成立。A/B 实测编译版速度收益温和（20–50 条件 ~10–17%，5 条件持平）、分配≤解释器（50 条件 72B vs 120B）。默认关，作为架构层可切换能力落地，待生产 profiling（高 QPS + 高条件数 + 巨态分派）达标再灰度开。
-- **后续轮（未做）**：alpha/CSE 跨规则条件去重（同 `(sceneCode,eventType)` 下 ConditionNode hash 去重，同 `EvalContext` 内同条件只算一次）独立评估。`rule_version.compiled_predicate_ref` 列保持预留留空（lazy 编译，无需持久化编译产物引用）。
+- **后续轮（不做）**：alpha/CSE 跨规则条件去重——本项目不可变独立快照(D6)无对象级 Condition 共享引用，AST_BOOLEAN 已预编译到纳秒级(D67)，建缓存键+HashMap 查找开销>重新求值，是负优化。与 trae 架构差异（对方 Rule 层组合共享引用）导致其合理在本项目不成立。
 
 ### 2.14 嵌入式 SDK 模式（来源 D20 v1 不做的"嵌入式 SDK"）
 
@@ -195,33 +198,13 @@
 - **迁移成本**：高（SDK 版本管控 + 评估观测数据回写通道 + 多 backend Watcher 完整实现 + 跨实例灰度桶审计闭环）。
 - **优先级**：中。
 
-### 2.15 evaluation_session 异步化路径（来源 D21 派生 / 高吞吐讨论）
+### 2.15 运行审计可靠性与完整对账
 
-> **本节是触发条件达成后的重构方向，v1 阶段无任何专项准备动作，标准工程实践即可**——避免读者把"演进路径"误读为"v1 待办"。
-
-- **v1 现状**：每次评估 1 行同步写，承担三层角色：①**幂等收口**（DB uk on `event_id`，与 Redis trySet 形成双兜底，D11 / §3.10）；②**对账分母**（HIT / MISS / BLOCKED / ERROR 四态统计源，D15 + D22）；③**外键时序**（`node_trace` 引用 `session_id`）。单行同步 insert 1–3 ms，对 D8 千级 QPS 目标是零头，故 D21 仅把 `node_trace`（50–1000 行 / 次）异步化，**`evaluation_session` 保持同步**。
-- **触发条件**：
-  - profile 显示 `evaluation_session` 同步 insert 进入热路径 P99；或
-  - v2 整体演进路径触达——比如转 event sourcing（RuleEvent → MQ → 评估服务消费）时 `evaluation_session` 表的语义会被 MQ + 消费 offset 取代，本节方案废弃。
-- **演进方向**——三层角色各自解耦：
-
-  | 角色 | v1 同步落点 | v2 异步落点 |
-  |------|------------|------------|
-  | 幂等收口 | Redis trySet + DB uk 双兜底 | 持久化 KV（持久化 Redis / Tair）为主，DB uk 降级为慢路径校验或删除 |
-  | 对账分母 | `evaluation_session` 行计数 | MQ counter + 列存聚合（与 §2.5 同属"观测数据存储分级"演进方向，但对象不同——§2.5 是 node_trace 行级数据，本节是对账计数 / 列存聚合，两者可独立推进） |
-  | 外键时序 | DB autoincrement + 同事务保证 | 评估线程预生成 `session_id`（Snowflake / UUID v7），父子表独立异步队列，反序到达靠查询时间窗口兜底 |
-
-  异步写本身可复用 D21 `TraceWriter` 模型（队列 + 消费者池 + batch insert），但**独立队列**——`evaluation_session` 不可丢（对账锚），队列满策略要从"丢弃"改为"降级回同步写"或"落本地 WAL"。
-- **v1 阶段为什么不做前置准备**：
-  - **`session_id` 预生成（Snowflake / UUID）**：UUID 索引相对 autoincrement 是随机插入，B+ tree 页分裂 + 写放大，v1 量级反而拖慢；
-  - **引入持久化 KV / Tair**：破 D9 "全 MySQL 起步" 红线，运维形态被未到时机的功能拖着走；
-  - **抽象 `SessionWriter` SPI**：演进路径未定（v2 可能整体被 MQ / event sourcing 取代），SPI 成空跑负债——对比 D20 §5 `RuleVersionExecutor` SPI（v1.5 切预编译路径明确）才有预留价值；
-  - **决策依据不足**：profile 数据缺失，瓶颈猜测大概率偏离实际（更可能是 Pre-Gate 频次计数器 / 解释执行 Visitor / metric round-trip 等更前置环节）。
-- **v1 阶段隐含完成的工程卫生**（**不是为本演进做的提前设计**，本来就该做）：
-  - `evaluation_session` 写入走 Repository 层（标准三层分层）—— v2 切换实现只动 Repository；
-  - Prometheus counter 埋点（D20 监控体系 / §2.6 已覆盖）—— v2 切对账数据源时基线已具备。
-- **迁移成本**：高（幂等基础设施切换 + 对账数据源切换 + 父子表时序重设计 + D9 红线松动）。
-- **依赖与联动**：与 §2.5 trace 冷热分级（存储分层）正交可独立做，与 §2.14 嵌入式 SDK（评估下沉）同期评估更划算；若 v2 整体转 event sourcing，本节方案废弃。
+- **当前实现**：`evaluation_session` 已由 `AuditPersister` 异步 best-effort 批写；评估线程预生成雪花 ID，trace 使用独立写入队列，两者不设数据库外键。唯一键仅防重复审计行，不防重复求值。
+- **触发条件**：业务要求审计不可丢、完整对账分母，或要求事件可靠重投及明确的重复处理语义。
+- **演进方向**：届时再评估持久化队列/事务 outbox、失败重试、背压与消费去重。可靠审计与业务执行幂等是不同边界，不能仅把内存队列换成 MQ 就宣称完成。
+- **当前不做**：不为尚未确认的可靠性需求增加 WAL、外部持久化 KV 或同步回退路径。
+- **依赖与联动**：与 §2.5 trace 存储分层分别评估；当前运行和故障语义见 [02-runtime §四](./02-runtime.md) 与 [07-operability §三](./07-operability.md)。
 
 ### 2.16 灰度 A/B 实验互斥（来源 D6 v1 已知缺陷）
 
@@ -293,7 +276,7 @@
   - 发布期矩阵（`AstDataTypeResolver`）扩展：EQ/NEQ/BETWEEN/NOT_BETWEEN 允许集合 += DATE/DATETIME；DATE_BEFORE/DATE_AFTER 新增行；
   - `time.window` / `time.occurred_at` 在 `KernelEvaluators.defaults()` 注册，内置路径闭合集合，无 `metricCode`；
   - `context_snapshot` 升级为嵌套格式 `{"metrics": {...}, "evalNow": "<ISO>"}`；
-  - `V1_5__add_date_datetime_to_metric_datatype.sql` 扩展 `metric_definition.data_type` ENUM；
+  - 开发期 `V1_5__add_date_datetime_to_metric_datatype.sql` 曾扩展 `metric_definition.data_type` ENUM；该历史变更已收敛进公开基线 `V1__baseline.sql`；
   - Scene 级默认时区（`sceneDefaultTimezone`）槽位保留，B20 阶段暂缓（调用方传 null），由后续批次激活。
 - **不做（B21+ 范畴）**：相对时长算术（`$now-P7D`）；`EvalContext.now` 注入 SQL_AGGREGATE 的 `:now` 绑定变量；Scene 级默认时区激活。
 - **已实装（B20 / D44）**：见 D44 已实装清单。构建于 B19（AstDataTypeResolver 矩阵）之上。
@@ -318,7 +301,7 @@
   - 可选 **Lambda 形态**：T-1 历史批处理 + 当日增量融合（全局去重统计的精度损失需按 metric 标注）；
   - 物化未命中 / 未完成时的降级语义（忽略 / 失败 / 回落实时算）按 metric 粒度配置，归 D15 失败语义体系。
 - **接口衔接面**：`metric_definition` 加物化档 `sourceType` + 刷新策略列；`MetricSourceHandler` 增物化实现（读 KV）+ 一套离线 / CDC 预计算 writer（独立于评估热路径）；`EvalContext` 取数侧透明（仍按 `metricCode` 索引，选 handler 由 `sourceType` 路由，**评估代码零改动**）。
-- **迁移成本**：高（引入物化 KV / 列存为新存储组件，需与 D9 "全 MySQL 起步"基调专门决策——注意 metric 值不属 D9 引擎自有持久化范畴、D20 已含 Redis 取数后端；外加 CDC 管道 + 预计算 writer + metric 注册扩 `sourceType` + 降级语义）。
+- **迁移成本**：高（引入物化 KV / 列存为新存储组件，需与 D9 "生产单库起步"基调专门决策——注意 metric 值不属 D9 引擎自有持久化范畴、D20 已含 Redis 取数后端；外加 CDC 管道 + 预计算 writer + metric 注册扩 `sourceType` + 降级语义）。
 - **依赖与联动**：与 §2.2 metric 版本化正交（物化的是**值**，版本管的是**定义口径**，可叠加）；与 CEP（§2 预留窗口指标）同属"特征供给增强"，但 CEP 解时间窗序列、本锚点解高频实时取数性能，可独立推进。
 
 ### 2.25 what-if 批量回放 / 新规则陪跑（来源 风控演进成熟度对照分析 — 第三代「高可靠」；建立在 D70 之上）
@@ -358,7 +341,7 @@
 
 ### 2.27 决策效果闭环 / 规则有效性度量（来源 对照成熟决策平台分析 — 效果维度，FICO/Sapiens 规则绩效同类能力）
 
-**标签回灌已实装（B32 / 2026-06-19）：`decision_outcome` 表 + 回灌 API + `OUTCOME_INGESTION` 定时拉标签。** 业务真实结局按 `eventId` 回灌（`OutcomeService.recordOutcomes` 按 `(tenant,event)` 幂等 upsert，覆盖修正）；除手工/接口回灌外，新增 `OUTCOME_INGESTION` 调度任务类型经 `OutcomeSource` SPI（首个实现 `SqlOutcomeSource`：复用 metric 只读数据源跑 SQL 拉固定列 `event_id/outcome_label/outcome_value/labeled_at`）增量拉标签 → `OutcomeService` upsert，watermark（max `labeled_at`）写回任务 config 推进游标。**按规则聚合 TP/FP/FN → precision/recall/漂移仍未实装**（标签接入位已就绪，聚合查询为后续）。
+**效果闭环全链路已实装（B32 / 2026-06-19 标签回灌 + 聚合查询）：** ① `decision_outcome` 表 + 回灌 API（`OutcomeService.recordOutcomes` 幂等 upsert）+ `OUTCOME_INGESTION` 经 `SqlOutcomeSource` 自动拉标签；② `EffectivenessService` 按 RULE_VERSION/DECISION 维度聚合 TP/FP/FN → precision/recall + DAY/WEEK 时间分桶漂移 + fireRate；③ 前端 `EffectivenessPage`（tenant/scene/range/popularLabels/dimension/bucket 过滤 + 折线图 + 表格）。
 
 - **v1 现状**：每次决策落 `evaluation_session`（D21）；可观测体系（§2.6 / §2.22）度量的是**系统级**指标（QPS / 延迟 / 错误率 / 命中率）。**无业务效果度量**——"判 HIGH 的交易事后是不是真欺诈"答不了，单条规则的查准/查全无从谈起。
 - **触发条件**：风控/营销需要持续评估"规则抓得准不准"以迭代规则；监管/风控团队要求规则绩效可量化（误报率、漏报、随时间漂移）。系统级监控绿不代表业务有效。
@@ -387,11 +370,17 @@
 
 ### 2.29 场景内独立规则并行求值（来源 gengine 对照 — 见 [`reference-projects.md`](./reference-projects.md) §2.4）
 
-**候选，未立项。触发条件不满足前不实现（守 §2 以简为先）。**
+**已实现（2026-07-23）。场景级 opt-in，默认 SEQUENTIAL 零影响。**
 
-- **想法**：gengine 把"一个场景内多条独立规则并行求值"做成一等执行模型（Concurrent / DAG 层内并行）。本项目评估当前是**同步串行**——`SceneRuleIndex` 命中的 N 条规则逐条 `execute`。对**含多条重规则**的场景（多次 `EXTERNAL_HTTP` 取数、`EXPRESSION_SCRIPT` 重算），并行求值可能是真实吞吐杠杆。
-- **为何暂不做**：① metric 预拉**已批量**（D20 `EvalContextAssembler` 一次取全），取数不是逐规则 N+1，最大的并行收益已被批量吃掉；② 轻量条件规则（`AST_BOOLEAN` 比较）求值本身是纳秒级，并行的调度开销可能大于收益；③ 与 D60 同步纯决策定位需权衡（引入并行=引入线程模型/超时/错误聚合复杂度）；④ D75 `DECISION_FLOW` 的图层已能表达"独立分支"，若需要结构化并行应走图而非隐式并行整个场景。
-- **已实现（2026-07-23）**：`ExecutionMode.PARALLEL` + `ParallelEvaluator`（VirtualThread 并行 fork/join，复用现有汇聚逻辑）。模式与 `SceneExecutionStrategy` 正交，默认 SEQUENTIAL——存量零影响。配置经 `scene.default_params.executionMode` 热更生效，前端 defaultParams 编辑器直接设置。设计见 `openspec/changes/parallel-rule-execution/design.md`。
+- **来源**：gengine 把"一个场景内多条独立规则并行求值"做成一等执行模型（Concurrent / DAG 层内并行）。本项目评估原为**同步串行**——`SceneRuleIndex` 命中的 N 条规则逐条 `execute`，由调研触发对照分析。
+- **实现**：`ExecutionMode enum { SEQUENTIAL, PARALLEL }` + `ParallelEvaluator`（`Executors.newVirtualThreadPerTaskExecutor` fork/join，零新依赖）。模式与 `SceneExecutionStrategy` 正交（ALL_HITS 全量并行、FIRST_HIT 批式并行），汇聚逻辑复用 `evaluateAllCandidates` 语义。设计见 `openspec/changes/parallel-rule-execution/design.md`。
+- **适用面窄（重要）**：metric 预拉已批量（D20），单条 AST_BOOLEAN 规则求值是纳秒级，虚拟线程创建+调度开销 ~µs。JMH benchmark 数据：
+  - 纯 AST_BOOLEAN（20 条轻量规则）：PARALLEL 41,256ns vs SEQUENTIAL 992ns — **42x 负优化**
+  - 混合场景（20 条中 10 条带模拟重计算 ≈ 脚本/Flow）：PARALLEL 75,194ns vs SEQUENTIAL 97,591ns — **1.30x 加速**（交叉点）
+  - 全重（20 条全带计算负载）：PARALLEL 97,484ns vs SEQUENTIAL 192,486ns — **1.97x 加速**
+  
+  **仅在场景含多条重规则（`EXPRESSION_SCRIPT` 复杂脚本 / `DECISION_FLOW` 多阶段图）且候选数 ≥ 3 时，并行才可能带来真实收益**。运营看到 benchmark 数据后自行判断开不开——引擎不替运营做启发式阈值。
+- **为何不进一步**：不做并行度/线程池参数暴露（JDK 虚拟线程无限并行已够）、不做节点级并行（ice P_AND 风格——D75 图层分支等价）、不做引擎侧自适应切换（启发式不可靠，opt-in 更透明）。
 
 > 来源：`00-decisions.md` 各组标题 + `README.md` §七 版本史。按 D 编号顺序，标记"何时做了什么取舍"。
 
@@ -401,7 +390,7 @@
 
 ### 第二组：指标与外部集成（D8–D11）
 
-D8 性能目标（千级 QPS，决定是否引入 RETE / 预编译 / 索引化匹配）；D9 v1 全 MySQL 不引入列存 / 大数据；D10 AI 评估节点预留（LLMConditionEvaluator 占位，v1 不实现）；D11 Job 模式 + 调度器选型（定时扫表 / 周期回查类规则纳入一等公民）。
+D8 性能目标（千级 QPS，决定是否引入 RETE / 预编译 / 索引化匹配）；D9 MySQL 单库起步、不引入列存 / 大数据，D79 统一默认运行和数据库测试的 MySQL 口径；D10 AI 评估节点预留（LLMConditionEvaluator 占位，v1 不实现）；D11 Job 模式 + 调度器选型（定时扫表 / 周期回查类规则纳入一等公民）。
 
 ### 第三组：Rule 结构与模式（D12–D17）
 
@@ -424,6 +413,7 @@ D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔�
 | D27 确立 | Action 从 Rule 迁移到 Decision | 最大单次重构；同一 Decision 的所有命中共享 Action 配置 |
 | D30 确立 | providedMetrics allowProvided per sourceType | 调用方数据权威性最晚才表态；per-sourceType 粒度是 D30 讨论时才浮现的需求 |
 | D60 确立 | 规则引擎纯决策化，移除动作子系统 | 引擎收敛为纯决策（只产出 Decision）；动作子系统（ActionHandler SPI / 派发 / `action_execution` / 配置）整体移除，编排交流程引擎；作废 D4 / D16 / D18 / D27 / D28 / D57。上文 D4–D30 时间线中的动作相关条目为当时的历史记录，其结论已被 D60 取代 |
+| D79 确立（2026-08-30） | 运行与验证统一 MySQL | 取消 D78 的默认内嵌数据库与双数据库门禁；默认启动无需 profile，数据库测试和 CI 镜像烟测均使用 Docker 临时 MySQL；保留 V1 基线与旧库数据保护，不改原业务库及 Flyway 历史 |
 
 ---
 
@@ -437,7 +427,6 @@ D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔�
 | providedMetrics 全局 allowProvided=true | D30 讨论时 | 高权威 metric（如账户余额 SQL_AGGREGATE）不应被调用方覆盖 | per-sourceType 默认值（ATTRIBUTE / EXTERNAL_HTTP=true，SQL_AGGREGATE / STREAM=false） |
 | persistedMetricCodes（引擎持久化 provided 值） | D30 讨论时 | 引擎承担业务数据存储职责；与不可变快照语义冲突 | 不做，provided 值只活在本次评估 |
 | Action 留在 Rule 上（D27 之前） | D27 确立时 | 同一 Rule 命中只能派发一组 Action；不同 Decision 需要不同 Action 无法表达 | D27：Action 迁移到 Decision |
-| evaluation_session 全量异步写 | D21 讨论时 | session 行是幂等 UK 锚点，必须在评估开始前存在；极端情况下异步写导致幂等失效 | 仅 session 行同步写，trace 行异步写 |
 | 三层模型（Rule / RuleGroup / Condition） | 架构初期 | RuleGroup 概念冗余，树形 AST 已能表达 AND/OR 复合；两层更简洁 | 两层模型（Rule + ConditionNode AST） |
 | 批量原子发布 API | D19 讨论时 | 跨规则原子事务复杂度高，且失败回滚语义不清晰 | 前端逐条提交，批量由调用层拆分 |
 | 完全延后权限与审计 | D14 讨论时（选项 C） | 后期 ALTER TABLE 痛；合规要求不可等 | A：占位字段 + audit_log 表（D14） |
@@ -458,5 +447,4 @@ D23 幂等 Redis+DB 协议落定细节；D24 Scene 配置热加载（30s 间隔�
 | [`00-decisions.md`](./00-decisions.md) D13 v1 不做的"payloadSchema 演进" | schema 升版本如何兼容存量规则 | §2.12 Scene schema 演进 | ✅ 已迁入 |
 | [`00-decisions.md`](./00-decisions.md) D20 v1 不做的"完整预编译 / alpha 共享" | Visitor 切预编译 lambda + 跨规则条件去重 | §2.13 评估期预编译完全切换 | ✅ 已迁入 |
 | [`00-decisions.md`](./00-decisions.md) D20 v1 不做的"嵌入式 SDK" | 评估下沉到业务进程 + Watcher 多 backend 完整实现 | §2.14 嵌入式 SDK 模式 | ✅ 已迁入 |
-| [`00-decisions.md`](./00-decisions.md) D21 派生（`evaluation_session` 同步写） | 三层角色解耦 + v1 不做前置准备的理由 | §2.15 evaluation_session 异步化路径 | ✅ 已迁入 |
-
+| 运行审计 best-effort 实现 | 可靠投递、完整对账与请求幂等的边界 | §2.15 运行审计可靠性与完整对账 | 当前不承诺可靠审计 |

@@ -14,7 +14,6 @@ import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
 import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
 import com.sstlfsj.rule.config.internal.domain.RuleVersion;
 import com.sstlfsj.rule.config.internal.domain.RuleVersionStatus;
-import com.sstlfsj.rule.config.internal.domain.SceneDef;
 import com.sstlfsj.rule.config.internal.event.MetricChangedSnapshot;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.repository.MetricDefinitionMapper;
@@ -54,7 +53,6 @@ class MetricWriteServiceImplTest {
         TableInfoHelper.initTableInfo(assistant, MetricDefinition.class);
         TableInfoHelper.initTableInfo(assistant, RuleDefinition.class);
         TableInfoHelper.initTableInfo(assistant, RuleVersion.class);
-        TableInfoHelper.initTableInfo(assistant, SceneDef.class);
     }
 
     @Mock MetricDefinitionMapper metricDefinitionMapper;
@@ -333,13 +331,9 @@ class MetricWriteServiceImplTest {
 
     @Test
     void findReferencingRules_returnsOnlyMatchingRules() {
-        // rule_definition：两条属于 TENANT，分属不同 scene
-        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
-        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", 11L, "DISABLED");
-
-        // scene：10 → transfer，11 → login
-        SceneDef sc1 = scene(10L, "risk.transfer");
-        SceneDef sc2 = scene(11L, "risk.login");
+        // rule_definition：两条属于 TENANT，分属不同 scene（sceneCode 直接落在 rule_definition 上）
+        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", "risk.transfer", "PUBLISHED");
+        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", "risk.login", "DISABLED");
 
         // rule_version（mock 只返回裁列后仍包含的三个字段：id/ruleDefinitionId/metricDependencies）：
         //   rv1 属于 rd1，含 {account.age,1} → 应被选中
@@ -356,9 +350,6 @@ class MetricWriteServiceImplTest {
                 .thenReturn(List.of(rd1, rd2));
         when(ruleVersionMapper.findActiveByRuleDefIds(any()))
                 .thenReturn(List.of(rv1, rv2, rv3, rv4));
-        // scene 批量查询
-        when(sceneMapper.findByIds(any()))
-                .thenReturn(List.of(sc1, sc2));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
 
@@ -383,15 +374,13 @@ class MetricWriteServiceImplTest {
     @Test
     void findReferencingRules_differentMetricCode_notIncluded() {
         // 纯反例：规则只引用 {user.level,1}，查 account.age/1 时不应出现
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", "risk.transfer", "PUBLISHED");
         RuleVersion rv = ruleVersion(1001L, 101L, List.of(new MetricDependency("user.level", 1)));
 
         when(ruleDefinitionMapper.findByTenant(any()))
                 .thenReturn(List.of(rd));
         when(ruleVersionMapper.findActiveByRuleDefIds(any()))
                 .thenReturn(List.of(rv));
-        when(sceneMapper.findByIds(any()))
-                .thenReturn(List.of(scene(10L, "risk.transfer")));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
 
@@ -412,7 +401,7 @@ class MetricWriteServiceImplTest {
 
     @Test
     void findReferencingRules_nullDependencies_treatedAsNoMatch() {
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", "risk.transfer", "PUBLISHED");
         // metric_dependencies 为 null（列空/未设置），containsDependency 视为不匹配，不抛异常
         RuleVersion rv = ruleVersion(1001L, 101L, null);
 
@@ -420,8 +409,6 @@ class MetricWriteServiceImplTest {
                 .thenReturn(List.of(rd));
         when(ruleVersionMapper.findActiveByRuleDefIds(any()))
                 .thenReturn(List.of(rv));
-        when(sceneMapper.findByIds(any()))
-                .thenReturn(List.of(scene(10L, "risk.transfer")));
 
         List<RuleRef> result = sut.findReferencingRules(TENANT, "account.age", 1);
 
@@ -434,8 +421,8 @@ class MetricWriteServiceImplTest {
     void findRulesReferencingMetric_dedupsByRuleAcrossVersions() {
         // rd1：两条 ACTIVE rule_version 都引用 account.age（不同版本），应只出一条 RuleRef
         // rd2：一条引用 account.age v3，单独出一条
-        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
-        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", 11L, "DISABLED");
+        RuleDefinition rd1 = ruleDefinition(101L, "risk.transfer", "转账风控", "risk.transfer", "PUBLISHED");
+        RuleDefinition rd2 = ruleDefinition(102L, "risk.login", "登录风控", "risk.login", "DISABLED");
 
         RuleVersion rv1 = ruleVersion(1001L, 101L, List.of(new MetricDependency("account.age", 1)));
         RuleVersion rv2 = ruleVersion(1002L, 101L, List.of(new MetricDependency("account.age", 2)));
@@ -443,8 +430,6 @@ class MetricWriteServiceImplTest {
 
         when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd1, rd2));
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv1, rv2, rv3));
-        when(sceneMapper.findByIds(any()))
-                .thenReturn(List.of(scene(10L, "risk.transfer"), scene(11L, "risk.login")));
 
         List<RuleRef> result = sut.findRulesReferencingMetric(TENANT, "account.age");
 
@@ -466,12 +451,11 @@ class MetricWriteServiceImplTest {
 
     @Test
     void findRulesReferencingMetric_differentMetricCode_notIncluded() {
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", 10L, "PUBLISHED");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账风控", "risk.transfer", "PUBLISHED");
         RuleVersion rv = ruleVersion(1001L, 101L, List.of(new MetricDependency("user.level", 1)));
 
         when(ruleDefinitionMapper.findByTenant(any())).thenReturn(List.of(rd));
         when(ruleVersionMapper.findActiveByRuleDefIds(any())).thenReturn(List.of(rv));
-        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene(10L, "risk.transfer")));
 
         List<RuleRef> result = sut.findRulesReferencingMetric(TENANT, "account.age");
 
@@ -492,7 +476,7 @@ class MetricWriteServiceImplTest {
 
     @Test
     void countRuleUsages_aggregatesPerMetricCode_dedupPerRule() {
-        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账", 10L, "PUBLISHED");
+        RuleDefinition rd = ruleDefinition(101L, "risk.transfer", "转账", "risk.transfer", "PUBLISHED");
         // rv1 引用 account.age v1；rv2 引用 account.age v2 + user.level v1；
         // 同一规则跨版本引用同 metric → 按 metricCode 去重（account.age 计 2 条规则版本，user.level 计 1）
         RuleVersion rv1 = ruleVersion(1001L, 101L, List.of(new MetricDependency("account.age", 1)));
@@ -554,22 +538,15 @@ class MetricWriteServiceImplTest {
         return m;
     }
 
-    private RuleDefinition ruleDefinition(Long id, String code, String name, Long sceneId, String status) {
+    private RuleDefinition ruleDefinition(Long id, String code, String name, String sceneCode, String status) {
         RuleDefinition rd = new RuleDefinition();
         rd.setId(id);
         rd.setTenantId(TENANT);
         rd.setCode(code);
         rd.setName(name);
-        rd.setSceneId(sceneId);
+        rd.setSceneCode(sceneCode);
         rd.setStatus(RuleDefinitionStatus.valueOf(status));
         return rd;
-    }
-
-    private SceneDef scene(Long id, String code) {
-        SceneDef sc = new SceneDef();
-        sc.setId(id);
-        sc.setCode(code);
-        return sc;
     }
 
     private RuleVersion ruleVersion(Long id, Long ruleDefinitionId, List<MetricDependency> metricDependencies) {

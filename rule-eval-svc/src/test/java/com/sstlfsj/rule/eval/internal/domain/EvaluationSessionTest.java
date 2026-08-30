@@ -27,8 +27,9 @@ class EvaluationSessionTest {
     @Test
     void contextSnapshot_setAndGet() {
         EvaluationSession s = new EvaluationSession();
-        s.setContextSnapshot("{\"metrics\":{\"user.age\":25},\"evalNow\":\"2024-01-01T00:00:00Z\"}");
-        assertEquals("{\"metrics\":{\"user.age\":25},\"evalNow\":\"2024-01-01T00:00:00Z\"}", s.getContextSnapshot());
+        EvaluationContextSnapshot snapshot = new EvaluationContextSnapshot(java.util.Map.of("user.age", 25), java.time.Instant.parse("2024-01-01T00:00:00Z"));
+        s.setContextSnapshot(snapshot);
+        assertEquals(snapshot, s.getContextSnapshot());
     }
 
     @Test
@@ -56,7 +57,7 @@ class EvaluationSessionTest {
     @Test
     void contextSnapshot_setNullAllowed() {
         EvaluationSession s = new EvaluationSession();
-        s.setContextSnapshot("{\"k\":1}");
+        s.setContextSnapshot(new EvaluationContextSnapshot(java.util.Map.of("k", 1), null));
         s.setContextSnapshot(null);
         assertNull(s.getContextSnapshot());
     }
@@ -66,18 +67,18 @@ class EvaluationSessionTest {
         EvaluationSession s = new EvaluationSession();
         assertNull(s.getPayload());                  // 默认 null（未捕获）
         assertNull(s.getCandidateRuleVersionIds());
-        s.setPayload("{\"amount\":5000}");
-        s.setCandidateRuleVersionIds("[11,22]");
-        assertEquals("{\"amount\":5000}", s.getPayload());
-        assertEquals("[11,22]", s.getCandidateRuleVersionIds());
+        s.setPayload(java.util.Map.of("amount", 5000));
+        s.setCandidateRuleVersionIds(java.util.List.of(11L, 22L));
+        assertEquals(java.util.Map.of("amount", 5000), s.getPayload());
+        assertEquals(java.util.List.of(11L, 22L), s.getCandidateRuleVersionIds());
     }
 
     @Test
     void replayColumns_setNullAllowed() {
         EvaluationSession s = new EvaluationSession();
-        s.setPayload("{\"k\":1}");
+        s.setPayload(java.util.Map.of("k", 1));
         s.setPayload(null);
-        s.setCandidateRuleVersionIds("[1]");
+        s.setCandidateRuleVersionIds(java.util.List.of(1L));
         s.setCandidateRuleVersionIds(null);
         assertNull(s.getPayload());
         assertNull(s.getCandidateRuleVersionIds());

@@ -53,7 +53,7 @@ class RuleExportServiceTest {
 
     private RuleDefinition rule(long id, String code) {
         RuleDefinition r = new RuleDefinition();
-        r.setId(id); r.setTenantId(1L); r.setSceneId(5L);
+        r.setId(id); r.setTenantId(1L); r.setSceneCode("risk.transfer");
         r.setCode(code); r.setName("规则" + code); r.setKind(com.sstlfsj.rule.kernel.api.model.RuleKind.AST_BOOLEAN);
         r.setStatus(RuleDefinitionStatus.PUBLISHED);
         return r;
@@ -103,7 +103,7 @@ class RuleExportServiceTest {
                 .thenReturn(List.of(rule(10L, "a"), rule(11L, "b")));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(activeVersion(10L));
         when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(activeVersion(11L));
-        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene()));
         when(metricDefinitionMapper.findByCodeAndVersion(any(), eq("account.age"), eq(1))).thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
 
@@ -133,7 +133,7 @@ class RuleExportServiceTest {
         rv.setBody(new ScriptBody(new ScriptSource("metrics.amount > 1000", "CEL")));
         when(ruleDefinitionMapper.selectForExport(any(), any(), any())).thenReturn(List.of(rd));
         when(ruleVersionMapper.findActiveVersion(12L)).thenReturn(rv);
-        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene()));
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
 
@@ -152,7 +152,7 @@ class RuleExportServiceTest {
         // 相同内容 export 两次 → revision 一致（幂等）
         when(ruleDefinitionMapper.selectForExport(any(), any(), any())).thenReturn(List.of(rule(10L, "a")));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(activeVersion(10L));
-        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene()));
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
 
@@ -169,7 +169,7 @@ class RuleExportServiceTest {
                 .thenReturn(List.of(rule(10L, "a"), rule(11L, "b")));
         when(ruleVersionMapper.findActiveVersion(10L)).thenReturn(activeVersion(10L));
         when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(null);
-        when(sceneMapper.findByIds(any())).thenReturn(List.of(scene()));
+        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene()));
         when(metricDefinitionMapper.findByCodeAndVersion(any(), any(), any())).thenReturn(metric());
         when(decisionDefinitionMapper.findByCodes(any(), any())).thenReturn(List.of(decision()));
 

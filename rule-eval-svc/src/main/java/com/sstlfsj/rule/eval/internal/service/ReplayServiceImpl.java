@@ -12,8 +12,6 @@ import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import com.sstlfsj.rule.kernel.internal.engine.EvalEngine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -30,7 +28,6 @@ public class ReplayServiceImpl implements ReplayService {
     private final EvaluationSessionMapper sessionMapper;
     private final SceneSnapshotLoader snapshotLoader;
     private final EvalEngine evalEngine;
-    private final ObjectMapper objectMapper;
 
     @Override
     public EvalResult replay(Long tenantId, Long sessionId) {
@@ -43,12 +40,10 @@ public class ReplayServiceImpl implements ReplayService {
                     "REPLAY_NOT_REPRODUCIBLE: 缺少 payload/候选版本id/context_snapshot(存量行或捕获未开启)");
         }
 
-        List<Long> candidateIds = objectMapper.readValue(
-                s.getCandidateRuleVersionIds(), new TypeReference<List<Long>>() {});
-        Map<String, Object> payload = objectMapper.readValue(
-                s.getPayload(), new TypeReference<Map<String, Object>>() {});
+        List<Long> candidateIds = s.getCandidateRuleVersionIds();
+        Map<String, Object> payload = s.getPayload();
         ContextSnapshotDeserializer.Snapshot snap =
-                ContextSnapshotDeserializer.deserialize(objectMapper, s.getContextSnapshot());
+                ContextSnapshotDeserializer.deserialize(s.getContextSnapshot());
 
         List<RuleVersionSnapshot> candidates = new ArrayList<>(candidateIds.size());
         for (Long id : candidateIds) {

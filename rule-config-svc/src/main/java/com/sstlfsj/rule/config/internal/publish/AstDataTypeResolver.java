@@ -73,7 +73,11 @@ class AstDataTypeResolver {
         }
         // 校验同 resolveCondition：dataType 已知且算子在 ALLOWED 内才校验；缺席算子放行
         if (dataType != null) {
-            OperatorSpec spec = ConditionTypeCatalog.spec(col.operator());
+            String operator = col.operator();
+        if (operator == null || operator.isBlank()) {
+            throw new IllegalArgumentException("决策表列缺少算子: metric=" + col.metricCode());
+        }
+        OperatorSpec spec = ConditionTypeCatalog.spec(operator);
             Set<String> allowed = spec != null ? spec.allowedDataTypes() : null;
             if (allowed != null && !allowed.contains(dataType)) {
                 throw new IllegalArgumentException(

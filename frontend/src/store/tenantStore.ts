@@ -5,7 +5,7 @@ import type { TenantInfo } from '@/types';
 interface TenantState {
   current: string | null;
   currentId: number | null;
-  /** Header 专用：全部 ACTIVE 租户列表（始终全量，不受页面筛选影响） */
+  /** Header/页面选择器专用：ACTIVE 业务租户列表（排除 SYSTEM 平台租户）。租户管理页用 searchTenants 自行查全量。 */
   activeList: TenantInfo[];
   /** 应用启动时自动初始化 */
   init: () => Promise<void>;
@@ -21,13 +21,14 @@ export const useTenantStore = create<TenantState>((set, get) => ({
   currentId: Number(localStorage.getItem('tenantId')) || null,
   activeList: [],
 
-  /** 应用启动时自动加载 ACTIVE 租户列表并选中第一个 */
+  /** 应用启动时自动加载 ACTIVE 业务租户列表（排除 SYSTEM 平台租户），选中第一个 */
   init: async () => {
-    const tenants = await get().searchTenants(undefined, 'ACTIVE');
-    set({ activeList: tenants });
+    const all = await get().searchTenants(undefined, 'ACTIVE');
+    const biz = all.filter((t) => t.code !== 'SYSTEM');
+    set({ activeList: biz });
     const { current, currentId } = get();
-    if ((!current || !currentId) && tenants.length > 0) {
-      const t = tenants[0];
+    if ((!current || !currentId) && biz.length > 0) {
+      const t = biz[0];
       localStorage.setItem('tenantCode', t.code);
       localStorage.setItem('tenantId', String(t.id));
       set({ current: t.code, currentId: t.id });

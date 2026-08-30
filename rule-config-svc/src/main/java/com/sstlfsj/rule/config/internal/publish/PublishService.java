@@ -41,6 +41,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +59,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class PublishService {
+
+    private static final Logger log = LoggerFactory.getLogger(PublishService.class);
 
     private final RuleDefinitionMapper ruleDefinitionMapper;
     private final SceneMapper sceneMapper;
@@ -129,18 +134,35 @@ public class PublishService {
         if (rule.getStatus() == RuleDefinitionStatus.DISABLED) {
             throw new IllegalArgumentException("DISABLED 规则不允许直接发布，需先启用(enable)后再发布");
         }
-        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        SceneDef scene = sceneMapper.findByCode(rule.getTenantId(), rule.getSceneCode());
         if (scene == null) {
-            throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
+            throw new IllegalStateException("Scene 不存在: code=" + rule.getSceneCode());
         }
-        // 加载最新 DRAFT（已是冻结快照，premise A）；无待发布草稿则拒
+        // 加载最新 DRAFT；无待发布草稿则拒
         RuleVersion draft = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
         if (draft == null) {
             throw new IllegalStateException("没有待发布的草稿版本，请先保存规则草稿");
         }
+
+        // DECISION_FLOW：模板实例化时 strictRefs=false 跳过了引用冻结，发布时需重解析以冻快照并级联发布子规则
+        if (draft.getKind() == RuleKind.DECISION_FLOW && draft.getBody() instanceof FlowBody fb) {
+            ResolvedDraft resolved = resolveAndValidate(
+                    tenantId, scene, RuleKind.DECISION_FLOW,
+                    null, draft.getDecisionBindings(), draft.getPreGates(),
+                    draft.getTriggerEventTypes(), null, fb.flowGraph(), true);
+            RuleVersion reFrozen = buildDraftVersion(ruleDefinitionId, draft.getVersion(), resolved);
+            draft.setBody(reFrozen.getBody());
+            draft.setDecisionBindings(reFrozen.getDecisionBindings());
+            draft.setPreGates(reFrozen.getPreGates());
+            draft.setTriggerEventTypes(reFrozen.getTriggerEventTypes());
+            draft.setMetricDependencies(reFrozen.getMetricDependencies());
+            draft.setPayloadDependencies(reFrozen.getPayloadDependencies());
+            ruleVersionMapper.updateById(draft);
+        }
+
         Long previousActiveId = rule.getCurrentVersion();
 
-        // 原地激活 DRAFT 行（不增版本、不重解析）
+        // 原地激活 DRAFT 行（不增版本）
         draft.setStatus(RuleVersionStatus.ACTIVE);
         draft.setPublishedBy(actorId);
         draft.setPublishedAt(LocalDateTime.now());
@@ -203,9 +225,9 @@ public class PublishService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        SceneDef scene = sceneMapper.findByCode(rule.getTenantId(), rule.getSceneCode());
         if (scene == null) {
-            throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
+            throw new IllegalStateException("Scene 不存在: code=" + rule.getSceneCode());
         }
         RuleVersion draft = ruleVersionMapper.findLatestDraft(ruleDefinitionId);
         if (draft == null) {
@@ -280,9 +302,9 @@ public class PublishService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleDefinitionId);
         }
-        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
+        SceneDef scene = sceneMapper.findByCode(rule.getTenantId(), rule.getSceneCode());
         if (scene == null) {
-            throw new IllegalStateException("Scene 不存在: id=" + rule.getSceneId());
+            throw new IllegalStateException("Scene 不存在: code=" + rule.getSceneCode());
         }
         // 一条规则同时只允许一条待发布 DRAFT：有未发布草稿则拒绝出新版本
         if (ruleVersionMapper.findLatestDraft(ruleDefinitionId) != null) {
@@ -431,6 +453,20 @@ public class PublishService {
             List<String> triggerEventTypes,
             ScriptSource script,
             FlowGraph flowGraph) {
+        return resolveAndValidate(tenantId, scene, kind, conditionAst, rawBindings, preGates,
+                triggerEventTypes, script, flowGraph, true);
+    }
+
+    /** resolveAndValidate 重载：strictRefs=false 时跳过 DECISION_FLOW 的 RuleRef 冻结（模板实例化使用）。 */
+    public ResolvedDraft resolveAndValidate(
+            Long tenantId, SceneDef scene, RuleKind kind,
+            AstNode conditionAst,
+            List<RuleVersionSnapshot.DecisionBinding> rawBindings,
+            List<RuleVersionSnapshot.PreGateConfig> preGates,
+            List<String> triggerEventTypes,
+            ScriptSource script,
+            FlowGraph flowGraph,
+            boolean strictRefs) {
 
         AstNode ast = conditionAst != null ? conditionAst
                 : new AndNode(List.of(), null, null);
@@ -450,9 +486,9 @@ public class PublishService {
         if (RuleKind.EXPRESSION_SCRIPT.tag().equals(kindTag)) {
             return resolveScriptDraft(tenantId, scene, script, bindings, gates, triggers);
         }
-        // DECISION_FLOW 命中即提前 return：图不进 AST，走图编排层（结构校验 + RuleRef 冻快照 + Output 冻决策 + metric 并集）
+        // DECISION_FLOW 命中即提前 return：图不进 AST，走图编排层；strictRefs=false 时跳过 RuleRef 冻结
         if (RuleKind.DECISION_FLOW.tag().equals(kindTag)) {
-            return resolveFlowDraft(tenantId, scene, flowGraph, bindings, gates, triggers);
+            return resolveFlowDraft(tenantId, scene, flowGraph, bindings, gates, triggers, strictRefs);
         }
         // 结构校验：SCORECARD 根/权重、DECISION_TREE 结构、DECISION_TABLE 行列一致
         validateKindStructure(kindTag, ast);
@@ -569,7 +605,8 @@ public class PublishService {
      */
     private ResolvedDraft resolveFlowDraft(Long tenantId, SceneDef scene, FlowGraph flow,
             List<RuleVersionSnapshot.DecisionBinding> bindings,
-            List<RuleVersionSnapshot.PreGateConfig> gates, List<String> triggers) {
+            List<RuleVersionSnapshot.PreGateConfig> gates, List<String> triggers,
+            boolean strictRefs) {
         if (flow == null || flow.nodes().isEmpty()) {
             throw new IllegalArgumentException("DECISION_FLOW 规则必须提供非空决策图");
         }
@@ -584,11 +621,13 @@ public class PublishService {
         validateTriggerEventTypes(triggers, scene.getEventTypes());
         validatePreGateParams(gates);
 
-        // RuleRef 冻结：按 ruleCode 查同 Scene 被引规则 ACTIVE 版本，完整 snapshot 冻入（去重，只冻直接被引，不递归）
+        // RuleRef 冻结：按 ruleCode 查被引规则 ACTIVE 版本；strictRefs=false 时跳过（模板实例化场景，发布时再冻）
         Map<String, RuleVersionSnapshot> referenced = new LinkedHashMap<>();
-        for (FlowNode node : flow.nodes()) {
-            if (node instanceof RuleRefNode ref) {
-                referenced.computeIfAbsent(ref.ruleCode(), code -> freezeReferencedRule(tenantId, scene, code));
+        if (strictRefs) {
+            for (FlowNode node : flow.nodes()) {
+                if (node instanceof RuleRefNode ref) {
+                    referenced.computeIfAbsent(ref.ruleCode(), code -> freezeReferencedRule(tenantId, code));
+                }
             }
         }
 
@@ -615,14 +654,18 @@ public class PublishService {
         // flow v1 不做类型检查，freezePayloadDeps 的 dataType 出参(供 AST 路径类型环)在此不使用，传空 map 丢弃
         List<PayloadDependency> payloadDeps = freezePayloadDeps(scene, exprRefs.payloadFields(), new HashMap<>());
 
-        // Output 决策冻结：收集 OutputNode.decisionCode(去重)，仿 freezeDecisionBindings 校验存在 + 回填 name/priority
+        // Output 决策冻结：收集 OutputNode.decisionCode；strictRefs=false 时跳过（模板实例化发布时再校验）
         List<String> outputCodes = flow.nodes().stream()
                 .filter(OutputNode.class::isInstance).map(n -> ((OutputNode) n).decisionCode())
                 .filter(dc -> dc != null && !dc.isBlank()).distinct().toList();
-        List<RuleVersionSnapshot.DecisionBinding> rawOutputBindings = outputCodes.stream()
-                .map(dc -> new RuleVersionSnapshot.DecisionBinding(dc, 0)).toList();
-        List<RuleVersionSnapshot.DecisionBinding> flowDecisionBindings =
-                freezeDecisionBindings(tenantId, scene, rawOutputBindings);
+        List<RuleVersionSnapshot.DecisionBinding> flowDecisionBindings;
+        if (strictRefs) {
+            List<RuleVersionSnapshot.DecisionBinding> rawOutputBindings = outputCodes.stream()
+                    .map(dc -> new RuleVersionSnapshot.DecisionBinding(dc, 0)).toList();
+            flowDecisionBindings = freezeDecisionBindings(tenantId, scene, rawOutputBindings);
+        } else {
+            flowDecisionBindings = List.of();
+        }
 
         // flow 决策面由 OutputNode 定义，入参 bindings 忽略（v1）；resolvedAst/script=null，flow 原样冻入
         return new ResolvedDraft(RuleKind.DECISION_FLOW, null, flowDecisionBindings, gates, triggers,
@@ -630,33 +673,42 @@ public class PublishService {
     }
 
     /**
-     * 冻结一条被 DECISION_FLOW RuleRefNode 引用的规则：查同 Scene 下 ruleCode 对应规则的 ACTIVE 版本，
-     * 用其 typed 字段组装完整 {@link RuleVersionSnapshot}（发布期定格）。规则不存在/不同 Scene/无 ACTIVE 版本均拒绝发布。
+     * 冻结一条被 DECISION_FLOW RuleRefNode 引用的规则：按 tenant 级 ruleCode 查对应规则的 ACTIVE 版本
+     * （允许跨 Scene 引用），用其 typed 字段组装完整 {@link RuleVersionSnapshot}（发布期定格）。
+     * 规则不存在/无 ACTIVE 版本均拒绝发布。快照 sceneCode 取被引规则自身的 sceneCode。
      *
      * @param tenantId 租户 id
-     * @param scene    本 flow 所属场景（被引规则须同 Scene，v1 治理简化）
-     * @param ruleCode 被引规则逻辑编码
+     * @param ruleCode 被引规则逻辑编码（tenant 内唯一，可属任意 Scene）
      * @return 冻结的被引规则完整快照
      */
-    private RuleVersionSnapshot freezeReferencedRule(Long tenantId, SceneDef scene, String ruleCode) {
+    private RuleVersionSnapshot freezeReferencedRule(Long tenantId, String ruleCode) {
         if (ruleCode == null || ruleCode.isBlank()) {
             throw new IllegalArgumentException("DECISION_FLOW RuleRefNode.ruleCode 不得为空");
         }
-        // 按 (tenant, sceneId, code) 查：跨 Scene 引用查不到 → null → 拒绝（v1 限同 Scene）
-        RuleDefinition ref = ruleDefinitionMapper.findBySceneAndCode(tenantId, scene.getId(), ruleCode);
+        // 按 (tenant, code) 查：ruleCode 为 tenant 级业务标识，允许跨 Scene 引用
+        RuleDefinition ref = ruleDefinitionMapper.findByTenantAndCode(tenantId, ruleCode);
         if (ref == null) {
-            throw new IllegalArgumentException(
-                    "DECISION_FLOW 引用的规则不存在或不属于同一 Scene(v1 限同 Scene): " + ruleCode);
+            throw new IllegalArgumentException("DECISION_FLOW 引用的规则不存在: " + ruleCode);
         }
         RuleVersion active = ruleVersionMapper.findActiveVersion(ref.getId());
         if (active == null) {
-            throw new IllegalArgumentException("DECISION_FLOW 引用的规则无 ACTIVE 版本，无法冻结: " + ruleCode);
+            // 无 ACTIVE → 检查是否 DRAFT，有则级联自动发布
+            RuleVersion draft = ruleVersionMapper.findLatestDraft(ref.getId());
+            if (draft != null) {
+                log.info("Flow 发布：级联自动发布被引规则 {} (id={})", ruleCode, ref.getId());
+                publish(tenantId, ref.getId(), "system");  // 发布后产生 ACTIVE 版本
+                active = ruleVersionMapper.findActiveVersion(ref.getId());
+            }
+            if (active == null) {
+                throw new IllegalArgumentException(
+                    "DECISION_FLOW 引用的规则无 ACTIVE 版本且无 DRAFT 可自动发布: " + ruleCode);
+            }
         }
         RuleKind refKind = active.getKind() != null ? active.getKind() : RuleKind.AST_BOOLEAN;
         // 直接由 typed 实体字段组装完整快照（同 SnapshotAssembler 的形状，但源为实体而非 JSON，保全 payloadDeps 等全字段）；
         // 被引若为 flow，其 referencedSnapshots 在它自己发布时已冻，此处原样携带，不递归重冻
         return new RuleVersionSnapshot(
-                active.getId(), scene.getCode(), String.valueOf(tenantId),
+                active.getId(), ref.getSceneCode(), String.valueOf(tenantId),
                 active.getBody(), active.getPreGates(), active.getDecisionBindings(),
                 active.getTriggerEventTypes(), refKind.name(), ref.getCode(), active.getVersion(),
                 active.getMetricDependencies(), active.getPayloadDependencies());
@@ -860,18 +912,22 @@ public class PublishService {
     }
 
     /**
-     * 创建规则草稿：INSERT rule_definition + rule_version（status=DRAFT）+ audit_log。
-     *
-     * @param tenantId  租户 id
-     * @param sceneCode 场景编码
-     * @param code      规则编码
-     * @param content   规则内容（name/kind/conditionAst/decisionBindings/preGates/triggerEventTypes/script，kind null 时默认 AST_BOOLEAN）
-     * @param actorId   操作人
-     * @return 新建草稿的 id 和版本信息
+     * 创建规则草稿（主入口）。建规则定义 + 首版 DRAFT version，建草稿即冻结快照（premise A）。
      */
     @Transactional
     public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
                                           String code, RuleContent content, String actorId) {
+        return createDraft(tenantId, sceneCode, code, content, actorId, true);
+    }
+
+    /**
+     * 创建规则草稿（严格模式可选）。模板实例化时 strictRefs=false 跳过 Flow RuleRef 冻结，
+     * 允许被引规则尚不存在；发布时再校验。其余 kind 不受影响。
+     */
+    @Transactional
+    public DraftCreatedResult createDraft(Long tenantId, String sceneCode,
+                                          String code, RuleContent content, String actorId,
+                                          boolean strictRefs) {
         String name = content.name();
         String kind = content.kind();
         RuleBody body = content.body();
@@ -888,8 +944,8 @@ public class PublishService {
             throw new IllegalArgumentException("Scene 不存在: code=" + sceneCode);
         }
 
-        // 2. 校验 code 在同 tenant+scene 下唯一，提前给出友好错误
-        boolean codeExists = ruleDefinitionMapper.findBySceneAndCode(tenantId, scene.getId(), code) != null;
+        // 2. 校验 code 在同 tenant 下唯一（ruleCode 为 tenant 级业务标识），提前给出友好错误
+        boolean codeExists = ruleDefinitionMapper.findByTenantAndCode(tenantId, code) != null;
         if (codeExists) {
             throw new IllegalArgumentException("规则编码已存在: code=" + code);
         }
@@ -907,13 +963,13 @@ public class PublishService {
         validateKindBodyConsistent(effectiveRuleKind, body);
 
         // 4. INSERT rule_definition（status=DRAFT）
-        RuleDefinition rd = RuleDefinition.draft(tenantId, scene.getId(), code, name, effectiveRuleKind, actorId);
+        RuleDefinition rd = RuleDefinition.draft(tenantId, sceneCode, code, name, effectiveRuleKind, actorId);
         ruleDefinitionMapper.insert(rd);
 
-        // 5. resolveAndValidate（premise A）：建草稿即冻结快照
+        // 5. resolveAndValidate（premise A）：建草稿即冻结快照；strictRefs=false 时跳过 Flow RuleRef 冻结
         ResolvedDraft resolved = resolveAndValidate(
                 tenantId, scene, effectiveRuleKind,
-                conditionAst, decisionBindings, preGates, triggerEventTypes, script, flowGraph);
+                conditionAst, decisionBindings, preGates, triggerEventTypes, script, flowGraph, strictRefs);
         RuleVersion rv = buildDraftVersion(rd.getId(), 1L, resolved);
         ruleVersionMapper.insert(rv);
 

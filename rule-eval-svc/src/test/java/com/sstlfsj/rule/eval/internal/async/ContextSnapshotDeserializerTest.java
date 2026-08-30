@@ -5,8 +5,7 @@ import com.sstlfsj.rule.kernel.api.model.EventSource;
 import com.sstlfsj.rule.kernel.api.model.MetricValue;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
+import com.sstlfsj.rule.eval.internal.domain.EvaluationContextSnapshot;
 
 import java.time.Instant;
 import java.util.Map;
@@ -15,20 +14,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ContextSnapshotDeserializerTest {
 
-    private final ObjectMapper om = JsonMapper.builder().build();
-
     @Test
     void deserialize_parsesMetricsAndEvalNow() {
-        String json = "{\"metrics\":{\"total\":200},\"evalNow\":\"2026-06-09T01:02:03Z\"}";
-        ContextSnapshotDeserializer.Snapshot s = ContextSnapshotDeserializer.deserialize(om, json);
+        ContextSnapshotDeserializer.Snapshot s = ContextSnapshotDeserializer.deserialize(
+                new EvaluationContextSnapshot(Map.of("total", 200), Instant.parse("2026-06-09T01:02:03Z")));
         assertThat(s.metrics()).containsEntry("total", 200);
         assertThat(s.evalNow()).isEqualTo(Instant.parse("2026-06-09T01:02:03Z"));
     }
 
     @Test
     void deserialize_nullOrBlank_returnsEmpty() {
-        assertThat(ContextSnapshotDeserializer.deserialize(om, null).metrics()).isEmpty();
-        assertThat(ContextSnapshotDeserializer.deserialize(om, "  ").evalNow()).isNull();
+        assertThat(ContextSnapshotDeserializer.deserialize(null).metrics()).isEmpty();
+        assertThat(ContextSnapshotDeserializer.deserialize(null).evalNow()).isNull();
     }
 
     @Test
@@ -40,8 +37,8 @@ class ContextSnapshotDeserializerTest {
         EvalContext ctx = new EvalContext("1", ev, null,
                 Map.of("total", new MetricValue(8888, "NUMBER", "PROVIDED")), now);
 
-        String json = ContextSnapshotSerializer.serialize(om, ctx);
-        ContextSnapshotDeserializer.Snapshot s = ContextSnapshotDeserializer.deserialize(om, json);
+        EvaluationContextSnapshot snapshot = ContextSnapshotSerializer.serialize(ctx);
+        ContextSnapshotDeserializer.Snapshot s = ContextSnapshotDeserializer.deserialize(snapshot);
 
         assertThat(s.metrics()).containsEntry("total", 8888);
         assertThat(s.evalNow()).isEqualTo(now);

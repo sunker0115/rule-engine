@@ -37,15 +37,16 @@ export default function CenterPanel({ metadata, sceneCode, ruleCode, tenantId, a
     if (currentId) listDecisions(currentId).then((d) => setDecisions(d ?? []));
   }, [currentId]);
 
-  // DECISION_FLOW：拉取同场景已发布规则写入 store，供 FlowCanvasEditor 和 RightPanel 共用
+  // DECISION_FLOW：拉取 tenant 全量已发布规则写入 store（RuleRef 允许跨 Scene 引用），供 FlowCanvasEditor 和 RightPanel 共用
+  // 排除自身与 DECISION_FLOW（防递归）；仅 PUBLISHED 可被引（RuleRef 冻结 ACTIVE 版本）
   useEffect(() => {
-    if (!tenantId || !sceneCode || kind !== 'DECISION_FLOW') return;
-    listRules(tenantId, sceneCode, { page: 1, size: 500 }).then((data) => {
+    if (!tenantId || kind !== 'DECISION_FLOW') return;
+    listRules(tenantId, undefined, { page: 1, size: 500 }).then((data) => {
       setFlowSceneRules((data.items ?? [])
-        .filter((r: any) => r.code !== ruleCode && r.status === 'PUBLISHED')
-        .map((r: any) => ({ code: r.code, name: r.name, ruleDefinitionId: r.ruleDefinitionId, kind: r.kind })));
+        .filter((r: any) => r.code !== ruleCode && r.status === 'PUBLISHED' && r.kind !== 'DECISION_FLOW')
+        .map((r: any) => ({ code: r.code, name: r.name, ruleDefinitionId: r.ruleDefinitionId, kind: r.kind, sceneCode: r.sceneCode })));
     });
-  }, [tenantId, sceneCode, kind, ruleCode, setFlowSceneRules]);
+  }, [tenantId, kind, ruleCode, setFlowSceneRules]);
 
   const renderEditor = () => {
     // DECISION_FLOW: 决策图画布（与其它 5 种承载平级，独立编排层）

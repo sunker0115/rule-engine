@@ -289,7 +289,10 @@ export default function LeftPanel({ ruleDetail, onOpenDryRun, onUpdated, onReana
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                   <span style={{ width: 6, height: 6, borderRadius: 2, background: '#2f6bff', flex: 'none' }} />
                   <span>{r.name}</span>
-                  <Tag style={{ marginLeft: 'auto', fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>{r.kind}</Tag>
+                  {r.sceneCode && (
+                    <Tag style={{ marginLeft: 'auto', fontSize: 10, lineHeight: '16px', padding: '0 4px' }} color="blue">{r.sceneCode}</Tag>
+                  )}
+                  <Tag style={{ marginLeft: r.sceneCode ? 0 : 'auto', fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>{r.kind}</Tag>
                 </div>
               ))}
             </div>

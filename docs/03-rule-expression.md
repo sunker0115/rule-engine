@@ -1,14 +1,19 @@
-# 03 — 规则表达式
+# 03 — 规则表达式（AST 系）
 
-> **位置定位**：本文档承载规则的**可写性边界**——AST 节点结构 / 操作符清单 / 短路求值规则 / 节点级 trace 落点 / 哪些表达式 v1 不支持。
+> **位置定位**：本文档承载 AST 系四种 kind（`AST_BOOLEAN` / `SCORECARD` / `DECISION_TREE` / `DECISION_TABLE`）的**可写性边界**——AST 节点结构 / 操作符清单 / 短路求值规则 / 节点级 trace 落点。
 >
 > **前置阅读**：[`01-concepts.md`](./01-concepts.md) §3.5 AST 与"分组心智" + §3.6 Condition（含 ConditionType）、[`00-decisions.md`](./00-decisions.md) D12 / D15 / D20
 >
 > **解决什么疑问**："我能写多复杂的规则？""嵌套 AND/OR/NOT 怎么表达？""短路求值的边界是什么？""trace 在哪儿能看到节点求值结果？"
 >
 > **职责边界**——
-> - ✅ AST 节点字段语义 / 操作符语义 / 短路规则 / trace 输出 / v1 不支持的表达式（指向 08-evolution）
-> - ❌ 不写运行时调度（→ 02-runtime）、不写 ConditionType 扩展指南（→ 04-extension）、不写 node_trace 表结构（→ 05-storage）、不写编辑器 UI（→ 06-frontend）
+> - ✅ AST 节点字段语义 / 操作符语义 / 短路规则 / trace 输出
+> - ❌ 不写 DECISION_FLOW（→ [02-runtime §3.5b](./02-runtime.md)）、不写 EXPRESSION_SCRIPT 脚本语法（→ [04-extension §三](./04-extension.md)）、不写运行时调度（→ 02-runtime）、不写 ConditionType 扩展指南（→ 04-extension）、不写 node_trace 表结构（→ 05-storage）、不写编辑器 UI（→ 06-frontend）
+>
+> **六种 kind 的判定主体**（D76 `RuleBody` 多态）：
+> - `AstBody(conditionAst)` → AST 系四种 kind（本文档覆盖）
+> - `ScriptBody(script)` → EXPRESSION_SCRIPT（六引擎表达式，见 04-extension §三）
+> - `FlowBody(flowGraph, referencedSnapshots)` → DECISION_FLOW（DAG 决策图，见 02-runtime §3.5b）
 
 ---
 
@@ -20,14 +25,14 @@
 | §三 操作符清单 | ✅（含 DATE_BEFORE/DATE_AFTER §3.4） |
 | §四 短路求值规则 | ✅ |
 | §五 节点级 trace | ✅ |
-| §六 v1 不支持的表达式 | ✅ |
+| §六 超出 AST 系的判定形态 | ✅（DECISION_FLOW→02-runtime / EXPRESSION_SCRIPT→04-extension） |
 | §七 内置时间类 conditionType | ✅ 已展开（time.window / time.occurred_at / 间接时间） |
 
 ---
 
 ## 二、AST 节点结构
 
-AST 由五种节点类型组成，每种节点字段如下。
+AST 由五种节点类型组成，六种 rule kind 通过 `RuleBody` 多态承载（见 §七）。本节描述 AST 系四种 kind（`AST_BOOLEAN`/`SCORECARD`/`DECISION_TREE`/`DECISION_TABLE`）共用的节点。
 
 ### 2.1 AndNode（与节点）
 
@@ -293,15 +298,17 @@ trace 行在评估结束后异步入队 TraceWriter，失败降级丢弃（不�
 
 ---
 
-## 六、v1 不支持的表达式
+## 六、超出 AST 系的判定形态
 
-以下表达式形态 v1 明确不支持，列出替代方案和演进锚点。
+以下判定形态不在 AST 系四种 kind 的覆盖范围内，由其他机制承载：
 
-| 不支持的形态 | 原因 | v1 替代方案 | 演进锚点 |
-|------------|------|-----------|---------|
-| 用户自定义 Java 函数调用（urule FunctionLibrary 风格） | 与闭合校验（D20 §3）、禁止副作用（D16）、metric 只读（§3.9）三条决策正面冲突；已否决（见 [`08-evolution.md §四`](./08-evolution.md)） | 封装为 `@ConditionType` SPI（[`04-extension.md`](./04-extension.md)） | — || 跨规则引用 / 子规则调用 | D6 评估即版本快照不可变；跨规则引用违背快照语义（被引用规则可能在引用期间发布新版） | 将共享逻辑提取为 Metric（SQL 或 HTTP）或拆分成多条独立规则 | [`08-evolution.md §2`](./08-evolution.md) |
-| 运行时动态参数绑定（`params` 字段引用 payload 变量） | D20 §3：所有变量类型在发布时已知，不做运行期参数解析 | 设 `valueRef=PAYLOAD` 直接引用 payload 字段（params 仍写死比较值，不在运行期绑定）；动态值走 Metric | — |
-| 结果聚合函数（SUM/AVG/COUNT over 多节点结果） | AST 是布尔树，不产生数值聚合 | SCORECARD kind（D12，v2 演进）；v1 用 metric 预计算聚合值 | [`08-evolution.md §2`](./08-evolution.md)（SCORECARD） |
+| 形态 | 承载方式 | 详见 |
+|------|---------|------|
+| DECISION_FLOW（DAG 决策图编排） | 第 6 种 kind `DECISION_FLOW`，`FlowBody(flowGraph)`，`FlowExecutor` DAG 遍历 | [02-runtime §3.5b](./02-runtime.md) |
+| EXPRESSION_SCRIPT（脚本表达式） | 第 5 种 kind `EXPRESSION_SCRIPT`，`ScriptBody(script)`，六引擎求值 | [04-extension §三](./04-extension.md) |
+| 用户自定义 Java 函数调用（urule FunctionLibrary 风格） | 已否决——与闭合校验/禁副作用/metric 只读冲突 | [08-evolution §四](./08-evolution.md) |
+| 运行时动态参数绑定（`params` 字段引用 payload 变量） | D20 §3：变量类型发布时已知，不做运行期解析。动态值走 `valueRef=PAYLOAD` 或 Metric | — |
+| RuleBody 多态承载 | `RuleBody` sealed：`AstBody` / `ScriptBody` / `FlowBody` 三变体，D76 收敛 | [01-concepts §3.4](./01-concepts.md) |
 
 ---
 

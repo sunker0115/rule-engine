@@ -1,7 +1,7 @@
 # 高风险登录拦截(high-risk-login)
 
 > **状态**:✅ 对齐当前实现(2026-06-10,含配置闭环 B 轮 D54:decision 独立写 API + 发布期冻结 name/priority/actions + PULL 决策无 action 校验),已通过 HTTP API 端到端跑通。
-> 本案例是按**当前真实 API 契约**重写的样板——其余旧案例已归档于 [`../../archive/`](../../archive/)（`new-account-large-transfer` / `ticket-creation` / `user-register` / `time-conditions`），使用了已废弃的形态(见文末「旧案例过期点」),需逐个按本案例范式重写后移回业务域目录。
+> 本案例是按**当前真实 API 契约**重写的样板。同级还有 [`../../time-conditions/`](../../time-conditions/)（时间条件三种写法）与 [`../../connector-standardization/`](../../connector-standardization/)（EXTERNAL_HTTP 连接器）两个已对齐的案例；旧废弃案例（依赖 D60 动作子系统 / D55 providedMetrics 等已移除能力）已删除，其过期点见文末「过期点对照」。
 
 ## 一、场景与业务目标
 

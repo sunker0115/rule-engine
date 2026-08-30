@@ -1,0 +1,14 @@
+[
+  {
+    "metricCode": "user.login.count.7d",
+    "name": "近 7 天登录次数",
+    "sourceType": "SQL_AGGREGATE",
+    "dataType": "LONG",
+    "params": {
+      "datasource": "loadtest_ro",
+      "sql": "SELECT COUNT(*) FROM user_login_log WHERE user_id = :subjectId AND created_at >= NOW() - INTERVAL 7 DAY"
+    },
+    "cacheTtlSeconds": 60,
+    "allowProvided": false
+  }
+]

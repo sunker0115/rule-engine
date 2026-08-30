@@ -3,6 +3,7 @@ package com.sstlfsj.rule.eval.internal.repository;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
 import org.apache.ibatis.annotations.Insert;
+import com.baomidou.mybatisplus.annotation.TableName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -51,6 +52,13 @@ class EvaluationSessionMapperTest {
         assertTrue(sql.contains("candidate_rule_version_ids"), "INSERT 列清单应含 candidate_rule_version_ids");
         assertTrue(sql.contains("s.payload"), "VALUES 应绑定 #{s.payload}");
         assertTrue(sql.contains("candidateRuleVersionIds"), "VALUES 应绑定 #{s.candidateRuleVersionIds}");
+        assertTrue(sql.contains("BestEffortJsonTypeHandler"), "四个 JSON 参数须显式使用局部容错 TypeHandler");
+    }
+
+    @Test
+    void entity_usesAutoResultMapForTypedJsonColumns() {
+        assertTrue(EvaluationSession.class.getAnnotation(TableName.class).autoResultMap(),
+                "读取 JSON 列须经实体字段 TypeHandler 反序列化");
     }
 
     @Test

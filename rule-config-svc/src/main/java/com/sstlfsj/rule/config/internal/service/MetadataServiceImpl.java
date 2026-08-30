@@ -93,6 +93,29 @@ class MetadataServiceImpl implements MetadataService {
     }
 
     @Override
+    public MetadataResponse getTenantMetadata(Long tenantId) {
+        // conditionTypes: SPI 全局注册，与 scene/tenant 无关
+        Map<String, OperatorSpec> merged = new LinkedHashMap<>();
+        ConditionTypeCatalog.all().forEach(s -> merged.put(s.code(), s));
+        customSpecs.forEach(s -> merged.putIfAbsent(s.code(), s));
+        List<OperatorSpec> conditionTypes = List.copyOf(merged.values());
+
+        // metrics: tenant 级，与场景无关（metric 在 tenant 级对所有 scene 可用）
+        List<MetricMeta> metricMetas = metricDefinitionMapper.findActiveByTenant(tenantId)
+                .stream()
+                .map(m -> new MetricMeta(m.getMetricCode(), m.getName(),
+                        m.getDataType(), m.getSourceType(),
+                        Boolean.TRUE.equals(m.getAllowProvided())))
+                .toList();
+
+        List<String> langs = expressionEngines.stream()
+                .map(ExpressionEngine::lang).distinct().toList();
+
+        // eventTypes 与场景无关，返回空列表（模板不绑定事件类型）
+        return new MetadataResponse(conditionTypes, metricMetas, List.of(), langs);
+    }
+
+    @Override
     public List<MetricDescriptor> listMetricDefinitions(MetricListQuery q) {
         Long tid = q.tenantId();
 
@@ -130,7 +153,7 @@ class MetadataServiceImpl implements MetadataService {
             return new InputManifestResponse(List.of());
         }
 
-        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneIds(tid, List.of(scene.getId()))
+        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneCode(tid, sceneCode)
                 .stream().map(RuleDefinition::getId).toList();
         if (defIds.isEmpty()) {
             return new InputManifestResponse(List.of());
@@ -163,12 +186,9 @@ class MetadataServiceImpl implements MetadataService {
      * 与 collectRequiredMetricCodes 不同：保留 version，以便 DECLARED 分支按版本精确查询。
      */
     private Set<MetricDependency> collectRequiredDeps(Long tenantId, List<String> scenes) {
-        List<Long> sceneIds = sceneMapper.findByCodes(tenantId, scenes)
-                .stream().map(SceneDef::getId).toList();
-        if (sceneIds.isEmpty()) return Set.of();
-
-        List<Long> defIds = ruleDefinitionMapper.findByTenantAndSceneIds(tenantId, sceneIds)
-                .stream().map(RuleDefinition::getId).toList();
+        List<Long> defIds = scenes.stream()
+                .flatMap(sc -> ruleDefinitionMapper.findByTenantAndSceneCode(tenantId, sc).stream())
+                .map(RuleDefinition::getId).distinct().toList();
         if (defIds.isEmpty()) return Set.of();
 
         Set<MetricDependency> deps = new HashSet<>();

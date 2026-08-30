@@ -9,13 +9,16 @@
     "triggerEventTypes": ["login"],
     "decisionBindings": [{"decisionCode": "FLAG", "priority": 10}],
     "preGates": [],
-    "conditionAst": {
-      "type": "ConditionNode",
-      "conditionType": "time.occurred_at",
-      "params": {
-        "operator": "BETWEEN",
-        "start": "2026-01-01T00:00:00Z",
-        "end": "2026-12-31T23:59:59Z"
+    "body": {
+      "type": "AstBody",
+      "conditionAst": {
+        "type": "ConditionNode",
+        "conditionType": "time.occurred_at",
+        "params": {
+          "operator": "BETWEEN",
+          "start": "2026-01-01T00:00:00Z",
+          "end": "2026-12-31T23:59:59Z"
+        }
       }
     }
   },
@@ -29,14 +32,17 @@
     "triggerEventTypes": ["access"],
     "decisionBindings": [{"decisionCode": "ALLOW", "priority": 10}],
     "preGates": [],
-    "conditionAst": {
-      "type": "ConditionNode",
-      "conditionType": "time.window",
-      "params": {
-        "start": "09:00",
-        "end": "18:00",
-        "daysOfWeek": ["MON", "TUE", "WED", "THU", "FRI"],
-        "timezone": "Asia/Shanghai"
+    "body": {
+      "type": "AstBody",
+      "conditionAst": {
+        "type": "ConditionNode",
+        "conditionType": "time.window",
+        "params": {
+          "start": "09:00",
+          "end": "18:00",
+          "daysOfWeek": ["MON", "TUE", "WED", "THU", "FRI"],
+          "timezone": "Asia/Shanghai"
+        }
       }
     }
   }

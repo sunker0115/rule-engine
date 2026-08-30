@@ -18,6 +18,8 @@ interface Props {
   eventTypes: string[];
   payloadFieldNames: string[];
   payloadFieldTypes?: Record<string, string>;
+  /** 模板参数名（来自 script.params），试算时可选择并覆盖。 */
+  paramKeys?: string[];
 }
 
 interface PayloadPair {
@@ -28,7 +30,7 @@ interface PayloadPair {
 
 let nextPairId = 0;
 
-export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabel, ruleId, sceneCode, eventTypes, payloadFieldNames, payloadFieldTypes }: Props) {
+export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabel, ruleId, sceneCode, eventTypes, payloadFieldNames, payloadFieldTypes, paramKeys }: Props) {
   const te = useTranslation('eval').t;
   const tc = useTranslation('common').t;
   const { current } = useTenantStore(); // tenant code, e.g. "loadtest"
@@ -89,7 +91,7 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
     return {
       tenantCode: current ?? '',
       sceneCode,
-      eventType: values.eventType,
+      eventType: values.eventType || 'default',
       subjectId: values.subjectId,
       eventId: `dry-${Date.now()}`,
       occurredAt: new Date().toISOString(),
@@ -168,14 +170,26 @@ export default function DryRunDrawer({ open, onClose, ruleVersionId, versionLabe
         </div>
       )}
       <Form form={form} layout="vertical" onValuesChange={(_, all) => setFormValues(all)}>
-        <Form.Item name="eventType" label={te('dryRun.eventType')} rules={[{ required: eventTypes.length > 0 }]}>
-          {eventTypes.length > 0
-            ? <Select options={eventTypes.map((e) => ({ value: e, label: e }))} />
-            : <Input placeholder={te('dryRun.eventTypeAny')} />}
+        <Form.Item name="eventType" label={te('dryRun.eventType')} initialValue="default" rules={[{ required: true }]}>
+          <Select
+            mode="tags"
+            maxCount={1}
+            placeholder={te('dryRun.eventTypeAny')}
+            options={eventTypes.map((e) => ({ value: e, label: e }))}
+            style={{ width: '100%' }}
+          />
         </Form.Item>
         <Form.Item name="subjectId" label={te('dryRun.subjectId')} rules={[{ required: true }]}>
           <Input />
         </Form.Item>
+        {(paramKeys?.length ?? 0) > 0 && (
+          <Form.Item label="模板参数（已内嵌，无需手动添加）">
+            {paramKeys!.map((k) => (
+              <Tag key={k} style={{ marginBottom: 4 }}>{k}</Tag>
+            ))}
+          </Form.Item>
+        )}
+
         <Form.Item label={te('dryRun.payload')}>
           {pairs.length === 0 && (
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>

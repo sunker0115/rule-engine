@@ -47,10 +47,15 @@ RuleEvent
 ④ EvalContext 构建
   │  · 扫 AST 收集涉及的 metricCode（集合并集）
   │  · payload 字段直接注入（valueRef=PAYLOAD）；metric 按 provided（SDK/Job 注入）优先 → 其余按 sourceType 并发取数（D25/D55）
-  │  · 组装 EvalContext（不可变 POJO）；evaluation_session 行同步写入 DB
+  │  · 组装 EvalContext（不可变 POJO）；此阶段不写 evaluation_session
   ▼
-⑤ AST 评估（Visitor 树遍历）
-  │  · InterpretedExecutor（v1 默认实现）
+⑤ 规则判定主体评估（按 kind 路由执行器）
+  │  · AST_BOOLEAN/SCORECARD/DECISION_TREE/DECISION_TABLE → InterpretedExecutor（Visitor 树遍历）
+  │  · EXPRESSION_SCRIPT → ScriptExecutor（六引擎表达式求值，见 04-extension §三）
+  │  · DECISION_FLOW → FlowExecutor（DAG 图遍历：RuleRef/Switch/Transform/Output，见 §3.5b）
+  │  · 按 Scene.executionMode 决定候选规则执行方式（见 §3.5a）：
+  │    SEQUENTIAL（默认）：逐条串行
+  │    PARALLEL：ParallelEvaluator 并发（VirtualThread，ALL_HITS/HIGHEST_PRIORITY 全量并行 / FIRST_HIT 批式并行）
   │  · 每个节点评估结果收集到 TraceCollector（内存 ArrayList，无锁）
   │  · 单节点失败：节点 satisfied=false，整树继续短路求值（D15）
   │  · 评估结束：EvalResult 出树，node_trace 批量 submit 入 TraceWriter 队列（异步，D21）
@@ -58,7 +63,7 @@ RuleEvent
 ⑥ 决策合成（decisionStrategy）
   · 命中规则绑定的 Decision 经 decisionStrategy 合成 finalDecision（D26/D29）
   · PULL：EvalResult{finalDecision, hitDecisions, ...} 同步返回调用方
-  · PUSH/HYBRID：异步评估完即落库 evaluation_session，不派发动作（D60）
+  · PUSH/HYBRID：异步评估完成后发布审计事件，不派发动作（D60）
   · "命中后做什么"归消费方 / 流程引擎
 ```
 
@@ -69,30 +74,22 @@ RuleEvent
 | 阶段①→③ 串行 | Trigger 校验 → Matcher 路由 → Pre-Gate 拦截依次串行，快速短路 |
 | 阶段④内部并发 | Subject 加载与 metric 批拉 `CompletableFuture.allOf()` 并行（D25） |
 | 引擎纯决策化 | 引擎只产出决策，不派发动作（D60）；"命中后做什么"归消费方 / 流程引擎 |
-| `evaluation_session` 同步写 | 阶段④结束时同步写入（量小延迟可忽略，且对账需该行作锚 + 与 event_id DB uk 是 D11 幂等双兜底的下半层，D21） |
+| `evaluation_session` 异步批写 | 评估完成后发布事件并非阻塞入队，消费者插入终态；失败可丢，不阻塞评估响应 |
 | `node_trace` 异步批写 | 阶段⑤结束时入 TraceWriter 队列，旁路观察通道，失败降级丢弃，不影响热路径（D21） |
 
 **同步/异步边界**：
 
 ```
-  评估线程（同步热路径）
-  ──────────────────────────────────────────────────────
-  ① Trigger → ② Matcher → ③ Pre-Gate → ④ EvalContext 构建
-                                              │
-                                          ④ 末尾：INSERT evaluation_session（同步）
-                                              │
-                                         ⑤ AST 评估
-                                              │
-                                        ⑤ 末尾：submit(node_trace batch)
-                                              │         │
-                                              │         └──▶ TraceWriter 队列（异步批写）
-                                              │
-                                         ⑥ 决策合成 finalDecision
-                                              │
-                             PULL 模式：EvalResult ◀──── 同步返回
-                             PUSH/HYBRID 模式：异步评估完落库即止（不派发动作，D60）
-  ──────────────────────────────────────────────────────
+评估线程：Trigger → Matcher → Pre-Gate → EvalContext → 求值 → 决策合成
+                                                           │
+                                                发布 AuditRecordedEvent
+                                                           │
+                                  AuditPersister 非阻塞入队 → 返回 EvalResult
+                                                           │
+异步消费者：终态 evaluation_session 批写 → node_trace 旁路入队 → 异步批写
 ```
+
+PUSH 入口先返回受理结果，后续由评估线程执行同一计算与审计事件发布流程。审计和 trace 均为 best-effort，不保证在响应返回前落库；dry-run 在单版本分支直接返回，不发布生产审计事件。
 
 ---
 
@@ -109,7 +106,7 @@ RuleEvent
 - `eventId` 为空时引擎生成 UUID v4；
 - 校验 `eventType` ∈ `Scene.eventTypes` 白名单，不在则返回 400 `INVALID_EVENT_TYPE`；
 - 校验 `payload` 字段符合 `Scene.payloadSchema`（字段名 + 基础类型），不符则返回 400 `PAYLOAD_SCHEMA_MISMATCH`；
-- 幂等上半层：`SET rule:session:{tenantId}:{eventId} <evalResultJson> NX EX 3600`（Redis trySet），命中说明已处理过，直接返回缓存结果，不进入后续阶段。
+- 当前入口不做 Redis 请求去重或结果缓存；数据库唯一键仅约束异步审计记录（见 §四）。
 
 **PUSH vs PULL vs dry-run 入口对比**：
 
@@ -119,7 +116,7 @@ RuleEvent
 | `POST /api/v1/rule/evaluate` | PULL | 是 | `EvalResult { ... }` |
 | `POST /api/v1/rule/dry-run` | PULL（试算） | 是 | `EvalResult + nodeTrace` |
 
-> **dry-run 试跑目标二选一必传**（D56）：`ruleVersionId`（精确版本）/ `ruleId`（取最新版本，含 DRAFT）二选一，都不传 → 400 `MISSING_DRYRUN_TARGET`。dry-run 结构上恒走"带版本单快照"分支——**不写 `evaluation_session`**，痕迹按需落 `dry_run_session` / `dry_run_node_trace`。premise A 下草稿即冻结快照，故 dry-run 试跑的 DRAFT 与发布后内容一致。
+> **dry-run 试跑目标二选一必传**（D56）：`ruleVersionId`（精确版本）/ `ruleId`（取最新版本，含 DRAFT）二选一，都不传 → 400 `MISSING_DRYRUN_TARGET`。dry-run 结构上恒走"带版本单快照"分支，**不写 `evaluation_session` 或任何专用历史表**，结果和节点 trace 只随响应返回。premise A 下草稿即冻结快照，故 dry-run 试跑的 DRAFT 与发布后内容一致。
 
 **异常语义**：
 - 400 系列：schema 校验失败，不进入评估链路；
@@ -139,13 +136,13 @@ RuleEvent
 - 索引在规则发布/禁用时增量热更（D17）：单服务模式由 Modulith `RulePublishedEvent` 触发（近实时）；嵌入式 SDK 模式由 `DbPollingRuleWatcher` 轮询触发（15s 最终一致）；Scene 变更同理（D24，单服务 `SceneChangedEvent` / SDK 模式 `DbPollingSceneWatcher` 30s）。
 
 **异常语义**：
-- 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { satisfied=false }`（API 字段名 `ruleHit`），不写 `evaluation_session`，不进入后续阶段。此路径下幂等依赖 Redis 上半层（TTL 默认 3600s）；TTL 过期后相同 eventId 再次推送被视为新事件。
+- 无候选（索引查不到匹配 RuleVersion）→ 直接返回 `EvalResult { satisfied=false }`（API 字段名 `ruleHit`），不写 `evaluation_session`，不进入后续阶段。同一 eventId 再次请求仍会执行候选匹配。
 
 ### 3.3 Pre-Gate 拦截
 
 **输入**：候选 `RuleVersion` 快照列表 + `RuleEvent`
 
-**输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或写 `evaluation_session { status=BLOCKED, blocked_by=<Gate 类型> }` + 返回 `EvalResult { satisfied=false }`（API 字段名 `ruleHit`）
+**输出**：通过 Pre-Gate 的 `RuleVersion` 列表；或产生 BLOCKED 审计事件材料并返回 `EvalResult { satisfied=false }`（API 字段名 `ruleHit`）
 
 **核心动作**：
 - 对每条候选 RuleVersion，串行评估 `pre_gates` 中声明的 Gate（v1 仅 `ROLLOUT`）；
@@ -160,7 +157,7 @@ RuleEvent
 
 **结果语义**：
 - 某条 RuleVersion 被任一 Gate 拦截 → 该 RuleVersion 不进入 EvalContext 构建与 AST 评估；
-- 若**全部**候选 RuleVersion 均被 Pre-Gate 拦截 → 写 `evaluation_session { status=BLOCKED, blocked_by=<首个拦截 Gate 类型> }`，返回 `EvalResult { satisfied=false }`；
+- 若**全部**候选 RuleVersion 均被 Pre-Gate 拦截 → 评估结束后异步写 `evaluation_session { status=BLOCKED, blocked_by=<首个拦截 Gate 类型> }`，返回 `EvalResult { satisfied=false }`；
 - BLOCKED 对账不计入命中率分母（D22）。
 
 **Gate 内部异常**（如 Redis 频次计数器超时）：默认 fail-closed——失败视为"未通过该 Gate"，宁可漏发不可错发；具体各 Gate 的 fail-open/closed 默认值由各实现声明（→ 04-extension）。
@@ -169,15 +166,14 @@ RuleEvent
 
 **输入**：通过 Pre-Gate 的 `RuleVersion` 快照列表 + `RuleEvent`
 
-**输出**：不可变 `EvalContext` + `evaluation_session` 行（同步写 DB）
+**输出**：不可变 `EvalContext`；审计在完整评估结束后异步写入。
 
-**核心动作（5 步）**（B21 已实装：`EvalContextAssembler` 接线 provided 优先 → 查缓存 → 按 `sourceType` 并发 fetch → 失败降级 `METRIC_FETCH_FAIL`；并注入 payload 字段）：
+**核心动作（4 步）**（B21 已实装：`EvalContextAssembler` 接线 provided 优先 → 查缓存 → 按 `sourceType` 并发 fetch → 失败降级 `METRIC_FETCH_FAIL`；并注入 payload 字段）：
 
 1. **收集 metricCode**：扫每条候选 RuleVersion 的 `metric_dependencies`，取并集；
 2. **payload 注入 + metric provided 优先**：payload 字段（`valueRef=PAYLOAD`）由 `EvalContextAssembler` 直接注入值 map（`ValueSource.PAYLOAD`，`putIfAbsent` 让同名 metric/provided 优先）；metric 的 `providedMetrics` 来自 SDK/Job 非公开注入（**公开评估请求体已删该字段，D55**；内部 `RuleEvent` 仍持有），有值且 `allowProvided=true` 则直接用，跳过 sourceType 取数；
 3. **并发取数**（D25）：Subject 加载（`SubjectLoader.load()`）与剩余 metric 批拉（各 `MetricSource` 自管连接池/HTTP client）并行启动，`CompletableFuture.allOf()` 等待全部完成；
 4. **组装 EvalContext**：将 Subject + metrics + RuleEvent + `now`（评估开始时间）+ traceId 封装为不可变 POJO；
-5. **同步写 evaluation_session**（D21）：INSERT `evaluation_session { status=PENDING（中间状态）, tenant_id, event_id, scene_code, subject_id, ... }`，与 event_id DB uk 构成幂等双兜底下半层。（注：Pre-Gate 全部拦截时在阶段③直接写 `status=BLOCKED`，不经过本步骤）
 
 **EvalContext 标准字段**（v1 闭合枚举，发布期引用闭合校验根路径，D20 §3）：
 
@@ -198,45 +194,102 @@ RuleEvent
 - 单 metric 加载失败 → 该 metric 标记 `FETCH_FAIL`；引用该 metric 的 ConditionNode 在 AST 评估期 evaluated=false；整树继续短路求值（D15）；
 - 全体等待超时（`allOf().join(timeout)`）→ 已完成的 metric 有效，未完成的视同失败，超时阈值在 07-operability 给。
 
-### 3.5 AST 评估（InterpretedExecutor）
+### 3.5 规则判定主体评估（按 kind 路由执行器）
 
-**输入**：`EvalContext` + 候选 `RuleVersion`（含预解析 AST）
+**输入**：`EvalContext` + 候选 `RuleVersionSnapshot`（含 `body` JSON → `RuleBody` 多态：`AstBody`/`ScriptBody`/`FlowBody`，D76）
 
 **输出**：`EvalResult` + node_trace batch（入 TraceWriter 队列，异步）
 
 **核心动作**：
-- `InterpretedExecutor` 以 Visitor 模式递归遍历 AST；
-- 每个节点评估后追加一行到 `TraceCollector`（内存 `ArrayList`，无锁，O(1) 追加）；
-- EvalResult 出树时一次性 `traceWriter.submit(batch)`（非阻塞 offer，队满丢弃+告警，D21）。
+- `EvalEngine.selectExecutor(snap)` 按 `snap.kind()` 路由到对应 `RuleVersionExecutor` 实现；
+- 每种执行器的判定主体不同，但返回统一的 `EvalResult` + trace；
+- 评估结束后 `node_trace` 批量 submit 入 TraceWriter 队列（非阻塞 offer，队满丢弃+告警，D21）。
 
-**节点类型与求值语义**：
+**六种 kind 与执行器对应**：
+
+| kind | 判定主体（RuleBody 变体） | 执行器 | 求值方式 |
+|------|--------------------------|--------|---------|
+| `AST_BOOLEAN` | `AstBody(conditionAst)` | `InterpretedExecutor` | Visitor 递归遍历 AST 树 |
+| `SCORECARD` | `AstBody(conditionAst)` | `InterpretedExecutor` | Visitor + weight 加权评分 |
+| `DECISION_TREE` | `AstBody(conditionAst)` | `InterpretedExecutor` | Visitor + 分支路径选择 |
+| `DECISION_TABLE` | `AstBody(conditionAst)` | `InterpretedExecutor` | Visitor + 行列匹配 |
+| `EXPRESSION_SCRIPT` | `ScriptBody(script)` | `ScriptExecutor` | 六引擎表达式求值（见 04-extension §三） |
+| `DECISION_FLOW` | `FlowBody(flowGraph, referencedSnapshots)` | `FlowExecutor` | DAG 图遍历（见 §3.5b） |
+
+**AST 系四种 kind 的节点求值语义**（`InterpretedExecutor`）：
 
 | 节点 | 求值逻辑 | 短路行为 |
 |------|---------|---------|
-| `AndNode` | 全部子节点 true | 首个 false 即短路，剩余 `result=null`（跳过，不遍历） |
+| `AndNode` | 全部子节点 true | 首个 false 即短路，剩余跳过 |
 | `OrNode` | 任一子节点 true | 首个 true 即短路，剩余跳过 |
 | `NotNode` | 取反唯一子节点 | 无短路 |
 | `ConditionNode` | 调用对应 `ConditionEvaluator.evaluate()` | 失败时 satisfied=false，整树继续（D15） |
 
-**dry-run 模式**：恒走"带版本单快照"分支（按 `ruleVersionId` / `ruleId` 解析出的单个版本试跑），**结构上不进派发链路、不写 prod `evaluation_session`**——副作用从分支结构根除，而非靠 `isDryRun` 标志逐处门控（D56）。痕迹写 `dry_run_session` / `dry_run_node_trace`，TraceWriter 按 `EvalContext.dryRun` 标记路由到 dry-run 目标表（D7 / D21）。
+**dry-run 模式**：恒走"带版本单快照"分支（按 `ruleVersionId` / `ruleId` 解析出的单个版本试跑），**结构上不进生产 session 持久化链路**（D56）。结果和节点 trace 直接返回，不写 `evaluation_session`、`node_trace` 或专用 dry-run 表。
 
-**EvalResult 输出字段**（D12 多态，v1 仅填 satisfied 部分）：
+**EvalResult 输出字段**（D12 多态，六种 kind 按需填）：
 
 ```
 EvalResult {
-    satisfied:       boolean           // AST_BOOLEAN kind：整树求值结果
-    score?:          Number            // D12 占位，v1 不填；SCORECARD kind 启用
-    category?:       String            // D12 占位，v1 不填；DECISION_TREE kind 启用
-    decision?:       Map<String,Any>   // D12 占位，v1 不填；DECISION_TABLE kind 启用
-    finalDecision?:  DecisionRef       // D26：合成后最终 Decision（Scene 配了 decisionStrategy 时填充）
-    hitDecisions:    List<DecisionRef> // D26：所有命中规则的 Decision 按 priority 排序
-    trace:           List<NodeTrace>   // 节点级 trace（PULL/dry-run 同步返回；PUSH 仅异步落库）
-    errorCode?:      String            // D15：非空表示有节点失败（METRIC_FETCH_FAIL / CONDITION_EVAL_ERROR，见 10-api-contract §七）
+    satisfied:       boolean           // AST_BOOLEAN：整树求值结果
+    score?:          Number            // SCORECARD：加权评分
+    category?:       String            // DECISION_TREE：分支类别
+    decision?:       Map<String,Any>   // DECISION_TABLE：匹配行输出
+    finalDecision?:  DecisionRef       // D26：合成后最终 Decision
+    hitDecisions:    List<DecisionRef> // D26：所有命中规则的 Decision
+    trace:           List<NodeTrace>   // 节点级 trace
+    errorCode?:      String            // D15：非空表示有节点失败
     errorMessage?:   String
     failedNodeIds?:  List<String>
     partial?:        Boolean
 }
 ```
+
+### 3.5a 候选规则执行模式（ExecutionMode）
+
+候选规则（经 Matcher + Pre-Gate 后）在评估阶段的执行方式由 Scene 级 `executionMode` 控制，与 `decisionStrategy` 正交：
+
+| 模式 | 行为 | 适用 |
+|------|------|------|
+| `SEQUENTIAL`（默认） | 逐条串行执行候选规则，与 v1 行为一致 | 所有场景 |
+| `PARALLEL` | `ParallelEvaluator` 用 `Executors.newVirtualThreadPerTaskExecutor()` 并发执行，零新依赖（JDK 25） | 含多重脚本/决策图场景 |
+
+**PARALLEL 模式下的两种策略**：
+
+| 决策策略 | 并行行为 |
+|---------|---------|
+| `ALL_HITS` / `HIGHEST_PRIORITY` | 全量候选规则并行 fork，join 后 `mergeResults` 收集全部 hitDecisions + 首个 errorCode + max score |
+| `FIRST_HIT` | 批式并行：候选按 priority 排序后一批 N 条（默认全部候选）并行跑，取最高 priority 命中；全不中跑下一批 |
+
+**并发安全**：`EvalContext` 不可变（防御性拷贝），各规则返回独立 `EvalResult`，零共享可变状态，无需加锁。一条规则抛异常时 errorCode 被捕获，其余规则结果仍正常收集。
+
+**适用面（重要）**：纯 AST_BOOLEAN 场景 PARALLEL 负优化 ~42x（虚拟线程调度开销 > 纳秒级求值）。仅在场景含多条重规则（`EXPRESSION_SCRIPT` / `DECISION_FLOW`）且候选数 ≥ 3 时建议开启。配置经 `scene.default_params.executionMode` 热更生效。详细 benchmark 见 08-evolution §2.29。
+
+### 3.5b DECISION_FLOW 评估（FlowExecutor）
+
+第 6 种 kind `DECISION_FLOW` 由 `FlowExecutor implements RuleVersionExecutor` 求值——它不遍历 AST 树，而遍历 **DAG 决策图**（`FlowBody.flowGraph`）。
+
+**图结构**：节点 `FlowNode` sealed（`RuleRefNode` / `SwitchNode` / `TransformNode` / `OutputNode` 四变体）+ 边 `FlowEdge`（`from` / `to` / `caseKey`）。
+
+**遍历流程**（`Walker.run()`）：
+
+```
+inputNodeId → while (cur != null) cur = step(node) → assemble()
+```
+
+| 节点类型 | 求值逻辑 | 下一步 |
+|---------|---------|--------|
+| `RuleRefNode` | 调被引规则的冻结快照（`FlowBody.referencedSnapshots`，发布期 D6 冻结）+ 走对应 kind executor 求值 | 按 `true`/`false` 选 Switch 出边 |
+| `SwitchNode` | 求值表达式（六引擎之一，bindings = metrics/payload/subject/now/flow/params/上一步 hitDecisions） | 匹配 caseKey 的边；无匹配走 default（`caseKey=null`）；无 default 终止 |
+| `TransformNode` | 求值表达式 → 写 `flowVars`（图内变量命名空间，不污染 EvalContext） | 唯一出边 |
+| `OutputNode` | 产出 Decision（匹配 `decisionBindings` 中的 code）→ 进 `hitDecisions` | 终止或下一跳 |
+
+**关键约束**：
+- **同步无状态**：一次 Flow 评估内一次性走完，不挂起、不等外部事件
+- **RuleRef 冻结快照**：发布期把被引规则的 ACTIVE 版本冻结进 `FlowBody.referencedSnapshots`（D6），评估期零 DB 查询
+- **环检测**：发布期静态拒绝成环 flow（`FlowGraphValidator`），运行期兜底 `visited` set 断环
+- **被引规则隔离**：传原始 `EvalContext`，不注入 flow 变量——被引规则行为独立于调用方
+- **与 BPMN 分界**：FlowExecutor 是"一口气算完"的同步决策图；"要等"的编排交流程引擎（D60/D75 判据）
 
 ### 3.6 决策合成（decisionStrategy）
 
@@ -251,78 +304,23 @@ EvalResult {
 
 **缺省 decisionStrategy**（D29）：PUSH/HYBRID Scene 未配 `decisionStrategy` 时，缺省等价 `HIGHEST_PRIORITY`，不会因漏配导致 `finalDecision` 静默为空；PULL Scene 不参与合成（`finalDecision` 始终 null），`hitDecisions` 仍返回供调用方自行处理。
 
-**PUSH vs PULL**：PUSH/HYBRID 模式异步评估完即落库 `evaluation_session`（含 `final_decision` / `hit_decisions`）；PULL 模式同步把 `EvalResult` 返回调用方。两种模式都不在引擎内执行副作用。
+**PUSH vs PULL**：PUSH/HYBRID 模式异步评估完成后发布事件，由审计消费者批写 `evaluation_session`（含 `final_decision` / `hit_decisions`）；PULL 模式同步把 `EvalResult` 返回调用方。两种模式都不在引擎内执行副作用。
 
 ---
 
 ## 四、evaluation_session 生命周期
 
-`evaluation_session` 是一次规则评估的主记录行（每次评估 1 行），承担两个职责：
+`evaluation_session` 是生产评估的异步审计结果，不是同步创建的评估执行锁。
 
-1. **对账锚点**：查询命中率 / BLOCKED 比例 / ERROR 比例的 JOIN 基准（D22）；
-2. **幂等下半层**：`UNIQUE KEY(tenant_id, event_id)` 防止同一事件重复评估（D11 / D23）。
+1. 有候选规则时，评估线程预生成 session ID，完成求值后发布 `AuditRecordedEvent`。
+2. `AuditPersister` 非阻塞入队；消费者批量插入最终的 `HIT / MISS / BLOCKED / ERROR`，不经历 `PENDING → 终态` 的数据库更新过程。
+3. `(tenant_id, event_id)` 唯一键配合重复键空更新，避免重复审计行；它不阻止重复求值，也不会从异步写入回传已有结果。
+4. session 批写后，消费者将 trace 交给独立的 `TraceWriter` 队列。两条写入路径均可能失败，不能将其视为同一原子事务。
+5. 无候选、dry-run 不产生生产审计记录；进程退出、队满或数据库故障也可能导致缺行。返回评估结果不承诺持久化成功。
 
-**状态机**：
+当前服务端没有实现 Redis 评估结果缓存/请求锁；重复事件的求值与业务执行去重由接入方负责。历史 D11/D21/D23 描述的同步幂等设计不能作为当前实现保证。
 
-```
- （幂等检查通过）
-       │
-       ├─ Pre-Gate 全部拦截 ──▶ 直接 INSERT status=BLOCKED（不经过 PENDING）
-       │
-       └─ Pre-Gate 通过，进入 EvalContext 构建
-                │
-                ▼
-           PENDING（阶段④末尾 INSERT）
-                │
-      ┌─────────┼─────────┐
-      ↓         ↓         ↓
-  status=HIT  status=MISS  status=ERROR
- （AST=true） （AST=false） （有节点失败）
-
-  若评估线程崩溃：
-  PENDING ──▶ FAILED（不可恢复异常，异常监控另行处理）
-```
-
-> `PENDING` 是引擎内部中间状态，在 EvalContext 构建完毕、AST 评估开始前写入。BLOCKED 路径由 Pre-Gate 阶段（③）直接写入，不经过 PENDING。DB `status` 列存储 6 种值：`PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态，完成态）/ `FAILED`（崩溃态）。
-
-**写入时机**：
-
-| 操作 | 时机 | 是否同步 |
-|------|------|---------|
-| `INSERT (status=PENDING)` | EvalContext 构建完毕，AST 评估开始前 | **同步**（D21） |
-| `UPDATE (status=HIT/MISS/ERROR)` | EvalResult 出树后，用实际四态值直接 UPDATE（不经过 COMPLETED 中间态） | **同步**（同一链路，D21） |
-| `node_trace` batch INSERT | EvalResult 出树后入 TraceWriter 队列 | **异步**（D21） |
-
-**幂等处理**（D11 / D23）：
-
-1. **上半层（Redis trySet）**：Trigger 接入时 `SET rule:session:{tenantId}:{eventId} <evalResultJson> NX EX 3600`；成功则继续；失败（key 已存在）则直接返回上次缓存的 `EvalResult`，不再进入评估链路；
-2. **下半层（DB uk）**：INSERT `evaluation_session` 时若 `(tenant_id, event_id)` uk 冲突 → catch `DuplicateKeyException` → 查询已有行返回已有结果；
-3. **Redis 宕机降级**：上半层不可用时降级走 DB uk；DB uk 并发竞争时，后提交者 SELECT 已有行返回。
-
-**evaluation_session 字段概览**：
-
-| 列名 | 类型 | 说明 |
-|------|------|------|
-| `id` | BIGINT PK | 主键，雪花（概念上称 session_id） |
-| `tenant_id` | BIGINT | 租户 ID（关联 tenant.id 外键） |
-| `event_id` | VARCHAR | 业务事件 ID；与 tenant_id 构成 UK（D23） |
-| `scene_code` | VARCHAR | 场景码 |
-| `event_type` | VARCHAR | 事件类型 |
-| `subject_id` | VARCHAR | 主体 ID |
-| `source` | ENUM | 评估触发方式：`PUSH` / `PULL` / `REPLAY`（与 RuleEvent.source 不同维度，D23） |
-| `status` | VARCHAR | `PENDING`（进行中）/ `HIT / MISS / BLOCKED / ERROR`（D22 四态，完成态）/ `FAILED`（异常态） |
-| `final_decision` | VARCHAR | 合成后 Decision.code（nullable；D29：PUSH/HYBRID Scene 缺省 HIGHEST_PRIORITY，无命中规则时为 null；PULL Scene 不参与合成，始终 null） |
-| `hit_decisions` | JSON | 所有命中规则的 Decision 列表（始终填充） |
-| `blocked_by` | VARCHAR | nullable；仅 `status=BLOCKED` 时有值，记录首个拦截 Gate 类型 |
-| `error_code` | VARCHAR | nullable；D15 EvalResult.errorCode；仅 `status=ERROR` 时有值 |
-| `candidate_rule_count` | INT | Matcher 命中的候选 RuleVersion 数量 |
-| `hit_rule_count` | INT | AST 求值满足（HIT）的 Rule 数量 |
-| `occurred_at` | DATETIME | 业务事件发生时间（来自 RuleEvent.occurredAt，非引擎收到时间） |
-| `started_at` | DATETIME | 引擎开始评估时间 |
-| `finished_at` | DATETIME | status 从 PENDING 更新为终态的时间（nullable） |
-| `eval_duration_ms` | INT | 整 session 耗时（ms） |
-
-> DDL 完整定义见 [`05-storage.md`](./05-storage.md) §evaluation_session 表。
+字段、状态聚合、快照开关与索引见 [01-concepts §3.15](./01-concepts.md#315-evaluationsession评估会话非一等公民) 和 [05-storage](./05-storage.md)。
 
 ---
 
@@ -367,4 +365,4 @@ EvalResult {
 
 - 本文档只描述**运行时时序与契约**，不重复字段表（→ 01-concepts）、不贴 SQL（→ 05-storage）、不写参数默认值（→ 07-operability）。
 - 新增运行时阶段（如未来 §2.13 评估期预编译切换）必须更新 §二 时序图 + §三 对应阶段。
-- v1 同步路径变更或 v2 异步路径锚点更新时，§四 evaluation_session 章节同步回写。
+- 评估审计事件、异步写入或可靠性边界变更时，回写 §四 evaluation_session 章节。

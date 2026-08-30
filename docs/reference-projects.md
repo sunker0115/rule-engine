@@ -25,6 +25,36 @@
 
 ---
 
+## 产品级选型对比
+
+本节面向正在选择方案的读者；后续各项目的小节保留实现与决策层面的详细依据。
+
+> **关于 GoRules ZEN**：ZEN Engine 是 Rust 写的开源 BRE 库（跨语言嵌入 + JDM 决策图），GoRules 另有闭源商业 BRMS（多租户、版本、治理、管理台）。本项目对标的是商业 BRMS 的产品能力；开源 ZEN 对标的是 `rule-kernel` 一个模块，而非完整平台。
+
+| 维度 | Rule Engine（本项目） | GoRules ZEN / BRMS | Drools | Easy Rules | 业务自研 if-else |
+|------|----------------------|---------------------|--------|-----------|-----------------|
+| 定位 | 通用决策平台，多租户多 Scene | ZEN：可嵌入 BRE 库；BRMS：规则管理平台 | 通用规则引擎 | 轻量规则框架 | 一次性业务代码 |
+| 规则建模 | 布尔树、评分卡、决策树、决策表、脚本、决策图 | JDM 全图建模 | DRL 文本规则与决策表 | 注解/DSL 简单规则 | 无固定形态 |
+| 配置与治理 | 管理台、版本快照、灰度、审计、血缘、重放 | ZEN 无；BRMS 有 | 需按需组合 | 无内置能力 | 需自行建设 |
+| 取数与运行 | 属性、SQL 聚合、声明式 HTTP；服务与 SDK 双模 | ZEN 由调用方准备 context；BRMS 有 | 事实对象插入 | 事实对象 | 手工查库 |
+| 适合场景 | 多业务线、规则频繁变更、需要治理 | ZEN：轻量嵌入；BRMS：平台化管理 | 复杂推理、CEP | 少量简单规则 | 少量长期不变条件 |
+
+### 什么时候选 Rule Engine
+
+- 规则要由运营、风控等非开发角色持续调整；
+- 需要发布快照、灰度、审计、血缘或历史重放；
+- 多个业务线需要共享 Tenant / Scene / Metric 模型；
+- 业务系统只想获得 Decision，而把发券、拦截等动作留在自己的边界内。
+
+### 什么时候选别的方案
+
+- 条件只有 3–5 条且长期不变，直接写 `if-else` 更简单；
+- 需要跨语言进程内微秒级嵌入，ZEN 更合适；
+- 需要 RETE 推理或复杂事件处理，优先评估 Drools/Kogito；
+- 只需在 Java 代码中维护少量简单规则，Easy Rules 的成本更低。
+
+---
+
 ## 二、业界对标速览（决策级引用索引）
 
 只在决策/演进里点到、未逐模块拆的业界项目，索引到具体落点。
@@ -76,8 +106,10 @@
 | 已吸收 | Apache Ranger | 字段声明 + 读时遮蔽 | D71 Trace PII 读时脱敏 |
 | 已吸收 | CEL / Aviator | 表达式引擎 | D66 六引擎之二 |
 | 已吸收 | ZEN L1 | 表达式编辑器变量补全（**六引擎通用**） | `expressionCompletions.ts` + ScriptEditor + ExpressionInput（Flow Switch/Transform），零后端 |
-| 已吸收 | FICO / Sapiens（效果·一半） | 业务结局标签回灌 | §2.27 B32 `decision_outcome` |
+| 已吸收 | Drools | guided rule template（参数化模板） | D74：JsonPointer 统一寻址覆盖全 6 kind + params 冻结常量命名空间消除 Script/Flow 异类 + binder SPI + 快照式实例化；受 Drools 启发但定位为 authoring 便利层 |
+| 已吸收 | FICO / Sapiens | 决策效果闭环 | §2.27 B32：`decision_outcome` 回灌 + `OUTCOME_INGESTION` 自动取标签 + `EffectivenessService` TP/FP/FN→precision/recall（RULE_VERSION/DECISION×DAY/WEEK 漂移）+ 前端 `EffectivenessPage` |
 | 已吸收 | ZEN L2 | CEL 实时类型诊断（CEL 专属） | `ExpressionValidationService` + `POST /admin/v1/expressions/validate` + ScriptEditor/ExpressionInput debounced lint（弱类型引擎 no-op 自动通过） |
+| 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH：纯 AST_BOOLEAN 20 规则 42x 负优化、10 重/20 混合 1.30x 交叉、20 全重 1.97x 加速——仅含重脚本/决策图场景建议开启） |
 | 不需要 | trae | 6 级 Context / 内部事件总线 / 自研验证框架 / 引擎耦合 JPA / `DecisionCode` 硬编码 / Rule 层组合策略 | 分别被 不可变 POJO / Modulith / Spring Validation / kernel 零 Spring / Decision 业务配置 / AST 组合 顶替 |
 | 不需要 | trae R4 | 自研有状态 Flow 编排 | 架构已定：同步图归 D75 `DECISION_FLOW`，有状态编排接 Flowable（D60/D75），不自研 |
 | 不需要 | gengine | 命令式副作用 DSL / DataContext 任意函数 / 规则池 / salience·StopTag / DAG 执行模型 | 分别被 D60 / urule 否决 / 快照+预编译 / hit policy / D75 覆盖 |
@@ -92,10 +124,6 @@
 | 不需要 | Evrete | 轻量 RETE + JSR-94 注解规则 | 刻意非 RETE；D61 已有 easyrules 注解 |
 | 不需要 | OpenL Tablets | Excel 编译 JVM 字节码 authoring | 业务用户 Excel 录入模型留 D74 待触发；LGPL |
 | 不需要 | ice | 树形编排+Leaf 副作用执行+多语言 SDK+零依赖文件存储 | 执行型有副作用(D60 拒)；多语言 SDK/文件存储非本项目方向；节点复用(D75 RuleRef)/并行(§2.29)已有等价物 |
-| 已吸收 | gengine | 场景内独立规则并行求值 | §2.29（`ExecutionMode.PARALLEL` + `ParallelEvaluator`，VirtualThread；JMH 压测：纯 AST_BOOLEAN 负优化 13-42x，仅含重脚本/决策图场景建议开启） |
-| 待定 | trae R5 | Decorator 三级缓存键（条件去重） | §2.13 alpha 节点共享，待实现 |
-| 待定 | Drools | guided rule template（参数化模板） | D74 暂缓，记录待触发 |
-| 待定 | FICO / Sapiens | 按规则聚合 precision/recall/漂移 | §2.27 后续（标签位已就绪，聚合未做） |
 
 ### 3.2 分项目（细对比·融合版）
 
@@ -125,7 +153,7 @@
 | 不需要 | `DecisionCode` 硬编码枚举 | 本项目 Decision 是业务配置，灵活性更高 | — |
 | 不需要 | Rule 实体层组合策略 | 本项目组合语义在 AST 表达，职责更清晰 | — |
 | 不需要 | R4 自研有状态 Flow | 同步图已由 D75 覆盖；有状态编排 D60/D75 已定接 Flowable | — |
-| 待定 | R5 Decorator 三级缓存键 | `ConditionEvaluationKey=(conditionId, ctxHash)` 与"同 ctx 条件只算一次"一致 | §2.13 alpha 节点共享 |
+| 不需要 | R5 Decorator 三级缓存键 | trae 规则层 Condition 共享引用缓存有意义；本项目不可变独立快照(D6)+预编译纳秒级(D67)，建缓存键开销>重新求值，负优化 | — |
 
 #### 3.2.2 skyhackvip/risk_engine（天网）
 
@@ -197,7 +225,7 @@ JDM（决策图 = Input→节点→Output 的 DAG，叶子原子、图只编排�
 
 | 桶 | 点 | 细节 / 为什么 | 落点 |
 |---|---|---|---|
-| 已吸收 | 规则集完备性/冲突校验 | Drools Verifier 思路已吸收进 B31 静态分析（命名/语义对齐）；决策表 + guided template 入 D42/D74 | §2.26 B31 |
+| 已吸收 | 规则集完备性/冲突校验 | Drools Verifier 思路已吸收进 B31 静态分析（命名/语义对齐）；决策表入 D42；guided template 为 D74（已实装,JsonPointer 统一寻址+params 命名空间+binder SPI+快照式实例化） | §2.26 B31 |
 | 不需要 | RETE 前向/后向推理引擎 | 本项目刻意非 RETE：不可变快照 (D6) + 倒排索引 (D17) + 每事件无状态求值 | — |
 | 不需要 | CEP 复杂事件处理 | 事件流处理留 Flink/CEP 扩展，不内嵌引擎 | §2.24 |
 | 不需要 | DRL 命令式规则 DSL | 同 gengine·grule：命令式 + 副作用，D60 纯决策拒绝 | — |

@@ -9,12 +9,15 @@
     "triggerEventTypes": ["trade"],
     "decisionBindings": [{"decisionCode": "REVIEW", "priority": 50}],
     "preGates": [],
-    "conditionAst": {
-      "type": "ConditionNode",
-      "conditionType": "GT",
-      "metricCode": "amount",
-      "params": {"threshold": 5000},
-      "valueRef": "PAYLOAD"
+    "body": {
+      "type": "AstBody",
+      "conditionAst": {
+        "type": "ConditionNode",
+        "conditionType": "GT",
+        "metricCode": "amount",
+        "params": {"threshold": 5000},
+        "valueRef": "PAYLOAD"
+      }
     }
   }
 ]

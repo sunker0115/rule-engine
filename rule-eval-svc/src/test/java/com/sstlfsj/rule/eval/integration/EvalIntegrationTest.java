@@ -136,11 +136,11 @@ class EvalIntegrationTest {
                 VALUES (1, 1, 'REJECT', '拒绝', 100, 'ACTIVE')
                 """);
 
-        // 规则主记录（关联 scene_id=1，current_version=1，status=PUBLISHED）
+        // 规则主记录（关联 scene_code='fraud_check'，current_version=1，status=PUBLISHED）
         jdbc.execute("""
-                INSERT IGNORE INTO rule_definition (id, tenant_id, scene_id, code, name,
+                INSERT IGNORE INTO rule_definition (id, tenant_id, scene_code, code, name,
                     status, kind, current_version)
-                VALUES (1, 1, 1, 'fraud-rule-001', '欺诈检测规则',
+                VALUES (1, 1, 'fraud_check', 'fraud-rule-001', '欺诈检测规则',
                     'PUBLISHED', 'AST_BOOLEAN', 1)
                 """);
 
@@ -196,6 +196,25 @@ class EvalIntegrationTest {
         // source 取自 event 渠道，mode 由 evaluate() 入口判定为 PULL
         assertThat(sessions.get(0).getSource()).isEqualTo(EventSource.HTTP);
         assertThat(sessions.get(0).getMode()).isEqualTo(EvalMode.PULL);
+    }
+
+    @Test
+    void pull_evaluate_roundTripsTypedJsonSnapshots() throws InterruptedException {
+        RuleEvent event = RuleEvent.builder()
+                .tenantId("1").sceneCode("fraud_check").eventType("login")
+                .subjectId("user-typed").eventId("typed-json-001").occurredAt(Instant.now())
+                .payload(Map.of("amount", 5000)).source(EventSource.HTTP).build();
+
+        evalService.evaluate(event);
+
+        EvaluationSession session = awaitSessions("typed-json-001").getFirst();
+        assertThat(session.getHitDecisions()).hasSize(1);
+        assertThat(session.getHitDecisions().getFirst().code()).isEqualTo("REJECT");
+        assertThat(session.getPayload()).containsEntry("amount", 5000);
+        assertThat(session.getCandidateRuleVersionIds()).containsExactly(1L);
+        assertThat(session.getContextSnapshot()).isNotNull();
+        assertThat(session.getContextSnapshot().metrics()).containsEntry("amount", 5000);
+        assertThat(session.getContextSnapshot().evalNow()).isNotNull();
     }
 
     // ===== 测试 2：相同 eventId 幂等，只写一条 session =====

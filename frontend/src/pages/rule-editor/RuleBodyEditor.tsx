@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import type {
   AstNode, ScorecardRootNode, IfNode, DecisionTableNode,
-  ConditionTypeMeta, MetricDescriptor, DecisionItem, RuleKind,
+  ConditionTypeMeta, MetricDescriptor, DecisionItem, RuleKind, ScriptParams,
 } from '@/types';
+import type { DataType } from '@/types/template';
 import ConditionTreeEditor from './ConditionTreeEditor';
 import ScorecardEditor from './ScorecardEditor';
 import DecisionTreeEditor from './DecisionTreeEditor';
@@ -13,9 +14,9 @@ interface Props {
   /** 规则体的种类（DECISION_FLOW 以外的 5 种，由画布单独承载）。 */
   kind: RuleKind;
   ast: AstNode | null;
-  script: { source: string; lang: string } | null;
+  script: { source: string; lang: string; params?: ScriptParams } | null;
   onAstChange: (ast: AstNode) => void;
-  onScriptChange: (script: { source: string; lang: string }) => void;
+  onScriptChange: (script: { source: string; lang: string; params?: ScriptParams }) => void;
   conditionTypes: ConditionTypeMeta[];
   availableMetrics: MetricDescriptor[];
   payloadFieldNames: string[];
@@ -24,6 +25,12 @@ interface Props {
   decisions: DecisionItem[];
   tenantId?: number;
   sceneCode?: string;
+  /** 透传给 ScriptEditor：true 时脚本参数表可编辑（模板编辑场景）。 */
+  editableParams?: boolean;
+  /** 透传给 ScriptEditor：参数化开关回调，接线模板 slots/bindings。 */
+  onParamSlotToggle?: (key: string, enabled: boolean, dataType: DataType) => void;
+  /** 透传给 ScriptEditor：已参数化的 param 键集合（真相源=模板 bindings），受控开关态。 */
+  slottedParamKeys?: string[];
 }
 
 /**
@@ -33,7 +40,7 @@ interface Props {
 export default function RuleBodyEditor({
   kind, ast, script, onAstChange, onScriptChange,
   conditionTypes, availableMetrics, payloadFieldNames, payloadFieldTypes, decisions,
-  tenantId, sceneCode,
+  tenantId, sceneCode, editableParams, onParamSlotToggle, slottedParamKeys,
 }: Props) {
   const { t } = useTranslation('rule');
   const shared = { conditionTypes, availableMetrics, payloadFieldNames };
@@ -73,6 +80,9 @@ export default function RuleBodyEditor({
         payloadFieldTypes={payloadFieldTypes}
         tenantId={tenantId}
         sceneCode={sceneCode}
+        editableParams={editableParams}
+        onParamSlotToggle={onParamSlotToggle}
+        slottedParamKeys={slottedParamKeys}
       />
     );
   }

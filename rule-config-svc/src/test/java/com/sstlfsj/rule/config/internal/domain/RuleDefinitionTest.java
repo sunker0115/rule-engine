@@ -13,7 +13,7 @@ class RuleDefinitionTest {
         RuleDefinition def = new RuleDefinition();
         def.setId(10L);
         def.setTenantId(1L);
-        def.setSceneId(5L);
+        def.setSceneCode("risk.transfer");
         def.setCode("rule.demo");
         def.setName("测试规则");
         def.setDescription("规则描述");
@@ -26,7 +26,7 @@ class RuleDefinitionTest {
 
         assertEquals(10L, def.getId());
         assertEquals(1L, def.getTenantId());
-        assertEquals(5L, def.getSceneId());
+        assertEquals("risk.transfer", def.getSceneCode());
         assertEquals("rule.demo", def.getCode());
         assertEquals("测试规则", def.getName());
         assertEquals("规则描述", def.getDescription());
@@ -49,10 +49,10 @@ class RuleDefinitionTest {
 
     @Test
     void draft_setsBusinessDefaults() {
-        RuleDefinition def = RuleDefinition.draft(1L, 5L, "rule.demo", "测试规则", RuleKind.AST_BOOLEAN, "operator1");
+        RuleDefinition def = RuleDefinition.draft(1L, "risk.transfer", "rule.demo", "测试规则", RuleKind.AST_BOOLEAN, "operator1");
 
         assertEquals(1L, def.getTenantId());
-        assertEquals(5L, def.getSceneId());
+        assertEquals("risk.transfer", def.getSceneCode());
         assertEquals("rule.demo", def.getCode());
         assertEquals("测试规则", def.getName());
         assertEquals(RuleKind.AST_BOOLEAN, def.getKind());

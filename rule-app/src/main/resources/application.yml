@@ -10,6 +10,8 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    baseline-on-migrate: false
   modulith:
     events:
       republish-outstanding-events-on-restart: true
@@ -25,6 +27,10 @@ mybatis-plus:
     default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
 
 management:
+  health:
+    redis:
+      # Redis 仅供 STREAM 取数使用；使用时通过 MANAGEMENT_HEALTH_REDIS_ENABLED=true 开启检查
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -81,10 +87,10 @@ engine:
         appname: ${XXL_APPNAME:rule-engine}
         port: ${XXL_EXECUTOR_PORT:9999}
         log-path: ${XXL_LOG_PATH:/tmp/xxl-job-logs}
-        access-token: ${XXL_ACCESS_TOKEN:default_token}
-        admin-username: ${XXL_ADMIN_USERNAME:admin}
-        admin-password: ${XXL_ADMIN_PASSWORD:123456}
-    # 数据保留/清理:各模块 @Scheduled 按保留窗删超期运行/历史行(observability 清 trace 两表、eval-svc 清 session 两表)
+        access-token: ${XXL_ACCESS_TOKEN:}
+        admin-username: ${XXL_ADMIN_USERNAME:}
+        admin-password: ${XXL_ADMIN_PASSWORD:}
+    # 数据保留/清理：各模块 @Scheduled 按保留窗删除超期运行数据（observability 清 node_trace，eval-svc 清 evaluation_session）
     retention:
       enabled: true
       cron: "0 30 3 * * *"       # 每日 03:30
@@ -100,6 +106,6 @@ engine:
     fetch:
       datasources:
         - name: loadtest_ro
-          url: jdbc:mysql://localhost:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-          username: root
-          password: 123456
+          url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/rule_engine?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+          username: ${SPRING_DATASOURCE_USERNAME:root}
+          password: ${SPRING_DATASOURCE_PASSWORD:123456}

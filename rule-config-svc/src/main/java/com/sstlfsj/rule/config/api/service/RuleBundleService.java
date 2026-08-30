@@ -21,14 +21,14 @@ public interface RuleBundleService {
      *
      * @param tenantId 租户 id
      * @param ruleIds  规则定义 id 列表（可为 null / 空）
-     * @param sceneId  场景 id（可为 null）
+     * @param sceneCode 场景编码（可为 null）
      * @return 多规则自包含 Bundle v2
      * @throws IllegalArgumentException 无可导出的 ACTIVE 规则
      */
-    RuleBundle export(Long tenantId, List<Long> ruleIds, Long sceneId);
+    RuleBundle export(Long tenantId, List<Long> ruleIds, String sceneCode);
 
     /** 按条件导出规则当前 ACTIVE 版本为快照列表（SDK 本地调用用）。 */
-    List<RuleVersionSnapshot> exportSnapshots(Long tenantId, List<Long> ruleIds, Long sceneId);
+    List<RuleVersionSnapshot> exportSnapshots(Long tenantId, List<Long> ruleIds, String sceneCode);
 
     /**
      * 导入 Bundle 到目标租户。

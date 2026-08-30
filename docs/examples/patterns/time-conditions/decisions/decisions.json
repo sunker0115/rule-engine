@@ -1,0 +1,4 @@
+[
+  { "code": "REWARD", "name": "发放奖励", "priority": 1,   "description": "营销奖励", "actions": [] },
+  { "code": "PASS",   "name": "不处理",   "priority": 100, "description": "放行",     "actions": [] }
+]

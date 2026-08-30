@@ -1,13 +1,13 @@
 package com.sstlfsj.rule.eval.internal.async;
 
 import com.sstlfsj.rule.eval.internal.domain.EvaluationSession;
+import com.sstlfsj.rule.eval.internal.domain.HitDecision;
 import com.sstlfsj.rule.eval.internal.domain.SessionStatus;
 import com.sstlfsj.rule.eval.internal.repository.EvaluationSessionMapper;
 import com.sstlfsj.rule.kernel.api.model.EvalResult;
 import com.sstlfsj.rule.kernel.api.model.RuleEvent;
 import com.sstlfsj.rule.kernel.api.spi.trace.TraceWriter;
 import lombok.extern.slf4j.Slf4j;
-import tools.jackson.databind.ObjectMapper;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
@@ -28,8 +28,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 @Slf4j
 @Component
-// native：HitDecisionView 经 Jackson 序列化 hit_decisions，需注册其 record 组件反射(否则 native 下 writeValueAsString 抛 UnsupportedFeatureError)
-@RegisterReflectionForBinding(AuditPersister.HitDecisionView.class)
+@RegisterReflectionForBinding(HitDecision.class)
 public class AuditPersister implements InitializingBean, DisposableBean {
 
     private final int queueCapacity;
@@ -37,7 +36,6 @@ public class AuditPersister implements InitializingBean, DisposableBean {
     private final long flushIntervalMs;
     private final EvaluationSessionMapper sessionMapper;
     private final TraceWriter traceWriter;
-    private final ObjectMapper objectMapper;
     private final boolean captureContextSnapshot;
 
     private LinkedBlockingQueue<AuditRecordedEvent> queue;
@@ -46,20 +44,19 @@ public class AuditPersister implements InitializingBean, DisposableBean {
 
     public AuditPersister(int queueCapacity, int batchSize, long flushIntervalMs,
                           EvaluationSessionMapper sessionMapper, TraceWriter traceWriter,
-                          ObjectMapper objectMapper, boolean captureContextSnapshot) {
+                          boolean captureContextSnapshot) {
         this.queueCapacity = queueCapacity;
         this.batchSize = batchSize;
         this.flushIntervalMs = flushIntervalMs;
         this.sessionMapper = sessionMapper;
         this.traceWriter = traceWriter;
-        this.objectMapper = objectMapper;
         this.captureContextSnapshot = captureContextSnapshot;
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public AuditPersister(EvaluationSessionMapper sessionMapper, TraceWriter traceWriter,
-                          ObjectMapper objectMapper, AuditProperties auditProperties) {
-        this(10000, 500, 200, sessionMapper, traceWriter, objectMapper,
+                          AuditProperties auditProperties) {
+        this(10000, 500, 200, sessionMapper, traceWriter,
                 auditProperties.getContextSnapshot().isEnabled());
     }
 
@@ -132,11 +129,9 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setHitRuleCount(r.hitDecisions().size());
         s.setScore(r.score());   // SCORECARD 累计分；其他 kind 为 null
         s.setCategory(r.finalDecision() != null ? r.finalDecision().category() : null);
-        // best-effort 序列化：单条 hit_decisions 序列化失败降级为 null，不抛进 .map() 流导致整批落库丢失
-        s.setHitDecisions(serializeJson(
-                r.hitDecisions().stream()
-                        .map(d -> new HitDecisionView(d.code(), d.category(), d.fromRuleVersionId()))
-                        .toList()));
+        s.setHitDecisions(r.hitDecisions().stream()
+                .map(d -> new HitDecision(d.code(), d.category(), d.fromRuleVersionId()))
+                .toList());
         if (ev.occurredAt() != null) {
             s.setOccurredAt(LocalDateTime.ofInstant(ev.occurredAt(), ZoneId.systemDefault()));
         }
@@ -148,28 +143,14 @@ public class AuditPersister implements InitializingBean, DisposableBean {
         s.setFinishedAt(start.plusNanos(e.durationMs() * 1_000_000L));
         s.setEvalDurationMs(e.durationMs());
         // 开关开启才回填重放三件套(payload + 候选版本 id + context_snapshot;默认见 AuditProperties)；
-        // context 为 null 时 serializer 返回 null，序列化失败 best-effort 写 null
+        // context 为 null 时 serializer 返回 null；序列化容错由 evaluation_session 专用 TypeHandler 处理
         if (captureContextSnapshot) {
-            s.setContextSnapshot(ContextSnapshotSerializer.serialize(objectMapper, e.context()));
-            s.setPayload(serializeJson(ev.payload()));
-            s.setCandidateRuleVersionIds(serializeJson(e.candidateVersionIds()));
+            s.setContextSnapshot(ContextSnapshotSerializer.serialize(e.context()));
+            s.setPayload(ev.payload());
+            s.setCandidateRuleVersionIds(e.candidateVersionIds());
         }
         return s;
     }
-
-    /** best-effort 序列化为 JSON 文本；null 入参或序列化失败返回 null。 */
-    private String serializeJson(Object value) {
-        if (value == null) return null;
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (RuntimeException ex) {
-            return null;
-        }
-    }
-
-    /** hit_decisions JSON 元素：每条命中决策的码 + 分类 + 来源规则版本。 */
-    /** hit_decisions JSON 元素：码 + 分类 + 来源规则版本。包级可见以便 native 反射 hints 引用。 */
-    record HitDecisionView(String code, String category, Long ruleVersionId) {}
 
     @Override
     public void destroy() {

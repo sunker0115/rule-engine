@@ -3,11 +3,12 @@ import { Drawer, Descriptions, Select, Input, Button, Tag, Alert, Space, Spin, M
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { getRule, editDraft, createRule } from '@/api/rule';
+import { listScenes } from '@/api/scene';
 import RuleBodyEditor from './RuleBodyEditor';
 import ExpressionInput from './ExpressionInput';
 import type {
   FlowNode, RuleRefNode, SwitchNode, TransformNode, OutputNode,
-  SceneMetadata, DecisionItem, RuleDetail, AstNode,
+  SceneMetadata, DecisionItem, RuleDetail, AstNode, ScriptParams,
 } from '@/types';
 import { bodyToCarriers, carriersToBody } from '@/types';
 
@@ -17,6 +18,8 @@ export interface SceneRuleItem {
   name: string;
   ruleDefinitionId: number;
   kind: string;
+  /** 规则所属场景编码（跨 Scene 引用分组展示用）。 */
+  sceneCode?: string;
 }
 
 interface Props {
@@ -51,12 +54,21 @@ export default function FlowNodeInspectorDrawer({
   // 被引规则下钻编辑的本地态
   const [refDetail, setRefDetail] = useState<RuleDetail | null>(null);
   const [refAst, setRefAst] = useState<AstNode | null>(null);
-  const [refScript, setRefScript] = useState<{ source: string; lang: string } | null>(null);
+  const [refScript, setRefScript] = useState<{ source: string; lang: string; params?: ScriptParams } | null>(null);
   const [loadingRef, setLoadingRef] = useState(false);
   const [savingRef, setSavingRef] = useState(false);
   const [newLeafOpen, setNewLeafOpen] = useState(false);
   const [newLeafForm] = Form.useForm();
   const [creating, setCreating] = useState(false);
+  // 新建叶子规则可跨 Scene：拉取 tenant 全量 Scene 供目标场景选择，默认当前 flow 所属 sceneCode
+  const [scenes, setScenes] = useState<{ code: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (!newLeafOpen || !tenantId) return;
+    listScenes(tenantId, { page: 1, size: 500 }).then((items) => {
+      setScenes((items ?? []).map((s) => ({ code: s.sceneCode, name: s.name })));
+    });
+  }, [newLeafOpen, tenantId]);
 
   const langs = metadata?.expressionLangs ?? ['CEL'];
   const isRuleRef = node?.type === 'RuleRefNode';
@@ -100,7 +112,8 @@ export default function FlowNodeInspectorDrawer({
     setCreating(true);
     try {
       // 最小叶子：AST_BOOLEAN 空规则，建完自动被当前 RuleRef 引用，用户再下钻编辑其条件
-      await createRule(tenantId, { sceneCode, code: values.code, name: values.name, kind: 'AST_BOOLEAN',
+      // 目标 Scene 默认当前 flow 所属，也可跨 Scene 建（RuleRef 允许跨 Scene 引用）
+      await createRule(tenantId, { sceneCode: values.sceneCode ?? sceneCode, code: values.code, name: values.name, kind: 'AST_BOOLEAN',
         body: { type: 'AstBody', conditionAst: { type: 'AndNode', children: [] } } });
       message.success(tc('message.createSuccess'));
       setNewLeafOpen(false);
@@ -201,7 +214,16 @@ export default function FlowNodeInspectorDrawer({
               showSearch
               optionFilterProp="label"
               placeholder={t('editor.flow.node.selectRule')}
-              options={sceneRules.map((r) => ({ value: r.code, label: `${r.name} (${r.code})` }))}
+              options={Object.entries(
+                sceneRules.reduce((acc, r) => {
+                  const sc = r.sceneCode ?? '';
+                  (acc[sc] = acc[sc] ?? []).push(r);
+                  return acc;
+                }, {} as Record<string, SceneRuleItem[]>),
+              ).map(([sc, items]) => ({
+                label: sc || '—',
+                options: items.map((r) => ({ value: r.code, label: `${r.name} (${r.code})` })),
+              }))}
               onChange={(v) => onChangeNode({ ...ref, ruleCode: v })}
             />
             <Button icon={<PlusOutlined />} onClick={() => setNewLeafOpen(true)}>{t('editor.flow.drill.newLeaf')}</Button>
@@ -280,12 +302,16 @@ export default function FlowNodeInspectorDrawer({
         confirmLoading={creating}
         onCancel={() => { setNewLeafOpen(false); newLeafForm.resetFields(); }}
       >
-        <Form form={newLeafForm} layout="vertical">
+        <Form form={newLeafForm} layout="vertical" initialValues={{ sceneCode }}>
           <Form.Item name="code" label={t('editor.createModal.code')} rules={[{ required: true, message: tc('validation.required') }]}>
             <Input />
           </Form.Item>
           <Form.Item name="name" label={tc('label.name')} rules={[{ required: true, message: tc('validation.required') }]}>
             <Input />
+          </Form.Item>
+          <Form.Item name="sceneCode" label={t('editor.flow.drill.leafScene')} rules={[{ required: true, message: tc('validation.required') }]}>
+            <Select showSearch optionFilterProp="label"
+              options={scenes.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))} />
           </Form.Item>
         </Form>
       </Modal>

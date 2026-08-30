@@ -30,7 +30,7 @@ public interface RuleVersionReadMapper {
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
-            INNER JOIN scene s ON rd.scene_id = s.id
+            INNER JOIN scene s ON rd.tenant_id = s.tenant_id AND rd.scene_code = s.code
             WHERE rv.status = 'ACTIVE'
               AND rd.status = 'PUBLISHED'
             """)
@@ -55,7 +55,7 @@ public interface RuleVersionReadMapper {
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
-            INNER JOIN scene s ON rd.scene_id = s.id
+            INNER JOIN scene s ON rd.tenant_id = s.tenant_id AND rd.scene_code = s.code
             WHERE rv.status = 'ACTIVE'
               AND rd.status = 'PUBLISHED'
               AND rd.tenant_id = #{tenantId}
@@ -83,7 +83,7 @@ public interface RuleVersionReadMapper {
               s.default_params   AS defaultParamsJson
             FROM rule_version rv
             INNER JOIN rule_definition rd ON rv.rule_definition_id = rd.id
-            INNER JOIN scene s ON rd.scene_id = s.id
+            INNER JOIN scene s ON rd.tenant_id = s.tenant_id AND rd.scene_code = s.code
             WHERE rv.id = #{ruleVersionId}
             """)
     RuleVersionRow loadById(@Param("ruleVersionId") Long ruleVersionId);

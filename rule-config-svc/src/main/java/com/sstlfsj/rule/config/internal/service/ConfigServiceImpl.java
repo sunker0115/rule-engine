@@ -11,21 +11,12 @@ import com.sstlfsj.rule.config.api.dto.RuleVersionContentVO;
 import com.sstlfsj.rule.config.api.dto.TenantItemVO;
 import com.sstlfsj.rule.config.api.event.RulePublishedEvent;
 import com.sstlfsj.rule.config.api.service.ConfigService;
-import com.sstlfsj.rule.config.internal.domain.ActorType;
-import com.sstlfsj.rule.config.internal.domain.AuditAction;
-import com.sstlfsj.rule.config.internal.domain.AuditTargetType;
-import com.sstlfsj.rule.config.internal.domain.RuleDefinition;
-import com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus;
-import com.sstlfsj.rule.config.internal.domain.RuleVersion;
-import com.sstlfsj.rule.config.internal.domain.SceneDef;
-import com.sstlfsj.rule.config.internal.domain.Tenant;
-import com.sstlfsj.rule.config.internal.domain.TenantStatus;
+import com.sstlfsj.rule.config.internal.domain.*;
 import com.sstlfsj.rule.config.internal.event.OperationAuditedEvent;
 import com.sstlfsj.rule.config.internal.event.RuleStatusSnapshot;
 import com.sstlfsj.rule.config.internal.publish.PublishService;
 import com.sstlfsj.rule.config.internal.repository.RuleDefinitionMapper;
 import com.sstlfsj.rule.config.internal.repository.RuleVersionMapper;
-import com.sstlfsj.rule.config.internal.repository.SceneMapper;
 import com.sstlfsj.rule.config.internal.repository.TenantMapper;
 import com.sstlfsj.rule.kernel.api.model.RuleVersionSnapshot;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,7 +38,6 @@ class ConfigServiceImpl implements ConfigService {
 
     private final PublishService publishService;
     private final RuleDefinitionMapper ruleDefinitionMapper;
-    private final SceneMapper sceneMapper;
     private final RuleVersionMapper ruleVersionMapper;
     private final TenantMapper tenantMapper;
     private final ApplicationEventPublisher eventPublisher;
@@ -108,38 +97,22 @@ class ConfigServiceImpl implements ConfigService {
 
         // 状态变更须刷新 eval 索引:disable→loader 按 rd.status='PUBLISHED' 过滤摘除、enable→装回。
         // 复用 RulePublishedEvent（提交后异步，Modulith）触发该 scene 索引重建 + 编译缓存清除。
-        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
-        if (scene != null) {
+        String sceneCode = rule.getSceneCode();
+        if (sceneCode != null && !sceneCode.isBlank()) {
             eventPublisher.publishEvent(new RulePublishedEvent(
-                    String.valueOf(tenantId), scene.getCode(), rule.getCurrentVersion()));
+                    String.valueOf(tenantId), sceneCode, rule.getCurrentVersion()));
         }
     }
 
     @Override
     public Page<RuleDefinition> listRules(RuleListQuery q) {
-        Long sceneId = null;
-        if (q.sceneCode() != null && !q.sceneCode().isBlank()) {
-            SceneDef scene = sceneMapper.findByCode(q.tenantId(), q.sceneCode());
-            if (scene == null) {
-                return new Page<>(q.page(), q.size());
-            }
-            sceneId = scene.getId();
-        }
-
         LocalDate fromDate = q.from() != null && !q.from().isBlank()
                 ? LocalDate.parse(q.from()) : null;
         LocalDate toDate = q.to() != null && !q.to().isBlank()
                 ? LocalDate.parse(q.to()) : null;
 
         return ruleDefinitionMapper.selectRulePage(
-                new Page<>(q.page(), q.size()), q.tenantId(), sceneId, q.status(), fromDate, toDate);
-    }
-
-    @Override
-    public Map<Long, String> getSceneCodeMap(Set<Long> sceneIds) {
-        if (sceneIds == null || sceneIds.isEmpty()) return Collections.emptyMap();
-        return sceneMapper.selectBatchIds(sceneIds).stream()
-                .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
+                new Page<>(q.page(), q.size()), q.tenantId(), q.sceneCode(), q.status(), fromDate, toDate);
     }
 
     @Override
@@ -148,7 +121,6 @@ class ConfigServiceImpl implements ConfigService {
         if (rule == null || !tenantId.equals(rule.getTenantId())) {
             throw new IllegalArgumentException("规则不存在: id=" + ruleId);
         }
-        SceneDef scene = sceneMapper.selectById(rule.getSceneId());
 
         // 按规则状态取对应版本：DRAFT → DRAFT 版本，PUBLISHED/DISABLED → ACTIVE 版本
         RuleVersion current;
@@ -170,7 +142,7 @@ class ConfigServiceImpl implements ConfigService {
                 rule.getTenantId(),
                 rule.getId(), rule.getCode(), rule.getName(), rule.getStatus().name(),
                 rule.getKind() != null ? rule.getKind().name() : null,
-                scene != null ? scene.getCode() : null,
+                rule.getSceneCode(),
                 current != null ? current.getBody() : null,
                 current != null ? current.getDecisionBindings() : null,
                 current != null ? current.getPreGates() : null,
@@ -246,5 +218,20 @@ class ConfigServiceImpl implements ConfigService {
         if (t == null) throw new IllegalArgumentException("租户不存在: " + tenantId);
         t.setStatus(enable ? TenantStatus.ACTIVE : TenantStatus.DISABLED);
         tenantMapper.updateById(t);
+    }
+
+    @Override
+    @Transactional
+    public Long createTenant(String code, String name, String actorId) {
+        if (tenantMapper.selectOne(new LambdaQueryWrapper<Tenant>().eq(Tenant::getCode, code)) != null) {
+            throw new IllegalArgumentException("租户编码已存在: " + code);
+        }
+        Tenant t = new Tenant();
+        t.setCode(code);
+        t.setName(name);
+        t.setType(TenantType.STANDARD);
+        t.setStatus(TenantStatus.ACTIVE);
+        tenantMapper.insert(t);
+        return t.getId();
     }
 }

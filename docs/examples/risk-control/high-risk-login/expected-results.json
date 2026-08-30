@@ -38,6 +38,6 @@
         ]
       }
     },
-    "_note": "dry-run 同样会落 evaluation_session(记为 HIT);PULL 场景 dry-run 与 evaluate 等价,不派发 action;nodeTrace 与 evaluate 一致填充。"
+    "_note": "dry-run 只评估指定规则版本并返回结果与 nodeTrace，不写 evaluation_session、node_trace 或专用历史表；不等同于场景候选规则的完整 evaluate。"
   }
 ]

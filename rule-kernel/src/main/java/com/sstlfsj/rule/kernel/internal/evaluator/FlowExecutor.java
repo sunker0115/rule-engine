@@ -152,12 +152,13 @@ public class FlowExecutor implements RuleVersionExecutor {
             return singleNext(out.id());
         }
 
-        /** 求值 Switch/Transform 表达式：bindings = metrics/payload/subject/now + flow + 上一步 RuleRef 的 hitDecisions。 */
+        /** 求值 Switch/Transform 表达式：bindings = metrics/payload/subject/now + flow + params（图冻结常量）+ 上一步 RuleRef 的 hitDecisions。 */
         private Object evalExpr(ExpressionLang lang, String expression) {
             ExpressionEngine engine = engines.get(lang == null ? null : lang.tag());
             if (engine == null) throw new FlowHalt(EvalErrorCode.FLOW_NO_ENGINE.name());
             Map<String, Object> bindings = new HashMap<>(ScriptBindings.from(ctx));
             bindings.put("flow", flowVars);
+            bindings.put("params", graph.params());
             bindings.put("hitDecisions", lastRef == null ? List.of() : lastRef.hitDecisions());
             try {
                 return engine.evaluate(engine.compile(expression), bindings);

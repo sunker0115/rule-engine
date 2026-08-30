@@ -38,6 +38,8 @@
 | admin | Scene 管理 | `/admin/v1/scenes` | 创建 / 更新 / 禁用 Scene |
 | admin | 指标管理 | `/admin/v1/metrics` | 注册 / 更新 / 禁用 Metric |
 | admin | 元数据接口 | `/admin/v1/scenes/{sceneCode}/metadata` | 前端编辑器拉 ConditionType 枚举 + tenant 级 ACTIVE metric |
+| admin | 模板管理 | `/admin/v1/rule-templates` | 模板 CRUD / 发布 / 禁用 / 实例化为规则草稿 / 版本历史（D74） |
+| admin | 表达式验证 | `/admin/v1/expressions/validate` | 实时类型诊断（CEL）+ 弱类型引擎自动通过（L2 intellisense 后端） |
 | admin | 审计与查询 | `/admin/v1/evaluation-sessions`，`/admin/v1/rules/{id}/sessions` | 查 session / trace；按规则查历史触发记录 |
 | sdk | SDK 下发接口 | `/sdk/v1/snapshots`，`/sdk/v1/metric-definitions` | 嵌入式 SDK 拉规则快照 / metric 定义元数据（HTTP 模式，见 §8.7） |
 
@@ -133,7 +135,7 @@ POST /api/v1/rule/dry-run
 
 - 两者都不传 → 400 `MISSING_DRYRUN_TARGET`（见 §七）。
 - 两者都传时以 `ruleVersionId` 为准（精确版本优先）。
-- dry-run 恒走"带版本单快照"分支：**不写 `evaluation_session`**，dry-run 痕迹按需落 `dry_run_session` / `dry_run_node_trace`（与正式评估隔离，D7）。
+- dry-run 恒走"带版本单快照"分支：**不写 `evaluation_session`、`node_trace` 或任何专用历史表**；结果与节点 trace 仅随响应返回。
 
 **Response 200：** 同 3.2，但 `nodeTrace` 字段填充真实节点路径（evaluate 时为空数组）；引擎纯决策化后只返回决策预览（`finalDecision` / `hitDecisions`），无 `actionResults`：
 ```json
@@ -335,7 +337,7 @@ DELETE /admin/v1/rules/{ruleDefinitionId}
 ```
 
 - 规则存在任一 ACTIVE / SUPERSEDED 版本（曾上线）→ 拒绝（返回 400），只能 §4.3 disable。
-- 级联范围**只 `rule_version` + `rule_definition`**；dry-run 痕迹（`dry_run_session`/`dry_run_node_trace`，按 ruleVersionId 关联）视同审计历史**不级联删**，靠 TTL 退休（D56 / D7）。被引用的 metric/decision/scene 不受影响。
+- 级联范围**只 `rule_version` + `rule_definition`**；dry-run 不持久化，因此没有试算历史需要级联。被引用的 metric/decision/scene 不受影响。
 
 **Response 200：** 删除成功。
 
@@ -523,6 +525,51 @@ GET /admin/v1/metrics?tenantId=demo-tenant
 ```
 
 **Response 200：** `MetricDescriptor` 数组，每项含 `metricCode / metricVersion / sourceType / dataType / allowProvided / cacheTtlSeconds / params`（与 §8.7 SDK 下发的 MetricDescriptor 同构）。
+
+---
+
+### 4-A 模板管理接口（D74 实验性预实现）
+
+> 模板概念见 [01-concepts §3.21](./01-concepts.md)，存储见 [05-storage](./05-storage.md) rule_template 三表。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/admin/v1/rule-templates` | 创建模板草稿（建 `rule_template` + `rule_template_version` v1 DRAFT） |
+| `PUT` | `/admin/v1/rule-templates/{code}` | 更新模板（DRAFT 原地改；PUBLISHED 出 v(n+1) DRAFT） |
+| `POST` | `/admin/v1/rule-templates/{code}/publish` | 发布模板（DRAFT version→PUBLISHED，status→PUBLISHED） |
+| `POST` | `/admin/v1/rule-templates/{code}/disable` | 禁用模板 |
+| `POST` | `/admin/v1/rule-templates/{code}/enable` | 启用模板（DISABLED→PUBLISHED） |
+| `GET` | `/admin/v1/rule-templates` | 模板列表（可见性过滤：STANDARD tenant 可见 SYSTEM 模板） |
+| `GET` | `/admin/v1/rule-templates/{code}` | 模板详情（身份 + 最新 version 快照） |
+| `GET` | `/admin/v1/rule-templates/{code}/versions` | 版本历史列表 |
+| `GET` | `/admin/v1/rule-templates/{code}/versions/{version}` | 指定版本快照 |
+| `POST` | `/admin/v1/rule-templates/{code}/instantiate` | **实例化为规则草稿**：填 slot 值 → SlotRefResolver 验证 REF → binder 填 skeleton → `PublishService.createDraft` → 溯源记录 |
+
+**请求体示例（instantiate）**：
+```json
+{
+  "sceneCode": "risk.transfer",
+  "slotValues": {
+    "threshold": "10000",
+    "riskMetric": "device.fingerprint.risk"
+  },
+  "ruleCode": "high-value-transfer-check"
+}
+```
+
+**响应**：`DraftCreatedResult { ruleDefinitionId, ruleVersionId }`。
+
+### 4-B 表达式验证接口（L2 intellisense 后端）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/admin/v1/expressions/validate` | 实时类型检查（CEL 真实诊断；弱类型引擎返回 valid=true） |
+
+**请求体**：`{ "tenantId": 1, "sceneCode": "fraud", "lang": "CEL", "source": "metrics.amount > payload.threshold" }`
+
+**响应**：`{ "valid": true/false, "error": "…" }`（若 `lang` 不支持 → HTTP 400 `EXPRESSION_LANG_UNSUPPORTED`）
+
+前端 `ScriptEditor` / `ExpressionInput` 经 300ms debounce 调用此端点，结果通过 CodeMirror `lintGutter` 实时呈现。详情见 [06-frontend.md](./06-frontend.md)。
 
 ---
 

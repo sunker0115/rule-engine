@@ -34,7 +34,8 @@ class RuleControllerScriptTest {
         configService = mock(ConfigService.class);
         JsonMapper mapper = JsonMapper.builder().build();
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new RuleController(configService))
+                .standaloneSetup(new RuleController(configService,
+                        mock(com.sstlfsj.rule.config.api.service.RuleLineageService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .build();

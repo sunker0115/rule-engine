@@ -14,8 +14,8 @@ class RuleBundleServiceTest {
 
     @Test
     void interfaceMethodSignatures_compileAndReflect() throws NoSuchMethodException {
-        // export 签名：(Long, List<Long>, Long) → RuleBundle
-        var exportMethod = RuleBundleService.class.getMethod("export", Long.class, List.class, Long.class);
+        // export 签名：(Long, List<Long>, String) → RuleBundle（第三参 sceneCode 由 Long 改为 String）
+        var exportMethod = RuleBundleService.class.getMethod("export", Long.class, List.class, String.class);
         assertThat(exportMethod.getReturnType()).isEqualTo(RuleBundle.class);
 
         // importBundle v2 签名：(Long, RuleBundle, ImportPolicy, boolean, String) → ImportDiffReport

@@ -63,7 +63,7 @@ class RuleAnalysisServiceImplTest {
         RuleDefinition rd = new RuleDefinition();
         rd.setId(id);
         rd.setTenantId(1L);
-        rd.setSceneId(5L);
+        rd.setSceneCode("scene-1");
         rd.setCode(code);
         rd.setKind(RuleKind.AST_BOOLEAN);
         return rd;
@@ -99,7 +99,7 @@ class RuleAnalysisServiceImplTest {
         when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
         RuleDefinition rdA = ruleDef(11L, "R_a");
         RuleDefinition rdB = ruleDef(12L, "R_b");
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L))).thenReturn(List.of(rdA, rdB));
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(1L, "scene-1")).thenReturn(List.of(rdA, rdB));
         when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(null);
         when(ruleVersionMapper.findLatestDraft(12L)).thenReturn(null);
         when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(activeVersion(11L, cond(ConditionTypes.GT, "age", 10)));
@@ -125,7 +125,7 @@ class RuleAnalysisServiceImplTest {
     @Test
     void scene_without_active_rules_returns_empty_report() {
         when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L))).thenReturn(List.of());
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(1L, "scene-1")).thenReturn(List.of());
 
         RuleSetAnalysisReport report = sut.analyze(1L, "scene-1");
 
@@ -146,7 +146,7 @@ class RuleAnalysisServiceImplTest {
 
     private void stubWideCoversNarrow(DecisionStrategy strategy) {
         when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, strategy));
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(1L, "scene-1"))
                 .thenReturn(List.of(ruleDef(11L, "R_a"), ruleDef(12L, "R_b")));
         RuleVersion wide = activeVersion(11L, cond(ConditionTypes.GT, "age", 10));
         wide.setDecisionBindings(List.of(new DecisionBinding("D_A", 9)));
@@ -193,7 +193,7 @@ class RuleAnalysisServiceImplTest {
     void rule_definition_without_draft_or_active_version_is_skipped() {
         // 规则定义存在但既无 DRAFT 也无 ACTIVE → 跳过,不入分析,返回空报告
         when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(1L, "scene-1"))
                 .thenReturn(List.of(ruleDef(11L, "R_a")));
         when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(null);
         when(ruleVersionMapper.findActiveVersion(11L)).thenReturn(null);
@@ -208,7 +208,7 @@ class RuleAnalysisServiceImplTest {
     void rule_definition_with_only_active_version_is_analyzed() {
         // 仅有 ACTIVE(无 DRAFT) → 回落 ACTIVE,行为不变:两规则区间相交得到一条 overlap
         when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(1L, "scene-1"))
                 .thenReturn(List.of(ruleDef(11L, "R_a"), ruleDef(12L, "R_b")));
         when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(null);
         when(ruleVersionMapper.findLatestDraft(12L)).thenReturn(null);
@@ -226,7 +226,7 @@ class RuleAnalysisServiceImplTest {
         // 用户场景:规则只有从未发布的 DRAFT 版本 → 现也被分析。
         // 草稿条件 age>20 ∧ age>10 同 AND 组冗余(age>20 蕴含 age>10) → 应产出一条 redundancy,证明草稿已纳入分析。
         when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(1L, "scene-1"))
                 .thenReturn(List.of(ruleDef(11L, "R_a")));
         AstNode redundant = new AndNode(
                 List.of(cond(ConditionTypes.GT, "age", 20), cond(ConditionTypes.GT, "age", 10)),
@@ -245,7 +245,7 @@ class RuleAnalysisServiceImplTest {
         // 同一规则同时有 DRAFT 与 ACTIVE:应分析 DRAFT。
         // 给两规则的 DRAFT 设相交区间 → overlap 命中;若误用 ACTIVE(不相交)则无 overlap。
         when(sceneMapper.findByCode(1L, "scene-1")).thenReturn(scene(5L, DecisionStrategy.HIGHEST_PRIORITY));
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(1L, List.of(5L)))
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(1L, "scene-1"))
                 .thenReturn(List.of(ruleDef(11L, "R_a"), ruleDef(12L, "R_b")));
         // DRAFT 相交(age>10 与 age>20),ACTIVE 不相交(age<0 与 age>100)
         when(ruleVersionMapper.findLatestDraft(11L)).thenReturn(draftVersion(11L, cond(ConditionTypes.GT, "age", 10)));

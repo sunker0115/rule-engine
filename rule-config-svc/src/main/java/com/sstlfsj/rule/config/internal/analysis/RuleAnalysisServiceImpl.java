@@ -53,7 +53,7 @@ public class RuleAnalysisServiceImpl implements RuleAnalysisService {
 
         SceneExecutionStrategy strategy = mapStrategy(scene);
 
-        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.findByTenantAndSceneIds(tenantId, List.of(scene.getId()));
+        List<RuleDefinition> ruleDefs = ruleDefinitionMapper.findByTenantAndSceneCode(tenantId, sceneCode);
         List<AnalyzableRule> analyzableRules = new ArrayList<>();
         for (RuleDefinition rd : ruleDefs) {
             // 草稿优先,否则 ACTIVE:反映待发布编辑态(发布生命周期保证至多一个 DRAFT)

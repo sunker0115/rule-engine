@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import tools.jackson.databind.json.JsonMapper;
+import com.sstlfsj.rule.eval.internal.domain.EvaluationContextSnapshot;
 
 import java.util.List;
 import java.util.Map;
@@ -34,7 +34,7 @@ class ReplayServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        impl = new ReplayServiceImpl(sessionMapper, snapshotLoader, evalEngine, JsonMapper.builder().build());
+        impl = new ReplayServiceImpl(sessionMapper, snapshotLoader, evalEngine);
     }
 
     private EvaluationSession fullSession() {
@@ -44,9 +44,9 @@ class ReplayServiceImplTest {
         s.setEventType("e");
         s.setSubjectId("u");
         s.setEventId("evt-1");
-        s.setPayload("{\"amount\":5000}");
-        s.setCandidateRuleVersionIds("[11]");
-        s.setContextSnapshot("{\"metrics\":{\"total\":200},\"evalNow\":\"2026-06-09T01:02:03Z\"}");
+        s.setPayload(Map.of("amount", 5000));
+        s.setCandidateRuleVersionIds(List.of(11L));
+        s.setContextSnapshot(new EvaluationContextSnapshot(Map.of("total", 200), java.time.Instant.parse("2026-06-09T01:02:03Z")));
         return s;
     }
 

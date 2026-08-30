@@ -27,6 +27,11 @@
             <groupId>com.sstlfsj.rule</groupId>
             <artifactId>rule-sdk-spring-boot-starter</artifactId>
         </dependency>
+        <!-- DECISION_FLOW / EXPRESSION_SCRIPT demo 的 CEL 表达式引擎 -->
+        <dependency>
+            <groupId>com.sstlfsj.rule</groupId>
+            <artifactId>rule-expression-cel</artifactId>
+        </dependency>
         <!-- annotation demo 的 Spring 上下文（非 web） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

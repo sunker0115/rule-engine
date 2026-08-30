@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,7 +52,10 @@ public class ScriptExecutor implements RuleVersionExecutor {
         Object result;
         try {
             CompiledExpression compiled = engine.compile(script.source());
-            result = engine.evaluate(compiled, ScriptBindings.from(ctx));
+            // 冻结常量命名空间并入绑定顶层 params key(对标 FlowExecutor 注入 flow/hitDecisions)
+            Map<String, Object> bindings = new HashMap<>(ScriptBindings.from(ctx));
+            bindings.put("params", script.params());
+            result = engine.evaluate(compiled, bindings);
         } catch (Exception e) {
             return EvalResult.error(EvalErrorCode.SCRIPT_EVAL_ERROR, scriptTrace(false, "ERROR", snapshot));
         }

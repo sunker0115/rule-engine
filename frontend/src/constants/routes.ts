@@ -21,6 +21,9 @@ export const ROUTES = {
   SCHEDULED_TASKS:        '/scheduled-tasks',
   SCHEDULED_TASK_DETAIL:  '/scheduled-tasks/:taskId',
   IMPORT_EXPORT:  '/import-export',
+  TEMPLATES:             '/templates',
+  TEMPLATE_EDITOR:       '/templates/:code/edit',
+  TEMPLATE_INSTANTIATE:  '/templates/:code/instantiate',
 } as const;
 
 /** 生成带参数的实际路径 */

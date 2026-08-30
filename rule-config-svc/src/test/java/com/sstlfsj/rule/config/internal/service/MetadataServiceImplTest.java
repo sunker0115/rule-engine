@@ -130,16 +130,11 @@ class MetadataServiceImplTest {
     @Test
     void listMetricDefinitions_withScenes_filtersToMetricDependencyUnion() {
         // scenes=["fraud"] → scene id 5 → ruleDef id 11 → ACTIVE rule_version 依赖对象数组格式 risk.score v1
-        SceneDef scene = new SceneDef();
-        scene.setId(5L);
-        scene.setTenantId(1L);
-        scene.setCode("fraud");
-        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene));
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
-        def.setSceneId(5L);
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
+        def.setSceneCode("fraud");
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(any(), any())).thenReturn(List.of(def));
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus(RuleVersionStatus.ACTIVE);
@@ -166,16 +161,11 @@ class MetadataServiceImplTest {
 
     @Test
     void listMetricDefinitions_withScenes_noMetricDeps_returnsEmpty() {
-        SceneDef scene = new SceneDef();
-        scene.setId(5L);
-        scene.setTenantId(1L);
-        scene.setCode("fraud");
-        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene));
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
-        def.setSceneId(5L);
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
+        def.setSceneCode("fraud");
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(any(), any())).thenReturn(List.of(def));
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
         rv.setStatus(RuleVersionStatus.ACTIVE);
@@ -190,7 +180,8 @@ class MetadataServiceImplTest {
 
     @Test
     void listMetricDefinitions_unknownScene_returnsEmpty() {
-        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of());   // scene code 不存在
+        // scene code 不存在 → 该 sceneCode 下无 rule_definition → 空
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(any(), any())).thenReturn(List.of());
 
         MetadataServiceImpl service = newService(List.of());
 
@@ -215,17 +206,12 @@ class MetadataServiceImplTest {
         riskV1.setStatus(MetricStatus.SUPERSEDED);
 
         // scenes=["fraud"] → scene id 5 → ruleDef id 11 → ACTIVE rule_version 绑对象数组 v1
-        SceneDef scene = new SceneDef();
-        scene.setId(5L);
-        scene.setTenantId(1L);
-        scene.setCode("fraud");
-        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene));
 
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
-        def.setSceneId(5L);
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
+        def.setSceneCode("fraud");
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(any(), any())).thenReturn(List.of(def));
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
@@ -254,17 +240,12 @@ class MetadataServiceImplTest {
      */
     @Test
     void listMetricDefinitions_declaredMode_missingDefinition_skipsGracefully() {
-        SceneDef scene = new SceneDef();
-        scene.setId(5L);
-        scene.setTenantId(1L);
-        scene.setCode("fraud");
-        when(sceneMapper.findByCodes(any(), any())).thenReturn(List.of(scene));
 
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
-        def.setSceneId(5L);
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
+        def.setSceneCode("fraud");
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(any(), any())).thenReturn(List.of(def));
 
         RuleVersion rv = new RuleVersion();
         rv.setRuleDefinitionId(11L);
@@ -325,8 +306,8 @@ class MetadataServiceImplTest {
         RuleDefinition def = new RuleDefinition();
         def.setId(11L);
         def.setTenantId(1L);
-        def.setSceneId(5L);
-        when(ruleDefinitionMapper.findByTenantAndSceneIds(any(), any())).thenReturn(List.of(def));
+        def.setSceneCode("fraud");
+        when(ruleDefinitionMapper.findByTenantAndSceneCode(any(), any())).thenReturn(List.of(def));
 
         RuleVersion rv1 = new RuleVersion();
         rv1.setRuleDefinitionId(11L);
@@ -394,5 +375,41 @@ class MetadataServiceImplTest {
         OperatorSpec gt = resp.conditionTypes().stream()
                 .filter(s -> "GT".equals(s.code())).findFirst().orElseThrow();
         assertThat(gt.displayName()).isEqualTo("大于");
+    }
+
+    // ---- getTenantMetadata：不依赖 scene ----
+
+    @Test
+    void getTenantMetadata_returnsConditionTypesAndMetrics_withoutScene() {
+        MetricDefinition metric = new MetricDefinition();
+        metric.setMetricCode("txn.amount");
+        metric.setName("交易金额");
+        metric.setDataType("LONG");
+        metric.setSourceType("SQL_AGGREGATE");
+        metric.setAllowProvided(false);
+        when(metricDefinitionMapper.findActiveByTenant(1L)).thenReturn(List.of(metric));
+
+        MetadataService.MetadataResponse resp = newService(List.of()).getTenantMetadata(1L);
+
+        // conditionTypes 来自全局 catalog，非空
+        assertThat(resp.conditionTypes()).isNotEmpty();
+        // metrics 来自 tenant，正确返回
+        assertThat(resp.availableMetrics()).hasSize(1);
+        assertThat(resp.availableMetrics().get(0).metricCode()).isEqualTo("txn.amount");
+        // eventTypes 为空（模板不绑定事件类型）
+        assertThat(resp.eventTypes()).isEmpty();
+        // 确认没有调 sceneMapper（tenant 级不依赖 scene）
+        verifyNoInteractions(sceneMapper);
+    }
+
+    @Test
+    void getTenantMetadata_noMetrics_returnsEmptyMetrics() {
+        when(metricDefinitionMapper.findActiveByTenant(9001L)).thenReturn(List.of());
+
+        MetadataService.MetadataResponse resp = newService(List.of()).getTenantMetadata(9001L);
+
+        assertThat(resp.conditionTypes()).isNotEmpty(); // conditionType 全局，始终有
+        assertThat(resp.availableMetrics()).isEmpty();
+        verifyNoInteractions(sceneMapper);
     }
 }

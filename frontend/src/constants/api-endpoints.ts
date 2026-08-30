@@ -56,6 +56,8 @@ export const ENDPOINTS = {
 
   // Metadata
   SCENE_METADATA: (sceneCode: string) => `${ADMIN}/scenes/${sceneCode}/metadata`,
+  /** 租户级元数据（conditionTypes/metrics/expressionLangs），不依赖 scene，供模板编辑器使用。 */
+  TENANT_METADATA: `${ADMIN}/metadata`,
 
   // Evaluation
   EVAL_EVENT:    `${API}/event`,
@@ -93,4 +95,15 @@ export const ENDPOINTS = {
   // Tenant
   TENANT_LIST: `${ADMIN}/tenants`,
   TENANT_TOGGLE_STATUS: (id: number) => `${ADMIN}/tenants/${id}/status`,
+
+  // Template V2
+  TEMPLATE_LIST:        `${ADMIN}/rule-templates`,
+  TEMPLATE_DETAIL:      (code: string) => `${ADMIN}/rule-templates/${code}`,
+  TEMPLATE_CREATE:      `${ADMIN}/rule-templates`,
+  TEMPLATE_UPDATE:      (code: string) => `${ADMIN}/rule-templates/${code}`,
+  TEMPLATE_PUBLISH:     (code: string) => `${ADMIN}/rule-templates/${code}/publish`,
+  TEMPLATE_DISABLE:     (code: string) => `${ADMIN}/rule-templates/${code}/disable`,
+  TEMPLATE_ENABLE:      (code: string) => `${ADMIN}/rule-templates/${code}/enable`,
+  TEMPLATE_INSTANTIATE: (code: string) => `${ADMIN}/rule-templates/${code}/instantiate`,
+  TEMPLATE_VERSIONS:    (code: string) => `${ADMIN}/rule-templates/${code}/versions`,
 } as const;

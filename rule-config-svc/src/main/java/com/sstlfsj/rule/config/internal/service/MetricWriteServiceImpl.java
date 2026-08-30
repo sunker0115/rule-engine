@@ -123,7 +123,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     @Override
     @Transactional(readOnly = true)
     public List<RuleRef> findReferencingRules(Long tenantId, String metricCode, int metricVersion) {
-        // 第一步：查该 tenant 下所有 rule_definition，取 id/code/name/sceneId/status
+        // 第一步：查该 tenant 下所有 rule_definition，取 id/code/name/sceneCode/status
         List<RuleDefinition> defs = ruleDefinitionMapper.findByTenant(tenantId);
         if (defs.isEmpty()) {
             return List.of();
@@ -131,27 +131,17 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         Map<Long, RuleDefinition> defMap = defs.stream()
                 .collect(Collectors.toMap(RuleDefinition::getId, d -> d));
 
-        // 第二步：批量查 scene，建 sceneId → sceneCode 索引
-        Set<Long> sceneIds = defs.stream()
-                .map(RuleDefinition::getSceneId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<Long, String> sceneCodeMap = sceneIds.isEmpty() ? Map.of() :
-                sceneMapper.findByIds(sceneIds)
-                        .stream()
-                        .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
-
-        // 第三步：查这批 rule_definition_id 下所有 ACTIVE rule_version，只取影响面判断所需列
+        // 第二步：查这批 rule_definition_id 下所有 ACTIVE rule_version，只取影响面判断所需列
         // 口径对齐 eval 侧 RuleVersionReadMapper：以 rv.status=ACTIVE 为"参与评估"判定，
         // 不按 rule_definition.status 过滤（eval 的 loadAllActive/loadActiveByScene 均如此）。
         List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defMap.keySet());
 
-        // 第四步：反序列化 metric_dependencies，筛出含目标 (metricCode, metricVersion) 的行
+        // 第三步：反序列化 metric_dependencies，筛出含目标 (metricCode, metricVersion) 的行
         List<RuleRef> result = new ArrayList<>();
         for (RuleVersion rv : activeVersions) {
             if (containsDependency(rv.getMetricDependencies(), metricCode, metricVersion)) {
                 RuleDefinition def = defMap.get(rv.getRuleDefinitionId());
-                String sceneCode = sceneCodeMap.getOrDefault(def.getSceneId(), "");
+                String sceneCode = def.getSceneCode();
                 result.add(new RuleRef(def.getId(), def.getCode(), def.getName(),
                         sceneCode, def.getStatus().name()));
             }
@@ -162,7 +152,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
     @Override
     @Transactional(readOnly = true)
     public List<RuleRef> findRulesReferencingMetric(Long tenantId, String metricCode) {
-        // 第一步：查该 tenant 下所有 rule_definition，取 id/code/name/sceneId/status
+        // 第一步：查该 tenant 下所有 rule_definition，取 id/code/name/sceneCode/status
         List<RuleDefinition> defs = ruleDefinitionMapper.findByTenant(tenantId);
         if (defs.isEmpty()) {
             return List.of();
@@ -170,20 +160,10 @@ public class MetricWriteServiceImpl implements MetricWriteService {
         Map<Long, RuleDefinition> defMap = defs.stream()
                 .collect(Collectors.toMap(RuleDefinition::getId, d -> d));
 
-        // 第二步：批量查 scene，建 sceneId → sceneCode 索引
-        Set<Long> sceneIds = defs.stream()
-                .map(RuleDefinition::getSceneId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<Long, String> sceneCodeMap = sceneIds.isEmpty() ? Map.of() :
-                sceneMapper.findByIds(sceneIds)
-                        .stream()
-                        .collect(Collectors.toMap(SceneDef::getId, SceneDef::getCode));
-
-        // 第三步：查这批 rule_definition_id 下所有 ACTIVE rule_version（沿用既有投影，metric_dependencies 在内）
+        // 第二步：查这批 rule_definition_id 下所有 ACTIVE rule_version（沿用既有投影，metric_dependencies 在内）
         List<RuleVersion> activeVersions = ruleVersionMapper.findActiveByRuleDefIds(defMap.keySet());
 
-        // 第四步：筛出 metric_dependencies 含该 metricCode（任意版本）的规则；
+        // 第三步：筛出 metric_dependencies 含该 metricCode（任意版本）的规则；
         // 同一 rule_definition 跨多版本引用同 metric 只出一条（按 ruleDefinitionId 去重，
         // 与 countRuleUsages 去重口径一致）——这是"哪些规则用了它"，不是"多少个版本引用"。
         Set<Long> seenRuleDefIds = new HashSet<>();
@@ -196,7 +176,7 @@ public class MetricWriteServiceImpl implements MetricWriteService {
                 continue;
             }
             RuleDefinition def = defMap.get(rv.getRuleDefinitionId());
-            String sceneCode = sceneCodeMap.getOrDefault(def.getSceneId(), "");
+            String sceneCode = def.getSceneCode();
             result.add(new RuleRef(def.getId(), def.getCode(), def.getName(),
                     sceneCode, def.getStatus().name()));
         }

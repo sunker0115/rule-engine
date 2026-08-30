@@ -59,7 +59,7 @@ class PublishServiceTest {
         draftRule = new RuleDefinition();
         draftRule.setId(10L);
         draftRule.setTenantId(1L);
-        draftRule.setSceneId(5L);
+        draftRule.setSceneCode("PAYMENT");
         draftRule.setCode("rule.demo");
         draftRule.setName("测试规则");
         draftRule.setStatus(RuleDefinitionStatus.DRAFT);
@@ -90,7 +90,7 @@ class PublishServiceTest {
         draftVersion.setPayloadDependencies(List.of());
         draftVersion.setTriggerEventTypes(List.of());
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
         when(ruleVersionMapper.updateById((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
@@ -127,7 +127,7 @@ class PublishServiceTest {
         draftVersion.setPayloadDependencies(List.of());
         draftVersion.setTriggerEventTypes(List.of());
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(any())).thenReturn(draftVersion);
         when(ruleVersionMapper.updateById((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
@@ -149,7 +149,7 @@ class PublishServiceTest {
     @Test
     void publish_noDraftVersion_throwsIllegalState() {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(any())).thenReturn(null);
 
         assertThatThrownBy(() -> publishService.publish(1L, 10L, "op"))
@@ -162,7 +162,7 @@ class PublishServiceTest {
         draftRule.setKind(RuleKind.AST_BOOLEAN);
         draftVersion.setVersion(1L);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);
         when(ruleVersionMapper.updateById((RuleVersion) any())).thenReturn(1);
         MetricDefinition md = new MetricDefinition();
@@ -191,7 +191,7 @@ class PublishServiceTest {
         draftVersion.setVersion(1L);
         draftVersion.setKind(RuleKind.SCORECARD);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);
         when(ruleVersionMapper.updateById((RuleVersion) any())).thenReturn(1);
         when(ruleDefinitionMapper.updateById((RuleDefinition) any())).thenReturn(1);
@@ -221,7 +221,7 @@ class PublishServiceTest {
         draftRule.setKind(RuleKind.AST_BOOLEAN);
         draftVersion.setVersion(1L);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);
 
         assertThatThrownBy(() -> publishService.editDraft(1L, 10L,
@@ -237,7 +237,7 @@ class PublishServiceTest {
     @Test
     void editDraft_noDraft_throws() {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(null);
         assertThatThrownBy(() -> publishService.editDraft(1L, 10L,
                 new RuleContent("n", RuleKind.AST_BOOLEAN.name(),
@@ -253,7 +253,7 @@ class PublishServiceTest {
         draftScene.setTenantId(1L);
         draftScene.setCode("risk.transfer");
         when(sceneMapper.findByCode(any(), any())).thenReturn(draftScene);
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn((RuleDefinition) null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn((RuleDefinition) null);
 
         doAnswer(inv -> {
             RuleDefinition rd = inv.getArgument(0);
@@ -317,7 +317,7 @@ class PublishServiceTest {
         SceneDef sc = new SceneDef();
         sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
         when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
-        lenient().when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        lenient().when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
 
         RuleContent content = new RuleContent("mismatch", "AST_BOOLEAN",
                 new ScriptBody(new ScriptSource("x > 1", "CEL")), List.of(), List.of(), List.of());
@@ -344,7 +344,7 @@ class PublishServiceTest {
         scene.setCode("risk.transfer");
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
         // 模拟同 tenant+scene 下已存在同 code 的规则
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(new RuleDefinition());
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(new RuleDefinition());
 
         assertThrows(IllegalArgumentException.class, () ->
                 publishService.createDraft(1L, "risk.transfer", "rule.test",
@@ -375,7 +375,7 @@ class PublishServiceTest {
         draftScene.setTenantId(1L);
         draftScene.setCode("risk.transfer");
         when(sceneMapper.findByCode(any(), any())).thenReturn(draftScene);
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn((RuleDefinition) null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn((RuleDefinition) null);
 
         doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
                 .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
@@ -399,7 +399,7 @@ class PublishServiceTest {
         sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
         sc.setEventTypes(List.of("payment.initiated"));
         when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
         doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
                 .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
         doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
@@ -427,7 +427,7 @@ class PublishServiceTest {
         SceneDef sc = new SceneDef();
         sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
         when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
         doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
                 .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
         when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of());
@@ -445,7 +445,7 @@ class PublishServiceTest {
     void newVersion_requiresNoPendingDraft_createsNextVersion() {
         draftRule.setStatus(RuleDefinitionStatus.PUBLISHED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(null);   // 无待发布草稿
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(1L);
         doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(30L); return 1; })
@@ -471,7 +471,7 @@ class PublishServiceTest {
     @Test
     void newVersion_pendingDraftExists_throws() {
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(draftVersion);   // 已有 DRAFT
         assertThatThrownBy(() -> publishService.newVersion(1L, 10L,
                 new RuleContent(null, RuleKind.AST_BOOLEAN.name(),
@@ -488,7 +488,7 @@ class PublishServiceTest {
         oldV.setBody(new AstBody(new ConditionNode("GT", "amount", "LONG", Map.of("threshold", 1), 0.0)));
         oldV.setDecisionBindings(List.of()); oldV.setPreGates(List.of()); oldV.setTriggerEventTypes(List.of());
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(draftRule);
-        when(sceneMapper.selectById(5L)).thenReturn(scene);
+        when(sceneMapper.findByCode(1L, "PAYMENT")).thenReturn(scene);
         when(ruleVersionMapper.findLatestDraft(10L)).thenReturn(null);
         when(ruleVersionMapper.findByIdAndRule(50L, 10L)).thenReturn(oldV);
         when(ruleVersionMapper.maxVersion(10L)).thenReturn(2L);
@@ -653,7 +653,7 @@ class PublishServiceTest {
         sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
         sc.setEventTypes(List.of("payment.initiated"));
         when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
         MetricDefinition md = new MetricDefinition();
         md.setMetricCode("score"); md.setDataType("LONG"); md.setStatus(MetricStatus.ACTIVE);
         lenient().when(metricDefinitionMapper.findActiveByCodes(any(), any())).thenReturn(List.of(md));
@@ -676,7 +676,7 @@ class PublishServiceTest {
         sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
         sc.setEventTypes(List.of("payment.initiated"));
         when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
-        lenient().when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        lenient().when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
 
         RuleVersionSnapshot.PreGateConfig timeWindow = new RuleVersionSnapshot.PreGateConfig(
                 "TIME_WINDOW", Map.of("fromEpochMilli", 2000L, "toEpochMilli", 1000L));
@@ -696,7 +696,7 @@ class PublishServiceTest {
         sc.setId(5L); sc.setTenantId(1L); sc.setCode("PAYMENT");
         sc.setEventTypes(List.of("payment.initiated"));
         when(sceneMapper.findByCode(any(), any())).thenReturn(sc);
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
         doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
                 .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
         doAnswer(inv -> { inv.getArgument(0, RuleVersion.class).setId(20L); return 1; })
@@ -720,7 +720,7 @@ class PublishServiceTest {
     void publish_disabledRule_throws() {
         // DISABLED 规则须先 enable 再发布，不允许通过 publish 路径绕过 transitionStatus 状态机
         RuleDefinition disabledRule = new RuleDefinition();
-        disabledRule.setId(10L); disabledRule.setTenantId(1L); disabledRule.setSceneId(5L);
+        disabledRule.setId(10L); disabledRule.setTenantId(1L); disabledRule.setSceneCode("PAYMENT");
         disabledRule.setStatus(com.sstlfsj.rule.config.internal.domain.RuleDefinitionStatus.DISABLED);
         when(ruleDefinitionMapper.selectById(10L)).thenReturn(disabledRule);
 

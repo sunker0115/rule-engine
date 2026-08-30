@@ -16,12 +16,12 @@
 2. **`IJobHandler` 是抽象类**(不是 interface):`public abstract void execute() throws Exception`(**无参、返回 void**)。job 参数走 `XxlJobHelper.getJobParam()` 静态取,结果走 `XxlJobHelper.handleSuccess()/handleFail()`(不写则默认成功)。
 3. **编程式动态注册**:`XxlJobExecutor.registryJobHandler(String name, IJobHandler handler)`(**静态方法,拼写带 `y`**),底层 `ConcurrentHashMap.put`,返回被覆盖的旧 handler。`loadJobHandler(name)` 取(不存在返 null)。**注意**:registry 是 `ConcurrentHashMap`,不接受 null value 且无公开注销 API → 注销=覆盖为 no-op tombstone handler。
 4. **执行器** `XxlJobSpringExecutor extends XxlJobExecutor implements SmartInitializingSingleton, DisposableBean`。配置走 setter(`setAdminAddresses/setAccessToken/setAppname/setAddress/setIp/setPort/setLogPath/setLogRetentionDays/setEnabled`)。**自动 start**(`afterSingletonsInstantiated()`),**不要手动调 `start()`**;`setEnabled(false)` 则 start 直接跳过(测试用)。EmbedServer 是 Netty,默认端口 9999。
-5. **admin REST 契约(3.4.0,与 cpt 参考的 2.4.0 断层,必须按 3.4.0 写)**:
+5. **admin REST 契约(3.4.0,与旧参考实现使用的 2.4.0 断层,必须按 3.4.0 写)**:
    - 登录:`POST /auth/doLogin`,form `userName`/`password`,返回 `Response{code,msg,data}`,**`data` 直接是 sso token**。后续请求带 `Cookie: xxl_sso_token=<token>`。
    - jobgroup:`POST /jobgroup/pageList`(form `offset/pagesize/appname/title`)、`POST /jobgroup/insert`(form `appname/title/addressType=0/addressList`)。写操作要求登录账号具 ADMIN_ROLE。
    - jobinfo:`POST /jobinfo/pageList`(form `offset/pagesize/jobGroup/triggerStatus/jobDesc/executorHandler/author`,**全部必填**,空串占位)、`POST /jobinfo/insert`(XxlJobInfo 全字段 form)。
    - **统一返回** `Response{code,msg,data}`:成功 `code==200`;**pageList 行在 `data.data`(数组)、总数 `data.total`**(`PageModel`,不是 `recordsTotal`);insert 新 id 在 `data`。
-6. **"有了不管" seed**:`/jobinfo/pageList` 的 `executorHandler` 入参是**模糊匹配**,需在客户端对结果再 `equals` 精确过滤;命中即 return 其 id **不发任何写请求**(与 cpt"有了就 update"相反)。
+6. **"有了不管" seed**:`/jobinfo/pageList` 的 `executorHandler` 入参是**模糊匹配**,需在客户端对结果再 `equals` 精确过滤;命中即 return 其 id **不发任何写请求**(与旧参考实现的"有了就 update"相反)。
 7. **jobCode 形如 `"job:" + jobId`**(来自 `JobScheduleManager.key()`),handler 名直接用它;冒号在 admin executorHandler 字段是普通字符串,保持原样。若构建时发现 admin 拒绝冒号,再做转义(默认不转)。
 
 **需在构建/联调时验证(未编造,不要当成已知)**:(a) admin 实际 context-path 与端口;(b) `@XxlSso` 拦截器是否接受 cookie `xxl_sso_token`(本计划用 cookie 方式,SSO 默认 tokenKey=`xxl_sso_token`);(c) seed 账号是否具 ADMIN_ROLE;(d) GraalVM native image 下 netty/groovy/xxl-tool 的 reachability(Task 7 go/no-go 门控)。

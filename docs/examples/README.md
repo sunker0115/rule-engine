@@ -2,10 +2,11 @@
 
 > **目录用途**：承载端到端真实业务案例，作为新人首次接入 / 接入新场景 / 评审参考的具象材料。本目录与决策 / 概念 / 运行时文档互补——文档讲"为什么 + 怎么落"，案例讲"长什么样"。
 
-> **案例有效性(2026-06-09)**：
-> - ✅ 对齐当前实现、HTTP API 跑通：[`risk-control/high-risk-login/`](./risk-control/high-risk-login/)（新范式样板，含完整 curl 剧本）
-> - ✅ 对齐当前实现：[`connector-standardization/`](./connector-standardization/)（D72 声明式 HTTP 连接器端到端：建 connector → 引用它的 EXTERNAL_HTTP metric → 发布 → 评估 → 热失效 → `:test` 验 trace → 清理）
-> - 🛑 已过期、归档于 [`archive/`](./archive/)：`new-account-large-transfer`、`ticket-creation`、`user-register`——使用了废弃的 `metricBindings`/`decisions`/`PAYLOAD_COMPARE`/`_mockMetrics` 等形态。
+> **案例有效性(2026-07-23)**：全部对齐当前实现（D54/D55/D69/D72/D76）。
+> - ✅ 业务域样板：[`risk-control/high-risk-login/`](./risk-control/high-risk-login/)（新范式样板，payload 驱动 + PULL 同步 + 完整 curl 剧本）
+> - ✅ 技术模式：[`patterns/time-conditions/`](./patterns/time-conditions/)（时间条件三写法：time.window / time.occurred_at / Metric 内嵌窗口）
+> - ✅ 技术模式：[`patterns/connector-standardization/`](./patterns/connector-standardization/)（D72 声明式 HTTP 连接器端到端：建 connector → 引用它的 EXTERNAL_HTTP metric → 发布 → 评估 → 热失效 → `:test` 验 trace → 清理）
+> - 旧废弃案例（依赖 D60 动作子系统 / D55 providedMetrics 等已移除能力）已删除。
 
 ---
 
@@ -17,13 +18,15 @@
 examples/
 ├── README.md           本文件
 ├── risk-control/       风控类（额度校验 / 黑名单 / 异常行为拦截）
+│   └── high-risk-login/
 ├── marketing/          营销类（VIP 升级 / 满减 / 画像投放）
 ├── activity/           活动类（任务进度 / 奖励发放 / 兑换券）
-├── patterns/           跨域技术模式（时间条件写法 / Metric sourceType 对比 / Pre-Gate 组合等）
-└── archive/           已过期案例归档（用废弃形态，待按新范式重写后移回业务域目录）
+└── patterns/           跨域技术模式
+    ├── time-conditions/         时间条件三写法（time.window / occurred_at / Metric 内嵌窗口）
+    └── connector-standardization/  EXTERNAL_HTTP 声明式连接器（D72）
 ```
 
-⏳ 子目录内案例待逐步沉淀。
+⏳ marketing / activity 子目录待逐步沉淀。
 
 ## 二、单个案例必含文件清单
 

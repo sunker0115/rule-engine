@@ -25,6 +25,9 @@ const Effectiveness      = lazy(() => import('@/pages/effectiveness'));
 const ScheduledTaskList   = lazy(() => import('@/pages/scheduled-task-list'));
 const ScheduledTaskDetail = lazy(() => import('@/pages/scheduled-task-detail'));
 const ImportExport       = lazy(() => import('@/pages/import-export'));
+const TemplateList        = lazy(() => import('@/pages/template-list'));
+const TemplateEditor      = lazy(() => import('@/pages/template-editor'));
+const TemplateInstantiate  = lazy(() => import('@/pages/template-instantiate'));
 
 const LazyPage = ({ children }: { children: ReactNode }) => (
   <Suspense fallback={<Spin size="large" style={{ display: 'block', margin: '100px auto' }} />}>
@@ -59,6 +62,9 @@ export const router = createBrowserRouter([
       { path: ROUTES.SCHEDULED_TASKS,       element: <LazyPage><ScheduledTaskList /></LazyPage> },
       { path: ROUTES.SCHEDULED_TASK_DETAIL, element: <LazyPage><ScheduledTaskDetail /></LazyPage> },
       { path: ROUTES.IMPORT_EXPORT,  element: <LazyPage><ImportExport /></LazyPage> },
+      { path: ROUTES.TEMPLATES,             element: <LazyPage><TemplateList /></LazyPage> },
+      { path: ROUTES.TEMPLATE_EDITOR,       element: <LazyPage><TemplateEditor /></LazyPage> },
+      { path: ROUTES.TEMPLATE_INSTANTIATE,  element: <LazyPage><TemplateInstantiate /></LazyPage> },
     ],
   },
 ]);

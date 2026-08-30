@@ -52,7 +52,7 @@ export default function ExpressionInput({ value, onChange, availableMetrics, pay
   const types = payloadFieldTypes ?? {};
 
   const completeFn = useMemo(
-    () => (ctx: CompletionContext) => expressionCompletions(ctx, availableMetrics, payloadFieldNames, types),
+    () => (ctx: CompletionContext) => expressionCompletions(ctx, availableMetrics, payloadFieldNames, types, []),
     [availableMetrics, payloadFieldNames, types],
   );
 

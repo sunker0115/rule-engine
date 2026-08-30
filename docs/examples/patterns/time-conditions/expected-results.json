@@ -1,0 +1,9 @@
+{
+  "evt-tw-001": { "ruleHit": true,  "finalDecision": { "code": "REWARD", "name": "发放奖励", "priority": 1 }, "note": "工作日窗口内 + action_type=login" },
+  "evt-tw-002": { "ruleHit": false, "status": "MISS", "note": "凌晨不在 09:00–22:00 窗口" },
+  "evt-tw-003": { "ruleHit": false, "status": "MISS", "note": "周六被 daysOfWeek 排除" },
+  "evt-oat-001": { "ruleHit": true,  "finalDecision": { "code": "REWARD", "name": "发放奖励", "priority": 1 }, "note": "occurredAt 在活动期内（asOf 超期也命中）" },
+  "evt-oat-002": { "ruleHit": false, "status": "MISS", "note": "occurredAt 早于活动开始" },
+  "evt-oat-003": { "ruleHit": false, "status": "MISS", "note": "occurredAt 晚于活动结束" },
+  "evt-mw-001": { "ruleHit": "视库数据而定", "note": "user.login.count.7d ≥ 3 → REWARD；由 loadtest_ro 库 user_login_log 实际行数决定" }
+}

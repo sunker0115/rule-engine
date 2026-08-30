@@ -59,7 +59,7 @@ class PublishServicePayloadTest {
         scene.setPayloadSchema(List.of(
                 new PayloadFieldSpec("channel", "STRING", false, null, null, null, null, null)));
         when(sceneMapper.findByCode(any(), any())).thenReturn(scene);
-        when(ruleDefinitionMapper.findBySceneAndCode(any(), any(), any())).thenReturn(null);
+        when(ruleDefinitionMapper.findByTenantAndCode(any(), any())).thenReturn(null);
         doAnswer(inv -> { inv.getArgument(0, RuleDefinition.class).setId(10L); return 1; })
                 .when(ruleDefinitionMapper).insert(any(RuleDefinition.class));
 

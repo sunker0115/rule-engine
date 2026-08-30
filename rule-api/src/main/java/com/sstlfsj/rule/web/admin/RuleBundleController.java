@@ -47,22 +47,22 @@ public class RuleBundleController {
      *
      * @param tenantId 租户 id
      * @param ruleIds  规则定义 id 列表（逗号分隔，可选）
-     * @param sceneId  场景 id（可选）
+     * @param sceneCode 场景编码（可选）
      * @return Bundle JSON 文件（Content-Disposition: attachment）
      */
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(@RequestParam Long tenantId,
                                          @RequestParam(required = false) List<Long> ruleIds,
-                                         @RequestParam(required = false) Long sceneId,
+                                         @RequestParam(required = false) String sceneCode,
                                          @RequestParam(defaultValue = "bundle") String format) {
         byte[] body;
         String suffix;
         if ("snapshot".equals(format)) {
-            List<RuleVersionSnapshot> snapshots = ruleBundleService.exportSnapshots(tenantId, ruleIds, sceneId);
+            List<RuleVersionSnapshot> snapshots = ruleBundleService.exportSnapshots(tenantId, ruleIds, sceneCode);
             body = objectMapper.writeValueAsString(snapshots).getBytes(StandardCharsets.UTF_8);
             suffix = "snapshots";
         } else {
-            RuleBundle bundle = ruleBundleService.export(tenantId, ruleIds, sceneId);
+            RuleBundle bundle = ruleBundleService.export(tenantId, ruleIds, sceneCode);
             body = objectMapper.writeValueAsString(bundle).getBytes(StandardCharsets.UTF_8);
             suffix = "bundle";
         }
