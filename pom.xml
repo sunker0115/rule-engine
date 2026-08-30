@@ -43,7 +43,7 @@
     </modules>
 
     <properties>
-        <revision>1.0.0-SNAPSHOT</revision>
+        <revision>0.7.2-SNAPSHOT</revision>
         <java.version>25</java.version>
         <spring-modulith.version>2.1.0</spring-modulith.version>
         <mybatis-plus.version>3.5.16</mybatis-plus.version>
